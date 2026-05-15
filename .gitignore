@@ -1,0 +1,12 @@
+build/
+build-*/
+out/
+dist/
+.vscode/
+.idea/
+.cache/
+*.user
+*.autosave
+CMakeCache.txt
+CMakeFiles/
+.DS_Store
