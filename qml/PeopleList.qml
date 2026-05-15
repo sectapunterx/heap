@@ -82,7 +82,7 @@ Rectangle {
             model: AppController.people
             boundsBehavior: Flickable.StopAtBounds
 
-            delegate: Rectangle {
+            delegate: Item {
                 id: prow
                 required property string id
                 required property string name
@@ -90,18 +90,42 @@ Rectangle {
                 required property string question
                 required property string state
                 required property var color
-                width: ListView.view.width
+                width: ListView.view ? ListView.view.width : 0
                 height: layout.implicitHeight + 12
-                radius: 7
-                color: rowMA.containsMouse ? Theme.panel : "transparent"
-                border.color: rowMA.containsMouse ? Theme.border : "transparent"
-                border.width: 1
+
+                // 1) MouseArea declared FIRST so its id is available when sibling
+                //    bindings evaluate, and so it sits below RowLayout in paint/
+                //    event order (later siblings draw on top, events hit them first).
+                MouseArea {
+                    id: rowMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onDoubleClicked: root.personRequested(prow.id)
+                    onClicked: (mouse) => {
+                        if (mouse.button === Qt.RightButton) root.personRequested(prow.id);
+                    }
+                }
+
+                // 2) Hover indicator — a real Rectangle whose visibility is
+                //    toggled by border.width / a separate fill Rectangle.
+                //    Using opacity instead of swapping color literals avoids
+                //    the "transparent string" rendering quirk on Windows.
+                Rectangle {
+                    anchors.fill: parent
+                    radius: 8
+                    color: Theme.panel3
+                    border.color: Theme.border
+                    border.width: 1
+                    opacity: rowMA.containsMouse ? 1.0 : 0.0
+                    Behavior on opacity { NumberAnimation { duration: 80 } }
+                }
 
                 RowLayout {
                     id: layout
-                    anchors.fill: parent
+                    anchors.left: parent.left; anchors.right: parent.right
+                    anchors.verticalCenter: parent.verticalCenter
                     anchors.leftMargin: 8; anchors.rightMargin: 8
-                    anchors.topMargin: 6; anchors.bottomMargin: 6
                     spacing: 10
 
                     Rectangle {
@@ -144,31 +168,36 @@ Rectangle {
                         }
                     }
 
-                    // Edit pencil (only on hover)
-                    Rectangle {
-                        visible: rowMA.containsMouse
-                        width: 22; height: 22; radius: 5
-                        color: editMA.containsMouse ? Theme.panel3 : "transparent"
-                        Text {
-                            anchors.centerIn: parent
-                            text: "✎"
-                            color: Theme.textMuted
-                            font.pixelSize: 12
-                        }
-                        MouseArea {
-                            id: editMA
+                    Item {
+                        Layout.preferredWidth: 22
+                        Layout.preferredHeight: 22
+                        opacity: rowMA.containsMouse ? 1.0 : 0.0
+                        Behavior on opacity { NumberAnimation { duration: 80 } }
+                        Rectangle {
                             anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.personRequested(prow.id)
-                            ToolTip.visible: containsMouse
-                            ToolTip.delay: 400
-                            ToolTip.text: "Редактировать"
+                            radius: 5
+                            color: editMA.containsMouse ? Theme.panel : "transparent"
+                            Text {
+                                anchors.centerIn: parent
+                                text: "✎"
+                                color: Theme.textMuted
+                                font.pixelSize: 12
+                            }
+                            MouseArea {
+                                id: editMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.personRequested(prow.id)
+                                ToolTip.visible: containsMouse
+                                ToolTip.delay: 400
+                                ToolTip.text: "Редактировать"
+                            }
                         }
                     }
 
-                    // Clickable state badge — cycles
                     Rectangle {
+                        Layout.alignment: Qt.AlignVCenter
                         radius: 999
                         color: prow.state === "pinged" ? Theme.withAlpha(Theme.p1, 0.10)
                              : prow.state === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)
@@ -203,18 +232,6 @@ Rectangle {
                             ToolTip.text: "написать → написал → ответил"
                         }
                     }
-                }
-
-                MouseArea {
-                    id: rowMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onDoubleClicked: root.personRequested(prow.id)
-                    onClicked: (mouse) => {
-                        if (mouse.button === Qt.RightButton) root.personRequested(prow.id);
-                    }
-                    z: -1
                 }
             }
         }
