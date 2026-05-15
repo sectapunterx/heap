@@ -1,0 +1,1022 @@
+// Docs view — spec / wiki / refs / snippets / contacts (editable)
+import QtQuick
+import QtQuick.Layouts
+import QtQuick.Controls.Basic
+import TodoCpp
+
+Item {
+    id: root
+
+    property bool editMode: false
+    property string searchText: ""
+
+    // ── Data ─────────────────────────────────────────────────────────────────
+
+    property var sections: [
+        {
+            id: "3gpp",
+            title: "3GPP / ETSI Standards",
+            subtitle: "External — LTE / E-UTRAN protocol specifications",
+            accent: Theme.mStandup,
+            items: [
+                { ref: "TS 36.331", title: "RRC Protocol Specification",
+                  desc: "Radio Resource Control — connection setup, reconfiguration, handover, measurements, SIB.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136300_136399/136331/", source: "ETSI", version: "v17.5.0", updated: "" },
+                { ref: "TS 36.323", title: "PDCP Specification",
+                  desc: "Packet Data Convergence Protocol — ciphering / integrity, ROHC, SN handling.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136300_136399/136323/", source: "ETSI", version: "v17.0.0", updated: "" },
+                { ref: "TS 36.322", title: "RLC Protocol Specification",
+                  desc: "Radio Link Control — AM / UM / TM modes, ARQ, segmentation, reassembly.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136300_136399/136322/", source: "ETSI", version: "v17.0.0", updated: "" },
+                { ref: "TS 36.321", title: "MAC Protocol Specification",
+                  desc: "Medium Access Control — HARQ, scheduling, BSR, PHR, RACH, DRX.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136300_136399/136321/", source: "ETSI", version: "v17.4.0", updated: "" },
+                { ref: "TS 36.211", title: "Physical Channels & Modulation",
+                  desc: "PHY — OFDM/SC-FDMA, reference signals, channel mapping, frame structure.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136200_136299/136211/", source: "ETSI", version: "v17.5.0", updated: "" },
+                { ref: "TS 36.213", title: "Physical Layer Procedures",
+                  desc: "PHY procedures — power control, CQI/PMI/RI, link adaptation, scheduling.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136200_136299/136213/", source: "ETSI", version: "v17.5.0", updated: "" },
+                { ref: "TS 36.413", title: "S1AP — S1 Application Protocol",
+                  desc: "eNB ↔ MME signalling — UE context, handover, paging, NAS transport.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136400_136499/136413/", source: "ETSI", version: "v17.5.0", updated: "" },
+                { ref: "TS 36.423", title: "X2AP — X2 Application Protocol",
+                  desc: "eNB ↔ eNB signalling — handover prep, load balancing, dual connectivity.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/136400_136499/136423/", source: "ETSI", version: "v17.5.0", updated: "" },
+                { ref: "TS 24.301", title: "NAS — EPS Mobility / Session Mgmt",
+                  desc: "Non-Access Stratum — EMM (attach/detach), ESM (bearer mgmt), security.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/124300_124399/124301/", source: "ETSI", version: "v17.7.0", updated: "" },
+                { ref: "TS 29.281", title: "GTPv1-U",
+                  desc: "GPRS Tunneling Protocol user plane — bearer encapsulation S1-U / X2-U.",
+                  url: "https://www.etsi.org/deliver/etsi_ts/129200_129299/129281/", source: "ETSI", version: "v17.0.0", updated: "" }
+            ]
+        },
+        {
+            id: "internal",
+            title: "Internal — eNB-core",
+            subtitle: "Wiki, runbooks, coding standards, on-call",
+            accent: Theme.mOneone,
+            items: [
+                { ref: "ARCH-001", title: "eNB-core Architecture Overview",
+                  desc: "Слой-диаграмма, thread model, message dispatch, IPC между PHY и L2/L3.",
+                  url: "#/wiki/lte-core/architecture", source: "wiki.internal", version: "", updated: "2 weeks ago" },
+                { ref: "STYLE-CPP", title: "C++ Coding Standard (eNB-core)",
+                  desc: "RAII обязателен, smart ptr only, no exceptions в hot path, naming rules.",
+                  url: "#/wiki/lte-core/cpp-style", source: "wiki.internal", version: "", updated: "1 month ago" },
+                { ref: "BUILD-101", title: "Build & CI Guide",
+                  desc: "Bazel targets, sanitizers, cross-compile ARM SoC, release pipeline.",
+                  url: "#/wiki/lte-core/build", source: "wiki.internal", version: "", updated: "3 days ago" },
+                { ref: "RUN-001", title: "Runbook · UE Attach Failures",
+                  desc: "Cause codes по 24.301, NAS trace collection, S1AP correlation IDs.",
+                  url: "#/runbooks/attach-fail", source: "runbook", version: "", updated: "1 week ago" },
+                { ref: "RUN-007", title: "Runbook · PDCP/RLC Drops",
+                  desc: "Buffer occupancy, SN gap analysis, retx counters, perf knobs.",
+                  url: "#/runbooks/pdcp-rlc-drops", source: "runbook", version: "", updated: "5 days ago" },
+                { ref: "RUN-012", title: "Runbook · HARQ Stuck Detection",
+                  desc: "Когда NDI не флипается; шаги диагностики со стороны MAC scheduler.",
+                  url: "#/runbooks/harq-stuck", source: "runbook", version: "", updated: "yesterday" },
+                { ref: "OPS-CALL", title: "On-call Rotation & Escalation",
+                  desc: "PagerDuty, severity levels, customer-impact decision matrix.",
+                  url: "#/wiki/oncall", source: "wiki.internal", version: "", updated: "today" },
+                { ref: "REL-24.06.2", title: "Release Notes · 24.06.2",
+                  desc: "Latest internal cut — HARQ retx fix, GTP-U SIMD, S1AP timeout.",
+                  url: "#/releases/24.06.2", source: "release", version: "", updated: "today" },
+                { ref: "TPL-PR", title: "PR Template & Review Checklist",
+                  desc: "Что должно быть в PR description: spec ref, перф, тесты, riscs.",
+                  url: "#/wiki/pr-template", source: "wiki.internal", version: "", updated: "2 months ago" }
+            ]
+        },
+        {
+            id: "cpp",
+            title: "C++ Reference",
+            subtitle: "Language, ABI, modern best practices",
+            accent: Theme.mSync,
+            items: [
+                { ref: "cppreference", title: "C++ Reference",
+                  desc: "Полный справочник по языку и stdlib. Главный daily-driver.",
+                  url: "https://en.cppreference.com/", source: "cppreference.com", version: "", updated: "" },
+                { ref: "ISO C++20", title: "ISO/IEC 14882:2020",
+                  desc: "Официальный стандарт C++20 — concepts, ranges, coroutines, modules.",
+                  url: "https://www.iso.org/standard/79358.html", source: "iso.org", version: "", updated: "" },
+                { ref: "Itanium ABI", title: "Itanium C++ ABI",
+                  desc: "Стандартный ABI для GCC / Clang — name mangling, vtables, RTTI.",
+                  url: "https://itanium-cxx-abi.github.io/cxx-abi/", source: "itanium-cxx-abi", version: "", updated: "" },
+                { ref: "Core G.", title: "C++ Core Guidelines",
+                  desc: "Bjarne & Herb — modern C++ best practices, GSL.",
+                  url: "https://isocpp.github.io/CppCoreGuidelines/CppCoreGuidelines", source: "isocpp.github.io", version: "", updated: "" },
+                { ref: "Godbolt", title: "Compiler Explorer",
+                  desc: "Интерактивный ASM viewer — GCC, Clang, MSVC, ICC, multiple archs.",
+                  url: "https://godbolt.org/", source: "godbolt.org", version: "", updated: "" },
+                { ref: "Quick C++", title: "Quick C++ Benchmarks",
+                  desc: "Микро-бенчмарки на Google Benchmark прямо в браузере.",
+                  url: "https://quick-bench.com/", source: "quick-bench", version: "", updated: "" }
+            ]
+        },
+        {
+            id: "tools",
+            title: "Tools & Debug",
+            subtitle: "Профилирование, packet analysis, sanitizers",
+            accent: Theme.mFocus,
+            items: [
+                { ref: "Wireshark", title: "Wireshark — LTE dissectors",
+                  desc: "S1AP, X2AP, NAS, RRC dissectors. mac-lte / rlc-lte / pdcp-lte protos.",
+                  url: "https://www.wireshark.org/docs/dfref/", source: "wireshark.org", version: "", updated: "" },
+                { ref: "GDB", title: "GDB Documentation",
+                  desc: "Threading, watchpoints, conditional breakpoints, pretty-printers.",
+                  url: "https://sourceware.org/gdb/current/onlinedocs/gdb.html/", source: "sourceware", version: "", updated: "" },
+                { ref: "perf", title: "Linux perf",
+                  desc: "Sampling profiler, hardware counters, FlameGraph workflow.",
+                  url: "https://perf.wiki.kernel.org/index.php/Main_Page", source: "kernel.org", version: "", updated: "" },
+                { ref: "ASan", title: "AddressSanitizer",
+                  desc: "Memory bugs в runtime — out-of-bounds, UAF. -fsanitize=address.",
+                  url: "https://clang.llvm.org/docs/AddressSanitizer.html", source: "clang.llvm", version: "", updated: "" },
+                { ref: "TSan", title: "ThreadSanitizer",
+                  desc: "Гонки данных — must-have для multi-threaded eNB hot path.",
+                  url: "https://clang.llvm.org/docs/ThreadSanitizer.html", source: "clang.llvm", version: "", updated: "" },
+                { ref: "valgrind", title: "Valgrind",
+                  desc: "Memcheck, helgrind, callgrind. Дорогой но точный.",
+                  url: "https://valgrind.org/docs/manual/manual.html", source: "valgrind.org", version: "", updated: "" }
+            ]
+        }
+    ]
+
+    property var snippets: [
+        { title: "Build с sanitizers", lang: "sh",
+          code: "# AddressSanitizer\nbazel build --config=asan //enb/core/...\n\n# ThreadSanitizer (для гонок)\nbazel build --config=tsan //enb/core/...\n\n# UBSan + ASan combo\nbazel build --config=asan-ubsan //enb/core/..." },
+        { title: "GDB · attach к running eNB", lang: "sh",
+          code: "sudo gdb -p $(pgrep -f enb-core)\n(gdb) info threads\n(gdb) thread apply all bt 30\n(gdb) bt full\n(gdb) p *self  # пример pretty-print" },
+        { title: "PCAP capture per-cell", lang: "sh",
+          code: "# S1AP (port 36412) + X2AP (36422) к указанному MME\ntcpdump -i any -w /tmp/lte-cell-3.pcap \\\n  'host 10.0.0.5 and (port 36412 or port 36422)'\n\n# C-plane + U-plane всё разом\ntcpdump -i any -w /tmp/full.pcap \\\n  'port 36412 or port 36422 or port 2152'" },
+        { title: "S1AP cause codes (36.413 §9.2.1.3)", lang: "cpp",
+          code: "enum class S1apCause : uint8_t {\n  RadioNetwork_Unspecified = 0,\n  Transport_Unspecified    = 1,\n  NAS_Unspecified          = 2,\n  Protocol_Unspecified     = 3,\n  Misc_Unspecified         = 4,\n};\n\n// Для UE Context Release Request (§9.1.4.5)\nconstexpr auto kUeCtxRelTimeout =\n  std::chrono::seconds{10};" },
+        { title: "Logging hot-path safe", lang: "cpp",
+          code: "// В hot path — только структурированный bin-log,\n// никаких fmt::format / std::ostream.\nLOG_BIN(kHarqRetx, ueId, harqId, ndi, rv);\n\n// Slow-path (ошибки, init) — обычный log OK\nLOG_WARN(\"PDCP SN wrap on bearer {}\", drbId);" }
+    ]
+
+    property var contacts: [
+        { name: "Олег Т.",    role: "Tech Lead",          channel: "#lte-core-leads", slack: "@oleg.t",          color: "#d97a6c" },
+        { name: "Andrey S.",  role: "Senior C++",         channel: "#lte-core",       slack: "@andrey.s",        color: "#6cc4b8" },
+        { name: "Hiroshi M.", role: "PHY team",           channel: "#lte-phy",        slack: "@hiroshi.m",       color: "#7cc492" },
+        { name: "Маша К.",    role: "QA Lead",            channel: "#lte-qa",         slack: "@masha.k",         color: "#c87fc7" },
+        { name: "Виктор Л.",  role: "Architect",          channel: "#lte-arch",       slack: "@viktor.l",        color: "#7da8d9" },
+        { name: "On-call",    role: "PagerDuty rotation", channel: "#enb-oncall",     slack: "page: lte-oncall", color: "#e6624c" }
+    ]
+
+    readonly property var contactPalette: [
+        "#d97a6c", "#dcb86b", "#dcc06a", "#7cc492",
+        "#6cc4b8", "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7"
+    ]
+
+    // ── Helpers ─────────────────────────────────────────────────────────────
+
+    function totalDocs() {
+        let n = 0;
+        for (let i = 0; i < sections.length; i++) n += sections[i].items.length;
+        return n;
+    }
+    function passesSearch(item) {
+        const q = (root.searchText || "").toLowerCase().trim();
+        if (q.length === 0) return true;
+        const hay = ((item.ref || "") + " " + (item.title || "") + " " + (item.desc || "") + " " + (item.source || "")).toLowerCase();
+        return hay.indexOf(q) >= 0;
+    }
+    function initials(name) {
+        const parts = (name || "").split(/\s+/);
+        return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
+    }
+    function showToast(s) { if (toast) toast.show(s) }
+
+    // ── Section ops ─────────────────────────────────────────────────────────
+
+    function _replaceSections(updater) {
+        const copy = sections.map(function (s) {
+            return Object.assign({}, s, { items: s.items.slice() });
+        });
+        updater(copy);
+        sections = copy;
+    }
+
+    function saveDoc(draft) {
+        const targetSectionId = draft._sectionId || editor.sectionId;
+        const cleaned = Object.assign({}, draft);
+        delete cleaned._sectionId;
+        delete cleaned._isNew;
+
+        _replaceSections(copy => {
+            if (editor.isNew) {
+                const target = copy.find(s => s.id === targetSectionId);
+                if (target) target.items.push(cleaned);
+            } else {
+                for (let s of copy) {
+                    if (s.id === editor.sectionId) {
+                        if (targetSectionId === s.id) {
+                            s.items = s.items.map(i => i.ref === editor.originalRef ? cleaned : i);
+                        } else {
+                            s.items = s.items.filter(i => i.ref !== editor.originalRef);
+                        }
+                    } else if (s.id === targetSectionId) {
+                        s.items.push(cleaned);
+                    }
+                }
+            }
+        });
+        showToast(editor.isNew ? ("Создано: " + (cleaned.ref || cleaned.title)) : ("Сохранено: " + (cleaned.ref || cleaned.title)));
+    }
+    function deleteDoc(sectionId, ref) {
+        _replaceSections(copy => {
+            for (let s of copy) {
+                if (s.id === sectionId) s.items = s.items.filter(i => i.ref !== ref);
+            }
+        });
+        showToast("Удалено: " + ref);
+    }
+
+    function saveSnippet(draft, idx) {
+        const list = snippets.slice();
+        if (idx < 0 || idx === undefined) { list.push(draft); showToast("Snippet создан: " + draft.title); }
+        else { list[idx] = draft; showToast("Snippet сохранён: " + draft.title); }
+        snippets = list;
+    }
+    function deleteSnippet(idx) {
+        const list = snippets.slice();
+        list.splice(idx, 1);
+        snippets = list;
+        showToast("Snippet удалён");
+    }
+
+    function saveContact(draft, idx) {
+        const list = contacts.slice();
+        if (idx < 0 || idx === undefined) { list.push(draft); showToast("Контакт добавлен: " + draft.name); }
+        else { list[idx] = draft; showToast("Контакт сохранён: " + draft.name); }
+        contacts = list;
+    }
+    function deleteContact(idx) {
+        const list = contacts.slice();
+        list.splice(idx, 1);
+        contacts = list;
+        showToast("Контакт удалён");
+    }
+
+    function openExternal(url) {
+        if (!url) return;
+        if (url.indexOf("#") === 0) {
+            showToast("Open in wiki: " + url.substring(1));
+        } else {
+            Qt.openUrlExternally(url);
+        }
+    }
+
+    // ── Layout ──────────────────────────────────────────────────────────────
+
+    Rectangle { anchors.fill: parent; color: Theme.bg }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        // Head bar
+        Rectangle {
+            Layout.fillWidth: true
+            Layout.preferredHeight: 56
+            color: Theme.panel
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
+
+            RowLayout {
+                anchors.fill: parent
+                anchors.leftMargin: 18; anchors.rightMargin: 18
+                spacing: 14
+
+                ColumnLayout {
+                    spacing: 1
+                    Layout.alignment: Qt.AlignVCenter
+                    Text { text: "Docs · spec & references"; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    Text {
+                        text: root.totalDocs() + " entries · " + root.snippets.length + " snippets · " + root.contacts.length + " contacts"
+                              + (root.editMode ? "    · EDITING" : "")
+                        color: root.editMode ? Theme.accentStrong : Theme.textDim
+                        font.family: Theme.fontMono
+                        font.pixelSize: 11
+                    }
+                }
+
+                Item { Layout.fillWidth: true }
+
+                // Search
+                Rectangle {
+                    Layout.preferredWidth: 320
+                    Layout.preferredHeight: 28
+                    radius: 6
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 10; anchors.rightMargin: 6
+                        spacing: 6
+                        Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
+                        TextField {
+                            id: docsSearch
+                            Layout.fillWidth: true
+                            placeholderText: "Поиск: 36.331, RRC, asan, valgrind…"
+                            color: Theme.text
+                            placeholderTextColor: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.pixelSize: 12
+                            background: Item {}
+                            selectByMouse: true
+                            text: root.searchText
+                            onTextChanged: root.searchText = text
+                        }
+                        Rectangle {
+                            visible: root.searchText.length > 0
+                            width: 18; height: 18; radius: 9
+                            color: clearMA.containsMouse ? Theme.panel3 : "transparent"
+                            Text { anchors.centerIn: parent; text: "×"; color: Theme.textDim; font.pixelSize: 14 }
+                            MouseArea {
+                                id: clearMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: { root.searchText = ""; docsSearch.text = "" }
+                            }
+                        }
+                    }
+                }
+
+                // Edit toggle
+                PillButton {
+                    text: root.editMode ? "✓ Готово" : "✎ Редактировать"
+                    primary: root.editMode
+                    onClicked: root.editMode = !root.editMode
+                }
+            }
+        }
+
+        // Body — nav + scrollable content
+        RowLayout {
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            spacing: 0
+
+            // Nav rail
+            Rectangle {
+                Layout.preferredWidth: 220
+                Layout.fillHeight: true
+                color: Theme.panel
+                Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.border }
+
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 2
+
+                    Repeater {
+                        model: root.sections
+                        delegate: NavLink {
+                            required property var modelData
+                            label: modelData.title
+                            count: modelData.items.length
+                            barColor: modelData.accent
+                            anchorId: "sec-" + modelData.id
+                        }
+                    }
+
+                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: 8; Layout.bottomMargin: 6 }
+
+                    NavLink {
+                        label: "Snippets"
+                        count: root.snippets.length
+                        barColor: Theme.accent
+                        anchorId: "sec-snippets"
+                    }
+                    NavLink {
+                        label: "Contacts"
+                        count: root.contacts.length
+                        barColor: Theme.textMuted
+                        anchorId: "sec-contacts"
+                    }
+
+                    Item { Layout.fillHeight: true }
+                }
+            }
+
+            // Body
+            ScrollView {
+                id: bodyScroll
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                clip: true
+                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+
+                ColumnLayout {
+                    width: bodyScroll.availableWidth
+                    spacing: 24
+
+                    // Doc sections
+                    Repeater {
+                        model: root.sections
+                        delegate: ColumnLayout {
+                            id: secCol
+                            required property var modelData
+                            required property int index
+                            property var section: modelData
+                            property var filtered: section.items.filter(root.passesSearch)
+                            visible: !(root.searchText.length > 0 && filtered.length === 0)
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 24
+                            Layout.rightMargin: 24
+                            Layout.topMargin: index === 0 ? 20 : 0
+                            spacing: 12
+
+                            Item {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 44
+                                id: secAnchor
+                                objectName: "sec-" + secCol.section.id
+
+                                RowLayout {
+                                    anchors.fill: parent
+                                    spacing: 12
+                                    Rectangle { width: 4; height: 32; radius: 2; color: secCol.section.accent }
+                                    ColumnLayout {
+                                        spacing: 0
+                                        Text { text: secCol.section.title; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                        Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: 12 }
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                    Text {
+                                        text: secCol.filtered.length + " / " + secCol.section.items.length
+                                        color: Theme.textDim
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 11
+                                    }
+                                    PillButton {
+                                        visible: root.editMode
+                                        text: "+ Add"
+                                        onClicked: root.openDocCreate(secCol.section.id)
+                                    }
+                                }
+                            }
+
+                            // Grid of cards (2 columns)
+                            Grid {
+                                id: cardGrid
+                                Layout.fillWidth: true
+                                columns: Math.max(1, Math.floor(width / 340))
+                                columnSpacing: 12
+                                rowSpacing: 12
+
+                                Repeater {
+                                    model: secCol.filtered
+                                    delegate: DocCard {
+                                        required property var modelData
+                                        required property int index
+                                        item: modelData
+                                        accent: secCol.section.accent
+                                        sectionId: secCol.section.id
+                                        editMode: root.editMode
+                                        width: (cardGrid.width - (cardGrid.columns - 1) * cardGrid.columnSpacing) / cardGrid.columns
+                                    }
+                                }
+
+                                Rectangle {
+                                    visible: root.editMode
+                                    width: cardGrid.columns > 0
+                                           ? ((cardGrid.width - (cardGrid.columns - 1) * cardGrid.columnSpacing) / cardGrid.columns)
+                                           : cardGrid.width
+                                    height: 100
+                                    radius: 10
+                                    color: addCardMA.containsMouse ? Theme.panel2 : "transparent"
+                                    border.color: Theme.border
+                                    border.width: 1
+                                    Column {
+                                        anchors.centerIn: parent
+                                        spacing: 4
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "+"; color: Theme.textDim; font.pixelSize: 22 }
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Add entry"; color: Theme.textDim; font.pixelSize: 11 }
+                                    }
+                                    MouseArea {
+                                        id: addCardMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.openDocCreate(secCol.section.id)
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Snippets
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 24
+                        Layout.rightMargin: 24
+                        spacing: 12
+                        Item {
+                            Layout.fillWidth: true; Layout.preferredHeight: 44
+                            objectName: "sec-snippets"
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 12
+                                Rectangle { width: 4; height: 32; radius: 2; color: Theme.accent }
+                                ColumnLayout {
+                                    spacing: 0
+                                    Text { text: "Snippets"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: "Часто используемые команды и шаблоны кода"; color: Theme.textMuted; font.pixelSize: 12 }
+                                }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    text: root.snippets.length + ""
+                                    color: Theme.textDim
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 11
+                                }
+                                PillButton {
+                                    visible: root.editMode
+                                    text: "+ Add"
+                                    onClicked: root.openSnippetCreate()
+                                }
+                            }
+                        }
+
+                        Repeater {
+                            model: root.snippets
+                            delegate: SnippetCard {
+                                required property var modelData
+                                required property int index
+                                snip: modelData
+                                idx: index
+                                editMode: root.editMode
+                                Layout.fillWidth: true
+                            }
+                        }
+                    }
+
+                    // Contacts
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        Layout.leftMargin: 24
+                        Layout.rightMargin: 24
+                        Layout.bottomMargin: 32
+                        spacing: 12
+                        Item {
+                            Layout.fillWidth: true; Layout.preferredHeight: 44
+                            objectName: "sec-contacts"
+                            RowLayout {
+                                anchors.fill: parent
+                                spacing: 12
+                                Rectangle { width: 4; height: 32; radius: 2; color: Theme.textMuted }
+                                ColumnLayout {
+                                    spacing: 0
+                                    Text { text: "Contacts & Channels"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: "Кому пинговать в Slack и где обсуждать"; color: Theme.textMuted; font.pixelSize: 12 }
+                                }
+                                Item { Layout.fillWidth: true }
+                                Text {
+                                    text: root.contacts.length + ""
+                                    color: Theme.textDim
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 11
+                                }
+                                PillButton {
+                                    visible: root.editMode
+                                    text: "+ Add"
+                                    onClicked: root.openContactCreate()
+                                }
+                            }
+                        }
+
+                        Grid {
+                            Layout.fillWidth: true
+                            columns: Math.max(1, Math.floor(width / 280))
+                            columnSpacing: 10
+                            rowSpacing: 8
+                            Repeater {
+                                model: root.contacts
+                                delegate: ContactCard {
+                                    required property var modelData
+                                    required property int index
+                                    c: modelData
+                                    idx: index
+                                    editMode: root.editMode
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // ── Toast ───────────────────────────────────────────────────────────────
+    Toast {
+        id: toast
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+        anchors.horizontalCenter: parent.horizontalCenter
+        z: 80
+    }
+
+    // ── Editor ──────────────────────────────────────────────────────────────
+    DocsEditor {
+        id: editor
+        sections: root.sections
+        contactPalette: root.contactPalette
+        onSavedDoc:     (draft) => root.saveDoc(draft)
+        onDeletedDoc:   () => root.deleteDoc(editor.sectionId, editor.originalRef)
+        onSavedSnippet: (draft) => root.saveSnippet(draft, editor.idx)
+        onDeletedSnippet: () => root.deleteSnippet(editor.idx)
+        onSavedContact: (draft) => root.saveContact(draft, editor.idx)
+        onDeletedContact: () => root.deleteContact(editor.idx)
+    }
+
+    function openDocCreate(sectionId) {
+        editor.kind = "doc";
+        editor.sectionId = sectionId;
+        editor.originalRef = "";
+        editor.isNew = true;
+        editor.draft = ({ ref: "", title: "", desc: "", url: "", source: "", version: "", updated: "", _sectionId: sectionId });
+        editor.open();
+    }
+    function openDocEdit(sectionId, item) {
+        editor.kind = "doc";
+        editor.sectionId = sectionId;
+        editor.originalRef = item.ref;
+        editor.isNew = false;
+        editor.draft = Object.assign({}, item, { _sectionId: sectionId });
+        editor.open();
+    }
+    function openSnippetCreate() {
+        editor.kind = "snippet";
+        editor.idx = -1;
+        editor.isNew = true;
+        editor.draft = ({ title: "", lang: "sh", code: "" });
+        editor.open();
+    }
+    function openSnippetEdit(idx) {
+        editor.kind = "snippet";
+        editor.idx = idx;
+        editor.isNew = false;
+        editor.draft = Object.assign({}, root.snippets[idx]);
+        editor.open();
+    }
+    function openContactCreate() {
+        editor.kind = "contact";
+        editor.idx = -1;
+        editor.isNew = true;
+        editor.draft = ({ name: "", role: "", channel: "", slack: "", color: root.contactPalette[0] });
+        editor.open();
+    }
+    function openContactEdit(idx) {
+        editor.kind = "contact";
+        editor.idx = idx;
+        editor.isNew = false;
+        editor.draft = Object.assign({}, root.contacts[idx]);
+        editor.open();
+    }
+
+    // ── Inline components ───────────────────────────────────────────────────
+
+    component NavLink: Rectangle {
+        id: nav
+        property string label: ""
+        property int count: 0
+        property color barColor: Theme.accent
+        property string anchorId: ""
+        Layout.fillWidth: true
+        Layout.preferredHeight: 30
+        radius: 6
+        color: navMA.containsMouse ? Theme.panel2 : "transparent"
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 8; anchors.rightMargin: 8
+            spacing: 8
+            Rectangle { width: 4; height: 16; radius: 2; color: nav.barColor }
+            Text { text: nav.label; color: Theme.text; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+            Text { text: nav.count + ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 11 }
+        }
+        MouseArea {
+            id: navMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: scrollToAnchor(nav.anchorId)
+        }
+    }
+
+    function scrollToAnchor(objectName) {
+        const flick = bodyScroll.contentItem;
+        if (!flick) return;
+        const target = findChildByName(flick, objectName);
+        if (!target) return;
+        const p = target.mapToItem(flick.contentItem, 0, 0);
+        flick.contentY = Math.max(0, Math.min(p.y - 8, flick.contentHeight - flick.height));
+    }
+    function findChildByName(parentItem, name) {
+        if (!parentItem) return null;
+        const kids = parentItem.children;
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (k && k.objectName === name) return k;
+            const sub = findChildByName(k, name);
+            if (sub) return sub;
+        }
+        return null;
+    }
+
+    component DocCard: Rectangle {
+        id: card
+        property var item: ({})
+        property color accent: Theme.accent
+        property string sectionId: ""
+        property bool editMode: false
+        readonly property bool isInternal: (item.url || "").indexOf("#") === 0
+        height: cardCol.implicitHeight + 24
+        radius: 10
+        color: cardMA.containsMouse ? Theme.panel2 : Theme.panel
+        border.color: cardMA.containsMouse ? Theme.borderStrong : Theme.border
+        border.width: 1
+
+        ColumnLayout {
+            id: cardCol
+            anchors.fill: parent
+            anchors.margins: 12
+            spacing: 6
+
+            RowLayout {
+                spacing: 6
+                Rectangle {
+                    radius: 4
+                    color: "transparent"
+                    border.color: card.accent
+                    border.width: 1
+                    implicitWidth: refT.implicitWidth + 14
+                    implicitHeight: 20
+                    Text { id: refT; anchors.centerIn: parent
+                           text: card.item.ref || ""
+                           color: card.accent
+                           font.family: Theme.fontMono
+                           font.pixelSize: 11
+                           font.weight: Font.DemiBold }
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    visible: (card.item.version || "").length > 0
+                    text: card.item.version || ""
+                    color: Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: 11
+                }
+                Text {
+                    visible: !card.editMode
+                    text: card.isInternal ? "→" : "↗"
+                    color: cardMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                    font.pixelSize: 12
+                }
+            }
+            Text {
+                Layout.fillWidth: true
+                text: card.item.title || ""
+                color: Theme.text
+                font.pixelSize: 13
+                font.weight: Font.Medium
+                wrapMode: Text.WordWrap
+            }
+            Text {
+                Layout.fillWidth: true
+                text: card.item.desc || ""
+                color: Theme.textMuted
+                font.pixelSize: 11
+                wrapMode: Text.WordWrap
+                maximumLineCount: 3
+                elide: Text.ElideRight
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                Layout.topMargin: 4
+                Text {
+                    text: card.item.source || ""
+                    color: Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                }
+                Item { Layout.fillWidth: true }
+                Text {
+                    visible: (card.item.updated || "").length > 0
+                    text: "upd " + (card.item.updated || "")
+                    color: Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                }
+            }
+        }
+
+        // Edit actions (hover overlay)
+        Row {
+            visible: card.editMode && cardMA.containsMouse
+            anchors.top: parent.top; anchors.right: parent.right
+            anchors.margins: 6
+            spacing: 4
+            Rectangle {
+                width: 22; height: 22; radius: 5
+                color: editIcoMA.containsMouse ? Theme.panel3 : Theme.panel2
+                border.color: Theme.border; border.width: 1
+                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: 11 }
+                MouseArea {
+                    id: editIcoMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.openDocEdit(card.sectionId, card.item)
+                }
+            }
+            Rectangle {
+                width: 22; height: 22; radius: 5
+                color: delIcoMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
+                border.color: delIcoMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                Text { anchors.centerIn: parent; text: "×"; color: delIcoMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 12 }
+                MouseArea {
+                    id: delIcoMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.deleteDoc(card.sectionId, card.item.ref)
+                }
+            }
+        }
+
+        MouseArea {
+            id: cardMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: {
+                if (card.editMode) root.openDocEdit(card.sectionId, card.item);
+                else root.openExternal(card.item.url);
+            }
+        }
+    }
+
+    component SnippetCard: Rectangle {
+        id: sCard
+        property var snip: ({})
+        property int idx: -1
+        property bool editMode: false
+        radius: 10
+        color: Theme.panel
+        border.color: Theme.border
+        border.width: 1
+        implicitHeight: sCol.implicitHeight + 20
+
+        ColumnLayout {
+            id: sCol
+            anchors.fill: parent
+            anchors.margins: 10
+            spacing: 8
+
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 8
+                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
+                Rectangle {
+                    radius: 4
+                    color: Theme.panel2
+                    border.color: Theme.border; border.width: 1
+                    implicitWidth: lngT.implicitWidth + 12
+                    implicitHeight: 18
+                    Text { id: lngT; anchors.centerIn: parent; text: sCard.snip.lang || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
+                }
+                Rectangle {
+                    visible: sCard.editMode
+                    radius: 4
+                    color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
+                    border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
+                    border.width: 1
+                    implicitWidth: editSnT.implicitWidth + 14
+                    implicitHeight: 22
+                    Text { id: editSnT; anchors.centerIn: parent; text: "✎ edit"; color: editSnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
+                }
+                Rectangle {
+                    visible: sCard.editMode
+                    radius: 4
+                    color: delSnMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
+                    border.color: delSnMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                    implicitWidth: delSnT.implicitWidth + 14
+                    implicitHeight: 22
+                    Text { id: delSnT; anchors.centerIn: parent; text: "× del"; color: delSnMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 11 }
+                    MouseArea { id: delSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteSnippet(sCard.idx) }
+                }
+                Rectangle {
+                    visible: !sCard.editMode
+                    radius: 4
+                    color: copySnMA.containsMouse ? Theme.accentSoft : Theme.panel2
+                    border.color: copySnMA.containsMouse ? Theme.accent : Theme.border
+                    border.width: 1
+                    implicitWidth: copyT.implicitWidth + 14
+                    implicitHeight: 22
+                    Text { id: copyT; anchors.centerIn: parent; text: "copy"; color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    MouseArea {
+                        id: copySnMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            AppController.copyToClipboard(sCard.snip.code || "");
+                            root.showToast("Скопировано: " + (sCard.snip.title || ""));
+                        }
+                    }
+                }
+            }
+            Rectangle {
+                Layout.fillWidth: true
+                color: Theme.bg2
+                radius: 6
+                border.color: Theme.border
+                border.width: 1
+                implicitHeight: codeText.implicitHeight + 18
+                TextEdit {
+                    id: codeText
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    text: sCard.snip.code || ""
+                    color: Theme.text
+                    font.family: Theme.fontMono
+                    font.pixelSize: 12
+                    readOnly: true
+                    selectByMouse: true
+                    wrapMode: TextEdit.NoWrap
+                }
+            }
+        }
+    }
+
+    component ContactCard: Rectangle {
+        id: cc
+        property var c: ({})
+        property int idx: -1
+        property bool editMode: false
+        width: parent ? ((parent.width - (parent.columns - 1) * parent.columnSpacing) / parent.columns) : 240
+        height: 56
+        radius: 10
+        color: ccMA.containsMouse ? Theme.panel2 : Theme.panel
+        border.color: ccMA.containsMouse ? Theme.borderStrong : Theme.border
+        border.width: 1
+
+        RowLayout {
+            anchors.fill: parent
+            anchors.leftMargin: 10; anchors.rightMargin: 10
+            spacing: 10
+            Rectangle {
+                width: 32; height: 32; radius: 16
+                color: cc.c.color || Theme.accent
+                Text {
+                    anchors.centerIn: parent
+                    text: root.initials(cc.c.name || "")
+                    color: "#06121a"
+                    font.family: Theme.fontMono
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+            }
+            ColumnLayout {
+                Layout.fillWidth: true
+                spacing: 0
+                Text { text: cc.c.name || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                Text { text: cc.c.role || ""; color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
+            }
+            ColumnLayout {
+                visible: !cc.editMode
+                spacing: 0
+                Text { text: cc.c.channel || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
+                Text { text: cc.c.slack || "";   color: Theme.textDim;   font.family: Theme.fontMono; font.pixelSize: 10 }
+            }
+            Row {
+                visible: cc.editMode
+                spacing: 4
+                Rectangle {
+                    width: 22; height: 22; radius: 5
+                    color: editCMA.containsMouse ? Theme.panel3 : Theme.panel2
+                    border.color: Theme.border; border.width: 1
+                    Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: 11 }
+                    MouseArea { id: editCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openContactEdit(cc.idx) }
+                }
+                Rectangle {
+                    width: 22; height: 22; radius: 5
+                    color: delCMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
+                    border.color: delCMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                    Text { anchors.centerIn: parent; text: "×"; color: delCMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 12 }
+                    MouseArea { id: delCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteContact(cc.idx) }
+                }
+            }
+        }
+        MouseArea {
+            id: ccMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: cc.editMode ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onClicked: if (cc.editMode) root.openContactEdit(cc.idx)
+        }
+    }
+}
