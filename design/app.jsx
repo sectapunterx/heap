@@ -167,6 +167,8 @@ function App() {
   const [search, setSearch] = aUseState("");
   const [priFilter, setPriFilter] = aUseState(new Set());
   const [toast, setToast] = aUseState(null);
+  const [view, setView] = aUseState("board"); // 'board' | 'timeline' | 'week'
+  const [showDoneTimeline, setShowDoneTimeline] = aUseState(false);
 
   // Apply theme + density to <html>
   aUseEffect(() => {
@@ -310,8 +312,10 @@ function App() {
     return by;
   }, [tasks]);
 
+  const viewTitle = { board: "Board", timeline: "Timeline", week: "Week" }[view];
+
   return (
-    <div className="app">
+    <div className={"app view-" + view}>
       <div className="topbar">
         <div className="brand">
           <span className="dot" />
@@ -335,11 +339,22 @@ function App() {
 
       {/* Side rail */}
       <div className="rail">
-        <div className="rail-btn active" title="My board">▦</div>
-        <div className="rail-btn" title="Backlog">
-          ⌧
-          {stats.backlog > 0 && <span className="count" style={{background:"var(--text-dim)"}}>{stats.backlog}</span>}
-        </div>
+        <button
+          className={"rail-btn" + (view === "board" ? " active" : "")}
+          title="Board (Kanban)"
+          onClick={() => setView("board")}
+        >▦</button>
+        <button
+          className={"rail-btn" + (view === "timeline" ? " active" : "")}
+          title="Timeline (по дедлайнам)"
+          onClick={() => setView("timeline")}
+        >☰</button>
+        <button
+          className={"rail-btn" + (view === "week" ? " active" : "")}
+          title="Week (7 дней)"
+          onClick={() => setView("week")}
+        >◫</button>
+        <div className="sep" />
         <div className="rail-btn" title="Blocked">
           ⊘
           {stats.blocked > 0 && <span className="count">{stats.blocked}</span>}
@@ -349,8 +364,16 @@ function App() {
           {stats.review > 0 && <span className="count" style={{background:"var(--st-review)"}}>{stats.review}</span>}
         </div>
         <div className="sep" />
-        <div className="rail-btn" title="Compiler Explorer">C++</div>
-        <div className="rail-btn" title="Docs">§</div>
+        <button
+          className={"rail-btn" + (view === "docs" ? " active" : "")}
+          title="C++ References (Docs)"
+          onClick={() => setView("docs")}
+        >C++</button>
+        <button
+          className={"rail-btn" + (view === "docs" ? " active" : "")}
+          title="Docs"
+          onClick={() => setView("docs")}
+        >§</button>
         <div style={{flex:1}} />
         <div className="rail-btn" title="Settings">⚙</div>
       </div>
@@ -358,7 +381,10 @@ function App() {
       {/* Main */}
       <div className="main">
         <div className="toolbar">
-          <span className="filter-chip" style={{background:"transparent", border:"none", color:"var(--text-muted)", padding:"4px 4px"}}>Filters:</span>
+          <span className="filter-chip" style={{background:"transparent", border:"none", color:"var(--text-muted)", padding:"4px 4px"}}>
+            <b style={{color:"var(--text)", fontWeight:600, marginRight:"4px"}}>{viewTitle}</b>
+            · Filters:
+          </span>
           {["P0","P1","P2","P3"].map(p => (
             <button
               key={p}
@@ -376,15 +402,42 @@ function App() {
             {tasks.length} tasks · {stats.prog + stats.half} active · {stats.blocked} blocked · {stats.review} review
           </span>
         </div>
-        <KanbanBoard
-          tasks={tasks}
-          statuses={D.STATUSES}
-          filters={filters}
-          onMove={moveTask}
-          onOpen={openTask}
-          onCreate={createTaskInStatus}
-          scheduleMap={scheduleMap}
-        />
+        {view === "board" && (
+          <KanbanBoard
+            tasks={tasks}
+            statuses={D.STATUSES}
+            filters={filters}
+            onMove={moveTask}
+            onOpen={openTask}
+            onCreate={createTaskInStatus}
+            scheduleMap={scheduleMap}
+          />
+        )}
+        {view === "timeline" && (
+          <TimelineView
+            tasks={tasks}
+            statuses={D.STATUSES}
+            onOpen={openTask}
+            filters={filters}
+            scheduleMap={scheduleMap}
+            showDone={showDoneTimeline}
+            onToggleDone={() => setShowDoneTimeline(v => !v)}
+          />
+        )}
+        {view === "week" && (
+          <WeekView
+            tasks={tasks}
+            events={events}
+            statuses={D.STATUSES}
+            selectedIso={selectedDate}
+            onSelectDay={(d) => { setSelectedDate(d); }}
+            onOpen={openTask}
+            onEventOpen={setEditingEvent}
+          />
+        )}
+        {view === "docs" && (
+          <DocsView />
+        )}
       </div>
 
       {/* Right column: mini-week + day cal + people */}
