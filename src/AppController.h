@@ -54,6 +54,11 @@ public:
 
     // ---- People ops ----
     Q_INVOKABLE void cyclePerson(const QString &id);
+    Q_INVOKABLE void setPersonState(const QString &id, const QString &state);
+    Q_INVOKABLE QVariantMap newPersonDraft() const;
+    Q_INVOKABLE QVariantMap personById(const QString &id) const;
+    Q_INVOKABLE void savePerson(const QVariantMap &draft);
+    Q_INVOKABLE void deletePerson(const QString &id);
     Q_INVOKABLE int  pendingPeopleCount() const { return m_people.todoCount(); }
 
     // ---- Status counts ----
