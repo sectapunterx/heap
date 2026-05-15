@@ -1,6 +1,12 @@
-node_modules/
-dist/
+build/
+build-*/
 out/
-*.log
-.DS_Store
+dist/
+.vscode/
+.idea/
 .cache/
+*.user
+*.autosave
+CMakeCache.txt
+CMakeFiles/
+.DS_Store
