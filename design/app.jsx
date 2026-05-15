@@ -364,8 +364,16 @@ function App() {
           {stats.review > 0 && <span className="count" style={{background:"var(--st-review)"}}>{stats.review}</span>}
         </div>
         <div className="sep" />
-        <div className="rail-btn" title="Compiler Explorer">C++</div>
-        <div className="rail-btn" title="Docs">§</div>
+        <button
+          className={"rail-btn" + (view === "docs" ? " active" : "")}
+          title="C++ References (Docs)"
+          onClick={() => setView("docs")}
+        >C++</button>
+        <button
+          className={"rail-btn" + (view === "docs" ? " active" : "")}
+          title="Docs"
+          onClick={() => setView("docs")}
+        >§</button>
         <div style={{flex:1}} />
         <div className="rail-btn" title="Settings">⚙</div>
       </div>
@@ -426,6 +434,9 @@ function App() {
             onOpen={openTask}
             onEventOpen={setEditingEvent}
           />
+        )}
+        {view === "docs" && (
+          <DocsView />
         )}
       </div>
 
