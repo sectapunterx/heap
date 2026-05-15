@@ -143,6 +143,69 @@ void AppController::cyclePerson(const QString &id) {
     m_people.cycleState(id);
 }
 
+void AppController::setPersonState(const QString &id, const QString &state) {
+    m_people.setState(id, state);
+}
+
+QVariantMap AppController::newPersonDraft() const {
+    static const QColor palette[] = {
+        QColor("#d97a6c"), QColor("#c87fc7"), QColor("#6cc4b8"),
+        QColor("#7da8d9"), QColor("#dcc06a"), QColor("#7cc492"),
+        QColor("#e69854"), QColor("#a4a4d6"),
+    };
+    const int n = static_cast<int>(sizeof(palette) / sizeof(palette[0]));
+    const QColor c = palette[m_people.rowCount() % n];
+    QVariantMap m;
+    m["_isNew"] = true;
+    m["id"]       = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    m["name"]     = QString();
+    m["role"]     = QString();
+    m["question"] = QString();
+    m["state"]    = "todo";
+    m["color"]    = c;
+    return m;
+}
+
+QVariantMap AppController::personById(const QString &id) const {
+    const int row = m_people.indexOfId(id);
+    if (row < 0) return {};
+    const QModelIndex mi = m_people.index(row, 0);
+    QVariantMap m;
+    m["_isNew"]   = false;
+    m["id"]       = m_people.data(mi, PersonModel::IdRole);
+    m["name"]     = m_people.data(mi, PersonModel::NameRole);
+    m["role"]     = m_people.data(mi, PersonModel::RoleRole);
+    m["question"] = m_people.data(mi, PersonModel::QuestionRole);
+    m["state"]    = m_people.data(mi, PersonModel::StateRole);
+    m["color"]    = m_people.data(mi, PersonModel::ColorRole);
+    return m;
+}
+
+void AppController::savePerson(const QVariantMap &draft) {
+    Person p;
+    p.id       = draft.value("id").toString();
+    p.name     = draft.value("name").toString();
+    p.role     = draft.value("role").toString();
+    p.question = draft.value("question").toString();
+    p.state    = draft.value("state").toString();
+    p.color    = draft.value("color").value<QColor>();
+    if (!p.color.isValid()) p.color = QColor("#7da8d9");
+    if (p.state.isEmpty()) p.state = "todo";
+    if (p.id.isEmpty()) p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    const bool isNew = draft.value("_isNew").toBool();
+    if (isNew && p.name.trimmed().isEmpty()) return;
+    m_people.upsert(p);
+    if (isNew) emit toast(QString("Добавлен: %1").arg(p.name));
+}
+
+void AppController::deletePerson(const QString &id) {
+    const int row = m_people.indexOfId(id);
+    if (row < 0) return;
+    const QString name = m_people.data(m_people.index(row,0), PersonModel::NameRole).toString();
+    m_people.removeById(id);
+    emit toast(QString("Удалён: %1").arg(name));
+}
+
 int AppController::countByStatus(const QString &statusId) const {
     int n = 0;
     for (const auto &t : m_tasks.items()) if (t.status == statusId) ++n;
