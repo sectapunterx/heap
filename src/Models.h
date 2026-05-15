@@ -112,6 +112,9 @@ public:
 
     int indexOfId(const QString &id) const;
     void cycleState(const QString &id);
+    void setState(const QString &id, const QString &state);
+    void upsert(const Person &p);
+    void removeById(const QString &id);
     int todoCount() const;
 
 private:
