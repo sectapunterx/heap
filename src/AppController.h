@@ -21,6 +21,7 @@ class AppController : public QObject {
     Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
     Q_PROPERTY(QString theme   READ theme   WRITE setTheme   NOTIFY themeChanged)
     Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
+    Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -39,6 +40,9 @@ public:
 
     QString density() const { return m_density; }
     void    setDensity(const QString &d);
+
+    QString currentView() const { return m_currentView; }
+    void    setCurrentView(const QString &v);
 
     // ---- Task ops ----
     Q_INVOKABLE void moveTask(const QString &id, const QString &newStatus);
@@ -70,10 +74,17 @@ public:
     Q_INVOKABLE QString sprintLabel() const;
     Q_INVOKABLE QString humanDate(const QDate &date) const;
 
+    // ---- Timeline / week helpers ----
+    Q_INVOKABLE QString deadlineBucket(const QDate &deadline) const;   // overdue/today/tomorrow/thisweek/nextweek/later/nodl
+    Q_INVOKABLE QString deadlineDiffLabel(const QDate &deadline) const;
+    Q_INVOKABLE QString shortDate(const QDate &d) const;               // "Пт, 15 май"
+    Q_INVOKABLE int     isoWeekNumber(const QDate &d) const;
+
 signals:
     void selectedDateChanged();
     void themeChanged();
     void densityChanged();
+    void currentViewChanged();
     void toast(const QString &message);
 
 private:
@@ -83,6 +94,7 @@ private:
     QVariantList m_statuses;
     QDate        m_today;
     QDate        m_selectedDate;
-    QString      m_theme   = "dark";
-    QString      m_density = "comfy";
+    QString      m_theme       = "dark";
+    QString      m_density     = "comfy";
+    QString      m_currentView = "board";
 };
