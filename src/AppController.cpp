@@ -37,6 +37,12 @@ void AppController::setDensity(const QString &d) {
     emit densityChanged();
 }
 
+void AppController::setCurrentView(const QString &v) {
+    if (v == m_currentView) return;
+    m_currentView = v;
+    emit currentViewChanged();
+}
+
 void AppController::moveTask(const QString &id, const QString &newStatus) {
     const int row = m_tasks.indexOfId(id);
     if (row < 0) return;
@@ -240,4 +246,36 @@ QString AppController::humanDate(const QDate &date) const {
     if (!date.isValid()) return {};
     QLocale ru(QLocale::Russian, QLocale::Russia);
     return ru.toString(date, "dddd, d MMMM");
+}
+
+QString AppController::deadlineBucket(const QDate &deadline) const {
+    if (!deadline.isValid()) return "nodl";
+    const int d = m_today.daysTo(deadline);
+    if (d < 0)  return "overdue";
+    if (d == 0) return "today";
+    if (d == 1) return "tomorrow";
+    if (d <= 6)  return "thisweek";
+    if (d <= 13) return "nextweek";
+    return "later";
+}
+
+QString AppController::deadlineDiffLabel(const QDate &deadline) const {
+    if (!deadline.isValid()) return QStringLiteral("—");
+    const int d = m_today.daysTo(deadline);
+    if (d < 0)  return QString("%1d overdue").arg(-d);
+    if (d == 0) return QStringLiteral("today");
+    if (d == 1) return QStringLiteral("+1 day");
+    if (d < 7)  return QString("+%1 days").arg(d);
+    return QString("+%1d").arg(d);
+}
+
+QString AppController::shortDate(const QDate &d) const {
+    if (!d.isValid()) return {};
+    QLocale ru(QLocale::Russian, QLocale::Russia);
+    return ru.toString(d, "ddd, d MMM");
+}
+
+int AppController::isoWeekNumber(const QDate &d) const {
+    if (!d.isValid()) return 0;
+    return d.weekNumber();
 }
