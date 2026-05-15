@@ -194,6 +194,35 @@ void PersonModel::cycleState(const QString &id) {
     emit dataChanged(mi, mi, { StateRole });
 }
 
+void PersonModel::setState(const QString &id, const QString &state) {
+    const int row = indexOfId(id);
+    if (row < 0 || m_items[row].state == state) return;
+    m_items[row].state = state;
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi, { StateRole });
+}
+
+void PersonModel::upsert(const Person &p) {
+    const int row = indexOfId(p.id);
+    if (row >= 0) {
+        m_items[row] = p;
+        const QModelIndex mi = index(row, 0);
+        emit dataChanged(mi, mi);
+    } else {
+        beginInsertRows({}, m_items.size(), m_items.size());
+        m_items.push_back(p);
+        endInsertRows();
+    }
+}
+
+void PersonModel::removeById(const QString &id) {
+    const int row = indexOfId(id);
+    if (row < 0) return;
+    beginRemoveRows({}, row, row);
+    m_items.removeAt(row);
+    endRemoveRows();
+}
+
 int PersonModel::todoCount() const {
     int n = 0;
     for (const auto &p : m_items) if (p.state == "todo") ++n;
