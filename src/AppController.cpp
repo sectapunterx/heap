@@ -1,7 +1,9 @@
 #include "AppController.h"
 #include "SampleData.h"
 
+#include <QClipboard>
 #include <QDateTime>
+#include <QGuiApplication>
 #include <QLocale>
 #include <QUuid>
 
@@ -306,4 +308,8 @@ QString AppController::shortDate(const QDate &d) const {
 int AppController::isoWeekNumber(const QDate &d) const {
     if (!d.isValid()) return 0;
     return d.weekNumber();
+}
+
+void AppController::copyToClipboard(const QString &text) {
+    if (auto *cb = QGuiApplication::clipboard()) cb->setText(text);
 }

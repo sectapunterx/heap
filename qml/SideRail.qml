@@ -42,8 +42,12 @@ Rectangle {
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
-        RailBtn { glyph: "C++"; tooltipText: "Compiler Explorer"; fontPx: 10 }
-        RailBtn { glyph: "§"; tooltipText: "Docs" }
+        RailBtn { glyph: "C++"; tooltipText: "C++ References (Docs)"; fontPx: 10
+                   active: AppController.currentView === "docs"
+                   onActivated: AppController.currentView = "docs" }
+        RailBtn { glyph: "§"; tooltipText: "Docs"
+                   active: AppController.currentView === "docs"
+                   onActivated: AppController.currentView = "docs" }
 
         Item { Layout.fillHeight: true }
 

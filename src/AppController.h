@@ -96,6 +96,8 @@ public:
     Q_INVOKABLE QString shortDate(const QDate &d) const;               // "Пт, 15 май"
     Q_INVOKABLE int     isoWeekNumber(const QDate &d) const;
 
+    Q_INVOKABLE void copyToClipboard(const QString &text);
+
 signals:
     void selectedDateChanged();
     void themeChanged();
