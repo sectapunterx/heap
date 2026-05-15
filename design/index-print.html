@@ -1,0 +1,267 @@
+<!doctype html>
+<html lang="ru" data-theme="dark" data-density="comfy">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>todo·cpp — Print</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="styles.css" />
+  <style>
+    html, body { margin: 0; padding: 0; background: var(--bg); }
+    body { font-family: var(--font-ui); color: var(--text); }
+
+    .print-page {
+      width: 1440px;
+      height: 960px;
+      padding: 22px 28px;
+      box-sizing: border-box;
+      background: var(--bg);
+      display: flex;
+      flex-direction: column;
+      gap: 14px;
+      overflow: hidden;
+      page-break-after: always;
+      break-after: page;
+    }
+    .print-page:last-child { page-break-after: auto; break-after: auto; }
+
+    .print-head {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      padding: 0 0 12px 0;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+    .print-brand {
+      font-family: var(--font-mono);
+      font-weight: 600;
+      font-size: 17px;
+      letter-spacing: -0.02em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+    .print-brand .dot {
+      width: 12px; height: 12px;
+      border-radius: 3px;
+      background: var(--accent);
+      box-shadow: 0 0 12px var(--accent);
+    }
+    .print-view {
+      font-size: 14px;
+      color: var(--text-muted);
+      padding-left: 16px;
+      border-left: 1px solid var(--border);
+    }
+    .print-view b { color: var(--text); font-weight: 600; }
+    .print-stats {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-dim);
+      margin-left: auto;
+    }
+    .print-date {
+      font-family: var(--font-mono);
+      font-size: 11px;
+      color: var(--text-muted);
+      padding-left: 12px;
+      border-left: 1px solid var(--border);
+    }
+
+    .print-body {
+      flex: 1;
+      min-height: 0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* === Kanban in print: 7 cols fit page === */
+    .print-board .kanban-wrap {
+      flex: 1;
+      overflow: visible !important;
+      padding: 0;
+    }
+    .print-board .kanban {
+      display: grid;
+      grid-template-columns: repeat(7, minmax(0, 1fr));
+      grid-auto-flow: row;
+      gap: 10px;
+      min-width: 0;
+      height: 100%;
+    }
+    .print-board .col { min-width: 0; }
+    .print-board .col-body {
+      overflow: visible !important;
+      padding: 6px;
+      gap: 6px;
+    }
+    .print-board .task {
+      padding: 7px 8px;
+      gap: 4px;
+    }
+    .print-board .task .title { font-size: 12px; line-height: 1.3; }
+    .print-board .task .desc {
+      font-size: 10.5px;
+      line-height: 1.35;
+      display: -webkit-box;
+      -webkit-line-clamp: 3;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+    .print-board .col-head .add { display: none; }
+
+    /* === Timeline in print === */
+    .print-timeline .timeline { overflow: visible; }
+    .print-timeline .tl-head {
+      position: static !important;
+      padding: 0 0 12px 0;
+      background: transparent;
+      border-bottom: 1px solid var(--border);
+    }
+    .print-timeline .tl-body {
+      max-width: none;
+      padding: 14px 0 0 0;
+      margin: 0;
+    }
+    .print-timeline .tl-side { position: static !important; }
+    .print-timeline .tl-group { margin-bottom: 18px; }
+
+    /* === Week in print === */
+    .print-week .week-view { height: 100%; }
+    .print-week .week-head {
+      padding: 0 0 10px 0;
+      background: transparent;
+      border-bottom: 1px solid var(--border);
+    }
+    .print-week .week-grid-wrap {
+      flex: 1;
+      overflow: visible !important;
+    }
+    .print-week .week-grid { min-width: 0; }
+    .print-week .week-gutter,
+    .print-week .week-day-head { position: static !important; }
+    .print-week .week-head .btn { display: none; }
+
+    /* hide all interactive overlays */
+    .topbar, .rail, .right, .toolbar, .toast, .modal-backdrop,
+    .tweaks-toggle, .tweaks-panel, [class*="tweaks-"] { display: none !important; }
+
+    @media print {
+      @page { size: 1440px 960px; margin: 0; }
+      html, body { background: var(--bg) !important; }
+      * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+      .print-page {
+        width: 1440px;
+        height: 960px;
+        box-shadow: none;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="root"></div>
+
+  <script src="https://unpkg.com/react@18.3.1/umd/react.development.js" integrity="sha384-hD6/rw4ppMLGNu3tX5cjIb+uRZ7UkRJ6BPkLpg4hAu/6onKUg4lLsHAs9EBPT82L" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/react-dom@18.3.1/umd/react-dom.development.js" integrity="sha384-u6aeetuaXnQ38mYT8rp6sbXaQe3NL9t+IBXmnYxwkUI2Hw4bsp2Wvmx4yRQF1uAm" crossorigin="anonymous"></script>
+  <script src="https://unpkg.com/@babel/standalone@7.29.0/babel.min.js" integrity="sha384-m08KidiNqLdpJqLq95G/LEi8Qvjl/xUYll3QILypMoQ65QorJ9Lvtp2RXYGBFj1y" crossorigin="anonymous"></script>
+
+  <script type="text/babel" src="data.jsx"></script>
+  <script type="text/babel" src="kanban.jsx"></script>
+  <script type="text/babel" src="calendar.jsx"></script>
+  <script type="text/babel" src="people.jsx"></script>
+  <script type="text/babel" src="timeline.jsx"></script>
+  <script type="text/babel" src="week.jsx"></script>
+
+  <script type="text/babel">
+    const D = window.__APP_DATA__;
+    const tasks = D.SAMPLE_TASKS;
+    const events = D.SAMPLE_EVENTS.map(e => ({...e, date: D.isoToday}));
+    const todayIso = D.isoToday;
+    const noop = () => {};
+
+    const scheduleMap = {};
+    events.forEach(e => { if (e.taskId) scheduleMap[e.taskId] = fmtHour(e.start); });
+
+    const stats = {};
+    D.STATUSES.forEach(s => stats[s.id] = 0);
+    tasks.forEach(t => stats[t.status]++);
+
+    function PrintHead({ view }) {
+      return (
+        <div className="print-head">
+          <div className="print-brand"><span className="dot" /><span>todo<span style={{color:"var(--text-muted)"}}>·</span>cpp</span></div>
+          <div className="print-view"><b>{view}</b></div>
+          <div className="print-stats">
+            {tasks.length} tasks · {stats.prog + stats.half} active · {stats.blocked} blocked · {stats.review} review
+          </div>
+          <div className="print-date">{todayIso}</div>
+        </div>
+      );
+    }
+
+    function PrintApp() {
+      return (
+        <React.Fragment>
+          <section className="print-page print-board">
+            <PrintHead view="Board · Kanban" />
+            <div className="print-body">
+              <KanbanBoard
+                tasks={tasks}
+                statuses={D.STATUSES}
+                filters={{q:"", priorities: new Set()}}
+                onMove={noop}
+                onOpen={noop}
+                onCreate={noop}
+                scheduleMap={scheduleMap}
+              />
+            </div>
+          </section>
+          <section className="print-page print-timeline">
+            <PrintHead view="Timeline · sorted by deadline" />
+            <div className="print-body">
+              <TimelineView
+                tasks={tasks}
+                statuses={D.STATUSES}
+                onOpen={noop}
+                filters={{q:"", priorities: new Set()}}
+                scheduleMap={scheduleMap}
+                showDone={false}
+                onToggleDone={noop}
+              />
+            </div>
+          </section>
+          <section className="print-page print-week">
+            <PrintHead view="Week · 7-day overview" />
+            <div className="print-body">
+              <WeekView
+                tasks={tasks}
+                events={events}
+                statuses={D.STATUSES}
+                selectedIso={todayIso}
+                onSelectDay={noop}
+                onOpen={noop}
+                onEventOpen={noop}
+              />
+            </div>
+          </section>
+        </React.Fragment>
+      );
+    }
+
+    ReactDOM.createRoot(document.getElementById("root")).render(<PrintApp />);
+
+    // Auto-print after fonts + render settle
+    (async () => {
+      try {
+        if (document.fonts && document.fonts.ready) await document.fonts.ready;
+      } catch (e) {}
+      await new Promise(r => setTimeout(r, 800));
+      window.print();
+    })();
+  </script>
+</body>
+</html>
