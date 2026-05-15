@@ -96,9 +96,12 @@ ApplicationWindow {
                 spacing: 0
                 FilterBar {
                     Layout.fillWidth: true
+                    visible: AppController.currentView !== "docs"
+                    Layout.preferredHeight: visible ? implicitHeight : 0
                     viewLabel: AppController.currentView === "board" ? "Board"
                              : AppController.currentView === "timeline" ? "Timeline"
-                             : "Week"
+                             : AppController.currentView === "week" ? "Week"
+                             : "Docs"
                     priorities: win.prioritiesFilter
                     totalCount: AppController.tasks.rowCount()
                     activeCount: win.activeCount()
@@ -118,6 +121,7 @@ ApplicationWindow {
                     sourceComponent: {
                         if (AppController.currentView === "timeline") return timelineComp;
                         if (AppController.currentView === "week")     return weekComp;
+                        if (AppController.currentView === "docs")     return docsComp;
                         return boardComp;
                     }
                 }
@@ -150,6 +154,10 @@ ApplicationWindow {
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onEventClicked: (id) => eventEditor.showForId(id)
                     }
+                }
+                Component {
+                    id: docsComp
+                    DocsView {}
                 }
             }
         }

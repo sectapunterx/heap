@@ -33,6 +33,8 @@ qt_add_qml_module(todocpp
         qml/TaskCard.qml
         qml/TimelineView.qml
         qml/WeekView.qml
+        qml/DocsView.qml
+        qml/DocsEditor.qml
         qml/MiniWeek.qml
         qml/DayCalendar.qml
         qml/PeopleList.qml
