@@ -6,7 +6,9 @@ import TodoCpp
 Rectangle {
     id: root
     color: Theme.panel2
-    implicitHeight: Math.min(220, col.implicitHeight + 24)
+
+    signal personRequested(string id)
+    signal newPersonRequested()
 
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
@@ -20,6 +22,7 @@ Rectangle {
         spacing: 8
 
         RowLayout {
+            Layout.fillWidth: true
             spacing: 6
             Text {
                 text: "КОМУ НАПИСАТЬ"
@@ -43,10 +46,32 @@ Rectangle {
                 }
                 Connections {
                     target: AppController.people
-                    function onDataChanged() { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
+                    function onDataChanged()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
+                    function onRowsInserted()   { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
+                    function onRowsRemoved()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
                 }
             }
             Item { Layout.fillWidth: true }
+            Rectangle {
+                width: 22; height: 22; radius: 5
+                color: addMA.containsMouse ? Theme.panel3 : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: "+"
+                    color: addMA.containsMouse ? Theme.text : Theme.textDim
+                    font.pixelSize: 14
+                }
+                MouseArea {
+                    id: addMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.newPersonRequested()
+                    ToolTip.visible: containsMouse
+                    ToolTip.delay: 400
+                    ToolTip.text: "Добавить контакт"
+                }
+            }
         }
 
         ListView {
@@ -55,6 +80,7 @@ Rectangle {
             clip: true
             spacing: 6
             model: AppController.people
+            boundsBehavior: Flickable.StopAtBounds
 
             delegate: Rectangle {
                 id: prow
@@ -67,8 +93,8 @@ Rectangle {
                 width: ListView.view.width
                 height: layout.implicitHeight + 12
                 radius: 7
-                color: stateMA.containsMouse ? Theme.panel : "transparent"
-                border.color: stateMA.containsMouse ? Theme.border : "transparent"
+                color: rowMA.containsMouse ? Theme.panel : "transparent"
+                border.color: rowMA.containsMouse ? Theme.border : "transparent"
                 border.width: 1
 
                 RowLayout {
@@ -99,7 +125,7 @@ Rectangle {
                         spacing: 1
                         Text {
                             width: parent.width
-                            text: prow.name + "  · " + prow.role
+                            text: prow.name + (prow.role.length ? "  · " + prow.role : "")
                             color: (prow.state === "todo") ? Theme.text : Theme.textMuted
                             font.pixelSize: 12
                             font.weight: Font.Medium
@@ -117,6 +143,31 @@ Rectangle {
                             opacity: prow.state === "replied" ? 0.6 : 1.0
                         }
                     }
+
+                    // Edit pencil (only on hover)
+                    Rectangle {
+                        visible: rowMA.containsMouse
+                        width: 22; height: 22; radius: 5
+                        color: editMA.containsMouse ? Theme.panel3 : "transparent"
+                        Text {
+                            anchors.centerIn: parent
+                            text: "✎"
+                            color: Theme.textMuted
+                            font.pixelSize: 12
+                        }
+                        MouseArea {
+                            id: editMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.personRequested(prow.id)
+                            ToolTip.visible: containsMouse
+                            ToolTip.delay: 400
+                            ToolTip.text: "Редактировать"
+                        }
+                    }
+
+                    // Clickable state badge — cycles
                     Rectangle {
                         radius: 999
                         color: prow.state === "pinged" ? Theme.withAlpha(Theme.p1, 0.10)
@@ -127,7 +178,7 @@ Rectangle {
                                     : Theme.border
                         border.width: 1
                         implicitWidth: stT.implicitWidth + 14
-                        implicitHeight: 20
+                        implicitHeight: 22
                         Text {
                             id: stT
                             anchors.centerIn: parent
@@ -140,16 +191,30 @@ Rectangle {
                             font.family: Theme.fontMono
                             font.pixelSize: 10
                             font.letterSpacing: 1
+                            font.weight: Font.DemiBold
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: AppController.cyclePerson(prow.id)
+                            ToolTip.visible: containsMouse
+                            ToolTip.delay: 400
+                            ToolTip.text: "написать → написал → ответил"
                         }
                     }
                 }
 
                 MouseArea {
-                    id: stateMA
+                    id: rowMA
                     anchors.fill: parent
                     hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: AppController.cyclePerson(prow.id)
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onDoubleClicked: root.personRequested(prow.id)
+                    onClicked: (mouse) => {
+                        if (mouse.button === Qt.RightButton) root.personRequested(prow.id);
+                    }
+                    z: -1
                 }
             }
         }

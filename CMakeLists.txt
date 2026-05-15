@@ -36,6 +36,7 @@ qt_add_qml_module(todocpp
         qml/PeopleList.qml
         qml/TaskEditor.qml
         qml/EventEditor.qml
+        qml/PersonEditor.qml
         qml/TweaksPanel.qml
         qml/Toast.qml
         qml/PillButton.qml

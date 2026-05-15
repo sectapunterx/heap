@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Window
 import QtQuick.Layouts
+import QtQuick.Controls
 import QtQuick.Controls.Basic
 import TodoCpp
 
@@ -121,18 +122,44 @@ ApplicationWindow {
                 anchors.fill: parent
                 spacing: 0
                 MiniWeek { Layout.fillWidth: true }
-                DayCalendar {
+                SplitView {
+                    id: rightSplit
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    onEventClicked: (id) => eventEditor.showForId(id)
+                    orientation: Qt.Vertical
+
+                    handle: Rectangle {
+                        implicitHeight: 6
+                        color: SplitHandle.pressed ? Theme.accent
+                             : SplitHandle.hovered ? Theme.borderStrong
+                             : Theme.border
+                        Rectangle {
+                            anchors.centerIn: parent
+                            width: 32; height: 2; radius: 1
+                            color: SplitHandle.hovered ? Theme.text : Theme.textDim
+                            opacity: 0.6
+                        }
+                    }
+
+                    DayCalendar {
+                        SplitView.fillHeight: true
+                        SplitView.minimumHeight: 120
+                        onEventClicked: (id) => eventEditor.showForId(id)
+                    }
+                    PeopleList {
+                        SplitView.preferredHeight: 220
+                        SplitView.minimumHeight: 64
+                        onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
+                        onNewPersonRequested: personEditor.showFor(AppController.newPersonDraft())
+                    }
                 }
-                PeopleList { Layout.fillWidth: true }
             }
         }
     }
 
-    TaskEditor  { id: taskEditor }
-    EventEditor { id: eventEditor }
+    TaskEditor   { id: taskEditor }
+    EventEditor  { id: eventEditor }
+    PersonEditor { id: personEditor }
 
     // Floating tweaks panel
     TweaksPanel {
