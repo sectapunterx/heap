@@ -43,6 +43,34 @@ void AppController::setCurrentView(const QString &v) {
     emit currentViewChanged();
 }
 
+void AppController::setWorkdayStart(int v) {
+    v = qBound(0, v, 23);
+    if (v >= m_workdayEnd) v = m_workdayEnd - 1;
+    if (v == m_workdayStart) return;
+    m_workdayStart = v;
+    emit workdayChanged();
+}
+
+void AppController::setWorkdayEnd(int v) {
+    v = qBound(1, v, 24);
+    if (v <= m_workdayStart) v = m_workdayStart + 1;
+    if (v == m_workdayEnd) return;
+    m_workdayEnd = v;
+    emit workdayChanged();
+}
+
+void AppController::setCrumbProject(const QString &v) {
+    if (v == m_crumbProject) return;
+    m_crumbProject = v;
+    emit crumbProjectChanged();
+}
+
+void AppController::setCrumbUser(const QString &v) {
+    if (v == m_crumbUser) return;
+    m_crumbUser = v;
+    emit crumbUserChanged();
+}
+
 void AppController::moveTask(const QString &id, const QString &newStatus) {
     const int row = m_tasks.indexOfId(id);
     if (row < 0) return;

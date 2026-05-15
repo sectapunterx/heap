@@ -8,6 +8,8 @@ Rectangle {
     color: Theme.panel
     width: 56
 
+    signal openTweaks(Item anchor)
+
     Rectangle {
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         width: 1; color: Theme.border
@@ -45,6 +47,12 @@ Rectangle {
 
         Item { Layout.fillHeight: true }
 
+        RailBtn {
+            id: tweaksBtn
+            glyph: "✦"
+            tooltipText: "Tweaks · тема, плотность, рабочий день"
+            onActivated: root.openTweaks(tweaksBtn)
+        }
         RailBtn { glyph: "⚙"; tooltipText: "Settings"; Layout.bottomMargin: 14 }
     }
 
