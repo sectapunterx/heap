@@ -13,8 +13,8 @@ Item {
     signal eventClicked(string id)
     signal dayClicked(date d)
 
-    readonly property int hoursStart: 8
-    readonly property int hoursEnd: 22
+    readonly property int hoursStart: AppController.workdayStart
+    readonly property int hoursEnd:   AppController.workdayEnd
     readonly property int hourH: 38
     readonly property var dowLabels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
 
