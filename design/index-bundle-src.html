@@ -8,6 +8,20 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="styles.css" />
+  <template id="__bundler_thumbnail" data-bg-color="#0b0e13">
+    <svg viewBox="0 0 1200 800" xmlns="http://www.w3.org/2000/svg">
+      <rect width="1200" height="800" fill="#0b0e13"/>
+      <!-- accent dot brand mark -->
+      <rect x="500" y="320" width="60" height="60" rx="14" fill="#3ec5e3"/>
+      <!-- 3 small kanban-like columns -->
+      <rect x="580" y="320" width="40" height="60" rx="6" fill="#1d232d"/>
+      <rect x="630" y="320" width="40" height="60" rx="6" fill="#1d232d"/>
+      <rect x="680" y="320" width="40" height="60" rx="6" fill="#1d232d"/>
+      <!-- wordmark -->
+      <text x="600" y="450" font-family="ui-monospace, monospace" font-size="44" font-weight="600" fill="#e5ecf3" text-anchor="middle">todo·cpp</text>
+      <text x="600" y="490" font-family="ui-monospace, monospace" font-size="18" fill="#8a94a3" text-anchor="middle">loading…</text>
+    </svg>
+  </template>
 </head>
 <body>
   <div id="root"></div>
@@ -23,7 +37,6 @@
   <script type="text/babel" src="people.jsx"></script>
   <script type="text/babel" src="timeline.jsx"></script>
   <script type="text/babel" src="week.jsx"></script>
-  <script type="text/babel" src="docs.jsx"></script>
   <script type="text/babel" src="app.jsx"></script>
 </body>
 </html>
