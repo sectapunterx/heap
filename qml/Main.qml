@@ -17,6 +17,12 @@ ApplicationWindow {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+    property bool showDoneTimeline: false
+
+    Component.onCompleted: {
+        if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
+            AppController.currentView = INITIAL_VIEW;
+    }
 
     function activeCount() {
         return AppController.countByStatus("prog") + AppController.countByStatus("half");
@@ -73,7 +79,7 @@ ApplicationWindow {
             Layout.fillHeight: true
         }
 
-        // Main column: filter bar + kanban
+        // Main column: filter bar + active view
         Item {
             Layout.row: 1; Layout.column: 1
             Layout.fillWidth: true
@@ -83,6 +89,9 @@ ApplicationWindow {
                 spacing: 0
                 FilterBar {
                     Layout.fillWidth: true
+                    viewLabel: AppController.currentView === "board" ? "Board"
+                             : AppController.currentView === "timeline" ? "Timeline"
+                             : "Week"
                     priorities: win.prioritiesFilter
                     totalCount: AppController.tasks.rowCount()
                     activeCount: win.activeCount()
@@ -95,15 +104,45 @@ ApplicationWindow {
                     }
                     onClearPriorities: win.prioritiesFilter = ({})
                 }
-                KanbanBoard {
-                    id: board
+                Loader {
+                    id: viewLoader
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    searchText: win.searchText
-                    prioritiesFilter: win.prioritiesFilter
-                    scheduleMap: win._scheduleMap
-                    onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                    onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
+                    sourceComponent: {
+                        if (AppController.currentView === "timeline") return timelineComp;
+                        if (AppController.currentView === "week")     return weekComp;
+                        return boardComp;
+                    }
+                }
+                Component {
+                    id: boardComp
+                    KanbanBoard {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        scheduleMap: win._scheduleMap
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
+                    }
+                }
+                Component {
+                    id: timelineComp
+                    TimelineView {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        scheduleMap: win._scheduleMap
+                        showDone: win.showDoneTimeline
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
+                    }
+                }
+                Component {
+                    id: weekComp
+                    WeekView {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onEventClicked: (id) => eventEditor.showForId(id)
+                    }
                 }
             }
         }
