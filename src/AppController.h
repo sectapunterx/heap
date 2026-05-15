@@ -23,6 +23,12 @@ class AppController : public QObject {
     Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
     Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
 
+    Q_PROPERTY(int workdayStart READ workdayStart WRITE setWorkdayStart NOTIFY workdayChanged)
+    Q_PROPERTY(int workdayEnd   READ workdayEnd   WRITE setWorkdayEnd   NOTIFY workdayChanged)
+
+    Q_PROPERTY(QString crumbProject READ crumbProject WRITE setCrumbProject NOTIFY crumbProjectChanged)
+    Q_PROPERTY(QString crumbUser    READ crumbUser    WRITE setCrumbUser    NOTIFY crumbUserChanged)
+
 public:
     explicit AppController(QObject *parent = nullptr);
 
@@ -43,6 +49,16 @@ public:
 
     QString currentView() const { return m_currentView; }
     void    setCurrentView(const QString &v);
+
+    int  workdayStart() const { return m_workdayStart; }
+    void setWorkdayStart(int v);
+    int  workdayEnd() const { return m_workdayEnd; }
+    void setWorkdayEnd(int v);
+
+    QString crumbProject() const { return m_crumbProject; }
+    void    setCrumbProject(const QString &v);
+    QString crumbUser() const { return m_crumbUser; }
+    void    setCrumbUser(const QString &v);
 
     // ---- Task ops ----
     Q_INVOKABLE void moveTask(const QString &id, const QString &newStatus);
@@ -85,6 +101,9 @@ signals:
     void themeChanged();
     void densityChanged();
     void currentViewChanged();
+    void workdayChanged();
+    void crumbProjectChanged();
+    void crumbUserChanged();
     void toast(const QString &message);
 
 private:
@@ -97,4 +116,8 @@ private:
     QString      m_theme       = "dark";
     QString      m_density     = "comfy";
     QString      m_currentView = "board";
+    int          m_workdayStart = 9;
+    int          m_workdayEnd   = 19;
+    QString      m_crumbProject = "eNB-core";
+    QString      m_crumbUser    = "You";
 };

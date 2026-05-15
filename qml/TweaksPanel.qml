@@ -1,70 +1,140 @@
 import QtQuick
 import QtQuick.Layouts
-import QtQuick.Controls.Basic
+import QtQuick.Controls
 import TodoCpp
 
-Item {
+Popup {
     id: root
+    modal: false
+    focus: true
+    padding: 0
     width: 260
-    height: collapsed ? 36 : col.implicitHeight + 28
-    property bool collapsed: true
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
-    Behavior on height { NumberAnimation { duration: 120 } }
-
-    Rectangle {
-        anchors.fill: parent
+    background: Rectangle {
         radius: 12
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
-        opacity: 0.96
     }
 
-    ColumnLayout {
-        id: col
-        anchors.fill: parent
-        anchors.margins: 10
-        spacing: 10
+    contentItem: ColumnLayout {
+        spacing: 0
 
-        RowLayout {
+        // Header
+        Item {
             Layout.fillWidth: true
-            Text {
-                text: "TWEAKS"
-                color: Theme.textMuted
-                font.pixelSize: 11
-                font.weight: Font.DemiBold
-                font.letterSpacing: 1
-            }
-            Item { Layout.fillWidth: true }
-            Text {
-                text: root.collapsed ? "▾" : "▴"
-                color: Theme.textDim
-                font.pixelSize: 12
-            }
-            MouseArea {
+            Layout.preferredHeight: 38
+            Layout.topMargin: 0
+            RowLayout {
                 anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: root.collapsed = !root.collapsed
+                anchors.leftMargin: 14; anchors.rightMargin: 8
+                Text {
+                    text: "TWEAKS"
+                    color: Theme.textMuted
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 1
+                }
+                Item { Layout.fillWidth: true }
+                Rectangle {
+                    width: 22; height: 22; radius: 5
+                    color: closeMA.containsMouse ? Theme.panel3 : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "✕"
+                        color: Theme.textDim
+                        font.pixelSize: 12
+                    }
+                    MouseArea {
+                        id: closeMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.close()
+                    }
+                }
             }
         }
 
-        ColumnLayout {
-            visible: !root.collapsed
-            spacing: 10
-            Layout.fillWidth: true
+        Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
 
-            Text { text: "Тема"; color: Theme.textDim; font.pixelSize: 11 }
-            RowLayout {
-                spacing: 4
-                SegButton { text: "Тёмная";  active: AppController.theme === "dark";  onClicked: AppController.theme = "dark" }
-                SegButton { text: "Светлая"; active: AppController.theme === "light"; onClicked: AppController.theme = "light" }
+        ColumnLayout {
+            Layout.fillWidth: true
+            Layout.leftMargin: 14; Layout.rightMargin: 14
+            Layout.topMargin: 12; Layout.bottomMargin: 14
+            spacing: 14
+
+            ColumnLayout {
+                spacing: 6
+                Layout.fillWidth: true
+                Text { text: "Внешний вид"; color: Theme.textDim; font.pixelSize: 10; font.letterSpacing: 1; font.weight: Font.DemiBold }
+                Text { text: "Тема"; color: Theme.textMuted; font.pixelSize: 11 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    SegButton { text: "Тёмная";  active: AppController.theme === "dark";  onClicked: AppController.theme = "dark" }
+                    SegButton { text: "Светлая"; active: AppController.theme === "light"; onClicked: AppController.theme = "light" }
+                }
+                Text { text: "Плотность"; color: Theme.textMuted; font.pixelSize: 11; topPadding: 6 }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    SegButton { text: "Compact"; active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
+                    SegButton { text: "Comfy";   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
+                }
             }
 
-            Text { text: "Плотность"; color: Theme.textDim; font.pixelSize: 11 }
-            RowLayout {
-                spacing: 4
-                SegButton { text: "Compact"; active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
-                SegButton { text: "Comfy";   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
+            ColumnLayout {
+                spacing: 6
+                Layout.fillWidth: true
+                Text { text: "Рабочий день"; color: Theme.textDim; font.pixelSize: 10; font.letterSpacing: 1; font.weight: Font.DemiBold }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 8
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text { text: "Начало"; color: Theme.textMuted; font.pixelSize: 11 }
+                        SpinBox {
+                            id: startSpin
+                            Layout.fillWidth: true
+                            from: 0; to: 23
+                            value: AppController.workdayStart
+                            onValueModified: AppController.workdayStart = value
+                            background: Rectangle { color: Theme.panel2; border.color: Theme.border; border.width: 1; radius: 6 }
+                            contentItem: TextInput {
+                                text: startSpin.textFromValue(startSpin.value, startSpin.locale)
+                                color: Theme.text
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                readOnly: !startSpin.editable
+                                selectByMouse: true
+                            }
+                        }
+                    }
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 2
+                        Text { text: "Конец"; color: Theme.textMuted; font.pixelSize: 11 }
+                        SpinBox {
+                            id: endSpin
+                            Layout.fillWidth: true
+                            from: 1; to: 24
+                            value: AppController.workdayEnd
+                            onValueModified: AppController.workdayEnd = value
+                            background: Rectangle { color: Theme.panel2; border.color: Theme.border; border.width: 1; radius: 6 }
+                            contentItem: TextInput {
+                                text: endSpin.textFromValue(endSpin.value, endSpin.locale)
+                                color: Theme.text
+                                horizontalAlignment: Text.AlignHCenter
+                                verticalAlignment: Text.AlignVCenter
+                                readOnly: !endSpin.editable
+                                selectByMouse: true
+                            }
+                        }
+                    }
+                }
             }
         }
     }

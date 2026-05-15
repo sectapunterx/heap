@@ -75,8 +75,15 @@ ApplicationWindow {
 
         // Side rail
         SideRail {
+            id: rail
             Layout.row: 1; Layout.column: 0
             Layout.fillHeight: true
+            onOpenTweaks: (anchor) => {
+                const p = anchor.mapToItem(win.contentItem, 0, 0);
+                tweaks.x = p.x + anchor.width + 6;
+                tweaks.y = Math.max(8, Math.min(p.y, win.contentItem.height - tweaks.height - 8));
+                tweaks.open();
+            }
         }
 
         // Main column: filter bar + active view
@@ -200,15 +207,8 @@ ApplicationWindow {
     EventEditor  { id: eventEditor }
     PersonEditor { id: personEditor }
 
-    // Floating tweaks panel
-    TweaksPanel {
-        id: tweaks
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.rightMargin: 16
-        anchors.bottomMargin: 16
-        z: 50
-    }
+    // Tweaks popover (opened from the side rail)
+    TweaksPanel { id: tweaks }
 
     Toast {
         id: toast
