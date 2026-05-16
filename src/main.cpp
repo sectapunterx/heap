@@ -4,6 +4,12 @@
 #include <QQuickStyle>
 #include <QStringList>
 
+#include <csignal>
+
+namespace {
+void quitOnSignal(int) { QCoreApplication::quit(); }
+}
+
 int main(int argc, char *argv[]) {
     QGuiApplication app(argc, argv);
     app.setOrganizationName("todocpp");
@@ -12,6 +18,9 @@ int main(int argc, char *argv[]) {
     app.setApplicationDisplayName(QStringLiteral("todo·cpp"));
 
     QQuickStyle::setStyle("Basic");
+
+    std::signal(SIGINT,  quitOnSignal);
+    std::signal(SIGTERM, quitOnSignal);
 
     QString initialView;
     const QStringList args = app.arguments();

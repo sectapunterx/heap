@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QDate>
+#include <QTimer>
 #include <QVariantList>
 #include <qqmlregistration.h>
 
@@ -29,8 +30,14 @@ class AppController : public QObject {
     Q_PROPERTY(QString crumbProject READ crumbProject WRITE setCrumbProject NOTIFY crumbProjectChanged)
     Q_PROPERTY(QString crumbUser    READ crumbUser    WRITE setCrumbUser    NOTIFY crumbUserChanged)
 
+    Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
+    Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
+
 public:
     explicit AppController(QObject *parent = nullptr);
+    ~AppController() override;
+
+    Q_INVOKABLE void flushSave();
 
     TaskModel*   tasks()    { return &m_tasks; }
     EventModel*  events()   { return &m_events; }
@@ -59,6 +66,11 @@ public:
     void    setCrumbProject(const QString &v);
     QString crumbUser() const { return m_crumbUser; }
     void    setCrumbUser(const QString &v);
+
+    QString docsState() const { return m_docsState; }
+    void    setDocsState(const QString &v);
+
+    bool hasPendingUndo() const { return m_pendingUndo.kind != PendingUndo::None; }
 
     // ---- Task ops ----
     Q_INVOKABLE void moveTask(const QString &id, const QString &newStatus);
@@ -98,6 +110,10 @@ public:
 
     Q_INVOKABLE void copyToClipboard(const QString &text);
 
+    // ---- Undo ----
+    Q_INVOKABLE void undoLastDeletion();
+    Q_INVOKABLE void clearPendingUndo();
+
 signals:
     void selectedDateChanged();
     void themeChanged();
@@ -106,7 +122,10 @@ signals:
     void workdayChanged();
     void crumbProjectChanged();
     void crumbUserChanged();
+    void docsStateChanged();
+    void pendingUndoChanged();
     void toast(const QString &message);
+    void undoableToast(const QString &message, int seconds);
 
 private:
     TaskModel    m_tasks;
@@ -122,4 +141,29 @@ private:
     int          m_workdayEnd   = 19;
     QString      m_crumbProject = "eNB-core";
     QString      m_crumbUser    = "You";
+    QString      m_docsState;
+
+    // Persistence
+    QTimer*      m_saveTimer = nullptr;
+    bool         m_loading   = false;
+    void scheduleSave();
+    void saveStateNow();
+    void loadStateOnStart();
+    QString stateFilePath() const;
+
+    // Undo machinery
+    struct PendingUndo {
+        enum Kind { None, Task, Event, Person } kind = None;
+        // payload — only the field matching `kind` is populated
+        ::Task     task;
+        ::CalEvent event;
+        ::Person   person;
+        int row = -1;
+        // when a task is deleted, events lose their taskId — record what to restore
+        QVector<QPair<QString, QString>> detachedEventIds; // (eventId, originalTaskId)
+    };
+    PendingUndo  m_pendingUndo;
+    QTimer*      m_undoTimer = nullptr;
+    void armUndo(int seconds);
+    void cancelUndo();
 };

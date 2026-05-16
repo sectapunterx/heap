@@ -55,6 +55,9 @@ ApplicationWindow {
         target: AppController
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
         function onToast(msg) { toast.show(msg) }
+        function onUndoableToast(msg, secs) {
+            toast.showWithAction(msg, "Отменить", secs, function () { AppController.undoLastDeletion() });
+        }
     }
 
     GridLayout {
