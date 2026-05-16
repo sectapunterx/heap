@@ -391,8 +391,8 @@ Popup {
                             text: root.draft.name || ""; onTextChanged: root.draft.name = text }
                 FormField { placeholderText: "Tech Lead / QA / PHY team…"
                             text: root.draft.role || ""; onTextChanged: root.draft.role = text }
-                FieldLabel { text: "SLACK CHANNEL" }
-                FieldLabel { text: "SLACK HANDLE" }
+                FieldLabel { text: "MATTERMOST CHANNEL" }
+                FieldLabel { text: "MATTERMOST HANDLE" }
                 FormField { mono: true; placeholderText: "#lte-core"
                             text: root.draft.channel || ""; onTextChanged: root.draft.channel = text }
                 FormField { mono: true; placeholderText: "@name.surname"

@@ -158,12 +158,12 @@ Item {
     ]
 
     property var contacts: [
-        { name: "Олег Т.",    role: "Tech Lead",          channel: "#lte-core-leads", slack: "@oleg.t",          color: "#d97a6c" },
-        { name: "Andrey S.",  role: "Senior C++",         channel: "#lte-core",       slack: "@andrey.s",        color: "#6cc4b8" },
-        { name: "Hiroshi M.", role: "PHY team",           channel: "#lte-phy",        slack: "@hiroshi.m",       color: "#7cc492" },
-        { name: "Маша К.",    role: "QA Lead",            channel: "#lte-qa",         slack: "@masha.k",         color: "#c87fc7" },
-        { name: "Виктор Л.",  role: "Architect",          channel: "#lte-arch",       slack: "@viktor.l",        color: "#7da8d9" },
-        { name: "On-call",    role: "PagerDuty rotation", channel: "#enb-oncall",     slack: "page: lte-oncall", color: "#e6624c" }
+        { name: "Олег Т.",    role: "Tech Lead",          channel: "#lte-core-leads", mattermost: "@oleg.t",          color: "#d97a6c" },
+        { name: "Andrey S.",  role: "Senior C++",         channel: "#lte-core",       mattermost: "@andrey.s",        color: "#6cc4b8" },
+        { name: "Hiroshi M.", role: "PHY team",           channel: "#lte-phy",        mattermost: "@hiroshi.m",       color: "#7cc492" },
+        { name: "Маша К.",    role: "QA Lead",            channel: "#lte-qa",         mattermost: "@masha.k",         color: "#c87fc7" },
+        { name: "Виктор Л.",  role: "Architect",          channel: "#lte-arch",       mattermost: "@viktor.l",        color: "#7da8d9" },
+        { name: "On-call",    role: "PagerDuty rotation", channel: "#enb-oncall",     mattermost: "page: lte-oncall", color: "#e6624c" }
     ]
 
     readonly property var contactPalette: [
@@ -771,7 +771,7 @@ Item {
                                 ColumnLayout {
                                     spacing: 0
                                     Text { text: "Contacts & Channels"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
-                                    Text { text: "Кому пинговать в Slack и где обсуждать"; color: Theme.textMuted; font.pixelSize: 12 }
+                                    Text { text: "Кому пинговать в ММ и где обсуждать"; color: Theme.textMuted; font.pixelSize: 12 }
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
@@ -875,7 +875,7 @@ Item {
         editor.kind = "contact";
         editor.idx = -1;
         editor.isNew = true;
-        editor.draft = ({ name: "", role: "", channel: "", slack: "", color: root.contactPalette[0] });
+        editor.draft = ({ name: "", role: "", channel: "", mattermost: "", color: root.contactPalette[0] });
         editor.open();
     }
     function openContactEdit(idx) {
