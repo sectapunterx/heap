@@ -18,6 +18,7 @@ Item {
             title: "3GPP / ETSI Standards",
             subtitle: "External — LTE / E-UTRAN protocol specifications",
             accent: Theme.mStandup,
+            customFields: [],
             items: [
                 { ref: "TS 36.331", title: "RRC Protocol Specification",
                   desc: "Radio Resource Control — connection setup, reconfiguration, handover, measurements, SIB.",
@@ -56,6 +57,7 @@ Item {
             title: "Internal — eNB-core",
             subtitle: "Wiki, runbooks, coding standards, on-call",
             accent: Theme.mOneone,
+            customFields: [],
             items: [
                 { ref: "ARCH-001", title: "eNB-core Architecture Overview",
                   desc: "Слой-диаграмма, thread model, message dispatch, IPC между PHY и L2/L3.",
@@ -91,6 +93,7 @@ Item {
             title: "C++ Reference",
             subtitle: "Language, ABI, modern best practices",
             accent: Theme.mSync,
+            customFields: [],
             items: [
                 { ref: "cppreference", title: "C++ Reference",
                   desc: "Полный справочник по языку и stdlib. Главный daily-driver.",
@@ -117,6 +120,7 @@ Item {
             title: "Tools & Debug",
             subtitle: "Профилирование, packet analysis, sanitizers",
             accent: Theme.mFocus,
+            customFields: [],
             items: [
                 { ref: "Wireshark", title: "Wireshark — LTE dissectors",
                   desc: "S1AP, X2AP, NAS, RRC dissectors. mac-lte / rlc-lte / pdcp-lte protos.",
@@ -325,7 +329,7 @@ Item {
     }
     function saveSection(draft, originalId) {
         const copy = sections.map(function (s) {
-            return Object.assign({}, s, { items: s.items.slice() });
+            return Object.assign({}, s, { items: s.items.slice(), customFields: (s.customFields || []).slice() });
         });
         if (originalId === "" || originalId === undefined) {
             // create — generate id
@@ -340,6 +344,7 @@ Item {
                 title: draft.title || "",
                 subtitle: draft.subtitle || "",
                 accent: draft.accent || Theme.accent,
+                customFields: (draft.customFields || []).slice(),
                 items: []
             });
             sections = copy;
@@ -347,9 +352,10 @@ Item {
         } else {
             const i = copy.findIndex(function (s) { return s.id === originalId; });
             if (i < 0) return;
-            copy[i].title    = draft.title || copy[i].title;
-            copy[i].subtitle = draft.subtitle || "";
-            copy[i].accent   = draft.accent || copy[i].accent;
+            copy[i].title        = draft.title || copy[i].title;
+            copy[i].subtitle     = draft.subtitle || "";
+            copy[i].accent       = draft.accent || copy[i].accent;
+            copy[i].customFields = (draft.customFields || []).slice();
             sections = copy;
             showToast("Сохранено: " + draft.title);
         }
@@ -668,6 +674,7 @@ Item {
                                         item: modelData
                                         accent: secCol.section.accent
                                         sectionId: secCol.section.id
+                                        customFields: secCol.section.customFields || []
                                         editMode: root.editMode
                                         width: (cardGrid.width - (cardGrid.columns - 1) * cardGrid.columnSpacing) / cardGrid.columns
                                     }
@@ -828,12 +835,17 @@ Item {
         onDeletedSection: () => root.deleteSection(editor.sectionId)
     }
 
+    function _sectionCustomFields(sectionId) {
+        const s = sections.find(function (x) { return x.id === sectionId; });
+        return s ? (s.customFields || []) : [];
+    }
     function openDocCreate(sectionId) {
         editor.kind = "doc";
         editor.sectionId = sectionId;
         editor.originalRef = "";
         editor.isNew = true;
-        editor.draft = ({ ref: "", title: "", desc: "", url: "", source: "", version: "", updated: "", _sectionId: sectionId });
+        editor.docCustomFields = root._sectionCustomFields(sectionId);
+        editor.draft = ({ ref: "", title: "", desc: "", url: "", source: "", version: "", updated: "", extra: {}, _sectionId: sectionId });
         editor.open();
     }
     function openDocEdit(sectionId, item) {
@@ -841,7 +853,8 @@ Item {
         editor.sectionId = sectionId;
         editor.originalRef = item.ref;
         editor.isNew = false;
-        editor.draft = Object.assign({}, item, { _sectionId: sectionId });
+        editor.docCustomFields = root._sectionCustomFields(sectionId);
+        editor.draft = Object.assign({ extra: {} }, item, { _sectionId: sectionId, extra: Object.assign({}, item.extra || {}) });
         editor.open();
     }
     function openSnippetCreate() {
@@ -884,7 +897,12 @@ Item {
         editor.kind = "section";
         editor.sectionId = s.id;
         editor.isNew = false;
-        editor.draft = ({ title: s.title, subtitle: s.subtitle, accent: String(s.accent) });
+        editor.draft = ({
+            title: s.title,
+            subtitle: s.subtitle,
+            accent: String(s.accent),
+            customFields: (s.customFields || []).slice()
+        });
         editor.open();
     }
 
@@ -943,6 +961,7 @@ Item {
         property color accent: Theme.accent
         property string sectionId: ""
         property bool editMode: false
+        property var customFields: []
         readonly property bool isInternal: (item.url || "").indexOf("#") === 0
         height: cardCol.implicitHeight + 24
         radius: 10
@@ -1004,6 +1023,31 @@ Item {
                 maximumLineCount: 3
                 elide: Text.ElideRight
             }
+
+            // Custom extras — render rows for each field defined on the section
+            Repeater {
+                model: card.customFields
+                delegate: RowLayout {
+                    required property var modelData
+                    Layout.fillWidth: true
+                    spacing: 6
+                    visible: (card.item && card.item.extra && String(card.item.extra[modelData.key] || "").length > 0)
+                    Text {
+                        text: (modelData.label || modelData.key) + ":"
+                        color: Theme.textDim
+                        font.family: Theme.fontMono
+                        font.pixelSize: 10
+                    }
+                    Text {
+                        Layout.fillWidth: true
+                        text: card.item && card.item.extra ? String(card.item.extra[modelData.key] || "") : ""
+                        color: Theme.text
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                    }
+                }
+            }
+
             RowLayout {
                 Layout.fillWidth: true
                 Layout.topMargin: 4

@@ -19,6 +19,7 @@ Popup {
     property var    sections: []
     property var    contactPalette: []
     property var    accentPalette: []    // for section
+    property var    docCustomFields: [] // for doc — schema from the section
     property var    draft: ({})
 
     signal savedDoc(var draft)
@@ -114,6 +115,37 @@ Popup {
                             text: root.draft.source || ""; onTextChanged: root.draft.source = text }
                 FormField { placeholderText: "today, 2 weeks ago…"
                             text: root.draft.updated || ""; onTextChanged: root.draft.updated = text }
+            }
+
+            // Custom fields defined on the section
+            ColumnLayout {
+                visible: root.docCustomFields && root.docCustomFields.length > 0
+                Layout.fillWidth: true
+                spacing: 4
+                FieldLabel { text: "CUSTOM FIELDS" }
+                Repeater {
+                    model: root.docCustomFields
+                    delegate: RowLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 6
+                        Text {
+                            Layout.preferredWidth: 110
+                            text: modelData.label || modelData.key
+                            color: Theme.textMuted
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                        FormField {
+                            placeholderText: modelData.key
+                            text: (root.draft.extra && root.draft.extra[modelData.key]) ? root.draft.extra[modelData.key] : ""
+                            onTextChanged: {
+                                if (!root.draft.extra) root.draft.extra = ({});
+                                root.draft.extra[modelData.key] = text;
+                            }
+                        }
+                    }
+                }
             }
 
             ColumnLayout {
@@ -226,6 +258,120 @@ Popup {
                             onClicked: root.draft.accent = modelData
                         }
                     }
+                }
+            }
+
+            // ── Custom fields list ──────────────────────────────────────
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: 10 }
+            FieldLabel { text: "FIELDS · доп. поля карточек этой секции" }
+
+            ColumnLayout {
+                id: fieldsList
+                Layout.fillWidth: true
+                spacing: 6
+                property int rev: 0
+                function notify() { rev++; root.draft.customFields = (root.draft.customFields || []).slice() }
+                Repeater {
+                    model: (root.draft.customFields || []).length
+                    delegate: RowLayout {
+                        required property int index
+                        Layout.fillWidth: true
+                        spacing: 6
+                        property var fld: (root.draft.customFields || [])[index] || ({ key: "", label: "" })
+                        FormField {
+                            Layout.fillWidth: true
+                            placeholderText: "label"
+                            text: parent.fld.label || ""
+                            onTextChanged: {
+                                if (!root.draft.customFields) return;
+                                const list = root.draft.customFields.slice();
+                                if (!list[parent.index]) return;
+                                list[parent.index] = Object.assign({}, list[parent.index], { label: text });
+                                root.draft.customFields = list;
+                            }
+                        }
+                        FormField {
+                            mono: true
+                            Layout.preferredWidth: 140
+                            placeholderText: "key"
+                            text: parent.fld.key || ""
+                            onTextChanged: {
+                                if (!root.draft.customFields) return;
+                                const list = root.draft.customFields.slice();
+                                if (!list[parent.index]) return;
+                                list[parent.index] = Object.assign({}, list[parent.index], { key: text.toLowerCase().replace(/[^a-z0-9_]+/g, "_") });
+                                root.draft.customFields = list;
+                            }
+                        }
+                        Rectangle {
+                            width: 26; height: 26; radius: 5
+                            color: upMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "↑"; color: Theme.textMuted; font.pixelSize: 12 }
+                            MouseArea {
+                                id: upMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const i = parent.parent.index;
+                                    if (i <= 0) return;
+                                    const list = root.draft.customFields.slice();
+                                    const t = list[i]; list[i] = list[i-1]; list[i-1] = t;
+                                    root.draft.customFields = list;
+                                }
+                            }
+                        }
+                        Rectangle {
+                            width: 26; height: 26; radius: 5
+                            color: dnMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "↓"; color: Theme.textMuted; font.pixelSize: 12 }
+                            MouseArea {
+                                id: dnMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const i = parent.parent.index;
+                                    const cur = root.draft.customFields || [];
+                                    if (i >= cur.length - 1) return;
+                                    const list = cur.slice();
+                                    const t = list[i]; list[i] = list[i+1]; list[i+1] = t;
+                                    root.draft.customFields = list;
+                                }
+                            }
+                        }
+                        Rectangle {
+                            width: 26; height: 26; radius: 5
+                            color: delFMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
+                            border.color: delFMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 13 }
+                            MouseArea {
+                                id: delFMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const i = parent.parent.index;
+                                    const list = (root.draft.customFields || []).slice();
+                                    list.splice(i, 1);
+                                    root.draft.customFields = list;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            PillButton {
+                text: "+ Добавить поле"
+                onClicked: {
+                    const list = (root.draft.customFields || []).slice();
+                    let base = "field"; let key = base; let n = 2;
+                    while (list.some(function (f) { return f.key === key; })) { key = base + "_" + n; n++; }
+                    list.push({ key: key, label: "Field " + list.length });
+                    root.draft.customFields = list;
                 }
             }
         }
