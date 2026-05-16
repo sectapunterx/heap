@@ -17,6 +17,12 @@ ApplicationWindow {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+    property bool showDoneTimeline: false
+
+    Component.onCompleted: {
+        if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
+            AppController.currentView = INITIAL_VIEW;
+    }
 
     function activeCount() {
         return AppController.countByStatus("prog") + AppController.countByStatus("half");
@@ -49,6 +55,9 @@ ApplicationWindow {
         target: AppController
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
         function onToast(msg) { toast.show(msg) }
+        function onUndoableToast(msg, secs) {
+            toast.showWithAction(msg, "Отменить", secs, function () { AppController.undoLastDeletion() });
+        }
     }
 
     GridLayout {
@@ -69,11 +78,18 @@ ApplicationWindow {
 
         // Side rail
         SideRail {
+            id: rail
             Layout.row: 1; Layout.column: 0
             Layout.fillHeight: true
+            onOpenTweaks: (anchor) => {
+                const p = anchor.mapToItem(win.contentItem, 0, 0);
+                tweaks.x = p.x + anchor.width + 6;
+                tweaks.y = Math.max(8, Math.min(p.y, win.contentItem.height - tweaks.height - 8));
+                tweaks.open();
+            }
         }
 
-        // Main column: filter bar + kanban
+        // Main column: filter bar + active view
         Item {
             Layout.row: 1; Layout.column: 1
             Layout.fillWidth: true
@@ -83,6 +99,11 @@ ApplicationWindow {
                 spacing: 0
                 FilterBar {
                     Layout.fillWidth: true
+                    visible: AppController.currentView !== "docs"
+                    viewLabel: AppController.currentView === "board" ? "Board"
+                             : AppController.currentView === "timeline" ? "Timeline"
+                             : AppController.currentView === "week" ? "Week"
+                             : "Docs"
                     priorities: win.prioritiesFilter
                     totalCount: AppController.tasks.rowCount()
                     activeCount: win.activeCount()
@@ -95,15 +116,50 @@ ApplicationWindow {
                     }
                     onClearPriorities: win.prioritiesFilter = ({})
                 }
-                KanbanBoard {
-                    id: board
+                Loader {
+                    id: viewLoader
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    searchText: win.searchText
-                    prioritiesFilter: win.prioritiesFilter
-                    scheduleMap: win._scheduleMap
-                    onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                    onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
+                    sourceComponent: {
+                        if (AppController.currentView === "timeline") return timelineComp;
+                        if (AppController.currentView === "week")     return weekComp;
+                        if (AppController.currentView === "docs")     return docsComp;
+                        return boardComp;
+                    }
+                }
+                Component {
+                    id: boardComp
+                    KanbanBoard {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        scheduleMap: win._scheduleMap
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
+                    }
+                }
+                Component {
+                    id: timelineComp
+                    TimelineView {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        scheduleMap: win._scheduleMap
+                        showDone: win.showDoneTimeline
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
+                    }
+                }
+                Component {
+                    id: weekComp
+                    WeekView {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onEventClicked: (id) => eventEditor.showForId(id)
+                    }
+                }
+                Component {
+                    id: docsComp
+                    DocsView {}
                 }
             }
         }
@@ -112,6 +168,7 @@ ApplicationWindow {
         Rectangle {
             Layout.row: 1; Layout.column: 2
             Layout.preferredWidth: 420
+            Layout.minimumWidth: 360
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
@@ -161,15 +218,8 @@ ApplicationWindow {
     EventEditor  { id: eventEditor }
     PersonEditor { id: personEditor }
 
-    // Floating tweaks panel
-    TweaksPanel {
-        id: tweaks
-        anchors.right: parent.right
-        anchors.bottom: parent.bottom
-        anchors.rightMargin: 16
-        anchors.bottomMargin: 16
-        z: 50
-    }
+    // Tweaks popover (opened from the side rail)
+    TweaksPanel { id: tweaks }
 
     Toast {
         id: toast

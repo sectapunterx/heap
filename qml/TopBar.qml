@@ -39,13 +39,31 @@ Rectangle {
             }
         }
 
-        // Breadcrumbs
-        Text {
-            text: "<b>eNB-core</b> / " + AppController.sprintLabel() + " / <b>You</b>"
-            textFormat: Text.RichText
-            color: Theme.textMuted
-            font.family: Theme.fontMono
-            font.pixelSize: 12
+        // Breadcrumbs — editable in place
+        RowLayout {
+            id: crumbs
+            spacing: 4
+            EditableCrumb {
+                value: AppController.crumbProject
+                placeholder: "project"
+                bold: true
+                onCommitted: (v) => AppController.crumbProject = v
+            }
+            CrumbSep {}
+            // sprint segment — derived; not editable
+            Text {
+                text: AppController.sprintLabel()
+                color: Theme.textMuted
+                font.family: Theme.fontMono
+                font.pixelSize: 12
+            }
+            CrumbSep {}
+            EditableCrumb {
+                value: AppController.crumbUser
+                placeholder: "you"
+                bold: true
+                onCommitted: (v) => AppController.crumbUser = v
+            }
         }
 
         Item { Layout.fillWidth: true }
@@ -92,6 +110,77 @@ Rectangle {
             text: "+ Task"
             primary: true
             onClicked: root.newTaskRequested()
+        }
+    }
+
+    component CrumbSep: Text {
+        text: "/"
+        color: Theme.textMuted
+        font.family: Theme.fontMono
+        font.pixelSize: 12
+    }
+
+    component EditableCrumb: Item {
+        id: ec
+        property string value: ""
+        property string placeholder: ""
+        property bool bold: false
+        property bool editing: false
+        signal committed(string text)
+
+        implicitWidth: editing ? Math.max(60, edit.implicitWidth + 12) : Math.max(20, label.implicitWidth + 6)
+        implicitHeight: 22
+
+        Rectangle {
+            anchors.fill: parent
+            radius: 4
+            color: hoverMA.containsMouse && !ec.editing ? Theme.panel2 : (ec.editing ? Theme.panel2 : "transparent")
+            border.color: ec.editing ? Theme.accent : "transparent"
+            border.width: ec.editing ? 1 : 0
+        }
+
+        Text {
+            id: label
+            anchors.centerIn: parent
+            visible: !ec.editing
+            text: ec.value.length > 0 ? ec.value : ec.placeholder
+            color: ec.value.length > 0 ? Theme.text : Theme.textDim
+            font.family: Theme.fontMono
+            font.pixelSize: 12
+            font.weight: ec.bold ? Font.Medium : Font.Normal
+        }
+
+        TextField {
+            id: edit
+            anchors.fill: parent
+            anchors.leftMargin: 4; anchors.rightMargin: 4
+            visible: ec.editing
+            text: ec.value
+            placeholderText: ec.placeholder
+            color: Theme.text
+            placeholderTextColor: Theme.textDim
+            background: Item {}
+            verticalAlignment: Text.AlignVCenter
+            font.family: Theme.fontMono
+            font.pixelSize: 12
+            font.weight: ec.bold ? Font.Medium : Font.Normal
+            selectByMouse: true
+            onAccepted: { ec.committed(edit.text.trim()); ec.editing = false }
+            onActiveFocusChanged: if (!activeFocus && ec.editing) { ec.committed(edit.text.trim()); ec.editing = false }
+            Keys.onEscapePressed: { edit.text = ec.value; ec.editing = false }
+        }
+
+        MouseArea {
+            id: hoverMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.IBeamCursor
+            visible: !ec.editing
+            onClicked: {
+                ec.editing = true;
+                edit.forceActiveFocus();
+                edit.selectAll();
+            }
         }
     }
 }

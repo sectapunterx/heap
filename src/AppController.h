@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QDate>
+#include <QTimer>
 #include <QVariantList>
 #include <qqmlregistration.h>
 
@@ -15,15 +16,28 @@ class AppController : public QObject {
     Q_PROPERTY(TaskModel*   tasks    READ tasks    CONSTANT)
     Q_PROPERTY(EventModel*  events   READ events   CONSTANT)
     Q_PROPERTY(PersonModel* people   READ people   CONSTANT)
-    Q_PROPERTY(QVariantList statuses READ statuses CONSTANT)
+    Q_PROPERTY(QVariantList statuses READ statuses NOTIFY statusesChanged)
     Q_PROPERTY(QDate        today    READ today    CONSTANT)
 
     Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
     Q_PROPERTY(QString theme   READ theme   WRITE setTheme   NOTIFY themeChanged)
     Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
+    Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
+
+    Q_PROPERTY(int workdayStart READ workdayStart WRITE setWorkdayStart NOTIFY workdayChanged)
+    Q_PROPERTY(int workdayEnd   READ workdayEnd   WRITE setWorkdayEnd   NOTIFY workdayChanged)
+
+    Q_PROPERTY(QString crumbProject READ crumbProject WRITE setCrumbProject NOTIFY crumbProjectChanged)
+    Q_PROPERTY(QString crumbUser    READ crumbUser    WRITE setCrumbUser    NOTIFY crumbUserChanged)
+
+    Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
+    Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
+    ~AppController() override;
+
+    Q_INVOKABLE void flushSave();
 
     TaskModel*   tasks()    { return &m_tasks; }
     EventModel*  events()   { return &m_events; }
@@ -39,6 +53,24 @@ public:
 
     QString density() const { return m_density; }
     void    setDensity(const QString &d);
+
+    QString currentView() const { return m_currentView; }
+    void    setCurrentView(const QString &v);
+
+    int  workdayStart() const { return m_workdayStart; }
+    void setWorkdayStart(int v);
+    int  workdayEnd() const { return m_workdayEnd; }
+    void setWorkdayEnd(int v);
+
+    QString crumbProject() const { return m_crumbProject; }
+    void    setCrumbProject(const QString &v);
+    QString crumbUser() const { return m_crumbUser; }
+    void    setCrumbUser(const QString &v);
+
+    QString docsState() const { return m_docsState; }
+    void    setDocsState(const QString &v);
+
+    bool hasPendingUndo() const { return m_pendingUndo.kind != PendingUndo::None; }
 
     // ---- Task ops ----
     Q_INVOKABLE void moveTask(const QString &id, const QString &newStatus);
@@ -61,6 +93,13 @@ public:
     Q_INVOKABLE void deletePerson(const QString &id);
     Q_INVOKABLE int  pendingPeopleCount() const { return m_people.todoCount(); }
 
+    // ---- Status (kanban column) ops ----
+    Q_INVOKABLE void addStatus(const QString &name, const QString &color = QString());
+    Q_INVOKABLE void renameStatus(const QString &id, const QString &name);
+    Q_INVOKABLE void setStatusColor(const QString &id, const QString &color);
+    Q_INVOKABLE void moveStatus(const QString &id, int newIndex);
+    Q_INVOKABLE void deleteStatus(const QString &id);
+
     // ---- Status counts ----
     Q_INVOKABLE int  countByStatus(const QString &statusId) const;
 
@@ -70,11 +109,31 @@ public:
     Q_INVOKABLE QString sprintLabel() const;
     Q_INVOKABLE QString humanDate(const QDate &date) const;
 
+    // ---- Timeline / week helpers ----
+    Q_INVOKABLE QString deadlineBucket(const QDate &deadline) const;   // overdue/today/tomorrow/thisweek/nextweek/later/nodl
+    Q_INVOKABLE QString deadlineDiffLabel(const QDate &deadline) const;
+    Q_INVOKABLE QString shortDate(const QDate &d) const;               // "Пт, 15 май"
+    Q_INVOKABLE int     isoWeekNumber(const QDate &d) const;
+
+    Q_INVOKABLE void copyToClipboard(const QString &text);
+
+    // ---- Undo ----
+    Q_INVOKABLE void undoLastDeletion();
+    Q_INVOKABLE void clearPendingUndo();
+
 signals:
     void selectedDateChanged();
     void themeChanged();
     void densityChanged();
+    void currentViewChanged();
+    void workdayChanged();
+    void crumbProjectChanged();
+    void crumbUserChanged();
+    void docsStateChanged();
+    void statusesChanged();
+    void pendingUndoChanged();
     void toast(const QString &message);
+    void undoableToast(const QString &message, int seconds);
 
 private:
     TaskModel    m_tasks;
@@ -83,6 +142,40 @@ private:
     QVariantList m_statuses;
     QDate        m_today;
     QDate        m_selectedDate;
-    QString      m_theme   = "dark";
-    QString      m_density = "comfy";
+    QString      m_theme       = "dark";
+    QString      m_density     = "comfy";
+    QString      m_currentView = "board";
+    int          m_workdayStart = 9;
+    int          m_workdayEnd   = 19;
+    QString      m_crumbProject = "eNB-core";
+    QString      m_crumbUser    = "You";
+    QString      m_docsState;
+
+    // Persistence
+    QTimer*      m_saveTimer = nullptr;
+    bool         m_loading   = false;
+    void scheduleSave();
+    void saveStateNow();
+    void loadStateOnStart();
+    QString stateFilePath() const;
+    int statusIndexOf(const QString &id) const;
+
+    // Undo machinery
+    struct PendingUndo {
+        enum Kind { None, Task, Event, Person, Status } kind = None;
+        // payload — only the field matching `kind` is populated
+        ::Task     task;
+        ::CalEvent event;
+        ::Person   person;
+        QVariantMap status;
+        int row = -1;
+        // when a task is deleted, events lose their taskId — record what to restore
+        QVector<QPair<QString, QString>> detachedEventIds; // (eventId, originalTaskId)
+        // when a status is deleted, tasks get re-homed — record what to restore
+        QVector<QPair<QString, QString>> reHomedTasks;     // (taskId, originalStatusId)
+    };
+    PendingUndo  m_pendingUndo;
+    QTimer*      m_undoTimer = nullptr;
+    void armUndo(int seconds);
+    void cancelUndo();
 };
