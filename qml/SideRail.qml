@@ -8,6 +8,8 @@ Rectangle {
     color: Theme.panel
     width: 56
 
+    signal openTweaks(Item anchor)
+
     Rectangle {
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         width: 1; color: Theme.border
@@ -18,10 +20,19 @@ Rectangle {
         anchors.topMargin: 14
         spacing: 6
 
-        RailBtn { glyph: "▦"; tooltipText: "My board"; active: true }
-        RailBtn { glyph: "⌧"; tooltipText: "Backlog"
-                   countText: AppController.countByStatus("backlog") > 0 ? AppController.countByStatus("backlog") : ""
-                   countColor: Theme.textDim }
+        // View switcher
+        RailBtn { glyph: "▦"; tooltipText: "Board (Kanban)"
+                   active: AppController.currentView === "board"
+                   onActivated: AppController.currentView = "board" }
+        RailBtn { glyph: "☰"; tooltipText: "Timeline (по дедлайнам)"
+                   active: AppController.currentView === "timeline"
+                   onActivated: AppController.currentView = "timeline" }
+        RailBtn { glyph: "◫"; tooltipText: "Week (7 дней)"
+                   active: AppController.currentView === "week"
+                   onActivated: AppController.currentView = "week" }
+
+        Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
+
         RailBtn { glyph: "⊘"; tooltipText: "Blocked"
                    countText: AppController.countByStatus("blocked") > 0 ? AppController.countByStatus("blocked") : ""
                    countColor: Theme.p0 }
@@ -31,11 +42,21 @@ Rectangle {
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
-        RailBtn { glyph: "C++"; tooltipText: "Compiler Explorer"; fontPx: 10 }
-        RailBtn { glyph: "§"; tooltipText: "Docs" }
+        RailBtn { glyph: "C++"; tooltipText: "C++ References (Docs)"; fontPx: 10
+                   active: AppController.currentView === "docs"
+                   onActivated: AppController.currentView = "docs" }
+        RailBtn { glyph: "§"; tooltipText: "Docs"
+                   active: AppController.currentView === "docs"
+                   onActivated: AppController.currentView = "docs" }
 
         Item { Layout.fillHeight: true }
 
+        RailBtn {
+            id: tweaksBtn
+            glyph: "✦"
+            tooltipText: "Tweaks · тема, плотность, рабочий день"
+            onActivated: root.openTweaks(tweaksBtn)
+        }
         RailBtn { glyph: "⚙"; tooltipText: "Settings"; Layout.bottomMargin: 14 }
     }
 
@@ -47,6 +68,7 @@ Rectangle {
         property string countText: ""
         property color countColor: Theme.p0
         property int fontPx: 14
+        signal activated()
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredWidth: 36
         Layout.preferredHeight: 36
@@ -82,7 +104,11 @@ Rectangle {
             }
         }
         MouseArea {
-            id: ma; anchors.fill: parent; hoverEnabled: true
+            id: ma
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: btn.activated()
             ToolTip.visible: containsMouse && btn.tooltipText !== ""
             ToolTip.text: btn.tooltipText
             ToolTip.delay: 400

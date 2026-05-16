@@ -6,12 +6,14 @@ import TodoCpp
 Rectangle {
     id: root
     color: Theme.panel
-    height: 44
+    implicitHeight: 44
+    height: implicitHeight
     property var priorities: ({})  // map P0..P3 -> bool
     property int totalCount: 0
     property int activeCount: 0
     property int blockedCount: 0
     property int reviewCount: 0
+    property string viewLabel: "Board"
 
     signal togglePriority(string p)
     signal clearPriorities()
@@ -27,7 +29,8 @@ Rectangle {
         spacing: 8
 
         Text {
-            text: "Filters:"
+            text: "<b><font color=\"" + Theme.text + "\">" + root.viewLabel + "</font></b> · Filters:"
+            textFormat: Text.RichText
             color: Theme.textMuted
             font.family: Theme.fontUi
             font.pixelSize: 12
