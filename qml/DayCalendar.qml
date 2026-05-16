@@ -5,8 +5,8 @@ import TodoCpp
 
 Item {
     id: root
-    readonly property int hoursStart: 8
-    readonly property int hoursEnd: 22
+    readonly property int hoursStart: AppController.workdayStart
+    readonly property int hoursEnd:   AppController.workdayEnd
 
     signal eventClicked(string id)
 
