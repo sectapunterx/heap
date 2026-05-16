@@ -167,6 +167,11 @@ Item {
         "#6cc4b8", "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7"
     ]
 
+    readonly property var accentPalette: [
+        Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus,
+        Theme.accent, Theme.p0, Theme.p1, Theme.p2, Theme.p3, Theme.textMuted
+    ]
+
     // ── Helpers ─────────────────────────────────────────────────────────────
 
     function totalDocs() {
@@ -234,6 +239,11 @@ Item {
             list.splice(u.idx, 0, u.item);
             contacts = list;
             showToast("Восстановлено: " + u.item.name);
+        } else if (u.kind === "section") {
+            const list = sections.slice();
+            list.splice(u.idx, 0, u.item);
+            sections = list;
+            showToast("Восстановлена секция: " + u.item.title);
         }
         pendingUndo = null;
     }
@@ -313,6 +323,49 @@ Item {
         else { list[idx] = draft; showToast("Контакт сохранён: " + draft.name); }
         contacts = list;
     }
+    function saveSection(draft, originalId) {
+        const copy = sections.map(function (s) {
+            return Object.assign({}, s, { items: s.items.slice() });
+        });
+        if (originalId === "" || originalId === undefined) {
+            // create — generate id
+            let base = String(draft.title || "section").toLowerCase()
+                            .replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
+            if (base.length === 0) base = "section";
+            let id = base;
+            let n = 2;
+            while (copy.some(function (s) { return s.id === id; })) { id = base + "-" + n; n++; }
+            copy.push({
+                id: id,
+                title: draft.title || "",
+                subtitle: draft.subtitle || "",
+                accent: draft.accent || Theme.accent,
+                items: []
+            });
+            sections = copy;
+            showToast("Создана секция: " + draft.title);
+        } else {
+            const i = copy.findIndex(function (s) { return s.id === originalId; });
+            if (i < 0) return;
+            copy[i].title    = draft.title || copy[i].title;
+            copy[i].subtitle = draft.subtitle || "";
+            copy[i].accent   = draft.accent || copy[i].accent;
+            sections = copy;
+            showToast("Сохранено: " + draft.title);
+        }
+    }
+
+    function deleteSection(sectionId) {
+        const i = sections.findIndex(function (s) { return s.id === sectionId; });
+        if (i < 0) return;
+        const captured = sections[i];
+        const copy = sections.slice();
+        copy.splice(i, 1);
+        sections = copy;
+        pendingUndo = { kind: "section", idx: i, item: captured };
+        showUndoToast("Удалена секция: " + captured.title, function () { root.undoLastDeletion() });
+    }
+
     function deleteContact(idx) {
         if (idx < 0 || idx >= contacts.length) return;
         const captured = contacts[idx];
@@ -462,6 +515,40 @@ Item {
                         anchorId: "sec-contacts"
                     }
 
+                    Rectangle {
+                        visible: root.editMode
+                        Layout.fillWidth: true
+                        Layout.topMargin: 10
+                        Layout.preferredHeight: 28
+                        radius: 6
+                        color: addSecMA.containsMouse ? Theme.accentSoft : Theme.panel2
+                        border.color: Theme.border
+                        border.width: 1
+                        RowLayout {
+                            anchors.fill: parent
+                            anchors.leftMargin: 8; anchors.rightMargin: 8
+                            spacing: 6
+                            Text {
+                                text: "+"
+                                color: addSecMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                                font.pixelSize: 14
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: "Новая секция"
+                                color: addSecMA.containsMouse ? Theme.accentStrong : Theme.text
+                                font.pixelSize: 12
+                            }
+                        }
+                        MouseArea {
+                            id: addSecMA
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.openSectionCreate()
+                        }
+                    }
+
                     Item { Layout.fillHeight: true }
                 }
             }
@@ -506,7 +593,48 @@ Item {
                                     Rectangle { width: 4; height: 32; radius: 2; color: secCol.section.accent }
                                     ColumnLayout {
                                         spacing: 0
-                                        Text { text: secCol.section.title; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                        Layout.fillWidth: true
+                                        RowLayout {
+                                            spacing: 6
+                                            Text {
+                                                text: secCol.section.title
+                                                color: Theme.text
+                                                font.pixelSize: 16
+                                                font.weight: Font.DemiBold
+                                            }
+                                            Rectangle {
+                                                visible: root.editMode
+                                                width: 22; height: 22; radius: 5
+                                                color: secEditMA.containsMouse ? Theme.panel2 : "transparent"
+                                                border.color: Theme.border; border.width: 1
+                                                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: 11 }
+                                                MouseArea {
+                                                    id: secEditMA
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.openSectionEdit(secCol.section)
+                                                }
+                                            }
+                                            Rectangle {
+                                                visible: root.editMode
+                                                width: 22; height: 22; radius: 5
+                                                color: secDelMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : "transparent"
+                                                border.color: secDelMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                                                Text {
+                                                    anchors.centerIn: parent; text: "×"
+                                                    color: secDelMA.containsMouse ? Theme.p0 : Theme.textMuted
+                                                    font.pixelSize: 12
+                                                }
+                                                MouseArea {
+                                                    id: secDelMA
+                                                    anchors.fill: parent
+                                                    hoverEnabled: true
+                                                    cursorShape: Qt.PointingHandCursor
+                                                    onClicked: root.deleteSection(secCol.section.id)
+                                                }
+                                            }
+                                        }
                                         Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: 12 }
                                     }
                                     Item { Layout.fillWidth: true }
@@ -689,12 +817,15 @@ Item {
         id: editor
         sections: root.sections
         contactPalette: root.contactPalette
+        accentPalette: root.accentPalette
         onSavedDoc:     (draft) => root.saveDoc(draft)
         onDeletedDoc:   () => root.deleteDoc(editor.sectionId, editor.originalRef)
         onSavedSnippet: (draft) => root.saveSnippet(draft, editor.idx)
         onDeletedSnippet: () => root.deleteSnippet(editor.idx)
         onSavedContact: (draft) => root.saveContact(draft, editor.idx)
         onDeletedContact: () => root.deleteContact(editor.idx)
+        onSavedSection: (draft) => root.saveSection(draft, editor.sectionId)
+        onDeletedSection: () => root.deleteSection(editor.sectionId)
     }
 
     function openDocCreate(sectionId) {
@@ -739,6 +870,21 @@ Item {
         editor.idx = idx;
         editor.isNew = false;
         editor.draft = Object.assign({}, root.contacts[idx]);
+        editor.open();
+    }
+
+    function openSectionCreate() {
+        editor.kind = "section";
+        editor.sectionId = "";        // empty = create
+        editor.isNew = true;
+        editor.draft = ({ title: "", subtitle: "", accent: root.accentPalette[0] });
+        editor.open();
+    }
+    function openSectionEdit(s) {
+        editor.kind = "section";
+        editor.sectionId = s.id;
+        editor.isNew = false;
+        editor.draft = ({ title: s.title, subtitle: s.subtitle, accent: String(s.accent) });
         editor.open();
     }
 
