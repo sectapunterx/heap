@@ -6,7 +6,8 @@ import TodoCpp
 Rectangle {
     id: root
     color: Theme.panel
-    height: 44
+    implicitHeight: 44
+    height: implicitHeight
     property var priorities: ({})  // map P0..P3 -> bool
     property int totalCount: 0
     property int activeCount: 0
