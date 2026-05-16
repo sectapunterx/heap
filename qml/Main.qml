@@ -100,7 +100,6 @@ ApplicationWindow {
                 FilterBar {
                     Layout.fillWidth: true
                     visible: AppController.currentView !== "docs"
-                    Layout.preferredHeight: visible ? implicitHeight : 0
                     viewLabel: AppController.currentView === "board" ? "Board"
                              : AppController.currentView === "timeline" ? "Timeline"
                              : AppController.currentView === "week" ? "Week"
@@ -169,6 +168,7 @@ ApplicationWindow {
         Rectangle {
             Layout.row: 1; Layout.column: 2
             Layout.preferredWidth: 420
+            Layout.minimumWidth: 360
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
