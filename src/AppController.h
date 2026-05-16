@@ -16,7 +16,7 @@ class AppController : public QObject {
     Q_PROPERTY(TaskModel*   tasks    READ tasks    CONSTANT)
     Q_PROPERTY(EventModel*  events   READ events   CONSTANT)
     Q_PROPERTY(PersonModel* people   READ people   CONSTANT)
-    Q_PROPERTY(QVariantList statuses READ statuses CONSTANT)
+    Q_PROPERTY(QVariantList statuses READ statuses NOTIFY statusesChanged)
     Q_PROPERTY(QDate        today    READ today    CONSTANT)
 
     Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
@@ -93,6 +93,13 @@ public:
     Q_INVOKABLE void deletePerson(const QString &id);
     Q_INVOKABLE int  pendingPeopleCount() const { return m_people.todoCount(); }
 
+    // ---- Status (kanban column) ops ----
+    Q_INVOKABLE void addStatus(const QString &name, const QString &color = QString());
+    Q_INVOKABLE void renameStatus(const QString &id, const QString &name);
+    Q_INVOKABLE void setStatusColor(const QString &id, const QString &color);
+    Q_INVOKABLE void moveStatus(const QString &id, int newIndex);
+    Q_INVOKABLE void deleteStatus(const QString &id);
+
     // ---- Status counts ----
     Q_INVOKABLE int  countByStatus(const QString &statusId) const;
 
@@ -123,6 +130,7 @@ signals:
     void crumbProjectChanged();
     void crumbUserChanged();
     void docsStateChanged();
+    void statusesChanged();
     void pendingUndoChanged();
     void toast(const QString &message);
     void undoableToast(const QString &message, int seconds);
@@ -150,17 +158,21 @@ private:
     void saveStateNow();
     void loadStateOnStart();
     QString stateFilePath() const;
+    int statusIndexOf(const QString &id) const;
 
     // Undo machinery
     struct PendingUndo {
-        enum Kind { None, Task, Event, Person } kind = None;
+        enum Kind { None, Task, Event, Person, Status } kind = None;
         // payload — only the field matching `kind` is populated
         ::Task     task;
         ::CalEvent event;
         ::Person   person;
+        QVariantMap status;
         int row = -1;
         // when a task is deleted, events lose their taskId — record what to restore
         QVector<QPair<QString, QString>> detachedEventIds; // (eventId, originalTaskId)
+        // when a status is deleted, tasks get re-homed — record what to restore
+        QVector<QPair<QString, QString>> reHomedTasks;     // (taskId, originalStatusId)
     };
     PendingUndo  m_pendingUndo;
     QTimer*      m_undoTimer = nullptr;

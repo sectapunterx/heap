@@ -325,6 +325,101 @@ int AppController::countByStatus(const QString &statusId) const {
     return n;
 }
 
+int AppController::statusIndexOf(const QString &id) const {
+    for (int i = 0; i < m_statuses.size(); ++i)
+        if (m_statuses[i].toMap().value("id").toString() == id) return i;
+    return -1;
+}
+
+void AppController::addStatus(const QString &name, const QString &color) {
+    if (name.trimmed().isEmpty()) return;
+    QString base = name.toLower();
+    QString slug;
+    for (QChar c : base) slug.append(c.isLetterOrNumber() ? c : QChar('-'));
+    while (slug.contains("--")) slug.replace("--", "-");
+    if (slug.startsWith('-')) slug = slug.mid(1);
+    while (slug.endsWith('-')) slug.chop(1);
+    if (slug.isEmpty()) slug = "status";
+    QString id = slug;
+    int n = 2;
+    while (statusIndexOf(id) >= 0) { id = slug + "-" + QString::number(n++); }
+    QVariantMap m;
+    m["id"]    = id;
+    m["name"]  = name;
+    m["color"] = QColor(color.isEmpty() ? QStringLiteral("#5cc2dd") : color);
+    m_statuses.append(m);
+    emit statusesChanged();
+    emit toast(QString("Колонка добавлена: %1").arg(name));
+    scheduleSave();
+}
+
+void AppController::renameStatus(const QString &id, const QString &name) {
+    const int i = statusIndexOf(id);
+    if (i < 0 || name.trimmed().isEmpty()) return;
+    QVariantMap m = m_statuses[i].toMap();
+    if (m.value("name").toString() == name) return;
+    m["name"] = name;
+    m_statuses[i] = m;
+    emit statusesChanged();
+    scheduleSave();
+}
+
+void AppController::setStatusColor(const QString &id, const QString &color) {
+    const int i = statusIndexOf(id);
+    if (i < 0) return;
+    const QColor c(color);
+    if (!c.isValid()) return;
+    QVariantMap m = m_statuses[i].toMap();
+    m["color"] = c;
+    m_statuses[i] = m;
+    emit statusesChanged();
+    scheduleSave();
+}
+
+void AppController::moveStatus(const QString &id, int newIndex) {
+    const int from = statusIndexOf(id);
+    if (from < 0) return;
+    newIndex = qBound(0, newIndex, m_statuses.size() - 1);
+    if (from == newIndex) return;
+    QVariant v = m_statuses.takeAt(from);
+    m_statuses.insert(newIndex, v);
+    emit statusesChanged();
+    scheduleSave();
+}
+
+void AppController::deleteStatus(const QString &id) {
+    const int i = statusIndexOf(id);
+    if (i < 0 || m_statuses.size() <= 1) return; // never let the board run out of columns
+    cancelUndo();
+    m_pendingUndo = {};
+    m_pendingUndo.kind   = PendingUndo::Status;
+    m_pendingUndo.status = m_statuses[i].toMap();
+    m_pendingUndo.row    = i;
+
+    // re-home any tasks with this status to the first remaining one
+    QString fallback;
+    for (int k = 0; k < m_statuses.size(); ++k) {
+        if (k == i) continue;
+        fallback = m_statuses[k].toMap().value("id").toString();
+        break;
+    }
+    for (const auto &t : m_tasks.items()) {
+        if (t.status == id) {
+            m_pendingUndo.reHomedTasks.append({ t.id, id });
+        }
+    }
+    for (const auto &pair : m_pendingUndo.reHomedTasks) {
+        m_tasks.setStatus(pair.first, fallback);
+    }
+
+    const QString name = m_pendingUndo.status.value("name").toString();
+    m_statuses.removeAt(i);
+    emit statusesChanged();
+    armUndo(5);
+    emit undoableToast(QString("Удалена колонка: %1").arg(name), 5);
+    scheduleSave();
+}
+
 QVariantMap AppController::taskById(const QString &id) const {
     const int row = m_tasks.indexOfId(id);
     if (row < 0) return {};
@@ -430,6 +525,16 @@ void AppController::undoLastDeletion() {
             emit toast(QString("Восстановлён: %1").arg(m_pendingUndo.person.name));
             break;
         }
+        case PendingUndo::Status: {
+            const int idx = qBound(0, m_pendingUndo.row, m_statuses.size());
+            m_statuses.insert(idx, m_pendingUndo.status);
+            for (const auto &pair : m_pendingUndo.reHomedTasks)
+                m_tasks.setStatus(pair.first, pair.second);
+            emit statusesChanged();
+            emit toast(QString("Восстановлена колонка: %1")
+                       .arg(m_pendingUndo.status.value("name").toString()));
+            break;
+        }
         default: break;
     }
     m_pendingUndo = {};
@@ -495,6 +600,19 @@ void AppController::saveStateNow() {
         peopleArr.append(o);
     }
     root["people"] = peopleArr;
+
+    QJsonArray statusesArr;
+    for (const QVariant &v : m_statuses) {
+        const QVariantMap m = v.toMap();
+        QJsonObject o;
+        o["id"]    = m.value("id").toString();
+        o["name"]  = m.value("name").toString();
+        const QVariant col = m.value("color");
+        o["color"] = col.canConvert<QColor>() ? col.value<QColor>().name()
+                                              : col.toString();
+        statusesArr.append(o);
+    }
+    root["statuses"] = statusesArr;
 
     QJsonObject s;
     s["theme"]        = m_theme;
@@ -575,6 +693,22 @@ void AppController::loadStateOnStart() {
             v.append(p);
         }
         m_people.reset(v);
+    }
+
+    if (root.contains("statuses")) {
+        QVariantList v;
+        for (const auto &it : root["statuses"].toArray()) {
+            const QJsonObject o = it.toObject();
+            QVariantMap m;
+            m["id"]    = o["id"].toString();
+            m["name"]  = o["name"].toString();
+            m["color"] = QColor(o["color"].toString());
+            v.append(m);
+        }
+        if (!v.isEmpty()) {
+            m_statuses = v;
+            emit statusesChanged();
+        }
     }
 
     if (root.contains("settings")) {
