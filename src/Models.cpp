@@ -60,6 +60,13 @@ void TaskModel::upsert(const Task &t) {
     }
 }
 
+void TaskModel::insertAt(int row, const Task &t) {
+    row = qBound(0, row, m_items.size());
+    beginInsertRows({}, row, row);
+    m_items.insert(row, t);
+    endInsertRows();
+}
+
 void TaskModel::removeById(const QString &id) {
     const int row = indexOfId(id);
     if (row < 0) return;
@@ -142,6 +149,21 @@ void EventModel::detachTask(const QString &taskId) {
     }
 }
 
+void EventModel::insertAt(int row, const CalEvent &e) {
+    row = qBound(0, row, m_items.size());
+    beginInsertRows({}, row, row);
+    m_items.insert(row, e);
+    endInsertRows();
+}
+
+void EventModel::setTaskId(const QString &eventId, const QString &taskId) {
+    const int row = indexOfId(eventId);
+    if (row < 0) return;
+    m_items[row].taskId = taskId;
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi, { TaskIdRole });
+}
+
 // ---- PersonModel ----
 
 QHash<int, QByteArray> PersonModel::roleNames() const {
@@ -213,6 +235,13 @@ void PersonModel::upsert(const Person &p) {
         m_items.push_back(p);
         endInsertRows();
     }
+}
+
+void PersonModel::insertAt(int row, const Person &p) {
+    row = qBound(0, row, m_items.size());
+    beginInsertRows({}, row, row);
+    m_items.insert(row, p);
+    endInsertRows();
 }
 
 void PersonModel::removeById(const QString &id) {

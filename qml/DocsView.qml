@@ -185,6 +185,58 @@ Item {
         return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
     }
     function showToast(s) { if (toast) toast.show(s) }
+    function showUndoToast(s, fn) {
+        if (toast) toast.showWithAction(s, "Отменить", 5, fn);
+    }
+
+    // ── Persistence — JSON round-tripped through AppController.docsState ───
+
+    property bool _loadedOnce: false
+    Component.onCompleted: {
+        const raw = AppController.docsState || "";
+        if (raw.length > 0) {
+            try {
+                const o = JSON.parse(raw);
+                if (o.sections) sections = o.sections;
+                if (o.snippets) snippets = o.snippets;
+                if (o.contacts) contacts = o.contacts;
+            } catch (e) { /* corrupt — ignore */ }
+        }
+        _loadedOnce = true;
+    }
+    function persist() {
+        if (!_loadedOnce) return;
+        AppController.docsState = JSON.stringify({ sections: sections, snippets: snippets, contacts: contacts });
+    }
+    onSectionsChanged: persist()
+    onSnippetsChanged: persist()
+    onContactsChanged: persist()
+
+    // ── Undo ────────────────────────────────────────────────────────────────
+    property var pendingUndo: null
+
+    function undoLastDeletion() {
+        if (!pendingUndo) return;
+        const u = pendingUndo;
+        if (u.kind === "doc") {
+            _replaceSections(function (copy) {
+                const s = copy.find(function (x) { return x.id === u.sectionId; });
+                if (s) s.items.splice(u.itemIdx, 0, u.item);
+            });
+            showToast("Восстановлено: " + (u.item.ref || u.item.title));
+        } else if (u.kind === "snippet") {
+            const list = snippets.slice();
+            list.splice(u.idx, 0, u.item);
+            snippets = list;
+            showToast("Восстановлено: " + u.item.title);
+        } else if (u.kind === "contact") {
+            const list = contacts.slice();
+            list.splice(u.idx, 0, u.item);
+            contacts = list;
+            showToast("Восстановлено: " + u.item.name);
+        }
+        pendingUndo = null;
+    }
 
     // ── Section ops ─────────────────────────────────────────────────────────
 
@@ -223,12 +275,20 @@ Item {
         showToast(editor.isNew ? ("Создано: " + (cleaned.ref || cleaned.title)) : ("Сохранено: " + (cleaned.ref || cleaned.title)));
     }
     function deleteDoc(sectionId, ref) {
-        _replaceSections(copy => {
-            for (let s of copy) {
-                if (s.id === sectionId) s.items = s.items.filter(i => i.ref !== ref);
-            }
+        // Capture for undo
+        const sec = sections.find(function (s) { return s.id === sectionId; });
+        if (!sec) return;
+        const idx = sec.items.findIndex(function (i) { return i.ref === ref; });
+        if (idx < 0) return;
+        const captured = sec.items[idx];
+
+        _replaceSections(function (copy) {
+            for (let s of copy)
+                if (s.id === sectionId) s.items = s.items.filter(function (i) { return i.ref !== ref; });
         });
-        showToast("Удалено: " + ref);
+
+        pendingUndo = { kind: "doc", sectionId: sectionId, itemIdx: idx, item: captured };
+        showUndoToast("Удалено: " + ref, function () { root.undoLastDeletion() });
     }
 
     function saveSnippet(draft, idx) {
@@ -238,10 +298,13 @@ Item {
         snippets = list;
     }
     function deleteSnippet(idx) {
+        if (idx < 0 || idx >= snippets.length) return;
+        const captured = snippets[idx];
         const list = snippets.slice();
         list.splice(idx, 1);
         snippets = list;
-        showToast("Snippet удалён");
+        pendingUndo = { kind: "snippet", idx: idx, item: captured };
+        showUndoToast("Snippet удалён: " + captured.title, function () { root.undoLastDeletion() });
     }
 
     function saveContact(draft, idx) {
@@ -251,10 +314,13 @@ Item {
         contacts = list;
     }
     function deleteContact(idx) {
+        if (idx < 0 || idx >= contacts.length) return;
+        const captured = contacts[idx];
         const list = contacts.slice();
         list.splice(idx, 1);
         contacts = list;
-        showToast("Контакт удалён");
+        pendingUndo = { kind: "contact", idx: idx, item: captured };
+        showUndoToast("Контакт удалён: " + captured.name, function () { root.undoLastDeletion() });
     }
 
     function openExternal(url) {
