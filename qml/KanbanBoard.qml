@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import TodoCpp
 
 Item {
@@ -187,8 +188,21 @@ Item {
                                 id: headHover
                                 anchors.fill: parent
                                 hoverEnabled: true
-                                acceptedButtons: Qt.NoButton
+                                acceptedButtons: Qt.RightButton
+                                onClicked: (mouse) => { if (mouse.button === Qt.RightButton) colHeaderMenu.popup() }
                                 z: -1
+                            }
+
+                            QQC.Menu {
+                                id: colHeaderMenu
+                                QQC.MenuItem { text: "Add task"; onTriggered: root.createInStatus(col.statusId) }
+                                QQC.MenuItem { text: "Rename"; onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
+                                QQC.MenuItem { text: "Change color…"; onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
+                                QQC.MenuSeparator {}
+                                QQC.MenuItem { text: "Move left";  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                QQC.MenuItem { text: "Move right"; enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                QQC.MenuSeparator {}
+                                QQC.MenuItem { text: "Delete column"; enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
                             }
                         }
 
@@ -265,6 +279,18 @@ Item {
                                         drop.accept(Qt.MoveAction);
                                     }
                                 }
+                            }
+
+                            // Right-click on empty body → Add task
+                            MouseArea {
+                                anchors.fill: parent
+                                acceptedButtons: Qt.RightButton
+                                onClicked: (mouse) => { if (mouse.button === Qt.RightButton) bodyMenu.popup() }
+                                z: -2
+                            }
+                            QQC.Menu {
+                                id: bodyMenu
+                                QQC.MenuItem { text: "Add task"; onTriggered: root.createInStatus(col.statusId) }
                             }
                         }
                     }
