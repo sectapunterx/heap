@@ -13,6 +13,32 @@ Item {
     property date now: new Date()
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
 
+    // Reactive event count for the selected day; refreshed on every
+    // events-model mutation so the "N events" header stays in sync.
+    property int _eventsToday: 0
+    function _recountEventsToday() {
+        const d = AppController.selectedDate;
+        if (!d || !d.getFullYear) { _eventsToday = 0; return; }
+        let n = 0;
+        for (let i = 0; i < AppController.events.rowCount(); i++) {
+            const ed = AppController.events.data(AppController.events.index(i,0), Qt.UserRole + 7);
+            if (root.isSameDay(ed, d)) n++;
+        }
+        _eventsToday = n;
+    }
+    Connections {
+        target: AppController.events
+        function onRowsInserted() { root._recountEventsToday() }
+        function onRowsRemoved()  { root._recountEventsToday() }
+        function onDataChanged()  { root._recountEventsToday() }
+        function onModelReset()   { root._recountEventsToday() }
+    }
+    Connections {
+        target: AppController
+        function onSelectedDateChanged() { root._recountEventsToday() }
+    }
+    Component.onCompleted: _recountEventsToday()
+
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
         return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -52,11 +78,7 @@ Item {
                                 const y = d.getFullYear();
                                 const m = (d.getMonth()+1).toString().padStart(2,"0");
                                 const dd = d.getDate().toString().padStart(2,"0");
-                                let n = 0;
-                                for (let i = 0; i < AppController.events.rowCount(); i++) {
-                                    const ed = AppController.events.data(AppController.events.index(i,0), Qt.UserRole + 1 + 6);
-                                    if (root.isSameDay(ed, d)) n++;
-                                }
+                                const n = root._eventsToday;
                                 return y + "-" + m + "-" + dd + " · " + n + " event" + (n === 1 ? "" : "s");
                             }
                             color: Theme.textDim
@@ -150,6 +172,12 @@ Item {
                                 required property string attendees
                                 required property var date
                                 required property string taskId
+                                required property string profileId
+
+                                // Resolve once per event change so the dot reflects rename / recolor.
+                                readonly property var profileInfo: profileId.length > 0
+                                    ? AppController.profileById(profileId)
+                                    : null
 
                                 visible: root.isSameDay(date, AppController.selectedDate)
                                 x: 0
@@ -166,9 +194,20 @@ Item {
                                     radius: 1
                                 }
 
+                                // Feature/profile color dot (top-right).
+                                Rectangle {
+                                    visible: evRect.profileInfo !== null
+                                    anchors.top: parent.top; anchors.right: parent.right
+                                    anchors.topMargin: 6; anchors.rightMargin: 6
+                                    width: 8; height: 8; radius: 4
+                                    color: evRect.profileInfo ? evRect.profileInfo.color : Theme.accent
+                                    border.color: Theme.bg
+                                    border.width: 1
+                                }
+
                                 Column {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 10; anchors.rightMargin: 8
+                                    anchors.leftMargin: 10; anchors.rightMargin: 20
                                     anchors.topMargin: 6; anchors.bottomMargin: 6
                                     spacing: 2
                                     clip: true
@@ -191,6 +230,15 @@ Item {
                                         text: "· " + evRect.attendees
                                         color: Theme.textMuted
                                         font.pixelSize: 11
+                                        elide: Text.ElideRight
+                                        width: parent.width
+                                    }
+                                    Text {
+                                        visible: evRect.profileInfo !== null && evRect.height > 70
+                                        text: evRect.profileInfo ? evRect.profileInfo.name : ""
+                                        color: evRect.profileInfo ? evRect.profileInfo.color : Theme.textDim
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 10
                                         elide: Text.ElideRight
                                         width: parent.width
                                     }

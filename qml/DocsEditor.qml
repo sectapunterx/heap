@@ -11,6 +11,9 @@ Popup {
     padding: 0
     anchors.centerIn: Overlay.overlay
 
+    // Dimmed backdrop so the underlying app stays visible behind the popup.
+    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+
     property string kind: "doc"          // doc | snippet | contact | section
     property bool   isNew: false
     property string sectionId: ""        // for doc / section (=original id)

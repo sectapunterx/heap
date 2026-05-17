@@ -11,6 +11,9 @@ Popup {
     padding: 0
     width: 480
 
+    // Dimmed backdrop so the underlying app stays visible behind the popup.
+    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+
     property var draft: ({})
     property bool isNew: false
 

@@ -435,6 +435,9 @@ Item {
         anchors.centerIn: Overlay.overlay
         background: Rectangle { radius: 12; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
 
+        // Dimmed backdrop so the board stays visible behind the dialog.
+        Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+
         readonly property var palette: [
             "#5cc2dd", "#8a8e98", "#9aa3b4", "#5aa9e6", "#dcb86b",
             "#e6624c", "#c07acf", "#6ec18a", "#6cc4b8", "#7da8d9"

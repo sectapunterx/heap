@@ -130,6 +130,7 @@ public:
     Q_INVOKABLE void    setProfileColor(const QString &id, const QString &color);
     Q_INVOKABLE void    deleteProfile(const QString &id);
     Q_INVOKABLE QString duplicateProfile(const QString &id, const QString &newName);
+    Q_INVOKABLE QVariantMap profileById(const QString &id) const;
     Q_INVOKABLE QString exportActiveProfileToMarkdown() const;
     Q_INVOKABLE void    copyActiveProfileMarkdownToClipboard();
     Q_INVOKABLE QVariantList commandPaletteEntries() const;

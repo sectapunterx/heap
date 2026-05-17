@@ -13,6 +13,9 @@ Popup {
     width: 420
     anchors.centerIn: Overlay.overlay
 
+    // Dimmed backdrop so the underlying app stays visible behind the popup.
+    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+
     readonly property var palette: [
         "#5cc2dd", "#6cc4b8", "#7cc492", "#dcb86b",
         "#e6984c", "#c07acf", "#7da8d9", "#e6624c"
