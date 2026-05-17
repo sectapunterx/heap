@@ -10,6 +10,17 @@ Rectangle {
 
     signal openTweaks(Item anchor)
 
+    // Reactive badges — refresh on task model mutations + profile switches.
+    property int _blockedCount: AppController.countByStatus("blocked")
+    property int _reviewCount:  AppController.countByStatus("review")
+    Connections {
+        target: AppController.tasks
+        function onModelReset()   { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
+        function onRowsInserted() { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
+        function onRowsRemoved()  { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
+        function onDataChanged()  { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
+    }
+
     Rectangle {
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         width: 1; color: Theme.border
@@ -34,10 +45,10 @@ Rectangle {
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         RailBtn { glyph: "⊘"; tooltipText: "Blocked"
-                   countText: AppController.countByStatus("blocked") > 0 ? AppController.countByStatus("blocked") : ""
+                   countText: root._blockedCount > 0 ? root._blockedCount : ""
                    countColor: Theme.p0 }
         RailBtn { glyph: "⎇"; tooltipText: "Code Review"
-                   countText: AppController.countByStatus("review") > 0 ? AppController.countByStatus("review") : ""
+                   countText: root._reviewCount > 0 ? root._reviewCount : ""
                    countColor: Theme.stReview }
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import TodoCpp
 
 Rectangle {
@@ -10,6 +11,16 @@ Rectangle {
 
     property alias searchText: searchField.text
     signal newTaskRequested()
+    signal newProfileRequested()
+    signal renameProfileRequested()
+    signal duplicateProfileRequested()
+
+    function _activeProfileMap() {
+        const list = AppController.profiles;
+        const id = AppController.activeProfileId;
+        for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
+        return ({ name: "—", color: "#5cc2dd" });
+    }
 
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -63,6 +74,83 @@ Rectangle {
                 placeholder: "you"
                 bold: true
                 onCommitted: (v) => AppController.crumbUser = v
+            }
+            CrumbSep {}
+
+            // Profile pill — color dot + name + dropdown
+            Rectangle {
+                id: profilePill
+                Layout.preferredHeight: 24
+                Layout.alignment: Qt.AlignVCenter
+                radius: 6
+                color: profileMA.containsMouse ? Theme.panel2 : Theme.panel3
+                border.color: profileMA.containsMouse ? Theme.borderStrong : Theme.border
+                border.width: 1
+                implicitWidth: pillRow.implicitWidth + 16
+
+                property var active: root._activeProfileMap()
+
+                RowLayout {
+                    id: pillRow
+                    anchors.fill: parent
+                    anchors.leftMargin: 8; anchors.rightMargin: 8
+                    spacing: 6
+                    Rectangle {
+                        width: 8; height: 8; radius: 4
+                        color: profilePill.active.color || Theme.accent
+                    }
+                    Text {
+                        text: profilePill.active.name || "Profile"
+                        color: Theme.text
+                        font.family: Theme.fontMono
+                        font.pixelSize: 12
+                        font.weight: Font.Medium
+                    }
+                    Text {
+                        text: "▾"
+                        color: Theme.textDim
+                        font.pixelSize: 10
+                    }
+                }
+                MouseArea {
+                    id: profileMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    acceptedButtons: Qt.LeftButton | Qt.RightButton
+                    onClicked: profileMenu.popup()
+                }
+
+                QQC.Menu {
+                    id: profileMenu
+
+                    // Profile rows are inserted dynamically at the top of the
+                    // menu via Instantiator, so they show before the static
+                    // actions in declaration-order.
+                    Instantiator {
+                        id: profilesInst
+                        model: AppController.profiles
+                        delegate: QQC.MenuItem {
+                            required property var modelData
+                            text: (modelData.id === AppController.activeProfileId ? "✓ " : "    ")
+                                  + modelData.name
+                            onTriggered: AppController.activeProfileId = modelData.id
+                        }
+                        onObjectAdded:   (idx, obj) => profileMenu.insertItem(idx, obj)
+                        onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
+                    }
+                    QQC.MenuSeparator {}
+                    QQC.MenuItem { text: "+ Новый профиль…";        onTriggered: root.newProfileRequested() }
+                    QQC.MenuItem { text: "Переименовать активный…"; onTriggered: root.renameProfileRequested() }
+                    QQC.MenuItem { text: "Дублировать активный…";   onTriggered: root.duplicateProfileRequested() }
+                    QQC.MenuItem {
+                        text: "Удалить активный"
+                        enabled: AppController.profiles.length > 1
+                        onTriggered: AppController.deleteProfile(AppController.activeProfileId)
+                    }
+                    QQC.MenuSeparator {}
+                    QQC.MenuItem { text: "Экспорт в Markdown"; onTriggered: AppController.copyActiveProfileMarkdownToClipboard() }
+                }
             }
         }
 

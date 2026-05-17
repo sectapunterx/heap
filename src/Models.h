@@ -3,7 +3,9 @@
 #include <QAbstractListModel>
 #include <QColor>
 #include <QDate>
+#include <QDateTime>
 #include <QString>
+#include <QVariantList>
 #include <QVector>
 #include <qqmlregistration.h>
 
@@ -35,6 +37,21 @@ struct Person {
     QString question;
     QString state;      // todo/pinged/replied
     QColor  color;
+};
+
+// One profile = one feature workspace: its own tasks, events, people,
+// kanban-statuses and docs. Lives in AppController::m_profiles; only the
+// "active" profile is mirrored into the live QAbstractListModels.
+struct Profile {
+    QString      id;            // slug, unique
+    QString      name;          // human-readable
+    QString      color;         // accent ("#5cc2dd")
+    QDateTime    createdAt;
+    QVector<Task>     tasks;
+    QVector<CalEvent> events;
+    QVector<Person>   people;
+    QVariantList      statuses; // [{ id, name, color }]
+    QString           docsState; // JSON blob, same shape as AppController::docsState
 };
 
 class TaskModel : public QAbstractListModel {
