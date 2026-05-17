@@ -29,7 +29,20 @@ Item {
         if (dy === 0) return;
         const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
         if (maxX <= 0) return;
-        hscroll.contentX = Math.max(0, Math.min(maxX, hscroll.contentX - dy));
+        const base = outerAnim.running ? outerAnim.to : hscroll.contentX;
+        const newX = Math.max(0, Math.min(maxX, base - dy));
+        if (newX === base) return;
+        outerAnim.from = hscroll.contentX;
+        outerAnim.to = newX;
+        outerAnim.restart();
+    }
+
+    NumberAnimation {
+        id: outerAnim
+        target: hscroll
+        property: "contentX"
+        duration: 220
+        easing.type: Easing.OutCubic
     }
 
     Flickable {
@@ -245,6 +258,14 @@ Item {
                                 // has no overflow or is already at the top/bottom edge,
                                 // event.accepted = false lets the outer board scroll
                                 // horizontally instead.
+                                NumberAnimation {
+                                    id: bodyAnim
+                                    target: bodyFlick
+                                    property: "contentY"
+                                    duration: 220
+                                    easing.type: Easing.OutCubic
+                                }
+
                                 WheelHandler {
                                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                                     onWheel: (event) => {
@@ -252,13 +273,16 @@ Item {
                                         if (dy === 0) return;
                                         const maxY = Math.max(0, bodyFlick.contentHeight - bodyFlick.height);
                                         if (maxY > 0) {
-                                            const newY = Math.max(0, Math.min(maxY, bodyFlick.contentY - dy));
-                                            if (newY !== bodyFlick.contentY) {
-                                                bodyFlick.contentY = newY;
+                                            const base = bodyAnim.running ? bodyAnim.to : bodyFlick.contentY;
+                                            const newY = Math.max(0, Math.min(maxY, base - dy));
+                                            if (newY !== base) {
+                                                bodyAnim.from = bodyFlick.contentY;
+                                                bodyAnim.to = newY;
+                                                bodyAnim.restart();
                                                 return;
                                             }
                                         }
-                                        // No overflow or at the edge — pass to outer.
+                                        // No overflow or already at edge → pass through.
                                         root._scrollOuter(dy);
                                     }
                                 }
