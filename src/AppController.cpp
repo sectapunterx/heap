@@ -46,7 +46,6 @@ AppController::AppController(QObject *parent)
         p.color     = "#5cc2dd";
         p.createdAt = QDateTime::currentDateTime();
         p.tasks     = SampleData::tasks();
-        p.events    = SampleData::events(m_today);
         p.people    = SampleData::people();
         QVariantList st;
         for (const auto &m : SampleData::statuses()) st.push_back(m);
@@ -54,6 +53,12 @@ AppController::AppController(QObject *parent)
         p.docsState.clear();
         m_profiles.push_back(p);
         m_activeProfileId = p.id;
+
+        // Events are global; tag the sample events with this default profile.
+        QVector<CalEvent> sampleEvents = SampleData::events(m_today);
+        for (CalEvent &e : sampleEvents) e.profileId = p.id;
+        m_events.reset(sampleEvents);
+
         applyProfileToModels(p);
         emit profilesChanged();
         emit activeProfileChanged();
@@ -215,6 +220,7 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate &date) co
     m["attendees"] = QString();
     m["date"] = date.isValid() ? date : m_selectedDate;
     m["taskId"] = QString();
+    m["profileId"] = m_activeProfileId;   // default attribution: active profile
     m["_isNew"] = true;
     return m;
 }
@@ -229,6 +235,7 @@ void AppController::saveEvent(const QVariantMap &draft) {
     e.attendees = draft.value("attendees").toString();
     e.date      = draft.value("date").toDate();
     e.taskId    = draft.value("taskId").toString();
+    e.profileId = draft.value("profileId").toString();
     if (e.end <= e.start) e.end = e.start + 0.25;
     m_events.upsert(e);
     scheduleSave();
@@ -261,6 +268,7 @@ void AppController::scheduleTask(const QString &taskId, double startHour, const 
     e.attendees = "🔒 deep work";
     e.date = date;
     e.taskId = t.id;
+    e.profileId = m_activeProfileId;
     m_events.upsert(e);
     emit toast(QString("%1 запланировано на %2").arg(t.id, eventHourLabel(startHour)));
     scheduleSave();
@@ -648,12 +656,13 @@ QJsonArray eventsToJson(const QVector<CalEvent> &xs) {
         o["attendees"] = e.attendees;
         o["date"]      = e.date.isValid() ? e.date.toString(Qt::ISODate) : QString();
         o["taskId"]    = e.taskId;
+        o["profileId"] = e.profileId;
         a.append(o);
     }
     return a;
 }
 
-QVector<CalEvent> eventsFromJson(const QJsonArray &a) {
+QVector<CalEvent> eventsFromJson(const QJsonArray &a, const QString &fallbackProfileId = QString()) {
     QVector<CalEvent> v;
     v.reserve(a.size());
     for (const auto &it : a) {
@@ -667,6 +676,7 @@ QVector<CalEvent> eventsFromJson(const QJsonArray &a) {
         e.attendees = o["attendees"].toString();
         e.date      = QDate::fromString(o["date"].toString(), Qt::ISODate);
         e.taskId    = o["taskId"].toString();
+        e.profileId = o.contains("profileId") ? o["profileId"].toString() : fallbackProfileId;
         v.append(e);
     }
     return v;
@@ -739,7 +749,6 @@ QJsonObject profileToJson(const Profile &p) {
     o["color"]     = p.color;
     o["createdAt"] = p.createdAt.isValid() ? p.createdAt.toString(Qt::ISODate) : QString();
     o["tasks"]     = tasksToJson(p.tasks);
-    o["events"]    = eventsToJson(p.events);
     o["people"]    = peopleToJson(p.people);
     o["statuses"]  = statusesToJson(p.statuses);
     if (!p.docsState.isEmpty()) {
@@ -749,18 +758,24 @@ QJsonObject profileToJson(const Profile &p) {
     return o;
 }
 
-Profile profileFromJson(const QJsonObject &o) {
+// Returns the parsed Profile and pulls out any nested "events" array (legacy
+// schema v2) so the caller can hoist them into the global event pool with
+// fallback profileId = p.id.
+Profile profileFromJson(const QJsonObject &o, QVector<CalEvent> *outLegacyEvents = nullptr) {
     Profile p;
     p.id        = o["id"].toString();
     p.name      = o["name"].toString();
     p.color     = o["color"].toString();
     p.createdAt = QDateTime::fromString(o["createdAt"].toString(), Qt::ISODate);
     p.tasks     = tasksFromJson(o["tasks"].toArray());
-    p.events    = eventsFromJson(o["events"].toArray());
     p.people    = peopleFromJson(o["people"].toArray());
     p.statuses  = statusesFromJson(o["statuses"].toArray());
     if (o.contains("docs"))
         p.docsState = QJsonDocument(o["docs"].toObject()).toJson(QJsonDocument::Compact);
+    if (outLegacyEvents && o.contains("events")) {
+        const QVector<CalEvent> v = eventsFromJson(o["events"].toArray(), p.id);
+        outLegacyEvents->append(v);
+    }
     return p;
 }
 
@@ -793,20 +808,20 @@ void AppController::snapshotActiveProfile() {
     if (i < 0) return;
     Profile &p = m_profiles[i];
     p.tasks     = m_tasks.items();
-    p.events    = m_events.items();
     p.people    = m_people.items();
     p.statuses  = m_statuses;
     p.docsState = m_docsState;
+    // Events are global — not snapshotted into the profile.
 }
 
 void AppController::applyProfileToModels(const Profile &p) {
     m_tasks.reset(p.tasks);
-    m_events.reset(p.events);
     m_people.reset(p.people);
     m_statuses = p.statuses;
     emit statusesChanged();
     m_docsState = p.docsState;
     emit docsStateChanged();
+    // Events are global — not reset on profile switch.
 }
 
 Profile AppController::makeStartingProfile(const QString &name, const QString &color) const {
@@ -859,12 +874,15 @@ void AppController::saveStateNow() {
     snapshotActiveProfile();
 
     QJsonObject root;
-    root["schemaVersion"]   = 2;
+    root["schemaVersion"]   = 3;
     root["activeProfileId"] = m_activeProfileId;
 
     QJsonArray profilesArr;
     for (const Profile &p : m_profiles) profilesArr.append(profileToJson(p));
     root["profiles"] = profilesArr;
+
+    // Events are global (shown across profiles in the calendar).
+    root["events"] = eventsToJson(m_events.items());
 
     QJsonObject s;
     s["theme"]        = m_theme;
@@ -915,13 +933,24 @@ void AppController::loadStateOnStart() {
     }
 
     const int schema = root.value("schemaVersion").toInt(1);
+    QVector<CalEvent> globalEvents;
+
     if (schema >= 2 && root.contains("profiles")) {
-        // ----- schema v2: profiles array -----
-        for (const auto &it : root["profiles"].toArray())
-            m_profiles.push_back(profileFromJson(it.toObject()));
+        // ----- schema v2 / v3: profiles array -----
+        for (const auto &it : root["profiles"].toArray()) {
+            // For v2, profiles still carried their own events — hoist them
+            // into the global pool tagged with the source profile id.
+            QVector<CalEvent> legacy;
+            m_profiles.push_back(profileFromJson(it.toObject(),
+                                                 schema < 3 ? &legacy : nullptr));
+            if (!legacy.isEmpty()) globalEvents.append(legacy);
+        }
         m_activeProfileId = root.value("activeProfileId").toString();
         if (profileIndexOf(m_activeProfileId) < 0 && !m_profiles.isEmpty())
             m_activeProfileId = m_profiles.first().id;
+        // schema v3 keeps events at top level.
+        if (schema >= 3 && root.contains("events"))
+            globalEvents = eventsFromJson(root["events"].toArray());
     } else {
         // ----- schema v1: flat fields → wrap into one "Default" profile -----
         Profile p;
@@ -930,14 +959,18 @@ void AppController::loadStateOnStart() {
         p.color     = "#5cc2dd";
         p.createdAt = QDateTime::currentDateTime();
         if (root.contains("tasks"))    p.tasks    = tasksFromJson(root["tasks"].toArray());
-        if (root.contains("events"))   p.events   = eventsFromJson(root["events"].toArray());
         if (root.contains("people"))   p.people   = peopleFromJson(root["people"].toArray());
         if (root.contains("statuses")) p.statuses = statusesFromJson(root["statuses"].toArray());
         if (root.contains("docs"))
             p.docsState = QJsonDocument(root["docs"].toObject()).toJson(QJsonDocument::Compact);
+        // Hoist any legacy top-level events into the global pool.
+        if (root.contains("events"))
+            globalEvents = eventsFromJson(root["events"].toArray(), p.id);
         m_profiles.push_back(p);
         m_activeProfileId = p.id;
     }
+
+    m_events.reset(globalEvents);
 
     if (!m_profiles.isEmpty()) {
         const int ai = qMax(0, profileIndexOf(m_activeProfileId));
@@ -949,8 +982,8 @@ void AppController::loadStateOnStart() {
     emit profilesChanged();
     emit activeProfileChanged();
 
-    // Force a rewrite to upgrade the on-disk file to v2 if we just migrated.
-    if (schema < 2) scheduleSave();
+    // Force a rewrite to upgrade the on-disk file to v3 if we just migrated.
+    if (schema < 3) scheduleSave();
 }
 
 // ───────────────────────────────────────────────────── Profiles API ──
@@ -1030,6 +1063,18 @@ void AppController::deleteProfile(const QString &id) {
     const QString name = m_profiles[i].name;
     m_profiles.removeAt(i);
 
+    // Events that were attributed to this profile become "unassigned"
+    // (still visible in the calendar, but with no feature dot).
+    for (int r = 0; r < m_events.rowCount(); ++r) {
+        const QModelIndex mi = m_events.index(r, 0);
+        if (m_events.data(mi, EventModel::ProfileIdRole).toString() == id) {
+            const CalEvent &e = m_events.items().at(r);
+            CalEvent copy = e;
+            copy.profileId.clear();
+            m_events.upsert(copy);
+        }
+    }
+
     // If we deleted the active one, fall back to its neighbour.
     if (id == m_activeProfileId) {
         const int fallback = qMin(i, m_profiles.size() - 1);
@@ -1041,6 +1086,17 @@ void AppController::deleteProfile(const QString &id) {
     armUndo(5);
     emit undoableToast(QString("Удалён профиль: %1").arg(name), 5);
     scheduleSave();
+}
+
+QVariantMap AppController::profileById(const QString &id) const {
+    const int i = profileIndexOf(id);
+    if (i < 0) return {};
+    const Profile &p = m_profiles[i];
+    QVariantMap m;
+    m["id"]    = p.id;
+    m["name"]  = p.name;
+    m["color"] = p.color;
+    return m;
 }
 
 QString AppController::duplicateProfile(const QString &id, const QString &newName) {
