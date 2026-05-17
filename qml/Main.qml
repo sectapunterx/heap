@@ -19,6 +19,26 @@ ApplicationWindow {
     property var prioritiesFilter: ({})
     property bool showDoneTimeline: false
 
+    // Reactive task / status counts — QAbstractItemModel signals refresh
+    // these on profile switch (modelReset) and on individual mutations.
+    property int _taskCount:    AppController.tasks.rowCount()
+    property int _activeCount:  AppController.countByStatus("prog") + AppController.countByStatus("half")
+    property int _blockedCount: AppController.countByStatus("blocked")
+    property int _reviewCount:  AppController.countByStatus("review")
+    function _recountStatuses() {
+        _taskCount    = AppController.tasks.rowCount();
+        _activeCount  = AppController.countByStatus("prog") + AppController.countByStatus("half");
+        _blockedCount = AppController.countByStatus("blocked");
+        _reviewCount  = AppController.countByStatus("review");
+    }
+    Connections {
+        target: AppController.tasks
+        function onModelReset()   { win._recountStatuses() }
+        function onRowsInserted() { win._recountStatuses() }
+        function onRowsRemoved()  { win._recountStatuses() }
+        function onDataChanged()  { win._recountStatuses() }
+    }
+
     Component.onCompleted: {
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
@@ -50,6 +70,7 @@ ApplicationWindow {
         function onRowsInserted() { win._scheduleMap = win.scheduleMap() }
         function onRowsRemoved()  { win._scheduleMap = win.scheduleMap() }
         function onDataChanged()  { win._scheduleMap = win.scheduleMap() }
+        function onModelReset()   { win._scheduleMap = win.scheduleMap() }
     }
     Connections {
         target: AppController
@@ -74,6 +95,19 @@ ApplicationWindow {
             searchText: win.searchText
             onSearchTextChanged: win.searchText = searchText
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+            onNewProfileRequested: profileEditor.showCreate()
+            onRenameProfileRequested: {
+                const list = AppController.profiles;
+                const id = AppController.activeProfileId;
+                for (let i = 0; i < list.length; i++) if (list[i].id === id)
+                    profileEditor.showRename(list[i].id, list[i].name, list[i].color);
+            }
+            onDuplicateProfileRequested: {
+                const list = AppController.profiles;
+                const id = AppController.activeProfileId;
+                for (let i = 0; i < list.length; i++) if (list[i].id === id)
+                    profileEditor.showDuplicate(list[i].id, list[i].name, list[i].color);
+            }
         }
 
         // Side rail
@@ -105,10 +139,10 @@ ApplicationWindow {
                              : AppController.currentView === "week" ? "Week"
                              : "Docs"
                     priorities: win.prioritiesFilter
-                    totalCount: AppController.tasks.rowCount()
-                    activeCount: win.activeCount()
-                    blockedCount: AppController.countByStatus("blocked")
-                    reviewCount: AppController.countByStatus("review")
+                    totalCount: win._taskCount
+                    activeCount: win._activeCount
+                    blockedCount: win._blockedCount
+                    reviewCount: win._reviewCount
                     onTogglePriority: (p) => {
                         const next = Object.assign({}, win.prioritiesFilter);
                         next[p] = !next[p];
@@ -159,7 +193,20 @@ ApplicationWindow {
                 }
                 Component {
                     id: docsComp
-                    DocsView {}
+                    DocsView {
+                        id: docsView
+                        Connections {
+                            target: docsBridge
+                            function onRequestedAnchorChanged() {
+                                if (docsBridge.requestedAnchor.length > 0) {
+                                    Qt.callLater(function () {
+                                        docsView.scrollToAnchor(docsBridge.requestedAnchor);
+                                        docsBridge.requestedAnchor = "";
+                                    });
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
@@ -214,9 +261,41 @@ ApplicationWindow {
         }
     }
 
-    TaskEditor   { id: taskEditor }
-    EventEditor  { id: eventEditor }
-    PersonEditor { id: personEditor }
+    TaskEditor    { id: taskEditor }
+    EventEditor   { id: eventEditor }
+    PersonEditor  { id: personEditor }
+    ProfileEditor { id: profileEditor }
+
+    CommandPalette {
+        id: cmdPalette
+        onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))
+        onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
+        onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
+        onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
+        onNavigateToContacts: docsBridge.requestedAnchor = "sec-contacts"
+    }
+
+    // Anchor bridge — DocsView listens for changes and scrolls to the
+    // anchorId set here (set, then cleared after one tick).
+    QtObject {
+        id: docsBridge
+        property string requestedAnchor: ""
+    }
+
+    Shortcut {
+        sequences: ["Ctrl+K", "Ctrl+P"]
+        context: Qt.ApplicationShortcut
+        onActivated: cmdPalette.open()
+    }
+
+    Connections {
+        target: AppController
+        function onActiveProfileChanged() {
+            win.searchText = "";
+            win.prioritiesFilter = ({});
+            AppController.selectedDate = AppController.today;
+        }
+    }
 
     // Tweaks popover (opened from the side rail)
     TweaksPanel { id: tweaks }

@@ -5,26 +5,26 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QLocale>
+#include <QSaveFile>
 #include <QStandardPaths>
 #include <QUuid>
+
+namespace {
+constexpr int kBackupIntervalSeconds = 5 * 60;
+constexpr int kBackupRetentionCount  = 20;
+}
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
 {
     m_today = QDate::currentDate();
     m_selectedDate = m_today;
-
-    m_statuses.reserve(7);
-    for (const auto &m : SampleData::statuses()) m_statuses.push_back(m);
-
-    m_tasks.reset(SampleData::tasks());
-    m_events.reset(SampleData::events(m_today));
-    m_people.reset(SampleData::people());
 
     m_saveTimer = new QTimer(this);
     m_saveTimer->setSingleShot(true);
@@ -36,6 +36,29 @@ AppController::AppController(QObject *parent)
     connect(m_undoTimer, &QTimer::timeout, this, &AppController::clearPendingUndo);
 
     loadStateOnStart();
+
+    // Fresh install or unreadable state — seed a single "Default" profile
+    // from SampleData so the app boots with something sensible.
+    if (m_profiles.isEmpty()) {
+        Profile p;
+        p.id        = "default";
+        p.name      = "Default";
+        p.color     = "#5cc2dd";
+        p.createdAt = QDateTime::currentDateTime();
+        p.tasks     = SampleData::tasks();
+        p.events    = SampleData::events(m_today);
+        p.people    = SampleData::people();
+        QVariantList st;
+        for (const auto &m : SampleData::statuses()) st.push_back(m);
+        p.statuses  = st;
+        p.docsState.clear();
+        m_profiles.push_back(p);
+        m_activeProfileId = p.id;
+        applyProfileToModels(p);
+        emit profilesChanged();
+        emit activeProfileChanged();
+        scheduleSave();
+    }
 }
 
 AppController::~AppController() {
@@ -535,6 +558,20 @@ void AppController::undoLastDeletion() {
                        .arg(m_pendingUndo.status.value("name").toString()));
             break;
         }
+        case PendingUndo::Profile: {
+            const int idx = qBound(0, m_pendingUndo.row, m_profiles.size());
+            // Snapshot whatever is live now so we don't lose post-delete edits
+            // in whichever profile became active after the deletion.
+            snapshotActiveProfile();
+            m_profiles.insert(idx, m_pendingUndo.profile);
+            m_activeProfileId = m_pendingUndo.profile.id;
+            applyProfileToModels(m_pendingUndo.profile);
+            emit profilesChanged();
+            emit activeProfileChanged();
+            emit toast(QString("Восстановлен профиль: %1")
+                       .arg(m_pendingUndo.profile.name));
+            break;
+        }
         default: break;
     }
     m_pendingUndo = {};
@@ -551,16 +588,23 @@ QString AppController::stateFilePath() const {
     return dir + "/state.json";
 }
 
+QString AppController::backupDirPath() const {
+    const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/backups";
+    QDir().mkpath(dir);
+    return dir;
+}
+
 void AppController::scheduleSave() {
     if (m_loading || !m_saveTimer) return;
     m_saveTimer->start();
 }
 
-void AppController::saveStateNow() {
-    QJsonObject root;
+// ───────────────── (de)serialisation helpers ─────────────────
+namespace {
 
-    QJsonArray tasksArr;
-    for (const Task &t : m_tasks.items()) {
+QJsonArray tasksToJson(const QVector<Task> &xs) {
+    QJsonArray a;
+    for (const Task &t : xs) {
         QJsonObject o;
         o["id"]       = t.id;
         o["title"]    = t.title;
@@ -569,12 +613,32 @@ void AppController::saveStateNow() {
         o["status"]   = t.status;
         o["deadline"] = t.deadline.isValid() ? t.deadline.toString(Qt::ISODate) : QString();
         o["branch"]   = t.branch;
-        tasksArr.append(o);
+        a.append(o);
     }
-    root["tasks"] = tasksArr;
+    return a;
+}
 
-    QJsonArray eventsArr;
-    for (const CalEvent &e : m_events.items()) {
+QVector<Task> tasksFromJson(const QJsonArray &a) {
+    QVector<Task> v;
+    v.reserve(a.size());
+    for (const auto &it : a) {
+        const QJsonObject o = it.toObject();
+        Task t;
+        t.id       = o["id"].toString();
+        t.title    = o["title"].toString();
+        t.desc     = o["desc"].toString();
+        t.priority = o["priority"].toString();
+        t.status   = o["status"].toString();
+        t.deadline = QDate::fromString(o["deadline"].toString(), Qt::ISODate);
+        t.branch   = o["branch"].toString();
+        v.append(t);
+    }
+    return v;
+}
+
+QJsonArray eventsToJson(const QVector<CalEvent> &xs) {
+    QJsonArray a;
+    for (const CalEvent &e : xs) {
         QJsonObject o;
         o["id"]        = e.id;
         o["title"]     = e.title;
@@ -584,12 +648,33 @@ void AppController::saveStateNow() {
         o["attendees"] = e.attendees;
         o["date"]      = e.date.isValid() ? e.date.toString(Qt::ISODate) : QString();
         o["taskId"]    = e.taskId;
-        eventsArr.append(o);
+        a.append(o);
     }
-    root["events"] = eventsArr;
+    return a;
+}
 
-    QJsonArray peopleArr;
-    for (const Person &p : m_people.items()) {
+QVector<CalEvent> eventsFromJson(const QJsonArray &a) {
+    QVector<CalEvent> v;
+    v.reserve(a.size());
+    for (const auto &it : a) {
+        const QJsonObject o = it.toObject();
+        CalEvent e;
+        e.id        = o["id"].toString();
+        e.title     = o["title"].toString();
+        e.type      = o["type"].toString();
+        e.start     = o["start"].toDouble();
+        e.end       = o["end"].toDouble();
+        e.attendees = o["attendees"].toString();
+        e.date      = QDate::fromString(o["date"].toString(), Qt::ISODate);
+        e.taskId    = o["taskId"].toString();
+        v.append(e);
+    }
+    return v;
+}
+
+QJsonArray peopleToJson(const QVector<Person> &xs) {
+    QJsonArray a;
+    for (const Person &p : xs) {
         QJsonObject o;
         o["id"]       = p.id;
         o["name"]     = p.name;
@@ -597,12 +682,31 @@ void AppController::saveStateNow() {
         o["question"] = p.question;
         o["state"]    = p.state;
         o["color"]    = p.color.name();
-        peopleArr.append(o);
+        a.append(o);
     }
-    root["people"] = peopleArr;
+    return a;
+}
 
-    QJsonArray statusesArr;
-    for (const QVariant &v : m_statuses) {
+QVector<Person> peopleFromJson(const QJsonArray &a) {
+    QVector<Person> v;
+    v.reserve(a.size());
+    for (const auto &it : a) {
+        const QJsonObject o = it.toObject();
+        Person p;
+        p.id       = o["id"].toString();
+        p.name     = o["name"].toString();
+        p.role     = o["role"].toString();
+        p.question = o["question"].toString();
+        p.state    = o["state"].toString();
+        p.color    = QColor(o["color"].toString());
+        v.append(p);
+    }
+    return v;
+}
+
+QJsonArray statusesToJson(const QVariantList &xs) {
+    QJsonArray a;
+    for (const QVariant &v : xs) {
         const QVariantMap m = v.toMap();
         QJsonObject o;
         o["id"]    = m.value("id").toString();
@@ -610,9 +714,157 @@ void AppController::saveStateNow() {
         const QVariant col = m.value("color");
         o["color"] = col.canConvert<QColor>() ? col.value<QColor>().name()
                                               : col.toString();
-        statusesArr.append(o);
+        a.append(o);
     }
-    root["statuses"] = statusesArr;
+    return a;
+}
+
+QVariantList statusesFromJson(const QJsonArray &a) {
+    QVariantList v;
+    for (const auto &it : a) {
+        const QJsonObject o = it.toObject();
+        QVariantMap m;
+        m["id"]    = o["id"].toString();
+        m["name"]  = o["name"].toString();
+        m["color"] = QColor(o["color"].toString());
+        v.append(m);
+    }
+    return v;
+}
+
+QJsonObject profileToJson(const Profile &p) {
+    QJsonObject o;
+    o["id"]        = p.id;
+    o["name"]      = p.name;
+    o["color"]     = p.color;
+    o["createdAt"] = p.createdAt.isValid() ? p.createdAt.toString(Qt::ISODate) : QString();
+    o["tasks"]     = tasksToJson(p.tasks);
+    o["events"]    = eventsToJson(p.events);
+    o["people"]    = peopleToJson(p.people);
+    o["statuses"]  = statusesToJson(p.statuses);
+    if (!p.docsState.isEmpty()) {
+        const QJsonDocument d = QJsonDocument::fromJson(p.docsState.toUtf8());
+        if (!d.isNull() && d.isObject()) o["docs"] = d.object();
+    }
+    return o;
+}
+
+Profile profileFromJson(const QJsonObject &o) {
+    Profile p;
+    p.id        = o["id"].toString();
+    p.name      = o["name"].toString();
+    p.color     = o["color"].toString();
+    p.createdAt = QDateTime::fromString(o["createdAt"].toString(), Qt::ISODate);
+    p.tasks     = tasksFromJson(o["tasks"].toArray());
+    p.events    = eventsFromJson(o["events"].toArray());
+    p.people    = peopleFromJson(o["people"].toArray());
+    p.statuses  = statusesFromJson(o["statuses"].toArray());
+    if (o.contains("docs"))
+        p.docsState = QJsonDocument(o["docs"].toObject()).toJson(QJsonDocument::Compact);
+    return p;
+}
+
+} // namespace
+
+// ───────────────── Profile helpers (private) ─────────────────
+
+int AppController::profileIndexOf(const QString &id) const {
+    for (int i = 0; i < m_profiles.size(); ++i)
+        if (m_profiles[i].id == id) return i;
+    return -1;
+}
+
+QString AppController::makeProfileId(const QString &name) const {
+    QString slug;
+    for (QChar c : name.toLower())
+        slug.append(c.isLetterOrNumber() ? c : QChar('-'));
+    while (slug.contains("--")) slug.replace("--", "-");
+    if (slug.startsWith('-')) slug = slug.mid(1);
+    while (slug.endsWith('-')) slug.chop(1);
+    if (slug.isEmpty()) slug = "profile";
+    QString id = slug;
+    int n = 2;
+    while (profileIndexOf(id) >= 0) { id = slug + "-" + QString::number(n++); }
+    return id;
+}
+
+void AppController::snapshotActiveProfile() {
+    const int i = profileIndexOf(m_activeProfileId);
+    if (i < 0) return;
+    Profile &p = m_profiles[i];
+    p.tasks     = m_tasks.items();
+    p.events    = m_events.items();
+    p.people    = m_people.items();
+    p.statuses  = m_statuses;
+    p.docsState = m_docsState;
+}
+
+void AppController::applyProfileToModels(const Profile &p) {
+    m_tasks.reset(p.tasks);
+    m_events.reset(p.events);
+    m_people.reset(p.people);
+    m_statuses = p.statuses;
+    emit statusesChanged();
+    m_docsState = p.docsState;
+    emit docsStateChanged();
+}
+
+Profile AppController::makeStartingProfile(const QString &name, const QString &color) const {
+    Profile p;
+    p.name      = name;
+    p.color     = color.isEmpty() ? "#5cc2dd" : color;
+    p.createdAt = QDateTime::currentDateTime();
+    // Copy status template from the currently active profile (or sample).
+    const int activeIdx = profileIndexOf(m_activeProfileId);
+    if (activeIdx >= 0) {
+        for (const QVariant &v : m_profiles[activeIdx].statuses) {
+            QVariantMap m = v.toMap();
+            // copy color reference as-is
+            p.statuses.append(m);
+        }
+    } else {
+        for (const auto &m : SampleData::statuses()) p.statuses.append(m);
+    }
+    // tasks / events / people / docs — empty
+    return p;
+}
+
+// ───────────────── Save / load (schema v2) ─────────────────
+
+void AppController::rotateBackupIfDue() {
+    const QString path = stateFilePath();
+    if (!QFile::exists(path)) return;
+    const QDateTime now = QDateTime::currentDateTime();
+    if (m_lastBackupAt.isValid()
+        && m_lastBackupAt.secsTo(now) < kBackupIntervalSeconds) return;
+    const QString dir = backupDirPath();
+    const QString stamp = now.toString("yyyyMMdd-HHmmss");
+    QFile::copy(path, dir + "/state-" + stamp + ".json");
+    pruneBackups(kBackupRetentionCount);
+    m_lastBackupAt = now;
+}
+
+void AppController::pruneBackups(int keep) {
+    QDir d(backupDirPath());
+    const QStringList all = d.entryList({"state-*.json"},
+                                        QDir::Files | QDir::NoSymLinks,
+                                        QDir::Time);
+    for (int i = keep; i < all.size(); ++i) d.remove(all[i]);
+}
+
+void AppController::saveStateNow() {
+    if (m_loading) return;
+
+    // Push live model state back into the active profile.
+    snapshotActiveProfile();
+
+    QJsonObject root;
+    root["schemaVersion"]   = 2;
+    root["activeProfileId"] = m_activeProfileId;
+
+    QJsonArray profilesArr;
+    for (const Profile &p : m_profiles) profilesArr.append(profileToJson(p));
+    root["profiles"] = profilesArr;
 
     QJsonObject s;
     s["theme"]        = m_theme;
@@ -622,16 +874,19 @@ void AppController::saveStateNow() {
     s["workdayEnd"]   = m_workdayEnd;
     s["crumbProject"] = m_crumbProject;
     s["crumbUser"]    = m_crumbUser;
-    root["settings"] = s;
+    root["settings"]  = s;
 
-    if (!m_docsState.isEmpty()) {
-        const QJsonDocument d = QJsonDocument::fromJson(m_docsState.toUtf8());
-        if (!d.isNull() && d.isObject()) root["docs"] = d.object();
+    rotateBackupIfDue();
+
+    QSaveFile f(stateFilePath());
+    if (!f.open(QIODevice::WriteOnly)) {
+        qWarning("todocpp: cannot open state.json for writing: %s",
+                 qUtf8Printable(f.errorString()));
+        return;
     }
-
-    QFile f(stateFilePath());
-    if (f.open(QFile::WriteOnly | QFile::Truncate)) {
-        f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
+    if (!f.commit()) {
+        qWarning("todocpp: state.json commit failed: %s", qUtf8Printable(f.errorString()));
     }
 }
 
@@ -644,73 +899,7 @@ void AppController::loadStateOnStart() {
 
     m_loading = true;
 
-    if (root.contains("tasks")) {
-        QVector<Task> v;
-        for (const auto &it : root["tasks"].toArray()) {
-            const QJsonObject o = it.toObject();
-            Task t;
-            t.id       = o["id"].toString();
-            t.title    = o["title"].toString();
-            t.desc     = o["desc"].toString();
-            t.priority = o["priority"].toString();
-            t.status   = o["status"].toString();
-            t.deadline = QDate::fromString(o["deadline"].toString(), Qt::ISODate);
-            t.branch   = o["branch"].toString();
-            v.append(t);
-        }
-        m_tasks.reset(v);
-    }
-
-    if (root.contains("events")) {
-        QVector<CalEvent> v;
-        for (const auto &it : root["events"].toArray()) {
-            const QJsonObject o = it.toObject();
-            CalEvent e;
-            e.id        = o["id"].toString();
-            e.title     = o["title"].toString();
-            e.type      = o["type"].toString();
-            e.start     = o["start"].toDouble();
-            e.end       = o["end"].toDouble();
-            e.attendees = o["attendees"].toString();
-            e.date      = QDate::fromString(o["date"].toString(), Qt::ISODate);
-            e.taskId    = o["taskId"].toString();
-            v.append(e);
-        }
-        m_events.reset(v);
-    }
-
-    if (root.contains("people")) {
-        QVector<Person> v;
-        for (const auto &it : root["people"].toArray()) {
-            const QJsonObject o = it.toObject();
-            Person p;
-            p.id       = o["id"].toString();
-            p.name     = o["name"].toString();
-            p.role     = o["role"].toString();
-            p.question = o["question"].toString();
-            p.state    = o["state"].toString();
-            p.color    = QColor(o["color"].toString());
-            v.append(p);
-        }
-        m_people.reset(v);
-    }
-
-    if (root.contains("statuses")) {
-        QVariantList v;
-        for (const auto &it : root["statuses"].toArray()) {
-            const QJsonObject o = it.toObject();
-            QVariantMap m;
-            m["id"]    = o["id"].toString();
-            m["name"]  = o["name"].toString();
-            m["color"] = QColor(o["color"].toString());
-            v.append(m);
-        }
-        if (!v.isEmpty()) {
-            m_statuses = v;
-            emit statusesChanged();
-        }
-    }
-
+    // ----- settings (global) -----
     if (root.contains("settings")) {
         const QJsonObject s = root["settings"].toObject();
         if (s.contains("theme"))        { m_theme = s["theme"].toString(); emit themeChanged(); }
@@ -725,10 +914,400 @@ void AppController::loadStateOnStart() {
         if (s.contains("crumbUser"))    { m_crumbUser    = s["crumbUser"].toString();    emit crumbUserChanged(); }
     }
 
-    if (root.contains("docs")) {
-        m_docsState = QJsonDocument(root["docs"].toObject()).toJson(QJsonDocument::Compact);
-        emit docsStateChanged();
+    const int schema = root.value("schemaVersion").toInt(1);
+    if (schema >= 2 && root.contains("profiles")) {
+        // ----- schema v2: profiles array -----
+        for (const auto &it : root["profiles"].toArray())
+            m_profiles.push_back(profileFromJson(it.toObject()));
+        m_activeProfileId = root.value("activeProfileId").toString();
+        if (profileIndexOf(m_activeProfileId) < 0 && !m_profiles.isEmpty())
+            m_activeProfileId = m_profiles.first().id;
+    } else {
+        // ----- schema v1: flat fields → wrap into one "Default" profile -----
+        Profile p;
+        p.id        = "default";
+        p.name      = "Default";
+        p.color     = "#5cc2dd";
+        p.createdAt = QDateTime::currentDateTime();
+        if (root.contains("tasks"))    p.tasks    = tasksFromJson(root["tasks"].toArray());
+        if (root.contains("events"))   p.events   = eventsFromJson(root["events"].toArray());
+        if (root.contains("people"))   p.people   = peopleFromJson(root["people"].toArray());
+        if (root.contains("statuses")) p.statuses = statusesFromJson(root["statuses"].toArray());
+        if (root.contains("docs"))
+            p.docsState = QJsonDocument(root["docs"].toObject()).toJson(QJsonDocument::Compact);
+        m_profiles.push_back(p);
+        m_activeProfileId = p.id;
+    }
+
+    if (!m_profiles.isEmpty()) {
+        const int ai = qMax(0, profileIndexOf(m_activeProfileId));
+        applyProfileToModels(m_profiles[ai]);
     }
 
     m_loading = false;
+
+    emit profilesChanged();
+    emit activeProfileChanged();
+
+    // Force a rewrite to upgrade the on-disk file to v2 if we just migrated.
+    if (schema < 2) scheduleSave();
+}
+
+// ───────────────────────────────────────────────────── Profiles API ──
+
+QVariantList AppController::profiles() const {
+    QVariantList out;
+    for (const Profile &p : m_profiles) {
+        QVariantMap m;
+        m["id"]        = p.id;
+        m["name"]      = p.name;
+        m["color"]     = p.color;
+        m["tasks"]     = p.tasks.size();
+        m["docs"]      = p.docsState.size() > 2 ? 1 : 0;
+        m["createdAt"] = p.createdAt.isValid() ? p.createdAt.toString(Qt::ISODate) : QString();
+        out.append(m);
+    }
+    return out;
+}
+
+void AppController::setActiveProfileId(const QString &id) {
+    if (id == m_activeProfileId) return;
+    const int next = profileIndexOf(id);
+    if (next < 0) return;
+    snapshotActiveProfile();
+    m_activeProfileId = id;
+    applyProfileToModels(m_profiles[next]);
+    emit activeProfileChanged();
+    scheduleSave();
+}
+
+QString AppController::createProfile(const QString &name, const QString &color) {
+    if (name.trimmed().isEmpty()) return QString();
+    // Snapshot current active before creating so we don't lose unsaved edits.
+    snapshotActiveProfile();
+    Profile p = makeStartingProfile(name.trimmed(), color);
+    p.id = makeProfileId(name.trimmed());
+    m_profiles.push_back(p);
+    m_activeProfileId = p.id;
+    applyProfileToModels(p);
+    emit profilesChanged();
+    emit activeProfileChanged();
+    emit toast(QString("Профиль создан: %1").arg(p.name));
+    scheduleSave();
+    return p.id;
+}
+
+void AppController::renameProfile(const QString &id, const QString &newName) {
+    const int i = profileIndexOf(id);
+    if (i < 0 || newName.trimmed().isEmpty()) return;
+    if (m_profiles[i].name == newName) return;
+    m_profiles[i].name = newName.trimmed();
+    emit profilesChanged();
+    if (id == m_activeProfileId) emit activeProfileChanged();
+    scheduleSave();
+}
+
+void AppController::setProfileColor(const QString &id, const QString &color) {
+    const int i = profileIndexOf(id);
+    if (i < 0) return;
+    const QColor c(color);
+    if (!c.isValid()) return;
+    m_profiles[i].color = c.name();
+    emit profilesChanged();
+    if (id == m_activeProfileId) emit activeProfileChanged();
+    scheduleSave();
+}
+
+void AppController::deleteProfile(const QString &id) {
+    const int i = profileIndexOf(id);
+    if (i < 0 || m_profiles.size() <= 1) return;  // never let the app run out of profiles
+    cancelUndo();
+    snapshotActiveProfile();
+    m_pendingUndo = {};
+    m_pendingUndo.kind    = PendingUndo::Profile;
+    m_pendingUndo.profile = m_profiles[i];
+    m_pendingUndo.row     = i;
+    const QString name = m_profiles[i].name;
+    m_profiles.removeAt(i);
+
+    // If we deleted the active one, fall back to its neighbour.
+    if (id == m_activeProfileId) {
+        const int fallback = qMin(i, m_profiles.size() - 1);
+        m_activeProfileId = m_profiles[fallback].id;
+        applyProfileToModels(m_profiles[fallback]);
+        emit activeProfileChanged();
+    }
+    emit profilesChanged();
+    armUndo(5);
+    emit undoableToast(QString("Удалён профиль: %1").arg(name), 5);
+    scheduleSave();
+}
+
+QString AppController::duplicateProfile(const QString &id, const QString &newName) {
+    const int i = profileIndexOf(id);
+    if (i < 0) return QString();
+    if (id == m_activeProfileId) snapshotActiveProfile();
+    Profile copy   = m_profiles[i];
+    copy.name      = newName.trimmed().isEmpty()
+                     ? (m_profiles[i].name + " copy")
+                     : newName.trimmed();
+    copy.id        = makeProfileId(copy.name);
+    copy.createdAt = QDateTime::currentDateTime();
+    m_profiles.push_back(copy);
+    m_activeProfileId = copy.id;
+    applyProfileToModels(copy);
+    emit profilesChanged();
+    emit activeProfileChanged();
+    emit toast(QString("Дублирован профиль: %1").arg(copy.name));
+    scheduleSave();
+    return copy.id;
+}
+
+// ───────────────────────────────────────────────────── Backups API ──
+
+QVariantList AppController::listBackups() const {
+    QVariantList out;
+    QDir d(backupDirPath());
+    const QStringList files = d.entryList({"state-*.json"},
+                                          QDir::Files | QDir::NoSymLinks,
+                                          QDir::Time);
+    for (const QString &name : files) {
+        QFileInfo fi(d.filePath(name));
+        QVariantMap m;
+        m["fileName"] = name;
+        m["sizeKb"]   = qint64(fi.size() / 1024);
+        m["mtime"]    = fi.lastModified().toString(Qt::ISODate);
+        out.append(m);
+    }
+    return out;
+}
+
+bool AppController::restoreFromBackup(const QString &fileName) {
+    const QString src = backupDirPath() + "/" + fileName;
+    if (!QFile::exists(src)) return false;
+    // Snapshot current state alongside backups before overwriting.
+    rotateBackupIfDue();
+    flushSave();
+    QFile target(stateFilePath());
+    if (target.exists()) target.remove();
+    if (!QFile::copy(src, stateFilePath())) return false;
+
+    // Reload from disk.
+    m_profiles.clear();
+    m_activeProfileId.clear();
+    loadStateOnStart();
+    emit toast(QString("Восстановлено из %1").arg(fileName));
+    return true;
+}
+
+// ───────────────────────────────────────────── Command palette source ──
+
+QVariantList AppController::commandPaletteEntries() const {
+    QVariantList out;
+
+    // Profiles themselves.
+    for (const Profile &p : m_profiles) {
+        QVariantMap m;
+        m["kind"]      = "profile";
+        m["label"]     = p.name;
+        m["sub"]       = QString("%1 tasks").arg(p.tasks.size());
+        m["profileId"] = p.id;
+        m["color"]     = p.color;
+        out.append(m);
+    }
+
+    auto statusName = [](const QVariantList &statuses, const QString &id) {
+        for (const QVariant &v : statuses) {
+            const QVariantMap m = v.toMap();
+            if (m.value("id").toString() == id) return m.value("name").toString();
+        }
+        return id;
+    };
+
+    for (const Profile &p : m_profiles) {
+        // Tasks
+        for (const Task &t : p.tasks) {
+            QVariantMap m;
+            m["kind"]      = "task";
+            m["label"]     = QString("%1 · %2").arg(t.id, t.title);
+            m["sub"]       = QString("%1 · %2").arg(p.name, statusName(p.statuses, t.status).toUpper());
+            m["profileId"] = p.id;
+            m["taskId"]    = t.id;
+            m["color"]     = p.color;
+            out.append(m);
+        }
+        // Docs / snippets / contacts (parsed from docsState JSON blob)
+        if (!p.docsState.isEmpty()) {
+            const QJsonDocument d = QJsonDocument::fromJson(p.docsState.toUtf8());
+            if (!d.isNull() && d.isObject()) {
+                const QJsonObject root = d.object();
+                for (const auto &sIt : root["sections"].toArray()) {
+                    const QJsonObject sec = sIt.toObject();
+                    const QString secId    = sec["id"].toString();
+                    const QString secTitle = sec["title"].toString();
+                    for (const auto &iIt : sec["items"].toArray()) {
+                        const QJsonObject it = iIt.toObject();
+                        QVariantMap m;
+                        m["kind"]      = "doc";
+                        m["label"]     = QString("%1 · %2").arg(it["ref"].toString(),
+                                                                 it["title"].toString());
+                        m["sub"]       = QString("%1 · %2").arg(p.name, secTitle);
+                        m["profileId"] = p.id;
+                        m["sectionId"] = secId;
+                        m["color"]     = p.color;
+                        out.append(m);
+                    }
+                }
+                int snipIdx = 0;
+                for (const auto &snIt : root["snippets"].toArray()) {
+                    const QJsonObject sn = snIt.toObject();
+                    QVariantMap m;
+                    m["kind"]      = "snippet";
+                    m["label"]     = sn["title"].toString();
+                    m["sub"]       = QString("%1 · %2").arg(p.name, sn["lang"].toString());
+                    m["profileId"] = p.id;
+                    m["idx"]       = snipIdx++;
+                    m["color"]     = p.color;
+                    out.append(m);
+                }
+                int contactIdx = 0;
+                for (const auto &cIt : root["contacts"].toArray()) {
+                    const QJsonObject c = cIt.toObject();
+                    QVariantMap m;
+                    m["kind"]      = "contact";
+                    m["label"]     = c["name"].toString();
+                    m["sub"]       = QString("%1 · %2").arg(p.name, c["role"].toString());
+                    m["profileId"] = p.id;
+                    m["idx"]       = contactIdx++;
+                    m["color"]     = p.color;
+                    out.append(m);
+                }
+            }
+        }
+        // People (pending contacts list)
+        for (const Person &person : p.people) {
+            QVariantMap m;
+            m["kind"]      = "person";
+            m["label"]     = person.name;
+            m["sub"]       = QString("%1 · %2").arg(p.name, person.role);
+            m["profileId"] = p.id;
+            m["personId"]  = person.id;
+            m["color"]     = p.color;
+            out.append(m);
+        }
+    }
+
+    return out;
+}
+
+// ──────────────────────────────────────── Markdown export of profile ──
+
+QString AppController::exportActiveProfileToMarkdown() const {
+    const int i = profileIndexOf(m_activeProfileId);
+    if (i < 0) return QString();
+    const Profile &p = m_profiles[i];
+
+    // Use live models for the active profile so unsaved edits are included.
+    const QVector<Task>     &tasks   = m_tasks.items();
+    const QVector<Person>   &people  = m_people.items();
+    const QVariantList      &statuses = m_statuses;
+
+    QString out;
+    out += "# " + p.name + "  ·  " + p.id + "\n\n";
+    out += "_" + QString::number(tasks.size()) + " tasks · "
+         + QString::number(people.size()) + " contacts · upd "
+         + QDateTime::currentDateTime().toString("yyyy-MM-dd") + "_\n";
+
+    out += "\n## Tasks\n";
+    for (const QVariant &sv : statuses) {
+        const QVariantMap stm = sv.toMap();
+        const QString sid  = stm.value("id").toString();
+        const QString name = stm.value("name").toString();
+        QVector<const Task *> bucket;
+        for (const Task &t : tasks) if (t.status == sid) bucket.push_back(&t);
+        if (bucket.isEmpty()) continue;
+        out += "\n### " + name.toUpper() + "\n";
+        for (const Task *t : bucket) {
+            QString line = "- **" + t->id + "**";
+            if (!t->priority.isEmpty()) line += " [" + t->priority + "]";
+            if (t->deadline.isValid())  line += " *due " + deadlineDiffLabel(t->deadline) + "*";
+            line += "  " + t->title;
+            out += line + "\n";
+            if (!t->branch.isEmpty()) out += "  - branch: `" + t->branch + "`\n";
+            if (!t->desc.trimmed().isEmpty()) {
+                const QString d = t->desc.trimmed();
+                out += "  - " + d.left(200) + (d.size() > 200 ? "…" : "") + "\n";
+            }
+        }
+    }
+
+    if (!m_docsState.isEmpty()) {
+        const QJsonDocument d = QJsonDocument::fromJson(m_docsState.toUtf8());
+        if (!d.isNull() && d.isObject()) {
+            const QJsonObject root = d.object();
+            const QJsonArray sections = root["sections"].toArray();
+            if (!sections.isEmpty()) {
+                out += "\n## Docs\n";
+                for (const auto &sIt : sections) {
+                    const QJsonObject sec = sIt.toObject();
+                    out += "\n### " + sec["title"].toString() + "\n";
+                    for (const auto &iIt : sec["items"].toArray()) {
+                        const QJsonObject it = iIt.toObject();
+                        QString line = "- **" + it["ref"].toString() + "** — "
+                                     + it["title"].toString();
+                        const QString url = it["url"].toString();
+                        if (!url.isEmpty()) line += " → " + url;
+                        out += line + "\n";
+                    }
+                }
+            }
+            const QJsonArray snippets = root["snippets"].toArray();
+            if (!snippets.isEmpty()) {
+                out += "\n## Snippets\n";
+                for (const auto &sIt : snippets) {
+                    const QJsonObject sn = sIt.toObject();
+                    out += "\n### " + sn["title"].toString()
+                         + " (" + sn["lang"].toString() + ")\n";
+                    out += "```" + sn["lang"].toString() + "\n";
+                    out += sn["code"].toString() + "\n";
+                    out += "```\n";
+                }
+            }
+            const QJsonArray contacts = root["contacts"].toArray();
+            if (!contacts.isEmpty()) {
+                out += "\n## Contacts\n";
+                for (const auto &cIt : contacts) {
+                    const QJsonObject c = cIt.toObject();
+                    out += "- **" + c["name"].toString() + "**";
+                    if (!c["role"].toString().isEmpty())
+                        out += " — " + c["role"].toString();
+                    if (!c["channel"].toString().isEmpty())
+                        out += " — " + c["channel"].toString();
+                    if (!c["slack"].toString().isEmpty())
+                        out += " — " + c["slack"].toString();
+                    out += "\n";
+                }
+            }
+        }
+    }
+
+    if (!people.isEmpty()) {
+        out += "\n## Pending\n";
+        for (const Person &per : people) {
+            if (per.state != "todo") continue;
+            out += "- **" + per.name + "**";
+            if (!per.role.isEmpty()) out += " (" + per.role + ")";
+            if (!per.question.isEmpty()) out += " — " + per.question;
+            out += "\n";
+        }
+    }
+
+    return out;
+}
+
+void AppController::copyActiveProfileMarkdownToClipboard() {
+    const QString md = exportActiveProfileToMarkdown();
+    if (md.isEmpty()) return;
+    if (auto *cb = QGuiApplication::clipboard()) cb->setText(md);
+    emit toast("Скопировано в буфер обмена");
 }

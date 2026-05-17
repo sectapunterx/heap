@@ -201,25 +201,55 @@ Item {
     // ── Persistence — JSON round-tripped through AppController.docsState ───
 
     property bool _loadedOnce: false
-    Component.onCompleted: {
+    property bool _persisting: false   // we wrote AppController.docsState ourselves
+    property bool _reloading:  false   // external change (e.g. profile switch) — suppress persist()
+
+    function _loadFromController() {
+        _reloading = true;
         const raw = AppController.docsState || "";
-        if (raw.length > 0) {
+        if (raw.length === 0) {
+            sections = [];
+            snippets = [];
+            contacts = [];
+        } else {
             try {
                 const o = JSON.parse(raw);
-                if (o.sections) sections = o.sections;
-                if (o.snippets) snippets = o.snippets;
-                if (o.contacts) contacts = o.contacts;
-            } catch (e) { /* corrupt — ignore */ }
+                sections = o.sections || [];
+                snippets = o.snippets || [];
+                contacts = o.contacts || [];
+            } catch (e) { /* corrupt — keep current view */ }
         }
+        _reloading = false;
+    }
+
+    Component.onCompleted: {
+        const initiallyEmpty = ((AppController.docsState || "").length === 0);
+        // On first run with an empty profile, keep the hardcoded sample
+        // sections/snippets/contacts already declared as property defaults
+        // and persist them so subsequent profile switches round-trip cleanly.
+        if (!initiallyEmpty) _loadFromController();
         _loadedOnce = true;
+        if (initiallyEmpty && (sections.length > 0 || snippets.length > 0 || contacts.length > 0))
+            persist();
     }
     function persist() {
-        if (!_loadedOnce) return;
+        if (!_loadedOnce || _reloading) return;
+        _persisting = true;
         AppController.docsState = JSON.stringify({ sections: sections, snippets: snippets, contacts: contacts });
+        _persisting = false;
     }
     onSectionsChanged: persist()
     onSnippetsChanged: persist()
     onContactsChanged: persist()
+
+    // External docsState change → reload (e.g. profile switch).
+    Connections {
+        target: AppController
+        function onDocsStateChanged() {
+            if (!root._loadedOnce || root._persisting) return;
+            root._loadFromController();
+        }
+    }
 
     // ── Undo ────────────────────────────────────────────────────────────────
     property var pendingUndo: null
