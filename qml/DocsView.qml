@@ -672,6 +672,14 @@ Item {
                 boundsBehavior: Flickable.StopAtBounds
                 pressDelay: 180
 
+                NumberAnimation {
+                    id: wheelAnim
+                    target: bodyScroll
+                    property: "contentY"
+                    duration: 220
+                    easing.type: Easing.OutCubic
+                }
+
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                     onWheel: (event) => {
@@ -679,7 +687,14 @@ Item {
                         if (dy === 0) return;
                         const maxY = Math.max(0, bodyScroll.contentHeight - bodyScroll.height);
                         if (maxY <= 0) return;
-                        bodyScroll.contentY = Math.max(0, Math.min(maxY, bodyScroll.contentY - dy * 3));
+                        // Subsequent wheel events build on the in-flight target,
+                        // so several quick notches accumulate distance smoothly.
+                        const base = wheelAnim.running ? wheelAnim.to : bodyScroll.contentY;
+                        const newY = Math.max(0, Math.min(maxY, base - dy * 3));
+                        if (newY === base) return;
+                        wheelAnim.from = bodyScroll.contentY;
+                        wheelAnim.to = newY;
+                        wheelAnim.restart();
                     }
                 }
 
@@ -1177,7 +1192,10 @@ Item {
         const target = findChildByName(bodyCol, objectName);
         if (!target) return;
         const p = target.mapToItem(bodyCol, 0, 0);
-        bodyScroll.contentY = Math.max(0, Math.min(p.y - 8, bodyScroll.contentHeight - bodyScroll.height));
+        const newY = Math.max(0, Math.min(p.y - 8, bodyScroll.contentHeight - bodyScroll.height));
+        wheelAnim.from = bodyScroll.contentY;
+        wheelAnim.to = newY;
+        wheelAnim.restart();
     }
     function findChildByName(parentItem, name) {
         if (!parentItem) return null;
