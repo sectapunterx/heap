@@ -50,6 +50,7 @@ Rectangle {
                     function onDataChanged()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
                     function onRowsInserted()   { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
                     function onRowsRemoved()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
+                    function onModelReset()     { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
                 }
             }
             Item { Layout.fillWidth: true }

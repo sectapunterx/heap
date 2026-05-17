@@ -45,6 +45,8 @@ qt_add_qml_module(todocpp
         qml/TweaksPanel.qml
         qml/Toast.qml
         qml/PillButton.qml
+        qml/ProfileEditor.qml
+        qml/CommandPalette.qml
     SOURCES
         src/AppController.h
         src/Models.h

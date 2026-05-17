@@ -33,6 +33,10 @@ class AppController : public QObject {
     Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
     Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
+    Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
+    Q_PROPERTY(QString activeProfileId READ activeProfileId
+               WRITE setActiveProfileId NOTIFY activeProfileChanged)
+
 public:
     explicit AppController(QObject *parent = nullptr);
     ~AppController() override;
@@ -117,6 +121,23 @@ public:
 
     Q_INVOKABLE void copyToClipboard(const QString &text);
 
+    // ---- Profiles ----
+    QVariantList profiles() const;
+    QString      activeProfileId() const { return m_activeProfileId; }
+    void         setActiveProfileId(const QString &id);
+    Q_INVOKABLE QString createProfile(const QString &name, const QString &color = QString());
+    Q_INVOKABLE void    renameProfile(const QString &id, const QString &newName);
+    Q_INVOKABLE void    setProfileColor(const QString &id, const QString &color);
+    Q_INVOKABLE void    deleteProfile(const QString &id);
+    Q_INVOKABLE QString duplicateProfile(const QString &id, const QString &newName);
+    Q_INVOKABLE QString exportActiveProfileToMarkdown() const;
+    Q_INVOKABLE void    copyActiveProfileMarkdownToClipboard();
+    Q_INVOKABLE QVariantList commandPaletteEntries() const;
+
+    // ---- Backups ----
+    Q_INVOKABLE QVariantList listBackups() const;
+    Q_INVOKABLE bool         restoreFromBackup(const QString &fileName);
+
     // ---- Undo ----
     Q_INVOKABLE void undoLastDeletion();
     Q_INVOKABLE void clearPendingUndo();
@@ -132,6 +153,8 @@ signals:
     void docsStateChanged();
     void statusesChanged();
     void pendingUndoChanged();
+    void profilesChanged();
+    void activeProfileChanged();
     void toast(const QString &message);
     void undoableToast(const QString &message, int seconds);
 
@@ -151,23 +174,37 @@ private:
     QString      m_crumbUser    = "You";
     QString      m_docsState;
 
+    // Profiles
+    QVector<Profile> m_profiles;
+    QString          m_activeProfileId;
+    int  profileIndexOf(const QString &id) const;
+    QString makeProfileId(const QString &name) const;
+    void snapshotActiveProfile();
+    void applyProfileToModels(const Profile &p);
+    Profile makeStartingProfile(const QString &name, const QString &color) const;
+
     // Persistence
     QTimer*      m_saveTimer = nullptr;
     bool         m_loading   = false;
+    QDateTime    m_lastBackupAt;
     void scheduleSave();
     void saveStateNow();
     void loadStateOnStart();
     QString stateFilePath() const;
+    QString backupDirPath() const;
+    void rotateBackupIfDue();
+    void pruneBackups(int keep);
     int statusIndexOf(const QString &id) const;
 
     // Undo machinery
     struct PendingUndo {
-        enum Kind { None, Task, Event, Person, Status } kind = None;
+        enum Kind { None, Task, Event, Person, Status, Profile } kind = None;
         // payload — only the field matching `kind` is populated
         ::Task     task;
         ::CalEvent event;
         ::Person   person;
         QVariantMap status;
+        ::Profile  profile;
         int row = -1;
         // when a task is deleted, events lose their taskId — record what to restore
         QVector<QPair<QString, QString>> detachedEventIds; // (eventId, originalTaskId)
