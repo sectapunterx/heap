@@ -583,7 +583,8 @@ Item {
                 color: Theme.panel
                 Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.border }
 
-                ColumnLayout {
+                Column {
+                    id: navCol
                     anchors.fill: parent
                     anchors.margins: 10
                     spacing: 2
@@ -593,6 +594,7 @@ Item {
                         delegate: NavLink {
                             required property var modelData
                             required property int index
+                            width: navCol.width
                             label: modelData.title
                             count: modelData.items.length
                             barColor: modelData.accent
@@ -602,25 +604,30 @@ Item {
                         }
                     }
 
-                    Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: 8; Layout.bottomMargin: 6 }
+                    Item { width: navCol.width; height: 8 }
+                    Rectangle { width: navCol.width; height: 1; color: Theme.border }
+                    Item { width: navCol.width; height: 6 }
 
                     NavLink {
+                        width: navCol.width
                         label: "Snippets"
                         count: root.snippets.length
                         barColor: Theme.accent
                         anchorId: "sec-snippets"
                     }
                     NavLink {
+                        width: navCol.width
                         label: "Contacts"
                         count: root.contacts.length
                         barColor: Theme.textMuted
                         anchorId: "sec-contacts"
                     }
 
+                    Item { width: navCol.width; height: 10 }
+
                     Rectangle {
-                        Layout.fillWidth: true
-                        Layout.topMargin: 10
-                        Layout.preferredHeight: 28
+                        width: navCol.width
+                        height: 28
                         radius: 6
                         color: addSecMA.containsMouse ? Theme.accentSoft : Theme.panel2
                         border.color: Theme.border
@@ -649,28 +656,38 @@ Item {
                             onClicked: root.openSectionCreate()
                         }
                     }
-
-                    Item { Layout.fillHeight: true }
                 }
             }
 
-            // Body
-            ScrollView {
+            // Body — explicit Flickable so we can fully control wheel speed
+            // and pressDelay (so quick LMB-drag pans the page).
+            Flickable {
                 id: bodyScroll
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
-                ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                contentWidth: width
+                contentHeight: bodyCol.implicitHeight
+                flickableDirection: Flickable.VerticalFlick
+                boundsBehavior: Flickable.StopAtBounds
+                pressDelay: 180
 
-                // Defer click-press to children, so quick LMB drags pan the page
-                // and only deliberate press-then-drag triggers card-reorder.
-                Component.onCompleted: {
-                    if (contentItem && "pressDelay" in contentItem)
-                        contentItem.pressDelay = 180;
+                WheelHandler {
+                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                    onWheel: (event) => {
+                        const dy = event.angleDelta.y;
+                        if (dy === 0) return;
+                        const maxY = Math.max(0, bodyScroll.contentHeight - bodyScroll.height);
+                        if (maxY <= 0) return;
+                        bodyScroll.contentY = Math.max(0, Math.min(maxY, bodyScroll.contentY - dy * 3));
+                    }
                 }
 
+                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+
                 ColumnLayout {
-                    width: bodyScroll.availableWidth
+                    id: bodyCol
+                    width: bodyScroll.width
                     spacing: 24
 
                     // Doc sections
@@ -1050,12 +1067,22 @@ Item {
         property int count: 0
         property color barColor: Theme.accent
         property string anchorId: ""
-        property string sectionId: ""       // empty → no context menu (snippets/contacts links)
+        property string sectionId: ""       // empty → not draggable (snippets/contacts links)
         property int    sectionIndex: -1
-        Layout.fillWidth: true
-        Layout.preferredHeight: 30
+        readonly property bool draggable: sectionId.length > 0
+        height: 30
         radius: 6
         color: navMA.containsMouse ? Theme.panel2 : "transparent"
+        opacity: navDragMA.drag.active ? 0.5 : 1.0
+
+        Drag.active: navDragMA.drag.active
+        Drag.dragType: Drag.Internal
+        Drag.keys: ["nav-section"]
+        Drag.hotSpot.x: width / 2
+        Drag.hotSpot.y: height / 2
+        property real homeX: 0
+        property real homeY: 0
+
         RowLayout {
             anchors.fill: parent
             anchors.leftMargin: 8; anchors.rightMargin: 8
@@ -1068,11 +1095,57 @@ Item {
             id: navMA
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
+            acceptedButtons: Qt.NoButton
+        }
+        MouseArea {
+            id: navDragMA
+            anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            onClicked: (mouse) => {
-                if (mouse.button === Qt.RightButton && nav.sectionId.length > 0) navMenu.popup();
-                else scrollToAnchor(nav.anchorId);
+            cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+            drag.target: nav.draggable ? nav : null
+            drag.threshold: 6
+            property bool didDrag: false
+            onPressed: (mouse) => {
+                nav.homeX = nav.x; nav.homeY = nav.y; didDrag = false;
+                if (mouse.button === Qt.RightButton && nav.draggable) navMenu.popup();
+            }
+            onPositionChanged: if (drag.active) didDrag = true
+            onReleased: (mouse) => {
+                const wasDrag = didDrag;
+                if (nav.draggable) nav.Drag.drop();
+                nav.x = nav.homeX; nav.y = nav.homeY;
+                didDrag = false;
+                if (!wasDrag && mouse.button === Qt.LeftButton) scrollToAnchor(nav.anchorId);
+            }
+        }
+
+        // Receive drops from sibling NavLinks — top/bottom halves decide insert side.
+        DropArea {
+            anchors.fill: parent
+            keys: ["nav-section"]
+            property bool insertBefore: true
+            property bool over: false
+            enabled: nav.draggable
+            onEntered: over = true
+            onExited:  over = false
+            onPositionChanged: (drag) => { insertBefore = (drag.y < height / 2) }
+            onDropped: (drop) => {
+                over = false;
+                const srcId = drop.source && drop.source.sectionId;
+                if (srcId && srcId !== nav.sectionId) {
+                    root._reorderSection(srcId, nav.sectionId, insertBefore);
+                    drop.accept(Qt.MoveAction);
+                }
+            }
+            Rectangle {
+                visible: parent.over && parent.insertBefore
+                anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                height: 2; color: Theme.accent
+            }
+            Rectangle {
+                visible: parent.over && !parent.insertBefore
+                anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                height: 2; color: Theme.accent
             }
         }
 
@@ -1101,12 +1174,10 @@ Item {
     }
 
     function scrollToAnchor(objectName) {
-        const flick = bodyScroll.contentItem;
-        if (!flick) return;
-        const target = findChildByName(flick, objectName);
+        const target = findChildByName(bodyCol, objectName);
         if (!target) return;
-        const p = target.mapToItem(flick.contentItem, 0, 0);
-        flick.contentY = Math.max(0, Math.min(p.y - 8, flick.contentHeight - flick.height));
+        const p = target.mapToItem(bodyCol, 0, 0);
+        bodyScroll.contentY = Math.max(0, Math.min(p.y - 8, bodyScroll.contentHeight - bodyScroll.height));
     }
     function findChildByName(parentItem, name) {
         if (!parentItem) return null;
@@ -1135,9 +1206,9 @@ Item {
         color: cardMA.containsMouse ? Theme.panel2 : Theme.panel
         border.color: cardMA.containsMouse ? Theme.borderStrong : Theme.border
         border.width: 1
-        opacity: dragMA.drag.active ? 0.5 : 1.0
+        opacity: handleMA.drag.active ? 0.5 : 1.0
 
-        Drag.active: dragMA.drag.active
+        Drag.active: handleMA.drag.active
         Drag.dragType: Drag.Internal
         Drag.keys: ["doc"]
         Drag.hotSpot.x: width / 2
@@ -1244,12 +1315,31 @@ Item {
             }
         }
 
-        // Hover-overlay edit/delete icons (always available, no edit-mode gate)
+        // Hover-overlay icons: ⋮⋮ drag handle (LMB drag-source), ✎ edit, × delete.
+        // Keeping the drag-source to a small handle frees the rest of the card
+        // for click + page-pan via the parent Flickable.
         Row {
-            visible: cardMA.containsMouse && !dragMA.drag.active
+            visible: cardMA.containsMouse && !handleMA.drag.active
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: 6
             spacing: 4
+            Rectangle {
+                width: 18; height: 22; radius: 4
+                color: handleMA.containsMouse ? Theme.panel3 : Theme.panel2
+                border.color: Theme.border; border.width: 1
+                Text { anchors.centerIn: parent; text: "⋮⋮"; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 11 }
+                MouseArea {
+                    id: handleMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.LeftButton
+                    drag.target: card
+                    drag.threshold: 4
+                    cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
+                    onPressed: { card.homeX = card.x; card.homeY = card.y }
+                    onReleased: { card.Drag.drop(); card.x = card.homeX; card.y = card.homeY }
+                }
+            }
             Rectangle {
                 width: 22; height: 22; radius: 5
                 color: editIcoMA.containsMouse ? Theme.panel3 : Theme.panel2
@@ -1282,27 +1372,11 @@ Item {
             id: cardMA
             anchors.fill: parent
             hoverEnabled: true
-            acceptedButtons: Qt.NoButton
-        }
-        MouseArea {
-            id: dragMA
-            anchors.fill: parent
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            drag.target: card
-            drag.threshold: 6
-            cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.PointingHandCursor
-            property bool didDrag: false
-            onPressed: (mouse) => {
-                card.homeX = card.x; card.homeY = card.y; didDrag = false;
+            cursorShape: Qt.PointingHandCursor
+            onClicked: (mouse) => {
                 if (mouse.button === Qt.RightButton) docCardMenu.popup();
-            }
-            onPositionChanged: if (drag.active) didDrag = true
-            onReleased: (mouse) => {
-                const wasDrag = didDrag;
-                card.Drag.drop();
-                card.x = card.homeX; card.y = card.homeY;
-                didDrag = false;
-                if (!wasDrag && mouse.button === Qt.LeftButton) root.openExternal(card.item.url);
+                else root.openExternal(card.item.url);
             }
         }
 
