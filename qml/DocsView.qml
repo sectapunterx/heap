@@ -662,6 +662,13 @@ Item {
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
+                // Defer click-press to children, so quick LMB drags pan the page
+                // and only deliberate press-then-drag triggers card-reorder.
+                Component.onCompleted: {
+                    if (contentItem && "pressDelay" in contentItem)
+                        contentItem.pressDelay = 180;
+                }
+
                 ColumnLayout {
                     width: bodyScroll.availableWidth
                     spacing: 24
