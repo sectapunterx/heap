@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import TodoCpp
 
 Rectangle {
@@ -149,17 +150,29 @@ Rectangle {
     MouseArea {
         id: dragArea
         anchors.fill: parent
+        acceptedButtons: Qt.LeftButton | Qt.RightButton
         drag.target: card
         drag.threshold: 5
         cursorShape: dragArea.drag.active ? Qt.ClosedHandCursor : Qt.OpenHandCursor
         property bool didDrag: false
-        onPressed: { card.homeX = card.x; card.homeY = card.y; didDrag = false }
-        onPositionChanged: if (drag.active) didDrag = true
-        onReleased: {
-            const dropped = card.Drag.drop();
-            card.x = card.homeX; card.y = card.homeY;
-            if (!didDrag) card.clicked();
-            didDrag = false;
+        onPressed: (mouse) => {
+            card.homeX = card.x; card.homeY = card.y; didDrag = false;
+            if (mouse.button === Qt.RightButton) taskMenu.popup();
         }
+        onPositionChanged: if (drag.active) didDrag = true
+        onReleased: (mouse) => {
+            const wasDrag = didDrag;
+            card.Drag.drop();
+            card.x = card.homeX; card.y = card.homeY;
+            didDrag = false;
+            if (!wasDrag && mouse.button === Qt.LeftButton) card.clicked();
+        }
+    }
+
+    QQC.Menu {
+        id: taskMenu
+        QQC.MenuItem { text: "Открыть"; onTriggered: card.clicked() }
+        QQC.MenuSeparator {}
+        QQC.MenuItem { text: "Удалить"; onTriggered: AppController.deleteTask(card.taskId) }
     }
 }
