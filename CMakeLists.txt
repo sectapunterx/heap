@@ -15,6 +15,7 @@ qt_add_executable(todocpp
     src/AppController.cpp
     src/Models.cpp
     src/SampleData.cpp
+    src/CodeHighlighter.cpp
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -48,6 +49,7 @@ qt_add_qml_module(todocpp
         src/AppController.h
         src/Models.h
         src/SampleData.h
+        src/CodeHighlighter.h
 )
 
 target_include_directories(todocpp PRIVATE src)

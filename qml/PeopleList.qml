@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import TodoCpp
 
 Rectangle {
@@ -103,8 +104,16 @@ Rectangle {
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
                     onDoubleClicked: root.personRequested(prow.id)
                     onClicked: (mouse) => {
-                        if (mouse.button === Qt.RightButton) root.personRequested(prow.id);
+                        if (mouse.button === Qt.RightButton) personMenu.popup();
                     }
+                }
+
+                QQC.Menu {
+                    id: personMenu
+                    QQC.MenuItem { text: "Edit…"; onTriggered: root.personRequested(prow.id) }
+                    QQC.MenuItem { text: "Cycle state"; onTriggered: AppController.cyclePerson(prow.id) }
+                    QQC.MenuSeparator {}
+                    QQC.MenuItem { text: "Delete"; onTriggered: AppController.deletePerson(prow.id) }
                 }
 
                 // 2) Hover indicator — a real Rectangle whose visibility is

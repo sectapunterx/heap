@@ -2,12 +2,12 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import TodoCpp
 
 Item {
     id: root
 
-    property bool editMode: false
     property string searchText: ""
 
     // ── Data ─────────────────────────────────────────────────────────────────
@@ -262,6 +262,106 @@ Item {
         sections = copy;
     }
 
+    function _sortedItems(section) {
+        const arr = (section.items || []).slice();
+        const mode = section.sortBy || "manual";
+        if (mode === "manual") return arr;
+        const desc = !!section.sortDesc;
+        const k = mode === "ref" ? "ref"
+                : mode === "title" ? "title"
+                : mode === "updated" ? "updated"
+                : "";
+        if (!k) return arr;
+        arr.sort(function (a, b) {
+            const va = String((a && a[k]) || "").toLowerCase();
+            const vb = String((b && b[k]) || "").toLowerCase();
+            if (va < vb) return desc ? 1 : -1;
+            if (va > vb) return desc ? -1 : 1;
+            return 0;
+        });
+        return arr;
+    }
+
+    function setSortBy(sectionId, sortBy, sortDesc) {
+        _replaceSections(function (copy) {
+            const s = copy.find(function (x) { return x.id === sectionId; });
+            if (!s) return;
+            s.sortBy = sortBy;
+            s.sortDesc = !!sortDesc;
+        });
+    }
+
+    function _reorderDoc(srcSectionId, srcRef, dstSectionId, dstRef, before) {
+        _replaceSections(function (copy) {
+            const src = copy.find(function (x) { return x.id === srcSectionId; });
+            if (!src) return;
+            const i = src.items.findIndex(function (it) { return it.ref === srcRef; });
+            if (i < 0) return;
+            const moved = src.items.splice(i, 1)[0];
+
+            const dst = copy.find(function (x) { return x.id === dstSectionId; });
+            if (!dst) { src.items.splice(i, 0, moved); return; }
+            let j;
+            if (dstRef === "" || dstRef === undefined) {
+                j = dst.items.length;
+            } else {
+                j = dst.items.findIndex(function (it) { return it.ref === dstRef; });
+                if (j < 0) j = dst.items.length;
+                if (!before) j += 1;
+            }
+            dst.items.splice(j, 0, moved);
+            dst.sortBy = "manual";
+        });
+    }
+
+    function _reorderSection(srcId, dstId, before) {
+        if (srcId === dstId) return;
+        const copy = sections.slice();
+        const i = copy.findIndex(function (s) { return s.id === srcId; });
+        if (i < 0) return;
+        const moved = copy.splice(i, 1)[0];
+        let j = copy.findIndex(function (s) { return s.id === dstId; });
+        if (j < 0) j = copy.length;
+        if (!before) j += 1;
+        copy.splice(j, 0, moved);
+        sections = copy;
+    }
+
+    function _moveSectionByDelta(sectionId, delta) {
+        const copy = sections.slice();
+        const i = copy.findIndex(function (s) { return s.id === sectionId; });
+        if (i < 0) return;
+        const j = Math.max(0, Math.min(copy.length - 1, i + delta));
+        if (i === j) return;
+        const moved = copy.splice(i, 1)[0];
+        copy.splice(j, 0, moved);
+        sections = copy;
+    }
+
+    function _moveDocByDelta(sectionId, ref, delta) {
+        _replaceSections(function (copy) {
+            const s = copy.find(function (x) { return x.id === sectionId; });
+            if (!s) return;
+            const i = s.items.findIndex(function (it) { return it.ref === ref; });
+            if (i < 0) return;
+            const j = Math.max(0, Math.min(s.items.length - 1, i + delta));
+            if (i === j) return;
+            const moved = s.items.splice(i, 1)[0];
+            s.items.splice(j, 0, moved);
+            s.sortBy = "manual";
+        });
+    }
+
+    function _moveListItemByDelta(listName, idx, delta) {
+        const list = (listName === "snippets" ? snippets : contacts).slice();
+        const j = Math.max(0, Math.min(list.length - 1, idx + delta));
+        if (idx === j) return;
+        const moved = list.splice(idx, 1)[0];
+        list.splice(j, 0, moved);
+        if (listName === "snippets") snippets = list;
+        else contacts = list;
+    }
+
     function saveDoc(draft) {
         const targetSectionId = draft._sectionId || editor.sectionId;
         const cleaned = Object.assign({}, draft);
@@ -417,8 +517,7 @@ Item {
                     Text { text: "Docs · spec & references"; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
                     Text {
                         text: root.totalDocs() + " entries · " + root.snippets.length + " snippets · " + root.contacts.length + " contacts"
-                              + (root.editMode ? "    · EDITING" : "")
-                        color: root.editMode ? Theme.accentStrong : Theme.textDim
+                        color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
                     }
@@ -468,12 +567,6 @@ Item {
                     }
                 }
 
-                // Edit toggle
-                PillButton {
-                    text: root.editMode ? "✓ Готово" : "✎ Редактировать"
-                    primary: root.editMode
-                    onClicked: root.editMode = !root.editMode
-                }
             }
         }
 
@@ -499,10 +592,13 @@ Item {
                         model: root.sections
                         delegate: NavLink {
                             required property var modelData
+                            required property int index
                             label: modelData.title
                             count: modelData.items.length
                             barColor: modelData.accent
                             anchorId: "sec-" + modelData.id
+                            sectionId: modelData.id
+                            sectionIndex: index
                         }
                     }
 
@@ -522,7 +618,6 @@ Item {
                     }
 
                     Rectangle {
-                        visible: root.editMode
                         Layout.fillWidth: true
                         Layout.topMargin: 10
                         Layout.preferredHeight: 28
@@ -579,7 +674,7 @@ Item {
                             required property var modelData
                             required property int index
                             property var section: modelData
-                            property var filtered: section.items.filter(root.passesSearch)
+                            property var filtered: root._sortedItems(section).filter(root.passesSearch)
                             visible: !(root.searchText.length > 0 && filtered.length === 0)
                             Layout.fillWidth: true
                             Layout.leftMargin: 24
@@ -592,6 +687,34 @@ Item {
                                 Layout.preferredHeight: 44
                                 id: secAnchor
                                 objectName: "sec-" + secCol.section.id
+
+                                MouseArea {
+                                    id: secHover
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    acceptedButtons: Qt.RightButton
+                                    onClicked: (mouse) => {
+                                        if (mouse.button === Qt.RightButton) sectionMenu.popup()
+                                    }
+                                }
+
+                                QQC.Menu {
+                                    id: sectionMenu
+                                    QQC.MenuItem { text: "Add entry";        onTriggered: root.openDocCreate(secCol.section.id) }
+                                    QQC.MenuItem { text: "Rename / fields…"; onTriggered: root.openSectionEdit(secCol.section) }
+                                    QQC.Menu {
+                                        title: "Sort by"
+                                        QQC.MenuItem { text: "Manual";     onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
+                                        QQC.MenuItem { text: "By ref";     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
+                                        QQC.MenuItem { text: "By title";   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
+                                        QQC.MenuItem { text: "By updated"; onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
+                                    }
+                                    QQC.MenuSeparator {}
+                                    QQC.MenuItem { text: "Move up";   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
+                                    QQC.MenuItem { text: "Move down"; enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
+                                    QQC.MenuSeparator {}
+                                    QQC.MenuItem { text: "Delete section"; onTriggered: root.deleteSection(secCol.section.id) }
+                                }
 
                                 RowLayout {
                                     anchors.fill: parent
@@ -609,7 +732,7 @@ Item {
                                                 font.weight: Font.DemiBold
                                             }
                                             Rectangle {
-                                                visible: root.editMode
+                                                visible: secHover.containsMouse
                                                 width: 22; height: 22; radius: 5
                                                 color: secEditMA.containsMouse ? Theme.panel2 : "transparent"
                                                 border.color: Theme.border; border.width: 1
@@ -623,7 +746,7 @@ Item {
                                                 }
                                             }
                                             Rectangle {
-                                                visible: root.editMode
+                                                visible: secHover.containsMouse
                                                 width: 22; height: 22; radius: 5
                                                 color: secDelMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : "transparent"
                                                 border.color: secDelMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
@@ -645,17 +768,28 @@ Item {
                                     }
                                     Item { Layout.fillWidth: true }
                                     Text {
+                                        visible: (secCol.section.sortBy || "manual") !== "manual"
+                                        text: {
+                                            const m = secCol.section.sortBy || "manual";
+                                            const lbl = m === "ref" ? "ref" : m === "title" ? "title" : m === "updated" ? "upd" : m;
+                                            return "▼ " + lbl + (secCol.section.sortDesc ? " ↓" : " ↑");
+                                        }
+                                        color: Theme.accentStrong
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 10
+                                    }
+                                    Text {
                                         text: secCol.filtered.length + " / " + secCol.section.items.length
                                         color: Theme.textDim
                                         font.family: Theme.fontMono
                                         font.pixelSize: 11
                                     }
                                     PillButton {
-                                        visible: root.editMode
                                         text: "+ Add"
                                         onClicked: root.openDocCreate(secCol.section.id)
                                     }
                                 }
+
                             }
 
                             // Grid of cards (2 columns)
@@ -675,13 +809,12 @@ Item {
                                         accent: secCol.section.accent
                                         sectionId: secCol.section.id
                                         customFields: secCol.section.customFields || []
-                                        editMode: root.editMode
                                         width: (cardGrid.width - (cardGrid.columns - 1) * cardGrid.columnSpacing) / cardGrid.columns
                                     }
                                 }
 
                                 Rectangle {
-                                    visible: root.editMode
+                                    id: addEntryTile
                                     width: cardGrid.columns > 0
                                            ? ((cardGrid.width - (cardGrid.columns - 1) * cardGrid.columnSpacing) / cardGrid.columns)
                                            : cardGrid.width
@@ -734,7 +867,6 @@ Item {
                                     font.pixelSize: 11
                                 }
                                 PillButton {
-                                    visible: root.editMode
                                     text: "+ Add"
                                     onClicked: root.openSnippetCreate()
                                 }
@@ -748,7 +880,6 @@ Item {
                                 required property int index
                                 snip: modelData
                                 idx: index
-                                editMode: root.editMode
                                 Layout.fillWidth: true
                             }
                         }
@@ -781,7 +912,6 @@ Item {
                                     font.pixelSize: 11
                                 }
                                 PillButton {
-                                    visible: root.editMode
                                     text: "+ Add"
                                     onClicked: root.openContactCreate()
                                 }
@@ -800,7 +930,6 @@ Item {
                                     required property int index
                                     c: modelData
                                     idx: index
-                                    editMode: root.editMode
                                 }
                             }
                         }
@@ -914,6 +1043,8 @@ Item {
         property int count: 0
         property color barColor: Theme.accent
         property string anchorId: ""
+        property string sectionId: ""       // empty → no context menu (snippets/contacts links)
+        property int    sectionIndex: -1
         Layout.fillWidth: true
         Layout.preferredHeight: 30
         radius: 6
@@ -931,7 +1062,34 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: scrollToAnchor(nav.anchorId)
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton && nav.sectionId.length > 0) navMenu.popup();
+                else scrollToAnchor(nav.anchorId);
+            }
+        }
+
+        QQC.Menu {
+            id: navMenu
+            QQC.MenuItem {
+                text: "Rename / fields…"
+                onTriggered: {
+                    const s = root.sections.find(function (x) { return x.id === nav.sectionId; });
+                    if (s) root.openSectionEdit(s);
+                }
+            }
+            QQC.Menu {
+                title: "Sort by"
+                QQC.MenuItem { text: "Manual";     onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
+                QQC.MenuItem { text: "By ref";     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
+                QQC.MenuItem { text: "By title";   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
+                QQC.MenuItem { text: "By updated"; onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
+            }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Move up";   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
+            QQC.MenuItem { text: "Move down"; enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Delete section"; onTriggered: root.deleteSection(nav.sectionId) }
         }
     }
 
@@ -960,14 +1118,26 @@ Item {
         property var item: ({})
         property color accent: Theme.accent
         property string sectionId: ""
-        property bool editMode: false
         property var customFields: []
         readonly property bool isInternal: (item.url || "").indexOf("#") === 0
+        // Drag-source identifiers (read by DropArea.drop.source)
+        property string docRef: item.ref || ""
+        property string docSectionId: sectionId
         height: cardCol.implicitHeight + 24
         radius: 10
         color: cardMA.containsMouse ? Theme.panel2 : Theme.panel
         border.color: cardMA.containsMouse ? Theme.borderStrong : Theme.border
         border.width: 1
+        opacity: dragMA.drag.active ? 0.5 : 1.0
+
+        Drag.active: dragMA.drag.active
+        Drag.dragType: Drag.Internal
+        Drag.keys: ["doc"]
+        Drag.hotSpot.x: width / 2
+        Drag.hotSpot.y: 24
+
+        property real homeX: 0
+        property real homeY: 0
 
         ColumnLayout {
             id: cardCol
@@ -1000,7 +1170,6 @@ Item {
                     font.pixelSize: 11
                 }
                 Text {
-                    visible: !card.editMode
                     text: card.isInternal ? "→" : "↗"
                     color: cardMA.containsMouse ? Theme.accentStrong : Theme.textDim
                     font.pixelSize: 12
@@ -1068,9 +1237,9 @@ Item {
             }
         }
 
-        // Edit actions (hover overlay)
+        // Hover-overlay edit/delete icons (always available, no edit-mode gate)
         Row {
-            visible: card.editMode && cardMA.containsMouse
+            visible: cardMA.containsMouse && !dragMA.drag.active
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: 6
             spacing: 4
@@ -1106,11 +1275,73 @@ Item {
             id: cardMA
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: {
-                if (card.editMode) root.openDocEdit(card.sectionId, card.item);
-                else root.openExternal(card.item.url);
+            acceptedButtons: Qt.NoButton
+        }
+        MouseArea {
+            id: dragMA
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            drag.target: card
+            drag.threshold: 6
+            cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+            property bool didDrag: false
+            onPressed: (mouse) => {
+                card.homeX = card.x; card.homeY = card.y; didDrag = false;
+                if (mouse.button === Qt.RightButton) docCardMenu.popup();
             }
+            onPositionChanged: if (drag.active) didDrag = true
+            onReleased: (mouse) => {
+                const wasDrag = didDrag;
+                card.Drag.drop();
+                card.x = card.homeX; card.y = card.homeY;
+                didDrag = false;
+                if (!wasDrag && mouse.button === Qt.LeftButton) root.openExternal(card.item.url);
+            }
+        }
+
+        // Drop target — top half inserts BEFORE, bottom half inserts AFTER
+        DropArea {
+            id: cardDrop
+            anchors.fill: parent
+            keys: ["doc"]
+            property bool insertBefore: true
+            property bool over: false
+            onEntered: over = true
+            onExited:  over = false
+            onPositionChanged: (drag) => { insertBefore = (drag.y < height / 2) }
+            onDropped: (drop) => {
+                over = false;
+                const src = drop.source;
+                if (src && src !== card && src.docRef !== undefined && src.docSectionId !== undefined) {
+                    root._reorderDoc(src.docSectionId, src.docRef, card.sectionId, card.item.ref, insertBefore);
+                    drop.accept(Qt.MoveAction);
+                }
+            }
+            Rectangle {
+                visible: cardDrop.over && cardDrop.insertBefore
+                anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                height: 3; radius: 2; color: Theme.accent
+            }
+            Rectangle {
+                visible: cardDrop.over && !cardDrop.insertBefore
+                anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
+                height: 3; radius: 2; color: Theme.accent
+            }
+        }
+
+        QQC.Menu {
+            id: docCardMenu
+            QQC.MenuItem {
+                text: card.isInternal ? "Open (wiki)" : "Open URL ↗"
+                enabled: (card.item.url || "").length > 0
+                onTriggered: root.openExternal(card.item.url)
+            }
+            QQC.MenuItem { text: "Edit…"; onTriggered: root.openDocEdit(card.sectionId, card.item) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Move up";   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
+            QQC.MenuItem { text: "Move down"; onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
         }
     }
 
@@ -1118,12 +1349,19 @@ Item {
         id: sCard
         property var snip: ({})
         property int idx: -1
-        property bool editMode: false
         radius: 10
         color: Theme.panel
-        border.color: Theme.border
+        border.color: snHover.containsMouse ? Theme.borderStrong : Theme.border
         border.width: 1
         implicitHeight: sCol.implicitHeight + 20
+
+        MouseArea {
+            id: snHover
+            anchors.fill: parent
+            hoverEnabled: true
+            acceptedButtons: Qt.RightButton
+            onClicked: (mouse) => { if (mouse.button === Qt.RightButton) snipMenu.popup() }
+        }
 
         ColumnLayout {
             id: sCol
@@ -1133,7 +1371,7 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 8
+                spacing: 6
                 Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
                 Rectangle {
                     radius: 4
@@ -1144,28 +1382,6 @@ Item {
                     Text { id: lngT; anchors.centerIn: parent; text: sCard.snip.lang || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
                 }
                 Rectangle {
-                    visible: sCard.editMode
-                    radius: 4
-                    color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
-                    border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
-                    border.width: 1
-                    implicitWidth: editSnT.implicitWidth + 14
-                    implicitHeight: 22
-                    Text { id: editSnT; anchors.centerIn: parent; text: "✎ edit"; color: editSnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
-                    MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
-                }
-                Rectangle {
-                    visible: sCard.editMode
-                    radius: 4
-                    color: delSnMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
-                    border.color: delSnMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
-                    implicitWidth: delSnT.implicitWidth + 14
-                    implicitHeight: 22
-                    Text { id: delSnT; anchors.centerIn: parent; text: "× del"; color: delSnMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 11 }
-                    MouseArea { id: delSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteSnippet(sCard.idx) }
-                }
-                Rectangle {
-                    visible: !sCard.editMode
                     radius: 4
                     color: copySnMA.containsMouse ? Theme.accentSoft : Theme.panel2
                     border.color: copySnMA.containsMouse ? Theme.accent : Theme.border
@@ -1183,6 +1399,25 @@ Item {
                             root.showToast("Скопировано: " + (sCard.snip.title || ""));
                         }
                     }
+                }
+                Rectangle {
+                    visible: snHover.containsMouse
+                    radius: 4
+                    color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
+                    border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
+                    border.width: 1
+                    implicitWidth: 26; implicitHeight: 22
+                    Text { anchors.centerIn: parent; text: "✎"; color: editSnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
+                }
+                Rectangle {
+                    visible: snHover.containsMouse
+                    radius: 4
+                    color: delSnMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
+                    border.color: delSnMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                    implicitWidth: 26; implicitHeight: 22
+                    Text { anchors.centerIn: parent; text: "×"; color: delSnMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 12 }
+                    MouseArea { id: delSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteSnippet(sCard.idx) }
                 }
             }
             Rectangle {
@@ -1204,7 +1439,36 @@ Item {
                     selectByMouse: true
                     wrapMode: TextEdit.NoWrap
                 }
+                CodeHighlighter {
+                    target: codeText.textDocument
+                    language: sCard.snip.lang || "text"
+                    palette: ({
+                        keyword: Theme.accent,
+                        string:  Theme.p2,
+                        comment: Theme.textDim,
+                        number:  Theme.mFocus,
+                        type:    Theme.mSync,
+                        builtin: Theme.mOneone
+                    })
+                }
             }
+        }
+
+        QQC.Menu {
+            id: snipMenu
+            QQC.MenuItem {
+                text: "Copy"
+                onTriggered: {
+                    AppController.copyToClipboard(sCard.snip.code || "");
+                    root.showToast("Скопировано: " + (sCard.snip.title || ""));
+                }
+            }
+            QQC.MenuItem { text: "Edit…"; onTriggered: root.openSnippetEdit(sCard.idx) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Move up";   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
+            QQC.MenuItem { text: "Move down"; enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteSnippet(sCard.idx) }
         }
     }
 
@@ -1212,7 +1476,6 @@ Item {
         id: cc
         property var c: ({})
         property int idx: -1
-        property bool editMode: false
         width: parent ? ((parent.width - (parent.columns - 1) * parent.columnSpacing) / parent.columns) : 240
         height: 56
         radius: 10
@@ -1243,13 +1506,12 @@ Item {
                 Text { text: cc.c.role || ""; color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
             }
             ColumnLayout {
-                visible: !cc.editMode
                 spacing: 0
                 Text { text: cc.c.channel || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
                 Text { text: cc.c.slack || "";   color: Theme.textDim;   font.family: Theme.fontMono; font.pixelSize: 10 }
             }
             Row {
-                visible: cc.editMode
+                visible: ccMA.containsMouse
                 spacing: 4
                 Rectangle {
                     width: 22; height: 22; radius: 5
@@ -1271,8 +1533,23 @@ Item {
             id: ccMA
             anchors.fill: parent
             hoverEnabled: true
-            cursorShape: cc.editMode ? Qt.PointingHandCursor : Qt.ArrowCursor
-            onClicked: if (cc.editMode) root.openContactEdit(cc.idx)
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            cursorShape: Qt.PointingHandCursor
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton) ccMenu.popup();
+                else root.openContactEdit(cc.idx);
+            }
+            z: -1
+        }
+
+        QQC.Menu {
+            id: ccMenu
+            QQC.MenuItem { text: "Edit…"; onTriggered: root.openContactEdit(cc.idx) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Move up";   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
+            QQC.MenuItem { text: "Move down"; enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
+            QQC.MenuSeparator {}
+            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteContact(cc.idx) }
         }
     }
 }
