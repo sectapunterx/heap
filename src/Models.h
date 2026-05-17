@@ -27,7 +27,8 @@ struct CalEvent {
     double  end;
     QString attendees;
     QDate   date;
-    QString taskId;     // optional link
+    QString taskId;     // optional link to task in same profile
+    QString profileId;  // optional attribution to a feature profile (empty = global)
 };
 
 struct Person {
@@ -39,16 +40,16 @@ struct Person {
     QColor  color;
 };
 
-// One profile = one feature workspace: its own tasks, events, people,
-// kanban-statuses and docs. Lives in AppController::m_profiles; only the
-// "active" profile is mirrored into the live QAbstractListModels.
+// One profile = one feature workspace: its own tasks, people,
+// kanban-statuses and docs. Events live globally on AppController so the
+// calendar can show meetings/focus blocks from every profile at once;
+// CalEvent.profileId records the optional feature attribution.
 struct Profile {
     QString      id;            // slug, unique
     QString      name;          // human-readable
     QString      color;         // accent ("#5cc2dd")
     QDateTime    createdAt;
     QVector<Task>     tasks;
-    QVector<CalEvent> events;
     QVector<Person>   people;
     QVariantList      statuses; // [{ id, name, color }]
     QString           docsState; // JSON blob, same shape as AppController::docsState
@@ -91,7 +92,7 @@ public:
     enum Roles {
         IdRole = Qt::UserRole + 1,
         TitleRole, TypeRole, StartRole, EndRole,
-        AttendeesRole, DateRole, TaskIdRole,
+        AttendeesRole, DateRole, TaskIdRole, ProfileIdRole,
     };
     explicit EventModel(QObject *parent = nullptr) : QAbstractListModel(parent) {}
 

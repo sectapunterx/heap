@@ -14,6 +14,9 @@ Popup {
     height: 480
     anchors.centerIn: Overlay.overlay
 
+    // Dimmed backdrop so the underlying app stays visible behind the popup.
+    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+
     signal navigateToDoc(string sectionId)
     signal navigateToSnippets()
     signal navigateToContacts()
