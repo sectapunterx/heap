@@ -25,6 +25,13 @@ Item {
         return true;
     }
 
+    function _scrollOuter(dy) {
+        if (dy === 0) return;
+        const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
+        if (maxX <= 0) return;
+        hscroll.contentX = Math.max(0, Math.min(maxX, hscroll.contentX - dy));
+    }
+
     Flickable {
         id: hscroll
         anchors.fill: parent
@@ -36,6 +43,21 @@ Item {
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
         clip: true
+        pressDelay: 180
+
+        // Outer wheel: scroll the board horizontally with mouse-wheel.
+        // Triggered when an inner WheelHandler sets event.accepted = false
+        // (e.g. column at vertical-scroll edge or column header).
+        // Handles wheel on column headers / gaps / "+ column" tile —
+        // scrolls the board horizontally. Wheel inside a column body is
+        // handled by the inner WheelHandler, which calls _scrollOuter()
+        // when the column has no vertical overflow.
+        WheelHandler {
+            acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+            onWheel: (event) => {
+                root._scrollOuter(event.angleDelta.y || event.angleDelta.x);
+            }
+        }
 
         Row {
             id: rowL
@@ -217,6 +239,29 @@ Item {
                                 contentHeight: bodyCol.implicitHeight
                                 clip: true
                                 flickableDirection: Flickable.VerticalFlick
+                                pressDelay: 180
+
+                                // Wheel scrolls this column vertically. When the column
+                                // has no overflow or is already at the top/bottom edge,
+                                // event.accepted = false lets the outer board scroll
+                                // horizontally instead.
+                                WheelHandler {
+                                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
+                                    onWheel: (event) => {
+                                        const dy = event.angleDelta.y;
+                                        if (dy === 0) return;
+                                        const maxY = Math.max(0, bodyFlick.contentHeight - bodyFlick.height);
+                                        if (maxY > 0) {
+                                            const newY = Math.max(0, Math.min(maxY, bodyFlick.contentY - dy));
+                                            if (newY !== bodyFlick.contentY) {
+                                                bodyFlick.contentY = newY;
+                                                return;
+                                            }
+                                        }
+                                        // No overflow or at the edge — pass to outer.
+                                        root._scrollOuter(dy);
+                                    }
+                                }
 
                                 Column {
                                     id: bodyCol
