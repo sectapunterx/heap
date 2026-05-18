@@ -1637,7 +1637,7 @@ Item {
             ColumnLayout {
                 spacing: 0
                 Text { text: cc.c.channel || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
-                Text { text: cc.c.slack || "";   color: Theme.textDim;   font.family: Theme.fontMono; font.pixelSize: 10 }
+                Text { text: cc.c.mattermost || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 10 }
             }
             Row {
                 visible: ccMA.containsMouse
