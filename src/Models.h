@@ -53,6 +53,7 @@ struct Profile {
     QVector<Person>   people;
     QVariantList      statuses; // [{ id, name, color }]
     QString           docsState; // JSON blob, same shape as AppController::docsState
+    QString           notesState; // raw markdown text for the Notes view
 };
 
 class TaskModel : public QAbstractListModel {
