@@ -33,6 +33,7 @@ class AppController : public QObject {
 
     Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
     Q_PROPERTY(QString notesState READ notesState WRITE setNotesState NOTIFY notesStateChanged)
+    Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
     Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
     Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
@@ -80,6 +81,9 @@ public:
 
     QString notesState() const { return m_notesState; }
     void    setNotesState(const QString &v);
+
+    QString appSettingsJson() const { return m_appSettingsJson; }
+    void    setAppSettingsJson(const QString &v);
 
     bool hasPendingUndo() const { return m_pendingUndo.kind != PendingUndo::None; }
 
@@ -175,6 +179,7 @@ signals:
     void crumbUserChanged();
     void docsStateChanged();
     void notesStateChanged();
+    void appSettingsJsonChanged();
     void statusesChanged();
     void pendingUndoChanged();
     void profilesChanged();
@@ -199,6 +204,7 @@ private:
     QString      m_crumbUser    = "You";
     QString      m_docsState;
     QString      m_notesState;
+    QString      m_appSettingsJson;
 
     // Profiles
     QVector<Profile> m_profiles;

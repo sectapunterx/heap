@@ -153,6 +153,13 @@ void AppController::setNotesState(const QString &v) {
     scheduleSave();
 }
 
+void AppController::setAppSettingsJson(const QString &v) {
+    if (v == m_appSettingsJson) return;
+    m_appSettingsJson = v;
+    emit appSettingsJsonChanged();
+    scheduleSave();
+}
+
 void AppController::moveTask(const QString &id, const QString &newStatus) {
     const int row = m_tasks.indexOfId(id);
     if (row < 0) return;
@@ -918,6 +925,11 @@ void AppController::saveStateNow() {
     }
     s["shortcuts"]    = shortcutsObj;
 
+    if (!m_appSettingsJson.isEmpty()) {
+        const QJsonDocument d = QJsonDocument::fromJson(m_appSettingsJson.toUtf8());
+        if (!d.isNull() && d.isObject()) s["app"] = d.object();
+    }
+
     root["settings"]  = s;
 
     rotateBackupIfDue();
@@ -962,6 +974,10 @@ void AppController::loadStateOnStart() {
             for (auto it = shortcutsObj.constBegin(); it != shortcutsObj.constEnd(); ++it)
                 overrides.insert(it.key(), it.value().toString());
             applyShortcutOverrides(overrides);
+        }
+        if (s.contains("app") && s["app"].isObject()) {
+            m_appSettingsJson = QJsonDocument(s["app"].toObject()).toJson(QJsonDocument::Compact);
+            emit appSettingsJsonChanged();
         }
     }
 
@@ -1412,6 +1428,8 @@ void AppController::seedShortcutCatalog() {
         "Спеки, ссылки, сниппеты, контакты.",                  "Ctrl+4"));
     m_shortcuts.append(makeShortcut("view.notes",       "Перейти в Notes",
         "Markdown-канвас активного профиля.",                  "Ctrl+5"));
+    m_shortcuts.append(makeShortcut("view.settings",    "Перейти в Settings",
+        "Полная панель настроек: профиль, внешний вид, интеграции.", "Ctrl+6"));
     m_shortcuts.append(makeShortcut("profile.next",     "Следующий профиль",
         "Циклит по списку профилей вперёд.",                   "Ctrl+]"));
     m_shortcuts.append(makeShortcut("profile.prev",     "Предыдущий профиль",
