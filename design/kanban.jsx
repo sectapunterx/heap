@@ -25,13 +25,14 @@ function deadlineLabel(iso, todayIso) {
   return <span className={"deadline " + cls}>⏱ {txt}</span>;
 }
 
-function TaskCard({ task, onDragStart, onClick, onDragToCalStart, scheduled }) {
+function TaskCard({ task, onDragStart, onClick, onContextMenu, onDragToCalStart, scheduled }) {
   return (
     <div
       className="task"
       draggable
       onDragStart={(e) => onDragStart(e, task)}
       onClick={() => onClick(task)}
+      onContextMenu={onContextMenu ? (e) => onContextMenu(e, task) : undefined}
     >
       <div className="row">
         <span className="id mono">{task.id}</span>
@@ -52,7 +53,7 @@ function TaskCard({ task, onDragStart, onClick, onDragToCalStart, scheduled }) {
   );
 }
 
-function KanbanBoard({ tasks, statuses, filters, onMove, onOpen, onCreate, onTaskDragStart, scheduleMap }) {
+function KanbanBoard({ tasks, statuses, filters, onMove, onOpen, onCreate, onTaskDragStart, scheduleMap, onTaskContextMenu, onColumnContextMenu }) {
   const [dragOver, setDragOver] = useState(null);
   const dragRef = useRef(null);
 
@@ -97,7 +98,7 @@ function KanbanBoard({ tasks, statuses, filters, onMove, onOpen, onCreate, onTas
               onDragLeave={() => setDragOver((d) => d === s.id ? null : d)}
               onDrop={(e) => handleDrop(e, s.id)}
             >
-              <div className="col-head">
+              <div className="col-head" onContextMenu={onColumnContextMenu ? (e) => onColumnContextMenu(e, s.id) : undefined}>
                 <span className="dot" style={{background: s.color}} />
                 <span className="name">{s.name}</span>
                 <span className="cnt">{colTasks.length}</span>
@@ -110,6 +111,7 @@ function KanbanBoard({ tasks, statuses, filters, onMove, onOpen, onCreate, onTas
                     task={t}
                     onDragStart={handleDragStart}
                     onClick={onOpen}
+                    onContextMenu={onTaskContextMenu}
                     scheduled={scheduleMap[t.id]}
                   />
                 ))}

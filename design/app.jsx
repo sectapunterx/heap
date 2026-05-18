@@ -158,6 +158,7 @@ function EventModal({ event, tasks, onClose, onSave, onDelete }) {
 function App() {
   const D = window.__APP_DATA__;
   const [t, setTweak] = useTweaks(TWEAK_DEFAULTS);
+  const [settings, setSettings] = aUseState(DEFAULT_SETTINGS);
   const [tasks, setTasks] = aUseState(D.SAMPLE_TASKS);
   const [events, setEvents] = aUseState(D.SAMPLE_EVENTS.map(e => ({...e, date: D.isoToday})));
   const [people, setPeople] = aUseState(D.SAMPLE_PEOPLE);
@@ -170,16 +171,189 @@ function App() {
   const [view, setView] = aUseState("board"); // 'board' | 'timeline' | 'week'
   const [showDoneTimeline, setShowDoneTimeline] = aUseState(false);
 
-  // Apply theme + density to <html>
+  // Profiles
+  const [profiles, setProfiles] = aUseState([
+    { id: "default", name: "Default",       color: "oklch(0.74 0.12 200)", initials: "DF" },
+    { id: "deep",    name: "Deep work",     color: "oklch(0.74 0.13 150)", initials: "DW" },
+    { id: "oncall",  name: "On-call mode",  color: "oklch(0.70 0.18 25)",  initials: "OC" },
+  ]);
+  const [activeProfileId, setActiveProfileId] = aUseState("default");
+
+  // Floating menu state — single global menu at a time
+  const [menu, setMenu] = aUseState(null);
+  const closeMenu = () => setMenu(null);
+
+  // Apply theme + density + accent to <html>
   aUseEffect(() => {
-    document.documentElement.setAttribute("data-theme", t.theme);
-    document.documentElement.setAttribute("data-density", t.density);
+    const theme = settings.appearance.theme === "auto"
+      ? (window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark")
+      : settings.appearance.theme;
+    document.documentElement.setAttribute("data-theme", theme);
+    document.documentElement.setAttribute("data-density", settings.appearance.density);
+    document.documentElement.style.setProperty("--accent", settings.appearance.accent);
+    document.documentElement.style.setProperty("--accent-strong", settings.appearance.accent);
+  }, [settings.appearance.theme, settings.appearance.density, settings.appearance.accent]);
+
+  // Tweaks panel toggles ↔→ settings (kept in sync, single source of truth = settings)
+  aUseEffect(() => {
+    if (t.theme !== settings.appearance.theme && settings.appearance.theme !== "auto") {
+      setTweak("theme", settings.appearance.theme);
+    }
+    if (t.density !== settings.appearance.density) {
+      setTweak("density", settings.appearance.density);
+    }
+  }, [settings.appearance.theme, settings.appearance.density]);
+  aUseEffect(() => {
+    if (settings.appearance.theme !== t.theme && t.theme) {
+      setSettings(prev => ({...prev, appearance: {...prev.appearance, theme: t.theme}}));
+    }
+    if (settings.appearance.density !== t.density && t.density) {
+      setSettings(prev => ({...prev, appearance: {...prev.appearance, density: t.density}}));
+    }
   }, [t.theme, t.density]);
 
   const showToast = (msg) => {
     setToast(msg);
     clearTimeout(showToast._t);
     showToast._t = setTimeout(() => setToast(null), 2400);
+  };
+
+  const activeProfile = profiles.find(p => p.id === activeProfileId) || profiles[0];
+
+  // === Profile actions ===
+  const switchProfile = (id) => {
+    setActiveProfileId(id);
+    const p = profiles.find(x => x.id === id);
+    if (p) showToast(`Profile: ${p.name}`);
+  };
+  const createProfile = () => {
+    const name = prompt("Название нового профиля:");
+    if (!name || !name.trim()) return;
+    const palette = ["oklch(0.74 0.13 305)", "oklch(0.78 0.13 80)", "oklch(0.72 0.13 235)", "oklch(0.74 0.13 175)"];
+    const color = palette[profiles.length % palette.length];
+    const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0,2).join("").toUpperCase();
+    const id = "p-" + Date.now();
+    setProfiles(prev => [...prev, { id, name: name.trim(), color, initials }]);
+    setActiveProfileId(id);
+    showToast(`Создан профиль: ${name.trim()}`);
+  };
+  const renameProfile = () => {
+    const name = prompt("Новое имя профиля:", activeProfile.name);
+    if (!name || !name.trim()) return;
+    const initials = name.trim().split(/\s+/).map(w => w[0]).slice(0,2).join("").toUpperCase();
+    setProfiles(prev => prev.map(p => p.id === activeProfileId ? {...p, name: name.trim(), initials} : p));
+    showToast(`Профиль переименован`);
+  };
+  const duplicateProfile = () => {
+    const newName = activeProfile.name + " copy";
+    const initials = newName.split(/\s+/).map(w => w[0]).slice(0,2).join("").toUpperCase();
+    const id = "p-" + Date.now();
+    setProfiles(prev => [...prev, {...activeProfile, id, name: newName, initials}]);
+    setActiveProfileId(id);
+    showToast(`Дубликат создан`);
+  };
+  const deleteProfile = () => {
+    if (profiles.length <= 1) { showToast("Нельзя удалить единственный профиль"); return; }
+    if (!confirm(`Удалить профиль «${activeProfile.name}»?`)) return;
+    const next = profiles.find(p => p.id !== activeProfileId);
+    setProfiles(prev => prev.filter(p => p.id !== activeProfileId));
+    setActiveProfileId(next.id);
+    showToast(`Профиль удалён`);
+  };
+
+  const openProfileMenu = (e) => {
+    e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    setMenu({
+      anchor: { rect, side: "bottom-start" },
+      width: 240,
+      items: [
+        { header: "Профили" },
+        ...profiles.map(p => ({
+          label: p.name,
+          hint: p.id === activeProfileId ? "активный" : null,
+          checked: p.id === activeProfileId,
+          action: () => switchProfile(p.id),
+        })),
+        { separator: true },
+        { icon: "+", label: "Новый профиль…",       shortcut: "⇧⌘ N", action: createProfile },
+        { icon: "✎", label: "Переименовать активный…",                 action: renameProfile },
+        { icon: "⎘", label: "Дублировать активный…",                   action: duplicateProfile },
+        { icon: "×", label: "Удалить активный", danger: true,           action: deleteProfile, disabled: profiles.length <= 1 },
+        { separator: true },
+        { icon: "↓", label: "Экспорт в Markdown",                       action: () => showToast("Экспортировано в Markdown") },
+      ],
+    });
+  };
+
+  // === Right-click on a task ===
+  const openTaskContextMenu = (e, task) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setMenu({
+      x: e.clientX, y: e.clientY,
+      width: 240,
+      items: [
+        { header: `${task.id} · ${task.priority}` },
+        { icon: "✎", label: "Редактировать",       shortcut: "E",   action: () => openTask(task) },
+        { icon: "⎘", label: "Дублировать",          shortcut: "⌘ D", action: () => {
+            const copy = {...task, id: `LTE-${2700 + tasks.length}`};
+            setTasks(prev => [...prev, copy]);
+            showToast(`Создана копия ${copy.id}`);
+        }},
+        { separator: true },
+        { icon: "◐", label: "Поменять статус",
+          submenu: D.STATUSES.map(s => ({
+            label: s.name,
+            checked: task.status === s.id,
+            swatch: s.color,
+            action: () => moveTask(task.id, s.id),
+          })),
+        },
+        { icon: "!", label: "Приоритет",
+          submenu: ["P0","P1","P2","P3"].map(p => ({
+            label: p,
+            checked: task.priority === p,
+            icon: p,
+            action: () => setTasks(prev => prev.map(x => x.id === task.id ? {...x, priority: p} : x)),
+          })),
+        },
+        { icon: "⏰", label: "Запланировать в календарь", shortcut: "S", action: () => {
+            handleTaskDrop(task.id, 14, selectedDate);
+        }},
+        { separator: true },
+        { icon: "⎘", label: "Копировать ID", shortcut: "⌘ C", action: () => {
+            if (navigator.clipboard) navigator.clipboard.writeText(task.id);
+            showToast(`Скопировано: ${task.id}`);
+        }},
+        { icon: "⎇", label: "Копировать branch", disabled: !task.branch, action: () => {
+            if (task.branch && navigator.clipboard) navigator.clipboard.writeText(task.branch);
+            showToast(`branch скопирован`);
+        }},
+        { separator: true },
+        { icon: "×", label: "Удалить", shortcut: "⌫", danger: true, action: () => deleteTask(task.id) },
+      ],
+    });
+  };
+
+  // === Right-click on column header ===
+  const openColumnContextMenu = (e, statusId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const s = D.STATUSES.find(s => s.id === statusId);
+    setMenu({
+      x: e.clientX, y: e.clientY,
+      width: 220,
+      items: [
+        { header: s ? s.name.toUpperCase() : statusId },
+        { icon: "+", label: "Добавить задачу", shortcut: "A", action: () => createTaskInStatus(statusId) },
+        { separator: true },
+        { icon: "⌧", label: "Очистить все Done", disabled: statusId !== "done", danger: true, action: () => {
+            setTasks(prev => prev.filter(x => x.status !== "done"));
+            showToast("Done очищен");
+        }},
+      ],
+    });
   };
 
   // ---- Task ops ----
@@ -321,6 +495,16 @@ function App() {
           <span className="dot" />
           <span>todo<span style={{color:"var(--text-muted)"}}>·</span>cpp</span>
         </div>
+        <button
+          className={"profile-pill" + (menu && menu.items && menu.items[0] && menu.items[0].header === "Профили" ? " open" : "")}
+          onClick={openProfileMenu}
+          onContextMenu={openProfileMenu}
+          title="Профили — клик или ПКМ"
+        >
+          <span className="profile-pill-dot" style={{background: activeProfile.color}}>{activeProfile.initials}</span>
+          <span className="profile-pill-name">{activeProfile.name}</span>
+          <span className="profile-pill-arrow">▾</span>
+        </button>
         <div className="crumbs mono">
           <b>eNB-core</b> / sprint-{Math.floor((D.today.getMonth()+1)*2.1)} / <b>You</b>
         </div>
@@ -366,16 +550,15 @@ function App() {
         <div className="sep" />
         <button
           className={"rail-btn" + (view === "docs" ? " active" : "")}
-          title="C++ References (Docs)"
-          onClick={() => setView("docs")}
-        >C++</button>
-        <button
-          className={"rail-btn" + (view === "docs" ? " active" : "")}
           title="Docs"
           onClick={() => setView("docs")}
         >§</button>
         <div style={{flex:1}} />
-        <div className="rail-btn" title="Settings">⚙</div>
+        <button
+          className={"rail-btn" + (view === "settings" ? " active" : "")}
+          title="Settings"
+          onClick={() => setView("settings")}
+        >⚙</button>
       </div>
 
       {/* Main */}
@@ -411,6 +594,8 @@ function App() {
             onOpen={openTask}
             onCreate={createTaskInStatus}
             scheduleMap={scheduleMap}
+            onTaskContextMenu={openTaskContextMenu}
+            onColumnContextMenu={openColumnContextMenu}
           />
         )}
         {view === "timeline" && (
@@ -437,6 +622,13 @@ function App() {
         )}
         {view === "docs" && (
           <DocsView />
+        )}
+        {view === "settings" && (
+          <SettingsView
+            settings={settings}
+            setSettings={setSettings}
+            onToast={showToast}
+          />
         )}
       </div>
 
@@ -497,6 +689,17 @@ function App() {
       )}
 
       {toast && <div className="toast">{toast}</div>}
+
+      {menu && (
+        <Menu
+          x={menu.x}
+          y={menu.y}
+          anchor={menu.anchor}
+          items={menu.items}
+          width={menu.width}
+          onClose={closeMenu}
+        />
+      )}
     </div>
   );
 }
