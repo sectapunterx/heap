@@ -1289,117 +1289,97 @@ QVariantList AppController::commandPaletteEntries() const {
     return out;
 }
 
-// ──────────────────────────────────────── Markdown export of profile ──
+// ───────────────────────────────────── JSON import / export of profile ──
 
-QString AppController::exportActiveProfileToMarkdown() const {
+QString AppController::exportActiveProfileJson() const {
     const int i = profileIndexOf(m_activeProfileId);
     if (i < 0) return QString();
-    const Profile &p = m_profiles[i];
-
-    // Use live models for the active profile so unsaved edits are included.
-    const QVector<Task>     &tasks   = m_tasks.items();
-    const QVector<Person>   &people  = m_people.items();
-    const QVariantList      &statuses = m_statuses;
-
-    QString out;
-    out += "# " + p.name + "  ·  " + p.id + "\n\n";
-    out += "_" + QString::number(tasks.size()) + " tasks · "
-         + QString::number(people.size()) + " contacts · upd "
-         + QDateTime::currentDateTime().toString("yyyy-MM-dd") + "_\n";
-
-    out += "\n## Tasks\n";
-    for (const QVariant &sv : statuses) {
-        const QVariantMap stm = sv.toMap();
-        const QString sid  = stm.value("id").toString();
-        const QString name = stm.value("name").toString();
-        QVector<const Task *> bucket;
-        for (const Task &t : tasks) if (t.status == sid) bucket.push_back(&t);
-        if (bucket.isEmpty()) continue;
-        out += "\n### " + name.toUpper() + "\n";
-        for (const Task *t : bucket) {
-            QString line = "- **" + t->id + "**";
-            if (!t->priority.isEmpty()) line += " [" + t->priority + "]";
-            if (t->deadline.isValid())  line += " *due " + deadlineDiffLabel(t->deadline) + "*";
-            line += "  " + t->title;
-            out += line + "\n";
-            if (!t->branch.isEmpty()) out += "  - branch: `" + t->branch + "`\n";
-            if (!t->desc.trimmed().isEmpty()) {
-                const QString d = t->desc.trimmed();
-                out += "  - " + d.left(200) + (d.size() > 200 ? "…" : "") + "\n";
-            }
-        }
-    }
-
-    if (!m_docsState.isEmpty()) {
-        const QJsonDocument d = QJsonDocument::fromJson(m_docsState.toUtf8());
-        if (!d.isNull() && d.isObject()) {
-            const QJsonObject root = d.object();
-            const QJsonArray sections = root["sections"].toArray();
-            if (!sections.isEmpty()) {
-                out += "\n## Docs\n";
-                for (const auto &sIt : sections) {
-                    const QJsonObject sec = sIt.toObject();
-                    out += "\n### " + sec["title"].toString() + "\n";
-                    for (const auto &iIt : sec["items"].toArray()) {
-                        const QJsonObject it = iIt.toObject();
-                        QString line = "- **" + it["ref"].toString() + "** — "
-                                     + it["title"].toString();
-                        const QString url = it["url"].toString();
-                        if (!url.isEmpty()) line += " → " + url;
-                        out += line + "\n";
-                    }
-                }
-            }
-            const QJsonArray snippets = root["snippets"].toArray();
-            if (!snippets.isEmpty()) {
-                out += "\n## Snippets\n";
-                for (const auto &sIt : snippets) {
-                    const QJsonObject sn = sIt.toObject();
-                    out += "\n### " + sn["title"].toString()
-                         + " (" + sn["lang"].toString() + ")\n";
-                    out += "```" + sn["lang"].toString() + "\n";
-                    out += sn["code"].toString() + "\n";
-                    out += "```\n";
-                }
-            }
-            const QJsonArray contacts = root["contacts"].toArray();
-            if (!contacts.isEmpty()) {
-                out += "\n## Contacts\n";
-                for (const auto &cIt : contacts) {
-                    const QJsonObject c = cIt.toObject();
-                    out += "- **" + c["name"].toString() + "**";
-                    if (!c["role"].toString().isEmpty())
-                        out += " — " + c["role"].toString();
-                    if (!c["channel"].toString().isEmpty())
-                        out += " — " + c["channel"].toString();
-                    if (!c["slack"].toString().isEmpty())
-                        out += " — " + c["slack"].toString();
-                    out += "\n";
-                }
-            }
-        }
-    }
-
-    if (!people.isEmpty()) {
-        out += "\n## Pending\n";
-        for (const Person &per : people) {
-            if (per.state != "todo") continue;
-            out += "- **" + per.name + "**";
-            if (!per.role.isEmpty()) out += " (" + per.role + ")";
-            if (!per.question.isEmpty()) out += " — " + per.question;
-            out += "\n";
-        }
-    }
-
-    return out;
+    // Snapshot the live models into the profile copy we serialise, so
+    // unsaved edits in tasks/people/statuses/docs/notes round-trip.
+    Profile p = m_profiles[i];
+    p.tasks      = m_tasks.items();
+    p.people     = m_people.items();
+    p.statuses   = m_statuses;
+    p.docsState  = m_docsState;
+    p.notesState = m_notesState;
+    QJsonObject root;
+    root["schemaVersion"] = 3;
+    root["kind"]          = "todocpp.profile";
+    root["exportedAt"]    = QDateTime::currentDateTime().toString(Qt::ISODate);
+    root["profile"]       = profileToJson(p);
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
-void AppController::copyActiveProfileMarkdownToClipboard() {
-    const QString md = exportActiveProfileToMarkdown();
-    if (md.isEmpty()) return;
-    if (auto *cb = QGuiApplication::clipboard()) cb->setText(md);
-    emit toast("Скопировано в буфер обмена");
+bool AppController::exportActiveProfileToFile(const QUrl &fileUrl) const {
+    const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+    if (path.isEmpty()) return false;
+    const QString json = exportActiveProfileJson();
+    if (json.isEmpty()) return false;
+    QSaveFile f(path);
+    if (!f.open(QIODevice::WriteOnly)) {
+        qWarning("todocpp: cannot open %s for writing: %s",
+                 qUtf8Printable(path), qUtf8Printable(f.errorString()));
+        return false;
+    }
+    f.write(json.toUtf8());
+    if (!f.commit()) return false;
+    const_cast<AppController*>(this)->emit toast(
+        QStringLiteral("Профиль экспортирован: %1").arg(QFileInfo(path).fileName()));
+    return true;
 }
+
+QString AppController::importProfileFromJson(const QString &jsonText, bool activate) {
+    if (jsonText.trimmed().isEmpty()) return QStringLiteral("Пустой JSON");
+    const QJsonDocument doc = QJsonDocument::fromJson(jsonText.toUtf8());
+    if (doc.isNull() || !doc.isObject())
+        return QStringLiteral("Невалидный JSON");
+    const QJsonObject root = doc.object();
+
+    // Accept either { "profile": {...} } wrapper or a bare profile object.
+    QJsonObject profileObj;
+    if (root.contains("profile") && root["profile"].isObject())
+        profileObj = root["profile"].toObject();
+    else if (root.contains("id") && root.contains("name"))
+        profileObj = root;
+    else
+        return QStringLiteral("В JSON нет блока 'profile' или ожидаемых полей");
+
+    Profile imported = profileFromJson(profileObj);
+    if (imported.name.trimmed().isEmpty())
+        imported.name = QStringLiteral("Imported");
+
+    // Resolve id collisions — re-slug so we never overwrite an existing profile.
+    if (imported.id.isEmpty() || profileIndexOf(imported.id) >= 0)
+        imported.id = makeProfileId(imported.name);
+    imported.createdAt = QDateTime::currentDateTime();
+    if (imported.color.isEmpty()) imported.color = QStringLiteral("#5cc2dd");
+    if (imported.statuses.isEmpty()) {
+        for (const auto &m : SampleData::statuses()) imported.statuses.append(m);
+    }
+
+    if (activate) snapshotActiveProfile();
+    m_profiles.push_back(imported);
+    if (activate) {
+        m_activeProfileId = imported.id;
+        applyProfileToModels(imported);
+        emit activeProfileChanged();
+    }
+    emit profilesChanged();
+    emit toast(QStringLiteral("Импортирован профиль: %1").arg(imported.name));
+    scheduleSave();
+    return QString();
+}
+
+QString AppController::importProfileFromFile(const QUrl &fileUrl, bool activate) {
+    const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+    if (path.isEmpty()) return QStringLiteral("Пустой путь");
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly))
+        return QStringLiteral("Не открывается: ") + f.errorString();
+    const QString text = QString::fromUtf8(f.readAll());
+    return importProfileFromJson(text, activate);
+}
+
 
 // ─────────────────────────────────────────────── Shortcuts catalog ──
 

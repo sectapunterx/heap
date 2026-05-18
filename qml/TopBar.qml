@@ -14,6 +14,8 @@ Rectangle {
     signal newProfileRequested()
     signal renameProfileRequested()
     signal duplicateProfileRequested()
+    signal exportJsonRequested()
+    signal importJsonRequested()
 
     function focusSearch() {
         searchField.forceActiveFocus();
@@ -154,7 +156,8 @@ Rectangle {
                         onTriggered: AppController.deleteProfile(AppController.activeProfileId)
                     }
                     QQC.MenuSeparator {}
-                    QQC.MenuItem { text: "Экспорт в Markdown"; onTriggered: AppController.copyActiveProfileMarkdownToClipboard() }
+                    QQC.MenuItem { text: "Импорт из JSON…"; onTriggered: root.importJsonRequested() }
+                    QQC.MenuItem { text: "Экспорт в JSON…"; onTriggered: root.exportJsonRequested() }
                 }
             }
         }
