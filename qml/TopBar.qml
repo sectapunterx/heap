@@ -15,6 +15,11 @@ Rectangle {
     signal renameProfileRequested()
     signal duplicateProfileRequested()
 
+    function focusSearch() {
+        searchField.forceActiveFocus();
+        searchField.selectAll();
+    }
+
     function _activeProfileMap() {
         const list = AppController.profiles;
         const id = AppController.activeProfileId;
