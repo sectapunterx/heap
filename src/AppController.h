@@ -31,6 +31,7 @@ class AppController : public QObject {
     Q_PROPERTY(QString crumbUser    READ crumbUser    WRITE setCrumbUser    NOTIFY crumbUserChanged)
 
     Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
+    Q_PROPERTY(QString notesState READ notesState WRITE setNotesState NOTIFY notesStateChanged)
     Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
     Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
@@ -75,6 +76,9 @@ public:
 
     QString docsState() const { return m_docsState; }
     void    setDocsState(const QString &v);
+
+    QString notesState() const { return m_notesState; }
+    void    setNotesState(const QString &v);
 
     bool hasPendingUndo() const { return m_pendingUndo.kind != PendingUndo::None; }
 
@@ -165,6 +169,7 @@ signals:
     void crumbProjectChanged();
     void crumbUserChanged();
     void docsStateChanged();
+    void notesStateChanged();
     void statusesChanged();
     void pendingUndoChanged();
     void profilesChanged();
@@ -188,6 +193,7 @@ private:
     QString      m_crumbProject = "eNB-core";
     QString      m_crumbUser    = "You";
     QString      m_docsState;
+    QString      m_notesState;
 
     // Profiles
     QVector<Profile> m_profiles;

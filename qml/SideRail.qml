@@ -65,6 +65,9 @@ Rectangle {
         RailBtn { glyph: "§"; tooltipText: "Docs"
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }
+        RailBtn { glyph: "✎"; tooltipText: "Notes · markdown-заметки"
+                   active: AppController.currentView === "notes"
+                   onActivated: AppController.currentView = "notes" }
 
         Item { Layout.fillHeight: true }
 

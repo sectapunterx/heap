@@ -141,6 +141,7 @@ ApplicationWindow {
                 FilterBar {
                     Layout.fillWidth: true
                     visible: AppController.currentView !== "docs"
+                          && AppController.currentView !== "notes"
                     viewLabel: AppController.currentView === "board" ? "Board"
                              : AppController.currentView === "timeline" ? "Timeline"
                              : AppController.currentView === "week" ? "Week"
@@ -165,6 +166,7 @@ ApplicationWindow {
                         if (AppController.currentView === "timeline") return timelineComp;
                         if (AppController.currentView === "week")     return weekComp;
                         if (AppController.currentView === "docs")     return docsComp;
+                        if (AppController.currentView === "notes")    return notesComp;
                         return boardComp;
                     }
                 }
@@ -214,6 +216,10 @@ ApplicationWindow {
                             }
                         }
                     }
+                }
+                Component {
+                    id: notesComp
+                    NotesView {}
                 }
             }
         }
@@ -344,6 +350,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: AppController.currentView = "docs"
+    }
+    Shortcut {
+        sequence: _kbd("view.notes")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "notes"
     }
     Shortcut {
         sequence: _kbd("profile.next")
