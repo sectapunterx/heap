@@ -146,6 +146,13 @@ void AppController::setDocsState(const QString &v) {
     scheduleSave();
 }
 
+void AppController::setNotesState(const QString &v) {
+    if (v == m_notesState) return;
+    m_notesState = v;
+    emit notesStateChanged();
+    scheduleSave();
+}
+
 void AppController::moveTask(const QString &id, const QString &newStatus) {
     const int row = m_tasks.indexOfId(id);
     if (row < 0) return;
@@ -758,6 +765,7 @@ QJsonObject profileToJson(const Profile &p) {
         const QJsonDocument d = QJsonDocument::fromJson(p.docsState.toUtf8());
         if (!d.isNull() && d.isObject()) o["docs"] = d.object();
     }
+    if (!p.notesState.isEmpty()) o["notes"] = p.notesState;
     return o;
 }
 
@@ -775,6 +783,8 @@ Profile profileFromJson(const QJsonObject &o, QVector<CalEvent> *outLegacyEvents
     p.statuses  = statusesFromJson(o["statuses"].toArray());
     if (o.contains("docs"))
         p.docsState = QJsonDocument(o["docs"].toObject()).toJson(QJsonDocument::Compact);
+    if (o.contains("notes"))
+        p.notesState = o["notes"].toString();
     if (outLegacyEvents && o.contains("events")) {
         const QVector<CalEvent> v = eventsFromJson(o["events"].toArray(), p.id);
         outLegacyEvents->append(v);
@@ -810,10 +820,11 @@ void AppController::snapshotActiveProfile() {
     const int i = profileIndexOf(m_activeProfileId);
     if (i < 0) return;
     Profile &p = m_profiles[i];
-    p.tasks     = m_tasks.items();
-    p.people    = m_people.items();
-    p.statuses  = m_statuses;
-    p.docsState = m_docsState;
+    p.tasks      = m_tasks.items();
+    p.people     = m_people.items();
+    p.statuses   = m_statuses;
+    p.docsState  = m_docsState;
+    p.notesState = m_notesState;
     // Events are global — not snapshotted into the profile.
 }
 
@@ -824,6 +835,8 @@ void AppController::applyProfileToModels(const Profile &p) {
     emit statusesChanged();
     m_docsState = p.docsState;
     emit docsStateChanged();
+    m_notesState = p.notesState;
+    emit notesStateChanged();
     // Events are global — not reset on profile switch.
 }
 
@@ -1417,6 +1430,8 @@ void AppController::seedShortcutCatalog() {
         "Семидневный планировщик.",                            "Ctrl+3"));
     m_shortcuts.append(makeShortcut("view.docs",        "Перейти в Docs",
         "Спеки, ссылки, сниппеты, контакты.",                  "Ctrl+4"));
+    m_shortcuts.append(makeShortcut("view.notes",       "Перейти в Notes",
+        "Markdown-канвас активного профиля.",                  "Ctrl+5"));
     m_shortcuts.append(makeShortcut("profile.next",     "Следующий профиль",
         "Циклит по списку профилей вперёд.",                   "Ctrl+]"));
     m_shortcuts.append(makeShortcut("profile.prev",     "Предыдущий профиль",

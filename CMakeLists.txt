@@ -16,6 +16,7 @@ qt_add_executable(todocpp
     src/Models.cpp
     src/SampleData.cpp
     src/CodeHighlighter.cpp
+    src/NotesHighlighter.cpp
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -48,11 +49,13 @@ qt_add_qml_module(todocpp
         qml/ProfileEditor.qml
         qml/CommandPalette.qml
         qml/HotkeysPanel.qml
+        qml/NotesView.qml
     SOURCES
         src/AppController.h
         src/Models.h
         src/SampleData.h
         src/CodeHighlighter.h
+        src/NotesHighlighter.h
 )
 
 target_include_directories(todocpp PRIVATE src)
