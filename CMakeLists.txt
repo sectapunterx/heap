@@ -50,6 +50,7 @@ qt_add_qml_module(todocpp
         qml/CommandPalette.qml
         qml/HotkeysPanel.qml
         qml/NotesView.qml
+        qml/SettingsView.qml
     SOURCES
         src/AppController.h
         src/Models.h

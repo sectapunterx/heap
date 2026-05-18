@@ -85,56 +85,14 @@ Popup {
                 }
             }
 
-            ColumnLayout {
-                spacing: 6
+            // Hint that workday hours now live in Settings → Calendar.
+            Text {
                 Layout.fillWidth: true
-                Text { text: "Рабочий день"; color: Theme.textDim; font.pixelSize: 10; font.letterSpacing: 1; font.weight: Font.DemiBold }
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: 8
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text { text: "Начало"; color: Theme.textMuted; font.pixelSize: 11 }
-                        SpinBox {
-                            id: startSpin
-                            Layout.fillWidth: true
-                            from: 0; to: 23
-                            value: AppController.workdayStart
-                            onValueModified: AppController.workdayStart = value
-                            background: Rectangle { color: Theme.panel2; border.color: Theme.border; border.width: 1; radius: 6 }
-                            contentItem: TextInput {
-                                text: startSpin.textFromValue(startSpin.value, startSpin.locale)
-                                color: Theme.text
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                readOnly: !startSpin.editable
-                                selectByMouse: true
-                            }
-                        }
-                    }
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 2
-                        Text { text: "Конец"; color: Theme.textMuted; font.pixelSize: 11 }
-                        SpinBox {
-                            id: endSpin
-                            Layout.fillWidth: true
-                            from: 1; to: 24
-                            value: AppController.workdayEnd
-                            onValueModified: AppController.workdayEnd = value
-                            background: Rectangle { color: Theme.panel2; border.color: Theme.border; border.width: 1; radius: 6 }
-                            contentItem: TextInput {
-                                text: endSpin.textFromValue(endSpin.value, endSpin.locale)
-                                color: Theme.text
-                                horizontalAlignment: Text.AlignHCenter
-                                verticalAlignment: Text.AlignVCenter
-                                readOnly: !endSpin.editable
-                                selectByMouse: true
-                            }
-                        }
-                    }
-                }
+                text: "Рабочие часы и другие параметры — в Settings"
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: 10
+                wrapMode: Text.WordWrap
             }
         }
     }
