@@ -171,8 +171,42 @@ Rectangle {
 
     QQC.Menu {
         id: taskMenu
-        QQC.MenuItem { text: "Открыть"; onTriggered: card.clicked() }
+        QQC.MenuItem {
+            enabled: false
+            contentItem: Text {
+                text: card.task ? (card.task.id + " · " + card.task.priority) : ""
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: 10
+                font.weight: Font.DemiBold
+                font.letterSpacing: 1
+                leftPadding: 12
+                rightPadding: 12
+            }
+        }
+        QQC.MenuItem { text: "✎  Редактировать";          onTriggered: card.clicked() }
         QQC.MenuSeparator {}
-        QQC.MenuItem { text: "Удалить"; onTriggered: AppController.deleteTask(card.taskId) }
+        QQC.MenuItem {
+            text: "⏰  Запланировать в календарь"
+            onTriggered: {
+                if (!card.task) return;
+                AppController.scheduleTask(card.task.id, 14, AppController.selectedDate);
+            }
+        }
+        QQC.MenuItem {
+            text: "⎘  Копировать ID"
+            onTriggered: {
+                if (card.task && card.task.id) AppController.copyToClipboard(card.task.id);
+            }
+        }
+        QQC.MenuItem {
+            text: "⎇  Копировать branch"
+            enabled: card.task && card.task.branch && String(card.task.branch).length > 0
+            onTriggered: {
+                if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
+            }
+        }
+        QQC.MenuSeparator {}
+        QQC.MenuItem { text: "×  Удалить"; onTriggered: AppController.deleteTask(card.taskId) }
     }
 }
