@@ -37,6 +37,8 @@ class AppController : public QObject {
     Q_PROPERTY(QString activeProfileId READ activeProfileId
                WRITE setActiveProfileId NOTIFY activeProfileChanged)
 
+    Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
+
 public:
     explicit AppController(QObject *parent = nullptr);
     ~AppController() override;
@@ -139,6 +141,17 @@ public:
     Q_INVOKABLE QVariantList listBackups() const;
     Q_INVOKABLE bool         restoreFromBackup(const QString &fileName);
 
+    // ---- Shortcuts (rebindable keyboard catalog) ----
+    QVariantList shortcuts() const { return m_shortcuts; }
+    Q_INVOKABLE QString shortcutFor(const QString &id) const;
+    Q_INVOKABLE QString defaultShortcutFor(const QString &id) const;
+    Q_INVOKABLE QString shortcutDescription(const QString &id) const;
+    Q_INVOKABLE QString shortcutLabel(const QString &id) const;
+    Q_INVOKABLE QString findShortcutConflict(const QString &id, const QString &sequence) const;
+    Q_INVOKABLE bool    setShortcut(const QString &id, const QString &sequence);
+    Q_INVOKABLE void    resetShortcut(const QString &id);
+    Q_INVOKABLE void    resetAllShortcuts();
+
     // ---- Undo ----
     Q_INVOKABLE void undoLastDeletion();
     Q_INVOKABLE void clearPendingUndo();
@@ -156,6 +169,7 @@ signals:
     void pendingUndoChanged();
     void profilesChanged();
     void activeProfileChanged();
+    void shortcutsChanged();
     void toast(const QString &message);
     void undoableToast(const QString &message, int seconds);
 
@@ -183,6 +197,13 @@ private:
     void snapshotActiveProfile();
     void applyProfileToModels(const Profile &p);
     Profile makeStartingProfile(const QString &name, const QString &color) const;
+
+    // Shortcuts
+    QVariantList m_shortcuts;             // [{id,label,description,defaultSequence,sequence}]
+    int  shortcutIndexOf(const QString &id) const;
+    void seedShortcutCatalog();
+    void applyShortcutOverrides(const QVariantMap &overrides);
+    QString normalizeSequence(const QString &raw) const;
 
     // Persistence
     QTimer*      m_saveTimer = nullptr;

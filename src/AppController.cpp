@@ -10,6 +10,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QKeySequence>
 #include <QLocale>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -34,6 +35,8 @@ AppController::AppController(QObject *parent)
     m_undoTimer = new QTimer(this);
     m_undoTimer->setSingleShot(true);
     connect(m_undoTimer, &QTimer::timeout, this, &AppController::clearPendingUndo);
+
+    seedShortcutCatalog();
 
     loadStateOnStart();
 
@@ -892,6 +895,16 @@ void AppController::saveStateNow() {
     s["workdayEnd"]   = m_workdayEnd;
     s["crumbProject"] = m_crumbProject;
     s["crumbUser"]    = m_crumbUser;
+
+    // Keyboard shortcut overrides — store every entry (so a user-cleared
+    // binding survives a restart even if the default is non-empty).
+    QJsonObject shortcutsObj;
+    for (const QVariant &v : m_shortcuts) {
+        const QVariantMap m = v.toMap();
+        shortcutsObj[m.value("id").toString()] = m.value("sequence").toString();
+    }
+    s["shortcuts"]    = shortcutsObj;
+
     root["settings"]  = s;
 
     rotateBackupIfDue();
@@ -930,6 +943,13 @@ void AppController::loadStateOnStart() {
         }
         if (s.contains("crumbProject")) { m_crumbProject = s["crumbProject"].toString(); emit crumbProjectChanged(); }
         if (s.contains("crumbUser"))    { m_crumbUser    = s["crumbUser"].toString();    emit crumbUserChanged(); }
+        if (s.contains("shortcuts")) {
+            QVariantMap overrides;
+            const QJsonObject shortcutsObj = s["shortcuts"].toObject();
+            for (auto it = shortcutsObj.constBegin(); it != shortcutsObj.constEnd(); ++it)
+                overrides.insert(it.key(), it.value().toString());
+            applyShortcutOverrides(overrides);
+        }
     }
 
     const int schema = root.value("schemaVersion").toInt(1);
@@ -1366,4 +1386,180 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
     if (md.isEmpty()) return;
     if (auto *cb = QGuiApplication::clipboard()) cb->setText(md);
     emit toast("Скопировано в буфер обмена");
+}
+
+// ─────────────────────────────────────────────── Shortcuts catalog ──
+
+namespace {
+QVariantMap makeShortcut(const char *id, const char *label, const char *desc,
+                         const char *defaultSeq) {
+    QVariantMap m;
+    m["id"]              = QString::fromUtf8(id);
+    m["label"]           = QString::fromUtf8(label);
+    m["description"]     = QString::fromUtf8(desc);
+    m["defaultSequence"] = QString::fromUtf8(defaultSeq);
+    m["sequence"]        = QString::fromUtf8(defaultSeq);
+    return m;
+}
+} // namespace
+
+void AppController::seedShortcutCatalog() {
+    m_shortcuts.clear();
+    m_shortcuts.append(makeShortcut("palette.open",     "Открыть Command Palette",
+        "Глобальный fuzzy-поиск задач, доков, профилей.",      "Ctrl+K"));
+    m_shortcuts.append(makeShortcut("task.new",         "Новая задача",
+        "Создать тикет в активном профиле.",                   "Ctrl+N"));
+    m_shortcuts.append(makeShortcut("view.board",       "Перейти в Board",
+        "Канбан активного профиля.",                           "Ctrl+1"));
+    m_shortcuts.append(makeShortcut("view.timeline",    "Перейти в Timeline",
+        "Лента по дедлайнам.",                                 "Ctrl+2"));
+    m_shortcuts.append(makeShortcut("view.week",        "Перейти в Week",
+        "Семидневный планировщик.",                            "Ctrl+3"));
+    m_shortcuts.append(makeShortcut("view.docs",        "Перейти в Docs",
+        "Спеки, ссылки, сниппеты, контакты.",                  "Ctrl+4"));
+    m_shortcuts.append(makeShortcut("profile.next",     "Следующий профиль",
+        "Циклит по списку профилей вперёд.",                   "Ctrl+]"));
+    m_shortcuts.append(makeShortcut("profile.prev",     "Предыдущий профиль",
+        "Циклит по списку профилей назад.",                    "Ctrl+["));
+    m_shortcuts.append(makeShortcut("profile.exportMd", "Экспорт профиля в Markdown",
+        "Кладёт markdown-выжимку активного профиля в буфер.",  "Ctrl+Shift+E"));
+    m_shortcuts.append(makeShortcut("tweaks.open",      "Открыть Tweaks",
+        "Тема, плотность, рабочий день.",                      "Ctrl+,"));
+    m_shortcuts.append(makeShortcut("hotkeys.open",     "Открыть Hotkeys",
+        "Эта панель.",                                         "Ctrl+/"));
+    m_shortcuts.append(makeShortcut("undo",             "Отменить удаление",
+        "Восстановить последнюю удалённую задачу/событие/профиль.", "Ctrl+Z"));
+    m_shortcuts.append(makeShortcut("search.focus",     "Фокус в поиск",
+        "Перевести курсор в строку поиска в шапке.",           "Ctrl+F"));
+    emit shortcutsChanged();
+}
+
+int AppController::shortcutIndexOf(const QString &id) const {
+    for (int i = 0; i < m_shortcuts.size(); ++i)
+        if (m_shortcuts[i].toMap().value("id").toString() == id) return i;
+    return -1;
+}
+
+QString AppController::normalizeSequence(const QString &raw) const {
+    const QString trimmed = raw.trimmed();
+    if (trimmed.isEmpty()) return QString();
+    const QKeySequence ks(trimmed, QKeySequence::PortableText);
+    if (ks.isEmpty()) return QString();
+    return ks.toString(QKeySequence::PortableText);
+}
+
+void AppController::applyShortcutOverrides(const QVariantMap &overrides) {
+    bool changed = false;
+    for (int i = 0; i < m_shortcuts.size(); ++i) {
+        QVariantMap m = m_shortcuts[i].toMap();
+        const QString id = m.value("id").toString();
+        if (!overrides.contains(id)) continue;
+        const QString seq = normalizeSequence(overrides.value(id).toString());
+        if (seq == m.value("sequence").toString()) continue;
+        m["sequence"] = seq;
+        m_shortcuts[i] = m;
+        changed = true;
+    }
+    if (changed) emit shortcutsChanged();
+}
+
+QString AppController::shortcutFor(const QString &id) const {
+    const int i = shortcutIndexOf(id);
+    return i < 0 ? QString() : m_shortcuts[i].toMap().value("sequence").toString();
+}
+
+QString AppController::defaultShortcutFor(const QString &id) const {
+    const int i = shortcutIndexOf(id);
+    return i < 0 ? QString() : m_shortcuts[i].toMap().value("defaultSequence").toString();
+}
+
+QString AppController::shortcutDescription(const QString &id) const {
+    const int i = shortcutIndexOf(id);
+    return i < 0 ? QString() : m_shortcuts[i].toMap().value("description").toString();
+}
+
+QString AppController::shortcutLabel(const QString &id) const {
+    const int i = shortcutIndexOf(id);
+    return i < 0 ? QString() : m_shortcuts[i].toMap().value("label").toString();
+}
+
+QString AppController::findShortcutConflict(const QString &id, const QString &sequence) const {
+    const QString want = normalizeSequence(sequence);
+    if (want.isEmpty()) return QString();
+    for (int i = 0; i < m_shortcuts.size(); ++i) {
+        const QVariantMap m = m_shortcuts[i].toMap();
+        if (m.value("id").toString() == id) continue;
+        if (m.value("sequence").toString() == want)
+            return m.value("id").toString();
+    }
+    return QString();
+}
+
+bool AppController::setShortcut(const QString &id, const QString &sequence) {
+    const int i = shortcutIndexOf(id);
+    if (i < 0) return false;
+    const QString seq = normalizeSequence(sequence);
+    QVariantMap m = m_shortcuts[i].toMap();
+    if (m.value("sequence").toString() == seq) return true;
+
+    // VS-Code-style swap: clear the conflicting owner so the new binding wins.
+    if (!seq.isEmpty()) {
+        const QString conflictId = findShortcutConflict(id, seq);
+        if (!conflictId.isEmpty()) {
+            const int j = shortcutIndexOf(conflictId);
+            if (j >= 0) {
+                QVariantMap o = m_shortcuts[j].toMap();
+                const QString freedLabel = o.value("label").toString();
+                o["sequence"] = QString();
+                m_shortcuts[j] = o;
+                emit toast(QString("Освобождено: %1").arg(freedLabel));
+            }
+        }
+    }
+
+    m["sequence"] = seq;
+    m_shortcuts[i] = m;
+    emit shortcutsChanged();
+    scheduleSave();
+    return true;
+}
+
+void AppController::resetShortcut(const QString &id) {
+    const int i = shortcutIndexOf(id);
+    if (i < 0) return;
+    QVariantMap m = m_shortcuts[i].toMap();
+    const QString def = m.value("defaultSequence").toString();
+    if (m.value("sequence").toString() == def) return;
+    // If the default would conflict with another action, swap it out.
+    const QString conflictId = findShortcutConflict(id, def);
+    if (!conflictId.isEmpty()) {
+        const int j = shortcutIndexOf(conflictId);
+        if (j >= 0) {
+            QVariantMap o = m_shortcuts[j].toMap();
+            o["sequence"] = QString();
+            m_shortcuts[j] = o;
+        }
+    }
+    m["sequence"] = def;
+    m_shortcuts[i] = m;
+    emit shortcutsChanged();
+    scheduleSave();
+}
+
+void AppController::resetAllShortcuts() {
+    bool changed = false;
+    for (int i = 0; i < m_shortcuts.size(); ++i) {
+        QVariantMap m = m_shortcuts[i].toMap();
+        const QString def = m.value("defaultSequence").toString();
+        if (m.value("sequence").toString() != def) {
+            m["sequence"] = def;
+            m_shortcuts[i] = m;
+            changed = true;
+        }
+    }
+    if (changed) {
+        emit shortcutsChanged();
+        scheduleSave();
+        emit toast("Хоткеи сброшены к дефолту");
+    }
 }
