@@ -399,7 +399,7 @@ Popup {
                 FormField { mono: true; placeholderText: "#lte-core"
                             text: root.draft.channel || ""; onTextChanged: root.draft.channel = text }
                 FormField { mono: true; placeholderText: "@name.surname"
-                            text: root.draft.slack || ""; onTextChanged: root.draft.slack = text }
+                            text: root.draft.mattermost || ""; onTextChanged: root.draft.mattermost = text }
             }
 
             FieldLabel { text: "AVATAR COLOR" }

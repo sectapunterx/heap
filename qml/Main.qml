@@ -3,6 +3,7 @@ import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import TodoCpp
 
 ApplicationWindow {
@@ -109,6 +110,13 @@ ApplicationWindow {
                 for (let i = 0; i < list.length; i++) if (list[i].id === id)
                     profileEditor.showDuplicate(list[i].id, list[i].name, list[i].color);
             }
+            onExportJsonRequested: {
+                exportJsonDialog.currentFile = "file:///" + (
+                    (AppController.activeProfileId || "profile") + ".todocpp.json"
+                );
+                exportJsonDialog.open();
+            }
+            onImportJsonRequested: importJsonDialog.open()
         }
 
         // Side rail
@@ -426,6 +434,33 @@ ApplicationWindow {
     // Tweaks + Hotkeys popovers (opened from the side rail)
     TweaksPanel  { id: tweaks }
     HotkeysPanel { id: hotkeys }
+
+    // ── Profile import / export via JSON file ──────────────────────────
+    FileDialog {
+        id: exportJsonDialog
+        fileMode: FileDialog.SaveFile
+        nameFilters: [ "todo·cpp profile (*.json)", "All files (*)" ]
+        defaultSuffix: "json"
+        title: "Экспорт активного профиля в JSON"
+        onAccepted: {
+            if (AppController.exportActiveProfileToFile(selectedFile))
+                toast.show("Профиль экспортирован");
+            else
+                toast.show("Не удалось экспортировать профиль");
+        }
+    }
+    FileDialog {
+        id: importJsonDialog
+        fileMode: FileDialog.OpenFile
+        nameFilters: [ "todo·cpp profile (*.json)", "All files (*)" ]
+        title: "Импорт профиля из JSON"
+        onAccepted: {
+            const err = AppController.importProfileFromJson === undefined
+                ? "" : AppController.importProfileFromFile(selectedFile, true);
+            if (err && err.length > 0)
+                toast.show("Импорт не удался: " + err);
+        }
+    }
 
     Toast {
         id: toast

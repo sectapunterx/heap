@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QDate>
 #include <QTimer>
+#include <QUrl>
 #include <QVariantList>
 #include <qqmlregistration.h>
 
@@ -137,8 +138,12 @@ public:
     Q_INVOKABLE void    deleteProfile(const QString &id);
     Q_INVOKABLE QString duplicateProfile(const QString &id, const QString &newName);
     Q_INVOKABLE QVariantMap profileById(const QString &id) const;
-    Q_INVOKABLE QString exportActiveProfileToMarkdown() const;
-    Q_INVOKABLE void    copyActiveProfileMarkdownToClipboard();
+    // Profile JSON import / export (replaces the older Markdown export).
+    Q_INVOKABLE QString exportActiveProfileJson() const;
+    Q_INVOKABLE bool    exportActiveProfileToFile(const QUrl &fileUrl) const;
+    Q_INVOKABLE QString importProfileFromJson(const QString &jsonText, bool activate = true);
+    Q_INVOKABLE QString importProfileFromFile(const QUrl &fileUrl, bool activate = true);
+
     Q_INVOKABLE QVariantList commandPaletteEntries() const;
 
     // ---- Backups ----
