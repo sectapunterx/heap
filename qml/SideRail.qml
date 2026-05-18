@@ -9,6 +9,12 @@ Rectangle {
     width: 56
 
     signal openTweaks(Item anchor)
+    signal openHotkeys(Item anchor)
+
+    // Expose anchors so Main can position popups when triggered via
+    // shortcut (i.e. "as if the rail button had been clicked").
+    property alias tweaksAnchor:  tweaksBtn
+    property alias hotkeysAnchor: hotkeysBtn
 
     // Reactive badges — refresh on task model mutations + profile switches.
     property int _blockedCount: AppController.countByStatus("blocked")
@@ -62,6 +68,12 @@ Rectangle {
 
         Item { Layout.fillHeight: true }
 
+        RailBtn {
+            id: hotkeysBtn
+            glyph: "⌨"
+            tooltipText: "Hotkeys · клавиши и биндинги"
+            onActivated: root.openHotkeys(hotkeysBtn)
+        }
         RailBtn {
             id: tweaksBtn
             glyph: "✦"

@@ -90,6 +90,7 @@ ApplicationWindow {
 
         // Top bar spans all columns
         TopBar {
+            id: topBar
             Layout.row: 0; Layout.column: 0; Layout.columnSpan: 3
             Layout.fillWidth: true
             searchText: win.searchText
@@ -120,6 +121,12 @@ ApplicationWindow {
                 tweaks.x = p.x + anchor.width + 6;
                 tweaks.y = Math.max(8, Math.min(p.y, win.contentItem.height - tweaks.height - 8));
                 tweaks.open();
+            }
+            onOpenHotkeys: (anchor) => {
+                const p = anchor.mapToItem(win.contentItem, 0, 0);
+                hotkeys.x = p.x + anchor.width + 6;
+                hotkeys.y = Math.max(8, Math.min(p.y, win.contentItem.height - hotkeys.height - 8));
+                hotkeys.open();
             }
         }
 
@@ -282,10 +289,117 @@ ApplicationWindow {
         property string requestedAnchor: ""
     }
 
+    // ── Rebindable application shortcuts ──────────────────────────────
+    // Each Shortcut's sequence is bound through _kbd(id), which depends on
+    // AppController.shortcuts (a Q_PROPERTY) so the binding re-evaluates on
+    // shortcutsChanged — rebinding in the Hotkeys panel applies instantly.
+    function _kbd(id) {
+        const list = AppController.shortcuts;
+        for (let i = 0; i < list.length; i++)
+            if (list[i].id === id) return list[i].sequence;
+        return "";
+    }
+
     Shortcut {
-        sequences: ["Ctrl+K", "Ctrl+P"]
+        sequence: _kbd("palette.open")
         context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: cmdPalette.open()
+    }
+    // Built-in alias: Ctrl+P always opens the palette, independent of the
+    // catalog. If the user rebinds palette.open elsewhere, this still works.
+    Shortcut {
+        sequence: "Ctrl+P"
+        context: Qt.ApplicationShortcut
+        enabled: !hotkeys.isCapturing
+        onActivated: cmdPalette.open()
+    }
+
+    Shortcut {
+        sequence: _kbd("task.new")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: taskEditor.showFor(AppController.newTaskDraft("todo"))
+    }
+    Shortcut {
+        sequence: _kbd("view.board")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "board"
+    }
+    Shortcut {
+        sequence: _kbd("view.timeline")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "timeline"
+    }
+    Shortcut {
+        sequence: _kbd("view.week")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "week"
+    }
+    Shortcut {
+        sequence: _kbd("view.docs")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "docs"
+    }
+    Shortcut {
+        sequence: _kbd("profile.next")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: {
+            const list = AppController.profiles;
+            if (list.length === 0) return;
+            let idx = -1;
+            for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
+            const next = list[((idx >= 0 ? idx : 0) + 1) % list.length];
+            AppController.activeProfileId = next.id;
+        }
+    }
+    Shortcut {
+        sequence: _kbd("profile.prev")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: {
+            const list = AppController.profiles;
+            if (list.length === 0) return;
+            let idx = 0;
+            for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
+            const prev = list[(idx - 1 + list.length) % list.length];
+            AppController.activeProfileId = prev.id;
+        }
+    }
+    Shortcut {
+        sequence: _kbd("profile.exportMd")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.copyActiveProfileMarkdownToClipboard()
+    }
+    Shortcut {
+        sequence: _kbd("tweaks.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: rail.openTweaks(rail.tweaksAnchor)
+    }
+    Shortcut {
+        sequence: _kbd("hotkeys.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+    }
+    Shortcut {
+        sequence: _kbd("undo")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo
+        onActivated: AppController.undoLastDeletion()
+    }
+    Shortcut {
+        sequence: _kbd("search.focus")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: topBar.focusSearch()
     }
 
     Connections {
@@ -297,8 +411,9 @@ ApplicationWindow {
         }
     }
 
-    // Tweaks popover (opened from the side rail)
-    TweaksPanel { id: tweaks }
+    // Tweaks + Hotkeys popovers (opened from the side rail)
+    TweaksPanel  { id: tweaks }
+    HotkeysPanel { id: hotkeys }
 
     Toast {
         id: toast
