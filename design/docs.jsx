@@ -152,12 +152,12 @@ const DOCS_DATA = {
       code: "// В hot path — только структурированный bin-log,\n// никаких fmt::format / std::ostream.\nLOG_BIN(kHarqRetx, ueId, harqId, ndi, rv);\n\n// Slow-path (ошибки, init) — обычный log OK\nLOG_WARN(\"PDCP SN wrap on bearer {}\", drbId);" },
   ],
   contacts: [
-    { name: "Олег Т.",    role: "Tech Lead",        channel: "#lte-core-leads", mattermost: "@oleg.t",     color: "oklch(0.72 0.12 25)" },
-    { name: "Andrey S.",  role: "Senior C++",       channel: "#lte-core",       mattermost: "@andrey.s",   color: "oklch(0.74 0.12 175)" },
-    { name: "Hiroshi M.", role: "PHY team",         channel: "#lte-phy",        mattermost: "@hiroshi.m",  color: "oklch(0.74 0.12 145)" },
-    { name: "Маша К.",    role: "QA Lead",          channel: "#lte-qa",         mattermost: "@masha.k",    color: "oklch(0.72 0.12 305)" },
-    { name: "Виктор Л.",  role: "Architect",        channel: "#lte-arch",       mattermost: "@viktor.l",   color: "oklch(0.74 0.12 235)" },
-    { name: "On-call",    role: "PagerDuty rotation", channel: "#enb-oncall",   mattermost: "page: lte-oncall", color: "var(--p0)" },
+    { name: "Олег Т.",    role: "Tech Lead",        channel: "#lte-core-leads", slack: "@oleg.t",     color: "oklch(0.72 0.12 25)" },
+    { name: "Andrey S.",  role: "Senior C++",       channel: "#lte-core",       slack: "@andrey.s",   color: "oklch(0.74 0.12 175)" },
+    { name: "Hiroshi M.", role: "PHY team",         channel: "#lte-phy",        slack: "@hiroshi.m",  color: "oklch(0.74 0.12 145)" },
+    { name: "Маша К.",    role: "QA Lead",          channel: "#lte-qa",         slack: "@masha.k",    color: "oklch(0.72 0.12 305)" },
+    { name: "Виктор Л.",  role: "Architect",        channel: "#lte-arch",       slack: "@viktor.l",   color: "oklch(0.74 0.12 235)" },
+    { name: "On-call",    role: "PagerDuty rotation", channel: "#enb-oncall",   slack: "page: lte-oncall", color: "var(--p0)" },
   ],
 };
 
@@ -313,7 +313,7 @@ function DocsEditModal({ editing, onClose, onSave, onDelete, sections }) {
               </label>
               <label>
                 Slack handle
-                <input className="mono" value={draft.mattermost || ""} onChange={(e) => update("slack", e.target.value)} placeholder="@name.surname" />
+                <input className="mono" value={draft.slack || ""} onChange={(e) => update("slack", e.target.value)} placeholder="@name.surname" />
               </label>
             </div>
             <label>
@@ -457,7 +457,7 @@ function DocsView() {
   const openContactCreate = () => {
     setEditing({
       kind: "contact",
-      item: { name: "", role: "", channel: "", mattermost: "", color: CONTACT_COLORS[0] },
+      item: { name: "", role: "", channel: "", slack: "", color: CONTACT_COLORS[0] },
       isNew: true,
     });
   };
@@ -717,7 +717,7 @@ function DocsView() {
               <span className="docs-section-bar" style={{background:"var(--text-muted)"}} />
               <div>
                 <h2>Contacts &amp; Channels</h2>
-                <div className="docs-section-sub">Кому пинговать в MM и где обсуждать</div>
+                <div className="docs-section-sub">Кому пинговать в Slack и где обсуждать</div>
               </div>
               <div className="docs-section-cnt mono">{contacts.length}</div>
               {editMode && (
@@ -759,7 +759,7 @@ function DocsView() {
                   ) : (
                     <div className="dc-chans mono">
                       <div className="dc-channel">{c.channel}</div>
-                      <div className="dc-slack">{c.mattermost}</div>
+                      <div className="dc-slack">{c.slack}</div>
                     </div>
                   )}
                 </div>
