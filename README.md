@@ -1,12 +1,8 @@
+<p align="center">
+  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — heap.push(task)">
+</p>
+
 <div align="center">
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-lockup.svg">
-  <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-lockup-light.svg">
-  <img alt="heap." src="design/brand-export/logo/heap-lockup.svg" width="380">
-</picture>
-
-### **`heap.push(task)`**
 
 Native desktop kanban + calendar + docs for C++ engineers.
 
@@ -30,11 +26,9 @@ The app was ported one-to-one from a React/Babel prototype (`design/`) that
 still ships with the repo for visual reference. The brand bundle lives under
 `design/brand-export/`.
 
-<div align="center">
-
-<img src="design/brand-export/icon/heap-icon.svg" alt="heap. app icon" width="120">
-
-</div>
+<p align="center">
+  <img src="design/brand-export/surfaces/heap-marketing-hero.svg" width="100%" alt="heap. marketing hero — Your day, allocated.">
+</p>
 
 ## Highlights
 
