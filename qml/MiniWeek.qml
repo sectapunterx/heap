@@ -20,9 +20,13 @@ Rectangle {
     }
     function startOfWeek(d) {
         const dow = d.getDay();
-        const offset = (dow === 0 ? -6 : 1 - dow);
+        const sundayFirst = Theme.weekStart === "sun";
+        const offset = sundayFirst ? -dow : (dow === 0 ? -6 : 1 - dow);
         return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
     }
+
+    // Indexed by JS day-of-week (0=Sun..6=Sat).
+    readonly property var dowLabelsByJsDow: ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
     function eventCountFor(d) {
         let n = 0;
         for (let i = 0; i < AppController.events.rowCount(); i++) {
@@ -38,12 +42,12 @@ Rectangle {
         for (let i = 0; i < 7; i++) out.push(new Date(start.getFullYear(), start.getMonth(), start.getDate() + i));
         return out;
     }
-    property var _days: dayList()
-    onRefDateChanged: _days = dayList()
+    // Declarative — re-evaluates when refDate or Theme.weekStart change.
+    readonly property var _days: dayList()
     Connections {
         target: AppController.events
-        function onRowsInserted() { _days = dayList(); _bumpRev() }
-        function onRowsRemoved()  { _days = dayList(); _bumpRev() }
+        function onRowsInserted() { _bumpRev() }
+        function onRowsRemoved()  { _bumpRev() }
         function onDataChanged()  { _bumpRev() }
     }
     property int _eventsRev: 0
@@ -113,13 +117,11 @@ Rectangle {
                     border.color: isSelected ? Theme.accent : "transparent"
                     border.width: 1
 
-                    readonly property var dowLabels: ["MO","TU","WE","TH","FR","SA","SU"]
-
                     Column {
                         anchors.centerIn: parent
                         spacing: 1
                         Text {
-                            text: parent.parent.dowLabels[parent.parent.index]
+                            text: root.dowLabelsByJsDow[parent.parent.modelData.getDay()]
                             color: Theme.textDim
                             font.pixelSize: 10
                             font.letterSpacing: 1
