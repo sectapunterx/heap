@@ -38,11 +38,11 @@
 
     
     <text font-family="&#39;IBM Plex Sans&#39;, system-ui, sans-serif" font-size="17" fill="#b8c2cc" y="350">
-      <tspan x="0" dy="0">Менеджер задач для разработчика.</tspan>
-      <tspan x="0" dy="26">Kanban, календарь, контекстные меню,</tspan>
-      <tspan x="0" dy="26">snippet-библиотека и горячие клавиши —</tspan>
-      <tspan x="0" dy="26">всё то, что нужно, чтобы вернуться</tspan>
-      <tspan x="0" dy="26">к коду побыстрее.</tspan>
+      <tspan x="0" dy="0">A task manager for developers.</tspan>
+      <tspan x="0" dy="26">Kanban, calendar, context menus,</tspan>
+      <tspan x="0" dy="26">a snippet library and hotkeys —</tspan>
+      <tspan x="0" dy="26">everything you need to get back</tspan>
+      <tspan x="0" dy="26">to the code, faster.</tspan>
     </text>
 
     
