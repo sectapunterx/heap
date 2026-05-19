@@ -13,7 +13,7 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 680
-    title: "todo·cpp — LTE programmer's day"
+    title: "heap. — heap.push(task)"
     color: Theme.bg
 
     property string searchText: ""

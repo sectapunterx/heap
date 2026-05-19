@@ -1,8 +1,14 @@
 <div align="center">
 
-# heap.
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-lockup.svg">
+  <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-lockup-light.svg">
+  <img alt="heap." src="design/brand-export/logo/heap-lockup.svg" width="380">
+</picture>
 
-**heap.push(task)** — native desktop kanban + calendar + docs for C++ engineers.
+### **`heap.push(task)`**
+
+Native desktop kanban + calendar + docs for C++ engineers.
 
 [![Qt 6](https://img.shields.io/badge/Qt-6.4%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599c?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
@@ -17,17 +23,24 @@
 
 `heap.` is a single-binary Qt6/QML application. One process — no Electron, no
 browser, no remote services. Tasks, events, docs, snippets, and contacts live
-side by side in a per-profile workspace that's persisted as a JSON blob in your
-user data directory.
+side by side in a per-profile workspace that's persisted as a JSON blob in
+your user data directory.
 
 The app was ported one-to-one from a React/Babel prototype (`design/`) that
 still ships with the repo for visual reference. The brand bundle lives under
 `design/brand-export/`.
 
+<div align="center">
+
+<img src="design/brand-export/icon/heap-icon.svg" alt="heap. app icon" width="120">
+
+</div>
+
 ## Highlights
 
 - **Kanban Board** — drag-and-drop columns, status color picker, per-card
-  priority chips, branch decoration, scheduled-time pill.
+  priority chips, branch decoration, scheduled-time pill, lifted-card drag
+  ghost.
 - **Timeline** — overdue / today / tomorrow / week / later buckets with
   sub-grouping by date, show-done toggle, accent stripes.
 - **Week** — 7-day grid with all-day deadline chips, hourly event grid, full
@@ -35,12 +48,12 @@ still ships with the repo for visual reference. The brand bundle lives under
 - **Day calendar** — drag-to-create events, top/bottom resize, drop a task to
   schedule a focus block, live now-line.
 - **Docs** — sections (3GPP / internal / C++ / tools) with custom fields,
-  snippet editor with syntax highlight, contact cards with per-channel info.
+  snippet editor with syntax highlight, contact cards.
 - **Notes** — per-profile markdown canvas with `@people` / `#ticket`
   autocomplete.
 - **Profiles** — feature-scoped workspaces. JSON import / export.
-- **Command palette** — `Ctrl+K` fuzzy across tasks, docs, snippets, contacts,
-  people, profiles.
+- **Command palette** — `Ctrl+K` fuzzy across tasks, docs, snippets,
+  contacts, people, profiles.
 - **Hotkeys** — full rebindable catalog, inline capture.
 - **Settings** — 10 sections (profile, appearance, notifications, calendar,
   tasks, shortcuts, C++, integrations, data, about). Persists as JSON.
@@ -52,17 +65,65 @@ still ships with the repo for visual reference. The brand bundle lives under
 
 ## Brand
 
-`design/brand-export/` ships the **heap.** brand bundle: logos (mark, lockup,
-wordmark), the 1024×1024 squircle app icon, palette tokens, and two QML helpers
-(`Brand` singleton + `BrandLogo` component). See
-[design/brand-export/README.md](design/brand-export/README.md).
+The **heap.** brand ships under `design/brand-export/` and is wired into the
+runtime via the `Brand` QML singleton.
 
-The brand SVGs ride along in `qrc:/brand/...` resources baked into the
-executable at build time, so nothing has to be installed system-wide.
+<table>
+<tr>
+<td align="center" width="33%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-mark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-mark-light.svg">
+    <img alt="heap-mark" src="design/brand-export/logo/heap-mark.svg" width="120">
+  </picture>
+  <br><sub><code>BrandLogo { variant: "mark" }</code></sub>
+</td>
+<td align="center" width="33%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-wordmark.svg">
+    <img alt="heap-wordmark" src="design/brand-export/logo/heap-wordmark.svg" width="180">
+  </picture>
+  <br><sub><code>BrandLogo { variant: "wordmark" }</code></sub>
+</td>
+<td align="center" width="33%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-lockup.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-lockup-light.svg">
+    <img alt="heap-lockup" src="design/brand-export/logo/heap-lockup.svg" width="220">
+  </picture>
+  <br><sub><code>BrandLogo { variant: "lockup" }</code></sub>
+</td>
+</tr>
+</table>
 
-> SVG rendering needs Qt 6 with the `Qt6::Svg` module (`qsvg` image-format
-> plugin). On MSYS2: `pacman -S mingw-w64-ucrt-x86_64-qt6-svg`. Without it,
-> `BrandLogo` falls back to a text wordmark — no crash, just less pretty.
+`BrandLogo.qml` renders the mark with native QML primitives (`Rectangle` +
+`Canvas`), so the brand displays correctly without `Qt6::Svg`. The exported
+SVG files are bundled into `qrc:/brand/...` for the app icon and for any
+consumer that prefers vector assets.
+
+### Palette
+
+| token       | dark      | light     | role                           |
+| ----------- | --------- | --------- | ------------------------------ |
+| `bg`        | `#0b0e13` | `#f3f5f8` | app background                 |
+| `bg2`       | `#11151c` | derived   | secondary surface              |
+| `panel`     | `#14181f` | `#ffffff` | cards / panels                 |
+| `panel2`    | `#1a1f29` | derived   | nested cards                   |
+| `border`    | `#262d39` | `#dde3ec` | dividers, hairlines            |
+| `text`      | `#e5ecf3` | `#11151c` | primary text                   |
+| `text3`     | `#8a94a3` | `#5f6878` | muted / labels                 |
+| `accent`    | `#3bccdd` | `#178ea0` | brand cyan (the `heap.` dot)   |
+| `accent2`   | `#5fdaea` | derived   | hover / highlight              |
+
+| status       | hex       |
+| ------------ | --------- |
+| todo         | `#86a0bd` |
+| in-progress  | `#32b2e7` |
+| review       | `#bf94ec` |
+| done         | `#78be7a` |
+| warn         | `#fe9c3a` |
+
+Full token reference: [`design/brand-export/README.md`](design/brand-export/README.md).
 
 ## Build
 
@@ -71,7 +132,7 @@ Requires **Qt 6.4+** and a **C++17** toolchain.
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
 cmake --build build -j
-./build/todocpp
+./build/heap                  # ./build/heap.exe on Windows
 ```
 
 ### Linux (Debian / Ubuntu)
@@ -116,10 +177,10 @@ cmake --build build -j
    ```
    -DCMAKE_PREFIX_PATH=C:/msys64/ucrt64
    ```
-6. Pick the `todocpp` run configuration. `Shift+F10` to launch.
-7. To run the `.exe` outside CLion, either add `C:\msys64\ucrt64\bin` to your
+6. Pick the `heap` run configuration. `Shift+F10` to launch.
+7. To run `heap.exe` outside CLion, either add `C:\msys64\ucrt64\bin` to your
    `PATH`, or bundle the Qt DLLs once with `windeployqt6 --qmldir ../qml
-   todocpp.exe` from inside your build directory.
+   heap.exe` from inside your build directory.
 
 ## Project layout
 
@@ -134,10 +195,10 @@ cmake --build build -j
 │  ├─ CodeHighlighter.{h,cpp}  ← QSyntaxHighlighter for the docs snippet editor
 │  └─ NotesHighlighter.{h,cpp} ← markdown highlighter for the Notes view
 ├─ qml/
-│  ├─ Main.qml             ← top-level window: TopBar + SideRail + view stack + right column
-│  ├─ Theme.qml            ← singleton: dark/light/density/highContrast tokens, accent reactive to Settings
-│  ├─ Brand.qml            ← singleton: brand palette + tagline + asset paths
-│  ├─ BrandLogo.qml        ← lockup/mark/wordmark component
+│  ├─ Main.qml             ← top-level window
+│  ├─ Theme.qml            ← singleton: surfaces, accent (reactive), highContrast, reducedMotion
+│  ├─ Brand.qml            ← singleton: heap. palette + tagline + asset paths
+│  ├─ BrandLogo.qml        ← lockup/mark/wordmark, native QML — no SVG required
 │  ├─ TopBar.qml           ← BrandLogo, breadcrumbs, profile pill, search, +Task
 │  ├─ SideRail.qml         ← view switcher rail with badge counts
 │  ├─ FilterBar.qml        ← priority chips + Archived toggle + task counts
@@ -173,8 +234,8 @@ cmake --build build -j
 
 - **Profile snapshot** — each profile owns its own tasks, people, statuses,
   docs blob, and notes blob.
-- **Events** are global (so the calendar reflects every profile at once), with
-  an optional `profileId` attribution.
+- **Events** are global (so the calendar reflects every profile at once),
+  with an optional `profileId` attribution.
 - **Settings** live as `appSettingsJson` — a single JSON blob persisted via
   `QStandardPaths::AppDataLocation`. `SettingsView` is the canonical editor.
 - **Backups** rotate daily under `<AppDataLocation>/backups/` (configurable
@@ -208,8 +269,7 @@ floating Hotkeys panel.
   (`Theme.scaledMs(n)` collapses to 0).
 - **High contrast** — Tweaks → High contrast strengthens border and text
   tokens.
-- **Tab focus** — focusable inputs (search, breadcrumbs, settings fields)
-  paint an accent border when focused.
+- **Tab focus** — focusable inputs paint an accent border when focused.
 
 ## License
 

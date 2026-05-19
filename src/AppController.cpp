@@ -50,7 +50,7 @@ AppController::AppController(QObject *parent)
         if (icon.isNull()) icon = QGuiApplication::windowIcon();
         if (icon.isNull()) icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
         m_tray = new QSystemTrayIcon(icon, this);
-        m_tray->setToolTip(QStringLiteral("todocpp"));
+        m_tray->setToolTip(QStringLiteral("heap."));
         if (!icon.isNull()) m_tray->show();
     }
 
