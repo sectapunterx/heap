@@ -4,19 +4,22 @@
 #include <QColor>
 #include <QDate>
 #include <QDateTime>
+#include <QSet>
 #include <QString>
 #include <QVariantList>
 #include <QVector>
 #include <qqmlregistration.h>
 
 struct Task {
-    QString id;
-    QString title;
-    QString desc;
-    QString priority;   // P0..P3
-    QString status;     // backlog/todo/prog/half/blocked/review/done
-    QDate   deadline;   // invalid = none
-    QString branch;
+    QString   id;
+    QString   title;
+    QString   desc;
+    QString   priority;          // P0..P3
+    QString   status;            // backlog/todo/prog/half/blocked/review/done
+    QDate     deadline;          // invalid = none
+    QString   branch;
+    QDateTime statusChangedAt;   // last time `status` was mutated
+    bool      archived = false;  // hidden from Board/Timeline once auto-archived
 };
 
 struct CalEvent {
@@ -65,8 +68,15 @@ public:
         IdRole = Qt::UserRole + 1,
         TitleRole, DescRole, PriorityRole,
         StatusRole, DeadlineRole, BranchRole,
+        StatusChangedAtRole, ArchivedRole, BlockedStuckRole,
     };
     explicit TaskModel(QObject *parent = nullptr) : QAbstractListModel(parent) {}
+
+    // ID set the controller marks as "blocked too long"; consumed by
+    // BlockedStuckRole so TaskCard can paint a warning border.
+    void setBlockedStuckIds(const QSet<QString> &ids);
+    void setArchived(const QString &id, bool archived);
+    void stampStatusChange(const QString &id);
 
     int rowCount(const QModelIndex & = {}) const override { return m_items.size(); }
     QVariant data(const QModelIndex &idx, int role) const override;
@@ -83,6 +93,7 @@ public:
 
 private:
     QVector<Task> m_items;
+    QSet<QString> m_blockedStuck;
 };
 
 class EventModel : public QAbstractListModel {

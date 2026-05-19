@@ -13,12 +13,13 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 680
-    title: "todo·cpp — LTE programmer's day"
+    title: "heap. — heap.push(task)"
     color: Theme.bg
 
     property string searchText: ""
     property var prioritiesFilter: ({})
     property bool showDoneTimeline: false
+    property bool showArchived: false
 
     // Reactive task / status counts — QAbstractItemModel signals refresh
     // these on profile switch (modelReset) and on individual mutations.
@@ -150,6 +151,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     visible: AppController.currentView !== "docs"
                           && AppController.currentView !== "notes"
+                          && AppController.currentView !== "settings"
                     viewLabel: AppController.currentView === "board" ? "Board"
                              : AppController.currentView === "timeline" ? "Timeline"
                              : AppController.currentView === "week" ? "Week"
@@ -159,12 +161,14 @@ ApplicationWindow {
                     activeCount: win._activeCount
                     blockedCount: win._blockedCount
                     reviewCount: win._reviewCount
+                    showArchived: win.showArchived
                     onTogglePriority: (p) => {
                         const next = Object.assign({}, win.prioritiesFilter);
                         next[p] = !next[p];
                         win.prioritiesFilter = next;
                     }
                     onClearPriorities: win.prioritiesFilter = ({})
+                    onToggleArchived: win.showArchived = !win.showArchived
                 }
                 Loader {
                     id: viewLoader
@@ -175,6 +179,7 @@ ApplicationWindow {
                         if (AppController.currentView === "week")     return weekComp;
                         if (AppController.currentView === "docs")     return docsComp;
                         if (AppController.currentView === "notes")    return notesComp;
+                        if (AppController.currentView === "settings") return settingsComp;
                         return boardComp;
                     }
                 }
@@ -184,6 +189,7 @@ ApplicationWindow {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
+                        showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
                     }
@@ -195,6 +201,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
                         showDone: win.showDoneTimeline
+                        showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
                     }
@@ -204,6 +211,7 @@ ApplicationWindow {
                     WeekView {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
+                        showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onEventClicked: (id) => eventEditor.showForId(id)
                     }
@@ -228,6 +236,18 @@ ApplicationWindow {
                 Component {
                     id: notesComp
                     NotesView {}
+                }
+                Component {
+                    id: settingsComp
+                    SettingsView {
+                        // Expose a "bus" the inner buttons can hit to open
+                        // popups owned by Main (HotkeysPanel + FileDialog).
+                        property var settingsBus: QtObject {
+                            function openHotkeys() { rail.openHotkeys(rail.hotkeysAnchor) }
+                            function exportJson()  { exportJsonDialog.open() }
+                            function importJson()  { importJsonDialog.open() }
+                        }
+                    }
                 }
             }
         }
@@ -364,6 +384,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: AppController.currentView = "notes"
+    }
+    Shortcut {
+        sequence: _kbd("view.settings")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "settings"
     }
     Shortcut {
         sequence: _kbd("profile.next")

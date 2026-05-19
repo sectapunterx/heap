@@ -40,21 +40,11 @@ Rectangle {
         spacing: 14
 
         // Brand
-        RowLayout {
-            spacing: 8
-            Rectangle {
-                width: 10; height: 10; radius: 3
-                color: Theme.accent
-                layer.enabled: true
-            }
-            Text {
-                text: "todo<span style=\"color:" + Theme.textMuted + "\">·</span>cpp"
-                textFormat: Text.RichText
-                color: Theme.text
-                font.family: Theme.fontMono
-                font.weight: Font.DemiBold
-                font.pixelSize: 13
-            }
+        BrandLogo {
+            Layout.preferredHeight: 26
+            Layout.alignment: Qt.AlignVCenter
+            variant: "lockup"
+            theme: Theme.dark ? "dark" : "light"
         }
 
         // Breadcrumbs — editable in place
@@ -170,8 +160,9 @@ Rectangle {
             Layout.preferredHeight: 28
             radius: 6
             color: Theme.panel2
-            border.color: Theme.border
-            border.width: 1
+            border.color: searchField.activeFocus ? Theme.accent : Theme.border
+            border.width: searchField.activeFocus ? 2 : 1
+            Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10; anchors.rightMargin: 6
