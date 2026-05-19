@@ -63,6 +63,7 @@ qt_add_qml_module(heap
         qml/ThinScrollBar.qml
         qml/Brand.qml
         qml/BrandLogo.qml
+        qml/SplashScreen.qml
     SOURCES
         src/AppController.h
         src/Models.h
@@ -97,6 +98,9 @@ qt_add_resources(heap "brand"
         design/brand-export/logo/heap-lockup-light.svg
         design/brand-export/logo/heap-wordmark.svg
         design/brand-export/icon/heap-icon.svg
+        design/brand-export/surfaces/heap-splash.svg
+        design/brand-export/surfaces/heap-readme-banner.svg
+        design/brand-export/surfaces/heap-marketing-hero.svg
 )
 
 install(TARGETS heap
