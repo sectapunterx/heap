@@ -208,6 +208,7 @@ Popup {
             ScrollView {
                 Layout.fillWidth: true; Layout.preferredHeight: 240
                 TextArea {
+                    id: codeArea
                     text: root.draft.code || ""
                     onTextChanged: root.draft.code = text
                     wrapMode: TextEdit.NoWrap
@@ -218,6 +219,18 @@ Popup {
                     font.pixelSize: 12
                     background: Rectangle { radius: 6; color: Theme.bg2; border.color: Theme.border; border.width: 1 }
                 }
+            }
+            CodeHighlighter {
+                target: codeArea.textDocument
+                language: root.draft.lang || "text"
+                palette: ({
+                    keyword: Theme.accent,
+                    string:  Theme.p2,
+                    comment: Theme.textDim,
+                    number:  Theme.mFocus,
+                    type:    Theme.mSync,
+                    builtin: Theme.mOneone
+                })
             }
         }
 

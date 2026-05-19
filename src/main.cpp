@@ -1,4 +1,4 @@
-#include <QGuiApplication>
+#include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -11,7 +11,7 @@ void quitOnSignal(int) { QCoreApplication::quit(); }
 }
 
 int main(int argc, char *argv[]) {
-    QGuiApplication app(argc, argv);
+    QApplication app(argc, argv);
     app.setOrganizationName("todocpp");
     app.setOrganizationDomain("todocpp.local");
     app.setApplicationName("todo-cpp");

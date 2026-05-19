@@ -8,8 +8,38 @@ Popup {
     modal: false
     focus: true
     padding: 0
-    width: 260
+    width: 280
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+
+    readonly property var accentSwatches: [
+        "#5cc2dd", "#6ec18a", "#c07acf", "#dcb86b",
+        "#e6624c", "#7da8d9", "#9aa3b4"
+    ]
+
+    // ── Settings JSON shadow ──────────────────────────────────────────
+    property var settings: ({})
+
+    function _reload() {
+        const raw = AppController.appSettingsJson || "";
+        if (!raw.length) { settings = ({}); return; }
+        try { settings = JSON.parse(raw); } catch (e) { settings = ({}); }
+    }
+    function _setAppearance(key, val) {
+        const next = Object.assign({}, settings);
+        next.appearance = Object.assign({}, next.appearance || {}, { [key]: val });
+        settings = next;
+        AppController.appSettingsJson = JSON.stringify(next);
+    }
+    function _appearanceValue(key, fallback) {
+        const a = (settings && settings.appearance) || ({});
+        return (a[key] !== undefined) ? a[key] : fallback;
+    }
+
+    Component.onCompleted: _reload()
+    Connections {
+        target: AppController
+        function onAppSettingsJsonChanged() { root._reload(); }
+    }
 
     background: Rectangle {
         radius: 12
@@ -21,11 +51,10 @@ Popup {
     contentItem: ColumnLayout {
         spacing: 0
 
-        // Header
+        // ── Header ────────────────────────────────────────────────────
         Item {
             Layout.fillWidth: true
             Layout.preferredHeight: 38
-            Layout.topMargin: 0
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 14; anchors.rightMargin: 8
@@ -59,24 +88,26 @@ Popup {
 
         Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
 
+        // ── Body ──────────────────────────────────────────────────────
         ColumnLayout {
             Layout.fillWidth: true
             Layout.leftMargin: 14; Layout.rightMargin: 14
             Layout.topMargin: 12; Layout.bottomMargin: 14
             spacing: 14
 
+            // Внешний вид: theme + density
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
-                Text { text: "Внешний вид"; color: Theme.textDim; font.pixelSize: 10; font.letterSpacing: 1; font.weight: Font.DemiBold }
-                Text { text: "Тема"; color: Theme.textMuted; font.pixelSize: 11 }
+                SectLabel { text: "Внешний вид" }
+                FieldLabel { text: "Тема" }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 4
                     SegButton { text: "Тёмная";  active: AppController.theme === "dark";  onClicked: AppController.theme = "dark" }
                     SegButton { text: "Светлая"; active: AppController.theme === "light"; onClicked: AppController.theme = "light" }
                 }
-                Text { text: "Плотность"; color: Theme.textMuted; font.pixelSize: 11; topPadding: 6 }
+                FieldLabel { text: "Плотность"; topPadding: 6 }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 4
@@ -85,16 +116,75 @@ Popup {
                 }
             }
 
-            // Hint that workday hours now live in Settings → Calendar.
+            // Акцент: chip row mirroring SettingsView accent picker
+            ColumnLayout {
+                spacing: 6
+                Layout.fillWidth: true
+                SectLabel { text: "Акцент" }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Repeater {
+                        model: root.accentSwatches
+                        delegate: Rectangle {
+                            required property string modelData
+                            width: 26; height: 26; radius: 13
+                            color: modelData
+                            border.width: 2
+                            border.color: String(root._appearanceValue("accent", Theme._defaultAccent)).toLowerCase() === modelData.toLowerCase()
+                                ? Theme.text
+                                : "transparent"
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root._setAppearance("accent", parent.modelData)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Доступность: reducedMotion + highContrast toggles
+            ColumnLayout {
+                spacing: 6
+                Layout.fillWidth: true
+                SectLabel { text: "Доступность" }
+                ToggleRow {
+                    label: "Reduced motion"
+                    checked: !!root._appearanceValue("reducedMotion", false)
+                    onToggled: root._setAppearance("reducedMotion", v)
+                }
+                ToggleRow {
+                    label: "High contrast"
+                    checked: !!root._appearanceValue("highContrast", false)
+                    onToggled: root._setAppearance("highContrast", v)
+                }
+            }
+
+            // Hint: deeper config still lives in Settings.
             Text {
                 Layout.fillWidth: true
-                text: "Рабочие часы и другие параметры — в Settings"
+                text: "Все остальные параметры — в Settings"
                 color: Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: 10
                 wrapMode: Text.WordWrap
             }
         }
+    }
+
+    // ── Inline components ─────────────────────────────────────────────
+
+    component SectLabel: Text {
+        color: Theme.textDim
+        font.pixelSize: 10
+        font.letterSpacing: 1
+        font.weight: Font.DemiBold
+    }
+
+    component FieldLabel: Text {
+        color: Theme.textMuted
+        font.pixelSize: 11
     }
 
     component SegButton: Rectangle {
@@ -120,6 +210,41 @@ Popup {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: parent.clicked()
+        }
+    }
+
+    component ToggleRow: RowLayout {
+        property string label: ""
+        property bool checked: false
+        signal toggled(bool v)
+        Layout.fillWidth: true
+        spacing: 10
+        Text {
+            Layout.fillWidth: true
+            text: parent.label
+            color: Theme.text
+            font.pixelSize: 12
+        }
+        Rectangle {
+            width: 32; height: 18; radius: 9
+            color: parent.checked ? Theme.accent : Theme.panel3
+            border.color: parent.checked ? "transparent" : Theme.border
+            border.width: 1
+            Behavior on color { ColorAnimation { duration: Theme.animMs } }
+            Rectangle {
+                width: 14; height: 14; radius: 7
+                y: 2
+                x: parent.parent.checked ? parent.width - width - 2 : 2
+                color: "#ffffff"
+                border.color: Qt.rgba(0, 0, 0, 0.18)
+                border.width: 1
+                Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }
+            }
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: parent.parent.toggled(!parent.parent.checked)
+            }
         }
     }
 }
