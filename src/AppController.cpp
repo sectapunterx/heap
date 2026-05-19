@@ -46,11 +46,12 @@ AppController::AppController(QObject *parent)
     connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
 
     if (QSystemTrayIcon::isSystemTrayAvailable()) {
-        QIcon icon = QGuiApplication::windowIcon();
+        QIcon icon(QStringLiteral(":/brand/icon/heap-icon.svg"));
+        if (icon.isNull()) icon = QGuiApplication::windowIcon();
         if (icon.isNull()) icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
         m_tray = new QSystemTrayIcon(icon, this);
         m_tray->setToolTip(QStringLiteral("todocpp"));
-        m_tray->show();
+        if (!icon.isNull()) m_tray->show();
     }
 
     // Route notification(...) → tray balloon + in-app toast, respecting quiet hours.

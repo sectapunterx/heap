@@ -7,6 +7,10 @@ set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
+# Qt6Svg is optional — it provides the `qsvg` image-format plugin so QML <Image>
+# can render the heap. SVG logo + app icon. If absent, BrandLogo falls back to
+# a text wordmark. Install with: pacman -S mingw-w64-ucrt-x86_64-qt6-svg
+find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Svg)
 
 qt_standard_project_setup(REQUIRES 6.4)
 
@@ -20,6 +24,7 @@ qt_add_executable(todocpp
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/Brand.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 qt_add_qml_module(todocpp
     URI TodoCpp
@@ -52,6 +57,8 @@ qt_add_qml_module(todocpp
         qml/NotesView.qml
         qml/SettingsView.qml
         qml/ThinScrollBar.qml
+        qml/Brand.qml
+        qml/BrandLogo.qml
     SOURCES
         src/AppController.h
         src/Models.h
@@ -68,6 +75,24 @@ target_link_libraries(todocpp PRIVATE
     Qt6::Quick
     Qt6::QuickControls2
     Qt6::Widgets
+)
+if (TARGET Qt6::Svg)
+    target_link_libraries(todocpp PRIVATE Qt6::Svg)
+    target_compile_definitions(todocpp PRIVATE TODOCPP_HAS_SVG=1)
+endif()
+
+# ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
+qt_add_resources(todocpp "brand"
+    PREFIX "/brand"
+    BASE "design/brand-export"
+    FILES
+        design/brand-export/logo/heap-mark.svg
+        design/brand-export/logo/heap-mark-light.svg
+        design/brand-export/logo/heap-mark-mono.svg
+        design/brand-export/logo/heap-lockup.svg
+        design/brand-export/logo/heap-lockup-light.svg
+        design/brand-export/logo/heap-wordmark.svg
+        design/brand-export/icon/heap-icon.svg
 )
 
 install(TARGETS todocpp

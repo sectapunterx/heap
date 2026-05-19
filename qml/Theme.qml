@@ -25,7 +25,7 @@ QtObject {
     readonly property color textMuted:    dark ? "#8a94a3" : "#5a6371"
     readonly property color textDim:      dark ? "#5f6878" : "#8893a3"
 
-    readonly property color _defaultAccent: dark ? "#5cc2dd" : "#1f7aa6"
+    readonly property color _defaultAccent: dark ? Brand.accent : Brand.lightAccent
     readonly property color accent:        _appearance.accent ? _appearance.accent : _defaultAccent
     readonly property color accentStrong:  dark ? Qt.lighter(accent, 1.18) : Qt.darker(accent, 1.18)
     readonly property color accentSoft:    Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.12)

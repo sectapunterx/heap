@@ -152,12 +152,12 @@ Popup {
                 ToggleRow {
                     label: "Reduced motion"
                     checked: !!root._appearanceValue("reducedMotion", false)
-                    onToggled: root._setAppearance("reducedMotion", v)
+                    onToggled: (v) => root._setAppearance("reducedMotion", v)
                 }
                 ToggleRow {
                     label: "High contrast"
                     checked: !!root._appearanceValue("highContrast", false)
-                    onToggled: root._setAppearance("highContrast", v)
+                    onToggled: (v) => root._setAppearance("highContrast", v)
                 }
             }
 

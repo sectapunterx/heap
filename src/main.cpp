@@ -1,4 +1,5 @@
 #include <QApplication>
+#include <QIcon>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQuickStyle>
@@ -16,6 +17,7 @@ int main(int argc, char *argv[]) {
     app.setOrganizationDomain("todocpp.local");
     app.setApplicationName("todo-cpp");
     app.setApplicationDisplayName(QStringLiteral("todo·cpp"));
+    app.setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
     QQuickStyle::setStyle("Basic");
 
