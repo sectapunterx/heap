@@ -11,10 +11,13 @@ NotesHighlighter::NotesHighlighter(QObject *parent)
 }
 
 void NotesHighlighter::setTarget(QQuickTextDocument *t) {
-    if (m_target == t) return;
+    QTextDocument *newDoc = t ? t->textDocument() : nullptr;
+    const bool targetChange = (m_target != t);
+    const bool docChange    = (document() != newDoc);
+    if (!targetChange && !docChange) return;
     m_target = t;
-    setDocument(t ? t->textDocument() : nullptr);
-    emit targetChanged();
+    if (docChange) setDocument(newDoc);
+    if (targetChange) emit targetChanged();
     if (document()) rehighlight();
 }
 
@@ -30,6 +33,12 @@ QTextCharFormat NotesHighlighter::fmt(const char *key, bool bold, bool italic) c
     QTextCharFormat f;
     const QVariant v = m_palette.value(QString::fromLatin1(key));
     QColor c = v.value<QColor>();
+    if (!c.isValid()) {
+        // Sometimes QML hands us a QJSValue / QString instead of a QColor —
+        // try parsing the string form before falling back to literals.
+        const QString s = v.toString();
+        if (!s.isEmpty()) c = QColor(s);
+    }
     if (!c.isValid()) {
         // Sensible dark-mode fallbacks.
         const QByteArray k(key);

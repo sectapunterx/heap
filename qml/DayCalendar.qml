@@ -11,7 +11,10 @@ Item {
 
     signal eventClicked(string id)
 
-    function snapHour(h)  { return Math.round(h * 4) / 4; }
+    function snapHour(h)  {
+        const step = Math.max(1, Theme.snapMinutes) / 60.0;
+        return Math.round(h / step) * step;
+    }
     function yToHour(y)   { return root.hoursStart + y / Theme.hourH; }
     function clampHour(h) { return Math.max(root.hoursStart, Math.min(root.hoursEnd, h)); }
 
@@ -133,7 +136,7 @@ Item {
                                 x: 0; y: 2
                                 width: grid.labelW - 8
                                 horizontalAlignment: Text.AlignRight
-                                text: (root.hoursStart + parent.index).toString().padStart(2,"0") + ":00"
+                                text: Theme.fmtHour(root.hoursStart + parent.index)
                                 color: Theme.textDim
                                 font.family: Theme.fontMono
                                 font.pixelSize: 10
@@ -207,11 +210,17 @@ Item {
                         }
 
                         // Layer 2: drag-to-create MouseArea covering empty area.
+                        // preventStealing keeps the surrounding ScrollView's
+                        // Flickable from hijacking the vertical drag — without
+                        // it the drag-to-create only ever fires onPressed and
+                        // onReleased (no positionChanged), so we'd fall back to
+                        // the single-click 1-hour event branch.
                         MouseArea {
                             id: createArea
                             anchors.fill: parent
                             z: 1
                             cursorShape: Qt.PointingHandCursor
+                            preventStealing: true
                             property real pressY: -1
                             property real currentY: -1
                             property bool dragging: false
@@ -263,7 +272,7 @@ Item {
                                 text: {
                                     const a = root.snapHour(root.yToHour(Math.min(createArea.pressY, createArea.currentY)));
                                     const b = root.snapHour(root.yToHour(Math.max(createArea.pressY, createArea.currentY)));
-                                    return AppController.eventHourLabel(a) + " – " + AppController.eventHourLabel(b);
+                                    return Theme.fmtHour(a) + " – " + Theme.fmtHour(b);
                                 }
                                 color: Theme.text
                                 font.family: Theme.fontMono
@@ -341,7 +350,7 @@ Item {
                                         elide: Text.ElideRight
                                     }
                                     Text {
-                                        text: AppController.eventHourLabel(evRect.effStart) + " – " + AppController.eventHourLabel(evRect.effEnd)
+                                        text: Theme.fmtHour(evRect.effStart) + " – " + Theme.fmtHour(evRect.effEnd)
                                         color: Theme.textMuted
                                         font.family: Theme.fontMono
                                         font.pixelSize: 10
@@ -372,6 +381,7 @@ Item {
                                     anchors.topMargin: 6
                                     anchors.bottomMargin: 6
                                     cursorShape: didDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                    preventStealing: true
                                     property real grabY: 0
                                     property real baseY: 0
                                     property bool didDrag: false
@@ -412,6 +422,7 @@ Item {
                                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                                     height: 6
                                     cursorShape: Qt.SizeVerCursor
+                                    preventStealing: true
                                     property bool resizing: false
                                     onPressed: { resizing = true; evRect.pendingStartH = evRect.start; }
                                     onPositionChanged: (mouse) => {
@@ -437,6 +448,7 @@ Item {
                                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                     height: 6
                                     cursorShape: Qt.SizeVerCursor
+                                    preventStealing: true
                                     property bool resizing: false
                                     onPressed: { resizing = true; evRect.pendingEndH = evRect.end; }
                                     onPositionChanged: (mouse) => {
