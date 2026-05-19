@@ -434,6 +434,7 @@ Item {
     }
 
     component TextRow: ColumnLayout {
+        id: textRow
         property string label: ""
         property string hint: ""
         property string placeholder: ""
@@ -442,17 +443,26 @@ Item {
         signal committed(string text)
         spacing: 4
         Layout.fillWidth: true
-        FieldLabel { label: parent.label; hint: parent.hint }
+        FieldLabel { label: textRow.label; hint: textRow.hint }
         TextField {
+            id: textRowField
             Layout.fillWidth: true
-            text: parent.value
-            placeholderText: parent.placeholder
+            placeholderText: textRow.placeholder
             placeholderTextColor: Theme.textDim
             color: Theme.text
-            font.family: parent.mono ? Theme.fontMono : Theme.fontUi
+            font.family: textRow.mono ? Theme.fontMono : Theme.fontUi
             background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             selectByMouse: true
-            onTextChanged: parent.committed(text)
+            // Re-sync from external value changes without breaking the user's
+            // mid-edit text (no two-way binding → no loop, no per-keystroke
+            // settings write).
+            text: textRow.value
+            onActiveFocusChanged: {
+                if (!activeFocus && text !== textRow.value) textRow.committed(text);
+            }
+            onAccepted: {
+                if (text !== textRow.value) textRow.committed(text);
+            }
         }
     }
 
@@ -666,7 +676,7 @@ Item {
                             TextRow {
                                 label: "Полное имя"
                                 value: (root.settings.profile && root.settings.profile.name) || ""
-                                onCommitted: root.set("profile", "name", text)
+                                onCommitted: (text) => root.set("profile", "name", text)
                             }
                             RowLayout {
                                 Layout.fillWidth: true
@@ -675,13 +685,13 @@ Item {
                                     Layout.fillWidth: true
                                     label: "Handle"; mono: true; placeholder: "alex.t"
                                     value: (root.settings.profile && root.settings.profile.handle) || ""
-                                    onCommitted: root.set("profile", "handle", text)
+                                    onCommitted: (text) => root.set("profile", "handle", text)
                                 }
                                 TextRow {
                                     Layout.fillWidth: true
                                     label: "Роль"
                                     value: (root.settings.profile && root.settings.profile.role) || ""
-                                    onCommitted: root.set("profile", "role", text)
+                                    onCommitted: (text) => root.set("profile", "role", text)
                                 }
                             }
                         }
@@ -699,20 +709,20 @@ Item {
                             Layout.fillWidth: true
                             label: "Команда"
                             value: (root.settings.profile && root.settings.profile.team) || ""
-                            onCommitted: root.set("profile", "team", text)
+                            onCommitted: (text) => root.set("profile", "team", text)
                         }
                         TextRow {
                             Layout.fillWidth: true
                             label: "Часовой пояс"; mono: true
                             value: (root.settings.profile && root.settings.profile.timezone) || ""
-                            onCommitted: root.set("profile", "timezone", text)
+                            onCommitted: (text) => root.set("profile", "timezone", text)
                         }
                     }
                     SwatchRow {
                         label: "Цвет аватара"
                         value: (root.settings.profile && root.settings.profile.color) || root.avatarSwatches[0]
                         options: root.avatarSwatches
-                        onSelected: root.set("profile", "color", color)
+                        onSelected: (color) => root.set("profile", "color", color)
                     }
                 }
             }
@@ -731,19 +741,19 @@ Item {
                         label: "Тема"
                         value: AppController.theme
                         options: [ ({ value: "dark", label: "Тёмная" }), ({ value: "light", label: "Светлая" }) ]
-                        onSelected: AppController.theme = value
+                        onSelected: (value) => AppController.theme = value
                     }
                     SegRow {
                         label: "Плотность интерфейса"
                         value: AppController.density
                         options: [ ({ value: "compact", label: "Compact" }), ({ value: "comfy", label: "Comfy" }) ]
-                        onSelected: AppController.density = value
+                        onSelected: (value) => AppController.density = value
                     }
                     SwatchRow {
                         label: "Акцентный цвет"
                         value: (root.settings.appearance && root.settings.appearance.accent) || Theme.accent
                         options: root.accentSwatches
-                        onSelected: root.set("appearance", "accent", color)
+                        onSelected: (color) => root.set("appearance", "accent", color)
                     }
                 }
             }
@@ -755,13 +765,13 @@ Item {
                         label: "Reduced motion"
                         hint: "Отключить анимации и плавные переходы."
                         checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
-                        onToggled: root.set("appearance", "reducedMotion", checked)
+                        onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
                     }
                     SwitchRow {
                         label: "High contrast"
                         hint: "Усилить контраст текста и границ."
                         checked: !!(root.settings.appearance && root.settings.appearance.highContrast)
-                        onToggled: root.set("appearance", "highContrast", checked)
+                        onToggled: (checked) => root.set("appearance", "highContrast", checked)
                     }
                 }
             }
@@ -781,26 +791,26 @@ Item {
                         label: "Напоминать о дедлайнах"
                         hint: "Уведомлять заранее, если приближается deadline."
                         checked: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
-                        onToggled: root.set("notifications", "deadlineReminders", checked)
+                        onToggled: (checked) => root.set("notifications", "deadlineReminders", checked)
                     }
                     SliderRow {
                         visible: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
                         label: "За сколько часов до дедлайна"
                         unit: "h"; min: 1; max: 72; step: 1
                         value: (root.settings.notifications && root.settings.notifications.deadlineLeadHours) || 24
-                        onMoved: root.set("notifications", "deadlineLeadHours", value)
+                        onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
                     }
                     SwitchRow {
                         label: "Standup reminder"
                         hint: "Pop-up за минуты до daily standup."
                         checked: !!(root.settings.notifications && root.settings.notifications.standupReminder)
-                        onToggled: root.set("notifications", "standupReminder", checked)
+                        onToggled: (checked) => root.set("notifications", "standupReminder", checked)
                     }
                     SliderRow {
                         label: "За сколько минут до встречи"
                         unit: " min"; min: 0; max: 30; step: 1
                         value: (root.settings.notifications && root.settings.notifications.meetingLead) || 5
-                        onMoved: root.set("notifications", "meetingLead", value)
+                        onMoved: (value) => root.set("notifications", "meetingLead", value)
                     }
                 }
             }
@@ -812,23 +822,23 @@ Item {
                     SwitchRow {
                         label: "Desktop notifications"
                         checked: !!(root.settings.notifications && root.settings.notifications.desktopNotif)
-                        onToggled: root.set("notifications", "desktopNotif", checked)
+                        onToggled: (checked) => root.set("notifications", "desktopNotif", checked)
                     }
                     SwitchRow {
                         label: "Mattermost pings при code review"
                         hint: "Авто-пинг ревьюера, если PR висит >24 часов."
                         checked: !!(root.settings.notifications && root.settings.notifications.mmPingsOnReview)
-                        onToggled: root.set("notifications", "mmPingsOnReview", checked)
+                        onToggled: (checked) => root.set("notifications", "mmPingsOnReview", checked)
                     }
                     SwitchRow {
                         label: "Daily digest по Blocked"
                         checked: !!(root.settings.notifications && root.settings.notifications.blockedDailyDigest)
-                        onToggled: root.set("notifications", "blockedDailyDigest", checked)
+                        onToggled: (checked) => root.set("notifications", "blockedDailyDigest", checked)
                     }
                     SwitchRow {
                         label: "Звук при ping"
                         checked: !!(root.settings.notifications && root.settings.notifications.soundOnPing)
-                        onToggled: root.set("notifications", "soundOnPing", checked)
+                        onToggled: (checked) => root.set("notifications", "soundOnPing", checked)
                     }
                 }
             }
@@ -841,7 +851,7 @@ Item {
                         label: "Не беспокоить вечером"
                         hint: "Ничего не присылать в указанное окно."
                         checked: !!(root.settings.notifications && root.settings.notifications.quietHours)
-                        onToggled: root.set("notifications", "quietHours", checked)
+                        onToggled: (checked) => root.set("notifications", "quietHours", checked)
                     }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
@@ -850,13 +860,13 @@ Item {
                             Layout.fillWidth: true
                             label: "С"; mono: true; placeholder: "19:00"
                             value: (root.settings.notifications && root.settings.notifications.quietFrom) || ""
-                            onCommitted: root.set("notifications", "quietFrom", text)
+                            onCommitted: (text) => root.set("notifications", "quietFrom", text)
                         }
                         TextRow {
                             Layout.fillWidth: true
                             label: "До"; mono: true; placeholder: "09:00"
                             value: (root.settings.notifications && root.settings.notifications.quietTo) || ""
-                            onCommitted: root.set("notifications", "quietTo", text)
+                            onCommitted: (text) => root.set("notifications", "quietTo", text)
                         }
                     }
                 }
@@ -879,14 +889,14 @@ Item {
                             label: "Начало недели"
                             value: (root.settings.calendar && root.settings.calendar.weekStart) || "mon"
                             options: [ ({ value: "mon", label: "Понедельник" }), ({ value: "sun", label: "Воскресенье" }) ]
-                            onSelected: root.set("calendar", "weekStart", value)
+                            onSelected: (value) => root.set("calendar", "weekStart", value)
                         }
                         SegRow {
                             Layout.fillWidth: true
                             label: "Формат времени"
                             value: (root.settings.calendar && root.settings.calendar.timeFormat) || "24h"
                             options: [ ({ value: "24h", label: "24h" }), ({ value: "12h", label: "12h" }) ]
-                            onSelected: root.set("calendar", "timeFormat", value)
+                            onSelected: (value) => root.set("calendar", "timeFormat", value)
                         }
                     }
                     Sub { label: "Рабочие часы" }
@@ -896,25 +906,25 @@ Item {
                             Layout.fillWidth: true
                             label: "Начало"; unit: ":00"; min: 6; max: 12; step: 1
                             value: AppController.workdayStart
-                            onMoved: AppController.workdayStart = value
+                            onMoved: (value) => AppController.workdayStart = value
                         }
                         SliderRow {
                             Layout.fillWidth: true
                             label: "Окончание"; unit: ":00"; min: 14; max: 23; step: 1
                             value: AppController.workdayEnd
-                            onMoved: AppController.workdayEnd = value
+                            onMoved: (value) => AppController.workdayEnd = value
                         }
                     }
                     SegRow {
                         label: "Сетка слотов"
                         value: String((root.settings.calendar && root.settings.calendar.snapMinutes) || 15)
                         options: [ ({ value: "5", label: "5 min" }), ({ value: "15", label: "15 min" }), ({ value: "30", label: "30 min" }) ]
-                        onSelected: root.set("calendar", "snapMinutes", parseInt(value))
+                        onSelected: (value) => root.set("calendar", "snapMinutes", parseInt(value))
                     }
                     SwitchRow {
                         label: "Показывать выходные"
                         checked: !!(root.settings.calendar && root.settings.calendar.showWeekends)
-                        onToggled: root.set("calendar", "showWeekends", checked)
+                        onToggled: (checked) => root.set("calendar", "showWeekends", checked)
                     }
                 }
             }
@@ -927,19 +937,19 @@ Item {
                         label: "Автоматически создавать focus-блок"
                         hint: "Когда задача переходит в In Progress — добавлять блок в календарь."
                         checked: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
-                        onToggled: root.set("calendar", "autoFocusBlock", checked)
+                        onToggled: (checked) => root.set("calendar", "autoFocusBlock", checked)
                     }
                     SliderRow {
                         visible: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
                         label: "Длительность focus-блока"
                         unit: " min"; min: 30; max: 240; step: 15
                         value: (root.settings.calendar && root.settings.calendar.focusBlockDuration) || 90
-                        onMoved: root.set("calendar", "focusBlockDuration", value)
+                        onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }
                     TextRow {
                         label: "Время daily standup"; mono: true; placeholder: "10:00"
                         value: (root.settings.calendar && root.settings.calendar.standupTime) || ""
-                        onCommitted: root.set("calendar", "standupTime", text)
+                        onCommitted: (text) => root.set("calendar", "standupTime", text)
                     }
                 }
             }
@@ -961,21 +971,21 @@ Item {
                             label: "Префикс ID"; mono: true; placeholder: "LTE"
                             hint: "Новые задачи: " + ((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE") + "-XXXX"
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
-                            onCommitted: root.set("tasks", "idPrefix", text.toUpperCase())
+                            onCommitted: (text) => root.set("tasks", "idPrefix", text.toUpperCase())
                         }
                         SegRow {
                             Layout.fillWidth: true
                             label: "Дефолтный приоритет"
                             value: (root.settings.tasks && root.settings.tasks.defaultPriority) || "P2"
                             options: ["P0", "P1", "P2", "P3"]
-                            onSelected: root.set("tasks", "defaultPriority", value)
+                            onSelected: (value) => root.set("tasks", "defaultPriority", value)
                         }
                     }
                     SegRow {
                         label: "Дефолтная колонка"
                         value: (root.settings.tasks && root.settings.tasks.defaultStatus) || "todo"
                         options: [ ({ value: "backlog", label: "Backlog" }), ({ value: "todo", label: "To Do" }), ({ value: "prog", label: "In Progress" }) ]
-                        onSelected: root.set("tasks", "defaultStatus", value)
+                        onSelected: (value) => root.set("tasks", "defaultStatus", value)
                     }
                 }
             }
@@ -989,25 +999,25 @@ Item {
                         unit: " дн"; min: 0; max: 30; step: 1
                         hint: "0 — никогда не архивировать."
                         value: (root.settings.tasks && root.settings.tasks.archiveDoneAfterDays) || 0
-                        onMoved: root.set("tasks", "archiveDoneAfterDays", value)
+                        onMoved: (value) => root.set("tasks", "archiveDoneAfterDays", value)
                     }
                     SliderRow {
                         label: "Подсвечивать Blocked после"
                         unit: " дн"; min: 1; max: 14; step: 1
                         hint: "Задача в Blocked дольше — отмечается красным."
                         value: (root.settings.tasks && root.settings.tasks.autoMoveBlockedAfterDays) || 3
-                        onMoved: root.set("tasks", "autoMoveBlockedAfterDays", value)
+                        onMoved: (value) => root.set("tasks", "autoMoveBlockedAfterDays", value)
                     }
                     SwitchRow {
                         label: "Требовать branch перед Code Review"
                         hint: "Запрещать перевод задачи в Review без branch name."
                         checked: !!(root.settings.tasks && root.settings.tasks.requireBranchOnReview)
-                        onToggled: root.set("tasks", "requireBranchOnReview", checked)
+                        onToggled: (checked) => root.set("tasks", "requireBranchOnReview", checked)
                     }
                     SwitchRow {
                         label: "Показывать subtasks"
                         checked: !!(root.settings.tasks && root.settings.tasks.showSubtasks)
-                        onToggled: root.set("tasks", "showSubtasks", checked)
+                        onToggled: (checked) => root.set("tasks", "showSubtasks", checked)
                     }
                 }
             }
@@ -1087,14 +1097,14 @@ Item {
                             label: "Компилятор"
                             value: (root.settings.cpp && root.settings.cpp.defaultCompiler) || "clang-17"
                             options: ["gcc-13", "clang-17", "clang-18"]
-                            onSelected: root.set("cpp", "defaultCompiler", value)
+                            onSelected: (value) => root.set("cpp", "defaultCompiler", value)
                         }
                         SegRow {
                             Layout.fillWidth: true
                             label: "Стандарт C++"
                             value: (root.settings.cpp && root.settings.cpp.defaultStandard) || "C++20"
                             options: ["C++17", "C++20", "C++23"]
-                            onSelected: root.set("cpp", "defaultStandard", value)
+                            onSelected: (value) => root.set("cpp", "defaultStandard", value)
                         }
                     }
                     RowLayout {
@@ -1104,14 +1114,14 @@ Item {
                             label: "Sanitizer"
                             value: (root.settings.cpp && root.settings.cpp.defaultSanitizer) || "asan"
                             options: [ ({ value: "none", label: "None" }), ({ value: "asan", label: "ASan" }), ({ value: "tsan", label: "TSan" }), ({ value: "ubsan", label: "UBSan" }) ]
-                            onSelected: root.set("cpp", "defaultSanitizer", value)
+                            onSelected: (value) => root.set("cpp", "defaultSanitizer", value)
                         }
                         SegRow {
                             Layout.fillWidth: true
                             label: "Build type"
                             value: (root.settings.cpp && root.settings.cpp.defaultBuildType) || "RelWithDebInfo"
                             options: ["Debug", "RelWithDebInfo", "Release"]
-                            onSelected: root.set("cpp", "defaultBuildType", value)
+                            onSelected: (value) => root.set("cpp", "defaultBuildType", value)
                         }
                     }
                 }
@@ -1123,18 +1133,18 @@ Item {
                     TextRow {
                         label: "Bazel args"; mono: true; placeholder: "--jobs=12 --keep_going"
                         value: (root.settings.cpp && root.settings.cpp.bazelArgs) || ""
-                        onCommitted: root.set("cpp", "bazelArgs", text)
+                        onCommitted: (text) => root.set("cpp", "bazelArgs", text)
                     }
                     TextRow {
                         label: "Compiler Explorer URL"; mono: true; placeholder: "https://godbolt.org/"
                         value: (root.settings.cpp && root.settings.cpp.compilerExplorerUrl) || ""
-                        onCommitted: root.set("cpp", "compilerExplorerUrl", text)
+                        onCommitted: (text) => root.set("cpp", "compilerExplorerUrl", text)
                     }
                     SwitchRow {
                         label: "Inline ASM preview"
                         hint: "Показывать компиляторный вывод прямо в task card."
                         checked: !!(root.settings.cpp && root.settings.cpp.showAsmInline)
-                        onToggled: root.set("cpp", "showAsmInline", checked)
+                        onToggled: (checked) => root.set("cpp", "showAsmInline", checked)
                     }
                 }
             }
@@ -1269,14 +1279,14 @@ Item {
                         label: "Auto backup"
                         hint: "Сохранять снапшоты state.json в <AppData>/backups (раз в 5 минут, до 20 копий)."
                         checked: !!(root.settings.data && root.settings.data.autoBackup)
-                        onToggled: root.set("data", "autoBackup", checked)
+                        onToggled: (checked) => root.set("data", "autoBackup", checked)
                     }
                     SegRow {
                         visible: !!(root.settings.data && root.settings.data.autoBackup)
                         label: "Интервал"
                         value: (root.settings.data && root.settings.data.backupInterval) || "daily"
                         options: [ ({ value: "hourly", label: "Каждый час" }), ({ value: "daily", label: "Каждый день" }), ({ value: "weekly", label: "Раз в неделю" }) ]
-                        onSelected: root.set("data", "backupInterval", value)
+                        onSelected: (value) => root.set("data", "backupInterval", value)
                     }
                 }
             }
@@ -1364,12 +1374,13 @@ Item {
     }
 
     component AboutRow: RowLayout {
+        id: aboutRow
         property string label: ""
         property string value: ""
         Layout.fillWidth: true
         spacing: 16
-        Text { text: parent.parent.label; color: Theme.textMuted; font.pixelSize: 11; Layout.preferredWidth: 80 }
-        Text { text: parent.parent.value; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 11; Layout.fillWidth: true }
+        Text { text: aboutRow.label; color: Theme.textMuted; font.pixelSize: 11; Layout.preferredWidth: 80 }
+        Text { text: aboutRow.value; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 11; Layout.fillWidth: true }
     }
 
     // ── Bridge to Main.qml for popups (HotkeysPanel, FileDialog) ──────
