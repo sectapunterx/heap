@@ -1156,8 +1156,38 @@ Item {
                 delegate: SectionCard {
                     required property var modelData
                     ColumnLayout {
+                        id: intCard
                         spacing: 10
                         Layout.fillWidth: true
+                        readonly property string intKey: modelData.key
+                        readonly property var conf: (root.settings.integrations && root.settings.integrations[intKey]) || ({})
+                        readonly property var fieldsByKey: ({
+                            "jira": [
+                                { key: "baseUrl",      label: "Base URL",        placeholder: "https://jira.company.com" },
+                                { key: "projectKey",   label: "Project key",     placeholder: "LTE",                        mono: true },
+                                { key: "token",        label: "API token",       placeholder: "***",                        mono: true }
+                            ],
+                            "github": [
+                                { key: "repo",            label: "Repo",            placeholder: "org/name",                mono: true },
+                                { key: "token",           label: "Access token",    placeholder: "***",                     mono: true },
+                                { key: "branchTemplate",  label: "Branch template", placeholder: "feature/{id}-{slug}",     mono: true }
+                            ],
+                            "mattermost": [
+                                { key: "serverUrl", label: "Server URL", placeholder: "https://chat.company.com" },
+                                { key: "channel",   label: "Channel",    placeholder: "#team-eNB",                       mono: true },
+                                { key: "webhook",   label: "Webhook",    placeholder: "https://.../hooks/...",           mono: true }
+                            ],
+                            "pagerduty": [
+                                { key: "serviceId", label: "Service ID", placeholder: "PXXXXXX",  mono: true },
+                                { key: "apiKey",    label: "API key",    placeholder: "***",      mono: true }
+                            ],
+                            "confluence": [
+                                { key: "baseUrl",  label: "Base URL",  placeholder: "https://wiki.company.com" },
+                                { key: "spaceKey", label: "Space key", placeholder: "ENB",                     mono: true },
+                                { key: "token",    label: "API token", placeholder: "***",                     mono: true }
+                            ]
+                        })
+
                         RowLayout {
                             Layout.fillWidth: true
                             spacing: 12
@@ -1172,27 +1202,51 @@ Item {
                                 Text { text: modelData.name; color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
                                 Text { text: modelData.desc; color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
-                            readonly property var conf: (root.settings.integrations && root.settings.integrations[modelData.key]) || ({})
                             Text {
-                                text: parent.conf.connected ? "● connected" : "○ disconnected"
-                                color: parent.conf.connected ? Theme.mFocus : Theme.textDim
+                                text: intCard.conf.connected ? "● connected" : "○ disconnected"
+                                color: intCard.conf.connected ? Theme.mFocus : Theme.textDim
                                 font.family: Theme.fontMono; font.pixelSize: 10
                             }
                             Rectangle {
                                 radius: 6
-                                color: parent.conf.connected
+                                color: intCard.conf.connected
                                        ? (toggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
                                        : (toggleMA.containsMouse ? Theme.accentStrong : Theme.accent)
-                                border.color: parent.conf.connected ? Theme.border : Theme.accent
+                                border.color: intCard.conf.connected ? Theme.border : Theme.accent
                                 border.width: 1
                                 implicitWidth: toggleTxt.implicitWidth + 18; implicitHeight: 26
-                                Text { id: toggleTxt; anchors.centerIn: parent; text: parent.parent.conf.connected ? "Disconnect" : "Connect"; color: parent.parent.conf.connected ? Theme.text : "#06121a"; font.pixelSize: 11; font.weight: Font.Medium }
+                                Text {
+                                    id: toggleTxt
+                                    anchors.centerIn: parent
+                                    text: intCard.conf.connected ? "Disconnect" : "Connect"
+                                    color: intCard.conf.connected ? Theme.text : "#06121a"
+                                    font.pixelSize: 11; font.weight: Font.Medium
+                                }
                                 MouseArea {
                                     id: toggleMA
                                     anchors.fill: parent
                                     hoverEnabled: true
                                     cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.setNested("integrations", modelData.key, "connected", !parent.parent.conf.connected)
+                                    onClicked: root.setNested("integrations", intCard.intKey, "connected", !intCard.conf.connected)
+                                }
+                            }
+                        }
+
+                        // Per-integration config fields, visible only when connected.
+                        ColumnLayout {
+                            visible: intCard.conf.connected === true
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 44
+                            spacing: 6
+                            Repeater {
+                                model: intCard.fieldsByKey[intCard.intKey] || []
+                                delegate: TextRow {
+                                    required property var modelData
+                                    label: modelData.label
+                                    placeholder: modelData.placeholder
+                                    mono: !!modelData.mono
+                                    value: (intCard.conf && intCard.conf[modelData.key]) || ""
+                                    onCommitted: (txt) => root.setNested("integrations", intCard.intKey, modelData.key, txt)
                                 }
                             }
                         }

@@ -2,13 +2,16 @@
 
 QHash<int, QByteArray> TaskModel::roleNames() const {
     return {
-        { IdRole,       "id" },
-        { TitleRole,    "title" },
-        { DescRole,     "desc" },
-        { PriorityRole, "priority" },
-        { StatusRole,   "status" },
-        { DeadlineRole, "deadline" },
-        { BranchRole,   "branch" },
+        { IdRole,              "id" },
+        { TitleRole,           "title" },
+        { DescRole,            "desc" },
+        { PriorityRole,        "priority" },
+        { StatusRole,          "status" },
+        { DeadlineRole,        "deadline" },
+        { BranchRole,          "branch" },
+        { StatusChangedAtRole, "statusChangedAt" },
+        { ArchivedRole,        "archived" },
+        { BlockedStuckRole,    "blockedStuck" },
     };
 }
 
@@ -16,13 +19,16 @@ QVariant TaskModel::data(const QModelIndex &idx, int role) const {
     if (!idx.isValid() || idx.row() < 0 || idx.row() >= m_items.size()) return {};
     const Task &t = m_items[idx.row()];
     switch (role) {
-        case IdRole:       return t.id;
-        case TitleRole:    return t.title;
-        case DescRole:     return t.desc;
-        case PriorityRole: return t.priority;
-        case StatusRole:   return t.status;
-        case DeadlineRole: return t.deadline;
-        case BranchRole:   return t.branch;
+        case IdRole:              return t.id;
+        case TitleRole:           return t.title;
+        case DescRole:            return t.desc;
+        case PriorityRole:        return t.priority;
+        case StatusRole:          return t.status;
+        case DeadlineRole:        return t.deadline;
+        case BranchRole:          return t.branch;
+        case StatusChangedAtRole: return t.statusChangedAt;
+        case ArchivedRole:        return t.archived;
+        case BlockedStuckRole:    return m_blockedStuck.contains(t.id);
     }
     return {};
 }
@@ -42,9 +48,44 @@ int TaskModel::indexOfId(const QString &id) const {
 void TaskModel::setStatus(const QString &id, const QString &status) {
     const int row = indexOfId(id);
     if (row < 0 || m_items[row].status == status) return;
-    m_items[row].status = status;
+    m_items[row].status         = status;
+    m_items[row].statusChangedAt = QDateTime::currentDateTime();
     const QModelIndex mi = index(row, 0);
-    emit dataChanged(mi, mi, { StatusRole });
+    emit dataChanged(mi, mi, { StatusRole, StatusChangedAtRole });
+}
+
+void TaskModel::stampStatusChange(const QString &id) {
+    const int row = indexOfId(id);
+    if (row < 0) return;
+    m_items[row].statusChangedAt = QDateTime::currentDateTime();
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi, { StatusChangedAtRole });
+}
+
+void TaskModel::setArchived(const QString &id, bool archived) {
+    const int row = indexOfId(id);
+    if (row < 0 || m_items[row].archived == archived) return;
+    m_items[row].archived = archived;
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi, { ArchivedRole });
+}
+
+void TaskModel::setBlockedStuckIds(const QSet<QString> &ids) {
+    if (ids == m_blockedStuck) return;
+    QSet<QString> changed = m_blockedStuck;
+    changed.unite(ids);
+    m_blockedStuck = ids;
+    if (m_items.isEmpty()) return;
+    int lo = m_items.size();
+    int hi = -1;
+    for (int i = 0; i < m_items.size(); ++i) {
+        if (changed.contains(m_items[i].id)) {
+            if (i < lo) lo = i;
+            if (i > hi) hi = i;
+        }
+    }
+    if (hi < 0) return;
+    emit dataChanged(index(lo, 0), index(hi, 0), { BlockedStuckRole });
 }
 
 void TaskModel::upsert(const Task &t) {

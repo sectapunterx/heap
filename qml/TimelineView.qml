@@ -91,6 +91,32 @@ Item {
     onPrioritiesFilterChanged: groups = buildGroups()
     onShowDoneChanged: groups = buildGroups()
 
+    // Expand a bucket's flat task list into a mixed array of
+    // {kind:"header", label, date} / {kind:"task", task} rows. Buckets that
+    // span multiple distinct dates (thisweek/nextweek/later) get one header
+    // per date so the timeline reads like a sub-grouped agenda.
+    function bucketRows(bucketId, list) {
+        const out = [];
+        const grouped = (bucketId === "thisweek" || bucketId === "nextweek" || bucketId === "later");
+        if (!grouped) {
+            for (let i = 0; i < list.length; i++) out.push({ kind: "task", task: list[i] });
+            return out;
+        }
+        let lastKey = "__none__";
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            const dl = t.deadline;
+            const key = (dl && dl.getFullYear) ? (dl.getFullYear() + "-" + (dl.getMonth()+1) + "-" + dl.getDate()) : "";
+            if (key !== lastKey) {
+                const label = (dl && dl.getFullYear) ? AppController.shortDate(dl) : "Без даты";
+                out.push({ kind: "header", label: label, date: dl });
+                lastKey = key;
+            }
+            out.push({ kind: "task", task: t });
+        }
+        return out;
+    }
+
     function totalShown() {
         let n = 0;
         for (const k of root.bucketOrder) n += (groups[k] || []).length;
@@ -230,13 +256,53 @@ Item {
                                 spacing: 6
 
                                 Repeater {
-                                    model: groupItem.list
-                                    delegate: Rectangle {
-                                        id: tlRow
+                                    model: root.bucketRows(groupItem.bucketId, groupItem.list)
+                                    delegate: Loader {
                                         required property var modelData
-                                        readonly property var t: modelData
-                                        readonly property var st: root.statusInfo(t.status)
+                                        property var rowData: modelData
                                         Layout.fillWidth: true
+                                        sourceComponent: (modelData && modelData.kind === "header") ? subHeaderComp : taskRowComp
+                                    }
+                                }
+
+                                Component {
+                                    id: subHeaderComp
+                                    RowLayout {
+                                        id: hdr
+                                        readonly property var rd: parent && parent.rowData ? parent.rowData : null
+                                        width: parent ? parent.width : 0
+                                        spacing: 8
+                                        Rectangle {
+                                            Layout.preferredWidth: 3
+                                            Layout.preferredHeight: 12
+                                            radius: 1
+                                            color: Theme.border
+                                        }
+                                        Text {
+                                            text: hdr.rd ? hdr.rd.label : ""
+                                            color: Theme.textMuted
+                                            font.family: Theme.fontMono
+                                            font.pixelSize: 11
+                                            font.weight: Font.DemiBold
+                                            font.capitalization: Font.MixedCase
+                                        }
+                                        Rectangle {
+                                            Layout.fillWidth: true
+                                            Layout.preferredHeight: 1
+                                            color: Theme.border
+                                            opacity: 0.4
+                                        }
+                                    }
+                                }
+
+                                Component {
+                                    id: taskRowComp
+                                    Rectangle {
+                                        id: tlRow
+                                        readonly property var rd: parent && parent.rowData ? parent.rowData : null
+                                        readonly property var t: rd ? rd.task : null
+                                        readonly property var st: t ? root.statusInfo(t.status) : null
+                                        width: parent ? parent.width : 0
                                         radius: 8
                                         color: rowMA.containsMouse ? Theme.panel2 : Theme.panel
                                         border.color: rowMA.containsMouse ? Theme.borderStrong : Theme.border
