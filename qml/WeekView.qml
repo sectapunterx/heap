@@ -17,7 +17,9 @@ Item {
     readonly property int hoursStart: AppController.workdayStart
     readonly property int hoursEnd:   AppController.workdayEnd
     readonly property int hourH: 38
-    readonly property var dowLabels: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
+    // date regardless of which day the week starts on.
+    readonly property var dowLabelsByJsDow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
 
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
@@ -25,13 +27,17 @@ Item {
     }
     function startOfWeek(d) {
         const dow = d.getDay();
-        const offset = (dow === 0 ? -6 : 1 - dow);
+        const sundayFirst = Theme.weekStart === "sun";
+        const offset = sundayFirst ? -dow : (dow === 0 ? -6 : 1 - dow);
         return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
     }
     function fmtShort(d) {
         return AppController.shortDate(d);
     }
-    function snapHour(h)  { return Math.round(h * 4) / 4; }
+    function snapHour(h)  {
+        const step = Math.max(1, Theme.snapMinutes) / 60.0;
+        return Math.round(h / step) * step;
+    }
     function yToHour(y)   { return root.hoursStart + y / root.hourH; }
     function clampHour(h) { return Math.max(root.hoursStart, Math.min(root.hoursEnd, h)); }
     function passesFilter(t) {
@@ -64,18 +70,18 @@ Item {
         function onModelReset()   { root.eventRev++ }
     }
 
+    // Declarative binding: re-evaluates on AppController.selectedDate and
+    // Theme.weekStart changes — no manual Connections needed.
     property var weekStart: startOfWeek(AppController.selectedDate)
-    Connections {
-        target: AppController
-        function onSelectedDateChanged() { root.weekStart = root.startOfWeek(AppController.selectedDate) }
-    }
 
     function buildDays() {
         const start = weekStart;
         const days = [];
         const _t = root.taskRev; const _e = root.eventRev;
+        const showWeekends = Theme.showWeekends;
         for (let i = 0; i < 7; i++) {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+            if (!showWeekends && (d.getDay() === 0 || d.getDay() === 6)) continue;
             days.push({ date: d, tasks: [], events: [] });
         }
         const tm = AppController.tasks;
@@ -94,7 +100,7 @@ Item {
             };
             if (!t.deadline || !t.deadline.getTime) continue;
             if (!root.passesFilter(t)) continue;
-            for (let k = 0; k < 7; k++) {
+            for (let k = 0; k < days.length; k++) {
                 if (root.isSameDay(days[k].date, t.deadline)) {
                     days[k].tasks.push(t);
                     break;
@@ -113,24 +119,21 @@ Item {
                 attendees: em.data(idx, Qt.UserRole + 6),
                 date:      em.data(idx, Qt.UserRole + 7),
             };
-            for (let k = 0; k < 7; k++) {
+            for (let k = 0; k < days.length; k++) {
                 if (root.isSameDay(days[k].date, e.date)) { days[k].events.push(e); break; }
             }
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
-        for (let k = 0; k < 7; k++) {
+        for (let k = 0; k < days.length; k++) {
             days[k].tasks.sort((a, b) => (priRank[a.priority] || 9) - (priRank[b.priority] || 9));
         }
         return days;
     }
 
-    property var days: buildDays()
-    onWeekStartChanged: days = buildDays()
-    onTaskRevChanged: days = buildDays()
-    onEventRevChanged: days = buildDays()
-    onSearchTextChanged: days = buildDays()
-    onPrioritiesFilterChanged: days = buildDays()
-    onShowArchivedChanged: days = buildDays()
+    // Declarative: buildDays() reads weekStart, taskRev, eventRev, showArchived,
+    // searchText, prioritiesFilter, and Theme.showWeekends — QML auto-tracks
+    // those reads and re-evaluates this binding when any of them changes.
+    readonly property var days: buildDays()
 
     // Flattened events with per-week day index so interactive drag/resize
     // can position them absolutely (and move across day columns).
@@ -148,8 +151,7 @@ Item {
         }
         return out;
     }
-    property var flatEvents: buildFlatEvents()
-    onDaysChanged: flatEvents = buildFlatEvents()
+    readonly property var flatEvents: buildFlatEvents()
 
     function totalTasks() {
         let n = 0;
@@ -230,7 +232,8 @@ Item {
             Layout.fillHeight: true
 
             readonly property int gutterW: 50
-            readonly property int dayW: Math.max(120, (width - gutterW) / 7)
+            readonly property int dayCount: Math.max(1, root.days.length)
+            readonly property int dayW: Math.max(120, (width - gutterW) / dayCount)
             readonly property int dueRowH: 116
 
             // Sticky header band for the day-header + due-chips area
@@ -285,7 +288,7 @@ Item {
                                 anchors.margins: 10
                                 spacing: 6
                                 Text {
-                                    text: root.dowLabels[headCol.index]
+                                    text: root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
                                     color: headCol.isToday ? Theme.accentStrong : Theme.textMuted
                                     font.pixelSize: 12
                                     font.weight: Font.DemiBold
@@ -413,7 +416,7 @@ Item {
                                 y: index * root.hourH - 6
                                 width: gridHost.gutterW - 8
                                 horizontalAlignment: Text.AlignRight
-                                text: (root.hoursStart + index).toString().padStart(2, "0") + ":00"
+                                text: Theme.fmtHour(root.hoursStart + index)
                                 color: Theme.textDim
                                 font.family: Theme.fontMono
                                 font.pixelSize: 10
@@ -476,7 +479,7 @@ Item {
 
                             readonly property int effDayIndex: {
                                 const raw = modelData.dayIndex + Math.round(dragDx / gridHost.dayW);
-                                return Math.max(0, Math.min(6, raw));
+                                return Math.max(0, Math.min(root.days.length - 1, raw));
                             }
                             readonly property real effStart: !isNaN(pendingStartH) ? pendingStartH : modelData.start
                             readonly property real effEnd:   !isNaN(pendingEndH)   ? pendingEndH   : modelData.end
@@ -503,7 +506,7 @@ Item {
                                 spacing: 0
                                 clip: true
                                 Text {
-                                    text: AppController.eventHourLabel(weEv.effStart)
+                                    text: Theme.fmtHour(weEv.effStart)
                                     color: Theme.textMuted
                                     font.family: Theme.fontMono
                                     font.pixelSize: 9
