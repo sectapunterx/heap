@@ -40,21 +40,11 @@ Rectangle {
         spacing: 14
 
         // Brand
-        RowLayout {
-            spacing: 8
-            Rectangle {
-                width: 10; height: 10; radius: 3
-                color: Theme.accent
-                layer.enabled: true
-            }
-            Text {
-                text: "todo<span style=\"color:" + Theme.textMuted + "\">·</span>cpp"
-                textFormat: Text.RichText
-                color: Theme.text
-                font.family: Theme.fontMono
-                font.weight: Font.DemiBold
-                font.pixelSize: 13
-            }
+        BrandLogo {
+            Layout.preferredHeight: 26
+            Layout.alignment: Qt.AlignVCenter
+            variant: "lockup"
+            theme: Theme.dark ? "dark" : "light"
         }
 
         // Breadcrumbs — editable in place
