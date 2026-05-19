@@ -333,13 +333,13 @@ Item {
                     contentWidth: width
                     contentHeight: bodyCol.implicitHeight + 48
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    ScrollBar.vertical: ThinScrollBar {}
 
                     NumberAnimation {
                         id: scrollAnim
                         target: bodyScroll
                         property: "contentY"
-                        duration: 220
+                        duration: Theme.scaledMs(220)
                         easing.type: Easing.OutCubic
                     }
                     WheelHandler {
@@ -479,7 +479,7 @@ Item {
                 color: "#fff"
                 anchors.verticalCenter: parent.verticalCenter
                 x: parent.parent.checked ? parent.width - width - 3 : 3
-                Behavior on x { NumberAnimation { duration: 120 } }
+                Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
             }
             MouseArea {
                 anchors.fill: parent

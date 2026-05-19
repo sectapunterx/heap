@@ -6,16 +6,26 @@ import TodoCpp
 
 Rectangle {
     id: card
-    property var task           // QVariantMap-like with id,title,desc,priority,status,deadline,branch
+    property var task           // QVariantMap-like with id,title,desc,priority,status,deadline,branch,archived,blockedStuck
     property string scheduled
     property string taskId: task ? task.id : ""
+    readonly property bool _isStuck: card.task && card.task.blockedStuck === true
+    readonly property bool _isArchived: card.task && card.task.archived === true
     signal clicked()
 
     radius: 8
-    color: Theme.panel2
-    border.color: hoverArea.containsMouse ? Theme.borderStrong : Theme.border
-    border.width: 1
-    opacity: dragArea.drag.active ? 0.5 : 1.0
+    color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55) : Theme.panel2
+    border.color: dragArea.drag.active ? Theme.accent
+                : _isStuck ? Theme.p0
+                : hoverArea.containsMouse ? Theme.borderStrong
+                : Theme.border
+    border.width: dragArea.drag.active ? 2 : (_isStuck ? 2 : 1)
+    opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
+    scale: dragArea.drag.active ? 1.03 : 1.0
+    transformOrigin: Item.Center
+    z: dragArea.drag.active ? 1000 : 0
+    Behavior on scale { NumberAnimation { duration: Theme.scaledMs(120); easing.type: Easing.OutCubic } }
+    Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
 
     implicitWidth: parent ? parent.width : 260
     implicitHeight: contentCol.implicitHeight + 20
@@ -60,6 +70,42 @@ Rectangle {
                 }
             }
             Item { Layout.fillWidth: true }
+            Rectangle {
+                visible: card._isStuck
+                radius: 4
+                color: Theme.withAlpha(Theme.p0, 0.14)
+                border.color: Theme.p0
+                border.width: 1
+                implicitWidth: stuckT.implicitWidth + 10
+                implicitHeight: stuckT.implicitHeight + 2
+                Text {
+                    id: stuckT
+                    anchors.centerIn: parent
+                    text: "stuck"
+                    color: Theme.p0
+                    font.family: Theme.fontUi
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.6
+                }
+            }
+            Rectangle {
+                visible: card._isArchived
+                radius: 4
+                color: Theme.withAlpha(Theme.textDim, 0.18)
+                implicitWidth: archT.implicitWidth + 10
+                implicitHeight: archT.implicitHeight + 2
+                Text {
+                    id: archT
+                    anchors.centerIn: parent
+                    text: "arch"
+                    color: Theme.textDim
+                    font.family: Theme.fontUi
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.6
+                }
+            }
             Text {
                 visible: card.task && card.task.branch && String(card.task.branch).length > 0
                 text: card.task && card.task.branch

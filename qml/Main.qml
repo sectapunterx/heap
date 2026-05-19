@@ -19,6 +19,7 @@ ApplicationWindow {
     property string searchText: ""
     property var prioritiesFilter: ({})
     property bool showDoneTimeline: false
+    property bool showArchived: false
 
     // Reactive task / status counts — QAbstractItemModel signals refresh
     // these on profile switch (modelReset) and on individual mutations.
@@ -160,12 +161,14 @@ ApplicationWindow {
                     activeCount: win._activeCount
                     blockedCount: win._blockedCount
                     reviewCount: win._reviewCount
+                    showArchived: win.showArchived
                     onTogglePriority: (p) => {
                         const next = Object.assign({}, win.prioritiesFilter);
                         next[p] = !next[p];
                         win.prioritiesFilter = next;
                     }
                     onClearPriorities: win.prioritiesFilter = ({})
+                    onToggleArchived: win.showArchived = !win.showArchived
                 }
                 Loader {
                     id: viewLoader
@@ -186,6 +189,7 @@ ApplicationWindow {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
+                        showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
                     }
@@ -197,6 +201,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
                         showDone: win.showDoneTimeline
+                        showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onToggleShowDone: win.showDoneTimeline = !win.showDoneTimeline
                     }
@@ -206,6 +211,7 @@ ApplicationWindow {
                     WeekView {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
+                        showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onEventClicked: (id) => eventEditor.showForId(id)
                     }
