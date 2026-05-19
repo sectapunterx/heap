@@ -8,6 +8,7 @@
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QApplication>
 #include <QGuiApplication>
 #include <QIcon>
 #include <QJsonArray>
@@ -54,11 +55,19 @@ AppController::AppController(QObject *parent)
         if (!icon.isNull()) m_tray->show();
     }
 
-    // Route notification(...) → tray balloon + in-app toast, respecting quiet hours.
+    // Route notification(...) → tray balloon + in-app toast, respecting quiet
+    // hours and the user's `notifications.desktopNotif` / `soundOnPing`
+    // opt-outs.
     connect(this, &AppController::notification, this,
             [this](const QString &title, const QString &body, const QString & /*kind*/) {
         if (inQuietHours(QDateTime::currentDateTime())) return;
-        if (m_tray) m_tray->showMessage(title, body, QSystemTrayIcon::Information, 5000);
+        const QVariantMap notif = settingsMap().value("notifications").toMap();
+        if (notif.value("desktopNotif", true).toBool() && m_tray) {
+            m_tray->showMessage(title, body, QSystemTrayIcon::Information, 5000);
+        }
+        if (notif.value("soundOnPing", false).toBool()) {
+            QApplication::beep();
+        }
         emit toast(body);
     });
 
@@ -224,16 +233,21 @@ void AppController::moveTask(const QString &id, const QString &newStatus) {
 }
 
 QVariantMap AppController::newTaskDraft(const QString &statusId) const {
+    const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
+    const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("LTE")).toString().trimmed();
+    const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
+    const QString statusDefault   = tasksCfg.value("defaultStatus",   QStringLiteral("todo")).toString();
+
     const int nextNum = 2700 + m_tasks.rowCount();
     QVariantMap m;
-    m["_isNew"] = true;
-    m["id"] = QString("LTE-%1").arg(nextNum);
-    m["title"] = QString();
-    m["desc"] = QString();
-    m["priority"] = "P2";
-    m["status"] = statusId.isEmpty() ? QString("todo") : statusId;
+    m["_isNew"]   = true;
+    m["id"]       = QString("%1-%2").arg(prefix.isEmpty() ? QStringLiteral("TASK") : prefix).arg(nextNum);
+    m["title"]    = QString();
+    m["desc"]     = QString();
+    m["priority"] = priorityDefault.isEmpty() ? QStringLiteral("P2") : priorityDefault;
+    m["status"]   = statusId.isEmpty() ? (statusDefault.isEmpty() ? QStringLiteral("todo") : statusDefault) : statusId;
     m["deadline"] = QDate();
-    m["branch"] = QString();
+    m["branch"]   = QString();
     return m;
 }
 
@@ -305,11 +319,15 @@ void AppController::saveEvent(const QVariantMap &draft) {
 void AppController::updateEvent(const QString &id, double start, double end, const QDate &date) {
     const int row = m_events.indexOfId(id);
     if (row < 0) return;
-    auto snap15 = [](double h) { return std::round(h * 4.0) / 4.0; };
+    const int snapMin = qMax(1, settingsMap().value("calendar").toMap()
+                                 .value("snapMinutes", 15).toInt());
+    const double step = snapMin / 60.0;
+    const double minDur = step;
+    auto snap = [step](double h) { return std::round(h / step) * step; };
     CalEvent e = m_events.items().at(row);
-    e.start = snap15(qBound(0.0, start, 24.0));
-    e.end   = snap15(qBound(e.start + 0.25, end, 24.0));
-    if (e.end < e.start + 0.25) e.end = e.start + 0.25;
+    e.start = snap(qBound(0.0, start, 24.0));
+    e.end   = snap(qBound(e.start + minDur, end, 24.0));
+    if (e.end < e.start + minDur) e.end = e.start + minDur;
     if (date.isValid()) e.date = date;
     m_events.upsert(e);
     scheduleSave();
@@ -550,9 +568,15 @@ QVariantMap AppController::taskById(const QString &id) const {
 QString AppController::eventHourLabel(double hour) const {
     const int hh = int(hour);
     const int mm = int((hour - hh) * 60 + 0.5);
-    return QString("%1:%2")
-        .arg(hh, 2, 10, QLatin1Char('0'))
-        .arg(mm, 2, 10, QLatin1Char('0'));
+    const QString fmt = settingsMap().value("calendar").toMap()
+        .value("timeFormat", QStringLiteral("24h")).toString();
+    const QString mmS = QString("%1").arg(mm, 2, 10, QLatin1Char('0'));
+    if (fmt == QLatin1String("12h")) {
+        const int h12 = ((hh + 11) % 12) + 1;
+        const QString ampm = hh < 12 ? QStringLiteral("am") : QStringLiteral("pm");
+        return QString("%1:%2%3").arg(h12).arg(mmS).arg(ampm);
+    }
+    return QString("%1:%2").arg(hh, 2, 10, QLatin1Char('0')).arg(mmS);
 }
 
 QString AppController::sprintLabel() const {
@@ -943,11 +967,18 @@ Profile AppController::makeStartingProfile(const QString &name, const QString &c
 // ───────────────── Save / load (schema v2) ─────────────────
 
 void AppController::rotateBackupIfDue() {
+    const QVariantMap d = settingsMap().value("data").toMap();
+    if (!d.value("autoBackup", true).toBool()) return;
     const QString path = stateFilePath();
     if (!QFile::exists(path)) return;
     const QDateTime now = QDateTime::currentDateTime();
+    qint64 intervalSecs = kBackupIntervalSeconds;
+    const QString interval = d.value("backupInterval", QStringLiteral("daily")).toString();
+    if (interval == QLatin1String("hourly"))       intervalSecs = 3600;
+    else if (interval == QLatin1String("daily"))   intervalSecs = 24 * 3600;
+    else if (interval == QLatin1String("weekly"))  intervalSecs = 7 * 24 * 3600;
     if (m_lastBackupAt.isValid()
-        && m_lastBackupAt.secsTo(now) < kBackupIntervalSeconds) return;
+        && m_lastBackupAt.secsTo(now) < intervalSecs) return;
     const QString dir = backupDirPath();
     const QString stamp = now.toString("yyyyMMdd-HHmmss");
     QFile::copy(path, dir + "/state-" + stamp + ".json");
@@ -1753,6 +1784,21 @@ void AppController::runAutomation() {
         m_blockedStuckIds = stuck;
         m_tasks.setBlockedStuckIds(m_blockedStuckIds);
         emit blockedStuckChanged();
+    }
+
+    // 1b. Daily digest of blocked-stuck tasks — one notification per day.
+    if (notif.value("blockedDailyDigest", false).toBool() && !m_blockedStuckIds.isEmpty()) {
+        const QString sentinel = QStringLiteral("digest:") + today.toString(Qt::ISODate);
+        if (m_lastReminderDay.value(sentinel) != today) {
+            m_lastReminderDay[sentinel] = today;
+            QStringList ids;
+            ids.reserve(m_blockedStuckIds.size());
+            for (const QString &id : m_blockedStuckIds) ids << id;
+            std::sort(ids.begin(), ids.end());
+            const QString body = QStringLiteral("Stuck: %1").arg(ids.join(QStringLiteral(", ")));
+            notify(QStringLiteral("Blocked daily digest (%1)").arg(ids.size()),
+                   body, QStringLiteral("digest"));
+        }
     }
 
     // 2. Auto-archive done tasks past retention.
