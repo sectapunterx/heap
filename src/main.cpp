@@ -13,10 +13,11 @@ void quitOnSignal(int) { QCoreApplication::quit(); }
 
 int main(int argc, char *argv[]) {
     QApplication app(argc, argv);
-    app.setOrganizationName("todocpp");
-    app.setOrganizationDomain("todocpp.local");
-    app.setApplicationName("todo-cpp");
-    app.setApplicationDisplayName(QStringLiteral("todo·cpp"));
+    app.setOrganizationName("heap");
+    app.setOrganizationDomain("heap.local");
+    app.setApplicationName("heap");
+    app.setApplicationDisplayName(QStringLiteral("heap."));
+    app.setApplicationVersion(QStringLiteral("0.4.2"));
     app.setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
     QQuickStyle::setStyle("Basic");
