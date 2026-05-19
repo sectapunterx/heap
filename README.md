@@ -57,68 +57,6 @@ still ships with the repo for visual reference. The brand bundle lives under
   blocked-stuck warnings, fires deadline + standup reminders via system tray
   (respects quiet hours).
 
-## Brand
-
-The **heap.** brand ships under `design/brand-export/` and is wired into the
-runtime via the `Brand` QML singleton.
-
-<table>
-<tr>
-<td align="center" width="33%">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-mark.svg">
-    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-mark-light.svg">
-    <img alt="heap-mark" src="design/brand-export/logo/heap-mark.svg" width="120">
-  </picture>
-  <br><sub><code>BrandLogo { variant: "mark" }</code></sub>
-</td>
-<td align="center" width="33%">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-wordmark.svg">
-    <img alt="heap-wordmark" src="design/brand-export/logo/heap-wordmark.svg" width="180">
-  </picture>
-  <br><sub><code>BrandLogo { variant: "wordmark" }</code></sub>
-</td>
-<td align="center" width="33%">
-  <picture>
-    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-lockup.svg">
-    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-lockup-light.svg">
-    <img alt="heap-lockup" src="design/brand-export/logo/heap-lockup.svg" width="220">
-  </picture>
-  <br><sub><code>BrandLogo { variant: "lockup" }</code></sub>
-</td>
-</tr>
-</table>
-
-`BrandLogo.qml` renders the mark with native QML primitives (`Rectangle` +
-`Canvas`), so the brand displays correctly without `Qt6::Svg`. The exported
-SVG files are bundled into `qrc:/brand/...` for the app icon and for any
-consumer that prefers vector assets.
-
-### Palette
-
-| token       | dark      | light     | role                           |
-| ----------- | --------- | --------- | ------------------------------ |
-| `bg`        | `#0b0e13` | `#f3f5f8` | app background                 |
-| `bg2`       | `#11151c` | derived   | secondary surface              |
-| `panel`     | `#14181f` | `#ffffff` | cards / panels                 |
-| `panel2`    | `#1a1f29` | derived   | nested cards                   |
-| `border`    | `#262d39` | `#dde3ec` | dividers, hairlines            |
-| `text`      | `#e5ecf3` | `#11151c` | primary text                   |
-| `text3`     | `#8a94a3` | `#5f6878` | muted / labels                 |
-| `accent`    | `#3bccdd` | `#178ea0` | brand cyan (the `heap.` dot)   |
-| `accent2`   | `#5fdaea` | derived   | hover / highlight              |
-
-| status       | hex       |
-| ------------ | --------- |
-| todo         | `#86a0bd` |
-| in-progress  | `#32b2e7` |
-| review       | `#bf94ec` |
-| done         | `#78be7a` |
-| warn         | `#fe9c3a` |
-
-Full token reference: [`design/brand-export/README.md`](design/brand-export/README.md).
-
 ## Build
 
 Requires **Qt 6.4+** and a **C++17** toolchain.
@@ -264,6 +202,68 @@ floating Hotkeys panel.
 - **High contrast** — Tweaks → High contrast strengthens border and text
   tokens.
 - **Tab focus** — focusable inputs paint an accent border when focused.
+
+## Brand
+
+The **heap.** brand ships under `design/brand-export/` and is wired into the
+runtime via the `Brand` QML singleton.
+
+<table>
+<tr>
+<td align="center" width="33%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-mark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-mark-light.svg">
+    <img alt="heap-mark" src="design/brand-export/logo/heap-mark.svg" width="120">
+  </picture>
+  <br><sub><code>BrandLogo { variant: "mark" }</code></sub>
+</td>
+<td align="center" width="33%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-wordmark.svg">
+    <img alt="heap-wordmark" src="design/brand-export/logo/heap-wordmark.svg" width="180">
+  </picture>
+  <br><sub><code>BrandLogo { variant: "wordmark" }</code></sub>
+</td>
+<td align="center" width="33%">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-lockup.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-lockup-light.svg">
+    <img alt="heap-lockup" src="design/brand-export/logo/heap-lockup.svg" width="220">
+  </picture>
+  <br><sub><code>BrandLogo { variant: "lockup" }</code></sub>
+</td>
+</tr>
+</table>
+
+`BrandLogo.qml` renders the mark with native QML primitives (`Rectangle` +
+`Canvas`), so the brand displays correctly without `Qt6::Svg`. The exported
+SVG files are bundled into `qrc:/brand/...` for the app icon and for any
+consumer that prefers vector assets.
+
+### Palette
+
+| token       | dark      | light     | role                           |
+| ----------- | --------- | --------- | ------------------------------ |
+| `bg`        | `#0b0e13` | `#f3f5f8` | app background                 |
+| `bg2`       | `#11151c` | derived   | secondary surface              |
+| `panel`     | `#14181f` | `#ffffff` | cards / panels                 |
+| `panel2`    | `#1a1f29` | derived   | nested cards                   |
+| `border`    | `#262d39` | `#dde3ec` | dividers, hairlines            |
+| `text`      | `#e5ecf3` | `#11151c` | primary text                   |
+| `text3`     | `#8a94a3` | `#5f6878` | muted / labels                 |
+| `accent`    | `#3bccdd` | `#178ea0` | brand cyan (the `heap.` dot)   |
+| `accent2`   | `#5fdaea` | derived   | hover / highlight              |
+
+| status       | hex       |
+| ------------ | --------- |
+| todo         | `#86a0bd` |
+| in-progress  | `#32b2e7` |
+| review       | `#bf94ec` |
+| done         | `#78be7a` |
+| warn         | `#fe9c3a` |
+
+Full token reference: [`design/brand-export/README.md`](design/brand-export/README.md).
 
 ## License
 
