@@ -8,6 +8,7 @@ Item {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+    property bool showArchived: false
 
     signal taskClicked(string id)
     signal eventClicked(string id)
@@ -30,6 +31,9 @@ Item {
     function fmtShort(d) {
         return AppController.shortDate(d);
     }
+    function snapHour(h)  { return Math.round(h * 4) / 4; }
+    function yToHour(y)   { return root.hoursStart + y / root.hourH; }
+    function clampHour(h) { return Math.max(root.hoursStart, Math.min(root.hoursEnd, h)); }
     function passesFilter(t) {
         if (t.status === "done") return false;
         const q = (root.searchText || "").toLowerCase();
@@ -77,6 +81,8 @@ Item {
         const tm = AppController.tasks;
         for (let i = 0; i < tm.rowCount(); i++) {
             const idx = tm.index(i, 0);
+            const archived = tm.data(idx, Qt.UserRole + 9);
+            if (archived && !root.showArchived) continue;
             const t = {
                 id:       tm.data(idx, Qt.UserRole + 1),
                 title:    tm.data(idx, Qt.UserRole + 2),
@@ -124,6 +130,26 @@ Item {
     onEventRevChanged: days = buildDays()
     onSearchTextChanged: days = buildDays()
     onPrioritiesFilterChanged: days = buildDays()
+    onShowArchivedChanged: days = buildDays()
+
+    // Flattened events with per-week day index so interactive drag/resize
+    // can position them absolutely (and move across day columns).
+    function buildFlatEvents() {
+        const out = [];
+        for (let i = 0; i < days.length; i++) {
+            for (let j = 0; j < days[i].events.length; j++) {
+                const e = days[i].events[j];
+                out.push({
+                    id: e.id, title: e.title, type: e.type,
+                    start: e.start, end: e.end, attendees: e.attendees,
+                    date: e.date, dayIndex: i
+                });
+            }
+        }
+        return out;
+    }
+    property var flatEvents: buildFlatEvents()
+    onDaysChanged: flatEvents = buildFlatEvents()
 
     function totalTasks() {
         let n = 0;
@@ -370,6 +396,7 @@ Item {
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 Item {
+                    id: gridContent
                     width: gridHost.width
                     height: (root.hoursEnd - root.hoursStart) * root.hourH + 4
 
@@ -430,52 +457,163 @@ Item {
                                 }
                             }
 
-                            // Events
-                            Repeater {
-                                model: dayCol.modelData.events
-                                delegate: Rectangle {
-                                    required property var modelData
-                                    readonly property var ev: modelData
-                                    x: 2
-                                    y: (ev.start - root.hoursStart) * root.hourH
-                                    width: parent.width - 4
-                                    height: Math.max(18, (ev.end - ev.start) * root.hourH - 2)
-                                    radius: 4
-                                    color: Theme.withAlpha(Theme.eventColor(ev.type), 0.18)
-                                    border.color: Theme.withAlpha(Theme.eventColor(ev.type), 0.55)
-                                    border.width: 1
-                                    Rectangle {
-                                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                                        width: 3
-                                        color: Theme.eventColor(ev.type)
-                                        radius: 1
-                                    }
-                                    Column {
-                                        anchors.fill: parent
-                                        anchors.leftMargin: 8; anchors.rightMargin: 6; anchors.topMargin: 3
-                                        spacing: 0
-                                        clip: true
-                                        Text {
-                                            text: AppController.eventHourLabel(ev.start)
-                                            color: Theme.textMuted
-                                            font.family: Theme.fontMono
-                                            font.pixelSize: 9
-                                        }
-                                        Text {
-                                            width: parent.width
-                                            text: ev.title
-                                            color: Theme.text
-                                            font.pixelSize: 10
-                                            font.weight: Font.DemiBold
-                                            elide: Text.ElideRight
-                                        }
-                                    }
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.eventClicked(ev.id)
+                        }
+                    }
+
+                    // Flat interactive events layer — declared after the day
+                    // columns so it sits on top, and uses absolute coords
+                    // (dayIndex × dayW) to allow drag between columns.
+                    Repeater {
+                        model: root.flatEvents
+                        delegate: Rectangle {
+                            id: weEv
+                            required property var modelData
+
+                            property real dragDx: 0
+                            property real dragDy: 0
+                            property real pendingStartH: NaN
+                            property real pendingEndH:   NaN
+
+                            readonly property int effDayIndex: {
+                                const raw = modelData.dayIndex + Math.round(dragDx / gridHost.dayW);
+                                return Math.max(0, Math.min(6, raw));
+                            }
+                            readonly property real effStart: !isNaN(pendingStartH) ? pendingStartH : modelData.start
+                            readonly property real effEnd:   !isNaN(pendingEndH)   ? pendingEndH   : modelData.end
+
+                            x: gridHost.gutterW + effDayIndex * gridHost.dayW + 2
+                            y: (effStart - root.hoursStart) * root.hourH + dragDy
+                            width: gridHost.dayW - 4
+                            height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
+                            radius: 4
+                            color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
+                            border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
+                            border.width: 1
+                            z: 5
+
+                            Rectangle {
+                                anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                                width: 3
+                                color: Theme.eventColor(weEv.modelData.type)
+                                radius: 1
+                            }
+                            Column {
+                                anchors.fill: parent
+                                anchors.leftMargin: 8; anchors.rightMargin: 6; anchors.topMargin: 3
+                                spacing: 0
+                                clip: true
+                                Text {
+                                    text: AppController.eventHourLabel(weEv.effStart)
+                                    color: Theme.textMuted
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 9
+                                }
+                                Text {
+                                    width: parent.width
+                                    text: weEv.modelData.title
+                                    color: Theme.text
+                                    font.pixelSize: 10
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                }
+                            }
+
+                            // Move-drag — vertical = time, horizontal = day.
+                            MouseArea {
+                                id: weMove
+                                anchors.fill: parent
+                                anchors.topMargin: 6
+                                anchors.bottomMargin: 6
+                                cursorShape: didDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                property real grabX: 0
+                                property real grabY: 0
+                                property real baseX: 0
+                                property real baseY: 0
+                                property bool didDrag: false
+
+                                onPressed: (mouse) => {
+                                    grabX = mouse.x; grabY = mouse.y;
+                                    baseX = weEv.x; baseY = weEv.y;
+                                    didDrag = false;
+                                    weEv.dragDx = 0; weEv.dragDy = 0;
+                                }
+                                onPositionChanged: (mouse) => {
+                                    const pt = weMove.mapToItem(gridContent, mouse.x, mouse.y);
+                                    const wantX = pt.x - grabX;
+                                    const wantY = pt.y - grabY;
+                                    const dx = wantX - baseX;
+                                    const dy = wantY - baseY;
+                                    if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) didDrag = true;
+                                    if (didDrag) {
+                                        weEv.dragDx = dx;
+                                        weEv.dragDy = dy;
                                     }
                                 }
+                                onReleased: {
+                                    if (didDrag) {
+                                        const dur = weEv.modelData.end - weEv.modelData.start;
+                                        const newY = baseY + weEv.dragDy;
+                                        let ns = root.snapHour(root.yToHour(newY));
+                                        ns = Math.max(root.hoursStart, Math.min(ns, root.hoursEnd - dur));
+                                        const newDate = root.days[weEv.effDayIndex].date;
+                                        AppController.updateEvent(weEv.modelData.id, ns, ns + dur, newDate);
+                                    } else {
+                                        root.eventClicked(weEv.modelData.id);
+                                    }
+                                    weEv.dragDx = 0; weEv.dragDy = 0;
+                                    didDrag = false;
+                                }
+                                onCanceled: { weEv.dragDx = 0; weEv.dragDy = 0; didDrag = false; }
+                            }
+
+                            // Top resize handle.
+                            MouseArea {
+                                id: weTop
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+                                height: 6
+                                cursorShape: Qt.SizeVerCursor
+                                property bool resizing: false
+                                onPressed: { resizing = true; weEv.pendingStartH = weEv.modelData.start; }
+                                onPositionChanged: (mouse) => {
+                                    if (!resizing) return;
+                                    const pt = weTop.mapToItem(gridContent, mouse.x, mouse.y);
+                                    const h = root.snapHour(root.yToHour(pt.y));
+                                    const clamped = Math.min(h, weEv.modelData.end - 0.25);
+                                    weEv.pendingStartH = Math.max(root.hoursStart, clamped);
+                                }
+                                onReleased: {
+                                    if (!resizing) return;
+                                    resizing = false;
+                                    const ns = weEv.pendingStartH;
+                                    AppController.updateEvent(weEv.modelData.id, ns, weEv.modelData.end, weEv.modelData.date);
+                                    weEv.pendingStartH = NaN;
+                                }
+                                onCanceled: { resizing = false; weEv.pendingStartH = NaN; }
+                            }
+
+                            // Bottom resize handle.
+                            MouseArea {
+                                id: weBot
+                                anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                                height: 6
+                                cursorShape: Qt.SizeVerCursor
+                                property bool resizing: false
+                                onPressed: { resizing = true; weEv.pendingEndH = weEv.modelData.end; }
+                                onPositionChanged: (mouse) => {
+                                    if (!resizing) return;
+                                    const pt = weBot.mapToItem(gridContent, mouse.x, mouse.y);
+                                    const h = root.snapHour(root.yToHour(pt.y));
+                                    const clamped = Math.max(h, weEv.modelData.start + 0.25);
+                                    weEv.pendingEndH = Math.min(root.hoursEnd, clamped);
+                                }
+                                onReleased: {
+                                    if (!resizing) return;
+                                    resizing = false;
+                                    const ne = weEv.pendingEndH;
+                                    AppController.updateEvent(weEv.modelData.id, weEv.modelData.start, ne, weEv.modelData.date);
+                                    weEv.pendingEndH = NaN;
+                                }
+                                onCanceled: { resizing = false; weEv.pendingEndH = NaN; }
                             }
                         }
                     }

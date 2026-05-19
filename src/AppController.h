@@ -2,12 +2,17 @@
 
 #include <QObject>
 #include <QDate>
+#include <QMap>
+#include <QStringList>
 #include <QTimer>
 #include <QUrl>
 #include <QVariantList>
+#include <QVariantMap>
 #include <qqmlregistration.h>
 
 #include "Models.h"
+
+class QSystemTrayIcon;
 
 class AppController : public QObject {
     Q_OBJECT
@@ -33,6 +38,7 @@ class AppController : public QObject {
 
     Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
     Q_PROPERTY(QString notesState READ notesState WRITE setNotesState NOTIFY notesStateChanged)
+    Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
     Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
     Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
@@ -40,6 +46,7 @@ class AppController : public QObject {
                WRITE setActiveProfileId NOTIFY activeProfileChanged)
 
     Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
+    Q_PROPERTY(QStringList blockedStuckIds READ blockedStuckIds NOTIFY blockedStuckChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -81,6 +88,9 @@ public:
     QString notesState() const { return m_notesState; }
     void    setNotesState(const QString &v);
 
+    QString appSettingsJson() const { return m_appSettingsJson; }
+    void    setAppSettingsJson(const QString &v);
+
     bool hasPendingUndo() const { return m_pendingUndo.kind != PendingUndo::None; }
 
     // ---- Task ops ----
@@ -88,12 +98,21 @@ public:
     Q_INVOKABLE QVariantMap newTaskDraft(const QString &statusId) const;
     Q_INVOKABLE void saveTask(const QVariantMap &draft);
     Q_INVOKABLE void deleteTask(const QString &id);
+    Q_INVOKABLE bool canTransitionStatus(const QString &taskId, const QString &newStatus);
+    Q_INVOKABLE void setArchived(const QString &taskId, bool archived);
+
+    QStringList blockedStuckIds() const { return m_blockedStuckIds.values(); }
+
+    // ---- Notifications & automation ----
+    Q_INVOKABLE void notify(const QString &title, const QString &body, const QString &kind = QString());
 
     // ---- Event ops ----
     Q_INVOKABLE QVariantMap newEventDraft(double startHour, const QDate &date) const;
     Q_INVOKABLE void saveEvent(const QVariantMap &draft);
+    Q_INVOKABLE void updateEvent(const QString &id, double start, double end, const QDate &date);
     Q_INVOKABLE void deleteEvent(const QString &id);
     Q_INVOKABLE void scheduleTask(const QString &taskId, double startHour, const QDate &date);
+    Q_INVOKABLE QString scheduledLabelFor(const QString &taskId, const QDate &date) const;
 
     // ---- People ops ----
     Q_INVOKABLE void cyclePerson(const QString &id);
@@ -175,13 +194,19 @@ signals:
     void crumbUserChanged();
     void docsStateChanged();
     void notesStateChanged();
+    void appSettingsJsonChanged();
     void statusesChanged();
     void pendingUndoChanged();
     void profilesChanged();
     void activeProfileChanged();
     void shortcutsChanged();
+    void blockedStuckChanged();
+    void notification(const QString &title, const QString &body, const QString &kind);
     void toast(const QString &message);
     void undoableToast(const QString &message, int seconds);
+
+private slots:
+    void runAutomation();
 
 private:
     TaskModel    m_tasks;
@@ -199,6 +224,7 @@ private:
     QString      m_crumbUser    = "You";
     QString      m_docsState;
     QString      m_notesState;
+    QString      m_appSettingsJson;
 
     // Profiles
     QVector<Profile> m_profiles;
@@ -215,6 +241,16 @@ private:
     void seedShortcutCatalog();
     void applyShortcutOverrides(const QVariantMap &overrides);
     QString normalizeSequence(const QString &raw) const;
+
+    // Automation
+    QTimer*          m_automationTimer = nullptr;
+    QSystemTrayIcon* m_tray = nullptr;
+    QSet<QString>    m_blockedStuckIds;
+    QMap<QString, QDate> m_lastReminderDay;   // task/sentinel id -> last day notified
+    QVariantMap settingsMap() const;
+    bool inQuietHours(const QDateTime &when) const;
+    static double nextQuarterHour(const QDateTime &when);
+    void scheduleFocusBlockFor(const QString &taskId);
 
     // Persistence
     QTimer*      m_saveTimer = nullptr;

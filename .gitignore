@@ -10,3 +10,4 @@ dist/
 CMakeCache.txt
 CMakeFiles/
 .DS_Store
+/design/uploads/

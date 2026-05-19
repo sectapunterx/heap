@@ -83,7 +83,13 @@ Rectangle {
             tooltipText: "Tweaks · тема, плотность, рабочий день"
             onActivated: root.openTweaks(tweaksBtn)
         }
-        RailBtn { glyph: "⚙"; tooltipText: "Settings"; Layout.bottomMargin: 14 }
+        RailBtn {
+            glyph: "⚙"
+            tooltipText: "Settings"
+            active: AppController.currentView === "settings"
+            onActivated: AppController.currentView = "settings"
+            Layout.bottomMargin: 14
+        }
     }
 
     component RailBtn: Item {

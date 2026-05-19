@@ -208,13 +208,13 @@ Item {
             contentHeight: editor.implicitHeight + 48
             flickableDirection: Flickable.VerticalFlick
             boundsBehavior: Flickable.StopAtBounds
-            ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+            ScrollBar.vertical: ThinScrollBar {}
 
             NumberAnimation {
                 id: wheelAnim
                 target: notesScroll
                 property: "contentY"
-                duration: 220
+                duration: Theme.scaledMs(220)
                 easing.type: Easing.OutCubic
             }
             WheelHandler {

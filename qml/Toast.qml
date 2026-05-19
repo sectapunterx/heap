@@ -77,5 +77,5 @@ Rectangle {
         repeat: false
         onTriggered: root.opacity = 0
     }
-    Behavior on opacity { NumberAnimation { duration: 180 } }
+    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(180) } }
 }

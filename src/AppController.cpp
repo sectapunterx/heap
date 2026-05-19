@@ -1,12 +1,15 @@
 #include "AppController.h"
 #include "SampleData.h"
 
+#include <cmath>
+
 #include <QClipboard>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QIcon>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -14,6 +17,8 @@
 #include <QLocale>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QSystemTrayIcon>
+#include <QTime>
 #include <QUuid>
 
 namespace {
@@ -36,9 +41,31 @@ AppController::AppController(QObject *parent)
     m_undoTimer->setSingleShot(true);
     connect(m_undoTimer, &QTimer::timeout, this, &AppController::clearPendingUndo);
 
+    m_automationTimer = new QTimer(this);
+    m_automationTimer->setInterval(60 * 1000);
+    connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
+
+    if (QSystemTrayIcon::isSystemTrayAvailable()) {
+        QIcon icon(QStringLiteral(":/brand/icon/heap-icon.svg"));
+        if (icon.isNull()) icon = QGuiApplication::windowIcon();
+        if (icon.isNull()) icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
+        m_tray = new QSystemTrayIcon(icon, this);
+        m_tray->setToolTip(QStringLiteral("heap."));
+        if (!icon.isNull()) m_tray->show();
+    }
+
+    // Route notification(...) → tray balloon + in-app toast, respecting quiet hours.
+    connect(this, &AppController::notification, this,
+            [this](const QString &title, const QString &body, const QString & /*kind*/) {
+        if (inQuietHours(QDateTime::currentDateTime())) return;
+        if (m_tray) m_tray->showMessage(title, body, QSystemTrayIcon::Information, 5000);
+        emit toast(body);
+    });
+
     seedShortcutCatalog();
 
     loadStateOnStart();
+    m_automationTimer->start();
 
     // Fresh install or unreadable state — seed a single "Default" profile
     // from SampleData so the app boots with something sensible.
@@ -153,11 +180,19 @@ void AppController::setNotesState(const QString &v) {
     scheduleSave();
 }
 
+void AppController::setAppSettingsJson(const QString &v) {
+    if (v == m_appSettingsJson) return;
+    m_appSettingsJson = v;
+    emit appSettingsJsonChanged();
+    scheduleSave();
+}
+
 void AppController::moveTask(const QString &id, const QString &newStatus) {
     const int row = m_tasks.indexOfId(id);
     if (row < 0) return;
     const Task &t = m_tasks.items().at(row);
     if (t.status == newStatus) return;
+    if (!canTransitionStatus(id, newStatus)) return;
     QString statusName = newStatus;
     for (const auto &v : m_statuses) {
         const QVariantMap m = v.toMap();
@@ -168,6 +203,22 @@ void AppController::moveTask(const QString &id, const QString &newStatus) {
     }
     const QString taskId = t.id;
     m_tasks.setStatus(id, newStatus);
+
+    // Re-evaluate blocked-stuck set (the task may have left "blocked").
+    if (m_blockedStuckIds.remove(id)) {
+        m_tasks.setBlockedStuckIds(m_blockedStuckIds);
+        emit blockedStuckChanged();
+    }
+
+    // Auto focus-block when moving into "prog", if setting on.
+    if (newStatus == QStringLiteral("prog")) {
+        const QVariantMap s = settingsMap();
+        const QVariantMap cal = s.value("calendar").toMap();
+        if (cal.value("autoFocusBlock", true).toBool()) {
+            scheduleFocusBlockFor(taskId);
+        }
+    }
+
     emit toast(QString("%1 → %2").arg(taskId, statusName));
     scheduleSave();
 }
@@ -249,6 +300,30 @@ void AppController::saveEvent(const QVariantMap &draft) {
     if (e.end <= e.start) e.end = e.start + 0.25;
     m_events.upsert(e);
     scheduleSave();
+}
+
+void AppController::updateEvent(const QString &id, double start, double end, const QDate &date) {
+    const int row = m_events.indexOfId(id);
+    if (row < 0) return;
+    auto snap15 = [](double h) { return std::round(h * 4.0) / 4.0; };
+    CalEvent e = m_events.items().at(row);
+    e.start = snap15(qBound(0.0, start, 24.0));
+    e.end   = snap15(qBound(e.start + 0.25, end, 24.0));
+    if (e.end < e.start + 0.25) e.end = e.start + 0.25;
+    if (date.isValid()) e.date = date;
+    m_events.upsert(e);
+    scheduleSave();
+}
+
+QString AppController::scheduledLabelFor(const QString &taskId, const QDate &date) const {
+    if (taskId.isEmpty() || !date.isValid()) return QString();
+    double earliest = -1.0;
+    for (const CalEvent &e : m_events.items()) {
+        if (e.taskId != taskId || e.date != date) continue;
+        if (earliest < 0.0 || e.start < earliest) earliest = e.start;
+    }
+    if (earliest < 0.0) return QString();
+    return eventHourLabel(earliest);
 }
 
 void AppController::deleteEvent(const QString &id) {
@@ -624,13 +699,15 @@ QJsonArray tasksToJson(const QVector<Task> &xs) {
     QJsonArray a;
     for (const Task &t : xs) {
         QJsonObject o;
-        o["id"]       = t.id;
-        o["title"]    = t.title;
-        o["desc"]     = t.desc;
-        o["priority"] = t.priority;
-        o["status"]   = t.status;
-        o["deadline"] = t.deadline.isValid() ? t.deadline.toString(Qt::ISODate) : QString();
-        o["branch"]   = t.branch;
+        o["id"]              = t.id;
+        o["title"]           = t.title;
+        o["desc"]            = t.desc;
+        o["priority"]        = t.priority;
+        o["status"]          = t.status;
+        o["deadline"]        = t.deadline.isValid() ? t.deadline.toString(Qt::ISODate) : QString();
+        o["branch"]          = t.branch;
+        o["statusChangedAt"] = t.statusChangedAt.isValid() ? t.statusChangedAt.toString(Qt::ISODate) : QString();
+        o["archived"]        = t.archived;
         a.append(o);
     }
     return a;
@@ -649,6 +726,9 @@ QVector<Task> tasksFromJson(const QJsonArray &a) {
         t.status   = o["status"].toString();
         t.deadline = QDate::fromString(o["deadline"].toString(), Qt::ISODate);
         t.branch   = o["branch"].toString();
+        t.statusChangedAt = QDateTime::fromString(o["statusChangedAt"].toString(), Qt::ISODate);
+        if (!t.statusChangedAt.isValid()) t.statusChangedAt = QDateTime::currentDateTime();
+        t.archived = o["archived"].toBool(false);
         v.append(t);
     }
     return v;
@@ -918,6 +998,11 @@ void AppController::saveStateNow() {
     }
     s["shortcuts"]    = shortcutsObj;
 
+    if (!m_appSettingsJson.isEmpty()) {
+        const QJsonDocument d = QJsonDocument::fromJson(m_appSettingsJson.toUtf8());
+        if (!d.isNull() && d.isObject()) s["app"] = d.object();
+    }
+
     root["settings"]  = s;
 
     rotateBackupIfDue();
@@ -962,6 +1047,10 @@ void AppController::loadStateOnStart() {
             for (auto it = shortcutsObj.constBegin(); it != shortcutsObj.constEnd(); ++it)
                 overrides.insert(it.key(), it.value().toString());
             applyShortcutOverrides(overrides);
+        }
+        if (s.contains("app") && s["app"].isObject()) {
+            m_appSettingsJson = QJsonDocument(s["app"].toObject()).toJson(QJsonDocument::Compact);
+            emit appSettingsJsonChanged();
         }
     }
 
@@ -1412,6 +1501,8 @@ void AppController::seedShortcutCatalog() {
         "Спеки, ссылки, сниппеты, контакты.",                  "Ctrl+4"));
     m_shortcuts.append(makeShortcut("view.notes",       "Перейти в Notes",
         "Markdown-канвас активного профиля.",                  "Ctrl+5"));
+    m_shortcuts.append(makeShortcut("view.settings",    "Перейти в Settings",
+        "Полная панель настроек: профиль, внешний вид, интеграции.", "Ctrl+6"));
     m_shortcuts.append(makeShortcut("profile.next",     "Следующий профиль",
         "Циклит по списку профилей вперёд.",                   "Ctrl+]"));
     m_shortcuts.append(makeShortcut("profile.prev",     "Предыдущий профиль",
@@ -1556,5 +1647,171 @@ void AppController::resetAllShortcuts() {
         emit shortcutsChanged();
         scheduleSave();
         emit toast("Хоткеи сброшены к дефолту");
+    }
+}
+
+// ── Notifications, transitions, automation ─────────────────────────────
+
+QVariantMap AppController::settingsMap() const {
+    if (m_appSettingsJson.isEmpty()) return {};
+    QJsonParseError err;
+    const QJsonDocument doc = QJsonDocument::fromJson(m_appSettingsJson.toUtf8(), &err);
+    if (err.error != QJsonParseError::NoError || !doc.isObject()) return {};
+    return doc.object().toVariantMap();
+}
+
+bool AppController::canTransitionStatus(const QString &taskId, const QString &newStatus) {
+    const int row = m_tasks.indexOfId(taskId);
+    if (row < 0) return false;
+    const Task &t = m_tasks.items().at(row);
+    if (newStatus == QStringLiteral("review")) {
+        const QVariantMap s = settingsMap();
+        const QVariantMap tasks = s.value("tasks").toMap();
+        if (tasks.value("requireBranchOnReview", true).toBool() && t.branch.trimmed().isEmpty()) {
+            emit toast(QStringLiteral("Заполни branch — этого требует Settings"));
+            return false;
+        }
+    }
+    return true;
+}
+
+void AppController::setArchived(const QString &taskId, bool archived) {
+    m_tasks.setArchived(taskId, archived);
+    scheduleSave();
+}
+
+void AppController::notify(const QString &title, const QString &body, const QString &kind) {
+    emit notification(title, body, kind);
+}
+
+bool AppController::inQuietHours(const QDateTime &when) const {
+    const QVariantMap s = settingsMap();
+    const QVariantMap notif = s.value("notifications").toMap();
+    if (!notif.value("quietHours", true).toBool()) return false;
+    const QTime from = QTime::fromString(notif.value("quietFrom", "19:00").toString(), "HH:mm");
+    const QTime to   = QTime::fromString(notif.value("quietTo",   "09:00").toString(), "HH:mm");
+    if (!from.isValid() || !to.isValid()) return false;
+    const QTime now = when.time();
+    if (from <= to) {
+        return now >= from && now < to;
+    }
+    // Window wraps midnight (e.g. 19:00..09:00).
+    return now >= from || now < to;
+}
+
+double AppController::nextQuarterHour(const QDateTime &when) {
+    const QTime t = when.time();
+    const double cur = t.hour() + t.minute() / 60.0;
+    const double q = std::ceil(cur * 4.0) / 4.0;
+    return std::min(q, 24.0);
+}
+
+void AppController::scheduleFocusBlockFor(const QString &taskId) {
+    const int row = m_tasks.indexOfId(taskId);
+    if (row < 0) return;
+    const Task &t = m_tasks.items().at(row);
+    const QVariantMap s = settingsMap();
+    const QVariantMap cal = s.value("calendar").toMap();
+    const int durMin = cal.value("focusBlockDuration", 90).toInt();
+    const double dur = std::max(0.25, durMin / 60.0);
+    const QDateTime now = QDateTime::currentDateTime();
+    const double start = nextQuarterHour(now);
+    if (start >= 24.0) return; // No room left in today.
+    const double end = std::min(24.0, start + dur);
+    CalEvent e;
+    e.id        = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    e.title     = QStringLiteral("Focus: %1").arg(t.title);
+    e.type      = QStringLiteral("focus");
+    e.start     = start;
+    e.end       = end;
+    e.date      = now.date();
+    e.taskId    = taskId;
+    e.profileId = m_activeProfileId;
+    m_events.upsert(e);
+    scheduleSave();
+}
+
+void AppController::runAutomation() {
+    const QDateTime now = QDateTime::currentDateTime();
+    const QDate today = now.date();
+    const QVariantMap s = settingsMap();
+    const QVariantMap tasksCfg = s.value("tasks").toMap();
+    const QVariantMap notif = s.value("notifications").toMap();
+
+    // 1. Re-compute blocked-stuck (status=blocked older than threshold).
+    const int stuckDays = qMax(0, tasksCfg.value("autoMoveBlockedAfterDays", 3).toInt());
+    QSet<QString> stuck;
+    for (const Task &t : m_tasks.items()) {
+        if (t.archived) continue;
+        if (t.status != QStringLiteral("blocked")) continue;
+        if (!t.statusChangedAt.isValid()) continue;
+        if (t.statusChangedAt.daysTo(now) >= stuckDays) {
+            stuck.insert(t.id);
+        }
+    }
+    if (stuck != m_blockedStuckIds) {
+        m_blockedStuckIds = stuck;
+        m_tasks.setBlockedStuckIds(m_blockedStuckIds);
+        emit blockedStuckChanged();
+    }
+
+    // 2. Auto-archive done tasks past retention.
+    const int archDays = qMax(0, tasksCfg.value("archiveDoneAfterDays", 7).toInt());
+    bool persistedAny = false;
+    if (archDays > 0) {
+        QStringList toArchive;
+        for (const Task &t : m_tasks.items()) {
+            if (t.archived) continue;
+            if (t.status != QStringLiteral("done")) continue;
+            if (!t.statusChangedAt.isValid()) continue;
+            if (t.statusChangedAt.daysTo(now) >= archDays) toArchive << t.id;
+        }
+        for (const QString &id : toArchive) {
+            m_tasks.setArchived(id, true);
+            persistedAny = true;
+        }
+    }
+    if (persistedAny) scheduleSave();
+
+    // 3. Deadline reminders — at most one per task per day.
+    if (notif.value("deadlineReminders", true).toBool()) {
+        const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
+        for (const Task &t : m_tasks.items()) {
+            if (t.archived) continue;
+            if (!t.deadline.isValid()) continue;
+            if (t.status == QStringLiteral("done")) continue;
+            const QDateTime deadlineAt(t.deadline, QTime(23, 59));
+            const qint64 hoursLeft = now.secsTo(deadlineAt) / 3600;
+            if (hoursLeft < 0 || hoursLeft > leadHours) continue;
+            const QString sentinel = QStringLiteral("dl:") + t.id;
+            if (m_lastReminderDay.value(sentinel) == today) continue;
+            m_lastReminderDay[sentinel] = today;
+            const QString when = (hoursLeft <= 1)
+                ? QStringLiteral("через час")
+                : QStringLiteral("через %1 ч").arg(hoursLeft);
+            notify(QStringLiteral("Дедлайн %1").arg(when),
+                   QStringLiteral("%1 (%2)").arg(t.title, t.priority),
+                   QStringLiteral("deadline"));
+        }
+    }
+
+    // 4. Standup reminder.
+    if (notif.value("standupReminder", true).toBool()) {
+        const QVariantMap cal = s.value("calendar").toMap();
+        const QTime standup = QTime::fromString(cal.value("standupTime", "10:00").toString(), "HH:mm");
+        const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
+        if (standup.isValid()) {
+            const QDateTime atDt(today, standup);
+            const qint64 minsLeft = now.secsTo(atDt) / 60;
+            if (minsLeft >= 0 && minsLeft <= lead) {
+                const QString sentinel = QStringLiteral("standup:%1").arg(today.toString(Qt::ISODate));
+                if (m_lastReminderDay.value(sentinel) != today) {
+                    m_lastReminderDay[sentinel] = today;
+                    notify(QStringLiteral("Standup скоро"),
+                           QStringLiteral("Через %1 мин").arg(minsLeft),
+                           QStringLiteral("standup"));
+                }
+            }
+        }
     }
 }
