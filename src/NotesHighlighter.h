@@ -36,6 +36,12 @@ protected:
     void highlightBlock(const QString &text) override;
 
 private:
+    enum BlockState {
+        BS_Normal     = 0,
+        BS_FencedCode = 1,
+        BS_LatexBlock = 2,
+    };
+
     struct Rule {
         QRegularExpression pattern;
         QTextCharFormat    format;
@@ -45,6 +51,8 @@ private:
     QQuickTextDocument *m_target = nullptr;
     QVariantMap         m_palette;
     QVector<Rule>       m_rules;
+    QTextCharFormat     m_codeBlockFmt;
+    QTextCharFormat     m_latexFmt;
 
     void rebuildRules();
     QTextCharFormat fmt(const char *key, bool bold = false, bool italic = false) const;

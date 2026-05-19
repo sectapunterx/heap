@@ -327,23 +327,101 @@ Item {
                     onCursorPositionChanged: root._detectAutocomplete()
                     Keys.priority: Keys.BeforeItem
                     Keys.onPressed: (event) => {
-                        if (!acPopup.opened || acMatches.length === 0) return;
-                        if (event.key === Qt.Key_Down) {
-                            root.acSelected = Math.min(root.acMatches.length - 1, root.acSelected + 1);
-                            event.accepted = true; return;
+                        // Autocomplete navigation (when popup is open) takes
+                        // priority over markdown continuation.
+                        if (acPopup.opened && acMatches.length > 0) {
+                            if (event.key === Qt.Key_Down) {
+                                root.acSelected = Math.min(root.acMatches.length - 1, root.acSelected + 1);
+                                event.accepted = true; return;
+                            }
+                            if (event.key === Qt.Key_Up) {
+                                root.acSelected = Math.max(0, root.acSelected - 1);
+                                event.accepted = true; return;
+                            }
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                                || event.key === Qt.Key_Tab) {
+                                root._commitAutocomplete();
+                                event.accepted = true; return;
+                            }
+                            if (event.key === Qt.Key_Escape) {
+                                root._hideAutocomplete();
+                                event.accepted = true; return;
+                            }
                         }
-                        if (event.key === Qt.Key_Up) {
-                            root.acSelected = Math.max(0, root.acSelected - 1);
-                            event.accepted = true; return;
+
+                        // Smart Enter — continue markdown structure (list,
+                        // numbered, checklist, quote) and preserve indent
+                        // inside fenced code blocks.
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            const txt = editor.text;
+                            const pos = editor.cursorPosition;
+                            const before = txt.substring(0, pos);
+                            const lineStart = before.lastIndexOf("\n") + 1;
+                            const line = txt.substring(lineStart, pos);
+
+                            // Count fence boundaries before the cursor — odd
+                            // means we're inside an open ``` block.
+                            const fences = (before.match(/^```/gm) || []).length;
+                            const insideFence = fences % 2 === 1;
+
+                            let insert = null;
+                            if (insideFence) {
+                                const m = line.match(/^(\s+)/);
+                                insert = "\n" + (m ? m[1] : "");
+                            } else {
+                                const checkM = line.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.*)$/);
+                                const listM  = line.match(/^(\s*)([-*+])\s+(.*)$/);
+                                const numM   = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
+                                const quoteM = line.match(/^(\s*>+)\s+(.*)$/);
+
+                                if (checkM) {
+                                    if (checkM[4].length === 0) {
+                                        // Empty checklist item → break out by
+                                        // wiping the marker; default Enter
+                                        // (event not accepted) inserts \n.
+                                        editor.remove(lineStart, pos);
+                                        return;
+                                    }
+                                    insert = "\n" + checkM[1] + checkM[2] + " [ ] ";
+                                } else if (listM) {
+                                    if (listM[3].length === 0) {
+                                        editor.remove(lineStart, pos);
+                                        return;
+                                    }
+                                    insert = "\n" + listM[1] + listM[2] + " ";
+                                } else if (numM) {
+                                    if (numM[3].length === 0) {
+                                        editor.remove(lineStart, pos);
+                                        return;
+                                    }
+                                    const next = parseInt(numM[2]) + 1;
+                                    insert = "\n" + numM[1] + next + ". ";
+                                } else if (quoteM) {
+                                    if (quoteM[2].length === 0) {
+                                        editor.remove(lineStart, pos);
+                                        return;
+                                    }
+                                    insert = "\n" + quoteM[1] + " ";
+                                }
+                            }
+
+                            if (insert !== null) {
+                                editor.insert(pos, insert);
+                                event.accepted = true;
+                                return;
+                            }
                         }
-                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
-                            || event.key === Qt.Key_Tab) {
-                            root._commitAutocomplete();
-                            event.accepted = true; return;
-                        }
-                        if (event.key === Qt.Key_Escape) {
-                            root._hideAutocomplete();
-                            event.accepted = true; return;
+
+                        // Tab — inside fenced code block insert 4 spaces so
+                        // it acts as code indent (instead of focus shift).
+                        if (event.key === Qt.Key_Tab && (event.modifiers & ~Qt.KeypadModifier) === 0) {
+                            const before = editor.text.substring(0, editor.cursorPosition);
+                            const fences = (before.match(/^```/gm) || []).length;
+                            if (fences % 2 === 1) {
+                                editor.insert(editor.cursorPosition, "    ");
+                                event.accepted = true;
+                                return;
+                            }
                         }
                     }
                 }
@@ -437,16 +515,23 @@ Item {
     NotesHighlighter {
         id: highlighter
         palette: ({
-            heading: Theme.accentStrong,
-            bold:    Theme.text,
-            italic:  Theme.text,
-            code:    Theme.p2,
-            codeBg:  Theme.bg2,
-            quote:   Theme.textMuted,
-            mention: Theme.mStandup,
-            ticket:  Theme.p2,
-            link:    Theme.accent,
-            list:    Theme.accent
+            heading:      Theme.accentStrong,
+            bold:         Theme.text,
+            italic:       Theme.text,
+            code:         Theme.p2,
+            codeBg:       Theme.bg2,
+            codeBlock:    Theme.p2,
+            codeBlockBg:  Theme.bg2,
+            quote:        Theme.textMuted,
+            mention:      Theme.mStandup,
+            ticket:       Theme.p2,
+            link:         Theme.accent,
+            list:         Theme.accent,
+            tableRow:     Theme.accentStrong,
+            tableSep:     Theme.accent,
+            latex:        Theme.mOneone,
+            checkboxDone: Theme.stDone,
+            hr:           Theme.borderStrong
         })
     }
 
