@@ -18,6 +18,15 @@ QtObject {
         try { return JSON.parse(raw); } catch (e) { return ({}); }
     }
     readonly property var _appearance: (_settings && _settings.appearance) || ({})
+    readonly property var _calendar:   (_settings && _settings.calendar)   || ({})
+    readonly property var _tasks:      (_settings && _settings.tasks)      || ({})
+    readonly property var _notifications: (_settings && _settings.notifications) || ({})
+
+    // Convenience reads — all view'ы / делегаты могут идти через Theme.
+    readonly property string weekStart:    _calendar.weekStart    || "mon"
+    readonly property string timeFormat:   _calendar.timeFormat   || "24h"
+    readonly property int    snapMinutes:  _calendar.snapMinutes  || 15
+    readonly property bool   showWeekends: _calendar.showWeekends === undefined ? true : !!_calendar.showWeekends
 
     // ── Surfaces ──────────────────────────────────────────────────────
     readonly property color bg:           dark ? Brand.bg      : Brand.lightBg
@@ -85,6 +94,21 @@ QtObject {
         : (Brand.fontMono + ", Fira Code, DejaVu Sans Mono, monospace")
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
+
+    // Reactive hour formatter — picks 12h/24h based on settings.calendar.timeFormat.
+    // Use everywhere a binding needs to refresh on the user flipping the setting;
+    // AppController::eventHourLabel is the C++ equivalent for non-QML callers.
+    function fmtHour(h) {
+        const hh = Math.floor(h);
+        const mm = Math.round((h - hh) * 60);
+        const mmS = String(mm).padStart(2, "0");
+        if (timeFormat === "12h") {
+            const h12 = ((hh + 11) % 12) + 1;
+            const ampm = hh < 12 ? "am" : "pm";
+            return h12 + ":" + mmS + ampm;
+        }
+        return String(hh).padStart(2, "0") + ":" + mmS;
+    }
 
     function statusColor(id) {
         switch (id) {
