@@ -4,7 +4,7 @@
 
 <div align="center">
 
-Native desktop kanban + calendar + docs for C++ engineers.
+Native desktop kanban + calendar + docs for engineers.
 
 [![Qt 6](https://img.shields.io/badge/Qt-6.4%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
 [![C++17](https://img.shields.io/badge/C%2B%2B-17-00599c?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/17)
