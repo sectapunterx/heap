@@ -1,0 +1,22 @@
+<RCC>
+  <qresource prefix="/brand">
+    <file alias="logo/heap-mark.svg">logo/heap-mark.svg</file>
+    <file alias="logo/heap-mark-light.svg">logo/heap-mark-light.svg</file>
+    <file alias="logo/heap-mark-mono.svg">logo/heap-mark-mono.svg</file>
+    <file alias="logo/heap-lockup.svg">logo/heap-lockup.svg</file>
+    <file alias="logo/heap-lockup-light.svg">logo/heap-lockup-light.svg</file>
+    <file alias="logo/heap-wordmark.svg">logo/heap-wordmark.svg</file>
+    <file alias="icon/heap-icon.svg">icon/heap-icon.svg</file>
+  </qresource>
+  <qresource prefix="/fonts">
+    <!-- Drop .ttf files into brand-export/fonts/ then uncomment. See fonts/README.md -->
+    <!--
+    <file alias="IBMPlexSans-Regular.ttf">fonts/IBMPlexSans-Regular.ttf</file>
+    <file alias="IBMPlexSans-Medium.ttf">fonts/IBMPlexSans-Medium.ttf</file>
+    <file alias="IBMPlexSans-SemiBold.ttf">fonts/IBMPlexSans-SemiBold.ttf</file>
+    <file alias="JetBrainsMono-Regular.ttf">fonts/JetBrainsMono-Regular.ttf</file>
+    <file alias="JetBrainsMono-Medium.ttf">fonts/JetBrainsMono-Medium.ttf</file>
+    <file alias="JetBrainsMono-SemiBold.ttf">fonts/JetBrainsMono-SemiBold.ttf</file>
+    -->
+  </qresource>
+</RCC>

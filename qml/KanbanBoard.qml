@@ -10,6 +10,7 @@ Item {
     property string searchText: ""
     property var prioritiesFilter: ({})
     property var scheduleMap: ({})
+    property bool showArchived: false
     signal taskClicked(string id)
     signal createInStatus(string statusId)
 
@@ -41,7 +42,7 @@ Item {
         id: outerAnim
         target: hscroll
         property: "contentX"
-        duration: 220
+        duration: Theme.scaledMs(220)
         easing.type: Easing.OutCubic
     }
 
@@ -262,7 +263,7 @@ Item {
                                     id: bodyAnim
                                     target: bodyFlick
                                     property: "contentY"
-                                    duration: 220
+                                    duration: Theme.scaledMs(220)
                                     easing.type: Easing.OutCubic
                                 }
 
@@ -305,16 +306,21 @@ Item {
                                             required property string status
                                             required property var deadline
                                             required property string branch
+                                            required property bool archived
+                                            required property bool blockedStuck
                                             width: bodyCol.width
 
                                             readonly property var taskData: ({
                                                 id: tc.id, title: tc.title, desc: tc.desc,
                                                 priority: tc.priority, status: tc.status,
-                                                deadline: tc.deadline, branch: tc.branch
+                                                deadline: tc.deadline, branch: tc.branch,
+                                                archived: tc.archived, blockedStuck: tc.blockedStuck
                                             })
                                             task: taskData
                                             scheduled: root.scheduleMap[tc.id] || ""
-                                            visible: tc.status === col.statusId && root.passesFilter(taskData)
+                                            visible: tc.status === col.statusId
+                                                  && (root.showArchived || !tc.archived)
+                                                  && root.passesFilter(taskData)
                                             onClicked: root.taskClicked(tc.id)
 
                                             onVisibleChanged: col.recountSoon()

@@ -1,0 +1,80 @@
+<?xml version="1.0"?>
+
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640" font-family="&#39;IBM Plex Sans&#39;, system-ui, sans-serif">
+  <defs>
+    <pattern id="grid2" width="48" height="48" patternUnits="userSpaceOnUse">
+      <path d="M48 0H0v48" fill="none" stroke="#ffffff" stroke-opacity="0.025" stroke-width="1"></path>
+    </pattern>
+  </defs>
+
+  <rect width="1280" height="640" fill="#0b0e13"></rect>
+  <rect width="1280" height="640" fill="url(#grid2)"></rect>
+
+  <text x="32" y="38" font-family="&#39;JetBrains Mono&#39;, ui-monospace, monospace" font-size="11" fill="#b8c2cc" letter-spacing="1"><tspan font-weight="500">07</tspan> · README BANNER</text>
+  <text x="1248" y="38" font-family="&#39;JetBrains Mono&#39;, ui-monospace, monospace" font-size="11" fill="#5f6878" letter-spacing="1" text-anchor="end">GITHUB · SOCIAL CARD · OG:IMAGE</text>
+
+  
+  <g transform="translate(60, 200)">
+    
+    <g fill="none">
+      <line x1="50" y1="26" x2="26" y2="60" stroke="#8a94a3" stroke-width="2" stroke-linecap="round" opacity="0.35"></line>
+      <line x1="50" y1="26" x2="74" y2="60" stroke="#8a94a3" stroke-width="2" stroke-linecap="round" opacity="0.35"></line>
+      <rect x="36" y="8" width="28" height="20" rx="5" fill="#3bccdd"></rect>
+      <rect x="10" y="60" width="28" height="20" rx="5" fill="none" stroke="#8a94a3" stroke-width="2.5" opacity="0.7"></rect>
+      <rect x="62" y="60" width="28" height="20" rx="5" fill="none" stroke="#8a94a3" stroke-width="2.5" opacity="0.7"></rect>
+    </g>
+    
+    <text x="120" y="68" font-family="&#39;JetBrains Mono&#39;, ui-monospace, monospace" font-weight="600" font-size="78" letter-spacing="-3" fill="#e5ecf3">heap<tspan fill="#3bccdd">.</tspan></text>
+
+    
+    <g font-family="&#39;JetBrains Mono&#39;, ui-monospace, monospace" font-size="18" transform="translate(0, 130)">
+      <text>
+        <tspan fill="#8a94a3">heap</tspan><tspan fill="#5f6878">.</tspan><tspan fill="#3bccdd">push</tspan><tspan fill="#5f6878">(</tspan><tspan fill="#e5ecf3">task</tspan><tspan fill="#5f6878">)</tspan>
+      </text>
+    </g>
+  </g>
+
+  
+  <g transform="translate(580, 180)">
+    <text font-family="&#39;IBM Plex Sans&#39;, system-ui, sans-serif" font-weight="600" font-size="44" letter-spacing="-1.1" fill="#e5ecf3">
+      <tspan x="0" y="0">An engineer&#39;s day,</tspan>
+      <tspan x="0" y="56">structured.</tspan>
+    </text>
+
+    <text font-family="&#39;IBM Plex Sans&#39;, system-ui, sans-serif" font-size="16" fill="#b8c2cc" y="120">
+      <tspan x="0" dy="0">Kanban for tickets, weekly planner, context menus,</tspan>
+      <tspan x="0" dy="24">a snippet library and shortcuts — all in one place.</tspan>
+      <tspan x="0" dy="24">Built for the working day of an engineer.</tspan>
+    </text>
+
+    
+    <g transform="translate(0, 230)" font-family="&#39;JetBrains Mono&#39;, ui-monospace, monospace" font-size="12">
+      
+      <g>
+        <rect x="0" y="0" width="170" height="30" rx="15" fill="#14181f" stroke="#262d39"></rect>
+        <text x="14" y="20"><tspan fill="#3bccdd">▦</tspan><tspan fill="#b8c2cc" dx="8">7-column kanban</tspan></text>
+      </g>
+      <g transform="translate(180, 0)">
+        <rect x="0" y="0" width="186" height="30" rx="15" fill="#14181f" stroke="#262d39"></rect>
+        <text x="14" y="20"><tspan fill="#3bccdd">☰</tspan><tspan fill="#b8c2cc" dx="8">Timeline · by deadlines</tspan></text>
+      </g>
+      <g transform="translate(376, 0)">
+        <rect x="0" y="0" width="170" height="30" rx="15" fill="#14181f" stroke="#262d39"></rect>
+        <text x="14" y="20"><tspan fill="#3bccdd">◫</tspan><tspan fill="#b8c2cc" dx="8">Week + day planner</tspan></text>
+      </g>
+
+      <g transform="translate(0, 40)">
+        <rect x="0" y="0" width="172" height="30" rx="15" fill="#14181f" stroke="#262d39"></rect>
+        <text x="14" y="20"><tspan fill="#3bccdd">§</tspan><tspan fill="#b8c2cc" dx="8">Docs library</tspan></text>
+      </g>
+      <g transform="translate(182, 40)">
+        <rect x="0" y="0" width="180" height="30" rx="15" fill="#14181f" stroke="#262d39"></rect>
+        <text x="14" y="20"><tspan fill="#3bccdd">⌘</tspan><tspan fill="#b8c2cc" dx="8">Hotkeys everywhere</tspan></text>
+      </g>
+      <g transform="translate(372, 40)">
+        <rect x="0" y="0" width="200" height="30" rx="15" fill="#14181f" stroke="#262d39"></rect>
+        <text x="14" y="20"><tspan fill="#3bccdd">⎘</tspan><tspan fill="#b8c2cc" dx="8">Profiles &amp; workspaces</tspan></text>
+      </g>
+    </g>
+  </g>
+</svg>

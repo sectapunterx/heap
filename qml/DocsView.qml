@@ -706,7 +706,7 @@ Item {
                     id: wheelAnim
                     target: bodyScroll
                     property: "contentY"
-                    duration: 220
+                    duration: Theme.scaledMs(220)
                     easing.type: Easing.OutCubic
                 }
 
@@ -728,7 +728,7 @@ Item {
                     }
                 }
 
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                ScrollBar.vertical: ThinScrollBar {}
 
                 ColumnLayout {
                     id: bodyCol
