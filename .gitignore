@@ -10,4 +10,5 @@ dist/
 CMakeCache.txt
 CMakeFiles/
 .DS_Store
-/design/uploads/
+/design/*
+!design/brand-export/
