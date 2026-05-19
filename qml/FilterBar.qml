@@ -13,10 +13,12 @@ Rectangle {
     property int activeCount: 0
     property int blockedCount: 0
     property int reviewCount: 0
+    property bool showArchived: false
     property string viewLabel: "Board"
 
     signal togglePriority(string p)
     signal clearPriorities()
+    signal toggleArchived()
 
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -96,6 +98,35 @@ Rectangle {
         }
 
         Item { Layout.fillWidth: true }
+
+        Rectangle {
+            radius: 999
+            color: root.showArchived ? Theme.accentSoft : Theme.panel2
+            border.color: root.showArchived ? Theme.accent : Theme.border
+            border.width: 1
+            implicitWidth: archRow.implicitWidth + 16
+            implicitHeight: 24
+            RowLayout {
+                id: archRow
+                anchors.centerIn: parent
+                spacing: 6
+                Text {
+                    text: "▤"
+                    color: root.showArchived ? Theme.accentStrong : Theme.textDim
+                    font.pixelSize: 11
+                }
+                Text {
+                    text: "Archived"
+                    color: root.showArchived ? Theme.accentStrong : Theme.textMuted
+                    font.pixelSize: 12
+                }
+            }
+            MouseArea {
+                anchors.fill: parent
+                cursorShape: Qt.PointingHandCursor
+                onClicked: root.toggleArchived()
+            }
+        }
 
         Text {
             text: root.totalCount + " tasks · " + root.activeCount + " active · "

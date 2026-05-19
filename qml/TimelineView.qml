@@ -10,6 +10,7 @@ Item {
     property var prioritiesFilter: ({})
     property var scheduleMap: ({})
     property bool showDone: false
+    property bool showArchived: false
 
     signal taskClicked(string id)
     signal toggleShowDone()
@@ -61,6 +62,8 @@ Item {
         const m = AppController.tasks;
         for (let i = 0; i < m.rowCount(); i++) {
             const idx = m.index(i, 0);
+            const archived = m.data(idx, Qt.UserRole + 9);
+            if (archived && !root.showArchived) continue;
             const t = {
                 id:       m.data(idx, Qt.UserRole + 1),
                 title:    m.data(idx, Qt.UserRole + 2),
@@ -90,6 +93,7 @@ Item {
     onSearchTextChanged: groups = buildGroups()
     onPrioritiesFilterChanged: groups = buildGroups()
     onShowDoneChanged: groups = buildGroups()
+    onShowArchivedChanged: groups = buildGroups()
 
     // Expand a bucket's flat task list into a mixed array of
     // {kind:"header", label, date} / {kind:"task", task} rows. Buckets that

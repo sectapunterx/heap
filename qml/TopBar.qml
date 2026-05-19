@@ -170,8 +170,9 @@ Rectangle {
             Layout.preferredHeight: 28
             radius: 6
             color: Theme.panel2
-            border.color: Theme.border
-            border.width: 1
+            border.color: searchField.activeFocus ? Theme.accent : Theme.border
+            border.width: searchField.activeFocus ? 2 : 1
+            Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: 10; anchors.rightMargin: 6

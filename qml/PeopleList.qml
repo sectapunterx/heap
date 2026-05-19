@@ -128,7 +128,7 @@ Rectangle {
                     border.color: Theme.border
                     border.width: 1
                     opacity: rowMA.containsMouse ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: 80 } }
+                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
                 }
 
                 RowLayout {
@@ -182,7 +182,7 @@ Rectangle {
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
                         opacity: rowMA.containsMouse ? 1.0 : 0.0
-                        Behavior on opacity { NumberAnimation { duration: 80 } }
+                        Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
                         Rectangle {
                             anchors.fill: parent
                             radius: 5

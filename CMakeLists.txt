@@ -51,6 +51,7 @@ qt_add_qml_module(todocpp
         qml/HotkeysPanel.qml
         qml/NotesView.qml
         qml/SettingsView.qml
+        qml/ThinScrollBar.qml
     SOURCES
         src/AppController.h
         src/Models.h
