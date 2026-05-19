@@ -58,8 +58,11 @@ QtObject {
     // Accessibility / motion
     readonly property bool reducedMotion: !!_appearance.reducedMotion
     readonly property bool highContrast:  !!_appearance.highContrast
-    // Multiplier consumers can use to suppress easing durations under reducedMotion.
+    // Base easing duration consumers can use directly.
     readonly property int animMs: reducedMotion ? 0 : 160
+    // Per-call duration with reducedMotion mute — preserves each call site's
+    // intended pace under normal mode, collapses to 0 when motion is off.
+    function scaledMs(n) { return reducedMotion ? 0 : n; }
 
     readonly property string fontUi: _appearance.fontUI
         ? (_appearance.fontUI + ", Inter, Segoe UI, Noto Sans, sans-serif")
