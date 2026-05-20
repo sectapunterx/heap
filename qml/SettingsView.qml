@@ -20,6 +20,7 @@ Item {
         { id: "shortcuts",     icon: "⌨",   title: "Shortcuts",        sub: "Горячие клавиши" },
         { id: "cpp",           icon: "C++", title: "C++ Defaults",     sub: "Сборка, sanitizers" },
         { id: "integrations",  icon: "⎘",   title: "Integrations",     sub: "Jira, GitHub, MM" },
+        { id: "git",           icon: "⎇",   title: "Git Watcher",      sub: "Отслеживаемые репо, авто-перевод" },
         { id: "data",          icon: "↯",   title: "Data",             sub: "Import / export, reset" },
         { id: "about",         icon: "?",   title: "About",            sub: "Версия, лицензии" }
     ]
@@ -81,7 +82,13 @@ Item {
             pagerduty:  ({ connected: false, schedule: "" }),
             confluence: ({ connected: false, space: "" })
         },
-        data: { autoBackup: true, backupInterval: "daily" }
+        data: { autoBackup: true, backupInterval: "daily" },
+        git: {
+            watchedRepos: [],
+            autoMoveToInProgress: true,
+            autoCreateFocusBlock: false,
+            watchPrState: true
+        }
     })
 
     readonly property var accentSwatches: [
@@ -379,6 +386,7 @@ Item {
                                 if (root.activeSection === "shortcuts")     return sectionShortcuts;
                                 if (root.activeSection === "cpp")           return sectionCpp;
                                 if (root.activeSection === "integrations")  return sectionIntegrations;
+                                if (root.activeSection === "git")           return sectionGit;
                                 if (root.activeSection === "data")          return sectionData;
                                 if (root.activeSection === "about")         return sectionAbout;
                                 return null;
@@ -1260,6 +1268,143 @@ Item {
                                 }
                             }
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: sectionGit
+        ColumnLayout {
+            spacing: 16
+            SectionCard {
+                ColumnLayout {
+                    spacing: 12
+                    Layout.fillWidth: true
+                    Sub { label: "Отслеживаемые репозитории" }
+                    Text {
+                        Layout.fillWidth: true
+                        text: "Каждый путь — корень git worktree (содержит .git). "
+                            + "Префикс задачи берётся из секции Tasks → idPrefix."
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
+                    Repeater {
+                        model: (root.settings.git && root.settings.git.watchedRepos) || []
+                        delegate: RowLayout {
+                            required property string modelData
+                            required property int    index
+                            Layout.fillWidth: true
+                            spacing: 8
+                            Text {
+                                Layout.fillWidth: true
+                                text: modelData
+                                elide: Text.ElideMiddle
+                                color: Theme.text
+                                font.family: Theme.fontMono
+                                font.pixelSize: 11
+                            }
+                            Rectangle {
+                                radius: 4
+                                color: rmMA.containsMouse
+                                    ? Theme.withAlpha(Theme.p0, 0.18)
+                                    : "transparent"
+                                border.color: Theme.p0; border.width: 1
+                                implicitWidth: 22; implicitHeight: 22
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: "×"
+                                    color: Theme.p0
+                                }
+                                MouseArea {
+                                    id: rmMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        const arr = ((root.settings.git
+                                                    && root.settings.git.watchedRepos) || []).slice();
+                                        arr.splice(index, 1);
+                                        root.set("git", "watchedRepos", arr);
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: 8
+                        TextField {
+                            id: newRepoField
+                            Layout.fillWidth: true
+                            placeholderText: "C:/path/to/repo"
+                            color: Theme.text
+                            placeholderTextColor: Theme.textDim
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            background: Rectangle {
+                                radius: 6
+                                color: Theme.panel2
+                                border.color: Theme.border
+                                border.width: 1
+                            }
+                            selectByMouse: true
+                        }
+                        Rectangle {
+                            radius: 6
+                            implicitHeight: 30
+                            implicitWidth: addT.implicitWidth + 22
+                            color: addMA.containsMouse ? Theme.accentStrong : Theme.accent
+                            Text {
+                                id: addT
+                                anchors.centerIn: parent
+                                text: "+ Add"
+                                color: Theme.bg
+                                font.weight: Font.Medium
+                            }
+                            MouseArea {
+                                id: addMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const p = newRepoField.text.trim();
+                                    if (!p.length) return;
+                                    const arr = ((root.settings.git
+                                                && root.settings.git.watchedRepos) || []).slice();
+                                    if (!arr.includes(p)) arr.push(p);
+                                    root.set("git", "watchedRepos", arr);
+                                    newRepoField.text = "";
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            SectionCard {
+                ColumnLayout {
+                    spacing: 12
+                    Layout.fillWidth: true
+                    Sub { label: "Автоматизации при checkout" }
+                    SwitchRow {
+                        label: "Перевести задачу в In Progress"
+                        hint: "Когда git checkout попадает в ветку с известным префиксом задачи."
+                        checked: !!(root.settings.git && root.settings.git.autoMoveToInProgress)
+                        onToggled: (checked) => root.set("git", "autoMoveToInProgress", checked)
+                    }
+                    SwitchRow {
+                        label: "Создать focus-блок в календаре"
+                        hint: "Запускает scheduleFocusBlockFor(taskId) при checkout."
+                        checked: !!(root.settings.git && root.settings.git.autoCreateFocusBlock)
+                        onToggled: (checked) => root.set("git", "autoCreateFocusBlock", checked)
+                    }
+                    SwitchRow {
+                        label: "Подтягивать статус PR (gh / glab)"
+                        hint: "Раз в минуту читать состояние PR текущей ветки watched-репозиториев."
+                        checked: !!(root.settings.git && root.settings.git.watchPrState)
+                        onToggled: (checked) => root.set("git", "watchPrState", checked)
                     }
                 }
             }

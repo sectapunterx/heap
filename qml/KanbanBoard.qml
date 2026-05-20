@@ -308,13 +308,20 @@ Item {
                                             required property string branch
                                             required property bool archived
                                             required property bool blockedStuck
+                                            required property string prState
+                                            required property int    prNumber
+                                            required property string prUrl
+                                            required property int    gitAhead
+                                            required property int    gitBehind
                                             width: bodyCol.width
 
                                             readonly property var taskData: ({
                                                 id: tc.id, title: tc.title, desc: tc.desc,
                                                 priority: tc.priority, status: tc.status,
                                                 deadline: tc.deadline, branch: tc.branch,
-                                                archived: tc.archived, blockedStuck: tc.blockedStuck
+                                                archived: tc.archived, blockedStuck: tc.blockedStuck,
+                                                prState: tc.prState, prNumber: tc.prNumber, prUrl: tc.prUrl,
+                                                gitAhead: tc.gitAhead, gitBehind: tc.gitBehind
                                             })
                                             task: taskData
                                             scheduled: root.scheduleMap[tc.id] || ""
