@@ -19,8 +19,8 @@ jobs:
           fetch-depth: 0
 
       # ── Install MSYS2 + Qt6 ───────────────────────────────────────
-      # setup-msys2 installs to C:\msys64 by default — matches MSYS_ROOT
       - name: Setup MSYS2 (UCRT64)
+        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -34,12 +34,15 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
 
       # ── CMake configure ───────────────────────────────────────────
+      # cygpath -m converts the Windows path to forward-slash form
+      # that CMake accepts cleanly (e.g. D:/a/_temp/msys64)
       - name: Configure
         shell: msys2 {0}
         run: |
+          MSYS_ROOT=$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")
           cmake -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
-            -DMSYS_ROOT="C:/msys64"
+            -DMSYS_ROOT="$MSYS_ROOT"
 
       # ── Build the binary ──────────────────────────────────────────
       - name: Build heap
