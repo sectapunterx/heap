@@ -12,17 +12,19 @@ Popup {
     width: 560
     anchors.centerIn: Overlay.overlay
 
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+    Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.55)
+    }
 
-    property var _preview: ({ ok: false })
+    property var _preview: ({ok: false})
     property string _title: ""
 
     function _refreshPreview() {
         const raw = inputField.text;
         const r = AppController.parseDateTime(raw, new Date());
-        _preview = r || { ok: false };
+        _preview = r || {ok: false};
         if (_preview.ok && _preview.consumed && _preview.consumed.length > 0) {
-            const left  = raw.substr(0, _preview.startOffset).trim();
+            const left = raw.substr(0, _preview.startOffset).trim();
             const right = raw.substr(_preview.endOffset).trim();
             _title = (left + " " + right).replace(/\s+/g, " ").trim();
         } else {
@@ -39,13 +41,21 @@ Popup {
             draft.deadline = _preview.start;
         }
         AppController.saveTask(draft);
+        // Task.deadline is QDate-only — parsed time would be lost. Surface it
+        // as a calendar focus block so "купить хлеб завтра в 18:00" actually
+        // shows up at 18:00 on DayCalendar / WeekView.
+        if (_preview && _preview.ok && _preview.hasTime && _preview.start) {
+            const d = _preview.start;
+            const startHour = d.getHours() + d.getMinutes() / 60.0;
+            AppController.scheduleTask(draft.id, startHour, d);
+        }
         inputField.clear();
         root.close();
     }
 
     onOpened: {
         inputField.text = "";
-        _preview = { ok: false };
+        _preview = {ok: false};
         _title = "";
         inputField.forceActiveFocus();
     }
@@ -59,7 +69,9 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: 10
-        Item { Layout.preferredHeight: 6 }
+        Item {
+            Layout.preferredHeight: 6
+        }
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
@@ -75,7 +87,9 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
             placeholderText: "напр.: купить хлеб завтра в 18:00"
             font.pixelSize: 14
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle {
+                radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1
+            }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onTextChanged: previewTimer.restart()
@@ -108,7 +122,7 @@ Popup {
                 border.color: Theme.accent
                 border.width: 1
                 implicitHeight: previewChip.implicitHeight + 6
-                implicitWidth:  previewChip.implicitWidth + 16
+                implicitWidth: previewChip.implicitWidth + 16
                 Text {
                     id: previewChip
                     anchors.centerIn: parent
@@ -119,12 +133,13 @@ Popup {
                         const d = root._preview.start;
                         if (!d) return "";
                         const iso = d.getFullYear() + "-" +
-                                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                                    String(d.getDate()).padStart(2, "0");
+                            String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                            String(d.getDate()).padStart(2, "0");
                         if (root._preview.hasTime) {
                             const hh = String(d.getHours()).padStart(2, "0");
                             const mm = String(d.getMinutes()).padStart(2, "0");
                             return iso + " " + hh + ":" + mm;
+
                         }
                         return iso;
                     }
@@ -135,7 +150,9 @@ Popup {
         RowLayout {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 14
             spacing: 8
-            Item { Layout.fillWidth: true }
+            Item {
+                Layout.fillWidth: true
+            }
             PillButton {
                 text: "Отмена"
                 onClicked: root.close()
