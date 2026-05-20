@@ -7,7 +7,7 @@
 Native desktop kanban + calendar + docs for engineers.
 
 [![Qt 6](https://img.shields.io/badge/Qt-6.4%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
-[![C++20](https://img.shields.io/badge/C%2B%2B-17-00599c?logo=cplusplus&logoColor=white)](https://en.cppreference.com/w/cpp/20)
+[![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![CMake](https://img.shields.io/badge/CMake-3.21%2B-064f8c?logo=cmake&logoColor=white)](https://cmake.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
