@@ -12,6 +12,11 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
         { StatusChangedAtRole, "statusChangedAt" },
         { ArchivedRole,        "archived" },
         { BlockedStuckRole,    "blockedStuck" },
+        { PrStateRole,         "prState" },
+        { PrNumberRole,        "prNumber" },
+        { PrUrlRole,           "prUrl" },
+        { GitAheadRole,        "gitAhead" },
+        { GitBehindRole,       "gitBehind" },
     };
 }
 
@@ -29,6 +34,11 @@ QVariant TaskModel::data(const QModelIndex &idx, int role) const {
         case StatusChangedAtRole: return t.statusChangedAt;
         case ArchivedRole:        return t.archived;
         case BlockedStuckRole:    return m_blockedStuck.contains(t.id);
+        case PrStateRole:         return m_git.value(t.id).prState;
+        case PrNumberRole:        return m_git.value(t.id).prNumber;
+        case PrUrlRole:           return m_git.value(t.id).prUrl;
+        case GitAheadRole:        return m_git.value(t.id).ahead;
+        case GitBehindRole:       return m_git.value(t.id).behind;
     }
     return {};
 }
@@ -36,7 +46,37 @@ QVariant TaskModel::data(const QModelIndex &idx, int role) const {
 void TaskModel::reset(QVector<Task> items) {
     beginResetModel();
     m_items = std::move(items);
+    m_git.clear();
     endResetModel();
+}
+
+void TaskModel::setGitInfoForId(const QString &id, const QVariantMap &info) {
+    const int row = indexOfId(id);
+    if (row < 0) return;
+    GitInfo &g = m_git[id];
+    if (info.contains(QStringLiteral("prState")))
+        g.prState  = info.value(QStringLiteral("prState")).toString();
+    if (info.contains(QStringLiteral("prNumber")))
+        g.prNumber = info.value(QStringLiteral("prNumber")).toInt();
+    if (info.contains(QStringLiteral("prUrl")))
+        g.prUrl    = info.value(QStringLiteral("prUrl")).toString();
+    if (info.contains(QStringLiteral("ahead")))
+        g.ahead    = info.value(QStringLiteral("ahead")).toInt();
+    if (info.contains(QStringLiteral("behind")))
+        g.behind   = info.value(QStringLiteral("behind")).toInt();
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi,
+        { PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole });
+}
+
+void TaskModel::clearAllGitInfo() {
+    if (m_git.isEmpty() || m_items.isEmpty()) {
+        m_git.clear();
+        return;
+    }
+    m_git.clear();
+    emit dataChanged(index(0, 0), index(m_items.size() - 1, 0),
+        { PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole });
 }
 
 int TaskModel::indexOfId(const QString &id) const {

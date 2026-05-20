@@ -4,9 +4,11 @@
 #include <QColor>
 #include <QDate>
 #include <QDateTime>
+#include <QHash>
 #include <QSet>
 #include <QString>
 #include <QVariantList>
+#include <QVariantMap>
 #include <QVector>
 #include <qqmlregistration.h>
 
@@ -69,6 +71,8 @@ public:
         TitleRole, DescRole, PriorityRole,
         StatusRole, DeadlineRole, BranchRole,
         StatusChangedAtRole, ArchivedRole, BlockedStuckRole,
+        PrStateRole, PrNumberRole, PrUrlRole,
+        GitAheadRole, GitBehindRole,
     };
     explicit TaskModel(QObject *parent = nullptr) : QAbstractListModel(parent) {}
 
@@ -77,6 +81,12 @@ public:
     void setBlockedStuckIds(const QSet<QString> &ids);
     void setArchived(const QString &id, bool archived);
     void stampStatusChange(const QString &id);
+
+    // Push live git-derived data for a task (PR state, ahead/behind). Only
+    // keys present in \p info are updated; others stay as-is. Emits
+    // dataChanged for the matching row across all git roles.
+    void setGitInfoForId(const QString &id, const QVariantMap &info);
+    void clearAllGitInfo();
 
     int rowCount(const QModelIndex & = {}) const override { return m_items.size(); }
     QVariant data(const QModelIndex &idx, int role) const override;
@@ -92,8 +102,17 @@ public:
     void removeById(const QString &id);
 
 private:
-    QVector<Task> m_items;
-    QSet<QString> m_blockedStuck;
+    struct GitInfo {
+        QString prState;
+        QString prUrl;
+        int     prNumber = 0;
+        int     ahead    = 0;
+        int     behind   = 0;
+    };
+
+    QVector<Task>             m_items;
+    QSet<QString>             m_blockedStuck;
+    QHash<QString, GitInfo>   m_git;   // not persisted; runtime only
 };
 
 class EventModel : public QAbstractListModel {

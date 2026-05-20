@@ -15,6 +15,7 @@
 #include "Models.h"
 
 namespace heap::chrono { class ChronoParser; }
+namespace heap::git { class GitWatcher; }
 
 class QSystemTrayIcon;
 
@@ -51,6 +52,18 @@ class AppController : public QObject {
 
     Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
     Q_PROPERTY(QStringList blockedStuckIds READ blockedStuckIds NOTIFY blockedStuckChanged)
+
+    // ---- Git focus banner ----
+    Q_PROPERTY(QString     focusedTaskId          READ focusedTaskId
+               NOTIFY focusedGitChanged)
+    Q_PROPERTY(QString     focusedBranch          READ focusedBranch
+               NOTIFY focusedGitChanged)
+    Q_PROPERTY(QString     focusedRepo            READ focusedRepo
+               NOTIFY focusedGitChanged)
+    Q_PROPERTY(QVariantMap focusedRepoState       READ focusedRepoState
+               NOTIFY focusedGitChanged)
+    Q_PROPERTY(bool        focusedBannerDismissed READ focusedBannerDismissed
+               NOTIFY focusedGitChanged)
 
 public:
     explicit AppController(QObject *parent = nullptr);
@@ -194,6 +207,19 @@ public:
     Q_INVOKABLE void undoLastDeletion();
     Q_INVOKABLE void clearPendingUndo();
 
+    // ---- Git focus / watcher ----
+    QString     focusedTaskId() const         { return m_focusedTaskId; }
+    QString     focusedBranch() const         { return m_focusedBranch; }
+    QString     focusedRepo() const           { return m_focusedRepo; }
+    QVariantMap focusedRepoState() const      { return m_focusedRepoState; }
+    bool        focusedBannerDismissed() const {
+        return m_dismissedBranches.contains(m_focusedBranch);
+    }
+    Q_INVOKABLE void dismissGitBanner();
+    Q_INVOKABLE void openFocusedTask();
+    Q_INVOKABLE QStringList collectPrefixes() const;
+    Q_INVOKABLE void refreshGitForTaskBranch(const QString &taskId);
+
 signals:
     void selectedDateChanged();
     void themeChanged();
@@ -214,6 +240,8 @@ signals:
     void notification(const QString &title, const QString &body, const QString &kind);
     void toast(const QString &message);
     void undoableToast(const QString &message, int seconds);
+    void focusedGitChanged();
+    void openTaskRequested(const QString &id);
 
 private slots:
     void runAutomation();
@@ -296,4 +324,15 @@ private:
     void cancelUndo();
 
     std::unique_ptr<heap::chrono::ChronoParser> m_chrono;
+
+    // ---- Git watcher ----
+    std::unique_ptr<heap::git::GitWatcher> m_gitWatcher;
+    QString       m_focusedTaskId, m_focusedBranch, m_focusedRepo;
+    QVariantMap   m_focusedRepoState;
+    QSet<QString> m_dismissedBranches; // in-memory only; per branch name
+    void applyGitSettingsFromMap(const QVariantMap &git);
+    void onGitBranchChanged(const QString &repo,
+                            const QString &branch,
+                            const QString &taskId);
+    void onGitRepoState(const QString &repo, const QVariantMap &state);
 };
