@@ -154,6 +154,75 @@ Rectangle {
 
         Item { Layout.fillWidth: true }
 
+        // Git focus banner — appears when GitWatcher detects a checkout
+        // matching a registered task prefix. Dismiss persists until next
+        // branchChanged.
+        Rectangle {
+            id: gitBanner
+            visible: AppController.focusedTaskId.length > 0
+                  && !AppController.focusedBannerDismissed
+            Layout.preferredHeight: 26
+            Layout.alignment: Qt.AlignVCenter
+            radius: 6
+            color: Theme.accentSoft
+            border.color: Theme.accent
+            border.width: 1
+            implicitWidth: bannerRow.implicitWidth + 14
+            RowLayout {
+                id: bannerRow
+                anchors.fill: parent
+                anchors.leftMargin: 8; anchors.rightMargin: 6
+                spacing: 8
+                Text {
+                    text: "⎇"
+                    color: Theme.accentStrong
+                    font.family: Theme.fontMono
+                    font.pixelSize: 12
+                }
+                Text {
+                    text: "Working on " + AppController.focusedTaskId
+                    color: Theme.accentStrong
+                    font.family: Theme.fontMono
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
+                }
+                Rectangle {
+                    radius: 4
+                    color: openMA.containsMouse ? Theme.accentStrong : "transparent"
+                    border.color: Theme.accentStrong
+                    border.width: 1
+                    implicitWidth: openT.implicitWidth + 12
+                    implicitHeight: 18
+                    Text {
+                        id: openT
+                        anchors.centerIn: parent
+                        text: "Open"
+                        color: openMA.containsMouse ? Theme.bg : Theme.accentStrong
+                        font.pixelSize: 10
+                        font.weight: Font.Medium
+                    }
+                    MouseArea {
+                        id: openMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: AppController.openFocusedTask()
+                    }
+                }
+                Text {
+                    text: "×"
+                    color: Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: 14
+                    MouseArea {
+                        anchors.fill: parent
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: AppController.dismissGitBanner()
+                    }
+                }
+            }
+        }
+
         // Search
         Rectangle {
             Layout.preferredWidth: 280

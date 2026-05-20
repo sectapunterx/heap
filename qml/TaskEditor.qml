@@ -28,6 +28,10 @@ Popup {
         branchField.text = draft.branch || "";
         deadlineField.text = formatDate(draft.deadline);
         open();
+        // Kick a one-shot PR/state refresh for this task's branch across all
+        // watched repos. Result lands on TaskModel via repoStateUpdated and
+        // chips on the underlying TaskCard update without re-opening.
+        if (draft.id && !isNew) AppController.refreshGitForTaskBranch(draft.id);
     }
     function statusList() {
         const out = [];
