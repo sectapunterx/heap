@@ -308,6 +308,16 @@ ApplicationWindow {
     ProfileEditor { id: profileEditor }
     QuickCapturePopup { id: quickCapture }
 
+    // GitWatcher → TaskEditor bridge: TopBar "Open" button on the focus
+    // banner emits openTaskRequested; route it through the same showFor()
+    // path used by Kanban / Timeline / palette.
+    Connections {
+        target: AppController
+        function onOpenTaskRequested(taskId) {
+            taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+        }
+    }
+
     CommandPalette {
         id: cmdPalette
         onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))

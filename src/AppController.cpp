@@ -1,6 +1,8 @@
 #include "AppController.h"
 #include "SampleData.h"
 #include "chrono/ChronoParser.h"
+#include "git/BranchTaskMatcher.h"
+#include "git/GitWatcher.h"
 
 #include <cmath>
 
@@ -77,6 +79,31 @@ AppController::AppController(QObject *parent)
 
     loadStateOnStart();
     m_automationTimer->start();
+
+    // ---- Git watcher ----
+    m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged,
+            this, &AppController::onGitBranchChanged);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated,
+            this, &AppController::onGitRepoState);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this,
+            [this](const QString &, const QString &br, const QVariantMap &pr) {
+        heap::git::BranchTaskMatcher m(collectPrefixes());
+        const auto mr = m.extract(br);
+        if (!mr.matched) return;
+        QVariantMap entry;
+        entry["prState"]  = pr.value("state");
+        entry["prNumber"] = pr.value("number");
+        entry["prUrl"]    = pr.value("url");
+        m_tasks.setGitInfoForId(mr.taskId, entry);
+    });
+    applyGitSettingsFromMap(settingsMap().value("git").toMap());
+    connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+        applyGitSettingsFromMap(settingsMap().value("git").toMap());
+    });
+    connect(this, &AppController::activeProfileChanged, this, [this]() {
+        if (m_gitWatcher) m_gitWatcher->setPrefixes(collectPrefixes());
+    });
 
     // Fresh install or unreadable state — seed a single "Default" profile
     // from SampleData so the app boots with something sensible.
@@ -1902,4 +1929,95 @@ void AppController::runAutomation() {
             }
         }
     }
+}
+
+// ---- Git watcher integration ----
+
+QStringList AppController::collectPrefixes() const {
+    const QString def = settingsMap().value("tasks").toMap()
+                            .value("idPrefix", QStringLiteral("LTE"))
+                            .toString().trimmed().toUpper();
+    return def.isEmpty() ? QStringList{} : QStringList{ def };
+}
+
+void AppController::applyGitSettingsFromMap(const QVariantMap &g) {
+    if (!m_gitWatcher) return;
+    QStringList repos;
+    const QVariantList raw = g.value("watchedRepos").toList();
+    for (const QVariant &v : raw) {
+        const QString p = v.toString().trimmed();
+        if (!p.isEmpty()) repos << p;
+    }
+    m_gitWatcher->setPrefixes(collectPrefixes());
+    m_gitWatcher->setWatchedRepos(repos);
+    m_gitWatcher->setPrFetchEnabled(g.value("watchPrState", true).toBool());
+}
+
+void AppController::onGitBranchChanged(const QString &repo,
+                                       const QString &branch,
+                                       const QString &taskId) {
+    m_focusedRepo   = repo;
+    m_focusedBranch = branch;
+    m_focusedTaskId = taskId;
+    if (m_gitWatcher)
+        m_focusedRepoState = m_gitWatcher->snapshot().value(repo).toMap();
+    m_dismissedBranches.remove(branch); // re-arm banner on every branch change
+    emit focusedGitChanged();
+
+    if (taskId.isEmpty() || branch == QStringLiteral("(detached HEAD)")) return;
+    const QVariantMap g = settingsMap().value("git").toMap();
+    const int row = m_tasks.indexOfId(taskId);
+    if (row < 0) return;
+
+    if (g.value("autoMoveToInProgress", true).toBool()
+        && m_tasks.items().at(row).status != QStringLiteral("prog")) {
+        moveTask(taskId, QStringLiteral("prog"));
+    }
+    if (g.value("autoCreateFocusBlock", false).toBool()) {
+        scheduleFocusBlockFor(taskId);
+    }
+    emit notification(QStringLiteral("Working on ") + taskId,
+                      QStringLiteral("Branch ") + branch,
+                      QStringLiteral("git"));
+}
+
+void AppController::onGitRepoState(const QString &repo,
+                                   const QVariantMap &state) {
+    if (repo == m_focusedRepo) {
+        m_focusedRepoState = state;
+        emit focusedGitChanged();
+    }
+    heap::git::BranchTaskMatcher m(collectPrefixes());
+    const auto mr = m.extract(state.value("branch").toString());
+    if (!mr.matched) return;
+    const QVariantMap pr = state.value("pr").toMap();
+    QVariantMap entry;
+    entry["ahead"]    = state.value("ahead");
+    entry["behind"]   = state.value("behind");
+    entry["prState"]  = pr.value("state");
+    entry["prNumber"] = pr.value("number");
+    entry["prUrl"]    = pr.value("url");
+    m_tasks.setGitInfoForId(mr.taskId, entry);
+}
+
+void AppController::dismissGitBanner() {
+    if (m_focusedBranch.isEmpty()) return;
+    m_dismissedBranches.insert(m_focusedBranch);
+    emit focusedGitChanged();
+}
+
+void AppController::openFocusedTask() {
+    if (!m_focusedTaskId.isEmpty())
+        emit openTaskRequested(m_focusedTaskId);
+}
+
+void AppController::refreshGitForTaskBranch(const QString &taskId) {
+    if (!m_gitWatcher) return;
+    const int row = m_tasks.indexOfId(taskId);
+    if (row < 0) return;
+    const QString br = m_tasks.items().at(row).branch;
+    if (br.isEmpty()) return;
+    const QStringList repos = m_gitWatcher->snapshot().keys();
+    for (const QString &repo : repos)
+        m_gitWatcher->requestPrFetch(repo, br);
 }

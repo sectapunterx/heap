@@ -28,6 +28,8 @@ qt_add_executable(heap
     src/chrono/ChronoLocale_en.cpp
     src/chrono/ChronoLocale_ru.cpp
     src/chrono/ChronoParser.cpp
+    src/git/BranchTaskMatcher.cpp
+    src/git/GitWatcher.cpp
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -80,6 +82,9 @@ qt_add_qml_module(heap
         src/chrono/ChronoTokenizer.h
         src/chrono/ChronoLocale.h
         src/chrono/ChronoParser.h
+        src/git/BranchTaskMatcher.h
+        src/git/GitTypes.h
+        src/git/GitWatcher.h
 )
 
 target_include_directories(heap PRIVATE src)

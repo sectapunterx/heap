@@ -116,6 +116,58 @@ Rectangle {
                 font.pixelSize: 10
                 elide: Text.ElideRight
             }
+            // ── Git live-status chips — fed by GitWatcher via TaskModel ──
+            Rectangle {
+                visible: card.task && (card.task.gitAhead || 0) > 0
+                radius: 4
+                color: Theme.withAlpha(Theme.accent, 0.14)
+                border.color: Theme.accent
+                border.width: 1
+                implicitWidth: aheadT.implicitWidth + 10
+                implicitHeight: aheadT.implicitHeight + 2
+                Text {
+                    id: aheadT
+                    anchors.centerIn: parent
+                    text: "↑" + (card.task ? (card.task.gitAhead || 0) : 0)
+                    color: Theme.accentStrong
+                    font.family: Theme.fontMono
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                }
+            }
+            Rectangle {
+                visible: card.task && String(card.task.prState || "").length > 0
+                radius: 4
+                color: {
+                    const s = card.task ? String(card.task.prState || "") : "";
+                    if (s === "merged") return Theme.withAlpha(Theme.mFocus, 0.18);
+                    if (s === "closed") return Theme.withAlpha(Theme.textDim, 0.18);
+                    return Theme.withAlpha(Theme.p1, 0.18);
+                }
+                border.color: {
+                    const s = card.task ? String(card.task.prState || "") : "";
+                    if (s === "merged") return Theme.mFocus;
+                    if (s === "closed") return Theme.textDim;
+                    return Theme.p1;
+                }
+                border.width: 1
+                implicitWidth: prT.implicitWidth + 10
+                implicitHeight: prT.implicitHeight + 2
+                Text {
+                    id: prT
+                    anchors.centerIn: parent
+                    text: {
+                        if (!card.task) return "";
+                        const n = card.task.prNumber || 0;
+                        const s = String(card.task.prState || "");
+                        return (n > 0 ? "PR #" + n + " " : "PR ") + s;
+                    }
+                    color: Theme.text
+                    font.family: Theme.fontMono
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                }
+            }
         }
 
         Text {
