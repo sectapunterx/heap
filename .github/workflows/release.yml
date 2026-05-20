@@ -1,0 +1,78 @@
+name: Release Portable
+
+on:
+  push:
+    branches: [master]
+
+permissions:
+  contents: write
+
+jobs:
+  build-and-release:
+    runs-on: windows-latest
+
+    steps:
+      # ── Full history checkout (needed for release notes) ──────────
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      # ── Install MSYS2 + Qt6 ───────────────────────────────────────
+      # setup-msys2 installs to C:\msys64 by default — matches MSYS_ROOT
+      - name: Setup MSYS2 (UCRT64)
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: true
+          install: >-
+            mingw-w64-ucrt-x86_64-qt6-base
+            mingw-w64-ucrt-x86_64-qt6-declarative
+            mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-cmake
+            mingw-w64-ucrt-x86_64-ninja
+            mingw-w64-ucrt-x86_64-gcc
+
+      # ── CMake configure ───────────────────────────────────────────
+      - name: Configure
+        shell: msys2 {0}
+        run: |
+          cmake -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DMSYS_ROOT="C:/msys64"
+
+      # ── Build the binary ──────────────────────────────────────────
+      - name: Build heap
+        shell: msys2 {0}
+        run: cmake --build build --target heap --parallel $(nproc)
+
+      # ── Assemble portable bundle via CMake target ─────────────────
+      - name: Build portable bundle
+        shell: msys2 {0}
+        run: cmake --build build --target portable
+
+      # ── Pack into zip (PowerShell is built-in on windows-latest) ──
+      - name: Zip bundle
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path   "build\heap-portable\*" `
+            -DestinationPath "heap-portable-windows.zip"
+
+      # ── Generate tag: vYYYY.MM.DD-<short-sha> ─────────────────────
+      - name: Compute release tag
+        id: tag
+        shell: pwsh
+        run: |
+          $date = Get-Date -Format "yyyy.MM.dd"
+          $sha  = git rev-parse --short HEAD
+          "value=v$date-$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+
+      # ── Publish GitHub Release with the archive ───────────────────
+      - name: Publish release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name:               ${{ steps.tag.outputs.value }}
+          name:                   "heap ${{ steps.tag.outputs.value }}"
+          generate_release_notes: true
+          files:                  heap-portable-windows.zip
