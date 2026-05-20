@@ -17,7 +17,7 @@ find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Svg)
 
 qt_standard_project_setup(REQUIRES 6.4)
 
-qt_add_executable(heap
+qt_add_executable(heap WIN32
     src/main.cpp
     src/AppController.cpp
     src/Models.cpp
