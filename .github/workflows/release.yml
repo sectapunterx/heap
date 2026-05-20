@@ -33,9 +33,17 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-gcc
 
+      # ── Expose MSYS2 ucrt64/bin to every subsequent step ──────────
+      # Without this, windeployqt cannot find qmlimportscanner
+      # when Ninja invokes the portable target via cmd.exe
+      - name: Add MSYS2 ucrt64/bin to PATH
+        shell: pwsh
+        run: |
+          $ucrt = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
+          Write-Output "Adding to PATH: $ucrt"
+          "$ucrt" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+
       # ── CMake configure ───────────────────────────────────────────
-      # cygpath -m converts the Windows path to forward-slash form
-      # that CMake accepts cleanly (e.g. D:/a/_temp/msys64)
       - name: Configure
         shell: msys2 {0}
         run: |
