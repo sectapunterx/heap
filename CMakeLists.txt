@@ -130,48 +130,35 @@ if(HEAP_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-# ─── Автоматическое создание Portable-сборки (для Windows / MSYS2) ───
+# ─── Автоматическое создание Portable-сборки ───
 if(WIN32)
-    # Пытаемся найти windeployqt в путях системы
     find_program(WINDEPLOYQT_EXECUTABLE windeployqt)
 
     if(WINDEPLOYQT_EXECUTABLE)
-        # Указываем имя папки, куда будет собираться портативная версия
+        # Параметризуем корень MSYS2: переопределяется через -DMSYS_ROOT=...
+        # на CI и локально может отличаться только этим значением
+        set(MSYS_ROOT "C:/msys64" CACHE PATH "MSYS2 installation root")
+        set(MSYS_BIN_DIR "${MSYS_ROOT}/ucrt64/bin")
+        set(MSYS_QML_DIR "${MSYS_ROOT}/ucrt64/share/qt6/qml")
+
         set(PORTABLE_DIR "${CMAKE_BINARY_DIR}/heap-portable")
 
-        # Хардкодим пути MSYS2 UCRT64 (т.к. они стабильны для твоего окружения)
-        set(MSYS_BIN_DIR "C:/msys64/ucrt64/bin")
-        set(MSYS_QML_DIR "C:/msys64/ucrt64/share/qt6/qml")
-
         add_custom_target(portable
-                # Указываем, что цель зависит от сборки самого приложения (heap)
                 DEPENDS heap
-
-                # 1. Очищаем старую папку (если есть) и создаем новую
-                COMMAND ${CMAKE_COMMAND} -E rm -rf "${PORTABLE_DIR}"
-                COMMAND ${CMAKE_COMMAND} -E make_directory "${PORTABLE_DIR}"
-
-                # 2. Копируем свежесобранный .exe в новую папку
+                COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
+                COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
-
-                # 3. Запускаем windeployqt для сбора библиотек Qt
                 COMMAND ${WINDEPLOYQT_EXECUTABLE}
                 --no-translations
                 --qmldir "${CMAKE_SOURCE_DIR}/qml"
                 "${PORTABLE_DIR}/$<TARGET_FILE_NAME:heap>"
-
-                # 4. ВРУЧНУЮ копируем системные DLL от MinGW (которые windeployqt игнорирует)
-                COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libstdc++-6.dll" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libstdc++-6.dll"    "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libgcc_s_seh-1.dll" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libwinpthread-1.dll" "${PORTABLE_DIR}/"
-                # Если понадобятся другие DLL (например, libzstd.dll), добавь их сюда по аналогии
-
-                # 5. ВРУЧНУЮ копируем папку QtQuick (которую сканер MSYS2 часто пропускает)
-                COMMAND ${CMAKE_COMMAND} -E copy_directory "${MSYS_QML_DIR}/QtQuick" "${PORTABLE_DIR}/QtQuick"
-
-                COMMENT "Собираем готовую Portable-версию в папке ${PORTABLE_DIR}..."
+                COMMAND ${CMAKE_COMMAND} -E copy_directory "${MSYS_QML_DIR}/QtQuick"  "${PORTABLE_DIR}/QtQuick"
+                COMMENT "Assembling portable bundle → ${PORTABLE_DIR}"
         )
     else()
-        message(WARNING "Утилита windeployqt не найдена. Portable-сборка недоступна.")
+        message(WARNING "windeployqt not found — portable target unavailable.")
     endif()
 endif()
