@@ -349,6 +349,32 @@ Item {
                             }
                         }
 
+                        // Slash-commands — /today, /tomorrow, /завтра, etc.
+                        // Tab or Enter replaces "/<word>" with a parsed ISO
+                        // date when the chrono parser recognises the word.
+                        if (event.key === Qt.Key_Tab
+                            || event.key === Qt.Key_Return
+                            || event.key === Qt.Key_Enter)
+                        {
+                            const beforeCmd = editor.text.substring(0, editor.cursorPosition);
+                            const slashM = beforeCmd.match(/\/([A-Za-zА-Яа-яЁё]+)$/);
+                            if (slashM) {
+                                const word = slashM[1];
+                                const parsed = AppController.parseDateTime(word, new Date());
+                                if (parsed && parsed.ok && parsed.start) {
+                                    const d = parsed.start;
+                                    const iso = d.getFullYear() + "-" +
+                                                String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                                                String(d.getDate()).padStart(2, "0");
+                                    const slashPos = editor.cursorPosition - (word.length + 1);
+                                    editor.remove(slashPos, editor.cursorPosition);
+                                    editor.insert(slashPos, iso);
+                                    event.accepted = true;
+                                    return;
+                                }
+                            }
+                        }
+
                         // Smart Enter — continue markdown structure (list,
                         // numbered, checklist, quote) and preserve indent
                         // inside fenced code blocks.

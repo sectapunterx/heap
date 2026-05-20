@@ -1,8 +1,9 @@
 cmake_minimum_required(VERSION 3.21)
 project(heap VERSION 0.4.2 LANGUAGES CXX)
 
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
@@ -23,6 +24,10 @@ qt_add_executable(heap
     src/SampleData.cpp
     src/CodeHighlighter.cpp
     src/NotesHighlighter.cpp
+    src/chrono/ChronoTokenizer.cpp
+    src/chrono/ChronoLocale_en.cpp
+    src/chrono/ChronoLocale_ru.cpp
+    src/chrono/ChronoParser.cpp
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -64,12 +69,17 @@ qt_add_qml_module(heap
         qml/Brand.qml
         qml/BrandLogo.qml
         qml/SplashScreen.qml
+        qml/QuickCapturePopup.qml
     SOURCES
         src/AppController.h
         src/Models.h
         src/SampleData.h
         src/CodeHighlighter.h
         src/NotesHighlighter.h
+        src/chrono/ChronoTypes.h
+        src/chrono/ChronoTokenizer.h
+        src/chrono/ChronoLocale.h
+        src/chrono/ChronoParser.h
 )
 
 target_include_directories(heap PRIVATE src)
@@ -108,3 +118,9 @@ install(TARGETS heap
     RUNTIME DESTINATION bin
     LIBRARY DESTINATION lib
 )
+
+option(HEAP_BUILD_TESTS "Build heap unit tests" ON)
+if(HEAP_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

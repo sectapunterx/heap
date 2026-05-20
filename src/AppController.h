@@ -10,7 +10,11 @@
 #include <QVariantMap>
 #include <qqmlregistration.h>
 
+#include <memory>
+
 #include "Models.h"
+
+namespace heap::chrono { class ChronoParser; }
 
 class QSystemTrayIcon;
 
@@ -144,6 +148,12 @@ public:
     Q_INVOKABLE QString deadlineDiffLabel(const QDate &deadline) const;
     Q_INVOKABLE QString shortDate(const QDate &d) const;               // "Пт, 15 май"
     Q_INVOKABLE int     isoWeekNumber(const QDate &d) const;
+
+    // ---- Free-form datetime parser (heap chrono) ----
+    Q_INVOKABLE QVariantMap parseDateTime(const QString &input,
+                                          const QDateTime &reference = QDateTime()) const;
+    Q_INVOKABLE QVariantList parseAllDateTimes(const QString &input,
+                                               const QDateTime &reference = QDateTime()) const;
 
     Q_INVOKABLE void copyToClipboard(const QString &text);
 
@@ -284,4 +294,6 @@ private:
     QTimer*      m_undoTimer = nullptr;
     void armUndo(int seconds);
     void cancelUndo();
+
+    std::unique_ptr<heap::chrono::ChronoParser> m_chrono;
 };
