@@ -306,6 +306,7 @@ ApplicationWindow {
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
+    QuickCapturePopup { id: quickCapture }
 
     CommandPalette {
         id: cmdPalette
@@ -354,6 +355,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: taskEditor.showFor(AppController.newTaskDraft("todo"))
+    }
+    Shortcut {
+        sequence: _kbd("quick-capture")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: quickCapture.open()
     }
     Shortcut {
         sequence: _kbd("view.board")

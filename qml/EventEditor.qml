@@ -58,10 +58,41 @@ Popup {
     }
 
     function parseHour(s) {
-        const parts = (s || "").split(":");
+        if (!s) return 0;
+        const r = AppController.parseDateTime(s, new Date());
+        if (r && r.ok && r.hasTime && r.start) {
+            return r.start.getHours() + r.start.getMinutes() / 60.0;
+        }
+        const parts = s.split(":");
         const h = parseInt(parts[0]); const m = parseInt(parts[1] || "0");
         if (isNaN(h)) return 0;
         return h + (isNaN(m) ? 0 : m / 60.0);
+    }
+
+    // If `s` resolves to a range expression (e.g. "14-15", "с 14 до 15"), return
+    // [startHour, endHour]. Otherwise null.
+    function parseHourRange(s) {
+        if (!s) return null;
+        const r = AppController.parseDateTime(s, new Date());
+        if (r && r.ok && r.hasTime && r.start && r.end && r.end.getTime() > 0) {
+            return [r.start.getHours() + r.start.getMinutes() / 60.0,
+                    r.end.getHours()   + r.end.getMinutes()   / 60.0];
+        }
+        return null;
+    }
+
+    function _formatHour(h) {
+        const hh = Math.floor(h);
+        const mm = Math.round((h - hh) * 60);
+        return String(hh).padStart(2, "0") + ":" + String(mm).padStart(2, "0");
+    }
+
+    function _maybeExpandRange(field, otherField) {
+        const r = root.parseHourRange(field.text);
+        if (r && otherField) {
+            field.text = root._formatHour(r[0]);
+            otherField.text = root._formatHour(r[1]);
+        }
     }
 
     background: Rectangle {
@@ -119,9 +150,10 @@ Popup {
                 id: startField
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
-                placeholderText: "10:00"
+                placeholderText: "10:00 или 14-15"
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
+                onEditingFinished: root._maybeExpandRange(startField, endField)
             }
             TextField {
                 id: endField

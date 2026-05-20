@@ -47,9 +47,19 @@ Popup {
     }
     function parseDate(s) {
         if (!s) return undefined;
+        const r = AppController.parseDateTime(s, new Date());
+        if (r && r.ok && r.start) return r.start;
         const parts = s.split("-");
         if (parts.length !== 3) return undefined;
         return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+    }
+
+    property var _deadlinePreview: ({ ok: false })
+
+    function _refreshDeadlinePreview() {
+        const s = deadlineField.text;
+        if (!s) { _deadlinePreview = { ok: false }; return; }
+        _deadlinePreview = AppController.parseDateTime(s, new Date()) || { ok: false };
     }
 
     anchors.centerIn: Overlay.overlay
@@ -157,16 +167,70 @@ Popup {
                     verticalAlignment: Text.AlignVCenter
                 }
             }
-            FieldLabel { text: "ДЕДЛАЙН (YYYY-MM-DD)" }
+            FieldLabel { text: "ДЕДЛАЙН (любой формат)" }
             FieldLabel { text: "BRANCH" }
-            TextField {
-                id: deadlineField
+            RowLayout {
                 Layout.fillWidth: true
-                placeholderText: "2026-05-22"
-                font.family: Theme.fontMono
-                background: FieldBg {}
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
+                spacing: 6
+                TextField {
+                    id: deadlineField
+                    Layout.fillWidth: true
+                    placeholderText: "завтра, 22 мая, in 2 weeks…"
+                    font.family: Theme.fontMono
+                    background: Rectangle {
+                        radius: 6
+                        color: Theme.panel2
+                        border.color: deadlineField.text.length === 0
+                                      ? Theme.border
+                                      : (root._deadlinePreview && root._deadlinePreview.ok
+                                            ? (Theme.accent || Theme.borderStrong)
+                                            : (Theme.danger || "#c0392b"))
+                        border.width: 1
+                    }
+                    color: Theme.text
+                    placeholderTextColor: Theme.textDim
+                    onTextChanged: deadlinePreviewTimer.restart()
+                    onEditingFinished: {
+                        if (root._deadlinePreview && root._deadlinePreview.ok &&
+                            root._deadlinePreview.start)
+                        {
+                            text = root.formatDate(root._deadlinePreview.start);
+                        }
+                    }
+                    ToolTip.visible: hovered && text.length > 0 &&
+                                     root._deadlinePreview && !root._deadlinePreview.ok
+                    ToolTip.text: "не распознано"
+                }
+                Timer {
+                    id: deadlinePreviewTimer
+                    interval: 80
+                    repeat: false
+                    onTriggered: root._refreshDeadlinePreview()
+                }
+                Rectangle {
+                    visible: root._deadlinePreview && root._deadlinePreview.ok
+                    radius: 10
+                    color: Theme.panel2
+                    border.color: Theme.accent || Theme.borderStrong
+                    border.width: 1
+                    implicitHeight: chipLabel.implicitHeight + 6
+                    implicitWidth: chipLabel.implicitWidth + 14
+                    Text {
+                        id: chipLabel
+                        anchors.centerIn: parent
+                        font.pixelSize: 10
+                        color: Theme.text
+                        text: {
+                            if (!root._deadlinePreview || !root._deadlinePreview.ok ||
+                                !root._deadlinePreview.start) return "";
+                            const d = root._deadlinePreview.start;
+                            const iso = d.getFullYear() + "-" +
+                                        String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                                        String(d.getDate()).padStart(2, "0");
+                            return "↑ " + iso;
+                        }
+                    }
+                }
             }
             TextField {
                 id: branchField

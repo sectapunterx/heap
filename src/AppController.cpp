@@ -1,5 +1,6 @@
 #include "AppController.h"
 #include "SampleData.h"
+#include "chrono/ChronoParser.h"
 
 #include <cmath>
 
@@ -29,6 +30,7 @@ constexpr int kBackupRetentionCount  = 20;
 
 AppController::AppController(QObject *parent)
     : QObject(parent)
+    , m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale()))
 {
     m_today = QDate::currentDate();
     m_selectedDate = m_today;
@@ -620,6 +622,44 @@ QString AppController::shortDate(const QDate &d) const {
 int AppController::isoWeekNumber(const QDate &d) const {
     if (!d.isValid()) return 0;
     return d.weekNumber();
+}
+
+QVariantMap AppController::parseDateTime(const QString &input,
+                                         const QDateTime &reference) const
+{
+    QVariantMap m;
+    if (!m_chrono) { m.insert("ok", false); return m; }
+    const auto r = m_chrono->parse(input, reference);
+    m.insert("ok",           r.ok);
+    m.insert("start",        r.start);
+    m.insert("end",          r.end);
+    m.insert("hasTime",      r.hasTime);
+    m.insert("recurrence",   r.recurrence);
+    m.insert("consumed",     r.consumed);
+    m.insert("startOffset",  r.startOffset);
+    m.insert("endOffset",    r.endOffset);
+    return m;
+}
+
+QVariantList AppController::parseAllDateTimes(const QString &input,
+                                              const QDateTime &reference) const
+{
+    QVariantList out;
+    if (!m_chrono) return out;
+    const auto all = m_chrono->parseAll(input, reference);
+    for (const auto &r : all) {
+        QVariantMap m;
+        m.insert("ok",           r.ok);
+        m.insert("start",        r.start);
+        m.insert("end",          r.end);
+        m.insert("hasTime",      r.hasTime);
+        m.insert("recurrence",   r.recurrence);
+        m.insert("consumed",     r.consumed);
+        m.insert("startOffset",  r.startOffset);
+        m.insert("endOffset",    r.endOffset);
+        out.append(m);
+    }
+    return out;
 }
 
 void AppController::copyToClipboard(const QString &text) {
@@ -1548,6 +1588,8 @@ void AppController::seedShortcutCatalog() {
         "Восстановить последнюю удалённую задачу/событие/профиль.", "Ctrl+Z"));
     m_shortcuts.append(makeShortcut("search.focus",     "Фокус в поиск",
         "Перевести курсор в строку поиска в шапке.",           "Ctrl+F"));
+    m_shortcuts.append(makeShortcut("quick-capture",    "Быстрое создание задачи",
+        "Открыть Quick-capture с разбором даты на лету.",      "Ctrl+Shift+Space"));
     emit shortcutsChanged();
 }
 
