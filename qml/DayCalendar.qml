@@ -294,6 +294,7 @@ Item {
                                 required property var date
                                 required property string taskId
                                 required property string profileId
+                                required property string context
 
                                 // Transient drag/resize state.
                                 property real dragDy: 0           // pixels while move-dragging
@@ -341,13 +342,34 @@ Item {
                                     anchors.topMargin: 6; anchors.bottomMargin: 6
                                     spacing: 2
                                     clip: true
-                                    Text {
+                                    RowLayout {
                                         width: parent.width
-                                        text: evRect.title + (evRect.taskId ? "  " + evRect.taskId : "")
-                                        color: Theme.text
-                                        font.pixelSize: 12
-                                        font.weight: Font.DemiBold
-                                        elide: Text.ElideRight
+                                        spacing: 6
+                                        Text {
+                                            visible: evRect.context.length > 0
+                                            text: evRect.context
+                                            color: Theme.textMuted
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
+                                            Layout.maximumWidth: parent.width * 0.45
+                                        }
+                                        Rectangle {
+                                            visible: evRect.context.length > 0
+                                            Layout.preferredWidth: 6; Layout.preferredHeight: 6
+                                            radius: 3
+                                            color: evRect.profileInfo
+                                                ? evRect.profileInfo.color
+                                                : Theme.eventColor(evRect.type)
+                                        }
+                                        Text {
+                                            Layout.fillWidth: true
+                                            text: evRect.title + (evRect.taskId ? "  " + evRect.taskId : "")
+                                            color: Theme.text
+                                            font.pixelSize: 12
+                                            font.weight: Font.DemiBold
+                                            elide: Text.ElideRight
+                                        }
                                     }
                                     Text {
                                         text: Theme.fmtHour(evRect.effStart) + " – " + Theme.fmtHour(evRect.effEnd)

@@ -119,12 +119,12 @@ AppController::AppController(QObject* parent) :
     }
   });
 
-  // Fresh install or unreadable state — seed a single "Default" profile
+  // Fresh install or unreadable state — seed a single "Example" profile
   // from SampleData so the app boots with something sensible.
   if(m_profiles.isEmpty()) {
     Profile p;
     p.id = "default";
-    p.name = "Default";
+    p.name = "Example";
     p.color = "#5cc2dd";
     p.createdAt = QDateTime::currentDateTime();
     p.tasks = SampleData::tasks();
@@ -458,6 +458,7 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
   m["date"] = date.isValid() ? date : m_selectedDate;
   m["taskId"] = QString();
   m["profileId"] = m_activeProfileId;  // default attribution: active profile
+  m["context"] = QString();
   m["_isNew"] = true;
   return m;
 }
@@ -472,7 +473,16 @@ void AppController::saveEvent(const QVariantMap& draft) {
   e.attendees = draft.value("attendees").toString();
   e.date = draft.value("date").toDate();
   e.taskId = draft.value("taskId").toString();
-  e.profileId = draft.value("profileId").toString();
+  // EventEditor no longer exposes profileId — preserve the prior value
+  // (round-tripped through showForId) when the draft omits the key, so
+  // existing saved attribution survives an edit.
+  if(draft.contains("profileId")) {
+    e.profileId = draft.value("profileId").toString();
+  } else {
+    const int prev = m_events.indexOfId(e.id);
+    e.profileId = (prev >= 0) ? m_events.items().at(prev).profileId : QString();
+  }
+  e.context = draft.value("context").toString();
   if(e.end <= e.start) {
     e.end = e.start + 0.25;
   }
@@ -1163,6 +1173,7 @@ QJsonArray eventsToJson(const QVector<CalEvent>& xs) {
     o["date"] = e.date.isValid() ? e.date.toString(Qt::ISODate) : QString();
     o["taskId"] = e.taskId;
     o["profileId"] = e.profileId;
+    o["context"] = e.context;
     a.append(o);
   }
   return a;
@@ -1183,6 +1194,7 @@ QVector<CalEvent> eventsFromJson(const QJsonArray& a, const QString& fallbackPro
     e.date = QDate::fromString(o["date"].toString(), Qt::ISODate);
     e.taskId = o["taskId"].toString();
     e.profileId = o.contains("profileId") ? o["profileId"].toString() : fallbackProfileId;
+    e.context = o["context"].toString();
     v.append(e);
   }
   return v;
@@ -1561,10 +1573,10 @@ void AppController::loadStateOnStart() {
       globalEvents = eventsFromJson(root["events"].toArray());
     }
   } else {
-    // ----- schema v1: flat fields → wrap into one "Default" profile -----
+    // ----- schema v1: flat fields → wrap into one "Example" profile -----
     Profile p;
     p.id = "default";
-    p.name = "Default";
+    p.name = "Example";
     p.color = "#5cc2dd";
     p.createdAt = QDateTime::currentDateTime();
     if(root.contains("tasks")) {
@@ -1760,6 +1772,61 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   emit toast(QString("Дублирован профиль: %1").arg(copy.name));
   scheduleSave();
   return copy.id;
+}
+
+int AppController::renameTaskIdPrefix(const QString& oldPrefix, const QString& newPrefix) {
+  const QString from = oldPrefix.trimmed().toUpper();
+  const QString to = newPrefix.trimmed().toUpper();
+  if(from.isEmpty() || to.isEmpty() || from == to) {
+    return 0;
+  }
+
+  // Persist the live model back into the active profile so we walk a
+  // single source of truth — m_profiles holds the canonical list while
+  // m_tasks mirrors only the active one.
+  snapshotActiveProfile();
+
+  const QRegularExpression rx(QStringLiteral("^") + QRegularExpression::escape(from) + QStringLiteral("-(\\d+)$"),
+                              QRegularExpression::CaseInsensitiveOption);
+
+  QHash<QString, QString> remap;  // old id → new id, for CalEvent.taskId fix-up
+  int renamed = 0;
+
+  for(Profile& pr : m_profiles) {
+    for(Task& t : pr.tasks) {
+      const auto m = rx.match(t.id);
+      if(!m.hasMatch()) {
+        continue;
+      }
+      const QString next = to + QChar('-') + m.captured(1);
+      remap.insert(t.id, next);
+      t.id = next;
+      ++renamed;
+    }
+  }
+
+  if(!remap.isEmpty()) {
+    const auto& events = m_events.items();
+    for(const auto& event : events) {
+      const QString& tid = event.taskId;
+      auto it = remap.find(tid);
+      if(it == remap.end()) {
+        continue;
+      }
+      CalEvent copy = event;
+      copy.taskId = it.value();
+      m_events.upsert(copy);
+    }
+
+    const int ai = profileIndexOf(m_activeProfileId);
+    if(ai >= 0) {
+      applyProfileToModels(m_profiles[ai]);
+    }
+    scheduleSave();
+    emit toast(QString("Переименовано задач: %1").arg(renamed));
+  }
+
+  return renamed;
 }
 
 // ───────────────────────────────────────────────────── Backups API ──
