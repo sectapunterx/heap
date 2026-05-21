@@ -129,6 +129,14 @@ target_link_libraries(heap PRIVATE
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap PRIVATE Qt6::DBus)
 endif()
+
+# Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
+# can adapt the Settings UI: unimplemented sections are shown disabled in
+# Release, and the "show unimplemented" toggle is added in Debug only.
+target_compile_definitions(heap PRIVATE
+    $<$<CONFIG:Debug>:HEAP_DEBUG_BUILD=1>
+    $<$<CONFIG:RelWithDebInfo>:HEAP_DEBUG_BUILD=1>
+)
 if (TARGET Qt6::Svg)
     target_link_libraries(heap PRIVATE Qt6::Svg)
     target_compile_definitions(heap PRIVATE HEAP_HAS_SVG=1)
