@@ -56,7 +56,7 @@
 
         <nav class="topbar-tabs" aria-label="primary">
             <a class="tab active" href="#cover"><span class="num">00</span> overview</a>
-            <a class="tab" href="#what"><span class="num">01</span> what</a>
+            <a class="tab" href="#inside"><span class="num">01</span> inside</a>
             <a class="tab" href="#features"><span class="num">02</span> features</a>
             <a class="tab" href="#screens"><span class="num">03</span> screens</a>
             <a class="tab" href="#build"><span class="num">04</span> build</a>
@@ -83,7 +83,7 @@
 
         <div class="lede-row">
             <div>
-                <h2>Work, in one&nbsp;place.</h2>
+                <h2>Work, in one&nbsp;place</h2>
             </div>
             <div>
                 <p class="descriptor">
@@ -120,17 +120,17 @@
         </div>
 
         <div class="footnotes" style="margin-top:56px;">
-            <span>↓ scroll · what it is</span>
+            <span>↓ scroll · inside</span>
             <span>v 0.4.2 · 2026 — rebrand</span>
         </div>
     </section>
 
-    <!-- ============================ 01 · WHAT IT IS ============================ -->
-    <section id="what" data-screen-label="02 what it is">
-        <p class="eyebrow"><span class="num">01</span> what it is</p>
+    <!-- ============================ 01 · INSIDE ============================ -->
+    <section id="inside" data-screen-label="02 inside">
+        <p class="eyebrow"><span class="num">01</span> inside</p>
 
         <div class="section-head">
-            <h2>One process,<br>one workspace.</h2>
+            <h2>One process,<br>one workspace</h2>
             <div>
                 <p class="desc">
                     heap. ships as a single native binary. The board, the calendar, the docs canvas, and the markdown
@@ -177,7 +177,7 @@
         <p class="eyebrow"><span class="num">02</span> features</p>
 
         <div class="section-head">
-            <h2>Boards, calendars,<br>docs, notes.</h2>
+            <h2>Boards, calendars,<br>docs, notes</h2>
             <p class="desc">
                 Every surface is rendered in QML with the same palette and the same keyboard model. There is no
                 web view and no embedded browser. The board column you drag, the calendar block you resize, and the
@@ -247,7 +247,7 @@
         <p class="eyebrow"><span class="num">03</span> screens</p>
 
         <div class="section-head">
-            <h2>One window.<br>Six&nbsp;surfaces.</h2>
+            <h2>One window<br>six&nbsp;surfaces</h2>
             <p class="desc">
                 A guided tour of the surfaces you'll actually use. Every screenshot is the real QML app on a real
                 workspace — same palette, same keyboard, same JSON state file behind it.
@@ -257,13 +257,19 @@
         <div class="screens" data-screens>
             <div class="screen-tabs" role="tablist" aria-label="screens">
                 <button class="screen-tab" role="tab" aria-selected="true" data-target="board">
-                    <span class="num">01</span> board · default
+                    <span class="num">01</span> board
                 </button>
-                <button class="screen-tab" role="tab" aria-selected="false" data-target="focus">
-                    <span class="num">02</span> board · focused
+                <button class="screen-tab" role="tab" aria-selected="false" data-target="timeline">
+                    <span class="num">02</span> timeline
                 </button>
-                <button class="screen-tab" role="tab" aria-selected="false" data-target="hotkeys">
-                    <span class="num">03</span> hotkeys · tweaks
+                <button class="screen-tab" role="tab" aria-selected="false" data-target="week">
+                    <span class="num">03</span> week
+                </button>
+                <button class="screen-tab" role="tab" aria-selected="false" data-target="docs">
+                    <span class="num">04</span> docs
+                </button>
+                <button class="screen-tab" role="tab" aria-selected="false" data-target="notes">
+                    <span class="num">05</span> notes
                 </button>
             </div>
 
@@ -272,62 +278,102 @@
                 <div class="screen-frame">
                     <div class="surface-bar">
                         <div class="dots"><span></span><span></span><span></span></div>
-                        <span>heap. — board · eNB-core / sprint-10</span>
-                        <span class="meta">full layout · 1920 × 1080</span>
+                        <span>heap. — board</span>
+                        <span class="meta">full layout</span>
                     </div>
                     <img src="assets/img/screens/board-full.png"
-                         alt="heap. board: backlog, to-do, in-progress, 50/50, blocked, code review, done columns with calendar and team panel">
+                         alt="heap. board view: status columns from backlog through done with a pinned calendar and people pane on the right">
                 </div>
                 <div class="screen-caption">
-                    <h4>Default board layout</h4>
+                    <h4>Board</h4>
                     <p>
-                        Seven columns from backlog to done, an inline calendar pinned to the right, and a
-                        "кому написать" panel for outstanding pings. Filters (P0–P3) live at the top; the
-                        archived strip totals overdue / in-review at a glance.
+                        Status columns from backlog through done, with a pinned calendar and a people pane on the
+                        right. Priority filters and the archived strip live at the top.
                     </p>
                 </div>
             </div>
 
-            <!-- panel: focus -->
-            <div class="screen-panel" data-name="focus">
+            <!-- panel: timeline -->
+            <div class="screen-panel" data-name="timeline">
                 <div class="screen-frame">
                     <div class="surface-bar">
                         <div class="dots"><span></span><span></span><span></span></div>
-                        <span>heap. — board · focus mode</span>
-                        <span class="meta">narrow layout</span>
+                        <span>heap. — timeline</span>
+                        <span class="meta">deadline buckets</span>
                     </div>
-                    <img src="assets/img/screens/calendar-focus.png"
-                         alt="heap. board in focus mode: three columns visible with calendar still pinned on the right">
+                    <img src="assets/img/screens/board-timeline.png"
+                         alt="heap. timeline view with overdue, today, tomorrow, this week, and later buckets">
                 </div>
                 <div class="screen-caption">
-                    <h4>Focus a single workstream</h4>
+                    <h4>Timeline</h4>
                     <p>
-                        Collapse columns you're not touching today. The calendar stays anchored so a focus block
-                        you scheduled this morning is one glance away — drag a card onto it to time-box.
+                        Tasks bucketed by overdue, today, tomorrow, this week, and later. Sub-grouped by date with
+                        a show-done toggle and accent stripes for priority.
                     </p>
                 </div>
             </div>
 
-            <!-- panel: hotkeys -->
-            <div class="screen-panel" data-name="hotkeys">
+            <!-- panel: week -->
+            <div class="screen-panel" data-name="week">
                 <div class="screen-frame">
                     <div class="surface-bar">
                         <div class="dots"><span></span><span></span><span></span></div>
-                        <span>heap. — settings · hotkeys + tweaks</span>
-                        <span class="meta">overlays</span>
+                        <span>heap. — week</span>
+                        <span class="meta">7-day grid</span>
                     </div>
-                    <img src="assets/img/screens/hotkeys-tweaks.png"
-                         alt="heap. with hotkeys palette and tweaks panel open over the board">
+                    <img src="assets/img/screens/board-week.png"
+                         alt="heap. week view: 7-day grid with all-day deadline chips above an hourly event canvas">
                 </div>
                 <div class="screen-caption">
-                    <h4>Hotkeys and tweaks</h4>
+                    <h4>Week</h4>
                     <p>
-                        Every accelerator is editable from a single sheet. The tweaks panel exposes the few
-                        choices the brand actually allows — theme, density, accent, accessibility — and writes
-                        them back to the JSON profile file.
+                        7-day grid with all-day deadline chips above the hourly event canvas. Drag, resize, and
+                        cross-day move directly on the grid.
                     </p>
                 </div>
             </div>
+
+            <!-- panel: docs -->
+            <div class="screen-panel" data-name="docs">
+                <div class="screen-frame">
+                    <div class="surface-bar">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <span>heap. — docs</span>
+                        <span class="meta">sections + snippets</span>
+                    </div>
+                    <img src="assets/img/screens/board-docs.png"
+                         alt="heap. docs canvas with sections, custom fields, snippet editor, and contact cards">
+                </div>
+                <div class="screen-caption">
+                    <h4>Docs</h4>
+                    <p>
+                        Sections (3GPP, internal, C++, tools) with custom fields. A snippet editor with syntax
+                        highlighting and contact cards sit alongside.
+                    </p>
+                </div>
+            </div>
+
+            <!-- panel: notes -->
+            <div class="screen-panel" data-name="notes">
+                <div class="screen-frame">
+                    <div class="surface-bar">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <span>heap. — notes</span>
+                        <span class="meta">markdown canvas</span>
+                    </div>
+                    <img src="assets/img/screens/board-notes.png"
+                         alt="heap. notes canvas: per-profile markdown with @people and #ticket autocomplete">
+                </div>
+                <div class="screen-caption">
+                    <h4>Notes</h4>
+                    <p>
+                        Per-profile markdown canvas with <span class="mono">@people</span> and
+                        <span class="mono">#ticket</span> autocomplete. Persists to the same JSON workspace as
+                        everything else.
+                    </p>
+                </div>
+            </div>
+
         </div>
     </section>
 
@@ -336,7 +382,7 @@
         <p class="eyebrow"><span class="num">04</span> build</p>
 
         <div class="section-head">
-            <h2>Three commands,<br>any platform.</h2>
+            <h2>Three commands,<br>any platform</h2>
             <div>
                 <p class="desc">
                     The build is plain CMake. No package manager, no submodule recursion, no codegen. Qt 6.4+ and a
@@ -388,7 +434,7 @@ cmake --build build -j</code></pre>
         <p class="eyebrow"><span class="num">05</span> brand</p>
 
         <div class="section-head">
-            <h2>Three nodes.<br>One root.</h2>
+            <h2>Three nodes,<br>one root</h2>
             <div>
                 <p class="desc">
                     The mark is a three-node binary heap drawn at its smallest expressible form: one root, two
@@ -451,7 +497,7 @@ cmake --build build -j</code></pre>
             <h5>Product</h5>
             <ul>
                 <li><a href="#cover">Overview</a></li>
-                <li><a href="#what">What it is</a></li>
+                <li><a href="#inside">Inside</a></li>
                 <li><a href="#features">Features</a></li>
                 <li><a href="#screens">Screens</a></li>
                 <li><a href="#build">Build from source</a></li>
