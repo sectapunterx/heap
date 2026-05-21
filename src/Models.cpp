@@ -169,7 +169,8 @@ QHash<int, QByteArray> EventModel::roleNames() const {
         { DateRole,      "date" },
         { TaskIdRole,    "taskId" },
         { ProfileIdRole, "profileId" },
-    };
+      {ContextRole, "context"},
+  };
 }
 
 QVariant EventModel::data(const QModelIndex &idx, int role) const {
@@ -185,6 +186,8 @@ QVariant EventModel::data(const QModelIndex &idx, int role) const {
         case DateRole:      return e.date;
         case TaskIdRole:    return e.taskId;
         case ProfileIdRole: return e.profileId;
+        case ContextRole:
+          return e.context;
     }
     return {};
 }

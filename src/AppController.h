@@ -272,6 +272,12 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteProfile(const QString& id);
   Q_INVOKABLE QString duplicateProfile(const QString& id, const QString& newName);
   Q_INVOKABLE QVariantMap profileById(const QString& id) const;
+
+  // Rewrite every task id that starts with `oldPrefix-<digits>` to use
+  // `newPrefix-<digits>`. CalEvent.taskId backlinks are kept in sync so
+  // scheduled-task labels stay attached. Returns the number of tasks
+  // renamed. Used by Settings → Tasks when toggling idPrefix.
+  Q_INVOKABLE int renameTaskIdPrefix(const QString& oldPrefix, const QString& newPrefix);
   // Profile JSON import / export (replaces the older Markdown export).
   Q_INVOKABLE QString exportActiveProfileJson() const;
   Q_INVOKABLE bool exportActiveProfileToFile(const QUrl& fileUrl) const;

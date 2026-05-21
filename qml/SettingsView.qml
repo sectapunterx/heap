@@ -1132,6 +1132,11 @@ Item {
     Component {
         id: sectionTasks
         ColumnLayout {
+            id: sectionTasksRoot
+            // Local UI toggle: when ON, committing a new idPrefix also rewrites
+            // existing task ids (LTE-123 → HEAP-123). Not persisted across
+            // sessions — it's a one-shot intent.
+            property bool renameExistingOnCommit: false
             spacing: 16
             SectionCard {
                 ColumnLayout {
@@ -1144,7 +1149,18 @@ Item {
                             label: "Префикс ID"; mono: true; placeholder: "LTE"
                             hint: "Новые задачи: " + ((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE") + "-XXXX"
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
-                            onCommitted: (text) => root.set("tasks", "idPrefix", text.toUpperCase())
+                            onCommitted: (text) => {
+                                const next = (text || "").toUpperCase().trim();
+                                const prior = (((root.settings.tasks && root.settings.tasks.idPrefix) || "")).toUpperCase().trim();
+                                root.set("tasks", "idPrefix", next);
+                                if (sectionTasksRoot.renameExistingOnCommit
+                                    && next.length > 0
+                                    && prior.length > 0
+                                    && prior !== next) {
+                                    AppController.renameTaskIdPrefix(prior, next);
+                                    sectionTasksRoot.renameExistingOnCommit = false;
+                                }
+                            }
                         }
                         SegRow {
                             Layout.fillWidth: true
@@ -1153,6 +1169,14 @@ Item {
                             options: ["P0", "P1", "P2", "P3"]
                             onSelected: (value) => root.set("tasks", "defaultPriority", value)
                         }
+                    }
+                    SwitchRow {
+                        label: "Переименовать существующие задачи"
+                        hint: "Если включено: при смене префикса все task id с прежним префиксом будут переименованы (например, "
+                            + (((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
+                            + "-123 → новый-123)."
+                        checked: sectionTasksRoot.renameExistingOnCommit
+                        onToggled: (checked) => sectionTasksRoot.renameExistingOnCommit = checked
                     }
                     SegRow {
                         label: "Дефолтная колонка"

@@ -34,6 +34,7 @@ struct CalEvent {
     QDate   date;
     QString taskId;     // optional link to task in same profile
     QString profileId;  // optional attribution to a feature profile (empty = global)
+    QString context;    // free-form context label rendered before the title in calendar views
 };
 
 struct Person {
@@ -124,7 +125,8 @@ public:
         IdRole = Qt::UserRole + 1,
         TitleRole, TypeRole, StartRole, EndRole,
         AttendeesRole, DateRole, TaskIdRole, ProfileIdRole,
-    };
+   ContextRole,
+ };
     explicit EventModel(QObject *parent = nullptr) : QAbstractListModel(parent) {}
 
     int rowCount(const QModelIndex & = {}) const override { return m_items.size(); }
