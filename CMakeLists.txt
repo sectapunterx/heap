@@ -28,6 +28,10 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
+# DBus is only needed for the Linux native notifications backend.
+if(UNIX AND NOT APPLE)
+    find_package(Qt6 6.2 REQUIRED COMPONENTS DBus)
+endif()
 # Qt6Svg is optional — it provides the `qsvg` image-format plugin so QML <Image>
 # can render the heap. app icon (BrandLogo itself uses native primitives, so
 # the brand still renders without it). Install with:
@@ -51,6 +55,9 @@ qt_add_executable(heap WIN32
     src/git/BranchTaskMatcher.cpp
     src/git/GitWatcher.cpp
     src/text/TaskTextUtils.cpp
+    src/notify/NotificationCenter.cpp
+    src/notify/NotificationCenter_tray.cpp
+    $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -107,6 +114,7 @@ qt_add_qml_module(heap
         src/git/GitTypes.h
         src/git/GitWatcher.h
         src/text/TaskTextUtils.h
+        src/notify/NotificationCenter.h
 )
 
 target_include_directories(heap PRIVATE src)
@@ -118,6 +126,9 @@ target_link_libraries(heap PRIVATE
     Qt6::QuickControls2
     Qt6::Widgets
 )
+if(UNIX AND NOT APPLE)
+    target_link_libraries(heap PRIVATE Qt6::DBus)
+endif()
 if (TARGET Qt6::Svg)
     target_link_libraries(heap PRIVATE Qt6::Svg)
     target_compile_definitions(heap PRIVATE HEAP_HAS_SVG=1)

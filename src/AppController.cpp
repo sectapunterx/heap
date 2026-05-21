@@ -3,6 +3,7 @@
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "notify/NotificationCenter.h"
 #include "text/TaskTextUtils.h"
 
 #include <cmath>
@@ -51,24 +52,36 @@ AppController::AppController(QObject *parent)
     m_automationTimer->setInterval(60 * 1000);
     connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
 
-    if (QSystemTrayIcon::isSystemTrayAvailable()) {
-        QIcon icon(QStringLiteral(":/brand/icon/heap-icon.svg"));
-        if (icon.isNull()) icon = QGuiApplication::windowIcon();
-        if (icon.isNull()) icon = QIcon::fromTheme(QStringLiteral("application-x-executable"));
-        m_tray = new QSystemTrayIcon(icon, this);
-        m_tray->setToolTip(QStringLiteral("heap."));
-        if (!icon.isNull()) m_tray->show();
-    }
+    // (Legacy QSystemTrayIcon creation removed — the notification backend
+    // owns its own tray icon on Windows/macOS via the tray fallback. Having
+    // two would show duplicate icons in the system tray.)
 
-    // Route notification(...) → tray balloon + in-app toast, respecting quiet
-    // hours and the user's `notifications.desktopNotif` / `soundOnPing`
-    // opt-outs.
+    // Native notification backend — Linux uses org.freedesktop.Notifications
+    // (with real action buttons); Windows/macOS fall back to the legacy tray
+    // balloon path. See src/notify/NotificationCenter.h for the contract.
+    m_notifier = heap::notify::NotificationCenter::create(this);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked,
+            this, &AppController::onNotifierAction);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::activated,
+            this, &AppController::onNotifierActivated);
+
+    // Route notification(...) → native toast + in-app toast bar, respecting
+    // quiet hours and the user's `notifications.desktopNotif` / `soundOnPing`
+    // opt-outs. Kept as a signal so existing call-sites (`emit
+    // notification(...)`) keep working — the lambda just forwards to the
+    // NotificationCenter without action buttons (it carries no task id).
     connect(this, &AppController::notification, this,
-            [this](const QString &title, const QString &body, const QString & /*kind*/) {
+            [this](const QString &title, const QString &body, const QString &kind) {
         if (inQuietHours(QDateTime::currentDateTime())) return;
         const QVariantMap notif = settingsMap().value("notifications").toMap();
-        if (notif.value("desktopNotif", true).toBool() && m_tray) {
-            m_tray->showMessage(title, body, QSystemTrayIcon::Information, 5000);
+        if (notif.value("desktopNotif", true).toBool() && m_notifier) {
+            heap::notify::Notification n;
+            n.id       = QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch());
+            n.title    = title;
+            n.body     = body;
+            n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+            n.category = kind;
+            m_notifier->post(n);
         }
         if (notif.value("soundOnPing", false).toBool()) {
             QApplication::beep();
@@ -2024,9 +2037,10 @@ void AppController::runAutomation() {
             const QString when = (hoursLeft <= 1)
                 ? QStringLiteral("через час")
                 : QStringLiteral("через %1 ч").arg(hoursLeft);
-            notify(QStringLiteral("Дедлайн %1").arg(when),
-                   QStringLiteral("%1 (%2)").arg(t.title, t.priority),
-                   QStringLiteral("deadline"));
+            notifyTask(t.id,
+                       QStringLiteral("Дедлайн %1").arg(when),
+                       QStringLiteral("%1 (%2)").arg(t.title, t.priority),
+                       QStringLiteral("deadline"));
         }
     }
 
@@ -2140,4 +2154,78 @@ void AppController::refreshGitForTaskBranch(const QString &taskId) {
     const QStringList repos = m_gitWatcher->snapshot().keys();
     for (const QString &repo : repos)
         m_gitWatcher->requestPrFetch(repo, br);
+}
+
+// ── Native notifications with action buttons ─────────────────────
+
+void AppController::notifyTask(const QString &taskId,
+                               const QString &title,
+                               const QString &body,
+                               const QString &kind) {
+    if (inQuietHours(QDateTime::currentDateTime())) return;
+    const QVariantMap notif = settingsMap().value("notifications").toMap();
+    if (!notif.value("desktopNotif", true).toBool() || !m_notifier) {
+        // Fallback path — still surface via in-app toast for visibility.
+        emit toast(body);
+        return;
+    }
+
+    heap::notify::Notification n;
+    // The id encodes both kind and task id so the action handler can route
+    // back without bookkeeping ("deadline:LTE-2398" → kind=deadline, task=LTE-2398).
+    n.id       = heap::notify::routingId(kind, taskId);
+    n.title    = title;
+    n.body     = body;
+    n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+    n.category = kind;
+
+    if (m_notifier->supportsActions()) {
+        n.actions = {
+            { QStringLiteral("snooze1h"), QStringLiteral("Snooze 1h") },
+            { QStringLiteral("done"),     QStringLiteral("Mark done") },
+            { QStringLiteral("open"),     QStringLiteral("Open") }
+        };
+    }
+    m_notifier->post(n);
+
+    if (notif.value("soundOnPing", false).toBool()) QApplication::beep();
+    emit toast(body);
+}
+
+void AppController::snoozeDeadline(const QString &taskId, int seconds) {
+    const int row = m_tasks.indexOfId(taskId);
+    if (row < 0) return;
+    Task t = m_tasks.items().at(row);
+    if (!t.deadline.isValid()) return;
+    // Reminders are date-grained — bump to the next day so the dl: sentinel
+    // for "today" stops firing.
+    t.deadline = t.deadline.addDays((seconds + 86399) / 86400);
+    m_tasks.upsert(t);
+    // Forget the "already notified today" memo so the new horizon is honoured.
+    m_lastReminderDay.remove(QStringLiteral("dl:") + taskId);
+    emit toast(QStringLiteral("%1: дедлайн отложен").arg(taskId));
+    scheduleSave();
+}
+
+void AppController::onNotifierAction(const QString &notificationId,
+                                     const QString &actionId) {
+    const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
+    Q_UNUSED(kind);
+    if (taskId.isEmpty()) return;
+
+    if (actionId == QStringLiteral("snooze1h")) {
+        snoozeDeadline(taskId, 3600);
+    } else if (actionId == QStringLiteral("done")) {
+        if (m_tasks.indexOfId(taskId) >= 0) moveTask(taskId, QStringLiteral("done"));
+    } else if (actionId == QStringLiteral("open")) {
+        if (m_tasks.indexOfId(taskId) >= 0) emit openTaskRequested(taskId);
+    }
+}
+
+void AppController::onNotifierActivated(const QString &notificationId) {
+    const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
+    Q_UNUSED(kind);
+    if (!taskId.isEmpty() && m_tasks.indexOfId(taskId) >= 0) {
+        emit openTaskRequested(taskId);
+    }
 }
