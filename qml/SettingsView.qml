@@ -28,7 +28,8 @@ Item {
           unimplemented: true },
         { id: "git",           icon: "⎇",   title: "Git Watcher",      sub: "Отслеживаемые репо, авто-перевод" },
         { id: "data",          icon: "↯",   title: "Data",             sub: "Import / export, reset" },
-        { id: "about",         icon: "?",   title: "About",            sub: "Версия, лицензии" }
+        {id: "help", icon: "?", title: "Help", sub: "Гид по всем фичам"},
+        {id: "about", icon: "ⓘ", title: "About", sub: "Версия, лицензии"}
     ]
 
     readonly property bool _debugBuild: !!AppController.debugBuild
@@ -525,6 +526,7 @@ Item {
                                     if (root.activeSection === "integrations")  return sectionIntegrations;
                                     if (root.activeSection === "git")           return sectionGit;
                                     if (root.activeSection === "data")          return sectionData;
+                                    if (root.activeSection === "help") return sectionHelp;
                                     if (root.activeSection === "about")         return sectionAbout;
                                     return null;
                                 }
@@ -541,6 +543,31 @@ Item {
         for (let i = 0; i < sections.length; i++)
             if (sections[i].id === activeSection) return sections[i];
         return sections[0];
+    }
+
+    // In-page anchor scroll for HelpContent's TOC. Ported from DocsView.qml
+    // (scrollToAnchor / findChildByName). Reuses bodyScroll + scrollAnim.
+    function _scrollToAnchor(objectName) {
+        const target = _findChildByName(bodyCol, objectName);
+        if (!target) return;
+        const p = target.mapToItem(bodyCol, 0, 0);
+        const maxY = Math.max(0, bodyScroll.contentHeight - bodyScroll.height);
+        const newY = Math.max(0, Math.min(p.y - 8, maxY));
+        scrollAnim.from = bodyScroll.contentY;
+        scrollAnim.to = newY;
+        scrollAnim.restart();
+    }
+
+    function _findChildByName(parentItem, name) {
+        if (!parentItem) return null;
+        const kids = parentItem.children;
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (k && k.objectName === name) return k;
+            const sub = _findChildByName(k, name);
+            if (sub) return sub;
+        }
+        return null;
     }
 
     // ── Reusable controls ─────────────────────────────────────────────
@@ -1619,6 +1646,13 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    Component {
+        id: sectionHelp
+        HelpContent {
+            onAnchorRequested: (name) => root._scrollToAnchor(name)
         }
     }
 

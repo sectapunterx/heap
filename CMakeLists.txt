@@ -104,6 +104,7 @@ qt_add_qml_module(heap
         qml/HotkeysPanel.qml
         qml/NotesView.qml
         qml/SettingsView.qml
+        qml/HelpContent.qml
         qml/ThinScrollBar.qml
         qml/Brand.qml
         qml/BrandLogo.qml
