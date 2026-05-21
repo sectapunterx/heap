@@ -8,6 +8,11 @@ on:
 
 permissions:
   contents: read
+  # dorny/test-reporter posts a Check Run with test details on PRs.
+  # Private repos need explicit grants — defaulting GITHUB_TOKEN to read-only
+  # breaks the action with HTTP 403 "Resource not accessible by integration".
+  checks: write
+  pull-requests: write
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -53,7 +58,14 @@ jobs:
           # Locate clang-format-diff (Ubuntu ships it as a versioned binary).
           diff_tool="$(command -v clang-format-diff || true)"
           if [[ -z "$diff_tool" ]]; then
-            diff_tool="$(ls /usr/bin/clang-format-diff-* 2>/dev/null | sort -V | tail -n1 || true)"
+            # Use a glob expansion (not `ls`) — quiets shellcheck SC2012 and
+            # avoids word-splitting on filenames with spaces.
+            shopt -s nullglob
+            candidates=(/usr/bin/clang-format-diff-*)
+            shopt -u nullglob
+            if (( ${#candidates[@]} > 0 )); then
+              diff_tool="${candidates[-1]}"
+            fi
           fi
           if [[ -z "$diff_tool" ]]; then
             echo "::error::clang-format-diff not found in PATH"
@@ -303,8 +315,21 @@ jobs:
         shell: bash
         run: tar -xf build-${{ matrix.os }}.tar
 
-      - name: Run ctest
+      # Linux: native bash, Qt DLLs picked up via ld.so.cache.
+      - name: Run ctest (linux)
+        if: runner.os == 'Linux'
         shell: bash
+        run: |
+          ctest --test-dir build/tests \
+            --output-on-failure \
+            --output-junit ctest-${{ matrix.os }}.xml
+
+      # Windows: must run inside the msys2 shell so /ucrt64/bin (Qt6Core.dll
+      # etc.) is on PATH — otherwise the test exe fails to launch with
+      # STATUS_DLL_NOT_FOUND (0xc0000135).
+      - name: Run ctest (windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
         run: |
           ctest --test-dir build/tests \
             --output-on-failure \
