@@ -1,0 +1,38 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="1280" height="800">
+    <rect width="1280" height="800" fill="#0b0e13"></rect>
+
+
+    <g transform="translate(450, 320)">
+        <g transform="scale(1.9)">
+            <line x1="16" y1="9.5" x2="9.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+                  stroke-opacity="0.55"></line>
+            <line x1="16" y1="9.5" x2="22.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+                  stroke-opacity="0.55"></line>
+            <circle cx="9.5" cy="22" r="3" fill="#8a94a3"></circle>
+            <circle cx="22.5" cy="22" r="3" fill="#8a94a3"></circle>
+            <circle cx="16" cy="9.5" r="3.6" fill="#2f5560"></circle>
+        </g>
+        <text x="72.19999999999999" y="52.288" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif"
+              font-weight="500" font-size="60.8" letter-spacing="-2.128" fill="#8a94a3">heap
+            <tspan fill="#2f5560">.</tspan>
+        </text>
+    </g>
+
+
+    <text x="640" y="490" text-anchor="middle"
+          font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif" font-weight="300"
+          font-size="48" letter-spacing="-0.5" fill="#e5ecf3">Work, in one place.
+    </text>
+
+
+    <line x1="80" y1="700" x2="1200" y2="700" stroke="#1c2230" stroke-width="1"></line>
+
+
+    <g font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="12"
+       letter-spacing="1.6" fill="#5f6878">
+        <circle cx="92" cy="735" r="4" fill="#2f5560"></circle>
+        <text x="108" y="740">LOADING WORKSPACE · DEFAULT</text>
+        <text x="1200" y="740" text-anchor="end">V 0.9.4 · QT 6.4</text>
+    </g>
+</svg>

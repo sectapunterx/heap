@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1200 630" width="1200" height="630">
+    <rect width="1200" height="630" fill="#0b0e13"></rect>
+    <g transform="translate(80, 140)">
+        <g transform="scale(2.1)">
+            <line x1="16" y1="9.5" x2="9.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+                  stroke-opacity="0.55"></line>
+            <line x1="16" y1="9.5" x2="22.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+                  stroke-opacity="0.55"></line>
+            <circle cx="9.5" cy="22" r="3" fill="#8a94a3"></circle>
+            <circle cx="22.5" cy="22" r="3" fill="#8a94a3"></circle>
+            <circle cx="16" cy="9.5" r="3.6" fill="#2f5560"></circle>
+        </g>
+        <text x="79.80000000000001" y="57.792" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif"
+              font-weight="500" font-size="67.2" letter-spacing="-2.3520000000000003" fill="#8a94a3">heap
+            <tspan fill="#2f5560">.</tspan>
+        </text>
+    </g>
+    <text x="80" y="340" font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif"
+          font-weight="300" font-size="62" letter-spacing="-1.1" fill="#e5ecf3">Work, in one place.
+    </text>
+    <text x="80" y="400" font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif"
+          font-weight="300" font-size="62" letter-spacing="-1.1" fill="#8a94a3">A workspace for engineers.
+    </text>
+
+    <line x1="80" y1="530" x2="1120" y2="530" stroke="#1c2230" stroke-width="1"></line>
+    <g font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="13"
+       letter-spacing="1.8" fill="#5f6878">
+        <text x="80" y="570">GITHUB · SECTAPUNTERX/HEAP</text>
+        <text x="1120" y="570" text-anchor="end">QT 6 · MIT</text>
+    </g>
+</svg>

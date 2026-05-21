@@ -1,0 +1,502 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>heap. — Work, in one place.</title>
+    <meta name="description"
+          content="A native desktop board, calendar, and notebook for engineers. Qt 6 / QML / C++20, single binary.">
+
+    <link rel="icon" href="assets/img/favicon.svg" type="image/svg+xml">
+    <link rel="mask-icon" href="assets/img/heap-mark-mono.svg" color="#2f5560">
+
+    <meta property="og:type" content="website">
+    <meta property="og:title" content="heap. — Work, in one place.">
+    <meta property="og:description"
+          content="A native desktop board, calendar, and notebook for engineers. Qt 6 / QML / C++20, single binary.">
+    <meta property="og:image" content="assets/img/heap-og-card.svg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="heap. — Work, in one place.">
+    <meta name="twitter:description"
+          content="A native desktop board, calendar, and notebook for engineers.">
+    <meta name="twitter:image" content="assets/img/heap-og-card.svg">
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@300;400;500&family=JetBrains+Mono:wght@400;500&display=swap">
+
+    <link rel="stylesheet" href="assets/brand.css">
+    <link rel="stylesheet" href="assets/site.css">
+</head>
+<body>
+
+<!-- Reusable mark — referenced via <use href="#heap-mark"> for in-page chrome -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+    <symbol id="heap-mark" viewBox="0 0 32 32">
+        <line x1="16" y1="9.5" x2="9.5" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              opacity="0.55"></line>
+        <line x1="16" y1="9.5" x2="22.5" y2="22" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"
+              opacity="0.55"></line>
+        <circle cx="9.5" cy="22" r="3" fill="currentColor"></circle>
+        <circle cx="22.5" cy="22" r="3" fill="currentColor"></circle>
+        <circle cx="16" cy="9.5" r="3.6" fill="var(--root-fill, #2f5560)"></circle>
+    </symbol>
+</svg>
+
+<!-- ============================ TOP TAB BAR ============================ -->
+<header class="topbar" data-screen-label="top nav">
+    <div class="topbar-inner">
+        <a class="brand-link" href="#cover" aria-label="heap. — home">
+            <svg class="mark" width="26" height="26" aria-hidden="true">
+                <use href="#heap-mark"/>
+            </svg>
+            <span class="wm">heap<span class="dot">.</span></span>
+        </a>
+
+        <nav class="topbar-tabs" aria-label="primary">
+            <a class="tab active" href="#cover"><span class="num">00</span> overview</a>
+            <a class="tab" href="#what"><span class="num">01</span> what</a>
+            <a class="tab" href="#features"><span class="num">02</span> features</a>
+            <a class="tab" href="#screens"><span class="num">03</span> screens</a>
+            <a class="tab" href="#build"><span class="num">04</span> build</a>
+            <a class="tab" href="brand/"><span class="num">05</span> brand →</a>
+        </nav>
+
+        <div class="topbar-actions">
+            <a class="btn-ghost" href="https://github.com/sectapunterx/heap">
+                github <span class="arrow">↗</span>
+            </a>
+            <a class="btn-solid" href="https://github.com/sectapunterx/heap/releases">
+                download <span class="arrow">↓</span>
+            </a>
+        </div>
+    </div>
+</header>
+
+<div class="shell">
+
+    <!-- ============================ COVER ============================ -->
+    <section class="cover" id="cover" data-screen-label="01 overview">
+        <p class="eyebrow"><span class="num">00</span> overview</p>
+        <h1 class="wordmark-xl">heap<span class="dot">.</span></h1>
+
+        <div class="lede-row">
+            <div>
+                <h2>Work, in one&nbsp;place.</h2>
+            </div>
+            <div>
+                <p class="descriptor">
+                    A native desktop board, calendar, and notebook for engineers.
+                </p>
+                <p class="lede">
+                    heap. is a single-binary Qt 6 / QML application. Tasks, events, docs, snippets, and contacts live
+                    side by side in a per-profile workspace, persisted as a JSON blob in the user data directory.
+                    No Electron, no browser, no remote services.
+                </p>
+                <p class="descriptor-fine">qt 6 · c++ 20 · single binary · mit license</p>
+
+                <div class="cta-row">
+                    <a class="cta" href="https://github.com/sectapunterx/heap/releases">
+                        <span>download release</span><span class="arrow">→</span>
+                    </a>
+                    <a class="cta secondary" href="https://github.com/sectapunterx/heap">
+                        <span>view on github</span><span class="arrow">→</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <!-- product surface in hero -->
+        <div class="hero-surface">
+            <div class="surface-bar">
+                <div class="dots"><span></span><span></span><span></span></div>
+                <span>heap. — board · eNB-core / sprint-10</span>
+                <span class="meta">qml · 1920 × 1080</span>
+            </div>
+            <img src="assets/img/screens/board-full.png"
+                 alt="heap. board view with kanban columns, week calendar and team panel">
+            <span class="badge">live preview</span>
+        </div>
+
+        <div class="footnotes" style="margin-top:56px;">
+            <span>↓ scroll · what it is</span>
+            <span>v 0.4.2 · 2026 — rebrand</span>
+        </div>
+    </section>
+
+    <!-- ============================ 01 · WHAT IT IS ============================ -->
+    <section id="what" data-screen-label="02 what it is">
+        <p class="eyebrow"><span class="num">01</span> what it is</p>
+
+        <div class="section-head">
+            <h2>One process,<br>one workspace.</h2>
+            <div>
+                <p class="desc">
+                    heap. ships as a single native binary. The board, the calendar, the docs canvas, and the markdown
+                    notebook share one window, one keyboard map, and one JSON state file under
+                    <span class="mono">QStandardPaths::AppDataLocation</span>.
+                </p>
+                <p class="desc" style="font-size:15px;color:var(--text3);">
+                    Profiles are feature-scoped workspaces with JSON import and export. A 60-second background tick
+                    auto-archives done tasks, surfaces blocked-stuck warnings, and fires deadline and standup reminders
+                    via the system tray. Quiet hours are respected.
+                </p>
+                <div class="chip-stack" style="margin-top:24px;">
+                    <span class="tag">qt 6.4+</span>
+                    <span class="tag">c++ 20</span>
+                    <span class="tag">cmake 3.21+</span>
+                    <span class="tag">single binary</span>
+                    <span class="tag">no telemetry</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="stat-row">
+            <div class="stat">
+                <span class="v">1<span class="u">binary</span></span>
+                <span class="k">no installer</span>
+            </div>
+            <div class="stat">
+                <span class="v">6<span class="u">surfaces</span></span>
+                <span class="k">board · week · day · docs · notes · people</span>
+            </div>
+            <div class="stat">
+                <span class="v">0<span class="u">servers</span></span>
+                <span class="k">runs on your machine</span>
+            </div>
+            <div class="stat">
+                <span class="v">60<span class="u">s tick</span></span>
+                <span class="k">archive · warn · remind</span>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================ 02 · FEATURES ============================ -->
+    <section id="features" data-screen-label="03 features">
+        <p class="eyebrow"><span class="num">02</span> features</p>
+
+        <div class="section-head">
+            <h2>Boards, calendars,<br>docs, notes.</h2>
+            <p class="desc">
+                Every surface is rendered in QML with the same palette and the same keyboard model. There is no
+                web view and no embedded browser. The board column you drag, the calendar block you resize, and the
+                markdown line you edit all live in the same process and the same state file.
+            </p>
+        </div>
+
+        <div class="feature-grid">
+            <div class="feature-card">
+                <span class="num">01 · plan</span>
+                <h4>Kanban board</h4>
+                <p>Drag-and-drop columns, status color picker, per-card priority chips, branch decoration,
+                    scheduled-time pill.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">02 · plan</span>
+                <h4>Timeline</h4>
+                <p>Overdue, today, tomorrow, week, and later buckets. Sub-grouping by date, show-done toggle.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">03 · time</span>
+                <h4>Week view</h4>
+                <p>7-day grid with all-day deadline chips and an hourly event grid. Drag, resize, and cross-day
+                    move.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">04 · time</span>
+                <h4>Day calendar</h4>
+                <p>Drag-to-create events, top and bottom resize, drop a task to schedule a focus block, live
+                    now-line.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">05 · know</span>
+                <h4>Docs</h4>
+                <p>Sections (3GPP, internal, C++, tools) with custom fields. Snippet editor with syntax highlighting.
+                    Contact cards.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">06 · know</span>
+                <h4>Notes</h4>
+                <p>Per-profile markdown canvas with <span class="mono">@people</span> and <span
+                        class="mono">#ticket</span> autocomplete.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">07 · scope</span>
+                <h4>Profiles</h4>
+                <p>Feature-scoped workspaces. JSON import and export. Each profile owns its own tasks, people, statuses,
+                    docs blob, and notes blob.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">08 · find</span>
+                <h4>Command palette</h4>
+                <p><span class="mono">Ctrl+K</span> fuzzy search across tasks, docs, snippets, contacts, people, and
+                    profiles.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">09 · auto</span>
+                <h4>Automation</h4>
+                <p>60-second tick auto-archives done tasks, surfaces blocked-stuck warnings, fires deadline and standup
+                    reminders. Quiet hours respected.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================ 03 · SCREENS ============================ -->
+    <section id="screens" data-screen-label="04 screens">
+        <p class="eyebrow"><span class="num">03</span> screens</p>
+
+        <div class="section-head">
+            <h2>One window.<br>Six&nbsp;surfaces.</h2>
+            <p class="desc">
+                A guided tour of the surfaces you'll actually use. Every screenshot is the real QML app on a real
+                workspace — same palette, same keyboard, same JSON state file behind it.
+            </p>
+        </div>
+
+        <div class="screens" data-screens>
+            <div class="screen-tabs" role="tablist" aria-label="screens">
+                <button class="screen-tab" role="tab" aria-selected="true" data-target="board">
+                    <span class="num">01</span> board · default
+                </button>
+                <button class="screen-tab" role="tab" aria-selected="false" data-target="focus">
+                    <span class="num">02</span> board · focused
+                </button>
+                <button class="screen-tab" role="tab" aria-selected="false" data-target="hotkeys">
+                    <span class="num">03</span> hotkeys · tweaks
+                </button>
+            </div>
+
+            <!-- panel: board -->
+            <div class="screen-panel" data-name="board" data-active="true">
+                <div class="screen-frame">
+                    <div class="surface-bar">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <span>heap. — board · eNB-core / sprint-10</span>
+                        <span class="meta">full layout · 1920 × 1080</span>
+                    </div>
+                    <img src="assets/img/screens/board-full.png"
+                         alt="heap. board: backlog, to-do, in-progress, 50/50, blocked, code review, done columns with calendar and team panel">
+                </div>
+                <div class="screen-caption">
+                    <h4>Default board layout</h4>
+                    <p>
+                        Seven columns from backlog to done, an inline calendar pinned to the right, and a
+                        "кому написать" panel for outstanding pings. Filters (P0–P3) live at the top; the
+                        archived strip totals overdue / in-review at a glance.
+                    </p>
+                </div>
+            </div>
+
+            <!-- panel: focus -->
+            <div class="screen-panel" data-name="focus">
+                <div class="screen-frame">
+                    <div class="surface-bar">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <span>heap. — board · focus mode</span>
+                        <span class="meta">narrow layout</span>
+                    </div>
+                    <img src="assets/img/screens/calendar-focus.png"
+                         alt="heap. board in focus mode: three columns visible with calendar still pinned on the right">
+                </div>
+                <div class="screen-caption">
+                    <h4>Focus a single workstream</h4>
+                    <p>
+                        Collapse columns you're not touching today. The calendar stays anchored so a focus block
+                        you scheduled this morning is one glance away — drag a card onto it to time-box.
+                    </p>
+                </div>
+            </div>
+
+            <!-- panel: hotkeys -->
+            <div class="screen-panel" data-name="hotkeys">
+                <div class="screen-frame">
+                    <div class="surface-bar">
+                        <div class="dots"><span></span><span></span><span></span></div>
+                        <span>heap. — settings · hotkeys + tweaks</span>
+                        <span class="meta">overlays</span>
+                    </div>
+                    <img src="assets/img/screens/hotkeys-tweaks.png"
+                         alt="heap. with hotkeys palette and tweaks panel open over the board">
+                </div>
+                <div class="screen-caption">
+                    <h4>Hotkeys and tweaks</h4>
+                    <p>
+                        Every accelerator is editable from a single sheet. The tweaks panel exposes the few
+                        choices the brand actually allows — theme, density, accent, accessibility — and writes
+                        them back to the JSON profile file.
+                    </p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================ 04 · BUILD ============================ -->
+    <section id="build" data-screen-label="05 build">
+        <p class="eyebrow"><span class="num">04</span> build</p>
+
+        <div class="section-head">
+            <h2>Three commands,<br>any platform.</h2>
+            <div>
+                <p class="desc">
+                    The build is plain CMake. No package manager, no submodule recursion, no codegen. Qt 6.4+ and a
+                    C++20 toolchain are the only prerequisites.
+                </p>
+                <p class="fine mono" style="margin-top:8px;">
+                    cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
+                </p>
+            </div>
+        </div>
+
+        <div class="build-grid">
+            <div class="build-card">
+                <span class="os">linux · debian / ubuntu</span>
+                <h4>apt + cmake</h4>
+                <pre><code>sudo apt install \
+  qt6-base-dev qt6-declarative-dev \
+  libqt6svg6-dev cmake g++
+
+cmake -S . -B build
+cmake --build build -j</code></pre>
+            </div>
+            <div class="build-card">
+                <span class="os">macos</span>
+                <h4>brew + cmake</h4>
+                <pre><code>brew install qt cmake
+
+cmake -S . -B build \
+  -DCMAKE_PREFIX_PATH=$(brew --prefix qt)
+cmake --build build -j</code></pre>
+            </div>
+            <div class="build-card">
+                <span class="os">windows · msys2 ucrt64</span>
+                <h4>pacman + clion</h4>
+                <pre><code>pacman -S --needed \
+  mingw-w64-ucrt-x86_64-toolchain \
+  mingw-w64-ucrt-x86_64-cmake \
+  mingw-w64-ucrt-x86_64-qt6-base \
+  mingw-w64-ucrt-x86_64-qt6-declarative</code></pre>
+                <p class="note">Full CLion + windeployqt walkthrough in the
+                    <a href="https://github.com/sectapunterx/heap#windows-msys2-ucrt64--clion"
+                       style="color:var(--text2);border-bottom:1px solid var(--border)">README</a>.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- ============================ 05 · BRAND TEASER ============================ -->
+    <section id="brand" data-screen-label="06 brand teaser">
+        <p class="eyebrow"><span class="num">05</span> brand</p>
+
+        <div class="section-head">
+            <h2>Three nodes.<br>One root.</h2>
+            <div>
+                <p class="desc">
+                    The mark is a three-node binary heap drawn at its smallest expressible form: one root, two
+                    leaves, two edges. The root is rendered in muted teal; everything else takes the foreground
+                    colour of the surface it sits on.
+                </p>
+                <p class="desc" style="font-size:15px;color:var(--text3);">
+                    Tagline: <span class="mono">Work, in one place.</span> &nbsp;·&nbsp; Long form, editorial only:
+                    <span class="mono">A quiet place for the work you owe.</span>
+                </p>
+                <div class="cta-row">
+                    <a class="cta" href="brand/">
+                        <span>read the brandbook</span><span class="arrow">→</span>
+                    </a>
+                </div>
+            </div>
+        </div>
+
+        <div class="brand-row">
+            <div class="canvas sq">
+                <img src="assets/img/heap-mark.svg" alt="heap-mark">
+                <span class="label">mark</span>
+                <span class="size">primary</span>
+            </div>
+            <div class="canvas sq">
+                <img class="wordmark-asset" src="assets/img/heap-wordmark.svg" alt="heap-wordmark">
+                <span class="label">wordmark</span>
+                <span class="size">plex sans 500</span>
+            </div>
+            <div class="canvas sq">
+                <img class="lockup-asset" src="assets/img/heap-lockup.svg" alt="heap-lockup">
+                <span class="label">lockup</span>
+                <span class="size">mark + wordmark</span>
+            </div>
+        </div>
+    </section>
+
+</div>
+
+<!-- ============================ FOOTER (tabs / sitemap) ============================ -->
+<footer class="foot">
+    <div class="foot-inner">
+        <div class="foot-brand">
+            <a class="brand-link" href="#cover">
+                <svg class="mark" width="34" height="34" aria-hidden="true">
+                    <use href="#heap-mark"/>
+                </svg>
+                <span class="wm">heap<span class="dot">.</span></span>
+            </a>
+            <p>A native desktop workspace for engineers. Boards, calendars, docs and notes — one window, one binary, no
+                servers.</p>
+            <div class="mini-tags">
+                <span class="tag">qt 6</span>
+                <span class="tag">c++ 20</span>
+                <span class="tag">mit</span>
+            </div>
+        </div>
+
+        <div class="foot-col">
+            <h5>Product</h5>
+            <ul>
+                <li><a href="#cover">Overview</a></li>
+                <li><a href="#what">What it is</a></li>
+                <li><a href="#features">Features</a></li>
+                <li><a href="#screens">Screens</a></li>
+                <li><a href="#build">Build from source</a></li>
+            </ul>
+        </div>
+
+        <div class="foot-col">
+            <h5>Brand</h5>
+            <ul>
+                <li><a href="brand/#mark">The mark</a></li>
+                <li><a href="brand/#wordmark">Wordmark · lockup</a></li>
+                <li><a href="brand/#voice">Voice</a></li>
+                <li><a href="brand/#color">Color</a></li>
+                <li><a href="brand/#icon">App icon</a></li>
+                <li><a href="brand/#splash">Splash · banners</a></li>
+            </ul>
+        </div>
+
+        <div class="foot-col">
+            <h5>Resources</h5>
+            <ul>
+                <li><a href="https://github.com/sectapunterx/heap">GitHub <span class="ext">↗</span></a></li>
+                <li><a href="https://github.com/sectapunterx/heap/releases">Releases <span class="ext">↗</span></a></li>
+                <li><a href="https://github.com/sectapunterx/heap/blob/master/README.md">README <span
+                        class="ext">↗</span></a></li>
+                <li><a href="https://github.com/sectapunterx/heap/issues">Issues <span class="ext">↗</span></a></li>
+                <li><a href="https://github.com/sectapunterx/heap/blob/master/LICENSE">License · MIT <span
+                        class="ext">↗</span></a></li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="foot-bottom">
+        <span>heap<span class="dot">.</span> · mit · <span data-year>2026</span></span>
+        <div class="right">
+            <span>v 0.4.2</span>
+            <span>·</span>
+            <span>2026 — rebrand</span>
+            <span>·</span>
+            <span>built with qt 6</span>
+        </div>
+    </div>
+</footer>
+
+<script src="assets/nav.js"></script>
+
+</body>
+</html>
