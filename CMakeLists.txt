@@ -142,18 +142,35 @@ if(WIN32)
         set(MSYS_ROOT "C:/msys64" CACHE PATH "MSYS2 installation root")
         set(MSYS_BIN_DIR "${MSYS_ROOT}/ucrt64/bin")
         set(MSYS_QML_DIR "${MSYS_ROOT}/ucrt64/share/qt6/qml")
+        # Qt6 helper executables (qmlimportscanner etc.). MSYS2 places these
+        # under share/qt6/libexec on current packages and share/qt6/bin on
+        # older ones — include both so windeployqt's child process can launch
+        # without needing PATH munging in the workflow.
+        set(MSYS_QT_LIBEXEC "${MSYS_ROOT}/ucrt64/share/qt6/libexec")
+        set(MSYS_QT_SHARE_BIN "${MSYS_ROOT}/ucrt64/share/qt6/bin")
 
         set(PORTABLE_DIR "${CMAKE_BINARY_DIR}/heap-portable")
+
+        # PATH override for the windeployqt invocation only: prepend the Qt
+        # tool dirs so its `QProcess::start("qmlimportscanner.exe")` finds
+        # both the executable and the Qt6Core.dll it depends on. Bare
+        # backslash-free, ';' separator — Windows form. We do NOT append
+        # $ENV{PATH} because the value mixes UNIX-style ':' separators when
+        # invoked from the msys2 shell, which would corrupt the resulting
+        # PATH; system DLLs are still located via Windows default search.
+        set(_windeploy_path
+            "${MSYS_BIN_DIR};${MSYS_QT_LIBEXEC};${MSYS_QT_SHARE_BIN}")
 
         add_custom_target(portable
                 DEPENDS heap
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
-                COMMAND ${WINDEPLOYQT_EXECUTABLE}
-                --no-translations
-                --qmldir "${CMAKE_SOURCE_DIR}/qml"
-                "${PORTABLE_DIR}/$<TARGET_FILE_NAME:heap>"
+                COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
+                        ${WINDEPLOYQT_EXECUTABLE}
+                        --no-translations
+                        --qmldir "${CMAKE_SOURCE_DIR}/qml"
+                        "${PORTABLE_DIR}/$<TARGET_FILE_NAME:heap>"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libstdc++-6.dll"    "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libgcc_s_seh-1.dll" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libwinpthread-1.dll" "${PORTABLE_DIR}/"
