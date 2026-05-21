@@ -53,6 +53,10 @@ class AppController : public QObject {
     Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
     Q_PROPERTY(QStringList blockedStuckIds READ blockedStuckIds NOTIFY blockedStuckChanged)
 
+    // Compile-time flag — true for Debug / RelWithDebInfo builds. QML uses
+    // it to surface the developer-only "show unimplemented" toggle.
+    Q_PROPERTY(bool debugBuild READ debugBuild CONSTANT)
+
     // ---- Git focus banner ----
     Q_PROPERTY(QString     focusedTaskId          READ focusedTaskId
                NOTIFY focusedGitChanged)
@@ -123,6 +127,14 @@ public:
     Q_INVOKABLE void setArchived(const QString &taskId, bool archived);
 
     QStringList blockedStuckIds() const { return m_blockedStuckIds.values(); }
+
+    static constexpr bool debugBuild() {
+#ifdef HEAP_DEBUG_BUILD
+        return true;
+#else
+        return false;
+#endif
+    }
 
     // ---- Notifications & automation ----
     Q_INVOKABLE void notify(const QString &title, const QString &body, const QString &kind = QString());
