@@ -1,0 +1,139 @@
+---
+# Larra-aligned (CLionProjects/larra) Google + modern + core-guidelines set
+# with project-specific naming. CI enforces these on changed lines only.
+Checks: >
+  -*,
+  google-*,
+  cppcoreguidelines-*,
+  modernize-*,
+  bugprone-*,
+  cert-*,
+  concurrency-*,
+  performance-*,
+  portability-*,
+  readability-*,
+  misc-const-correctness,
+  misc-misplaced-const,
+  misc-redundant-expression,
+  misc-throw-by-value-catch-by-reference,
+  misc-unused-parameters,
+  -google-explicit-constructor,
+  -google-build-using-namespace,
+  -google-readability-todo,
+  -google-runtime-references,
+  -cppcoreguidelines-avoid-c-arrays,
+  -cppcoreguidelines-avoid-const-or-ref-data-members,
+  -cppcoreguidelines-avoid-magic-numbers,
+  -cppcoreguidelines-avoid-non-const-global-variables,
+  -cppcoreguidelines-avoid-reference-coroutine-parameters,
+  -cppcoreguidelines-c-copy-assignment-signature,
+  -cppcoreguidelines-non-private-member-variables-in-classes,
+  -cppcoreguidelines-owning-memory,
+  -cppcoreguidelines-pro-bounds-array-to-pointer-decay,
+  -cppcoreguidelines-pro-bounds-constant-array-index,
+  -cppcoreguidelines-pro-bounds-pointer-arithmetic,
+  -cppcoreguidelines-pro-type-reinterpret-cast,
+  -cppcoreguidelines-pro-type-static-cast-downcast,
+  -cppcoreguidelines-pro-type-vararg,
+  -cppcoreguidelines-special-member-functions,
+  -modernize-avoid-c-arrays,
+  -modernize-pass-by-value,
+  -modernize-return-braced-init-list,
+  -modernize-use-nodiscard,
+  -modernize-use-trailing-return-type,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-exception-escape,
+  -bugprone-narrowing-conversions,
+  -cert-err58-cpp,
+  -misc-non-private-member-variables-in-classes,
+  -performance-avoid-endl,
+  -performance-no-int-to-ptr,
+  -readability-convert-member-functions-to-static,
+  -readability-function-cognitive-complexity,
+  -readability-identifier-length,
+  -readability-implicit-bool-conversion,
+  -readability-magic-numbers,
+  -readability-named-parameter,
+  -readability-redundant-access-specifiers,
+  -readability-uppercase-literal-suffix
+
+WarningsAsErrors: ''
+HeaderFilterRegex: '^.*/src/.*\.(h|hpp)$'
+FormatStyle: file
+UseColor: true
+
+CheckOptions:
+  # ── Types ─────────────────────────────────────────────────────────
+  - { key: readability-identifier-naming.NamespaceCase,            value: lower_case }
+  - { key: readability-identifier-naming.ClassCase,                value: CamelCase  }
+  - { key: readability-identifier-naming.StructCase,               value: CamelCase  }
+  - { key: readability-identifier-naming.UnionCase,                value: CamelCase  }
+  - { key: readability-identifier-naming.EnumCase,                 value: CamelCase  }
+  - { key: readability-identifier-naming.TypeAliasCase,            value: CamelCase  }
+  - { key: readability-identifier-naming.TypedefCase,              value: CamelCase  }
+  - { key: readability-identifier-naming.TemplateParameterCase,    value: CamelCase  }
+
+  # ── Functions / methods — camelBack (Google) ──────────────────────
+  - { key: readability-identifier-naming.FunctionCase,             value: camelBack  }
+  - { key: readability-identifier-naming.MethodCase,               value: camelBack  }
+
+  # ── Parameters → lower_case (per project rule) ────────────────────
+  - { key: readability-identifier-naming.ParameterCase,            value: lower_case }
+  - { key: readability-identifier-naming.PointerParameterCase,     value: lower_case }
+  - { key: readability-identifier-naming.ConstantParameterCase,    value: lower_case }
+
+  # ── Variables — camelBack default ─────────────────────────────────
+  - { key: readability-identifier-naming.VariableCase,             value: camelBack  }
+  - { key: readability-identifier-naming.LocalVariableCase,        value: camelBack  }
+
+  # ── Members ──
+  # Private: no prefix, trailing `_` (project rule).
+  # Protected: same shape as private — they're equally encapsulated.
+  # Public / struct fields: lower_case.
+  - { key: readability-identifier-naming.MemberCase,               value: lower_case  }
+  - { key: readability-identifier-naming.PublicMemberCase,         value: lower_case  }
+  - { key: readability-identifier-naming.PrivateMemberCase,        value: lower_case }
+  - { key: readability-identifier-naming.PrivateMemberSuffix,      value: _          }
+  - { key: readability-identifier-naming.ProtectedMemberCase,      value: lower_case }
+  - { key: readability-identifier-naming.ProtectedMemberSuffix,    value: _          }
+
+  # ── Constants — k-prefix + CamelCase (project rule) ───────────────
+  - { key: readability-identifier-naming.ConstantCase,             value: CamelCase  }
+  - { key: readability-identifier-naming.ConstantPrefix,           value: k          }
+  - { key: readability-identifier-naming.GlobalConstantCase,       value: CamelCase  }
+  - { key: readability-identifier-naming.GlobalConstantPrefix,     value: k          }
+  - { key: readability-identifier-naming.StaticConstantCase,       value: CamelCase  }
+  - { key: readability-identifier-naming.StaticConstantPrefix,     value: k          }
+  - { key: readability-identifier-naming.ConstexprVariableCase,    value: CamelCase  }
+  - { key: readability-identifier-naming.ConstexprVariablePrefix,  value: k          }
+  - { key: readability-identifier-naming.ClassConstantCase,        value: CamelCase  }
+  - { key: readability-identifier-naming.ClassConstantPrefix,      value: k          }
+  - { key: readability-identifier-naming.GlobalConstantPointerCase,   value: CamelCase }
+  - { key: readability-identifier-naming.GlobalConstantPointerPrefix, value: k        }
+  # Enum constants keep CamelCase without `k` — they're already namespaced.
+  - { key: readability-identifier-naming.EnumConstantCase,         value: CamelCase  }
+  - { key: readability-identifier-naming.EnumConstantCasePrefix,   value: k  }
+  - { key: readability-identifier-naming.ScopedEnumConstantCase,   value: CamelCase  }
+
+  # ── Macros / template params kept conventional ────────────────────
+  - { key: readability-identifier-naming.MacroDefinitionCase,      value: UPPER_CASE }
+
+  # ── Modern C++ knobs ──
+  - { key: modernize-use-default-member-init.UseAssignment,        value: true       }
+  - { key: modernize-use-override.IgnoreDestructors,               value: true       }
+  - { key: modernize-loop-convert.MinConfidence,                   value: reasonable }
+  - { key: modernize-use-nullptr.NullMacros,                       value: 'NULL'     }
+
+  # ── Const-correctness ──
+  - { key: misc-const-correctness.AnalyzeValues,                   value: true       }
+  - { key: misc-const-correctness.AnalyzeReferences,               value: true       }
+  - { key: misc-const-correctness.WarnPointersAsValues,            value: false      }
+
+  # ── Performance — Qt implicit-shared types are cheap to copy ──
+  - { key: performance-unnecessary-value-param.AllowedTypes,       value: 'QString;QStringView;QChar;QByteArray' }
+  - { key: performance-for-range-copy.AllowedTypes,                value: 'QString;QChar' }
+
+  # ── Google specifics ──
+  - { key: google-readability-function-size.LineThreshold,         value: 300        }
+  - { key: google-readability-braces-around-statements.ShortStatementLines, value: 1 }
+...
