@@ -21,6 +21,7 @@ class ChronoParser;
 namespace heap::git {
 class GitWatcher;
 }
+
 namespace heap::notify {
 class NotificationCenter;
 }
@@ -194,10 +195,7 @@ class AppController : public QObject {
   // Post the given rich payload via the native notification backend.
   // `taskId` is the optional task tied to this toast — it is encoded into
   // the notification id so the action handlers can route back.
-  Q_INVOKABLE void notifyTask(const QString& taskId,
-                              const QString& title,
-                              const QString& body,
-                              const QString& kind = QString());
+  Q_INVOKABLE void notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind = QString());
   // Slide the deadline of \p taskId forward by \p seconds (no-op if the
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
