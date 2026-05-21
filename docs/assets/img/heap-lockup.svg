@@ -1,0 +1,16 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 360 100" width="360" height="100">
+    <g transform="translate(0,18) scale(2)">
+        <line x1="16" y1="9.5" x2="9.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+              stroke-opacity="0.55"></line>
+        <line x1="16" y1="9.5" x2="22.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+              stroke-opacity="0.55"></line>
+        <circle cx="9.5" cy="22" r="3" fill="#8a94a3"></circle>
+        <circle cx="22.5" cy="22" r="3" fill="#8a94a3"></circle>
+        <circle cx="16" cy="9.5" r="3.6" fill="#2f5560"></circle>
+    </g>
+    <text x="82" y="78" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-weight="500"
+          font-size="92" letter-spacing="-3.2" fill="#8a94a3">heap
+        <tspan fill="#2f5560">.</tspan>
+    </text>
+</svg>
