@@ -1,6 +1,14 @@
 cmake_minimum_required(VERSION 3.21)
 project(heap VERSION 0.4.2 LANGUAGES CXX)
 
+# Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
+# design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
+# without this, CMake silently skips .rc inputs and the PE icon resource is
+# missing, leaving Explorer/taskbar with the default Qt icon in release.
+if (WIN32)
+    enable_language(RC)
+endif ()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
