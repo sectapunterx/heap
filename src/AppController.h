@@ -113,6 +113,10 @@ public:
     // ---- Task ops ----
     Q_INVOKABLE void moveTask(const QString &id, const QString &newStatus);
     Q_INVOKABLE QVariantMap newTaskDraft(const QString &statusId) const;
+    // Like newTaskDraft, but the id is a placeholder ("TODO-N") instead of
+    // the project prefix — used by QuickCapture so the user is reminded to
+    // assign a real ticket id later.
+    Q_INVOKABLE QVariantMap newQuickTaskDraft() const;
     Q_INVOKABLE void saveTask(const QVariantMap &draft);
     Q_INVOKABLE void deleteTask(const QString &id);
     Q_INVOKABLE bool canTransitionStatus(const QString &taskId, const QString &newStatus);
@@ -169,6 +173,17 @@ public:
                                                const QDateTime &reference = QDateTime()) const;
 
     Q_INVOKABLE void copyToClipboard(const QString &text);
+
+    // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
+    // Returns one of "focus" | "sync" | "ticket" | "none".
+    Q_INVOKABLE QString classifyTaskKind(const QString &text) const;
+    // Returns { title, desc, handles: [..] } — same shape as the JS helper.
+    Q_INVOKABLE QVariantMap extractTaskMeta(const QString &text) const;
+    // Suggest a slug-style person id ("e.zaharov") from a free-form name.
+    // Avoids collisions with already-existing ids in the active profile
+    // by appending "-2", "-3", … on conflict.
+    Q_INVOKABLE QString suggestPersonId(const QString &name,
+                                        const QString &exceptId = QString()) const;
 
     // ---- Profiles ----
     QVariantList profiles() const;
