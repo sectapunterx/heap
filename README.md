@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — Work, in one place.">
+  <img src="design/brand-export/surfaces/heap-og-card.svg" width="100%" alt="heap. — Work, in one place.">
 </p>
 
 <div align="center">
@@ -27,7 +27,7 @@ still ships with the repo for visual reference. The brand bundle lives under
 `design/brand-export/`.
 
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-marketing-hero.svg" width="100%" alt="heap. marketing hero — Your day, allocated.">
+  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. marketing hero — Your day, allocated.">
 </p>
 
 ## Highlights
