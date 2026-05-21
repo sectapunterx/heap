@@ -71,7 +71,11 @@ public:
             const uint dbusId = reply.value();
             // Drop any stale dbus→ourId mapping for the replaced toast.
             for (auto it = m_dbusMap.begin(); it != m_dbusMap.end();) {
-                it = (it.value() == n.id) ? m_dbusMap.erase(it) : it + 1;
+                if (it.value() == n.id) {
+                    it = m_dbusMap.erase(it);
+                } else {
+                    ++it;
+                }
             }
             m_dbusMap.insert(dbusId, n.id);
             m_idMap.insert(n.id, dbusId);
