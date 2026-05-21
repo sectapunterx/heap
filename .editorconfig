@@ -1,0 +1,38 @@
+# EditorConfig — https://editorconfig.org
+# Keeps line-endings / charset / indentation consistent across editors and CI.
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+indent_style = space
+indent_size = 4
+insert_final_newline = true
+trim_trailing_whitespace = true
+max_line_length = 100
+
+# CMake mirrors C++ — 4-space.
+[CMakeLists.txt]
+indent_size = 4
+
+[*.cmake]
+indent_size = 4
+
+# YAML / JSON conventionally use 2-space.
+[*.{yml,yaml,json}]
+indent_size = 2
+
+# Markdown allows trailing two-space line breaks; do not trim.
+[*.md]
+trim_trailing_whitespace = false
+
+# Shell scripts.
+[*.sh]
+indent_size = 2
+
+# Batch / PowerShell files have native line endings.
+[*.{bat,cmd}]
+end_of_line = crlf
+
+[*.ps1]
+end_of_line = crlf
