@@ -4,6 +4,7 @@ out/
 dist/
 .vscode/
 .idea/
+.claude
 .cache/
 *.user
 *.autosave
@@ -12,3 +13,4 @@ CMakeFiles/
 .DS_Store
 /design/*
 !design/brand-export/
+cmake*
