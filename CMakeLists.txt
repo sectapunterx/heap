@@ -30,6 +30,7 @@ qt_add_executable(heap WIN32
     src/chrono/ChronoParser.cpp
     src/git/BranchTaskMatcher.cpp
     src/git/GitWatcher.cpp
+    src/text/TaskTextUtils.cpp
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -85,6 +86,7 @@ qt_add_qml_module(heap
         src/git/BranchTaskMatcher.h
         src/git/GitTypes.h
         src/git/GitWatcher.h
+        src/text/TaskTextUtils.h
 )
 
 target_include_directories(heap PRIVATE src)
