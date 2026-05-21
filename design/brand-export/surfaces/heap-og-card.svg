@@ -20,7 +20,7 @@
           font-weight="300" font-size="62" letter-spacing="-1.1" fill="#e5ecf3">Work, in one place.
     </text>
     <text x="80" y="400" font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif"
-          font-weight="300" font-size="62" letter-spacing="-1.1" fill="#8a94a3">A quiet workspace for engineers.
+          font-weight="300" font-size="62" letter-spacing="-1.1" fill="#8a94a3">A workspace for engineers.
     </text>
 
     <line x1="80" y1="530" x2="1120" y2="530" stroke="#1c2230" stroke-width="1"></line>
