@@ -12,9 +12,9 @@ Item {
 
     // ── Sections list (left nav) ──────────────────────────────────────
     // Full catalogue of settings sections.
-    //   unimplemented: section is a stub — controls are disabled in all
-    //                  builds; in Debug a developer toggle hides them.
-    //   devOnly:       section appears only in Debug builds.
+    //   unimplemented: section is a stub. In Release builds these are hidden
+    //                  completely. In Debug they obey the dev toggle in the
+    //                  nav footer.
     readonly property var allSections: [
         { id: "profile",       icon: "◉",   title: "Profile",          sub: "Имя, роль, команда" },
         { id: "appearance",    icon: "◑",   title: "Appearance",       sub: "Тема, акцент, плотность" },
@@ -28,28 +28,23 @@ Item {
           unimplemented: true },
         { id: "git",           icon: "⎇",   title: "Git Watcher",      sub: "Отслеживаемые репо, авто-перевод" },
         { id: "data",          icon: "↯",   title: "Data",             sub: "Import / export, reset" },
-        { id: "developer",     icon: "✦",   title: "Developer",        sub: "Сборка, флаги отладки",
-          devOnly: true },
         { id: "about",         icon: "?",   title: "About",            sub: "Версия, лицензии" }
     ]
 
     readonly property bool _debugBuild: !!AppController.debugBuild
-    // Persisted toggle: only meaningful in Debug builds. Defaults to `true`
-    // so a developer sees the stub sections out of the box.
+    // Persisted toggle: only meaningful in Debug builds. Defaults to true so
+    // a developer sees the stub sections out of the box.
     readonly property bool _showUnimplemented:
         !!(settings.developer && settings.developer.showUnimplemented)
 
-    // Visible sections =
-    //   * implemented ones — always shown,
-    //   * unimplemented ones — shown in Release (disabled) AND in Debug when
-    //                          the developer toggle is on,
-    //   * devOnly ones — Debug build only.
+    // Visible sections:
+    //   * implemented   — always shown,
+    //   * unimplemented — Debug AND showUnimplemented; never in Release.
     readonly property var sections: {
         const out = [];
         for (let i = 0; i < allSections.length; ++i) {
             const s = allSections[i];
-            if (s.devOnly && !_debugBuild) continue;
-            if (s.unimplemented && _debugBuild && !_showUnimplemented) continue;
+            if (s.unimplemented && !(_debugBuild && _showUnimplemented)) continue;
             out.push(s);
         }
         return out;
@@ -331,6 +326,51 @@ Item {
                 }
 
                 Item { Layout.fillHeight: true }
+
+                // Debug-only developer toggle. Lives in the nav footer so it
+                // never appears in Release builds. Drives `_showUnimplemented`
+                // → filters the stub sections out of `sections`.
+                Rectangle {
+                    visible: root._debugBuild
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
+                    radius: 6
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    implicitHeight: devToggleRow.implicitHeight + 12
+                    RowLayout {
+                        id: devToggleRow
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Text {
+                                text: "DEBUG"
+                                color: Theme.p1
+                                font.pixelSize: 9
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 1
+                            }
+                            Text {
+                                text: "Показать нереализованные"
+                                color: Theme.text
+                                font.pixelSize: 11
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                        Switch {
+                            id: devSwitch
+                            checked: root._showUnimplemented
+                            onToggled: root.set("developer", "showUnimplemented", checked)
+                        }
+                    }
+                }
+
                 Text {
                     text: "todo·cpp · 0.4.2 · stable"
                     color: Theme.textDim
@@ -485,7 +525,6 @@ Item {
                                     if (root.activeSection === "integrations")  return sectionIntegrations;
                                     if (root.activeSection === "git")           return sectionGit;
                                     if (root.activeSection === "data")          return sectionData;
-                                    if (root.activeSection === "developer")     return sectionDeveloper;
                                     if (root.activeSection === "about")         return sectionAbout;
                                     return null;
                                 }
@@ -1577,36 +1616,6 @@ Item {
                         hint: "Откатить к значениям по умолчанию. Профили, задачи и заметки останутся."
                         buttonText: "Reset all"
                         onTriggered: root.resetAll()
-                    }
-                }
-            }
-        }
-    }
-
-    Component {
-        id: sectionDeveloper
-        ColumnLayout {
-            spacing: 16
-            SectionCard {
-                ColumnLayout {
-                    spacing: 12
-                    Layout.fillWidth: true
-                    Sub { label: "Сборка" }
-                    Text {
-                        Layout.fillWidth: true
-                        text: "Это секция доступна только в Debug-сборке."
-                            + " В Release её нет, а нереализованные настройки"
-                            + " по-прежнему отображены, но заблокированы."
-                        color: Theme.textMuted
-                        font.pixelSize: 11
-                        wrapMode: Text.WordWrap
-                    }
-                    SwitchRow {
-                        label: "Показать нереализованные фичи"
-                        hint: "Когда выключено — секции-заглушки скрываются из левого меню."
-                        checked: !!(root.settings.developer
-                                    && root.settings.developer.showUnimplemented)
-                        onToggled: (checked) => root.set("developer", "showUnimplemented", checked)
                     }
                 }
             }
