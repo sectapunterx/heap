@@ -18,11 +18,18 @@ Popup {
 
     property var draft: ({})
     property bool isNew: false
+    // Original id at the moment of opening the editor. Used so that even if
+    // the user edits idField, AppController can find and rename the existing
+    // row instead of inserting a duplicate.
+    property string _originalId: ""
 
     function showFor(initialDraft) {
         draft = initialDraft || {};
         isNew = !!draft._isNew;
-        idField.text = draft.id || "";
+        _originalId = isNew ? "" : (draft.id || "");
+        // New tasks: leave idField empty with a TODO hint — real id is
+        // assigned on save. Edit: pre-fill with existing id (editable).
+        idField.text = isNew ? "" : (draft.id || "");
         titleField.text = draft.title || "";
         descField.text = draft.desc || "";
         statusBox.currentIndex = Math.max(0, statusList().indexOf(draft.status));
@@ -75,6 +82,45 @@ Popup {
         _deadlinePreview = AppController.parseDateTime(s, new Date()) || {ok: false};
     }
 
+    // Forwards to heap::text::extractMeta (C++, unit-tested).
+    function _extractMeta(raw) {
+        return AppController.extractTaskMeta(raw || "");
+    }
+
+    // Resolve @handles into display names via PersonModel. Unknown handles
+    // are kept as "@handle" so context isn't silently dropped.
+    function _resolvePeopleNames(handles) {
+        if (!handles || handles.length === 0) return [];
+        const out = [];
+        const known = AppController.people;
+        for (let i = 0; i < handles.length; ++i) {
+            const h = handles[i];
+            const p = AppController.personById(h);
+            if (p && p.id) { out.push(p.name || p.id); continue; }
+            // Fallback: case-insensitive scan over name's first token / id.
+            let matched = false;
+            for (let j = 0; j < known.rowCount(); ++j) {
+                const idx = known.index(j, 0);
+                const id  = String(known.data(idx, Qt.UserRole + 1) || "");
+                const nm  = String(known.data(idx, Qt.UserRole + 2) || "");
+                const firstWord = nm.split(/\s+/)[0] || "";
+                if (id.toLowerCase() === h.toLowerCase()
+                    || firstWord.toLowerCase() === h.toLowerCase()) {
+                    out.push(nm || id);
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) out.push("@" + h);
+        }
+        return out;
+    }
+
+    // Forwards to heap::text::classifyKind (C++, unit-tested).
+    function _classifyKind(text) {
+        return AppController.classifyTaskKind(text || "");
+    }
+
     anchors.centerIn: Overlay.overlay
 
     background: Rectangle {
@@ -120,13 +166,20 @@ Popup {
             id: idField
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
-            placeholderText: "LTE-XXXX"
+            // New tasks: TODO placeholder — final id is generated on save.
+            // Edit: pre-filled with the current id (still editable).
+            placeholderText: root.isNew ? "TODO — присвоится при сохранении"
+                                        : "LTE-XXXX"
             font.family: Theme.fontMono
             background: FieldBg {
             }
             color: Theme.text
             placeholderTextColor: Theme.textDim
-            onTextChanged: text = text.toUpperCase()
+            // Auto-uppercase so the id stays canonical (matches newTaskDraft).
+            onTextChanged: {
+                const up = text.toUpperCase();
+                if (up !== text) text = up;
+            }
         }
 
         FieldLabel {
@@ -308,28 +361,79 @@ Popup {
                 text: root.isNew ? "Создать" : "Сохранить"
                 primary: true
                 onClicked: {
+                    // New tasks: if user left idField blank, fall back to the
+                    // auto-generated id captured in the draft. Edit: take the
+                    // (possibly renamed) text from idField.
+                    let finalId = idField.text.trim();
+                    if (finalId.length === 0 && root.isNew) {
+                        finalId = root.draft.id || "";
+                    }
+                    // Extract @handle attendees and "// comment" tail. Handles
+                    // remain visible in the title — only the "//" tail is
+                    // peeled off into the description.
+                    const meta = root._extractMeta(titleField.text);
+                    const cleanedTitle = meta.title;
+                    const inlineDesc   = meta.desc;
+                    const handleNames  = root._resolvePeopleNames(meta.handles);
+
                     const d = {
                         _isNew: root.isNew,
-                        id: idField.text,
-                        title: titleField.text,
-                        desc: descField.text,
+                        // Pass the original id alongside the (possibly edited)
+                        // new id so saveTask can rename rather than insert a
+                        // duplicate row when the user changes the id field.
+                        _originalId: root._originalId,
+                        id: finalId,
+                        title: cleanedTitle,
+                        // Inline "//..." appends to the description field.
+                        desc: inlineDesc.length > 0
+                              ? ((descField.text || "").trim().length > 0
+                                  ? descField.text.trim() + "\n" + inlineDesc
+                                  : inlineDesc)
+                              : descField.text,
                         priority: priBox.currentText,
                         status: root.statusList()[statusBox.currentIndex],
                         deadline: root.parseDate(deadlineField.text),
                         branch: branchField.text
                     };
                     AppController.saveTask(d);
-                    // Task only stores QDate. If the user typed an explicit
-                    // time ("завтра в 18:00") on a brand-new task, expose it
-                    // via a focus block on the calendar — otherwise the time
-                    // is silently dropped.
+                    // Same classification rules as QuickCapturePopup — only
+                    // surface the parsed time on the calendar when the user
+                    // hinted at an event kind. "ticket"/"задача" wins over
+                    // everything (pure todo, never schedule).
                     if (root.isNew
                         && root._deadlinePreview && root._deadlinePreview.ok
                         && root._deadlinePreview.hasTime
                         && root._deadlinePreview.start) {
-                        const dt = root._deadlinePreview.start;
-                        const startHour = dt.getHours() + dt.getMinutes() / 60.0;
-                        AppController.scheduleTask(d.id, startHour, dt);
+                        const kind = root._classifyKind(
+                            (titleField.text || "") + " "
+                          + (descField.text || "") + " "
+                          + (deadlineField.text || ""));
+                        if (kind !== "ticket") {
+                            const dt = root._deadlinePreview.start;
+                            const startHour = dt.getHours() + dt.getMinutes() / 60.0;
+                            if (kind === "focus") {
+                                AppController.scheduleTask(d.id, startHour, dt);
+                                AppController.selectedDate = dt;
+                            } else if (kind === "sync") {
+                                // Honour parsed range "12:00-13:00", else 30m.
+                                let endHour = startHour + 0.5;
+                                const pe = root._deadlinePreview.end;
+                                if (pe && pe.getTime && pe.getTime() > 0) {
+                                    const eh = pe.getHours() + pe.getMinutes() / 60.0;
+                                    if (eh > startHour) endHour = eh;
+                                }
+                                const ev = AppController.newEventDraft(startHour, dt);
+                                ev.type      = "sync";
+                                ev.title     = (cleanedTitle || "").substring(0, 40);
+                                ev.end       = endHour;
+                                ev.taskId    = d.id;
+                                ev.date      = dt;
+                                ev.attendees = handleNames.join(", ");
+                                AppController.saveEvent(ev);
+                                AppController.selectedDate = dt;
+                            }
+                            // kind === "none" → keep deadline date only.
+                        }
                     }
                     root.close();
                 }

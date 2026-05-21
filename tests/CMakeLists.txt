@@ -55,3 +55,20 @@ target_link_libraries(heap_git_tests PRIVATE
 )
 
 add_test(NAME heap_git_tests COMMAND heap_git_tests)
+
+add_executable(heap_text_tests
+    test_task_text_utils.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+)
+
+target_include_directories(heap_text_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_text_tests PRIVATE
+    Qt6::Core
+    GTest::gtest
+    GTest::gtest_main
+)
+
+add_test(NAME heap_text_tests COMMAND heap_text_tests)
