@@ -22,7 +22,9 @@ namespace heap::git {
 class GitWatcher;
 }
 
-class QSystemTrayIcon;
+namespace heap::notify {
+class NotificationCenter;
+}
 
 class AppController : public QObject {
   Q_OBJECT
@@ -190,6 +192,13 @@ class AppController : public QObject {
 
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
+  // Post the given rich payload via the native notification backend.
+  // `taskId` is the optional task tied to this toast — it is encoded into
+  // the notification id so the action handlers can route back.
+  Q_INVOKABLE void notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind = QString());
+  // Slide the deadline of \p taskId forward by \p seconds (no-op if the
+  // task currently has no deadline). Invoked by the "Snooze 1h" action.
+  Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
 
   // ---- Event ops ----
   Q_INVOKABLE QVariantMap newEventDraft(double startHour, const QDate& date) const;
@@ -381,7 +390,9 @@ class AppController : public QObject {
 
   // Automation
   QTimer* m_automationTimer = nullptr;
-  QSystemTrayIcon* m_tray = nullptr;
+  std::unique_ptr<heap::notify::NotificationCenter> m_notifier;
+  void onNotifierAction(const QString& notificationId, const QString& actionId);
+  void onNotifierActivated(const QString& notificationId);
   QSet<QString> m_blockedStuckIds;
   QMap<QString, QDate> m_lastReminderDay;  // task/sentinel id -> last day notified
   QVariantMap settingsMap() const;

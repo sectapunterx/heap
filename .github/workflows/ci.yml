@@ -137,6 +137,10 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   tidy:
     name: clang-tidy (auto-fix)
+    # Serialize after format-cpp so the auto-commit chain stays linear —
+    # otherwise the two jobs race and the second push is rejected as
+    # non-fast-forward when the first one lands on origin first.
+    needs: format-cpp
     if: >-
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository
@@ -267,7 +271,8 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           cmake --build build --parallel \
-            --target heap heap_chrono_tests heap_git_tests heap_text_tests
+            --target heap heap_chrono_tests heap_git_tests heap_text_tests \
+                         heap_notify_tests
 
       - name: Configure (windows)
         if: runner.os == 'Windows'
@@ -283,7 +288,8 @@ jobs:
         shell: msys2 {0}
         run: |
           cmake --build build --parallel \
-            --target heap heap_chrono_tests heap_git_tests heap_text_tests
+            --target heap heap_chrono_tests heap_git_tests heap_text_tests \
+                         heap_notify_tests
 
       - name: Tar build dir
         if: always()
@@ -319,7 +325,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libqt6core6 libqt6gui6 libqt6qml6 libqt6quick6 \
-            libqt6quickcontrols2-6 libqt6widgets6 \
+            libqt6quickcontrols2-6 libqt6widgets6 libqt6test6 \
             cmake ninja-build
 
       - name: Setup MSYS2 (windows)
@@ -405,7 +411,8 @@ jobs:
       - name: Build tests
         run: |
           cmake --build build-san --parallel \
-            --target heap_chrono_tests heap_git_tests heap_text_tests
+            --target heap_chrono_tests heap_git_tests heap_text_tests \
+                     heap_notify_tests
 
       - name: Run tests under sanitizers
         env:
