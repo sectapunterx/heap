@@ -1,10 +1,12 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — heap.push(task)">
+  <img src="design/brand-export/surfaces/heap-og-card.svg" width="100%" alt="heap. — Work, in one place.">
+</p>
+
+<p align="center">
+  A native desktop board, calendar, and notebook for engineers.
 </p>
 
 <div align="center">
-
-Native desktop kanban + calendar + docs for engineers.
 
 [![Qt 6](https://img.shields.io/badge/Qt-6.4%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
@@ -17,49 +19,42 @@ Native desktop kanban + calendar + docs for engineers.
 
 ## What it is
 
-`heap.` is a single-binary Qt6/QML application. One process — no Electron, no
-browser, no remote services. Tasks, events, docs, snippets, and contacts live
-side by side in a per-profile workspace that's persisted as a JSON blob in
-your user data directory.
+heap. is a single-binary Qt 6 / QML application. One process, no Electron, no browser, no remote services. Tasks,
+events, docs, snippets, and contacts live side by side in a per-profile workspace persisted as a JSON blob in the user
+data directory.
 
-The app was ported one-to-one from a React/Babel prototype (`design/`) that
-still ships with the repo for visual reference. The brand bundle lives under
-`design/brand-export/`.
+The app was ported from a React prototype that still ships under `design/`
+for visual reference. The brand bundle lives under `design/brand-export/`; see [
+`design/brand-export/README.md`](design/brand-export/README.md) for tokens, mark geometry, and asset paths.
 
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-marketing-hero.svg" width="100%" alt="heap. marketing hero — Your day, allocated.">
+  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — work, in one place.">
 </p>
 
 ## Highlights
 
-- **Kanban Board** — drag-and-drop columns, status color picker, per-card
-  priority chips, branch decoration, scheduled-time pill, lifted-card drag
-  ghost.
-- **Timeline** — overdue / today / tomorrow / week / later buckets with
-  sub-grouping by date, show-done toggle, accent stripes.
-- **Week** — 7-day grid with all-day deadline chips, hourly event grid, full
-  drag/resize + cross-day move for events.
-- **Day calendar** — drag-to-create events, top/bottom resize, drop a task to
-  schedule a focus block, live now-line.
-- **Docs** — sections (3GPP / internal / C++ / tools) with custom fields,
-  snippet editor with syntax highlight, contact cards.
-- **Notes** — per-profile markdown canvas with `@people` / `#ticket`
+- **Kanban board.** Drag-and-drop columns, status color picker, per-card priority chips, branch decoration,
+  scheduled-time pill.
+- **Timeline.** Overdue / today / tomorrow / week / later buckets, with sub-grouping by date and a show-done toggle.
+- **Week view.** 7-day grid with all-day deadline chips and an hourly event grid. Drag, resize, and cross-day move for
+  events.
+- **Day calendar.** Drag-to-create events, top and bottom resize, drop a task to schedule a focus block, live now-line.
+- **Docs.** Sections (3GPP, internal, C++, tools) with custom fields. Snippet editor with syntax highlighting. Contact
+  cards.
+- **Notes.** Per-profile markdown canvas with `@people` and `#ticket`
   autocomplete.
-- **Profiles** — feature-scoped workspaces. JSON import / export.
-- **Command palette** — `Ctrl+K` fuzzy across tasks, docs, snippets,
-  contacts, people, profiles.
-- **Hotkeys** — full rebindable catalog, inline capture.
-- **Settings** — 10 sections (profile, appearance, notifications, calendar,
+- **Profiles.** Feature-scoped workspaces with JSON import and export.
+- **Command palette.** `Ctrl+K` fuzzy search across tasks, docs, snippets, contacts, people, and profiles.
+- **Hotkeys.** Rebindable catalog with inline capture.
+- **Settings.** 10 sections (profile, appearance, notifications, calendar,
   tasks, shortcuts, C++, integrations, data, about). Persists as JSON.
-- **Tweaks** — floating quick-access panel: theme, density, accent, reduced
-  motion, high contrast.
-- **Automation** — periodic 60s tick auto-archives done tasks, surfaces
-  blocked-stuck warnings, fires deadline + standup reminders via system tray
-  (respects quiet hours).
+- **Tweaks panel.** Theme, density, accent, reduced motion, high contrast.
+- **Automation.** A 60-second tick auto-archives done tasks, surfaces blocked-stuck warnings, and fires deadline and
+  standup reminders via the system tray. Respects quiet hours.
 
 ## Build
 
-Requires **Qt 6.4+** and a **C++17** toolchain.
+Requires Qt 6.4+ and a C++20 toolchain.
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -100,8 +95,7 @@ cmake --build build -j
        git
    ```
 
-4. Open the project in CLion → **Settings → Build, Execution, Deployment →
-   Toolchains → + → MinGW**:
+4. Open the project in CLion. Under **Settings → Build, Execution, Deployment → Toolchains → + → MinGW**:
    - **Name:** `MSYS2 UCRT64`
    - **Toolset:** `C:\msys64\ucrt64`
 5. In **Settings → CMake**, add to **CMake options**:
@@ -110,9 +104,8 @@ cmake --build build -j
    -DCMAKE_PREFIX_PATH=C:/msys64/ucrt64
    ```
 6. Pick the `heap` run configuration. `Shift+F10` to launch.
-7. To run `heap.exe` outside CLion, either add `C:\msys64\ucrt64\bin` to your
-   `PATH`, or bundle the Qt DLLs once with `windeployqt6 --qmldir ../qml
-   heap.exe` from inside your build directory.
+7. To run `heap.exe` outside CLion, add `C:\msys64\ucrt64\bin` to `PATH`, or bundle the Qt DLLs once with
+   `windeployqt6 --qmldir ../qml heap.exe` from the build directory.
 
 ## Project layout
 
@@ -129,23 +122,23 @@ cmake --build build -j
 ├─ qml/
 │  ├─ Main.qml             ← top-level window
 │  ├─ Theme.qml            ← singleton: surfaces, accent (reactive), highContrast, reducedMotion
-│  ├─ Brand.qml            ← singleton: heap. palette + tagline + asset paths
-│  ├─ BrandLogo.qml        ← lockup/mark/wordmark, native QML — no SVG required
+│  ├─ Brand.qml            ← singleton: heap. palette, identity tokens, tagline, asset paths
+│  ├─ BrandLogo.qml        ← lockup / mark / wordmark in native QML primitives
 │  ├─ TopBar.qml           ← BrandLogo, breadcrumbs, profile pill, search, +Task
 │  ├─ SideRail.qml         ← view switcher rail with badge counts
 │  ├─ FilterBar.qml        ← priority chips + Archived toggle + task counts
 │  ├─ KanbanBoard.qml      ← drag-and-drop board with status columns
-│  ├─ TaskCard.qml         ← per-task card (priority/branch/deadline/stuck/archived)
+│  ├─ TaskCard.qml         ← per-task card (priority, branch, deadline, stuck, archived)
 │  ├─ TimelineView.qml     ← deadline-bucketed agenda
 │  ├─ WeekView.qml         ← 7-day grid with interactive events
 │  ├─ DayCalendar.qml      ← hourly grid with drag-to-create + resize handles
 │  ├─ MiniWeek.qml         ← week navigator with per-day dots
-│  ├─ PeopleList.qml       ← "Кому написать" todo→pinged→replied
+│  ├─ PeopleList.qml       ← "Кому написать" todo → pinged → replied
 │  ├─ DocsView.qml         ← docs canvas (sections, snippets, contacts)
-│  ├─ DocsEditor.qml       ← modal editor for docs/snippets/contacts
+│  ├─ DocsEditor.qml       ← modal editor for docs / snippets / contacts
 │  ├─ NotesView.qml        ← markdown notes canvas
 │  ├─ SettingsView.qml     ← 10-section settings UI
-│  ├─ TweaksPanel.qml      ← floating theme/accent/a11y quick controls
+│  ├─ TweaksPanel.qml      ← floating theme / accent / a11y quick controls
 │  ├─ HotkeysPanel.qml     ← rebindable shortcut catalog
 │  ├─ CommandPalette.qml   ← Ctrl+K fuzzy palette
 │  ├─ TaskEditor.qml       ← task modal
@@ -154,28 +147,27 @@ cmake --build build -j
 │  ├─ ProfileEditor.qml    ← profile create / rename / duplicate modal
 │  ├─ ThinScrollBar.qml    ← shared thin translucent scrollbar
 │  ├─ Toast.qml            ← bottom-centered transient notifications
-│  └─ PillButton.qml       ← rounded primary/secondary button
+│  └─ PillButton.qml       ← rounded primary / secondary button
 ├─ design/
-│  ├─ *.jsx                ← original React/Babel prototype (reference only)
+│  ├─ *.jsx                ← original React prototype (reference only)
 │  ├─ styles.css           ← prototype stylesheet
-│  └─ brand-export/        ← heap. brand bundle (logos, icon, fonts, QML, brand.qrc)
+│  └─ brand-export/        ← heap. brand bundle: logos, app icon, surfaces, brandbook
 └─ README.md
 ```
 
-## State, persistence, and data
+## State and data
 
-- **Profile snapshot** — each profile owns its own tasks, people, statuses,
+- **Profile snapshot.** Each profile owns its own tasks, people, statuses,
   docs blob, and notes blob.
-- **Events** are global (so the calendar reflects every profile at once),
-  with an optional `profileId` attribution.
-- **Settings** live as `appSettingsJson` — a single JSON blob persisted via
+- **Events.** Global, so the calendar reflects every profile at once. Each event carries an optional `profileId`
+  attribution.
+- **Settings.** Stored as `appSettingsJson` — one JSON blob persisted via
   `QStandardPaths::AppDataLocation`. `SettingsView` is the canonical editor.
-- **Backups** rotate daily under `<AppDataLocation>/backups/` (configurable
-  retention in Settings → Data).
+- **Backups.** Rotated daily under `<AppDataLocation>/backups/`. Retention is configurable in **Settings → Data**.
 
 ## Keyboard
 
-Defaults — every entry is rebindable from **Settings → Shortcuts** or the
+Defaults. Every entry is rebindable from **Settings → Shortcuts** or the
 floating Hotkeys panel.
 
 | Action            | Default      |
@@ -197,16 +189,16 @@ floating Hotkeys panel.
 
 ## Accessibility
 
-- **Reduced motion** — Tweaks → Reduced motion mutes all transitions
-  (`Theme.scaledMs(n)` collapses to 0).
-- **High contrast** — Tweaks → High contrast strengthens border and text
+- **Reduced motion.** **Tweaks → Reduced motion** mutes all transitions.
+  `Theme.scaledMs(n)` collapses to 0.
+- **High contrast.** **Tweaks → High contrast** strengthens border and text
   tokens.
-- **Tab focus** — focusable inputs paint an accent border when focused.
+- **Tab focus.** Focusable inputs paint an accent border when focused.
 
 ## Brand
 
-The **heap.** brand ships under `design/brand-export/` and is wired into the
-runtime via the `Brand` QML singleton.
+The heap. brand ships under `design/brand-export/` and is wired into the runtime via the `Brand` QML singleton. Tagline:
+*Work, in one place.* Long form, for editorial contexts only: *A quiet place for the work you owe.*
 
 <table>
 <tr>
@@ -221,6 +213,7 @@ runtime via the `Brand` QML singleton.
 <td align="center" width="33%">
   <picture>
     <source media="(prefers-color-scheme: dark)" srcset="design/brand-export/logo/heap-wordmark.svg">
+    <source media="(prefers-color-scheme: light)" srcset="design/brand-export/logo/heap-wordmark-light.svg">
     <img alt="heap-wordmark" src="design/brand-export/logo/heap-wordmark.svg" width="180">
   </picture>
   <br><sub><code>BrandLogo { variant: "wordmark" }</code></sub>
@@ -236,24 +229,31 @@ runtime via the `Brand` QML singleton.
 </tr>
 </table>
 
-`BrandLogo.qml` renders the mark with native QML primitives (`Rectangle` +
-`Canvas`), so the brand displays correctly without `Qt6::Svg`. The exported
-SVG files are bundled into `qrc:/brand/...` for the app icon and for any
-consumer that prefers vector assets.
+`BrandLogo.qml` paints the mark with `Rectangle` and `Canvas`, so the brand renders without `Qt6::Svg`. The exported SVG
+files are bundled into
+`qrc:/brand/...` for the app icon and any consumer that prefers vector assets.
 
 ### Palette
 
-| token       | dark      | light     | role                           |
-| ----------- | --------- | --------- | ------------------------------ |
-| `bg`        | `#0b0e13` | `#f3f5f8` | app background                 |
-| `bg2`       | `#11151c` | derived   | secondary surface              |
-| `panel`     | `#14181f` | `#ffffff` | cards / panels                 |
-| `panel2`    | `#1a1f29` | derived   | nested cards                   |
-| `border`    | `#262d39` | `#dde3ec` | dividers, hairlines            |
-| `text`      | `#e5ecf3` | `#11151c` | primary text                   |
-| `text3`     | `#8a94a3` | `#5f6878` | muted / labels                 |
-| `accent`    | `#3bccdd` | `#178ea0` | brand cyan (the `heap.` dot)   |
-| `accent2`   | `#5fdaea` | derived   | hover / highlight              |
+The product palette (cyan `accent`, status hues, surfaces) is the runtime UI. The identity-only tokens (`brandInk`,
+`brandAccent`) are used by the mark, the wordmark, and the lockup, so the brand sits behind the product instead of
+competing with it.
+
+| token         | dark      | light     | role                                 |
+|---------------|-----------|-----------|--------------------------------------|
+| `bg`          | `#0b0e13` | `#f3f5f8` | app background                       |
+| `bg2`         | `#11151c` | derived   | secondary surface                    |
+| `panel`       | `#14181f` | `#ffffff` | cards and panels                     |
+| `panel2`      | `#1a1f29` | derived   | nested cards                         |
+| `border`      | `#262d39` | `#dde3ec` | dividers, hairlines                  |
+| `text`        | `#e5ecf3` | `#11151c` | primary text                         |
+| `text3`       | `#8a94a3` | `#5f6878` | muted, labels                        |
+| `accent`      | `#3bccdd` | `#178ea0` | product accent (UI only)             |
+| `accent2`     | `#5fdaea` | derived   | hover, highlight                     |
+| `brandInk`    | `#8a94a3` | —         | identity ink (wordmark, mark stroke) |
+| `brandAccent` | `#2f5560` | —         | identity accent (mark fill, dot)     |
+| `iconInk`     | `#5f6878` | —         | app-icon mark, one stop darker       |
+| `iconAccent`  | `#1f3d45` | —         | app-icon fill, one stop darker       |
 
 | status       | hex       |
 | ------------ | --------- |
@@ -263,12 +263,12 @@ consumer that prefers vector assets.
 | done         | `#78be7a` |
 | warn         | `#fe9c3a` |
 
-Full token reference: [`design/brand-export/README.md`](design/brand-export/README.md).
+Full token reference and asset map:
+[`design/brand-export/README.md`](design/brand-export/README.md).
 
 ## License
 
-MIT — see [LICENSE](LICENSE) (if present) or treat this repo as MIT-licensed.
+MIT. See [LICENSE](LICENSE) (if present), or treat this repo as MIT-licensed.
 
-The brand assets in `design/brand-export/` are also MIT for use within this
-codebase. Fonts referenced (IBM Plex Sans, JetBrains Mono) ship under the SIL
-Open Font License — see their own repositories.
+The brand assets under `design/brand-export/` are also MIT for use within this codebase. Fonts referenced (IBM Plex
+Sans, JetBrains Mono) ship under the SIL Open Font License; see their upstream repositories.

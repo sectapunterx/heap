@@ -32,16 +32,18 @@ Item {
                                   : variant === "wordmark" ? wordmarkAspect
                                                            : markAspect)
 
-    // Theme-resolved colors.
+    // Theme-resolved colors. Dark theme uses the quiet brand tokens
+    // (brandInk/brandAccent) so the identity sits behind the product instead
+    // of competing with the cyan `accent` used by the rest of the UI.
     readonly property color _fillColor:   theme === "light" ? Brand.lightAccent
                                         : theme === "mono"  ? monoColor
-                                        :                     Brand.accent
+            : Brand.brandAccent
     readonly property color _strokeColor: theme === "light" ? "#5f6878"
                                         : theme === "mono"  ? monoColor
-                                        :                     "#8a94a3"
+            : Brand.brandInk
     readonly property color _textColor:   theme === "light" ? Brand.lightText
                                         : theme === "mono"  ? monoColor
-                                        :                     Brand.text
+            : Brand.brandInk
 
     // ── Mark — root + 2 leaf rectangles wired by 2 diagonal connectors ──
     Item {

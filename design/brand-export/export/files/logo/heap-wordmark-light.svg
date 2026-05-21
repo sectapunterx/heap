@@ -1,7 +1,7 @@
 <?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 280 100" width="280" height="100">
     <text x="6" y="78" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-weight="500"
-          font-size="92" letter-spacing="-3.2" fill="#8a94a3">heap
+          font-size="92" letter-spacing="-3.2" fill="#11151c">heap
         <tspan fill="#2f5560">.</tspan>
     </text>
 </svg>

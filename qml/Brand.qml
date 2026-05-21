@@ -10,7 +10,8 @@ QtObject {
 
     // ── Identity ──────────────────────────────────────────────
     readonly property string name:    "heap."
-    readonly property string tagline: "heap.push(task)"
+    readonly property string tagline: "Work, in one place."
+    readonly property string taglineLong: "A quiet place for the work you owe."
     readonly property string version: "0.4.2"
 
     // ── Color palette (dark, primary) ─────────────────────────
@@ -30,6 +31,15 @@ QtObject {
     readonly property color accent:     "#3bccdd"
     readonly property color accent2:    "#5fdaea"  // hover / highlight
     readonly property color accentSoft: Qt.rgba(0.231, 0.800, 0.866, 0.15)
+
+    // ── Brand identity tokens (used only by the wordmark / mark / lockup) ─
+    // Quieter than `accent` / `text` on purpose so the identity sits behind
+    // the product instead of in front of it. See design/brand-export.
+    readonly property color brandInk: "#8a94a3"
+    readonly property color brandAccent: "#2f5560"
+    // App-icon squircle pushes one stop further so a dark dock/taskbar reads.
+    readonly property color iconInk: "#5f6878"
+    readonly property color iconAccent: "#1f3d45"
 
     // ── Status / semantic colors ──────────────────────────────
     readonly property color statusTodo:       "#86a0bd"
@@ -72,11 +82,13 @@ QtObject {
     readonly property int spacing6:  32
 
     // ── Logo asset paths (resolved against the qrc you set up) ─
-    readonly property string logoMark:       "qrc:/brand/logo/heap-mark.svg"
-    readonly property string logoMarkLight:  "qrc:/brand/logo/heap-mark-light.svg"
-    readonly property string logoMarkMono:   "qrc:/brand/logo/heap-mark-mono.svg"
-    readonly property string logoLockup:     "qrc:/brand/logo/heap-lockup.svg"
-    readonly property string logoLockupLight:"qrc:/brand/logo/heap-lockup-light.svg"
-    readonly property string logoWordmark:   "qrc:/brand/logo/heap-wordmark.svg"
-    readonly property string appIcon:        "qrc:/brand/icon/heap-icon.svg"
+    readonly property string logoMark: "qrc:/brand/logo/heap-mark.svg"
+    readonly property string logoMarkLight: "qrc:/brand/logo/heap-mark-light.svg"
+    readonly property string logoMarkMono: "qrc:/brand/logo/heap-mark-mono.svg"
+    readonly property string logoLockup: "qrc:/brand/logo/heap-lockup.svg"
+    readonly property string logoLockupLight: "qrc:/brand/logo/heap-lockup-light.svg"
+    readonly property string logoWordmark: "qrc:/brand/logo/heap-wordmark.svg"
+    readonly property string logoWordmarkLight: "qrc:/brand/logo/heap-wordmark-light.svg"
+    readonly property string appIcon: "qrc:/brand/icon/heap-icon.svg"
+    readonly property string favicon: "qrc:/brand/icon/favicon.svg"
 }

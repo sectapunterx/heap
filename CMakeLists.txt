@@ -163,10 +163,13 @@ qt_add_resources(heap "brand"
         design/brand-export/logo/heap-lockup.svg
         design/brand-export/logo/heap-lockup-light.svg
         design/brand-export/logo/heap-wordmark.svg
+        design/brand-export/logo/heap-wordmark-light.svg
         design/brand-export/icon/heap-icon.svg
+        design/brand-export/icon/favicon.svg
         design/brand-export/surfaces/heap-splash.svg
         design/brand-export/surfaces/heap-readme-banner.svg
         design/brand-export/surfaces/heap-marketing-hero.svg
+        design/brand-export/surfaces/heap-og-card.svg
 )
 
 install(TARGETS heap

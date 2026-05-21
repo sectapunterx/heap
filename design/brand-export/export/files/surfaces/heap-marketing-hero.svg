@@ -1,0 +1,97 @@
+<?xml version="1.0"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
+    <defs>
+        <pattern id="stripes" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
+            <rect width="24" height="24" fill="#14181f"></rect>
+            <line x1="0" y1="0" x2="0" y2="24" stroke="#ffffff" stroke-opacity="0.018" stroke-width="12"></line>
+        </pattern>
+    </defs>
+
+
+    <rect width="1440" height="900" fill="#0b0e13"></rect>
+
+
+    <g transform="translate(80, 100)">
+        <g transform="scale(1.1)">
+            <line x1="16" y1="9.5" x2="9.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+                  stroke-opacity="0.55"></line>
+            <line x1="16" y1="9.5" x2="22.5" y2="22" stroke="#8a94a3" stroke-width="1.5" stroke-linecap="round"
+                  stroke-opacity="0.55"></line>
+            <circle cx="9.5" cy="22" r="3" fill="#8a94a3"></circle>
+            <circle cx="22.5" cy="22" r="3" fill="#8a94a3"></circle>
+            <circle cx="16" cy="9.5" r="3.6" fill="#2f5560"></circle>
+        </g>
+        <text x="41.800000000000004" y="30.272000000000002"
+              font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-weight="500" font-size="35.2"
+              letter-spacing="-1.2320000000000002" fill="#8a94a3">heap
+            <tspan fill="#2f5560">.</tspan>
+        </text>
+    </g>
+
+    <text x="80" y="360" font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif"
+          font-weight="300" font-size="86" letter-spacing="-1.5" fill="#e5ecf3">Work,
+    </text>
+    <text x="80" y="450" font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif"
+          font-weight="300" font-size="86" letter-spacing="-1.5" fill="#e5ecf3">in one place.
+    </text>
+
+    <text x="80" y="540" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-size="18"
+          fill="#b8c2cc">A native desktop board, calendar, and notebook
+    </text>
+    <text x="80" y="566" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-size="18"
+          fill="#b8c2cc">for engineers. Everything you have to do today,
+    </text>
+    <text x="80" y="592" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-size="18"
+          fill="#b8c2cc">on the machine where you do it.
+    </text>
+
+
+    <g transform="translate(80, 640)">
+        <rect x="0" y="0" width="200" height="44" rx="8" fill="none" stroke="#8a94a3" stroke-width="1"></rect>
+        <text x="100" y="29" text-anchor="middle"
+              font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="13"
+              letter-spacing="1.2" fill="#8a94a3">DOWNLOAD · MACOS
+        </text>
+
+        <rect x="216" y="0" width="200" height="44" rx="8" fill="none" stroke="#262d39" stroke-width="1"></rect>
+        <text x="316" y="29" text-anchor="middle"
+              font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="13"
+              letter-spacing="1.2" fill="#8a94a3">OTHER PLATFORMS
+        </text>
+    </g>
+
+
+    <g font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace" font-size="11"
+       letter-spacing="1.6" fill="#5f6878">
+        <text x="80" y="810">QT 6 · C++ 20</text>
+        <text x="240" y="810">MIT</text>
+        <text x="320" y="810">ONE BINARY</text>
+    </g>
+
+
+    <rect x="700" y="40" width="700" height="820" fill="#11151c"></rect>
+    <rect x="740" y="80" width="620" height="740" rx="12" fill="#14181f" stroke="#262d39"></rect>
+    <rect x="740" y="80" width="620" height="740" rx="12" fill="url(#stripes)" opacity="0.55"></rect>
+
+
+    <line x1="740" y1="124" x2="1360" y2="124" stroke="#1c2230"></line>
+    <circle cx="762" cy="102" r="5" fill="#454d5a"></circle>
+    <circle cx="780" cy="102" r="5" fill="#454d5a"></circle>
+    <circle cx="798" cy="102" r="5" fill="#454d5a"></circle>
+    <text x="820" y="106" font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace"
+          font-size="11" fill="#5f6878" letter-spacing="0.6">heap. — board · default
+    </text>
+
+
+    <g text-anchor="middle">
+        <text x="1050" y="440" font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace"
+              font-size="11" letter-spacing="2" fill="#8a94a3">PRODUCT SHOT
+        </text>
+        <text x="1050" y="470" font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace"
+              font-size="13" fill="#8a94a3">board view · 580 × 700
+        </text>
+        <text x="1050" y="510" font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace"
+              font-size="11" fill="#5f6878">drop a full-bleed screenshot here
+        </text>
+    </g>
+</svg>

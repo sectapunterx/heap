@@ -373,7 +373,7 @@ Item {
                 }
 
                 Text {
-                    text: "todo·cpp · 0.4.2 · stable"
+                    text: "heap. · " + Brand.version + " · stable"
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -1696,8 +1696,12 @@ Item {
                         }
                         ColumnLayout {
                             spacing: 1
-                            Text { text: "todo·cpp"; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 16; font.weight: Font.DemiBold }
-                            Text { text: "A C++ programmer's day, structured."; color: Theme.textMuted; font.pixelSize: 11 }
+                            Text {
+                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 16; font.weight: Font.DemiBold
+                            }
+                            Text {
+                                text: Brand.tagline; color: Theme.textMuted; font.pixelSize: 11
+                            }
                         }
                     }
                     ColumnLayout {

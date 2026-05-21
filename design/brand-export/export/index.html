@@ -1,0 +1,866 @@
+<!doctype html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>heap. · export</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@300;400&family=JetBrains+Mono:wght@400;500&display=swap">
+    <style>
+        :root {
+            --bg: #0b0e13;
+            --bg2: #11151c;
+            --panel: #14181f;
+            --panel2: #1a1f29;
+            --border: #262d39;
+            --hair: #1c2230;
+            --text: #e5ecf3;
+            --text2: #b8c2cc;
+            --text3: #8a94a3;
+            --text4: #5f6878;
+            --brand-ink: #8a94a3;
+            --brand-accent: #2f5560;
+            --serif: "IBM Plex Serif", Georgia, serif;
+            --sans: "IBM Plex Sans", -apple-system, Helvetica, Arial, sans-serif;
+            --mono: "JetBrains Mono", "SF Mono", Menlo, monospace;
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html, body {
+            margin: 0;
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            font-size: 15px;
+            line-height: 1.55;
+            -webkit-font-smoothing: antialiased;
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        ::selection {
+            background: var(--brand-accent);
+            color: var(--text);
+        }
+
+        .shell {
+            max-width: 1280px;
+            margin: 0 auto;
+            padding: 0 clamp(20px, 4vw, 56px);
+        }
+
+        /* --- top utility --- */
+        .util {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            padding: 28px 0;
+            border-bottom: 1px solid var(--hair);
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text4);
+        }
+
+        .util .name {
+            color: var(--text2);
+        }
+
+        .util .name b {
+            color: var(--text);
+            font-weight: 500;
+            letter-spacing: 0.18em;
+        }
+
+        .util .name b i {
+            color: var(--brand-accent);
+            font-style: normal;
+        }
+
+        .util .right {
+            display: flex;
+            gap: 28px;
+        }
+
+        .util .right a {
+            color: var(--text3);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1px;
+        }
+
+        .util .right a:hover {
+            color: var(--text);
+            border-color: var(--brand-ink);
+        }
+
+        /* --- header --- */
+        header.hero {
+            padding: clamp(80px, 12vh, 140px) 0 clamp(40px, 6vh, 64px);
+        }
+
+        header.hero .eyebrow {
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text4);
+            margin: 0 0 24px 0;
+        }
+
+        header.hero .eyebrow span {
+            color: var(--brand-accent);
+            margin-right: 10px;
+        }
+
+        header.hero h1 {
+            font-family: var(--serif);
+            font-weight: 300;
+            font-size: clamp(40px, 5vw, 64px);
+            line-height: 1.05;
+            letter-spacing: -0.01em;
+            margin: 0 0 32px 0;
+            max-width: 18ch;
+        }
+
+        header.hero p {
+            color: var(--text3);
+            max-width: 60ch;
+            margin: 0;
+            font-size: 16px;
+        }
+
+        /* --- tabs --- */
+        .tabs {
+            display: flex;
+            gap: 1px;
+            background: var(--hair);
+            border: 1px solid var(--hair);
+            border-radius: 12px;
+            padding: 6px;
+            margin-top: 56px;
+            margin-bottom: 56px;
+            width: fit-content;
+        }
+
+        .tab {
+            background: transparent;
+            border: 0;
+            cursor: pointer;
+            padding: 12px 24px;
+            border-radius: 8px;
+            font-family: var(--mono);
+            font-size: 12px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text3);
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.12s, color 0.12s;
+        }
+
+        .tab:hover {
+            color: var(--text2);
+        }
+
+        .tab.is-active {
+            background: var(--panel);
+            color: var(--text);
+        }
+
+        .tab .count {
+            color: var(--text4);
+            font-size: 11px;
+            padding: 2px 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+        }
+
+        .tab.is-active .count {
+            color: var(--brand-accent);
+            border-color: var(--brand-accent);
+        }
+
+        /* --- panel intro --- */
+        .panel-intro {
+            margin-bottom: 48px;
+            max-width: 60ch;
+        }
+
+        .panel-intro h2 {
+            font-family: var(--serif);
+            font-weight: 300;
+            font-size: clamp(26px, 3vw, 36px);
+            line-height: 1.15;
+            letter-spacing: -0.01em;
+            margin: 0 0 14px 0;
+            color: var(--text);
+        }
+
+        .panel-intro p {
+            color: var(--text3);
+            margin: 0;
+            font-size: 15px;
+        }
+
+        /* --- grid + cards --- */
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 24px;
+            margin-bottom: 120px;
+        }
+
+        .grid.wide {
+            grid-template-columns: repeat(auto-fill, minmax(480px, 1fr));
+        }
+
+        .card {
+            background: var(--panel);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .card .preview {
+            background: var(--bg);
+            border-bottom: 1px solid var(--border);
+            display: grid;
+            place-items: center;
+            padding: 32px;
+            min-height: 200px;
+            position: relative;
+        }
+
+        .card .preview.light {
+            background: #f3f5f8;
+        }
+
+        .card .preview.tight {
+            padding: 0;
+            min-height: 0;
+        }
+
+        .card .preview img,
+        .card .preview svg {
+            max-width: 100%;
+            max-height: 280px;
+            display: block;
+        }
+
+        .card .preview.full img {
+            width: 100%;
+            height: auto;
+            max-height: none;
+        }
+
+        .card .preview .dims {
+            position: absolute;
+            top: 12px;
+            right: 14px;
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.1em;
+            color: var(--text4);
+            text-transform: uppercase;
+        }
+
+        .card .preview.light .dims {
+            color: #8a94a3;
+        }
+
+        .card .meta {
+            padding: 20px 22px 22px;
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .card .meta .top {
+            display: flex;
+            align-items: baseline;
+            justify-content: space-between;
+            gap: 16px;
+        }
+
+        .card .meta .name {
+            font-family: var(--mono);
+            font-size: 13px;
+            color: var(--text);
+            letter-spacing: 0.02em;
+        }
+
+        .card .meta .tag {
+            font-family: var(--mono);
+            font-size: 10px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text4);
+            padding: 3px 8px;
+            border: 1px solid var(--border);
+            border-radius: 999px;
+        }
+
+        .card .meta .desc {
+            font-size: 13px;
+            color: var(--text3);
+            margin: 0;
+            line-height: 1.5;
+        }
+
+        .card .meta .path {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--text4);
+            letter-spacing: 0.02em;
+            word-break: break-all;
+            padding: 8px 10px;
+            background: var(--bg);
+            border: 1px solid var(--hair);
+            border-radius: 6px;
+            margin-top: 4px;
+        }
+
+        .card .meta .path .arrow {
+            color: var(--brand-accent);
+            margin-right: 6px;
+        }
+
+        .card .meta .actions {
+            display: flex;
+            gap: 8px;
+            margin-top: 8px;
+        }
+
+        .card .meta .actions a {
+            flex: 1;
+            text-align: center;
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: var(--text2);
+            padding: 10px 12px;
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            transition: border-color 0.12s, color 0.12s, background 0.12s;
+        }
+
+        .card .meta .actions a:hover {
+            border-color: var(--brand-ink);
+            color: var(--text);
+            background: var(--panel2);
+        }
+
+        .card .meta .actions a.primary {
+            border-color: var(--brand-ink);
+            color: var(--text);
+        }
+
+        .card .meta .actions a.primary:hover {
+            background: var(--brand-ink);
+            color: var(--bg);
+        }
+
+        /* --- footer --- */
+        footer.foot {
+            padding: 64px 0 56px;
+            border-top: 1px solid var(--hair);
+            display: flex;
+            justify-content: space-between;
+            gap: 24px;
+            flex-wrap: wrap;
+            font-family: var(--mono);
+            font-size: 11px;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            color: var(--text4);
+        }
+
+        footer.foot a {
+            color: var(--text3);
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 1px;
+        }
+
+        footer.foot a:hover {
+            color: var(--text);
+            border-color: var(--brand-ink);
+        }
+
+        .hidden {
+            display: none !important;
+        }
+    </style>
+</head>
+<body>
+
+<div class="shell">
+
+    <header class="util">
+        <div class="name">export · <b>heap<i>.</i></b></div>
+        <div class="right">
+            <a href="../heap%20brand.html">brand sheet ↗</a>
+            <a href="README.md">README</a>
+        </div>
+    </header>
+
+    <header class="hero">
+        <p class="eyebrow"><span>00</span> deliverables</p>
+        <h1>Every asset, ready to drop into the repo.</h1>
+        <p>
+            Three groups — what the Qt program needs, what the GitHub repo needs,
+            and the raw logo set. Each card shows the asset at native scale,
+            its target path inside <span style="color:var(--text2);font-family:var(--mono);font-size:13px;">design/brand-export/</span>,
+            and a one-click download.
+        </p>
+    </header>
+
+    <div class="tabs" role="tablist">
+        <button class="tab is-active" data-tab="program" role="tab">
+            Program <span class="count">5</span>
+        </button>
+        <button class="tab" data-tab="github" role="tab">
+            GitHub <span class="count">4</span>
+        </button>
+        <button class="tab" data-tab="logo" role="tab">
+            Logo <span class="count">7</span>
+        </button>
+    </div>
+
+    <!-- ============================================================ -->
+    <!-- TAB · PROGRAM                                                 -->
+    <!-- ============================================================ -->
+    <section class="tab-panel" data-panel="program">
+        <div class="panel-intro">
+            <h2>For the Qt 6 application.</h2>
+            <p>
+                Drop these into <span style="color:var(--text2);font-family:var(--mono);font-size:13px;">design/brand-export/icon/</span>
+                and <span
+                    style="color:var(--text2);font-family:var(--mono);font-size:13px;">design/brand-export/logo/</span>.
+                The runtime <span style="color:var(--text2);font-family:var(--mono);font-size:13px;">Brand.qml</span>
+                singleton already
+                resolves them at <span
+                    style="color:var(--text2);font-family:var(--mono);font-size:13px;">qrc:/brand/…</span>.
+                The icon is the 1024 master; rasterise per-platform with
+                <span style="font-family:var(--mono);color:var(--text2);font-size:13px;">windeployqt6</span> /
+                ImageMagick /
+                <span style="font-family:var(--mono);color:var(--text2);font-size:13px;">iconutil</span>.
+            </p>
+        </div>
+
+        <div class="grid wide">
+
+            <article class="card">
+                <div class="preview" style="min-height: 340px; background: #0b0e13;">
+                    <span class="dims">1024 × 1024</span>
+                    <img src="files/icon/heap-icon.svg" alt="heap. app icon" style="max-height: 280px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-icon.svg</span>
+                        <span class="tag">master · 1024</span>
+                    </div>
+                    <p class="desc">Deep-charcoal squircle with the muted mark inside. Generate .icns / .ico / .png from
+                        this master.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/icon/heap-icon.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/icon/heap-icon.svg" download>download</a>
+                        <a href="files/icon/heap-icon.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">32 × 32</span>
+                    <img src="files/icon/favicon.svg" alt="favicon" style="width: 64px; height: 64px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">favicon.svg</span>
+                        <span class="tag">browser · 32</span>
+                    </div>
+                    <p class="desc">Bare 32 × 32 mark for browser tab + GitHub Pages favicon. No squircle — the system
+                        rounds it.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/icon/favicon.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/icon/favicon.svg" download>download</a>
+                        <a href="files/icon/favicon.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">native</span>
+                    <img src="files/logo/heap-mark.svg" alt="heap mark · primary" style="width: 160px; height: 160px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-mark.svg</span>
+                        <span class="tag">in-app</span>
+                    </div>
+                    <p class="desc">Primary mark used by TopBar.qml, Tweaks panel, About modal. Already drawn natively
+                        by BrandLogo.qml — this SVG is the qrc fallback.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-mark.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-mark.svg" download>download</a>
+                        <a href="files/logo/heap-mark.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">1280 × 800</span>
+                    <img src="files/surfaces/heap-splash.svg" alt="splash"
+                         style="width: 100%; max-height: 280px; object-fit: contain;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-splash.svg</span>
+                        <span class="tag">splash · qml</span>
+                    </div>
+                    <p class="desc">Static fallback for SplashScreen.qml. The runtime component composes the same thing
+                        with native QML primitives — use this for any host that can't render QML (installer banner, web
+                        preview).</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/surfaces/heap-splash.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/surfaces/heap-splash.svg" download>download</a>
+                        <a href="files/surfaces/heap-splash.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">tokens</span>
+                    <pre style="margin:0;font-family:var(--mono);font-size:12px;color:var(--text3);text-align:left;line-height:1.7;">
+brand-ink:    <span style="color:#8a94a3">#8a94a3</span>
+brand-accent: <span style="color:#2f5560">#2f5560</span>
+icon-ink:     <span style="color:#5f6878">#5f6878</span>
+icon-accent:  <span style="color:#1f3d45">#1f3d45</span></pre>
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">Brand.qml — patch</span>
+                        <span class="tag">tokens</span>
+                    </div>
+                    <p class="desc">Add these two tokens to the existing Brand singleton so the wordmark and mark pull
+                        them instead of <code style="font-family:var(--mono);color:var(--text2)">accent</code> / <code
+                                style="font-family:var(--mono);color:var(--text2)">text</code>.</p>
+                    <div class="path"><span class="arrow">→</span>qml/Brand.qml</div>
+                    <div class="actions">
+                        <a class="primary" href="README.md">see patch</a>
+                    </div>
+                </div>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB · GITHUB                                                  -->
+    <!-- ============================================================ -->
+    <section class="tab-panel hidden" data-panel="github">
+        <div class="panel-intro">
+            <h2>For the repository and the link previews.</h2>
+            <p>
+                The four surfaces that live on GitHub and the wider web — top of the
+                README, social-card preview, marketing landing hero, and the splash
+                used in announcement posts. Each is a single SVG, embeddable directly
+                in Markdown via <code style="font-family:var(--mono);color:var(--text2);font-size:13px;">&lt;img src="…"&gt;</code>.
+            </p>
+        </div>
+
+        <div class="grid wide">
+
+            <article class="card">
+                <div class="preview tight full">
+                    <span class="dims">1280 × 640</span>
+                    <img src="files/surfaces/heap-readme-banner.svg" alt="readme banner">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-readme-banner.svg</span>
+                        <span class="tag">readme · top</span>
+                    </div>
+                    <p class="desc">Lives at the top of <span style="font-family:var(--mono);color:var(--text2);">README.md</span>.
+                        Renders inline on github.com. Lockup left, big serif tagline middle, three mono spec cards
+                        right.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/surfaces/heap-readme-banner.svg
+                    </div>
+                    <div class="actions">
+                        <a class="primary" href="files/surfaces/heap-readme-banner.svg" download>download</a>
+                        <a href="files/surfaces/heap-readme-banner.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview tight full">
+                    <span class="dims">1440 × 900</span>
+                    <img src="files/surfaces/heap-marketing-hero.svg" alt="marketing hero">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-marketing-hero.svg</span>
+                        <span class="tag">landing</span>
+                    </div>
+                    <p class="desc">For a standalone landing page or repo OG-image. Editorial split: serif statement +
+                        CTAs on the left, product-shot placeholder on the right with explicit dimensions to swap in.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/surfaces/heap-marketing-hero.svg
+                    </div>
+                    <div class="actions">
+                        <a class="primary" href="files/surfaces/heap-marketing-hero.svg" download>download</a>
+                        <a href="files/surfaces/heap-marketing-hero.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview tight full">
+                    <span class="dims">1200 × 630</span>
+                    <img src="files/surfaces/heap-og-card.svg" alt="og card">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-og-card.svg</span>
+                        <span class="tag">og · social</span>
+                    </div>
+                    <p class="desc">Link-preview card. Set as <code style="font-family:var(--mono);color:var(--text2)">&lt;meta
+                        property="og:image"&gt;</code> on the landing page and as the repo's social-preview image.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/surfaces/heap-og-card.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/surfaces/heap-og-card.svg" download>download</a>
+                        <a href="files/surfaces/heap-og-card.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview tight full">
+                    <span class="dims">1280 × 800</span>
+                    <img src="files/surfaces/heap-splash.svg" alt="splash">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-splash.svg</span>
+                        <span class="tag">splash</span>
+                    </div>
+                    <p class="desc">Same splash served from the program tab — also used in announcement posts and the
+                        about modal's “What is heap.” section.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/surfaces/heap-splash.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/surfaces/heap-splash.svg" download>download</a>
+                        <a href="files/surfaces/heap-splash.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+        </div>
+    </section>
+
+    <!-- ============================================================ -->
+    <!-- TAB · LOGO                                                    -->
+    <!-- ============================================================ -->
+    <section class="tab-panel hidden" data-panel="logo">
+        <div class="panel-intro">
+            <h2>The mark, the wordmark, the lockup.</h2>
+            <p>
+                Seven SVG files covering every surface — dark, light, and a mono
+                (currentColor) variant for inline embedding inside text or other
+                coloured surfaces.
+                Drop into <code style="font-family:var(--mono);color:var(--text2);font-size:13px;">design/brand-export/logo/</code>
+                as the canonical replacement for the old assets.
+            </p>
+        </div>
+
+        <div class="grid">
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">primary</span>
+                    <img src="files/logo/heap-mark.svg" alt="mark · primary" style="width: 160px; height: 160px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-mark.svg</span>
+                        <span class="tag">dark surface</span>
+                    </div>
+                    <p class="desc">Default mark for any dark surface — board chrome, splash, banner.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-mark.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-mark.svg" download>download</a>
+                        <a href="files/logo/heap-mark.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview light">
+                    <span class="dims">light</span>
+                    <img src="files/logo/heap-mark-light.svg" alt="mark · light" style="width: 160px; height: 160px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-mark-light.svg</span>
+                        <span class="tag">light surface</span>
+                    </div>
+                    <p class="desc">Mark inverted for light surfaces — print collateral, light-mode docs, slides.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-mark-light.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-mark-light.svg" download>download</a>
+                        <a href="files/logo/heap-mark-light.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: var(--panel); color: var(--text2);">
+                    <span class="dims">mono</span>
+                    <svg viewBox="0 0 32 32" width="160" height="160" style="color: #b8c2cc;">
+                        <line x1="16" y1="9.5" x2="9.5" y2="22" stroke="currentColor" stroke-width="1.5"
+                              stroke-linecap="round" stroke-opacity="0.55"/>
+                        <line x1="16" y1="9.5" x2="22.5" y2="22" stroke="currentColor" stroke-width="1.5"
+                              stroke-linecap="round" stroke-opacity="0.55"/>
+                        <circle cx="9.5" cy="22" r="3" fill="currentColor"/>
+                        <circle cx="22.5" cy="22" r="3" fill="currentColor"/>
+                        <circle cx="16" cy="9.5" r="3.6" fill="currentColor"/>
+                    </svg>
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-mark-mono.svg</span>
+                        <span class="tag">currentColor</span>
+                    </div>
+                    <p class="desc">Single-ink mark using <code style="font-family:var(--mono);color:var(--text2)">currentColor</code>
+                        — inherits the surrounding text colour. Use inline in copy.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-mark-mono.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-mark-mono.svg" download>download</a>
+                        <a href="files/logo/heap-mark-mono.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">primary</span>
+                    <img src="files/logo/heap-wordmark.svg" alt="wordmark · primary" style="width: 240px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-wordmark.svg</span>
+                        <span class="tag">dark surface</span>
+                    </div>
+                    <p class="desc">Wordmark only. Use whenever the mark would add noise — buttons, dense footers, OS
+                        title bars.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-wordmark.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-wordmark.svg" download>download</a>
+                        <a href="files/logo/heap-wordmark.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview light">
+                    <span class="dims">light</span>
+                    <img src="files/logo/heap-wordmark-light.svg" alt="wordmark · light" style="width: 240px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-wordmark-light.svg</span>
+                        <span class="tag">light surface</span>
+                    </div>
+                    <p class="desc">Wordmark for light surfaces. Same construction, dark letters, same slate period.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-wordmark-light.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-wordmark-light.svg" download>download</a>
+                        <a href="files/logo/heap-wordmark-light.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview" style="background: #0b0e13;">
+                    <span class="dims">primary</span>
+                    <img src="files/logo/heap-lockup.svg" alt="lockup · primary" style="width: 320px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-lockup.svg</span>
+                        <span class="tag">dark surface</span>
+                    </div>
+                    <p class="desc">Mark + wordmark on a shared baseline. The canonical signature — use on covers,
+                        splashes, headers.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-lockup.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-lockup.svg" download>download</a>
+                        <a href="files/logo/heap-lockup.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+            <article class="card">
+                <div class="preview light">
+                    <span class="dims">light</span>
+                    <img src="files/logo/heap-lockup-light.svg" alt="lockup · light" style="width: 320px;">
+                </div>
+                <div class="meta">
+                    <div class="top">
+                        <span class="name">heap-lockup-light.svg</span>
+                        <span class="tag">light surface</span>
+                    </div>
+                    <p class="desc">Lockup for light surfaces. Mirror version of the primary; identical geometry.</p>
+                    <div class="path"><span class="arrow">→</span>design/brand-export/logo/heap-lockup-light.svg</div>
+                    <div class="actions">
+                        <a class="primary" href="files/logo/heap-lockup-light.svg" download>download</a>
+                        <a href="files/logo/heap-lockup-light.svg" target="_blank">open ↗</a>
+                    </div>
+                </div>
+            </article>
+
+        </div>
+    </section>
+
+    <footer class="foot">
+        <span>heap<span style="color:var(--brand-accent)">.</span> · export · 16 files</span>
+        <span>v 02 · 2026</span>
+    </footer>
+
+</div>
+
+<script>
+    // Minimal tab switcher.
+    const tabs = document.querySelectorAll('.tab');
+    const panels = document.querySelectorAll('.tab-panel');
+    tabs.forEach(t => t.addEventListener('click', () => {
+        const id = t.dataset.tab;
+        tabs.forEach(x => x.classList.toggle('is-active', x === t));
+        panels.forEach(p => p.classList.toggle('hidden', p.dataset.panel !== id));
+        history.replaceState(null, '', '#' + id);
+    }));
+    // Honour deep links: export/index.html#github etc.
+    const initial = location.hash.replace('#', '');
+    if (initial) {
+        const t = document.querySelector('.tab[data-tab="' + initial + '"]');
+        if (t) t.click();
+    }
+</script>
+
+</body>
+</html>
