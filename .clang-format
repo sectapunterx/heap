@@ -1,0 +1,106 @@
+---
+# Google base, larra-style (CLionProjects/larra) — narrow indent, wide column,
+# every argument on its own line when wrapping, no space before "(".
+BasedOnStyle: Google
+Language: Cpp
+Standard: c++20
+
+# ── Width / indent ─────────────────────────────────────────────────
+IndentWidth: 2
+TabWidth: 2
+UseTab: Never
+ContinuationIndentWidth: 4
+ColumnLimit: 140
+
+# ── Braces & control flow ──────────────────────────────────────────
+BreakBeforeBraces: Attach              # open brace on the same line
+AlwaysBreakAfterReturnType: None       # no forced break after return type
+AlwaysBreakTemplateDeclarations: Yes
+BreakConstructorInitializers: AfterColon
+AllowShortFunctionsOnASingleLine: None
+AllowShortIfStatementsOnASingleLine: false
+AllowShortLoopsOnASingleLine: false
+AllowShortLambdasOnASingleLine: Empty
+AllowShortBlocksOnASingleLine: Empty
+AllowShortCaseLabelsOnASingleLine: false
+InsertBraces: true
+
+# ── Pointers / references — "T* p" / "T& r", no leading space ─────
+DerivePointerAlignment: false
+PointerAlignment: Left
+ReferenceAlignment: Left
+QualifierAlignment: Left
+
+# ── Argument packing — one per line when wraps ─────────────────────
+BinPackArguments: false
+BinPackParameters: false
+
+# ── Spaces ─────────────────────────────────────────────────────────
+SpaceBeforeParens: Never               # f(x), if(x), while(x)
+SpaceAfterTemplateKeyword: false
+SpaceBeforeCpp11BracedList: false
+SpaceBeforeCtorInitializerColon: true
+SpaceBeforeInheritanceColon: true
+SpaceBeforeRangeBasedForLoopColon: true
+SpacesInAngles: Never
+SpacesInCStyleCastParentheses: false
+SpacesInParentheses: false
+SpacesInSquareBrackets: false
+
+# ── Includes — modern grouped layout, alphabetical inside groups ───
+SortIncludes: CaseInsensitive
+IncludeBlocks: Regroup
+IncludeCategories:
+  - Regex: '^"[^/]+"$'                  # paired header (same name as .cpp)
+    Priority: 1
+  - Regex: '^".*"$'                     # project headers under src/
+    Priority: 2
+  - Regex: '^<Q[A-Z][^/]*>$'            # Qt single-class headers
+    Priority: 3
+  - Regex: '^<Qt[A-Z][^/]*/.*>$'        # Qt submodule headers
+    Priority: 3
+  - Regex: '^<.*/.*>$'                  # other third-party (subpath)
+    Priority: 4
+  - Regex: '^<[^.]*>$'                  # C++ standard library
+    Priority: 5
+IncludeIsMainRegex: '(\.cpp|_test\.cpp)$'
+
+# ── Alignment ──────────────────────────────────────────────────────
+AlignAfterOpenBracket: Align
+AlignConsecutiveAssignments: None
+AlignConsecutiveDeclarations: None
+AlignConsecutiveMacros: Consecutive
+AlignEscapedNewlines: Left
+AlignOperands: Align
+AlignTrailingComments: true
+
+# ── Misc modern bits ───────────────────────────────────────────────
+Cpp11BracedListStyle: true
+CompactNamespaces: false
+FixNamespaceComments: true
+NamespaceIndentation: None
+ReflowComments: true
+SortUsingDeclarations: true
+SeparateDefinitionBlocks: Always
+EmptyLineBeforeAccessModifier: LogicalBlock
+MaxEmptyLinesToKeep: 1
+KeepEmptyLinesAtTheStartOfBlocks: false
+LineEnding: LF
+
+# ── Qt-aware macros (so the formatter doesn't break on them) ───────
+StatementMacros:
+  - Q_OBJECT
+  - Q_DECLARE_FLAGS
+  - Q_UNUSED
+  - QML_ELEMENT
+  - QML_SINGLETON
+  - QML_UNCREATABLE
+ForEachMacros:
+  - foreach
+  - Q_FOREACH
+NamespaceMacros:
+  - Q_NAMESPACE
+AttributeMacros:
+  - Q_NORETURN
+  - Q_DECL_DEPRECATED
+...
