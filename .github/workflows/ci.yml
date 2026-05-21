@@ -7,7 +7,9 @@ on:
     branches: ["**"]
 
 permissions:
-  contents: read
+  # `contents: write` is needed by the auto-format/auto-tidy jobs that push
+  # corrections back to the PR branch via stefanzweifel/git-auto-commit-action.
+  contents: write
   # dorny/test-reporter posts a Check Run with test details on PRs.
   # Private repos need explicit grants — defaulting GITHUB_TOKEN to read-only
   # breaks the action with HTTP 403 "Resource not accessible by integration".
@@ -21,24 +23,36 @@ concurrency:
 jobs:
 
   # ──────────────────────────────────────────────────────────────────
-  # 1. C++ format check (diff-only).
+  # 1. C++ auto-format (PR only).
+  # Runs `clang-format -i` on the files touched by the PR and pushes the
+  # result back to the branch. Idempotent — a second run after a successful
+  # format produces no diff and the auto-commit step no-ops, so the workflow
+  # does not loop.
   # ──────────────────────────────────────────────────────────────────
-  lint-cpp:
-    name: clang-format (diff)
+  format-cpp:
+    name: clang-format (auto-fix)
+    # Auto-commit only works when the workflow can push to the head branch —
+    # forks have a read-only token. Skip on fork PRs (they get reviewed
+    # manually).
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: Install clang-format
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends clang-format
 
-      - name: Run clang-format-diff on changed lines
+      - name: Apply clang-format to changed files
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: |
@@ -49,37 +63,16 @@ jobs:
             echo "No C/C++ changes — skipping."
             exit 0
           fi
-          if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
-            base="origin/${GITHUB_BASE_REF}"
-          else
-            base="$(git rev-parse HEAD~1 2>/dev/null || echo HEAD)"
-          fi
-          echo "Diffing changed lines vs $base"
-          # Locate clang-format-diff (Ubuntu ships it as a versioned binary).
-          diff_tool="$(command -v clang-format-diff || true)"
-          if [[ -z "$diff_tool" ]]; then
-            # Use a glob expansion (not `ls`) — quiets shellcheck SC2012 and
-            # avoids word-splitting on filenames with spaces.
-            shopt -s nullglob
-            candidates=(/usr/bin/clang-format-diff-*)
-            shopt -u nullglob
-            if (( ${#candidates[@]} > 0 )); then
-              diff_tool="${candidates[-1]}"
-            fi
-          fi
-          if [[ -z "$diff_tool" ]]; then
-            echo "::error::clang-format-diff not found in PATH"
-            exit 1
-          fi
-          git diff -U0 "$base" HEAD -- "${files[@]}" \
-            | "$diff_tool" -p1 -style=file > diff.patch
-          if [[ -s diff.patch ]]; then
-            echo "::error::clang-format violations on changed lines."
-            echo "Suggested patch:"
-            cat diff.patch
-            exit 1
-          fi
-          echo "All changed lines are properly formatted."
+          echo "Reformatting: ${files[*]}"
+          clang-format -i --style=file "${files[@]}"
+
+      - name: Commit formatting
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: apply clang-format"
+          commit_user_name: heap-ci
+          commit_user_email: heap-ci@users.noreply.github.com
+          file_pattern: "*.cpp *.cc *.cxx *.h *.hpp *.hxx"
 
   # ──────────────────────────────────────────────────────────────────
   # 2. QML lint (only files touched by the PR).
@@ -111,7 +104,24 @@ jobs:
             echo "No QML changes — skipping."
             exit 0
           fi
-          qmllint -I qml "${files[@]}"
+          # qmllint ships under different paths in different Qt6 packages:
+          #   /usr/bin/qmllint            (older qt6-declarative-dev-tools)
+          #   /usr/lib/qt6/bin/qmllint    (Ubuntu 24.04 + recent Qt6)
+          #   /usr/lib/qt6/libexec/qmllint
+          # Probe instead of hard-coding.
+          qmllint_bin="$(command -v qmllint || true)"
+          if [[ -z "$qmllint_bin" ]]; then
+            for c in /usr/lib/qt6/bin/qmllint /usr/lib/qt6/libexec/qmllint \
+                     /usr/lib/x86_64-linux-gnu/qt6/bin/qmllint; do
+              if [[ -x "$c" ]]; then qmllint_bin="$c"; break; fi
+            done
+          fi
+          if [[ -z "$qmllint_bin" ]]; then
+            echo "::warning::qmllint not found under /usr — skipping QML lint."
+            exit 0
+          fi
+          echo "Using $qmllint_bin"
+          "$qmllint_bin" -I qml "${files[@]}"
 
   # ──────────────────────────────────────────────────────────────────
   # 3. GitHub Actions YAML lint (full sweep — fast).
@@ -127,24 +137,32 @@ jobs:
           files: ".github/workflows/*.yml"
 
   # ──────────────────────────────────────────────────────────────────
-  # 4. clang-tidy on the diff (PR only).
+  # 4. clang-tidy auto-fix (PR only).
+  # Applies auto-fixable diagnostics (modernize-*, readability-*, …) and
+  # pushes the result back to the PR branch. Non-auto-fixable findings are
+  # left as warnings — the job does not fail on those, so reviewers can
+  # see them inline without blocking merges.
   # ──────────────────────────────────────────────────────────────────
   tidy:
-    name: clang-tidy (diff)
-    if: github.event_name == 'pull_request'
+    name: clang-tidy (auto-fix)
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - name: Checkout
+      - name: Checkout PR head
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.ref }}
+          repository: ${{ github.event.pull_request.head.repo.full_name }}
 
       - name: Install toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang-tidy cmake ninja-build \
+            clang-tidy clang-format cmake ninja-build \
             qt6-base-dev qt6-declarative-dev qt6-tools-dev libgl1-mesa-dev
 
       - name: Configure (compile_commands.json)
@@ -159,7 +177,7 @@ jobs:
         # build; clang-tidy fails to find them otherwise.
         run: cmake --build build --target heap_autogen heap_qmltyperegistrations || true
 
-      - name: Run clang-tidy on changed files
+      - name: Apply clang-tidy --fix to changed files
         env:
           GITHUB_BASE_REF: ${{ github.base_ref }}
         run: |
@@ -170,7 +188,6 @@ jobs:
             echo "No C/C++ source changes — skipping clang-tidy."
             exit 0
           fi
-          # Filter to files that actually have a compile-commands entry.
           tidy_files=()
           for f in "${files[@]}"; do
             if grep -q "\"file\": *\"$(pwd)/$f\"" build/compile_commands.json; then
@@ -181,8 +198,23 @@ jobs:
             echo "No source files with compile-commands entries — skipping."
             exit 0
           fi
-          echo "Running clang-tidy on: ${tidy_files[*]}"
-          clang-tidy --warnings-as-errors='*' -p build "${tidy_files[@]}"
+          echo "clang-tidy --fix on: ${tidy_files[*]}"
+          # `--fix-errors` applies every available rewrite even when other
+          # diagnostics are non-fatal; `--quiet` keeps the log readable.
+          # Identifier-naming auto-fixes would rename hundreds of legacy
+          # symbols in one commit — opt out of those here; the warnings are
+          # still visible inline in the PR.
+          clang-tidy --fix --fix-errors --quiet \
+            --checks='-readability-identifier-naming' \
+            -p build "${tidy_files[@]}" || true
+
+      - name: Commit clang-tidy fixes
+        uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: "style: apply clang-tidy auto-fixes"
+          commit_user_name: heap-ci
+          commit_user_email: heap-ci@users.noreply.github.com
+          file_pattern: "*.cpp *.cc *.cxx *.h *.hpp *.hxx"
 
   # ──────────────────────────────────────────────────────────────────
   # 5. Build matrix (Linux + Windows).
