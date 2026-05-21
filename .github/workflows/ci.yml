@@ -78,53 +78,42 @@ jobs:
           file_pattern: "*.cpp *.h"
 
   # ──────────────────────────────────────────────────────────────────
-  # 2. QML lint (only files touched by the PR).
+  # 2. QML lint — DISABLED.
+  #
+  # qmllint needs the `qmldir` and `.qmltypes` files emitted by Qt's
+  # `qt_add_qml_module(... URI TodoCpp ...)` at build time to resolve the
+  # project's singletons (Theme, Brand, AppController). Running it
+  # without a full build produces hundreds of false-positive "Property X
+  # not found on type Theme" / "Unqualified access settingsBus" warnings.
+  #
+  # To re-enable: gate the job on a prior `build (ubuntu-24.04)` artifact
+  # and point qmllint at the generated `<build>/qml/TodoCpp/qmldir` via
+  # `-I <build-dir>`. Left as a follow-up.
   # ──────────────────────────────────────────────────────────────────
-  lint-qml:
-    name: qmllint
-    runs-on: ubuntu-24.04
-    timeout-minutes: 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Install Qt6 declarative tools
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            qt6-declarative-dev qt6-declarative-dev-tools
-
-      - name: qmllint changed files
-        env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
-        run: |
-          set -euo pipefail
-          chmod +x .github/scripts/changed_files.sh
-          mapfile -t files < <(.github/scripts/changed_files.sh 'qml')
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No QML changes — skipping."
-            exit 0
-          fi
-          # qmllint ships under different paths in different Qt6 packages:
-          #   /usr/bin/qmllint            (older qt6-declarative-dev-tools)
-          #   /usr/lib/qt6/bin/qmllint    (Ubuntu 24.04 + recent Qt6)
-          #   /usr/lib/qt6/libexec/qmllint
-          # Probe instead of hard-coding.
-          qmllint_bin="$(command -v qmllint || true)"
-          if [[ -z "$qmllint_bin" ]]; then
-            for c in /usr/lib/qt6/bin/qmllint /usr/lib/qt6/libexec/qmllint \
-                     /usr/lib/x86_64-linux-gnu/qt6/bin/qmllint; do
-              if [[ -x "$c" ]]; then qmllint_bin="$c"; break; fi
-            done
-          fi
-          if [[ -z "$qmllint_bin" ]]; then
-            echo "::warning::qmllint not found under /usr — skipping QML lint."
-            exit 0
-          fi
-          echo "Using $qmllint_bin"
-          "$qmllint_bin" -I qml "${files[@]}"
+  # lint-qml:
+  #   name: qmllint
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 10
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #       with: { fetch-depth: 0 }
+  #     - name: Install Qt6 declarative tools
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y --no-install-recommends \
+  #           qt6-declarative-dev qt6-declarative-dev-tools
+  #     - name: qmllint changed files
+  #       env: { GITHUB_BASE_REF: ${{ github.base_ref }} }
+  #       run: |
+  #         set -euo pipefail
+  #         chmod +x .github/scripts/changed_files.sh
+  #         mapfile -t files < <(.github/scripts/changed_files.sh 'qml')
+  #         [[ ${#files[@]} -eq 0 ]] && exit 0
+  #         qmllint_bin="$(command -v qmllint \
+  #           || ls /usr/lib/qt6/bin/qmllint /usr/lib/qt6/libexec/qmllint \
+  #               /usr/lib/x86_64-linux-gnu/qt6/bin/qmllint 2>/dev/null | head -1)"
+  #         [[ -z "$qmllint_bin" ]] && { echo "::warning::qmllint missing"; exit 0; }
+  #         "$qmllint_bin" -I qml "${files[@]}"
 
   # ──────────────────────────────────────────────────────────────────
   # 3. GitHub Actions YAML lint (full sweep — fast).
