@@ -1807,13 +1807,13 @@ int AppController::renameTaskIdPrefix(const QString& oldPrefix, const QString& n
 
   if(!remap.isEmpty()) {
     const auto& events = m_events.items();
-    for(int r = 0; r < events.size(); ++r) {
-      const QString& tid = events.at(r).taskId;
+    for(const auto& event : events) {
+      const QString& tid = event.taskId;
       auto it = remap.find(tid);
       if(it == remap.end()) {
         continue;
       }
-      CalEvent copy = events.at(r);
+      CalEvent copy = event;
       copy.taskId = it.value();
       m_events.upsert(copy);
     }
