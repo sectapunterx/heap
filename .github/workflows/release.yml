@@ -43,6 +43,35 @@ jobs:
           Write-Output "Adding to PATH: $ucrt"
           "$ucrt" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
+      # ── Locate Qt6 libexec so windeployqt finds qmlimportscanner ──
+      # MSYS2 packages place qmlimportscanner under ucrt64/share/qt6/libexec
+      # (or ucrt64/share/qt6/bin in older packages). windeployqt resolves
+      # this via QLibraryInfo paths baked at build time, which doesn't
+      # always match the setup-msys2 install root (D:/a/_temp/msys64/...).
+      # Probe the filesystem instead of hard-coding.
+      - name: Add Qt6 tool dirs to PATH
+        shell: msys2 {0}
+        run: |
+          set -eu
+          # Inside the msys2 shell, /ucrt64 is the install root. Probe both
+          # the canonical msys path and the action's reported install dir.
+          SCANNER=$(find /ucrt64 -name 'qmlimportscanner.exe' -print -quit 2>/dev/null || true)
+          if [ -z "$SCANNER" ]; then
+            MSYS_BASE_UNIX=$(cygpath -u "${{ steps.msys2.outputs.msys2-location }}")
+            SCANNER=$(find "$MSYS_BASE_UNIX/ucrt64" -name 'qmlimportscanner.exe' -print -quit 2>/dev/null || true)
+          fi
+          if [ -z "$SCANNER" ]; then
+            echo "::error::qmlimportscanner.exe not found anywhere under /ucrt64"
+            exit 1
+          fi
+          echo "qmlimportscanner: $SCANNER"
+          SCANNER_DIR_WIN=$(cygpath -w "$(dirname "$SCANNER")")
+          echo "$SCANNER_DIR_WIN" >> "$GITHUB_PATH"
+          # Also expose share/qt6/bin (older qt6 layouts) when present.
+          for d in /ucrt64/share/qt6/bin /ucrt64/share/qt6/libexec; do
+            [ -d "$d" ] && cygpath -w "$d" >> "$GITHUB_PATH"
+          done
+
       # ── CMake configure ───────────────────────────────────────────
       - name: Configure
         shell: msys2 {0}
@@ -60,7 +89,14 @@ jobs:
       # ── Assemble portable bundle via CMake target ─────────────────
       - name: Build portable bundle
         shell: msys2 {0}
-        run: cmake --build build --target portable
+        run: |
+          set -eu
+          MSYS_BASE="${{ steps.msys2.outputs.msys2-location }}"
+          MSYS_BASE_UNIX=$(cygpath -u "$MSYS_BASE")
+          # Prepend Qt6 tool dirs so windeployqt (and the qmlimportscanner
+          # subprocess it spawns) can be found by Ninja → cmd.exe.
+          export PATH="$MSYS_BASE_UNIX/ucrt64/bin:$MSYS_BASE_UNIX/ucrt64/share/qt6/libexec:$MSYS_BASE_UNIX/ucrt64/share/qt6/bin:$PATH"
+          cmake --build build --target portable
 
       # ── Pack into zip (PowerShell is built-in on windows-latest) ──
       - name: Zip bundle
