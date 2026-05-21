@@ -11,19 +11,61 @@ Item {
     id: root
 
     // ── Sections list (left nav) ──────────────────────────────────────
-    readonly property var sections: [
+    // Full catalogue of settings sections.
+    //   unimplemented: section is a stub. In Release builds these are hidden
+    //                  completely. In Debug they obey the dev toggle in the
+    //                  nav footer.
+    readonly property var allSections: [
         { id: "profile",       icon: "◉",   title: "Profile",          sub: "Имя, роль, команда" },
         { id: "appearance",    icon: "◑",   title: "Appearance",       sub: "Тема, акцент, плотность" },
         { id: "notifications", icon: "◔",   title: "Notifications",    sub: "Дедлайны, созвоны" },
         { id: "calendar",      icon: "◫",   title: "Calendar",         sub: "Часы, focus time" },
         { id: "tasks",         icon: "▦",   title: "Tasks & Workflow", sub: "Префикс ID, дефолты" },
         { id: "shortcuts",     icon: "⌨",   title: "Shortcuts",        sub: "Горячие клавиши" },
-        { id: "cpp",           icon: "C++", title: "C++ Defaults",     sub: "Сборка, sanitizers" },
-        { id: "integrations",  icon: "⎘",   title: "Integrations",     sub: "Jira, GitHub, MM" },
+        { id: "cpp",           icon: "C++", title: "C++ Defaults",     sub: "Сборка, sanitizers",
+          unimplemented: true },
+        { id: "integrations",  icon: "⎘",   title: "Integrations",     sub: "Jira, GitHub, MM",
+          unimplemented: true },
         { id: "git",           icon: "⎇",   title: "Git Watcher",      sub: "Отслеживаемые репо, авто-перевод" },
         { id: "data",          icon: "↯",   title: "Data",             sub: "Import / export, reset" },
         { id: "about",         icon: "?",   title: "About",            sub: "Версия, лицензии" }
     ]
+
+    readonly property bool _debugBuild: !!AppController.debugBuild
+    // Persisted toggle: only meaningful in Debug builds. Defaults to true so
+    // a developer sees the stub sections out of the box.
+    readonly property bool _showUnimplemented:
+        !!(settings.developer && settings.developer.showUnimplemented)
+
+    // Visible sections:
+    //   * implemented   — always shown,
+    //   * unimplemented — Debug AND showUnimplemented; never in Release.
+    readonly property var sections: {
+        const out = [];
+        for (let i = 0; i < allSections.length; ++i) {
+            const s = allSections[i];
+            if (s.unimplemented && !(_debugBuild && _showUnimplemented)) continue;
+            out.push(s);
+        }
+        return out;
+    }
+    function _sectionMeta(id) {
+        for (let i = 0; i < allSections.length; ++i)
+            if (allSections[i].id === id) return allSections[i];
+        return null;
+    }
+    function _isUnimplemented(id) {
+        const m = _sectionMeta(id);
+        return !!(m && m.unimplemented);
+    }
+    // If the toggle just hid the currently-open section, fall back to the
+    // first visible one — otherwise the user sees an empty Loader.
+    onSectionsChanged: {
+        const list = sections;
+        for (let i = 0; i < list.length; ++i)
+            if (list[i].id === activeSection) return;
+        if (list.length > 0) activeSection = list[0].id;
+    }
 
     property string activeSection: "profile"
     property string searchText: ""
@@ -88,6 +130,9 @@ Item {
             autoMoveToInProgress: true,
             autoCreateFocusBlock: false,
             watchPrState: true
+        },
+        developer: {
+            showUnimplemented: true   // default ON in Debug; ignored in Release
         }
     })
 
@@ -281,6 +326,51 @@ Item {
                 }
 
                 Item { Layout.fillHeight: true }
+
+                // Debug-only developer toggle. Lives in the nav footer so it
+                // never appears in Release builds. Drives `_showUnimplemented`
+                // → filters the stub sections out of `sections`.
+                Rectangle {
+                    visible: root._debugBuild
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
+                    radius: 6
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    implicitHeight: devToggleRow.implicitHeight + 12
+                    RowLayout {
+                        id: devToggleRow
+                        anchors.fill: parent
+                        anchors.leftMargin: 10
+                        anchors.rightMargin: 8
+                        spacing: 8
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 0
+                            Text {
+                                text: "DEBUG"
+                                color: Theme.p1
+                                font.pixelSize: 9
+                                font.weight: Font.DemiBold
+                                font.letterSpacing: 1
+                            }
+                            Text {
+                                text: "Показать нереализованные"
+                                color: Theme.text
+                                font.pixelSize: 11
+                                wrapMode: Text.Wrap
+                                Layout.fillWidth: true
+                            }
+                        }
+                        Switch {
+                            id: devSwitch
+                            checked: root._showUnimplemented
+                            onToggled: root.set("developer", "showUnimplemented", checked)
+                        }
+                    }
+                }
+
                 Text {
                     text: "todo·cpp · 0.4.2 · stable"
                     color: Theme.textDim
@@ -372,24 +462,72 @@ Item {
                         // Padding via wrapper
                         Item { Layout.preferredHeight: 8 }
 
-                        // Each section gets its own loader-style block
-                        Loader {
+                        // ── Unimplemented banner ──
+                        // Shows on top of stub sections so the user can tell
+                        // the controls below are read-only stubs.
+                        Rectangle {
+                            visible: root._isUnimplemented(root.activeSection)
                             Layout.fillWidth: true
                             Layout.leftMargin: 24
                             Layout.rightMargin: 24
-                            sourceComponent: {
-                                if (root.activeSection === "profile")       return sectionProfile;
-                                if (root.activeSection === "appearance")    return sectionAppearance;
-                                if (root.activeSection === "notifications") return sectionNotifications;
-                                if (root.activeSection === "calendar")      return sectionCalendar;
-                                if (root.activeSection === "tasks")         return sectionTasks;
-                                if (root.activeSection === "shortcuts")     return sectionShortcuts;
-                                if (root.activeSection === "cpp")           return sectionCpp;
-                                if (root.activeSection === "integrations")  return sectionIntegrations;
-                                if (root.activeSection === "git")           return sectionGit;
-                                if (root.activeSection === "data")          return sectionData;
-                                if (root.activeSection === "about")         return sectionAbout;
-                                return null;
+                            radius: 8
+                            color: Theme.withAlpha(Theme.p1, 0.12)
+                            border.color: Theme.p1
+                            border.width: 1
+                            implicitHeight: notImplCol.implicitHeight + 16
+                            ColumnLayout {
+                                id: notImplCol
+                                anchors.fill: parent
+                                anchors.margins: 12
+                                spacing: 4
+                                Text {
+                                    text: "⚠ Не реализовано"
+                                    color: Theme.p1
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                    font.letterSpacing: 1
+                                }
+                                Text {
+                                    text: "Настройки этой секции пока без эффекта. "
+                                        + "Они отображены для предварительного просмотра — "
+                                        + "переключатели заблокированы во всех сборках."
+                                    color: Theme.text
+                                    font.pixelSize: 11
+                                    wrapMode: Text.WordWrap
+                                    Layout.fillWidth: true
+                                }
+                            }
+                        }
+
+                        // Each section gets its own loader-style block.
+                        // The wrapper Item disables every interactive widget
+                        // when the section is marked unimplemented — this
+                        // satisfies "в релизе отключены без возможности
+                        // включения".
+                        Item {
+                            Layout.fillWidth: true
+                            Layout.leftMargin: 24
+                            Layout.rightMargin: 24
+                            implicitHeight: sectionLoader.implicitHeight
+                            enabled: !root._isUnimplemented(root.activeSection)
+                            opacity: enabled ? 1.0 : 0.55
+                            Loader {
+                                id: sectionLoader
+                                anchors.fill: parent
+                                sourceComponent: {
+                                    if (root.activeSection === "profile")       return sectionProfile;
+                                    if (root.activeSection === "appearance")    return sectionAppearance;
+                                    if (root.activeSection === "notifications") return sectionNotifications;
+                                    if (root.activeSection === "calendar")      return sectionCalendar;
+                                    if (root.activeSection === "tasks")         return sectionTasks;
+                                    if (root.activeSection === "shortcuts")     return sectionShortcuts;
+                                    if (root.activeSection === "cpp")           return sectionCpp;
+                                    if (root.activeSection === "integrations")  return sectionIntegrations;
+                                    if (root.activeSection === "git")           return sectionGit;
+                                    if (root.activeSection === "data")          return sectionData;
+                                    if (root.activeSection === "about")         return sectionAbout;
+                                    return null;
+                                }
                             }
                         }
                         Item { Layout.preferredHeight: 24 }
