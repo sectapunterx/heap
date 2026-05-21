@@ -25,12 +25,19 @@ Popup {
     readonly property var states: ["todo", "pinged", "replied"]
     readonly property var stateLabels: ({ todo: "написать", pinged: "написал", replied: "ответил" })
 
+    // True while the user has not manually edited idField — keeps the id in
+    // sync with the live name. Flips to false on first manual edit so we
+    // don't clobber the user's chosen handle.
+    property bool _idAutoDerived: true
+
     function showFor(initialDraft) {
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         nameField.text     = draft.name || "";
         roleField.text     = draft.role || "";
         questionField.text = draft.question || "";
+        idField.text       = draft.id || "";
+        _idAutoDerived = isNew || (idField.text.length === 0);
         stateBox.currentIndex = Math.max(0, states.indexOf(draft.state || "todo"));
         const cur = String(draft.color || palette[0]).toLowerCase();
         let i = 0;
@@ -68,6 +75,26 @@ Popup {
             background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
+            // Re-derive idField while the user has not taken control of it.
+            onTextChanged: {
+                if (root._idAutoDerived) {
+                    idField.text = AppController.suggestPersonId(
+                        text, root.draft.id || "");
+                }
+            }
+        }
+
+        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "ID"
+               color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+        TextField {
+            id: idField
+            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            placeholderText: "e.zaharov"
+            font.family: Theme.fontMono
+            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            color: Theme.text
+            placeholderTextColor: Theme.textDim
+            onActiveFocusChanged: if (activeFocus) root._idAutoDerived = false
         }
 
         Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "РОЛЬ"
@@ -158,7 +185,12 @@ Popup {
                 onClicked: {
                     const d = {
                         _isNew: root.isNew,
-                        id: root.draft.id,
+                        // Prefer the explicit idField value; fall back to the
+                        // auto-suggested slug when the user left it blank.
+                        id: (idField.text || "").trim().length > 0
+                              ? idField.text.trim()
+                              : AppController.suggestPersonId(
+                                    nameField.text, root.draft.id || ""),
                         name: nameField.text,
                         role: roleField.text,
                         question: questionField.text,

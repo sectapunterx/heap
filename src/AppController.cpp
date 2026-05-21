@@ -3,6 +3,7 @@
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "text/TaskTextUtils.h"
 
 #include <cmath>
 
@@ -131,6 +132,38 @@ AppController::AppController(QObject *parent)
         emit profilesChanged();
         emit activeProfileChanged();
         scheduleSave();
+    }
+
+    // ── Person-id migration ──
+    // Upgrade legacy "p-XXXXXXXX" ids (UUID-short, pre-slug scheme) AND the
+    // sample-data ids ("p1".."p6") to slug form ("e.zaharov"). CalEvent.
+    // attendees is a freeform string of names — no cross-references to fix.
+    {
+        static const QRegularExpression kLegacyId(
+            QStringLiteral("^p-?[0-9a-fA-F]+$"));
+        bool changed = false;
+        for (Profile &pr : m_profiles) {
+            QSet<QString> taken;
+            for (const Person &pe : pr.people) taken.insert(pe.id);
+            for (Person &pe : pr.people) {
+                if (!kLegacyId.match(pe.id).hasMatch() && !pe.id.isEmpty())
+                    continue;
+                const QString slug = heap::text::slugifyPersonName(pe.name);
+                if (slug.isEmpty()) continue;
+                QString candidate = slug;
+                for (int i = 2; taken.contains(candidate) && i < 1000; ++i)
+                    candidate = slug + QChar('-') + QString::number(i);
+                taken.remove(pe.id);
+                taken.insert(candidate);
+                pe.id   = candidate;
+                changed = true;
+            }
+        }
+        if (changed) {
+            for (const Profile &pr : m_profiles)
+                if (pr.id == m_activeProfileId) { applyProfileToModels(pr); break; }
+            scheduleSave();
+        }
     }
 }
 
@@ -280,9 +313,22 @@ QVariantMap AppController::newTaskDraft(const QString &statusId) const {
     return m;
 }
 
+QVariantMap AppController::newQuickTaskDraft() const {
+    QVariantMap m = newTaskDraft(QStringLiteral("todo"));
+    // Replace the project-prefixed auto-id with a placeholder. The user can
+    // rename it later via TaskEditor — saveTask handles the rename safely.
+    int n = 1;
+    QString candidate;
+    do {
+        candidate = QStringLiteral("TODO-") + QString::number(n++);
+    } while (m_tasks.indexOfId(candidate) >= 0);
+    m["id"] = candidate;
+    return m;
+}
+
 void AppController::saveTask(const QVariantMap &draft) {
     Task t;
-    t.id       = draft.value("id").toString();
+    t.id       = draft.value("id").toString().trimmed();
     t.title    = draft.value("title").toString();
     t.desc     = draft.value("desc").toString();
     t.priority = draft.value("priority").toString();
@@ -291,6 +337,26 @@ void AppController::saveTask(const QVariantMap &draft) {
     t.branch   = draft.value("branch").toString();
     const bool isNew = draft.value("_isNew").toBool();
     if (isNew && t.title.trimmed().isEmpty()) return;
+
+    // ── Rename path ──
+    // If the editor captured an _originalId that differs from the new id,
+    // this is an id-change on an existing row. Drop the old row, fix up
+    // CalEvent.taskId backlinks, and upsert under the new id. This prevents
+    // the previous "duplicate appears after edit" symptom (which used to
+    // happen whenever idField text drifted from the stored id).
+    const QString originalId = draft.value("_originalId").toString().trimmed();
+    if (!isNew && !originalId.isEmpty() && originalId != t.id) {
+        const int row = m_tasks.indexOfId(originalId);
+        if (row >= 0) {
+            // Re-key dependent events first so live bindings update once.
+            for (const auto &e : m_events.items()) {
+                if (e.taskId == originalId)
+                    m_events.setTaskId(e.id, t.id);
+            }
+            m_tasks.removeById(originalId);
+        }
+    }
+
     m_tasks.upsert(t);
     if (isNew) emit toast(QString("Создано: %1").arg(t.id));
     scheduleSave();
@@ -426,7 +492,8 @@ QVariantMap AppController::newPersonDraft() const {
     const QColor c = palette[m_people.rowCount() % n];
     QVariantMap m;
     m["_isNew"] = true;
-    m["id"]       = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    // Empty id signals "auto-derive from name on save" — see savePerson().
+    m["id"]       = QString();
     m["name"]     = QString();
     m["role"]     = QString();
     m["question"] = QString();
@@ -460,12 +527,44 @@ void AppController::savePerson(const QVariantMap &draft) {
     p.color    = draft.value("color").value<QColor>();
     if (!p.color.isValid()) p.color = QColor("#7da8d9");
     if (p.state.isEmpty()) p.state = "todo";
-    if (p.id.isEmpty()) p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    // Derive a slug id ("e.zaharov") from the name when the caller did not
+    // supply one. Old UUID-style ids ("p-XXXXXXXX") are upgraded too — they
+    // were created before the slug scheme was in place.
+    static const QRegularExpression kLegacyId(QStringLiteral("^p-[0-9a-fA-F]+$"));
+    if (p.id.isEmpty() || kLegacyId.match(p.id).hasMatch()) {
+        p.id = suggestPersonId(p.name, /*exceptId=*/ draft.value("id").toString());
+    }
+    if (p.id.isEmpty()) {
+        // Names with no transliterable letters at all — fall back to UUID
+        // so we never end up with an empty key.
+        p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    }
     const bool isNew = draft.value("_isNew").toBool();
     if (isNew && p.name.trimmed().isEmpty()) return;
     m_people.upsert(p);
     if (isNew) emit toast(QString("Добавлен: %1").arg(p.name));
     scheduleSave();
+}
+
+QString AppController::suggestPersonId(const QString &name,
+                                       const QString &exceptId) const {
+    QString base = heap::text::slugifyPersonName(name);
+    if (base.isEmpty()) return QString();
+    // Collision check against every Person across every profile so that ids
+    // remain globally unique (even though models are per-profile).
+    auto inUse = [this, &exceptId](const QString &candidate) {
+        if (candidate == exceptId) return false;
+        for (const Profile &pr : m_profiles)
+            for (const Person &pe : pr.people)
+                if (pe.id == candidate) return true;
+        return false;
+    };
+    if (!inUse(base)) return base;
+    for (int i = 2; i < 1000; ++i) {
+        const QString c = base + QChar('-') + QString::number(i);
+        if (!inUse(c)) return c;
+    }
+    return base; // last-resort, caller already guarded against empty
 }
 
 void AppController::deletePerson(const QString &id) {
@@ -691,6 +790,27 @@ QVariantList AppController::parseAllDateTimes(const QString &input,
 
 void AppController::copyToClipboard(const QString &text) {
     if (auto *cb = QGuiApplication::clipboard()) cb->setText(text);
+}
+
+QString AppController::classifyTaskKind(const QString &text) const {
+    using heap::text::TaskKind;
+    switch (heap::text::classifyKind(text)) {
+        case TaskKind::Focus:   return QStringLiteral("focus");
+        case TaskKind::Sync:    return QStringLiteral("sync");
+        case TaskKind::Ticket:  return QStringLiteral("ticket");
+        case TaskKind::Contact: return QStringLiteral("contact");
+        case TaskKind::None:    break;
+    }
+    return QStringLiteral("none");
+}
+
+QVariantMap AppController::extractTaskMeta(const QString &text) const {
+    const auto m = heap::text::extractMeta(text);
+    QVariantMap out;
+    out["title"]   = m.title;
+    out["desc"]    = m.desc;
+    out["handles"] = QVariant::fromValue(m.handles);
+    return out;
 }
 
 // ───────────────────────────────────────────────────────── Undo ──
