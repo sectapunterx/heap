@@ -72,7 +72,10 @@ jobs:
           commit_message: "style: apply clang-format"
           commit_user_name: heap-ci
           commit_user_email: heap-ci@users.noreply.github.com
-          file_pattern: "*.cpp *.cc *.cxx *.h *.hpp *.hxx"
+          # Only extensions actually present in the repo — git-auto-commit
+          # invokes `git add` with raw globs and fails on any pattern that
+          # matches nothing (`fatal: pathspec '*.cc' did not match any files`).
+          file_pattern: "*.cpp *.h"
 
   # ──────────────────────────────────────────────────────────────────
   # 2. QML lint (only files touched by the PR).
@@ -214,7 +217,10 @@ jobs:
           commit_message: "style: apply clang-tidy auto-fixes"
           commit_user_name: heap-ci
           commit_user_email: heap-ci@users.noreply.github.com
-          file_pattern: "*.cpp *.cc *.cxx *.h *.hpp *.hxx"
+          # Only extensions actually present in the repo — git-auto-commit
+          # invokes `git add` with raw globs and fails on any pattern that
+          # matches nothing (`fatal: pathspec '*.cc' did not match any files`).
+          file_pattern: "*.cpp *.h"
 
   # ──────────────────────────────────────────────────────────────────
   # 5. Build matrix (Linux + Windows).
