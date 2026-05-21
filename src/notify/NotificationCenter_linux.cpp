@@ -55,13 +55,13 @@ class LinuxDBusBackend : public NotificationCenter {
       hints[QStringLiteral("category")] = n.category;
     }
     // Suppress system bell for non-critical pings.
-    hints[QStringLiteral("urgency")] = uint(1);  // 0 low, 1 normal, 2 critical
+    hints[QStringLiteral("urgency")] = static_cast<uint>(1);  // 0 low, 1 normal, 2 critical
 
     const uint replaceId = m_idMap.value(n.id, 0u);
     const QString iconPath = n.iconPath.isEmpty() ? QStringLiteral("dialog-information") : n.iconPath;
     const int expireMs = n.durationSec > 0 ? n.durationSec * 1000 : -1;
 
-    QDBusReply<uint> reply =
+    const QDBusReply<uint> reply =
         m_iface.call(QStringLiteral("Notify"), QStringLiteral("heap."), replaceId, iconPath, n.title, n.body, actions, hints, expireMs);
 
     if(reply.isValid()) {

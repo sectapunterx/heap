@@ -33,20 +33,22 @@ constexpr int kBackupIntervalSeconds = 5 * 60;
 constexpr int kBackupRetentionCount = 20;
 }  // namespace
 
-AppController::AppController(QObject* parent) : QObject(parent), m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale())) {
+AppController::AppController(QObject* parent) :
+    QObject(parent),
+    m_selectedDate(m_today),
+    m_saveTimer(new QTimer(this)),
+    m_undoTimer(new QTimer(this)),
+    m_automationTimer(new QTimer(this)),
+    m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale())) {
   m_today = QDate::currentDate();
-  m_selectedDate = m_today;
 
-  m_saveTimer = new QTimer(this);
   m_saveTimer->setSingleShot(true);
   m_saveTimer->setInterval(300);
   connect(m_saveTimer, &QTimer::timeout, this, &AppController::saveStateNow);
 
-  m_undoTimer = new QTimer(this);
   m_undoTimer->setSingleShot(true);
   connect(m_undoTimer, &QTimer::timeout, this, &AppController::clearPendingUndo);
 
-  m_automationTimer = new QTimer(this);
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
 
@@ -97,7 +99,7 @@ AppController::AppController(QObject* parent) : QObject(parent), m_chrono(std::m
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
   connect(
       m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
-        heap::git::BranchTaskMatcher m(collectPrefixes());
+        const heap::git::BranchTaskMatcher m(collectPrefixes());
         const auto mr = m.extract(br);
         if(!mr.matched) {
           return;
@@ -719,9 +721,9 @@ void AppController::addStatus(const QString& name, const QString& color) {
   if(name.trimmed().isEmpty()) {
     return;
   }
-  QString base = name.toLower();
+  const QString base = name.toLower();
   QString slug;
-  for(QChar c : base) {
+  for(const QChar c : base) {
     slug.append(c.isLetterOrNumber() ? c : QChar('-'));
   }
   while(slug.contains("--")) {
@@ -791,7 +793,7 @@ void AppController::moveStatus(const QString& id, int newIndex) {
   if(from == newIndex) {
     return;
   }
-  QVariant v = m_statuses.takeAt(from);
+  const QVariant v = m_statuses.takeAt(from);
   m_statuses.insert(newIndex, v);
   emit statusesChanged();
   scheduleSave();
@@ -852,8 +854,8 @@ QVariantMap AppController::taskById(const QString& id) const {
 }
 
 QString AppController::eventHourLabel(double hour) const {
-  const int hh = int(hour);
-  const int mm = int((hour - hh) * 60 + 0.5);
+  const int hh = static_cast<int>(hour);
+  const int mm = static_cast<int>((hour - hh) * 60 + 0.5);
   const QString fmt = settingsMap().value("calendar").toMap().value("timeFormat", QStringLiteral("24h")).toString();
   const QString mmS = QString("%1").arg(mm, 2, 10, QLatin1Char('0'));
   if(fmt == QLatin1String("12h")) {
@@ -865,7 +867,7 @@ QString AppController::eventHourLabel(double hour) const {
 }
 
 QString AppController::sprintLabel() const {
-  const int n = int((m_today.month()) * 2.1);
+  const int n = static_cast<int>((m_today.month()) * 2.1);
   return QString("sprint-%1").arg(n);
 }
 
@@ -873,7 +875,7 @@ QString AppController::humanDate(const QDate& date) const {
   if(!date.isValid()) {
     return {};
   }
-  QLocale ru(QLocale::Russian, QLocale::Russia);
+  const QLocale ru(QLocale::Russian, QLocale::Russia);
   return ru.toString(date, "dddd, d MMMM");
 }
 
@@ -924,7 +926,7 @@ QString AppController::shortDate(const QDate& d) const {
   if(!d.isValid()) {
     return {};
   }
-  QLocale ru(QLocale::Russian, QLocale::Russia);
+  const QLocale ru(QLocale::Russian, QLocale::Russia);
   return ru.toString(d, "ddd, d MMM");
 }
 
@@ -1307,7 +1309,7 @@ int AppController::profileIndexOf(const QString& id) const {
 
 QString AppController::makeProfileId(const QString& name) const {
   QString slug;
-  for(QChar c : name.toLower()) {
+  for(const QChar c : name.toLower()) {
     slug.append(c.isLetterOrNumber() ? c : QChar('-'));
   }
   while(slug.contains("--")) {
@@ -1365,7 +1367,7 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
   const int activeIdx = profileIndexOf(m_activeProfileId);
   if(activeIdx >= 0) {
     for(const QVariant& v : m_profiles[activeIdx].statuses) {
-      QVariantMap m = v.toMap();
+      const QVariantMap m = v.toMap();
       // copy color reference as-is
       p.statuses.append(m);
     }
@@ -1765,13 +1767,13 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
 
 QVariantList AppController::listBackups() const {
   QVariantList out;
-  QDir d(backupDirPath());
+  const QDir d(backupDirPath());
   const QStringList files = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
   for(const QString& name : files) {
-    QFileInfo fi(d.filePath(name));
+    const QFileInfo fi(d.filePath(name));
     QVariantMap m;
     m["fileName"] = name;
-    m["sizeKb"] = qint64(fi.size() / 1024);
+    m["sizeKb"] = (fi.size() / 1024);
     m["mtime"] = fi.lastModified().toString(Qt::ISODate);
     out.append(m);
   }
@@ -2076,8 +2078,8 @@ QString AppController::normalizeSequence(const QString& raw) const {
 
 void AppController::applyShortcutOverrides(const QVariantMap& overrides) {
   bool changed = false;
-  for(int i = 0; i < m_shortcuts.size(); ++i) {
-    QVariantMap m = m_shortcuts[i].toMap();
+  for(auto& m_shortcut : m_shortcuts) {
+    QVariantMap m = m_shortcut.toMap();
     const QString id = m.value("id").toString();
     if(!overrides.contains(id)) {
       continue;
@@ -2087,7 +2089,7 @@ void AppController::applyShortcutOverrides(const QVariantMap& overrides) {
       continue;
     }
     m["sequence"] = seq;
-    m_shortcuts[i] = m;
+    m_shortcut = m;
     changed = true;
   }
   if(changed) {
@@ -2120,8 +2122,8 @@ QString AppController::findShortcutConflict(const QString& id, const QString& se
   if(want.isEmpty()) {
     return QString();
   }
-  for(int i = 0; i < m_shortcuts.size(); ++i) {
-    const QVariantMap m = m_shortcuts[i].toMap();
+  for(const auto& m_shortcut : m_shortcuts) {
+    const QVariantMap m = m_shortcut.toMap();
     if(m.value("id").toString() == id) {
       continue;
     }
@@ -2193,12 +2195,12 @@ void AppController::resetShortcut(const QString& id) {
 
 void AppController::resetAllShortcuts() {
   bool changed = false;
-  for(int i = 0; i < m_shortcuts.size(); ++i) {
-    QVariantMap m = m_shortcuts[i].toMap();
+  for(auto& m_shortcut : m_shortcuts) {
+    QVariantMap m = m_shortcut.toMap();
     const QString def = m.value("defaultSequence").toString();
     if(m.value("sequence").toString() != def) {
       m["sequence"] = def;
-      m_shortcuts[i] = m;
+      m_shortcut = m;
       changed = true;
     }
   }
@@ -2483,7 +2485,7 @@ void AppController::onGitRepoState(const QString& repo, const QVariantMap& state
     m_focusedRepoState = state;
     emit focusedGitChanged();
   }
-  heap::git::BranchTaskMatcher m(collectPrefixes());
+  const heap::git::BranchTaskMatcher m(collectPrefixes());
   const auto mr = m.extract(state.value("branch").toString());
   if(!mr.matched) {
     return;
