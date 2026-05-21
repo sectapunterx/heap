@@ -67,9 +67,14 @@ jobs:
           echo "qmlimportscanner: $SCANNER"
           SCANNER_DIR_WIN=$(cygpath -w "$(dirname "$SCANNER")")
           echo "$SCANNER_DIR_WIN" >> "$GITHUB_PATH"
-          # Also expose share/qt6/bin (older qt6 layouts) when present.
+          # Also expose share/qt6/bin or libexec (one is the canonical tools
+          # dir; the other may not exist depending on Qt6 packaging). Use
+          # `if/then` so that a missing directory does NOT make `set -e`
+          # tear down the step.
           for d in /ucrt64/share/qt6/bin /ucrt64/share/qt6/libexec; do
-            [ -d "$d" ] && cygpath -w "$d" >> "$GITHUB_PATH"
+            if [ -d "$d" ]; then
+              cygpath -w "$d" >> "$GITHUB_PATH"
+            fi
           done
 
       # ── CMake configure ───────────────────────────────────────────
