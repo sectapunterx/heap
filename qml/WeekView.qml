@@ -118,6 +118,7 @@ Item {
                 end:       em.data(idx, Qt.UserRole + 5),
                 attendees: em.data(idx, Qt.UserRole + 6),
                 date:      em.data(idx, Qt.UserRole + 7),
+                context: em.data(idx, Qt.UserRole + 10) || "",
             };
             for (let k = 0; k < days.length; k++) {
                 if (root.isSameDay(days[k].date, e.date)) { days[k].events.push(e); break; }
@@ -145,7 +146,7 @@ Item {
                 out.push({
                     id: e.id, title: e.title, type: e.type,
                     start: e.start, end: e.end, attendees: e.attendees,
-                    date: e.date, dayIndex: i
+                    date: e.date, dayIndex: i, context: e.context || ""
                 });
             }
         }
@@ -511,13 +512,32 @@ Item {
                                     font.family: Theme.fontMono
                                     font.pixelSize: 9
                                 }
-                                Text {
+                                RowLayout {
                                     width: parent.width
-                                    text: weEv.modelData.title
-                                    color: Theme.text
-                                    font.pixelSize: 10
-                                    font.weight: Font.DemiBold
-                                    elide: Text.ElideRight
+                                    spacing: 4
+                                    Text {
+                                        visible: (weEv.modelData.context || "").length > 0
+                                        text: weEv.modelData.context
+                                        color: Theme.textMuted
+                                        font.pixelSize: 10
+                                        font.weight: Font.DemiBold
+                                        elide: Text.ElideRight
+                                        Layout.maximumWidth: parent.width * 0.5
+                                    }
+                                    Rectangle {
+                                        visible: (weEv.modelData.context || "").length > 0
+                                        Layout.preferredWidth: 5; Layout.preferredHeight: 5
+                                        radius: 2.5
+                                        color: Theme.eventColor(weEv.modelData.type)
+                                    }
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: weEv.modelData.title
+                                        color: Theme.text
+                                        font.pixelSize: 10
+                                        font.weight: Font.DemiBold
+                                        elide: Text.ElideRight
+                                    }
                                 }
                             }
 
