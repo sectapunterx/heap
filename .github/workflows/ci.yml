@@ -9,15 +9,9 @@ on:
 permissions:
   contents: read
 
-# Cancel in-flight runs on the same ref (but never on master — that one runs
-# to completion so the release build always sees the right SHA).
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
-
-env:
-  # Apt-installed clang-format / clang-tidy version. Bump together.
-  CLANG_TOOL_VERSION: "17"
 
 jobs:
 
@@ -26,23 +20,18 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   lint-cpp:
     name: clang-format (diff)
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # need history for `git diff` against base
+          fetch-depth: 0
 
       - name: Install clang-format
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            "clang-format-${CLANG_TOOL_VERSION}"
-          sudo ln -sf "/usr/bin/clang-format-diff-${CLANG_TOOL_VERSION}" \
-            /usr/local/bin/clang-format-diff
-          sudo ln -sf "/usr/bin/clang-format-${CLANG_TOOL_VERSION}" \
-            /usr/local/bin/clang-format
+          sudo apt-get install -y --no-install-recommends clang-format
 
       - name: Run clang-format-diff on changed lines
         env:
@@ -50,33 +39,31 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x .github/scripts/changed_files.sh
-          files="$(.github/scripts/changed_files.sh 'cpp|cc|cxx|h|hpp|hxx')"
-          if [[ -z "$files" ]]; then
+          mapfile -t files < <(.github/scripts/changed_files.sh 'cpp|cc|cxx|h|hpp|hxx')
+          if [[ ${#files[@]} -eq 0 ]]; then
             echo "No C/C++ changes — skipping."
             exit 0
           fi
-          # Resolve base sha the same way the helper script does.
           if [[ -n "${GITHUB_BASE_REF:-}" ]]; then
             base="origin/${GITHUB_BASE_REF}"
           else
             base="$(git rev-parse HEAD~1 2>/dev/null || echo HEAD)"
           fi
           echo "Diffing changed lines vs $base"
-          set +e
-          # shellcheck disable=SC2086
-          git diff -U0 "$base" HEAD -- $files \
-            | clang-format-diff -p1 -style=file > diff.patch
-          status=$?
-          set -e
-          if [[ $status -ne 0 ]]; then
-            echo "::error::clang-format-diff failed to run"
-            exit "$status"
+          # Locate clang-format-diff (Ubuntu ships it as a versioned binary).
+          diff_tool="$(command -v clang-format-diff || true)"
+          if [[ -z "$diff_tool" ]]; then
+            diff_tool="$(ls /usr/bin/clang-format-diff-* 2>/dev/null | sort -V | tail -n1 || true)"
           fi
+          if [[ -z "$diff_tool" ]]; then
+            echo "::error::clang-format-diff not found in PATH"
+            exit 1
+          fi
+          git diff -U0 "$base" HEAD -- "${files[@]}" \
+            | "$diff_tool" -p1 -style=file > diff.patch
           if [[ -s diff.patch ]]; then
             echo "::error::clang-format violations on changed lines."
-            echo "Apply with: clang-format-${CLANG_TOOL_VERSION} -i \\"
-            echo "  $(echo $files | tr ' ' '\n' | sed 's|^|    |')"
-            echo "---- suggested patch ----"
+            echo "Suggested patch:"
             cat diff.patch
             exit 1
           fi
@@ -87,7 +74,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   lint-qml:
     name: qmllint
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
       - name: Checkout
@@ -107,21 +94,19 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x .github/scripts/changed_files.sh
-          files="$(.github/scripts/changed_files.sh 'qml')"
-          if [[ -z "$files" ]]; then
+          mapfile -t files < <(.github/scripts/changed_files.sh 'qml')
+          if [[ ${#files[@]} -eq 0 ]]; then
             echo "No QML changes — skipping."
             exit 0
           fi
-          # qmllint reads .qmllint.ini automatically when present.
-          # shellcheck disable=SC2086
-          qmllint -I qml $files
+          qmllint -I qml "${files[@]}"
 
   # ──────────────────────────────────────────────────────────────────
   # 3. GitHub Actions YAML lint (full sweep — fast).
   # ──────────────────────────────────────────────────────────────────
   lint-actions:
     name: actionlint
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
@@ -135,7 +120,7 @@ jobs:
   tidy:
     name: clang-tidy (diff)
     if: github.event_name == 'pull_request'
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - name: Checkout
@@ -147,11 +132,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            "clang-tidy-${CLANG_TOOL_VERSION}" \
-            cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev
-          sudo ln -sf "/usr/bin/clang-tidy-${CLANG_TOOL_VERSION}" \
-            /usr/local/bin/clang-tidy
+            clang-tidy cmake ninja-build \
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev libgl1-mesa-dev
 
       - name: Configure (compile_commands.json)
         run: |
@@ -161,8 +143,8 @@ jobs:
             -DHEAP_BUILD_TESTS=OFF
 
       - name: Build Qt-generated sources only
-        # AUTOMOC / qmltyperegistrations files only exist after at least a
-        # partial build — clang-tidy fails to find them otherwise.
+        # AUTOMOC / qmltyperegistrations files only exist after a partial
+        # build; clang-tidy fails to find them otherwise.
         run: cmake --build build --target heap_autogen heap_qmltyperegistrations || true
 
       - name: Run clang-tidy on changed files
@@ -171,16 +153,14 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x .github/scripts/changed_files.sh
-          files="$(.github/scripts/changed_files.sh 'cpp|cc|cxx')"
-          if [[ -z "$files" ]]; then
+          mapfile -t files < <(.github/scripts/changed_files.sh 'cpp|cc|cxx')
+          if [[ ${#files[@]} -eq 0 ]]; then
             echo "No C/C++ source changes — skipping clang-tidy."
             exit 0
           fi
-          # Filter out files that don't have a compile-commands entry (e.g.
-          # tests are disabled in this build). clang-tidy errors loudly on
-          # those otherwise.
+          # Filter to files that actually have a compile-commands entry.
           tidy_files=()
-          for f in $files; do
+          for f in "${files[@]}"; do
             if grep -q "\"file\": *\"$(pwd)/$f\"" build/compile_commands.json; then
               tidy_files+=("$f")
             fi
@@ -202,11 +182,10 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest]
+        os: [ubuntu-24.04, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
-      # ── Linux toolchain ──
       - name: Install dependencies (linux)
         if: runner.os == 'Linux'
         run: |
@@ -214,7 +193,7 @@ jobs:
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ \
             qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-            libqt6opengl6-dev libgl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev
 
       - name: Setup ccache (linux)
         if: runner.os == 'Linux'
@@ -222,10 +201,8 @@ jobs:
         with:
           key: ${{ runner.os }}-ccache
 
-      # ── Windows toolchain (MSYS2 + Qt6) ──
       - name: Setup MSYS2 (windows)
         if: runner.os == 'Windows'
-        id: msys2
         uses: msys2/setup-msys2@v2
         with:
           msystem: UCRT64
@@ -239,7 +216,6 @@ jobs:
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-ccache
 
-      # ── Configure + build (Linux) ──
       - name: Configure (linux)
         if: runner.os == 'Linux'
         run: |
@@ -254,7 +230,6 @@ jobs:
           cmake --build build --parallel \
             --target heap heap_chrono_tests heap_git_tests heap_text_tests
 
-      # ── Configure + build (Windows) ──
       - name: Configure (windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
@@ -271,11 +246,10 @@ jobs:
           cmake --build build --parallel \
             --target heap heap_chrono_tests heap_git_tests heap_text_tests
 
-      # ── Carry the build dir over to the test job ──
       - name: Tar build dir
         if: always()
-        run: tar -cf build-${{ matrix.os }}.tar build
         shell: bash
+        run: tar -cf build-${{ matrix.os }}.tar build
 
       - name: Upload build artifact
         if: always()
@@ -296,7 +270,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-22.04, windows-latest]
+        os: [ubuntu-24.04, windows-latest]
     steps:
       - uses: actions/checkout@v4
 
@@ -306,7 +280,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             libqt6core6 libqt6gui6 libqt6qml6 libqt6quick6 \
-            libqt6quickcontrols2-6 libqt6widgets6 libgl1-mesa-glx \
+            libqt6quickcontrols2-6 libqt6widgets6 \
             cmake ninja-build
 
       - name: Setup MSYS2 (windows)
@@ -357,7 +331,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   sanitizers:
     name: ASan + UBSan
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
@@ -367,7 +341,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
 
       - name: Configure with sanitizers
         run: |
@@ -392,7 +367,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   coverage:
     name: coverage
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     needs: test
     steps:
@@ -403,7 +378,8 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ gcovr \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
 
       - name: Configure with coverage
         run: |
@@ -433,6 +409,5 @@ jobs:
         with:
           files: coverage.lcov
           fail_ci_if_error: ${{ github.event_name == 'pull_request' }}
-        # Token only required for private repos.
         env:
           CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
