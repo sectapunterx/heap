@@ -7,6 +7,26 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
 
+# Emit compile_commands.json so clang-tidy / clangd / IDEs work out of the box
+# (CI's clang-tidy job depends on this).
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+# ── Optional build modes — toggled by CI ──────────────────────────
+option(HEAP_ENABLE_COVERAGE   "Instrument heap for gcov coverage"          OFF)
+option(HEAP_ENABLE_SANITIZERS "Build heap with AddressSanitizer + UBSan"   OFF)
+
+if(HEAP_ENABLE_COVERAGE AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(STATUS "heap: coverage instrumentation ON")
+    add_compile_options(-O0 -g --coverage -fprofile-update=atomic)
+    add_link_options(--coverage)
+endif()
+
+if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    message(STATUS "heap: ASan + UBSan ON")
+    add_compile_options(-fsanitize=address,undefined -fno-omit-frame-pointer -g)
+    add_link_options(-fsanitize=address,undefined)
+endif()
+
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
 # Qt6Svg is optional — it provides the `qsvg` image-format plugin so QML <Image>
 # can render the heap. app icon (BrandLogo itself uses native primitives, so
