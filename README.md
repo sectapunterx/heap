@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — heap.push(task)">
+  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — Work, in one place.">
 </p>
 
 <div align="center">

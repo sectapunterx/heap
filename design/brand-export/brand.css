@@ -1,0 +1,752 @@
+/* heap. — brand sheet
+   Calm editorial layout on dark surface.
+   Mirrors the app palette so brand and product share one source of truth.
+*/
+
+:root {
+    --bg: #0b0e13;
+    --bg2: #11151c;
+    --panel: #14181f;
+    --panel2: #1a1f29;
+    --border: #262d39;
+    --hair: #1c2230;
+    --text: #e5ecf3;
+    --text2: #b8c2cc;
+    --text3: #8a94a3;
+    --text4: #5f6878;
+    --accent: #3bccdd;
+    --accent2: #5fdaea;
+    --accent-d: #178ea0;
+
+    /* ---- brand-only overrides ----
+       Used by the mark, the wordmark, and any logo glyph.
+       Replaces white-on-dark + cyan with dimmer slate tones so the
+       identity reads as quiet, never punches the surface. */
+    --brand-ink: #8a94a3; /* replaces the white in marks / wordmarks */
+    --brand-accent: #2f5560; /* replaces the bright cyan in dot / root  */
+
+    --status-todo: #86a0bd;
+    --status-prog: #32b2e7;
+    --status-review: #bf94ec;
+    --status-done: #78be7a;
+    --status-warn: #fe9c3a;
+
+    --serif: "IBM Plex Serif", Georgia, "Times New Roman", serif;
+    --sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    --mono: "JetBrains Mono", "SF Mono", Menlo, Consolas, monospace;
+
+    --col: minmax(0, 1200px);
+    --gut: clamp(20px, 4vw, 56px);
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html, body {
+    margin: 0;
+    padding: 0;
+    background: var(--bg);
+    color: var(--text);
+    font-family: var(--sans);
+    font-weight: 400;
+    font-size: 17px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+a {
+    color: inherit;
+}
+
+::selection {
+    background: var(--accent);
+    color: var(--bg);
+}
+
+/* ---------- layout ---------- */
+
+.shell {
+    display: grid;
+    grid-template-columns: 1fr var(--col) 1fr;
+    column-gap: 0;
+}
+
+.shell > * {
+    grid-column: 2;
+    padding-left: var(--gut);
+    padding-right: var(--gut);
+}
+
+.shell > .full {
+    grid-column: 1 / -1;
+    padding-left: 0;
+    padding-right: 0;
+}
+
+section {
+    padding-top: clamp(80px, 14vh, 180px);
+    padding-bottom: clamp(80px, 14vh, 180px);
+    border-top: 1px solid var(--hair);
+}
+
+section:first-of-type {
+    border-top: 0;
+}
+
+.eyebrow {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text4);
+    margin: 0 0 28px 0;
+}
+
+.eyebrow .num {
+    color: var(--accent);
+    margin-right: 10px;
+}
+
+h1, h2, h3, h4 {
+    font-family: var(--serif);
+    font-weight: 400;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0;
+}
+
+h2 {
+    font-size: clamp(34px, 4.4vw, 56px);
+    line-height: 1.05;
+}
+
+h3 {
+    font-size: clamp(22px, 2.2vw, 28px);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+h4 {
+    font-size: 16px;
+    font-family: var(--sans);
+    font-weight: 500;
+    color: var(--text);
+}
+
+p {
+    color: var(--text2);
+    margin: 0 0 1em 0;
+    text-wrap: pretty;
+}
+
+p.lede {
+    font-size: 19px;
+    color: var(--text2);
+    max-width: 56ch;
+}
+
+p.fine {
+    font-size: 13px;
+    color: var(--text3);
+}
+
+.mono {
+    font-family: var(--mono);
+}
+
+.row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 32px;
+}
+
+.grid-2 {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px 64px;
+}
+
+.grid-3 {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 32px;
+}
+
+@media (max-width: 820px) {
+    .grid-2, .grid-3 {
+        grid-template-columns: 1fr;
+    }
+}
+
+.divider {
+    height: 1px;
+    background: var(--hair);
+    border: 0;
+    margin: 56px 0;
+}
+
+.tag {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--text3);
+    padding: 4px 10px;
+    border: 1px solid var(--border);
+    border-radius: 999px;
+}
+
+/* ---------- top utility ---------- */
+
+.util {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    padding-top: 28px;
+    padding-bottom: 28px;
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text4);
+    border-bottom: 1px solid var(--hair);
+}
+
+.util .name {
+    color: var(--text2);
+}
+
+.util .name b {
+    color: var(--text);
+    font-weight: 500;
+    letter-spacing: 0.18em;
+}
+
+.util .name b i {
+    color: var(--accent);
+    font-style: normal;
+}
+
+.util .right {
+    display: flex;
+    gap: 28px;
+}
+
+/* ---------- cover ---------- */
+
+.cover {
+    min-height: min(880px, 92vh);
+    display: grid;
+    grid-template-columns: 1fr;
+    align-content: end;
+    padding-top: clamp(120px, 22vh, 240px);
+    padding-bottom: clamp(80px, 14vh, 140px);
+    border-top: 0;
+}
+
+.cover .wordmark-xl {
+    font-family: var(--sans);
+    font-weight: 500;
+    font-size: clamp(140px, 24vw, 320px);
+    line-height: 0.85;
+    letter-spacing: -0.04em;
+    color: var(--brand-ink);
+    margin: 0 0 64px 0;
+}
+
+.cover .wordmark-xl .dot {
+    color: var(--brand-accent);
+}
+
+.cover .lede-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 48px 64px;
+    max-width: 1100px;
+}
+
+@media (max-width: 820px) {
+    .cover .lede-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+.cover .lede-row h2 {
+    font-size: clamp(26px, 2.4vw, 32px);
+    line-height: 1.2;
+    color: var(--text);
+}
+
+.cover .lede-row p {
+    color: var(--text3);
+    max-width: 46ch;
+}
+
+.cover .footnotes {
+    display: flex;
+    justify-content: space-between;
+    align-items: end;
+    margin-top: clamp(80px, 14vh, 140px);
+    color: var(--text4);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+}
+
+/* ---------- mark canvases ---------- */
+
+.canvas {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    display: grid;
+    place-items: center;
+    position: relative;
+    overflow: hidden;
+}
+
+.canvas.light {
+    background: #f3f5f8;
+    color: #11151c;
+    border-color: #dde3ec;
+}
+
+.canvas .label {
+    position: absolute;
+    left: 14px;
+    bottom: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    color: var(--text4);
+}
+
+.canvas.light .label {
+    color: #8a94a3;
+}
+
+.canvas .size {
+    position: absolute;
+    right: 14px;
+    bottom: 12px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    color: var(--text4);
+}
+
+.canvas.light .size {
+    color: #8a94a3;
+}
+
+.canvas.tall {
+    aspect-ratio: 4 / 3;
+}
+
+.canvas.wide {
+    aspect-ratio: 21 / 9;
+}
+
+.canvas.sq {
+    aspect-ratio: 1 / 1;
+}
+
+.mark-row {
+    display: grid;
+    grid-template-columns: 1fr 1fr 1fr;
+    gap: 24px;
+}
+
+@media (max-width: 820px) {
+    .mark-row {
+        grid-template-columns: 1fr;
+    }
+}
+
+/* ---------- the mark itself ----------
+   3-node binary heap: root in cyan, children in foreground.
+   Geometry is normalized in 32×32; we scale with width attribute on each instance.
+*/
+/* Mark styles must be inline on the <symbol> children — CSS class selectors
+   don't reach through <use>'s shadow tree. We only steer with inherited
+   properties: `color` for currentColor (edges + child nodes), and the
+   `--root-fill` custom property for the root node.
+   Default mark = brand-ink (slate) + brand-accent (dark teal) so the logo
+   feels quiet on every dark surface. */
+.mark {
+    display: block;
+    color: var(--brand-ink);
+    --root-fill: var(--brand-accent);
+}
+
+.mark.mono {
+    --root-fill: currentColor;
+}
+
+/* wordmark + lockup */
+.wm {
+    font-family: var(--sans);
+    font-weight: 500;
+    letter-spacing: -0.035em;
+    color: var(--brand-ink);
+    line-height: 1;
+}
+
+.wm .dot {
+    color: var(--brand-accent);
+}
+
+.canvas.light .wm {
+    color: #11151c;
+}
+
+.canvas.light .wm .dot {
+    color: var(--accent-d);
+}
+
+.lockup {
+    display: inline-flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.lockup .wm {
+    font-size: inherit;
+}
+
+/* ---------- voice / slogans ---------- */
+
+.slogan-list {
+    display: grid;
+    gap: 56px;
+}
+
+.slogan {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 32px;
+    align-items: baseline;
+    padding-bottom: 56px;
+    border-bottom: 1px solid var(--hair);
+}
+
+.slogan:last-child {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.slogan .meta {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text4);
+    padding-top: 12px;
+}
+
+.slogan .meta b {
+    color: var(--accent);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+}
+
+.slogan .lines {
+    display: grid;
+    gap: 16px;
+}
+
+.slogan .lang {
+    display: grid;
+    grid-template-columns: 40px 1fr;
+    gap: 24px;
+    align-items: baseline;
+}
+
+.slogan .lang .code {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: var(--text4);
+    padding-top: 10px;
+}
+
+.slogan .lang .line {
+    font-family: var(--serif);
+    font-size: clamp(26px, 3vw, 38px);
+    line-height: 1.18;
+    color: var(--text);
+    letter-spacing: -0.01em;
+}
+
+.slogan .lang.short .line {
+    font-family: var(--sans);
+    font-weight: 500;
+}
+
+.slogan .note {
+    color: var(--text3);
+    font-size: 14px;
+    margin-top: 4px;
+}
+
+.tagline-hint {
+    margin-top: 80px;
+    padding: 24px 28px;
+    border-left: 2px solid var(--accent);
+    background: linear-gradient(90deg, rgba(59, 204, 221, 0.06), transparent 70%);
+}
+
+.tagline-hint p {
+    margin: 0;
+    color: var(--text2);
+    font-size: 14px;
+}
+
+.tagline-hint .mono {
+    color: var(--text3);
+}
+
+/* ---------- color ---------- */
+
+.swatches {
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    gap: 1px;
+    background: var(--hair);
+    border: 1px solid var(--hair);
+    border-radius: 12px;
+    overflow: hidden;
+}
+
+@media (max-width: 820px) {
+    .swatches {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.sw {
+    background: var(--panel);
+    padding: 24px 20px 20px;
+    min-height: 168px;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+.sw .chip {
+    width: 36px;
+    height: 36px;
+    border-radius: 8px;
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    margin-bottom: 18px;
+}
+
+.sw .name {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text);
+    letter-spacing: 0.02em;
+}
+
+.sw .hex {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text3);
+    letter-spacing: 0.08em;
+    margin-top: 4px;
+}
+
+.sw .role {
+    font-size: 12px;
+    color: var(--text4);
+    margin-top: 10px;
+}
+
+/* status row */
+.statuses {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 12px;
+    margin-top: 24px;
+}
+
+@media (max-width: 820px) {
+    .statuses {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}
+
+.status-chip {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 14px;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    background: var(--panel);
+}
+
+.status-chip .led {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    flex: 0 0 8px;
+}
+
+.status-chip .lbl {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+}
+
+.status-chip .hex {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--text4);
+    margin-left: auto;
+}
+
+/* ---------- icon ---------- */
+
+.icon-grid {
+    display: grid;
+    grid-template-columns: 1.4fr 1fr;
+    gap: 32px;
+}
+
+@media (max-width: 820px) {
+    .icon-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
+.icon-large {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 56px;
+    display: grid;
+    place-items: center;
+}
+
+.icon-row {
+    display: grid;
+    grid-template-rows: repeat(4, 1fr);
+    gap: 12px;
+}
+
+.icon-cell {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 14px 18px;
+}
+
+.icon-cell .name {
+    display: flex;
+    flex-direction: column;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--text2);
+}
+
+.icon-cell .name span {
+    color: var(--text4);
+    font-size: 10px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    margin-top: 4px;
+}
+
+/* squircle clip approximation — icon surface (muted, low-contrast) */
+.squircle {
+    border-radius: 22.37%; /* superellipse approximation */
+    background: radial-gradient(140% 110% at 0% 0%, #11151c 0%, #0a0d12 60%, #06080c 100%);
+    position: relative;
+    overflow: hidden;
+    border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.squircle::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), transparent 28%),
+    radial-gradient(120% 60% at 50% 115%, rgba(23, 142, 160, 0.10), transparent 65%);
+    pointer-events: none;
+}
+
+/* Darker mark variant used inside app-icon squircles —
+   pushed one stop further than the brand default so the icon disappears
+   into a dark dock instead of floating above it. */
+.mark.on-icon {
+    color: #5f6878;
+    --root-fill: #1f3d45;
+}
+
+/* ---------- surface frames ---------- */
+
+.surface {
+    position: relative;
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    background: var(--bg);
+    box-shadow: 0 30px 80px -40px #000;
+}
+
+.surface .surface-label {
+    position: absolute;
+    top: 14px;
+    left: 18px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text4);
+    z-index: 2;
+}
+
+.surface .surface-size {
+    position: absolute;
+    top: 14px;
+    right: 18px;
+    font-family: var(--mono);
+    font-size: 10px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text4);
+    z-index: 2;
+}
+
+/* ---------- footer ---------- */
+
+footer.foot {
+    padding-top: 80px;
+    padding-bottom: 56px;
+    border-top: 1px solid var(--hair);
+    color: var(--text4);
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.12em;
+    text-transform: uppercase;
+    display: flex;
+    justify-content: space-between;
+    gap: 24px;
+    flex-wrap: wrap;
+}
+
+footer.foot a {
+    color: var(--text3);
+    text-decoration: none;
+    border-bottom: 1px solid var(--border);
+    padding-bottom: 1px;
+}

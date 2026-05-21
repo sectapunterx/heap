@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 800" width="1280" height="800">
-  <rect width="1280" height="800" fill="#0b0e13"></rect>
+    <rect width="1280" height="800" fill="#0b0e13"></rect>
 
 
     <g transform="translate(450, 320)">
@@ -12,7 +12,7 @@
             <circle cx="9.5" cy="22" r="3" fill="#8a94a3"></circle>
             <circle cx="22.5" cy="22" r="3" fill="#8a94a3"></circle>
             <circle cx="16" cy="9.5" r="3.6" fill="#2f5560"></circle>
-  </g>
+        </g>
         <text x="72.19999999999999" y="52.288" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif"
               font-weight="500" font-size="60.8" letter-spacing="-2.128" fill="#8a94a3">heap
             <tspan fill="#2f5560">.</tspan>

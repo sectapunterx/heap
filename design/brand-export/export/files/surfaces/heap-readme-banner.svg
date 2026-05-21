@@ -1,6 +1,6 @@
 <?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 640" width="1280" height="640">
-  <rect width="1280" height="640" fill="#0b0e13"></rect>
+    <rect width="1280" height="640" fill="#0b0e13"></rect>
 
 
     <g transform="translate(80, 140)">
@@ -64,5 +64,5 @@
         <text x="870" y="460" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif" font-size="15"
               font-weight="400" fill="#b8c2cc" letter-spacing="0">user-data dir.
         </text>
-  </g>
+    </g>
 </svg>

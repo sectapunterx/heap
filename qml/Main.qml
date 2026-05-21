@@ -13,7 +13,7 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 680
-    title: "heap. — heap.push(task)"
+    title: "heap. — Work, in one place."
     color: Theme.bg
 
     property string searchText: ""
@@ -482,7 +482,7 @@ ApplicationWindow {
     FileDialog {
         id: exportJsonDialog
         fileMode: FileDialog.SaveFile
-        nameFilters: [ "todo·cpp profile (*.json)", "All files (*)" ]
+        nameFilters: ["heap. profile (*.json)", "All files (*)"]
         defaultSuffix: "json"
         title: "Экспорт активного профиля в JSON"
         onAccepted: {
@@ -495,7 +495,7 @@ ApplicationWindow {
     FileDialog {
         id: importJsonDialog
         fileMode: FileDialog.OpenFile
-        nameFilters: [ "todo·cpp profile (*.json)", "All files (*)" ]
+        nameFilters: ["heap. profile (*.json)", "All files (*)"]
         title: "Импорт профиля из JSON"
         onAccepted: {
             const err = AppController.importProfileFromJson === undefined

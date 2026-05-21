@@ -1,11 +1,11 @@
 <?xml version="1.0"?>
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1440 900" width="1440" height="900">
-  <defs>
-      <pattern id="stripes" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
-          <rect width="24" height="24" fill="#14181f"></rect>
-          <line x1="0" y1="0" x2="0" y2="24" stroke="#ffffff" stroke-opacity="0.018" stroke-width="12"></line>
-    </pattern>
-  </defs>
+    <defs>
+        <pattern id="stripes" patternUnits="userSpaceOnUse" width="24" height="24" patternTransform="rotate(45)">
+            <rect width="24" height="24" fill="#14181f"></rect>
+            <line x1="0" y1="0" x2="0" y2="24" stroke="#ffffff" stroke-opacity="0.018" stroke-width="12"></line>
+        </pattern>
+    </defs>
 
 
     <rect width="1440" height="900" fill="#0b0e13"></rect>
@@ -93,5 +93,5 @@
         <text x="1050" y="510" font-family="&#39;JetBrains Mono&#39;, &#39;SF Mono&#39;, Menlo, Consolas, monospace"
               font-size="11" fill="#5f6878">drop a full-bleed screenshot here
         </text>
-  </g>
+    </g>
 </svg>

@@ -83,18 +83,14 @@ Item {
             height: 92
         }
 
-        // Tagline: heap.push(task)
-        Row {
+        // Tagline: Work, in one place.
+        Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            Text {
-                text: "heap"; color: Brand.text3
-                font.family: Brand.fontMono; font.pixelSize: 14
-            }
-            Text { text: "."; color: Brand.text4; font.family: Brand.fontMono; font.pixelSize: 14 }
-            Text { text: "push"; color: Brand.accent; font.family: Brand.fontMono; font.pixelSize: 14 }
-            Text { text: "("; color: Brand.text4; font.family: Brand.fontMono; font.pixelSize: 14 }
-            Text { text: "task"; color: Brand.text; font.family: Brand.fontMono; font.pixelSize: 14 }
-            Text { text: ")"; color: Brand.text4; font.family: Brand.fontMono; font.pixelSize: 14 }
+            text: Brand.tagline
+            color: Brand.brandInk
+            font.family: Brand.fontSans
+            font.pixelSize: 14
+            font.letterSpacing: 0.2
         }
 
         // Loading bar
