@@ -12,19 +12,28 @@ Popup {
     width: 480
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+    Overlay.modal: Rectangle {
+        color: Qt.rgba(0, 0, 0, 0.55)
+    }
 
     property var draft: ({})
     property bool isNew: false
+    // Original id at the moment of opening the editor. Used so that even if
+    // the user edits idField, AppController can find and rename the existing
+    // row instead of inserting a duplicate.
+    property string _originalId: ""
 
     function showFor(initialDraft) {
         draft = initialDraft || {};
         isNew = !!draft._isNew;
-        idField.text     = draft.id || "";
-        titleField.text  = draft.title || "";
-        descField.text   = draft.desc || "";
+        _originalId = isNew ? "" : (draft.id || "");
+        // New tasks: leave idField empty with a TODO hint — real id is
+        // assigned on save. Edit: pre-fill with existing id (editable).
+        idField.text = isNew ? "" : (draft.id || "");
+        titleField.text = draft.title || "";
+        descField.text = draft.desc || "";
         statusBox.currentIndex = Math.max(0, statusList().indexOf(draft.status));
-        priBox.currentIndex    = Math.max(0, ["P0","P1","P2","P3"].indexOf(draft.priority || "P2"));
+        priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(draft.priority || "P2"));
         branchField.text = draft.branch || "";
         deadlineField.text = formatDate(draft.deadline);
         open();
@@ -33,37 +42,83 @@ Popup {
         // chips on the underlying TaskCard update without re-opening.
         if (draft.id && !isNew) AppController.refreshGitForTaskBranch(draft.id);
     }
+
     function statusList() {
         const out = [];
         const sts = AppController.statuses;
         for (let i = 0; i < sts.length; i++) out.push(sts[i].id);
         return out;
     }
+
     function statusNames() {
         const out = [];
         const sts = AppController.statuses;
         for (let i = 0; i < sts.length; i++) out.push(sts[i].name);
         return out;
     }
+
     function formatDate(d) {
         if (!d || !d.getFullYear) return "";
-        return d.getFullYear() + "-" + (d.getMonth()+1).toString().padStart(2,"0") + "-" + d.getDate().toString().padStart(2,"0");
+        return d.getFullYear() + "-" + (d.getMonth() + 1).toString().padStart(2, "0") + "-" + d.getDate().toString().padStart(2, "0");
     }
+
     function parseDate(s) {
         if (!s) return undefined;
         const r = AppController.parseDateTime(s, new Date());
         if (r && r.ok && r.start) return r.start;
         const parts = s.split("-");
         if (parts.length !== 3) return undefined;
-        return new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
     }
 
-    property var _deadlinePreview: ({ ok: false })
+    property var _deadlinePreview: ({ok: false})
 
     function _refreshDeadlinePreview() {
         const s = deadlineField.text;
-        if (!s) { _deadlinePreview = { ok: false }; return; }
-        _deadlinePreview = AppController.parseDateTime(s, new Date()) || { ok: false };
+        if (!s) {
+            _deadlinePreview = {ok: false};
+            return;
+        }
+        _deadlinePreview = AppController.parseDateTime(s, new Date()) || {ok: false};
+    }
+
+    // Forwards to heap::text::extractMeta (C++, unit-tested).
+    function _extractMeta(raw) {
+        return AppController.extractTaskMeta(raw || "");
+    }
+
+    // Resolve @handles into display names via PersonModel. Unknown handles
+    // are kept as "@handle" so context isn't silently dropped.
+    function _resolvePeopleNames(handles) {
+        if (!handles || handles.length === 0) return [];
+        const out = [];
+        const known = AppController.people;
+        for (let i = 0; i < handles.length; ++i) {
+            const h = handles[i];
+            const p = AppController.personById(h);
+            if (p && p.id) { out.push(p.name || p.id); continue; }
+            // Fallback: case-insensitive scan over name's first token / id.
+            let matched = false;
+            for (let j = 0; j < known.rowCount(); ++j) {
+                const idx = known.index(j, 0);
+                const id  = String(known.data(idx, Qt.UserRole + 1) || "");
+                const nm  = String(known.data(idx, Qt.UserRole + 2) || "");
+                const firstWord = nm.split(/\s+/)[0] || "";
+                if (id.toLowerCase() === h.toLowerCase()
+                    || firstWord.toLowerCase() === h.toLowerCase()) {
+                    out.push(nm || id);
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) out.push("@" + h);
+        }
+        return out;
+    }
+
+    // Forwards to heap::text::classifyKind (C++, unit-tested).
+    function _classifyKind(text) {
+        return AppController.classifyTaskKind(text || "");
     }
 
     anchors.centerIn: Overlay.overlay
@@ -78,7 +133,9 @@ Popup {
     contentItem: ColumnLayout {
         spacing: 12
         // padding via Item margins
-        Item { Layout.preferredHeight: 4 }
+        Item {
+            Layout.preferredHeight: 4
+        }
 
         RowLayout {
             Layout.leftMargin: 18; Layout.rightMargin: 18
@@ -97,34 +154,51 @@ Popup {
                 font.pixelSize: 12
                 font.weight: Font.Medium
             }
-            Item { Layout.fillWidth: true }
+            Item {
+                Layout.fillWidth: true
+            }
         }
 
-        FieldLabel { text: "ID ТИКЕТА"; Layout.leftMargin: 18; Layout.rightMargin: 18 }
+        FieldLabel {
+            text: "ID ТИКЕТА"; Layout.leftMargin: 18; Layout.rightMargin: 18
+        }
         TextField {
             id: idField
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
-            placeholderText: "LTE-XXXX"
+            // New tasks: TODO placeholder — final id is generated on save.
+            // Edit: pre-filled with the current id (still editable).
+            placeholderText: root.isNew ? "TODO — присвоится при сохранении"
+                                        : "LTE-XXXX"
             font.family: Theme.fontMono
-            background: FieldBg {}
+            background: FieldBg {
+            }
             color: Theme.text
             placeholderTextColor: Theme.textDim
-            onTextChanged: text = text.toUpperCase()
+            // Auto-uppercase so the id stays canonical (matches newTaskDraft).
+            onTextChanged: {
+                const up = text.toUpperCase();
+                if (up !== text) text = up;
+            }
         }
 
-        FieldLabel { text: "ЗАГОЛОВОК"; Layout.leftMargin: 18; Layout.rightMargin: 18 }
+        FieldLabel {
+            text: "ЗАГОЛОВОК"; Layout.leftMargin: 18; Layout.rightMargin: 18
+        }
         TextField {
             id: titleField
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
             placeholderText: "Короткое summary"
-            background: FieldBg {}
+            background: FieldBg {
+            }
             color: Theme.text
             placeholderTextColor: Theme.textDim
         }
 
-        FieldLabel { text: "ОПИСАНИЕ"; Layout.leftMargin: 18; Layout.rightMargin: 18 }
+        FieldLabel {
+            text: "ОПИСАНИЕ"; Layout.leftMargin: 18; Layout.rightMargin: 18
+        }
         ScrollView {
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
@@ -133,7 +207,8 @@ Popup {
                 id: descField
                 placeholderText: "Контекст, ссылки, спецификация…"
                 wrapMode: TextEdit.Wrap
-                background: FieldBg {}
+                background: FieldBg {
+                }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }
@@ -145,13 +220,18 @@ Popup {
             columns: 2
             columnSpacing: 10
             rowSpacing: 4
-            FieldLabel { text: "СТАТУС" }
-            FieldLabel { text: "ПРИОРИТЕТ" }
+            FieldLabel {
+                text: "СТАТУС"
+            }
+            FieldLabel {
+                text: "ПРИОРИТЕТ"
+            }
             ComboBox {
                 id: statusBox
                 Layout.fillWidth: true
                 model: root.statusNames()
-                background: FieldBg {}
+                background: FieldBg {
+                }
                 contentItem: Text {
                     text: statusBox.displayText
                     color: Theme.text
@@ -162,8 +242,9 @@ Popup {
             ComboBox {
                 id: priBox
                 Layout.fillWidth: true
-                model: ["P0","P1","P2","P3"]
-                background: FieldBg {}
+                model: ["P0", "P1", "P2", "P3"]
+                background: FieldBg {
+                }
                 contentItem: Text {
                     text: priBox.displayText
                     color: Theme.text
@@ -171,8 +252,12 @@ Popup {
                     verticalAlignment: Text.AlignVCenter
                 }
             }
-            FieldLabel { text: "ДЕДЛАЙН (любой формат)" }
-            FieldLabel { text: "BRANCH" }
+            FieldLabel {
+                text: "ДЕДЛАЙН (любой формат)"
+            }
+            FieldLabel {
+                text: "BRANCH"
+            }
             RowLayout {
                 Layout.fillWidth: true
                 spacing: 6
@@ -185,10 +270,10 @@ Popup {
                         radius: 6
                         color: Theme.panel2
                         border.color: deadlineField.text.length === 0
-                                      ? Theme.border
-                                      : (root._deadlinePreview && root._deadlinePreview.ok
-                                            ? (Theme.accent || Theme.borderStrong)
-                                            : (Theme.danger || "#c0392b"))
+                            ? Theme.border
+                            : (root._deadlinePreview && root._deadlinePreview.ok
+                                ? (Theme.accent || Theme.borderStrong)
+                                : (Theme.danger || "#c0392b"))
                         border.width: 1
                     }
                     color: Theme.text
@@ -196,13 +281,12 @@ Popup {
                     onTextChanged: deadlinePreviewTimer.restart()
                     onEditingFinished: {
                         if (root._deadlinePreview && root._deadlinePreview.ok &&
-                            root._deadlinePreview.start)
-                        {
+                            root._deadlinePreview.start) {
                             text = root.formatDate(root._deadlinePreview.start);
                         }
                     }
                     ToolTip.visible: hovered && text.length > 0 &&
-                                     root._deadlinePreview && !root._deadlinePreview.ok
+                        root._deadlinePreview && !root._deadlinePreview.ok
                     ToolTip.text: "не распознано"
                 }
                 Timer {
@@ -229,8 +313,14 @@ Popup {
                                 !root._deadlinePreview.start) return "";
                             const d = root._deadlinePreview.start;
                             const iso = d.getFullYear() + "-" +
-                                        String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                                        String(d.getDate()).padStart(2, "0");
+                                String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                                String(d.getDate()).padStart(2, "0");
+                            if (root._deadlinePreview.hasTime) {
+                                const hh = String(d.getHours()).padStart(2, "0");
+                                const mm = String(d.getMinutes()).padStart(2, "0");
+                                // ⏱ hint: a focus block will be created
+                                return "↑ " + iso + " " + hh + ":" + mm + (root.isNew ? " ⏱" : "");
+                            }
                             return "↑ " + iso;
                         }
                     }
@@ -241,7 +331,8 @@ Popup {
                 Layout.fillWidth: true
                 placeholderText: "fix/..."
                 font.family: Theme.fontMono
-                background: FieldBg {}
+                background: FieldBg {
+                }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }
@@ -259,7 +350,9 @@ Popup {
                     root.close();
                 }
             }
-            Item { Layout.fillWidth: true }
+            Item {
+                Layout.fillWidth: true
+            }
             PillButton {
                 text: "Отмена"
                 onClicked: root.close()
@@ -268,17 +361,80 @@ Popup {
                 text: root.isNew ? "Создать" : "Сохранить"
                 primary: true
                 onClicked: {
+                    // New tasks: if user left idField blank, fall back to the
+                    // auto-generated id captured in the draft. Edit: take the
+                    // (possibly renamed) text from idField.
+                    let finalId = idField.text.trim();
+                    if (finalId.length === 0 && root.isNew) {
+                        finalId = root.draft.id || "";
+                    }
+                    // Extract @handle attendees and "// comment" tail. Handles
+                    // remain visible in the title — only the "//" tail is
+                    // peeled off into the description.
+                    const meta = root._extractMeta(titleField.text);
+                    const cleanedTitle = meta.title;
+                    const inlineDesc   = meta.desc;
+                    const handleNames  = root._resolvePeopleNames(meta.handles);
+
                     const d = {
                         _isNew: root.isNew,
-                        id: idField.text,
-                        title: titleField.text,
-                        desc: descField.text,
+                        // Pass the original id alongside the (possibly edited)
+                        // new id so saveTask can rename rather than insert a
+                        // duplicate row when the user changes the id field.
+                        _originalId: root._originalId,
+                        id: finalId,
+                        title: cleanedTitle,
+                        // Inline "//..." appends to the description field.
+                        desc: inlineDesc.length > 0
+                              ? ((descField.text || "").trim().length > 0
+                                  ? descField.text.trim() + "\n" + inlineDesc
+                                  : inlineDesc)
+                              : descField.text,
                         priority: priBox.currentText,
                         status: root.statusList()[statusBox.currentIndex],
                         deadline: root.parseDate(deadlineField.text),
                         branch: branchField.text
                     };
                     AppController.saveTask(d);
+                    // Same classification rules as QuickCapturePopup — only
+                    // surface the parsed time on the calendar when the user
+                    // hinted at an event kind. "ticket"/"задача" wins over
+                    // everything (pure todo, never schedule).
+                    if (root.isNew
+                        && root._deadlinePreview && root._deadlinePreview.ok
+                        && root._deadlinePreview.hasTime
+                        && root._deadlinePreview.start) {
+                        const kind = root._classifyKind(
+                            (titleField.text || "") + " "
+                          + (descField.text || "") + " "
+                          + (deadlineField.text || ""));
+                        if (kind !== "ticket") {
+                            const dt = root._deadlinePreview.start;
+                            const startHour = dt.getHours() + dt.getMinutes() / 60.0;
+                            if (kind === "focus") {
+                                AppController.scheduleTask(d.id, startHour, dt);
+                                AppController.selectedDate = dt;
+                            } else if (kind === "sync") {
+                                // Honour parsed range "12:00-13:00", else 30m.
+                                let endHour = startHour + 0.5;
+                                const pe = root._deadlinePreview.end;
+                                if (pe && pe.getTime && pe.getTime() > 0) {
+                                    const eh = pe.getHours() + pe.getMinutes() / 60.0;
+                                    if (eh > startHour) endHour = eh;
+                                }
+                                const ev = AppController.newEventDraft(startHour, dt);
+                                ev.type      = "sync";
+                                ev.title     = (cleanedTitle || "").substring(0, 40);
+                                ev.end       = endHour;
+                                ev.taskId    = d.id;
+                                ev.date      = dt;
+                                ev.attendees = handleNames.join(", ");
+                                AppController.saveEvent(ev);
+                                AppController.selectedDate = dt;
+                            }
+                            // kind === "none" → keep deadline date only.
+                        }
+                    }
                     root.close();
                 }
             }
