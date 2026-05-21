@@ -388,68 +388,63 @@ jobs:
           ctest --test-dir build-san/tests --output-on-failure
 
   # ──────────────────────────────────────────────────────────────────
-  # 8. Coverage (Linux only) — currently disabled.
-  # Private repo lacks CODECOV_TOKEN. Flip `if:` back to `true` (or just
-  # remove the line) once a Codecov token is wired in via secrets.
+  # 8. Coverage (Linux only) — DISABLED.
+  # Re-enable by uncommenting the block below. Requires `CODECOV_TOKEN`
+  # secret for upload (private repo). Without it, coverage.lcov is still
+  # produced and kept as a build artifact.
   # ──────────────────────────────────────────────────────────────────
-  coverage:
-    name: coverage
-    if: false
-    runs-on: ubuntu-24.04
-    timeout-minutes: 20
-    needs: test
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install toolchain
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build g++ gcovr \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
-
-      - name: Configure with coverage
-        run: |
-          cmake -S . -B build-cov -G Ninja \
-            -DCMAKE_BUILD_TYPE=Debug \
-            -DHEAP_ENABLE_COVERAGE=ON
-
-      - name: Build tests
-        run: |
-          cmake --build build-cov --parallel \
-            --target heap_chrono_tests heap_git_tests heap_text_tests
-
-      - name: Run tests
-        run: ctest --test-dir build-cov/tests --output-on-failure
-
-      - name: Generate lcov report
-        run: |
-          gcovr --root . \
-            --filter 'src/.*' \
-            --exclude '.*_autogen.*' \
-            --lcov coverage.lcov \
-            --print-summary
-
-      # Always keep the raw report as an artifact so the data isn't lost when
-      # Codecov is unreachable (private repo without a token, etc.).
-      - name: Upload coverage artifact
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-lcov
-          path: coverage.lcov
-          retention-days: 7
-
-      # Codecov upload is gated on the secret. Private repos without a token
-      # would otherwise fail with "Token required - not valid tokenless
-      # upload".
-      - name: Upload to Codecov
-        if: env.CODECOV_TOKEN != ''
-        uses: codecov/codecov-action@v4
-        with:
-          files: coverage.lcov
-          fail_ci_if_error: true
-          token: ${{ env.CODECOV_TOKEN }}
-        env:
-          CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
+  # coverage:
+  #   name: coverage
+  #   runs-on: ubuntu-24.04
+  #   timeout-minutes: 20
+  #   needs: test
+  #   steps:
+  #     - uses: actions/checkout@v4
+  #
+  #     - name: Install toolchain
+  #       run: |
+  #         sudo apt-get update
+  #         sudo apt-get install -y --no-install-recommends \
+  #           cmake ninja-build g++ gcovr \
+  #           qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+  #           libgl1-mesa-dev libegl1-mesa-dev
+  #
+  #     - name: Configure with coverage
+  #       run: |
+  #         cmake -S . -B build-cov -G Ninja \
+  #           -DCMAKE_BUILD_TYPE=Debug \
+  #           -DHEAP_ENABLE_COVERAGE=ON
+  #
+  #     - name: Build tests
+  #       run: |
+  #         cmake --build build-cov --parallel \
+  #           --target heap_chrono_tests heap_git_tests heap_text_tests
+  #
+  #     - name: Run tests
+  #       run: ctest --test-dir build-cov/tests --output-on-failure
+  #
+  #     - name: Generate lcov report
+  #       run: |
+  #         gcovr --root . \
+  #           --filter 'src/.*' \
+  #           --exclude '.*_autogen.*' \
+  #           --lcov coverage.lcov \
+  #           --print-summary
+  #
+  #     - name: Upload coverage artifact
+  #       if: always()
+  #       uses: actions/upload-artifact@v4
+  #       with:
+  #         name: coverage-lcov
+  #         path: coverage.lcov
+  #         retention-days: 7
+  #
+  #     - name: Upload to Codecov
+  #       if: env.CODECOV_TOKEN != ''
+  #       uses: codecov/codecov-action@v4
+  #       with:
+  #         files: coverage.lcov
+  #         fail_ci_if_error: true
+  #         token: ${{ env.CODECOV_TOKEN }}
+  #       env:
+  #         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
