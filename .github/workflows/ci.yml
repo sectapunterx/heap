@@ -422,7 +422,49 @@ jobs:
           ctest --test-dir build-san/tests --output-on-failure
 
   # ──────────────────────────────────────────────────────────────────
-  # 8. Coverage (Linux only) — DISABLED.
+  # 8. Aggregator — single required status check for branch protection.
+  #
+  # Branch-protection rules in GitHub require each contributing job to be
+  # listed explicitly; adding a new job means editing the rule every time.
+  # This `ci` job depends on every real job in the workflow and reports its
+  # combined result. Add only `ci` to "Required status checks" on master and
+  # any new job is automatically covered as soon as it is added to `needs:`
+  # below.
+  #
+  # `if: always()` ensures this job runs even when a dependency fails or is
+  # skipped (PR-only jobs like format-cpp/tidy are skipped on push). The
+  # gating logic treats `skipped` and `success` as OK and only fails on
+  # `failure` or `cancelled` — so the check is green on push (where the
+  # PR-only jobs don't run) and on PRs alike.
+  # ──────────────────────────────────────────────────────────────────
+  ci:
+    name: ci
+    if: always()
+    needs:
+      - lint-actions
+      - format-cpp
+      - tidy
+      - build
+      - test
+      - sanitizers
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Check dependency results
+        env:
+          NEEDS_JSON: ${{ toJson(needs) }}
+        run: |
+          set -euo pipefail
+          echo "Dependency results:"
+          echo "$NEEDS_JSON"
+          if echo "$NEEDS_JSON" | grep -E '"result": *"(failure|cancelled)"' >/dev/null; then
+            echo "::error::At least one required job failed or was cancelled."
+            exit 1
+          fi
+          echo "All required jobs succeeded or were skipped."
+
+  # ──────────────────────────────────────────────────────────────────
+  # 9. Coverage (Linux only) — DISABLED.
   # Re-enable by uncommenting the block below. Requires `CODECOV_TOKEN`
   # secret for upload (private repo). Without it, coverage.lcov is still
   # produced and kept as a build artifact.
