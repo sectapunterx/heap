@@ -28,8 +28,8 @@ struct CalEvent {
     QString id;
     QString title;
     QString type;       // standup/oneone/sync/focus
-    double  start;      // hour 0..24
-    double  end;
+    double start{};     // hour 0..24
+    double end{};
     QString attendees;
     QDate   date;
     QString taskId;     // optional link to task in same profile
