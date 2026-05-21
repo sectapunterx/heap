@@ -1,0 +1,5 @@
+// Windows resource: embed the multi-resolution app icon into heap.exe so
+// Explorer (file icon) and the Win11 taskbar pick it up before QApplication
+// runs. setWindowIcon() in main.cpp covers the in-app/QML side once Qt is up;
+// this resource covers the shell side.
+IDI_ICON1 ICON "heap-icon.ico"
