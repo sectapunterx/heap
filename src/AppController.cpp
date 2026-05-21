@@ -41,7 +41,6 @@ AppController::AppController(QObject* parent) :
     m_undoTimer(new QTimer(this)),
     m_automationTimer(new QTimer(this)),
     m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale())) {
-
   m_saveTimer->setSingleShot(true);
   m_saveTimer->setInterval(300);
   connect(m_saveTimer, &QTimer::timeout, this, &AppController::saveStateNow);
