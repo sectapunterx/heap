@@ -79,7 +79,9 @@ ApplicationWindow {
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
         function onToast(msg) { toast.show(msg) }
         function onUndoableToast(msg, secs) {
-            toast.showWithAction(msg, "Отменить", secs, function () { AppController.undoLastDeletion() });
+            toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
+                AppController.undoLastDeletion()
+            });
         }
     }
 
@@ -484,24 +486,24 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: ["heap. profile (*.json)", "All files (*)"]
         defaultSuffix: "json"
-        title: "Экспорт активного профиля в JSON"
+        title: I18n.t("dialog.exportProfile.title")
         onAccepted: {
             if (AppController.exportActiveProfileToFile(selectedFile))
-                toast.show("Профиль экспортирован");
+                toast.show(I18n.t("toast.profile.exported"));
             else
-                toast.show("Не удалось экспортировать профиль");
+                toast.show(I18n.t("toast.profile.exportFail"));
         }
     }
     FileDialog {
         id: importJsonDialog
         fileMode: FileDialog.OpenFile
         nameFilters: ["heap. profile (*.json)", "All files (*)"]
-        title: "Импорт профиля из JSON"
+        title: I18n.t("dialog.importProfile.title")
         onAccepted: {
             const err = AppController.importProfileFromJson === undefined
                 ? "" : AppController.importProfileFromFile(selectedFile, true);
             if (err && err.length > 0)
-                toast.show("Импорт не удался: " + err);
+                toast.show(I18n.t("toast.profile.importFail") + err);
         }
     }
 

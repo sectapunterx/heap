@@ -96,7 +96,7 @@ Item {
                     }
                     Item { Layout.fillWidth: true }
                     Text {
-                        text: "Drag empty area → создать · drag task → запланировать"
+                        text: I18n.t("day.dragHint")
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11

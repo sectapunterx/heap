@@ -16,20 +16,69 @@ Item {
     //                  completely. In Debug they obey the dev toggle in the
     //                  nav footer.
     readonly property var allSections: [
-        { id: "profile",       icon: "◉",   title: "Profile",          sub: "Имя, роль, команда" },
-        { id: "appearance",    icon: "◑",   title: "Appearance",       sub: "Тема, акцент, плотность" },
-        { id: "notifications", icon: "◔",   title: "Notifications",    sub: "Дедлайны, созвоны" },
-        { id: "calendar",      icon: "◫",   title: "Calendar",         sub: "Часы, focus time" },
-        { id: "tasks",         icon: "▦",   title: "Tasks & Workflow", sub: "Префикс ID, дефолты" },
-        { id: "shortcuts",     icon: "⌨",   title: "Shortcuts",        sub: "Горячие клавиши" },
-        { id: "cpp",           icon: "C++", title: "C++ Defaults",     sub: "Сборка, sanitizers",
+        {
+            id: "profile",
+            icon: "◉",
+            title: I18n.t("settings.section.profile.title"),
+            sub: I18n.t("settings.section.profile.sub")
+        },
+        {
+            id: "appearance",
+            icon: "◑",
+            title: I18n.t("settings.section.appearance.title"),
+            sub: I18n.t("settings.section.appearance.sub")
+        },
+        {
+            id: "language",
+            icon: "Aa",
+            title: I18n.t("settings.section.language.title"),
+            sub: I18n.t("settings.section.language.sub")
+        },
+        {
+            id: "notifications",
+            icon: "◔",
+            title: I18n.t("settings.section.notifications.title"),
+            sub: I18n.t("settings.section.notifications.sub")
+        },
+        {
+            id: "calendar",
+            icon: "◫",
+            title: I18n.t("settings.section.calendar.title"),
+            sub: I18n.t("settings.section.calendar.sub")
+        },
+        {
+            id: "tasks",
+            icon: "▦",
+            title: I18n.t("settings.section.tasks.title"),
+            sub: I18n.t("settings.section.tasks.sub")
+        },
+        {
+            id: "shortcuts",
+            icon: "⌨",
+            title: I18n.t("settings.section.shortcuts.title"),
+            sub: I18n.t("settings.section.shortcuts.sub")
+        },
+        {
+            id: "cpp",
+            icon: "C++",
+            title: I18n.t("settings.section.cpp.title"),
+            sub: I18n.t("settings.section.cpp.sub"),
           unimplemented: true },
-        { id: "integrations",  icon: "⎘",   title: "Integrations",     sub: "Jira, GitHub, MM",
+        {
+            id: "integrations",
+            icon: "⎘",
+            title: I18n.t("settings.section.integrations.title"),
+            sub: I18n.t("settings.section.integrations.sub"),
           unimplemented: true },
-        { id: "git",           icon: "⎇",   title: "Git Watcher",      sub: "Отслеживаемые репо, авто-перевод" },
-        { id: "data",          icon: "↯",   title: "Data",             sub: "Import / export, reset" },
-        {id: "help", icon: "?", title: "Help", sub: "Гид по всем фичам"},
-        {id: "about", icon: "ⓘ", title: "About", sub: "Версия, лицензии"}
+        {id: "git", icon: "⎇", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
+        {id: "data", icon: "↯", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
+        {id: "help", icon: "?", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
+        {
+            id: "about",
+            icon: "ⓘ",
+            title: I18n.t("settings.section.about.title"),
+            sub: I18n.t("settings.section.about.sub")
+        }
     ]
 
     readonly property bool _debugBuild: !!AppController.debugBuild
@@ -79,7 +128,7 @@ Item {
 
     readonly property var defaults: ({
         profile: {
-            name: "Алексей Тимофеев",
+            name: I18n.lang === "ru" ? "Алексей Тимофеев" : "Alex Timofeev",
             handle: "alex.t",
             role: "C++ Engineer · LTE",
             team: "eNB-core",
@@ -235,14 +284,15 @@ Item {
                 spacing: 6
 
                 Text {
-                    text: "Settings"
+                    text: I18n.t("settings.title")
                     color: Theme.text
-                    font.pixelSize: 16
                     font.weight: Font.DemiBold
+                    font.pixelSize: 16
                 }
                 Text {
-                    text: Object.keys(root.settings).length + " groups · "
-                          + (root.settings.profile ? root.settings.profile.handle : "")
+                    text: I18n.t("settings.groups")
+                        .arg(Object.keys(root.settings).length)
+                        .arg(root.settings.profile ? root.settings.profile.handle : "")
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -262,7 +312,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
                         TextField {
                             Layout.fillWidth: true
-                            placeholderText: "Search settings…"
+                            placeholderText: I18n.t("settings.search")
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             background: Item {}
@@ -350,14 +400,14 @@ Item {
                             Layout.fillWidth: true
                             spacing: 0
                             Text {
-                                text: "DEBUG"
+                                text: I18n.t("settings.debug.label")
                                 color: Theme.p1
                                 font.pixelSize: 9
                                 font.weight: Font.DemiBold
                                 font.letterSpacing: 1
                             }
                             Text {
-                                text: "Показать нереализованные"
+                                text: I18n.t("settings.debug.showUnimpl")
                                 color: Theme.text
                                 font.pixelSize: 11
                                 wrapMode: Text.Wrap
@@ -373,7 +423,7 @@ Item {
                 }
 
                 Text {
-                    text: "heap. · " + Brand.version + " · stable"
+                    text: I18n.t("settings.footer.stable").arg(Brand.version)
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -402,7 +452,7 @@ Item {
                         spacing: 2
                         Layout.alignment: Qt.AlignVCenter
                         Text {
-                            text: "Settings / " + (root._activeMeta().title || "")
+                            text: I18n.t("settings.crumb").arg(root._activeMeta().title || "")
                             color: Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -482,16 +532,14 @@ Item {
                                 anchors.margins: 12
                                 spacing: 4
                                 Text {
-                                    text: "⚠ Не реализовано"
+                                    text: I18n.t("settings.notImpl.title")
                                     color: Theme.p1
                                     font.pixelSize: 11
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: 1
                                 }
                                 Text {
-                                    text: "Настройки этой секции пока без эффекта. "
-                                        + "Они отображены для предварительного просмотра — "
-                                        + "переключатели заблокированы во всех сборках."
+                                    text: I18n.t("settings.notImpl.body")
                                     color: Theme.text
                                     font.pixelSize: 11
                                     wrapMode: Text.WordWrap
@@ -518,6 +566,7 @@ Item {
                                 sourceComponent: {
                                     if (root.activeSection === "profile")       return sectionProfile;
                                     if (root.activeSection === "appearance")    return sectionAppearance;
+                                    if (root.activeSection === "language") return sectionLanguage;
                                     if (root.activeSection === "notifications") return sectionNotifications;
                                     if (root.activeSection === "calendar")      return sectionCalendar;
                                     if (root.activeSection === "tasks")         return sectionTasks;
@@ -847,7 +896,7 @@ Item {
                             Layout.fillWidth: true
                             spacing: 10
                             TextRow {
-                                label: "Полное имя"
+                                label: I18n.t("settings.profile.fullName")
                                 value: (root.settings.profile && root.settings.profile.name) || ""
                                 onCommitted: (text) => root.set("profile", "name", text)
                             }
@@ -856,13 +905,13 @@ Item {
                                 spacing: 10
                                 TextRow {
                                     Layout.fillWidth: true
-                                    label: "Handle"; mono: true; placeholder: "alex.t"
+                                    label: I18n.t("settings.profile.handle"); mono: true; placeholder: "alex.t"
                                     value: (root.settings.profile && root.settings.profile.handle) || ""
                                     onCommitted: (text) => root.set("profile", "handle", text)
                                 }
                                 TextRow {
                                     Layout.fillWidth: true
-                                    label: "Роль"
+                                    label: I18n.t("settings.profile.role")
                                     value: (root.settings.profile && root.settings.profile.role) || ""
                                     onCommitted: (text) => root.set("profile", "role", text)
                                 }
@@ -880,19 +929,19 @@ Item {
                         spacing: 10
                         TextRow {
                             Layout.fillWidth: true
-                            label: "Команда"
+                            label: I18n.t("settings.profile.team")
                             value: (root.settings.profile && root.settings.profile.team) || ""
                             onCommitted: (text) => root.set("profile", "team", text)
                         }
                         TextRow {
                             Layout.fillWidth: true
-                            label: "Часовой пояс"; mono: true
+                            label: I18n.t("settings.profile.timezone"); mono: true
                             value: (root.settings.profile && root.settings.profile.timezone) || ""
                             onCommitted: (text) => root.set("profile", "timezone", text)
                         }
                     }
                     SwatchRow {
-                        label: "Цвет аватара"
+                        label: I18n.t("settings.profile.avatarColor")
                         value: (root.settings.profile && root.settings.profile.color) || root.avatarSwatches[0]
                         options: root.avatarSwatches
                         onSelected: (color) => root.set("profile", "color", color)
@@ -911,19 +960,22 @@ Item {
                     spacing: 12
                     Layout.fillWidth: true
                     SegRow {
-                        label: "Тема"
+                        label: I18n.t("settings.appearance.theme")
                         value: AppController.theme
-                        options: [ ({ value: "dark", label: "Тёмная" }), ({ value: "light", label: "Светлая" }) ]
+                        options: [
+                            ({value: "dark", label: I18n.t("settings.appearance.theme.dark")}),
+                            ({value: "light", label: I18n.t("settings.appearance.theme.light")})
+                        ]
                         onSelected: (value) => AppController.theme = value
                     }
                     SegRow {
-                        label: "Плотность интерфейса"
+                        label: I18n.t("settings.appearance.density")
                         value: AppController.density
                         options: [ ({ value: "compact", label: "Compact" }), ({ value: "comfy", label: "Comfy" }) ]
                         onSelected: (value) => AppController.density = value
                     }
                     SwatchRow {
-                        label: "Акцентный цвет"
+                        label: I18n.t("settings.appearance.accent")
                         value: (root.settings.appearance && root.settings.appearance.accent) || Theme.accent
                         options: root.accentSwatches
                         onSelected: (color) => root.set("appearance", "accent", color)
@@ -935,16 +987,45 @@ Item {
                     spacing: 12
                     Layout.fillWidth: true
                     SwitchRow {
-                        label: "Reduced motion"
-                        hint: "Отключить анимации и плавные переходы."
+                        label: I18n.t("settings.appearance.reducedMotion")
+                        hint: I18n.t("settings.appearance.reducedMotion.hint")
                         checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
                         onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
                     }
                     SwitchRow {
-                        label: "High contrast"
-                        hint: "Усилить контраст текста и границ."
+                        label: I18n.t("settings.appearance.highContrast")
+                        hint: I18n.t("settings.appearance.highContrast.hint")
                         checked: !!(root.settings.appearance && root.settings.appearance.highContrast)
                         onToggled: (checked) => root.set("appearance", "highContrast", checked)
+                    }
+                }
+            }
+        }
+    }
+
+    Component {
+        id: sectionLanguage
+        ColumnLayout {
+            spacing: 16
+            SectionCard {
+                ColumnLayout {
+                    spacing: 12
+                    Layout.fillWidth: true
+                    SegRow {
+                        label: I18n.t("settings.language.label")
+                        value: AppController.language
+                        options: [
+                            ({value: "en", label: "English"}),
+                            ({value: "ru", label: "Русский"})
+                        ]
+                        onSelected: (value) => AppController.language = value
+                    }
+                    Text {
+                        text: I18n.t("settings.language.hint")
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
                     }
                 }
             }
@@ -959,28 +1040,30 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Дедлайны и созвоны" }
+                    Sub {
+                        label: I18n.t("settings.notif.sub.deadlines")
+                    }
                     SwitchRow {
-                        label: "Напоминать о дедлайнах"
-                        hint: "Уведомлять заранее, если приближается deadline."
+                        label: I18n.t("settings.notif.deadlineReminders")
+                        hint: I18n.t("settings.notif.deadlineReminders.hint")
                         checked: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
                         onToggled: (checked) => root.set("notifications", "deadlineReminders", checked)
                     }
                     SliderRow {
                         visible: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
-                        label: "За сколько часов до дедлайна"
+                        label: I18n.t("settings.notif.leadHours")
                         unit: "h"; min: 1; max: 72; step: 1
                         value: (root.settings.notifications && root.settings.notifications.deadlineLeadHours) || 24
                         onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
                     }
                     SwitchRow {
-                        label: "Standup reminder"
-                        hint: "Pop-up за минуты до daily standup."
+                        label: I18n.t("settings.notif.standupReminder")
+                        hint: I18n.t("settings.notif.standupReminder.hint")
                         checked: !!(root.settings.notifications && root.settings.notifications.standupReminder)
                         onToggled: (checked) => root.set("notifications", "standupReminder", checked)
                     }
                     SliderRow {
-                        label: "За сколько минут до встречи"
+                        label: I18n.t("settings.notif.meetingLead")
                         unit: " min"; min: 0; max: 30; step: 1
                         value: (root.settings.notifications && root.settings.notifications.meetingLead) || 5
                         onMoved: (value) => root.set("notifications", "meetingLead", value)
@@ -991,25 +1074,27 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Каналы доставки" }
+                    Sub {
+                        label: I18n.t("settings.notif.sub.channels")
+                    }
                     SwitchRow {
-                        label: "Desktop notifications"
+                        label: I18n.t("settings.notif.desktopNotif")
                         checked: !!(root.settings.notifications && root.settings.notifications.desktopNotif)
                         onToggled: (checked) => root.set("notifications", "desktopNotif", checked)
                     }
                     SwitchRow {
-                        label: "Mattermost pings при code review"
-                        hint: "Авто-пинг ревьюера, если PR висит >24 часов."
+                        label: I18n.t("settings.notif.mmPings")
+                        hint: I18n.t("settings.notif.mmPings.hint")
                         checked: !!(root.settings.notifications && root.settings.notifications.mmPingsOnReview)
                         onToggled: (checked) => root.set("notifications", "mmPingsOnReview", checked)
                     }
                     SwitchRow {
-                        label: "Daily digest по Blocked"
+                        label: I18n.t("settings.notif.blockedDigest")
                         checked: !!(root.settings.notifications && root.settings.notifications.blockedDailyDigest)
                         onToggled: (checked) => root.set("notifications", "blockedDailyDigest", checked)
                     }
                     SwitchRow {
-                        label: "Звук при ping"
+                        label: I18n.t("settings.notif.soundOnPing")
                         checked: !!(root.settings.notifications && root.settings.notifications.soundOnPing)
                         onToggled: (checked) => root.set("notifications", "soundOnPing", checked)
                     }
@@ -1019,10 +1104,12 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Quiet hours" }
+                    Sub {
+                        label: I18n.t("settings.notif.sub.quiet")
+                    }
                     SwitchRow {
-                        label: "Не беспокоить вечером"
-                        hint: "Ничего не присылать в указанное окно."
+                        label: I18n.t("settings.notif.quietHours")
+                        hint: I18n.t("settings.notif.quietHours.hint")
                         checked: !!(root.settings.notifications && root.settings.notifications.quietHours)
                         onToggled: (checked) => root.set("notifications", "quietHours", checked)
                     }
@@ -1031,13 +1118,13 @@ Item {
                         visible: !!(root.settings.notifications && root.settings.notifications.quietHours)
                         TextRow {
                             Layout.fillWidth: true
-                            label: "С"; mono: true; placeholder: "19:00"
+                            label: I18n.t("common.from"); mono: true; placeholder: "19:00"
                             value: (root.settings.notifications && root.settings.notifications.quietFrom) || ""
                             onCommitted: (text) => root.set("notifications", "quietFrom", text)
                         }
                         TextRow {
                             Layout.fillWidth: true
-                            label: "До"; mono: true; placeholder: "09:00"
+                            label: I18n.t("common.to"); mono: true; placeholder: "09:00"
                             value: (root.settings.notifications && root.settings.notifications.quietTo) || ""
                             onCommitted: (text) => root.set("notifications", "quietTo", text)
                         }
@@ -1059,43 +1146,48 @@ Item {
                         Layout.fillWidth: true; spacing: 10
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Начало недели"
+                            label: I18n.t("settings.cal.weekStart")
                             value: (root.settings.calendar && root.settings.calendar.weekStart) || "mon"
-                            options: [ ({ value: "mon", label: "Понедельник" }), ({ value: "sun", label: "Воскресенье" }) ]
+                            options: [
+                                ({value: "mon", label: I18n.t("settings.cal.weekStart.mon")}),
+                                ({value: "sun", label: I18n.t("settings.cal.weekStart.sun")})
+                            ]
                             onSelected: (value) => root.set("calendar", "weekStart", value)
                         }
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Формат времени"
+                            label: I18n.t("settings.cal.timeFormat")
                             value: (root.settings.calendar && root.settings.calendar.timeFormat) || "24h"
                             options: [ ({ value: "24h", label: "24h" }), ({ value: "12h", label: "12h" }) ]
                             onSelected: (value) => root.set("calendar", "timeFormat", value)
                         }
                     }
-                    Sub { label: "Рабочие часы" }
+                    Sub {
+                        label: I18n.t("settings.cal.workHours")
+                    }
                     RowLayout {
                         Layout.fillWidth: true; spacing: 10
                         SliderRow {
                             Layout.fillWidth: true
-                            label: "Начало"; unit: ":00"; min: 6; max: 12; step: 1
+                            label: I18n.t("settings.cal.workStart"); unit: ":00"; min: 6; max: 12; step: 1
                             value: AppController.workdayStart
                             onMoved: (value) => AppController.workdayStart = value
                         }
                         SliderRow {
                             Layout.fillWidth: true
-                            label: "Окончание"; unit: ":00"; min: 14; max: 23; step: 1
+                            label: I18n.t("settings.cal.workEnd"); unit: ":00"; min: 14; max: 23; step: 1
                             value: AppController.workdayEnd
                             onMoved: (value) => AppController.workdayEnd = value
                         }
                     }
                     SegRow {
-                        label: "Сетка слотов"
+                        label: I18n.t("settings.cal.snap")
                         value: String((root.settings.calendar && root.settings.calendar.snapMinutes) || 15)
                         options: [ ({ value: "5", label: "5 min" }), ({ value: "15", label: "15 min" }), ({ value: "30", label: "30 min" }) ]
                         onSelected: (value) => root.set("calendar", "snapMinutes", parseInt(value))
                     }
                     SwitchRow {
-                        label: "Показывать выходные"
+                        label: I18n.t("settings.cal.showWeekends")
                         checked: !!(root.settings.calendar && root.settings.calendar.showWeekends)
                         onToggled: (checked) => root.set("calendar", "showWeekends", checked)
                     }
@@ -1105,22 +1197,24 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Focus time" }
+                    Sub {
+                        label: I18n.t("settings.cal.focus")
+                    }
                     SwitchRow {
-                        label: "Автоматически создавать focus-блок"
-                        hint: "Когда задача переходит в In Progress — добавлять блок в календарь."
+                        label: I18n.t("settings.cal.autoFocus")
+                        hint: I18n.t("settings.cal.autoFocus.hint")
                         checked: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
                         onToggled: (checked) => root.set("calendar", "autoFocusBlock", checked)
                     }
                     SliderRow {
                         visible: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
-                        label: "Длительность focus-блока"
+                        label: I18n.t("settings.cal.focusDuration")
                         unit: " min"; min: 30; max: 240; step: 15
                         value: (root.settings.calendar && root.settings.calendar.focusBlockDuration) || 90
                         onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }
                     TextRow {
-                        label: "Время daily standup"; mono: true; placeholder: "10:00"
+                        label: I18n.t("settings.cal.standupTime"); mono: true; placeholder: "10:00"
                         value: (root.settings.calendar && root.settings.calendar.standupTime) || ""
                         onCommitted: (text) => root.set("calendar", "standupTime", text)
                     }
@@ -1146,8 +1240,8 @@ Item {
                         Layout.fillWidth: true; spacing: 10
                         TextRow {
                             Layout.fillWidth: true
-                            label: "Префикс ID"; mono: true; placeholder: "LTE"
-                            hint: "Новые задачи: " + ((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE") + "-XXXX"
+                            label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "LTE"
+                            hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE")
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
                             onCommitted: (text) => {
                                 const next = (text || "").toUpperCase().trim();
@@ -1164,22 +1258,21 @@ Item {
                         }
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Дефолтный приоритет"
+                            label: I18n.t("settings.tasks.defaultPriority")
                             value: (root.settings.tasks && root.settings.tasks.defaultPriority) || "P2"
                             options: ["P0", "P1", "P2", "P3"]
                             onSelected: (value) => root.set("tasks", "defaultPriority", value)
                         }
                     }
                     SwitchRow {
-                        label: "Переименовать существующие задачи"
-                        hint: "Если включено: при смене префикса все task id с прежним префиксом будут переименованы (например, "
-                            + (((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
-                            + "-123 → новый-123)."
+                        label: I18n.t("settings.tasks.renameExisting")
+                        hint: I18n.t("settings.tasks.renameExisting.hint")
+                            .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
                         checked: sectionTasksRoot.renameExistingOnCommit
                         onToggled: (checked) => sectionTasksRoot.renameExistingOnCommit = checked
                     }
                     SegRow {
-                        label: "Дефолтная колонка"
+                        label: I18n.t("settings.tasks.defaultColumn")
                         value: (root.settings.tasks && root.settings.tasks.defaultStatus) || "todo"
                         options: [ ({ value: "backlog", label: "Backlog" }), ({ value: "todo", label: "To Do" }), ({ value: "prog", label: "In Progress" }) ]
                         onSelected: (value) => root.set("tasks", "defaultStatus", value)
@@ -1190,29 +1283,31 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Автоматизации" }
+                    Sub {
+                        label: I18n.t("settings.tasks.automations")
+                    }
                     SliderRow {
-                        label: "Архивировать Done через"
-                        unit: " дн"; min: 0; max: 30; step: 1
-                        hint: "0 — никогда не архивировать."
+                        label: I18n.t("settings.tasks.archiveDone")
+                        unit: " " + I18n.t("common.days"); min: 0; max: 30; step: 1
+                        hint: I18n.t("settings.tasks.archiveDone.hint")
                         value: (root.settings.tasks && root.settings.tasks.archiveDoneAfterDays) || 0
                         onMoved: (value) => root.set("tasks", "archiveDoneAfterDays", value)
                     }
                     SliderRow {
-                        label: "Подсвечивать Blocked после"
-                        unit: " дн"; min: 1; max: 14; step: 1
-                        hint: "Задача в Blocked дольше — отмечается красным."
+                        label: I18n.t("settings.tasks.blockedHi")
+                        unit: " " + I18n.t("common.days"); min: 1; max: 14; step: 1
+                        hint: I18n.t("settings.tasks.blockedHi.hint")
                         value: (root.settings.tasks && root.settings.tasks.autoMoveBlockedAfterDays) || 3
                         onMoved: (value) => root.set("tasks", "autoMoveBlockedAfterDays", value)
                     }
                     SwitchRow {
-                        label: "Требовать branch перед Code Review"
-                        hint: "Запрещать перевод задачи в Review без branch name."
+                        label: I18n.t("settings.tasks.branchOnReview")
+                        hint: I18n.t("settings.tasks.branchOnReview.hint")
                         checked: !!(root.settings.tasks && root.settings.tasks.requireBranchOnReview)
                         onToggled: (checked) => root.set("tasks", "requireBranchOnReview", checked)
                     }
                     SwitchRow {
-                        label: "Показывать subtasks"
+                        label: I18n.t("settings.tasks.showSubtasks")
                         checked: !!(root.settings.tasks && root.settings.tasks.showSubtasks)
                         onToggled: (checked) => root.set("tasks", "showSubtasks", checked)
                     }
@@ -1231,18 +1326,23 @@ Item {
                     Layout.fillWidth: true
                     RowLayout {
                         Layout.fillWidth: true
-                        Sub { label: "Горячие клавиши" }
+                        Sub {
+                            label: I18n.t("settings.shortcuts.sub")
+                        }
                         Item { Layout.fillWidth: true }
                         Rectangle {
                             radius: 6; implicitWidth: openTxt.implicitWidth + 18; implicitHeight: 26
                             color: openMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
-                            Text { id: openTxt; anchors.centerIn: parent; text: "Открыть панель Hotkeys ↗"; color: Theme.text; font.pixelSize: 11 }
+                            Text {
+                                id:
+                                    openTxt; anchors.centerIn: parent; text: I18n.t("settings.shortcuts.open"); color: Theme.text; font.pixelSize: 11
+                            }
                             MouseArea { id: openMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.openHotkeysRequested() }
                         }
                     }
                     Text {
-                        text: "Полный список с capture-режимом перебинда — в отдельной панели Hotkeys (Ctrl+/). Ниже — текущие значения только для просмотра."
+                        text: I18n.t("settings.shortcuts.intro")
                         color: Theme.textMuted
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -1270,7 +1370,10 @@ Item {
                                 color: Theme.panel2
                                 border.color: Theme.border; border.width: 1
                                 implicitWidth: seqText.implicitWidth + 14; implicitHeight: 22
-                                Text { id: seqText; anchors.centerIn: parent; text: modelData.sequence || "(не задан)"; color: modelData.sequence ? Theme.text : Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 11 }
+                                Text {
+                                    id:
+                                        seqText; anchors.centerIn: parent; text: modelData.sequence || I18n.t("settings.shortcuts.notSet"); color: modelData.sequence ? Theme.text : Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 11
+                                }
                             }
                         }
                     }
@@ -1291,14 +1394,14 @@ Item {
                         Layout.fillWidth: true; spacing: 10
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Компилятор"
+                            label: I18n.t("settings.cpp.compiler")
                             value: (root.settings.cpp && root.settings.cpp.defaultCompiler) || "clang-17"
                             options: ["gcc-13", "clang-17", "clang-18"]
                             onSelected: (value) => root.set("cpp", "defaultCompiler", value)
                         }
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Стандарт C++"
+                            label: I18n.t("settings.cpp.standard")
                             value: (root.settings.cpp && root.settings.cpp.defaultStandard) || "C++20"
                             options: ["C++17", "C++20", "C++23"]
                             onSelected: (value) => root.set("cpp", "defaultStandard", value)
@@ -1308,14 +1411,14 @@ Item {
                         Layout.fillWidth: true; spacing: 10
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Sanitizer"
+                            label: I18n.t("settings.cpp.sanitizer")
                             value: (root.settings.cpp && root.settings.cpp.defaultSanitizer) || "asan"
                             options: [ ({ value: "none", label: "None" }), ({ value: "asan", label: "ASan" }), ({ value: "tsan", label: "TSan" }), ({ value: "ubsan", label: "UBSan" }) ]
                             onSelected: (value) => root.set("cpp", "defaultSanitizer", value)
                         }
                         SegRow {
                             Layout.fillWidth: true
-                            label: "Build type"
+                            label: I18n.t("settings.cpp.buildType")
                             value: (root.settings.cpp && root.settings.cpp.defaultBuildType) || "RelWithDebInfo"
                             options: ["Debug", "RelWithDebInfo", "Release"]
                             onSelected: (value) => root.set("cpp", "defaultBuildType", value)
@@ -1328,18 +1431,18 @@ Item {
                     spacing: 12
                     Layout.fillWidth: true
                     TextRow {
-                        label: "Bazel args"; mono: true; placeholder: "--jobs=12 --keep_going"
+                        label: I18n.t("settings.cpp.bazelArgs"); mono: true; placeholder: "--jobs=12 --keep_going"
                         value: (root.settings.cpp && root.settings.cpp.bazelArgs) || ""
                         onCommitted: (text) => root.set("cpp", "bazelArgs", text)
                     }
                     TextRow {
-                        label: "Compiler Explorer URL"; mono: true; placeholder: "https://godbolt.org/"
+                        label: I18n.t("settings.cpp.godbolt"); mono: true; placeholder: "https://godbolt.org/"
                         value: (root.settings.cpp && root.settings.cpp.compilerExplorerUrl) || ""
                         onCommitted: (text) => root.set("cpp", "compilerExplorerUrl", text)
                     }
                     SwitchRow {
-                        label: "Inline ASM preview"
-                        hint: "Показывать компиляторный вывод прямо в task card."
+                        label: I18n.t("settings.cpp.inlineAsm")
+                        hint: I18n.t("settings.cpp.inlineAsm.hint")
                         checked: !!(root.settings.cpp && root.settings.cpp.showAsmInline)
                         onToggled: (checked) => root.set("cpp", "showAsmInline", checked)
                     }
@@ -1354,11 +1457,35 @@ Item {
             spacing: 12
             Repeater {
                 model: [
-                    { key: "jira",       name: "Jira",       icon: "J", color: "#5aa3e6", desc: "Sync задач, ID prefix, статусов" },
-                    { key: "github",     name: "GitHub",     icon: "◯", color: "#5a6371", desc: "PR статус, branch template, code-review pings" },
-                    { key: "mattermost", name: "Mattermost", icon: "#", color: "#c07acf", desc: "Notification routing, follow-ups" },
-                    { key: "pagerduty",  name: "PagerDuty",  icon: "!", color: "#6ec18a", desc: "On-call schedule, incident escalation" },
-                    { key: "confluence", name: "Confluence", icon: "§", color: "#5aa3e6", desc: "Wiki + runbooks, link previews" }
+                    {key: "jira", name: "Jira", icon: "J", color: "#5aa3e6", desc: I18n.t("settings.int.jira.desc")},
+                    {
+                        key: "github",
+                        name: "GitHub",
+                        icon: "◯",
+                        color: "#5a6371",
+                        desc: I18n.t("settings.int.github.desc")
+                    },
+                    {
+                        key: "mattermost",
+                        name: "Mattermost",
+                        icon: "#",
+                        color: "#c07acf",
+                        desc: I18n.t("settings.int.mattermost.desc")
+                    },
+                    {
+                        key: "pagerduty",
+                        name: "PagerDuty",
+                        icon: "!",
+                        color: "#6ec18a",
+                        desc: I18n.t("settings.int.pagerduty.desc")
+                    },
+                    {
+                        key: "confluence",
+                        name: "Confluence",
+                        icon: "§",
+                        color: "#5aa3e6",
+                        desc: I18n.t("settings.int.confluence.desc")
+                    }
                 ]
                 delegate: SectionCard {
                     required property var modelData
@@ -1410,7 +1537,7 @@ Item {
                                 Text { text: modelData.desc; color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
                             Text {
-                                text: intCard.conf.connected ? "● connected" : "○ disconnected"
+                                text: intCard.conf.connected ? I18n.t("common.connected") : I18n.t("common.disconnected")
                                 color: intCard.conf.connected ? Theme.mFocus : Theme.textDim
                                 font.family: Theme.fontMono; font.pixelSize: 10
                             }
@@ -1425,7 +1552,7 @@ Item {
                                 Text {
                                     id: toggleTxt
                                     anchors.centerIn: parent
-                                    text: intCard.conf.connected ? "Disconnect" : "Connect"
+                                    text: intCard.conf.connected ? I18n.t("common.disconnect") : I18n.t("common.connect")
                                     color: intCard.conf.connected ? Theme.text : "#06121a"
                                     font.pixelSize: 11; font.weight: Font.Medium
                                 }
@@ -1471,11 +1598,12 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Отслеживаемые репозитории" }
+                    Sub {
+                        label: I18n.t("settings.git.repos")
+                    }
                     Text {
                         Layout.fillWidth: true
-                        text: "Каждый путь — корень git worktree (содержит .git). "
-                            + "Префикс задачи берётся из секции Tasks → idPrefix."
+                        text: I18n.t("settings.git.repos.hint")
                         color: Theme.textMuted
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -1549,7 +1677,7 @@ Item {
                             Text {
                                 id: addT
                                 anchors.centerIn: parent
-                                text: "+ Add"
+                                text: "+ " + I18n.t("common.add")
                                 color: Theme.bg
                                 font.weight: Font.Medium
                             }
@@ -1576,22 +1704,24 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Автоматизации при checkout" }
+                    Sub {
+                        label: I18n.t("settings.git.autoOn")
+                    }
                     SwitchRow {
-                        label: "Перевести задачу в In Progress"
-                        hint: "Когда git checkout попадает в ветку с известным префиксом задачи."
+                        label: I18n.t("settings.git.autoMove")
+                        hint: I18n.t("settings.git.autoMove.hint")
                         checked: !!(root.settings.git && root.settings.git.autoMoveToInProgress)
                         onToggled: (checked) => root.set("git", "autoMoveToInProgress", checked)
                     }
                     SwitchRow {
-                        label: "Создать focus-блок в календаре"
-                        hint: "Запускает scheduleFocusBlockFor(taskId) при checkout."
+                        label: I18n.t("settings.git.autoFocus")
+                        hint: I18n.t("settings.git.autoFocus.hint")
                         checked: !!(root.settings.git && root.settings.git.autoCreateFocusBlock)
                         onToggled: (checked) => root.set("git", "autoCreateFocusBlock", checked)
                     }
                     SwitchRow {
-                        label: "Подтягивать статус PR (gh / glab)"
-                        hint: "Раз в минуту читать состояние PR текущей ветки watched-репозиториев."
+                        label: I18n.t("settings.git.prState")
+                        hint: I18n.t("settings.git.prState.hint")
                         checked: !!(root.settings.git && root.settings.git.watchPrState)
                         onToggled: (checked) => root.set("git", "watchPrState", checked)
                     }
@@ -1608,18 +1738,24 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Резервные копии" }
+                    Sub {
+                        label: I18n.t("settings.data.backups")
+                    }
                     SwitchRow {
-                        label: "Auto backup"
-                        hint: "Сохранять снапшоты state.json в <AppData>/backups (раз в 5 минут, до 20 копий)."
+                        label: I18n.t("settings.data.autoBackup")
+                        hint: I18n.t("settings.data.autoBackup.hint")
                         checked: !!(root.settings.data && root.settings.data.autoBackup)
                         onToggled: (checked) => root.set("data", "autoBackup", checked)
                     }
                     SegRow {
                         visible: !!(root.settings.data && root.settings.data.autoBackup)
-                        label: "Интервал"
+                        label: I18n.t("settings.data.interval")
                         value: (root.settings.data && root.settings.data.backupInterval) || "daily"
-                        options: [ ({ value: "hourly", label: "Каждый час" }), ({ value: "daily", label: "Каждый день" }), ({ value: "weekly", label: "Раз в неделю" }) ]
+                        options: [
+                            ({value: "hourly", label: I18n.t("settings.data.interval.hourly")}),
+                            ({value: "daily", label: I18n.t("settings.data.interval.daily")}),
+                            ({value: "weekly", label: I18n.t("settings.data.interval.weekly")})
+                        ]
                         onSelected: (value) => root.set("data", "backupInterval", value)
                     }
                 }
@@ -1628,9 +1764,11 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Импорт / экспорт активного профиля" }
+                    Sub {
+                        label: I18n.t("settings.data.importExport")
+                    }
                     Text {
-                        text: "Экспортирует / импортирует JSON-файл с задачами, людьми, доками и notes текущего профиля."
+                        text: I18n.t("settings.data.importExport.hint")
                         color: Theme.textMuted
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
@@ -1643,7 +1781,10 @@ Item {
                             color: expMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: expTxt.implicitWidth + 24; implicitHeight: 30
-                            Text { id: expTxt; anchors.centerIn: parent; text: "↓ Export as JSON"; color: Theme.text; font.pixelSize: 12 }
+                            Text {
+                                id:
+                                    expTxt; anchors.centerIn: parent; text: I18n.t("settings.data.exportJson"); color: Theme.text; font.pixelSize: 12
+                            }
                             MouseArea { id: expMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.exportJsonRequested() }
                         }
                         Rectangle {
@@ -1651,7 +1792,10 @@ Item {
                             color: impMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: impTxt.implicitWidth + 24; implicitHeight: 30
-                            Text { id: impTxt; anchors.centerIn: parent; text: "↑ Import from JSON"; color: Theme.text; font.pixelSize: 12 }
+                            Text {
+                                id:
+                                    impTxt; anchors.centerIn: parent; text: I18n.t("settings.data.importJson"); color: Theme.text; font.pixelSize: 12
+                            }
                             MouseArea { id: impMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.importJsonRequested() }
                         }
                     }
@@ -1661,11 +1805,13 @@ Item {
                 ColumnLayout {
                     spacing: 12
                     Layout.fillWidth: true
-                    Sub { label: "Опасная зона" }
+                    Sub {
+                        label: I18n.t("settings.data.danger")
+                    }
                     DangerRow {
-                        title: "Сбросить все настройки"
-                        hint: "Откатить к значениям по умолчанию. Профили, задачи и заметки останутся."
-                        buttonText: "Reset all"
+                        title: I18n.t("settings.data.reset")
+                        hint: I18n.t("settings.data.reset.hint")
+                        buttonText: I18n.t("settings.data.resetButton")
                         onTriggered: root.resetAll()
                     }
                 }
@@ -1708,10 +1854,18 @@ Item {
                         spacing: 6
                         Layout.topMargin: 4
                         Layout.fillWidth: true
-                        AboutRow { label: "Version"; value: "0.4.2 — build 240617" }
-                        AboutRow { label: "Channel"; value: "stable" }
-                        AboutRow { label: "Storage"; value: "~/.local/share/todocpp" }
-                        AboutRow { label: "Engine";  value: "Qt 6.4 + QML" }
+                        AboutRow {
+                            label: I18n.t("settings.about.version"); value: "0.4.2 — build 240617"
+                        }
+                        AboutRow {
+                            label: I18n.t("settings.about.channel"); value: "stable"
+                        }
+                        AboutRow {
+                            label: I18n.t("settings.about.storage"); value: "~/.local/share/todocpp"
+                        }
+                        AboutRow {
+                            label: I18n.t("settings.about.engine"); value: "Qt 6.4 + QML"
+                        }
                     }
                 }
             }

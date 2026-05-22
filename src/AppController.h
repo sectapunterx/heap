@@ -40,6 +40,7 @@ class AppController : public QObject {
   Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
   Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
   Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
+  Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
 
   Q_PROPERTY(int workdayStart READ workdayStart WRITE setWorkdayStart NOTIFY workdayChanged)
@@ -113,6 +114,17 @@ class AppController : public QObject {
   }
 
   void setDensity(const QString& d);
+
+  QString language() const {
+    return m_language;
+  }
+
+  void setLanguage(const QString& v);
+
+  // Resolve a UI string for the current language. `key` is a stable
+  // identifier (e.g. "task.created"); returns the EN form as a last-resort
+  // fallback if the key is missing in the active table.
+  Q_INVOKABLE QString tr_(const QString& key) const;
 
   QString currentView() const {
     return m_currentView;
@@ -338,6 +350,7 @@ class AppController : public QObject {
   void selectedDateChanged();
   void themeChanged();
   void densityChanged();
+  void languageChanged();
   void currentViewChanged();
   void workdayChanged();
   void crumbProjectChanged();
@@ -369,6 +382,7 @@ class AppController : public QObject {
   QDate m_selectedDate;
   QString m_theme = "dark";
   QString m_density = "comfy";
+  QString m_language = "en";
   QString m_currentView = "board";
   int m_workdayStart = 9;
   int m_workdayEnd = 19;

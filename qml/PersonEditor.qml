@@ -23,7 +23,11 @@ Popup {
         "#dcc06a", "#7cc492", "#e69854", "#a4a4d6"
     ]
     readonly property var states: ["todo", "pinged", "replied"]
-    readonly property var stateLabels: ({ todo: "написать", pinged: "написал", replied: "ответил" })
+    readonly property var stateLabels: ({
+        todo: I18n.t("editor.person.state.todo"),
+        pinged: I18n.t("editor.person.state.pinged"),
+        replied: I18n.t("editor.person.state.replied")
+    })
 
     // True while the user has not manually edited idField — keeps the id in
     // sync with the live name. Flips to false on first manual edit so we
@@ -60,18 +64,19 @@ Popup {
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
-            text: root.isNew ? "Новый контакт" : "Редактировать контакт"
+            text: root.isNew ? I18n.t("editor.person.new") : I18n.t("editor.person.edit")
             color: Theme.text
             font.pixelSize: 14
             font.weight: Font.DemiBold
         }
 
-        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "ИМЯ"
+        Text {
+            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.name").toUpperCase()
                color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: nameField
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            placeholderText: "Иван Иванов"
+            placeholderText: I18n.t("editor.ph.fullName")
             background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
@@ -97,7 +102,8 @@ Popup {
             onActiveFocusChanged: if (activeFocus) root._idAutoDerived = false
         }
 
-        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "РОЛЬ"
+        Text {
+            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.role").toUpperCase()
                color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: roleField
@@ -108,14 +114,15 @@ Popup {
             placeholderTextColor: Theme.textDim
         }
 
-        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "ВОПРОС / ЗАДАЧА"
+        Text {
+            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.question").toUpperCase()
                color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         ScrollView {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
             Layout.preferredHeight: 64
             TextArea {
                 id: questionField
-                placeholderText: "О чём написать…"
+                placeholderText: I18n.t("editor.ph.question")
                 wrapMode: TextEdit.Wrap
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
@@ -129,11 +136,13 @@ Popup {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 4
-                Text { text: "СТАТУС"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                Text {
+                    text: I18n.t("editor.label.status").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                }
                 ComboBox {
                     id: stateBox
                     Layout.fillWidth: true
-                    model: ["написать", "написал", "ответил"]
+                    model: [I18n.t("editor.person.state.todo"), I18n.t("editor.person.state.pinged"), I18n.t("editor.person.state.replied")]
                     background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                     contentItem: Text { text: stateBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
                 }
@@ -141,7 +150,9 @@ Popup {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 4
-                Text { text: "ЦВЕТ АВАТАРА"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                Text {
+                    text: I18n.t("editor.label.avatar").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                }
                 Row {
                     id: colorSwatch
                     property int selectedIndex: 0
@@ -171,16 +182,18 @@ Popup {
             spacing: 8
             PillButton {
                 visible: !root.isNew
-                text: "Удалить"; danger: true
+                text: I18n.t("common.delete"); danger: true
                 onClicked: {
                     AppController.deletePerson(root.draft.id);
                     root.close();
                 }
             }
             Item { Layout.fillWidth: true }
-            PillButton { text: "Отмена"; onClicked: root.close() }
             PillButton {
-                text: root.isNew ? "Добавить" : "Сохранить"
+                text: I18n.t("common.cancel"); onClicked: root.close()
+            }
+            PillButton {
+                text: root.isNew ? I18n.t("editor.btn.add") : I18n.t("editor.btn.save")
                 primary: true
                 onClicked: {
                     const d = {

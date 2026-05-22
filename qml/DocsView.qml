@@ -195,7 +195,7 @@ Item {
     }
     function showToast(s) { if (toast) toast.show(s) }
     function showUndoToast(s, fn) {
-        if (toast) toast.showWithAction(s, "Отменить", 5, fn);
+        if (toast) toast.showWithAction(s, I18n.t("undo.action"), 5, fn);
     }
 
     // ── Persistence — JSON round-tripped through AppController.docsState ───
@@ -262,22 +262,22 @@ Item {
                 const s = copy.find(function (x) { return x.id === u.sectionId; });
                 if (s) s.items.splice(u.itemIdx, 0, u.item);
             });
-            showToast("Восстановлено: " + (u.item.ref || u.item.title));
+            showToast(I18n.t("docs.toast.restored").arg(u.item.ref || u.item.title));
         } else if (u.kind === "snippet") {
             const list = snippets.slice();
             list.splice(u.idx, 0, u.item);
             snippets = list;
-            showToast("Восстановлено: " + u.item.title);
+            showToast(I18n.t("docs.toast.restored").arg(u.item.title));
         } else if (u.kind === "contact") {
             const list = contacts.slice();
             list.splice(u.idx, 0, u.item);
             contacts = list;
-            showToast("Восстановлено: " + u.item.name);
+            showToast(I18n.t("docs.toast.restored").arg(u.item.name));
         } else if (u.kind === "section") {
             const list = sections.slice();
             list.splice(u.idx, 0, u.item);
             sections = list;
-            showToast("Восстановлена секция: " + u.item.title);
+            showToast(I18n.t("docs.toast.section.restored").arg(u.item.title));
         }
         pendingUndo = null;
     }
@@ -416,7 +416,7 @@ Item {
                 }
             }
         });
-        showToast(editor.isNew ? ("Создано: " + (cleaned.ref || cleaned.title)) : ("Сохранено: " + (cleaned.ref || cleaned.title)));
+        showToast(I18n.t(editor.isNew ? "docs.toast.created" : "docs.toast.saved").arg(cleaned.ref || cleaned.title));
     }
     function deleteDoc(sectionId, ref) {
         // Capture for undo
@@ -432,13 +432,20 @@ Item {
         });
 
         pendingUndo = { kind: "doc", sectionId: sectionId, itemIdx: idx, item: captured };
-        showUndoToast("Удалено: " + ref, function () { root.undoLastDeletion() });
+        showUndoToast(I18n.t("docs.toast.deleted").arg(ref), function () {
+            root.undoLastDeletion()
+        });
     }
 
     function saveSnippet(draft, idx) {
         const list = snippets.slice();
-        if (idx < 0 || idx === undefined) { list.push(draft); showToast("Snippet создан: " + draft.title); }
-        else { list[idx] = draft; showToast("Snippet сохранён: " + draft.title); }
+        if (idx < 0 || idx === undefined) {
+            list.push(draft);
+            showToast(I18n.t("docs.toast.snippet.created").arg(draft.title));
+        } else {
+            list[idx] = draft;
+            showToast(I18n.t("docs.toast.snippet.saved").arg(draft.title));
+        }
         snippets = list;
     }
     function deleteSnippet(idx) {
@@ -448,13 +455,20 @@ Item {
         list.splice(idx, 1);
         snippets = list;
         pendingUndo = { kind: "snippet", idx: idx, item: captured };
-        showUndoToast("Snippet удалён: " + captured.title, function () { root.undoLastDeletion() });
+        showUndoToast(I18n.t("docs.toast.snippet.deleted").arg(captured.title), function () {
+            root.undoLastDeletion()
+        });
     }
 
     function saveContact(draft, idx) {
         const list = contacts.slice();
-        if (idx < 0 || idx === undefined) { list.push(draft); showToast("Контакт добавлен: " + draft.name); }
-        else { list[idx] = draft; showToast("Контакт сохранён: " + draft.name); }
+        if (idx < 0 || idx === undefined) {
+            list.push(draft);
+            showToast(I18n.t("docs.toast.contact.added").arg(draft.name));
+        } else {
+            list[idx] = draft;
+            showToast(I18n.t("docs.toast.contact.saved").arg(draft.name));
+        }
         contacts = list;
     }
     function saveSection(draft, originalId) {
@@ -478,7 +492,7 @@ Item {
                 items: []
             });
             sections = copy;
-            showToast("Создана секция: " + draft.title);
+            showToast(I18n.t("docs.toast.section.created").arg(draft.title));
         } else {
             const i = copy.findIndex(function (s) { return s.id === originalId; });
             if (i < 0) return;
@@ -487,7 +501,7 @@ Item {
             copy[i].accent       = draft.accent || copy[i].accent;
             copy[i].customFields = (draft.customFields || []).slice();
             sections = copy;
-            showToast("Сохранено: " + draft.title);
+            showToast(I18n.t("docs.toast.section.saved").arg(draft.title));
         }
     }
 
@@ -499,7 +513,9 @@ Item {
         copy.splice(i, 1);
         sections = copy;
         pendingUndo = { kind: "section", idx: i, item: captured };
-        showUndoToast("Удалена секция: " + captured.title, function () { root.undoLastDeletion() });
+        showUndoToast(I18n.t("docs.toast.section.deleted").arg(captured.title), function () {
+            root.undoLastDeletion()
+        });
     }
 
     function deleteContact(idx) {
@@ -509,7 +525,9 @@ Item {
         list.splice(idx, 1);
         contacts = list;
         pendingUndo = { kind: "contact", idx: idx, item: captured };
-        showUndoToast("Контакт удалён: " + captured.name, function () { root.undoLastDeletion() });
+        showUndoToast(I18n.t("docs.toast.contact.deleted").arg(captured.name), function () {
+            root.undoLastDeletion()
+        });
     }
 
     function openExternal(url) {

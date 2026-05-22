@@ -51,10 +51,10 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18
             spacing: 8
             Text {
-                text: root.kind === "doc"     ? (root.isNew ? "Новая запись"  : "Редактировать запись")
-                    : root.kind === "snippet" ? (root.isNew ? "Новый snippet" : "Редактировать snippet")
-                    : root.kind === "section" ? (root.isNew ? "Новая секция"  : "Редактировать секцию")
-                                              : (root.isNew ? "Новый контакт" : "Редактировать контакт")
+                text: root.kind === "doc" ? I18n.t(root.isNew ? "docs.editor.title.new.doc" : "docs.editor.title.edit.doc")
+                    : root.kind === "snippet" ? I18n.t(root.isNew ? "docs.editor.title.new.snip" : "docs.editor.title.edit.snip")
+                        : root.kind === "section" ? I18n.t(root.isNew ? "docs.editor.title.new.section" : "docs.editor.title.edit.section")
+                            : I18n.t(root.isNew ? "docs.editor.title.new.contact" : "docs.editor.title.edit.contact")
                 color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
             }
             Text {
@@ -106,7 +106,8 @@ Popup {
             }
 
             FieldLabel { text: "URL" }
-            FormField { id: docUrl; mono: true; placeholderText: "https://… или #/wiki/…"
+            FormField {
+                id: docUrl; mono: true; placeholderText: I18n.t("docs.editor.url.ph")
                         text: root.draft.url || ""; onTextChanged: root.draft.url = text
                         Layout.fillWidth: true }
 
@@ -187,7 +188,7 @@ Popup {
                 FieldLabel { text: "TITLE" }
                 FieldLabel { text: "LANGUAGE" }
                 FormField {
-                    placeholderText: "Build с sanitizers"
+                    placeholderText: I18n.t("docs.editor.build.ph")
                     text: root.draft.title || ""
                     onTextChanged: root.draft.title = text
                 }
@@ -279,7 +280,9 @@ Popup {
 
             // ── Custom fields list ──────────────────────────────────────
             Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: 10 }
-            FieldLabel { text: "FIELDS · доп. поля карточек этой секции" }
+            FieldLabel {
+                text: I18n.t("docs.editor.fields.label")
+            }
 
             ColumnLayout {
                 id: fieldsList
@@ -381,7 +384,7 @@ Popup {
             }
 
             PillButton {
-                text: "+ Добавить поле"
+                text: I18n.t("docs.editor.addField")
                 onClicked: {
                     const list = (root.draft.customFields || []).slice();
                     let base = "field"; let key = base; let n = 2;
@@ -403,7 +406,8 @@ Popup {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
                 FieldLabel { text: "NAME" }
                 FieldLabel { text: "ROLE" }
-                FormField { placeholderText: "Иван Иванов"
+                FormField {
+                    placeholderText: I18n.t("docs.editor.ph.fullName")
                             text: root.draft.name || ""; onTextChanged: root.draft.name = text }
                 FormField { placeholderText: "Tech Lead / QA / PHY team…"
                             text: root.draft.role || ""; onTextChanged: root.draft.role = text }
@@ -445,7 +449,7 @@ Popup {
             spacing: 8
             PillButton {
                 visible: !root.isNew
-                text: "Удалить"; danger: true
+                text: I18n.t("common.delete"); danger: true
                 onClicked: {
                     if (root.kind === "doc")          root.deletedDoc();
                     else if (root.kind === "snippet") root.deletedSnippet();
@@ -455,9 +459,11 @@ Popup {
                 }
             }
             Item { Layout.fillWidth: true }
-            PillButton { text: "Отмена"; onClicked: root.close() }
             PillButton {
-                text: root.isNew ? "Создать" : "Сохранить"
+                text: I18n.t("common.cancel"); onClicked: root.close()
+            }
+            PillButton {
+                text: root.isNew ? I18n.t("editor.btn.create") : I18n.t("editor.btn.save")
                 primary: true
                 onClicked: {
                     // Validation

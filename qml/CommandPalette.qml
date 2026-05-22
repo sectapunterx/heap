@@ -124,7 +124,7 @@ Popup {
                 TextField {
                     id: searchField
                     Layout.fillWidth: true
-                    placeholderText: "Поиск задач, доков, сниппетов, контактов…"
+                    placeholderText: I18n.t("palette.placeholderLong")
                     background: Item {}
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
@@ -240,7 +240,7 @@ Popup {
             Text {
                 visible: root._matches.length === 0
                 anchors.centerIn: parent
-                text: searchField.text.length === 0 ? "введите запрос…" : "ничего не найдено"
+                text: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
                 color: Theme.textDim
                 font.pixelSize: 12
             }
@@ -254,7 +254,7 @@ Popup {
             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: Theme.border }
             Text {
                 anchors.centerIn: parent
-                text: "↑↓ выбор · Enter переход · Esc закрыть"
+                text: I18n.t("palette.kbdHint")
                 color: Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: 10

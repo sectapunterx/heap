@@ -112,7 +112,7 @@ Item {
             const dl = t.deadline;
             const key = (dl && dl.getFullYear) ? (dl.getFullYear() + "-" + (dl.getMonth()+1) + "-" + dl.getDate()) : "";
             if (key !== lastKey) {
-                const label = (dl && dl.getFullYear) ? AppController.shortDate(dl) : "Без даты";
+                const label = (dl && dl.getFullYear) ? AppController.shortDate(dl) : I18n.t("timeline.noDate");
                 out.push({ kind: "header", label: label, date: dl });
                 lastKey = key;
             }
@@ -148,7 +148,9 @@ Item {
                 spacing: 12
                 Column {
                     spacing: 1
-                    Text { text: "Timeline · по дедлайнам"; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    Text {
+                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
+                    }
                     Text {
                         text: root.totalShown() + " task" + (root.totalShown() === 1 ? "" : "s") + " · today is " + AppController.today.toLocaleDateString(Qt.locale("en_US"), "yyyy-MM-dd")
                         color: Theme.textDim
@@ -445,8 +447,12 @@ Item {
                         anchors.centerIn: parent
                         spacing: 6
                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: 26 }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Нет задач по фильтрам."; color: Theme.text; font.pixelSize: 13 }
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Сбрось фильтры или добавь задачу."; color: Theme.textDim; font.pixelSize: 12 }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: 13
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: 12
+                        }
                     }
                 }
 

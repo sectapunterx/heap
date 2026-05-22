@@ -86,13 +86,15 @@ Popup {
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
-            text: "Событие в календаре"
+            text: I18n.t("editor.label.eventTitle")
             color: Theme.text
             font.pixelSize: 14
             font.weight: Font.DemiBold
         }
 
-        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "НАЗВАНИЕ"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+        Text {
+            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("common.title").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+        }
         TextField {
             id: titleField
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
@@ -104,8 +106,12 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
             columns: 2; columnSpacing: 10; rowSpacing: 4
 
-            Text { text: "ТИП"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
-            Text { text: "УЧАСТНИКИ"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Text {
+                text: I18n.t("editor.label.eventType").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
+            Text {
+                text: I18n.t("editor.label.attendees").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
 
             ComboBox {
                 id: typeBox
@@ -121,14 +127,18 @@ Popup {
                 color: Theme.text
             }
 
-            Text { text: "НАЧАЛО"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
-            Text { text: "КОНЕЦ"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Text {
+                text: I18n.t("editor.label.start").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
+            Text {
+                text: I18n.t("editor.label.end").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
 
             TextField {
                 id: startField
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
-                placeholderText: "10:00 или 14-15"
+                placeholderText: I18n.t("editor.ph.timeRange")
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
                 onEditingFinished: root._maybeExpandRange(startField, endField)
@@ -150,7 +160,7 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
             spacing: 4
             Text {
-                text: "КОНТЕКСТ (необязательно)"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.context").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             TextField {
                 id: contextField
@@ -166,11 +176,15 @@ Popup {
         RowLayout {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 8; Layout.bottomMargin: 16
             spacing: 8
-            PillButton { text: "Удалить"; danger: true; onClicked: { AppController.deleteEvent(root.eventId); root.close(); } }
-            Item { Layout.fillWidth: true }
-            PillButton { text: "Отмена"; onClicked: root.close() }
             PillButton {
-                text: "Сохранить"; primary: true
+                text: I18n.t("common.delete"); danger: true; onClicked: { AppController.deleteEvent(root.eventId); root.close(); }
+            }
+            Item { Layout.fillWidth: true }
+            PillButton {
+                text: I18n.t("common.cancel"); onClicked: root.close()
+            }
+            PillButton {
+                text: I18n.t("editor.btn.save"); primary: true
                 onClicked: {
                     const m = AppController.events;
                     let curDate = AppController.selectedDate;

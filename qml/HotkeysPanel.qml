@@ -59,7 +59,8 @@ Popup {
                     color: resetAllMA.containsMouse ? Theme.panel3 : "transparent"
                     border.color: Theme.border; border.width: 1
                     Text { id: resetAllT; anchors.centerIn: parent
-                           text: "↺ всё"; color: Theme.textMuted; font.pixelSize: 11 }
+                        text: I18n.t("hotkeys.allClear"); color: Theme.textMuted; font.pixelSize: 11
+                    }
                     MouseArea {
                         id: resetAllMA
                         anchors.fill: parent
@@ -114,7 +115,7 @@ Popup {
             Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top; height: 1; color: Theme.border }
             Text {
                 anchors.centerIn: parent
-                text: "Esc — отмена, Enter — сохранить, ⌫ — очистить"
+                text: I18n.t("hotkeys.recordHelp")
                 color: Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: 10
@@ -293,8 +294,8 @@ Popup {
                 Text {
                     anchors.centerIn: parent
                     text: chip.capturing
-                        ? (chip.candidate.length > 0 ? chip.candidate : "…нажмите комбинацию")
-                        : (chip.sequence.length > 0 ? chip.sequence : "(не задан)")
+                        ? (chip.candidate.length > 0 ? chip.candidate : I18n.t("hotkeys.recordPress"))
+                        : (chip.sequence.length > 0 ? chip.sequence : I18n.t("common.notSet"))
                     color: chip.capturing
                         ? (chip.candidate.length > 0 ? Theme.text : Theme.textDim)
                         : (chip.sequence.length > 0 ? Theme.text : Theme.textDim)
@@ -390,7 +391,7 @@ Popup {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: -2
             visible: chip.capturing && chip.conflictName.length > 0
-            text: "Конфликт: " + chip.conflictName + " (Enter — переназначить)"
+            text: I18n.t("hotkeys.conflict.body").arg(chip.conflictName)
             color: Theme.p0
             font.pixelSize: 9
             elide: Text.ElideRight

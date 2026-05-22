@@ -203,7 +203,7 @@ Item {
                             const mentions = (t.match(/(^|[\s.,;:!?()\[\]{}])@[A-Za-z0-9_.\-]+/g) || []).length;
                             const tickets  = (t.match(/(^|[\s.,;:!?()\[\]{}])#[A-Z][A-Z0-9]*-\d+/g) || []).length;
                             const saved = root._savedAgo;
-                            const parts = [lines + " строк", mentions + " @mentions", tickets + " #tickets"];
+                            const parts = [I18n.t("notes.summary").arg(lines).arg(mentions).arg(tickets)];
                             if (saved.length > 0) parts.push(saved);
                             return parts.join(" · ");
                         }
@@ -215,7 +215,7 @@ Item {
                 Item { Layout.fillWidth: true }
                 Text {
                     visible: editor.text.length > 0 && root.viewMode !== "preview"
-                    text: "Markdown · @ — контакты · # — тикеты"
+                    text: I18n.t("notes.legend")
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 11
@@ -317,7 +317,7 @@ Item {
                     height: Math.max(notesScroll.height - 32, implicitHeight + 16)
                     wrapMode: TextArea.Wrap
                     selectByMouse: true
-                    placeholderText: "Начните писать заметку…  (поддерживается markdown, @упоминания и #тикеты)"
+                    placeholderText: I18n.t("notes.placeholderBody")
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
                     font.family: Theme.fontMono
@@ -511,7 +511,7 @@ Item {
                     text: editor.text
                     textFormat: TextEdit.MarkdownText
                     color: Theme.text
-                    placeholderText: "Превью появится по мере ввода…"
+                    placeholderText: I18n.t("notes.preview.empty")
                     placeholderTextColor: Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: 13

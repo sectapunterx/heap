@@ -286,7 +286,7 @@ Popup {
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
-            text: "Быстрое создание задачи"
+            text: I18n.t("quick.title")
             color: Theme.textMuted
             font.pixelSize: 10
             font.weight: Font.DemiBold
@@ -296,7 +296,7 @@ Popup {
         TextField {
             id: inputField
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            placeholderText: "напр.: купить хлеб завтра в 18:00"
+            placeholderText: I18n.t("quick.fieldPh")
             font.pixelSize: 14
             background: Rectangle {
                 radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1
@@ -455,11 +455,11 @@ Popup {
                 Layout.fillWidth: true
             }
             PillButton {
-                text: "Отмена"
+                text: I18n.t("common.cancel")
                 onClicked: root.close()
             }
             PillButton {
-                text: "Создать"
+                text: I18n.t("editor.btn.create")
                 primary: true
                 enabled: root._title.length > 0
                 onClicked: root._submit()
