@@ -61,7 +61,7 @@ WarningsAsErrors: ''
 HeaderFilterRegex: '^.*/src/.*\.(h|hpp)$'
 FormatStyle: file
 UseColor: true
-
+ 
 CheckOptions:
   # ── Types ─────────────────────────────────────────────────────────
   - { key: readability-identifier-naming.NamespaceCase,            value: lower_case }
