@@ -1,6 +1,6 @@
 ---
 # Google base, larra-style (CLionProjects/larra) — narrow indent, wide column,
-# every argument on its own line when wrapping, no space before "(".
+# every argument on its own line when wrapping, no space before "(". 
 BasedOnStyle: Google
 Language: Cpp
 Standard: c++20
