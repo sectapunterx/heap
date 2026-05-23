@@ -88,6 +88,8 @@ qt_add_qml_module(heap
         qml/FilterBar.qml
         qml/KanbanBoard.qml
         qml/TaskCard.qml
+        qml/SelectionBar.qml
+        qml/ArchiveView.qml
         qml/TimelineView.qml
         qml/WeekView.qml
         qml/DocsView.qml

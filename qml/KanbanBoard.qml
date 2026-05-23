@@ -14,6 +14,64 @@ Item {
     signal taskClicked(string id)
     signal createInStatus(string statusId)
 
+    // Anchor for shift-click range selection. Reset when the selection
+    // disappears so the next shift-click starts a fresh range.
+    property string shiftAnchorId: ""
+    Connections {
+        target: AppController
+
+        function onSelectedTaskIdsChanged() {
+            if (AppController.selectionCount === 0) root.shiftAnchorId = "";
+        }
+    }
+
+    // Walk every column's TaskCard repeater, collect ids of currently
+    // visible cards (respects search/priority/archived filters), hand them
+    // to AppController as the new selection set.
+    function selectAllVisible() {
+        AppController.setSelectedTaskIds(_flatVisibleIds());
+    }
+
+    // Flat ordered list of visible task ids across the entire board, column
+    // by column in render order, top-to-bottom inside each column. Used by
+    // selectAllVisible() and shift-range select.
+    function _flatVisibleIds() {
+        const out = [];
+        for (let c = 0; c < colRepeater.count; c++) {
+            const col = colRepeater.itemAt(c);
+            if (!col || !col.taskRepeater) continue;
+            const rep = col.taskRepeater;
+            for (let i = 0; i < rep.count; i++) {
+                const it = rep.itemAt(i);
+                if (it && it.visible && it.taskId) out.push(it.taskId);
+            }
+        }
+        return out;
+    }
+
+    // Shift-click range: spans the flat visible list (cross-column). First
+    // shift-click sets the anchor; subsequent shift-click selects every
+    // ticket between anchor and target inclusive.
+    function _rangeSelect(targetId) {
+        const ordered = _flatVisibleIds();
+        if (ordered.length === 0) return;
+        const haveAnchor = root.shiftAnchorId && ordered.indexOf(root.shiftAnchorId) >= 0;
+        if (!haveAnchor) {
+            root.shiftAnchorId = targetId;
+            AppController.toggleTaskSelection(targetId);
+            return;
+        }
+        const ai = ordered.indexOf(root.shiftAnchorId);
+        const ti = ordered.indexOf(targetId);
+        const lo = Math.min(ai, ti);
+        const hi = Math.max(ai, ti);
+        const merged = AppController.selectedTaskIds.slice();
+        for (let i = lo; i <= hi; i++) {
+            if (merged.indexOf(ordered[i]) < 0) merged.push(ordered[i]);
+        }
+        AppController.setSelectedTaskIds(merged);
+    }
+
     function passesFilter(taskObj) {
         const q = (root.searchText || "").toLowerCase();
         if (q && q.length > 0) {
@@ -57,7 +115,10 @@ Item {
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
         clip: true
-        pressDelay: 180
+        // pressDelay: 0 — keep card-drag activation instant on press.
+        // Horizontal flick by dragging empty board space is rarely used
+        // on desktop (mouse wheel handles it via WheelHandler below).
+        pressDelay: 0
 
         // Outer wheel: scroll the board horizontally with mouse-wheel.
         // Triggered when an inner WheelHandler sets event.accepted = false
@@ -89,6 +150,7 @@ Item {
                     readonly property string statusId: modelData.id
                     readonly property string statusName: modelData.name
                     readonly property color statusColor: modelData.color
+                    readonly property alias taskRepeater: colRep
                     property bool dragOver: false
                     property int visibleCount: 0
                     property bool renaming: false
@@ -253,7 +315,9 @@ Item {
                                 contentHeight: bodyCol.implicitHeight
                                 clip: true
                                 flickableDirection: Flickable.VerticalFlick
-                                pressDelay: 180
+                                // pressDelay: 0 — same rationale as the
+                                // outer hscroll: instant drag on cards.
+                                pressDelay: 0
 
                                 // Wheel scrolls this column vertically. When the column
                                 // has no overflow or is already at the top/bottom edge,
@@ -329,6 +393,7 @@ Item {
                                                   && (root.showArchived || !tc.archived)
                                                   && root.passesFilter(taskData)
                                             onClicked: root.taskClicked(tc.id)
+                                            onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
 
                                             onVisibleChanged: col.recountSoon()
                                             Component.onCompleted: col.recountSoon()
@@ -356,10 +421,14 @@ Item {
                                 onDropped: (drop) => {
                                     col.dragOver = false;
                                     const src = drop.source;
-                                    if (src && src.taskId) {
+                                    if (!src || !src.taskId) return;
+                                    if (AppController.isTaskSelected(src.taskId)
+                                        && AppController.selectionCount > 1) {
+                                        AppController.moveSelectedTasksToStatus(col.statusId);
+                                    } else {
                                         AppController.moveTask(src.taskId, col.statusId);
-                                        drop.accept(Qt.MoveAction);
                                     }
+                                    drop.accept(Qt.MoveAction);
                                 }
                             }
 

@@ -60,6 +60,10 @@ class AppController : public QObject {
   Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
   Q_PROPERTY(QStringList blockedStuckIds READ blockedStuckIds NOTIFY blockedStuckChanged)
 
+  // ---- Multi-select ----
+  Q_PROPERTY(QStringList selectedTaskIds READ selectedTaskIds NOTIFY selectedTaskIdsChanged)
+  Q_PROPERTY(int selectionCount READ selectionCount NOTIFY selectedTaskIdsChanged)
+
   // Compile-time flag — true for Debug / RelWithDebInfo builds. QML uses
   // it to surface the developer-only "show unimplemented" toggle.
   Q_PROPERTY(bool debugBuild READ debugBuild CONSTANT)
@@ -189,6 +193,26 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteTask(const QString& id);
   Q_INVOKABLE bool canTransitionStatus(const QString& taskId, const QString& newStatus);
   Q_INVOKABLE void setArchived(const QString& taskId, bool archived);
+
+  // ---- Multi-select API ----
+  QStringList selectedTaskIds() const {
+    return m_selectedTaskIdsList;
+  }
+
+  int selectionCount() const {
+    return m_selectedTaskIdsList.size();
+  }
+
+  Q_INVOKABLE bool isTaskSelected(const QString& id) const;
+  Q_INVOKABLE void toggleTaskSelection(const QString& id);
+  Q_INVOKABLE void setTaskSelected(const QString& id, bool selected);
+  Q_INVOKABLE void setSelectedTaskIds(const QStringList& ids);
+  Q_INVOKABLE void clearSelection();
+
+  // Bulk ops — operate on the current selection set.
+  Q_INVOKABLE void deleteSelectedTasks();
+  Q_INVOKABLE void moveSelectedTasksToStatus(const QString& statusId);
+  Q_INVOKABLE void setSelectedTasksArchived(bool archived);
 
   QStringList blockedStuckIds() const {
     return m_blockedStuckIds.values();
@@ -369,6 +393,7 @@ class AppController : public QObject {
   void undoableToast(const QString& message, int seconds);
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
+  void selectedTaskIdsChanged();
 
  private slots:
   void runAutomation();
@@ -435,7 +460,7 @@ class AppController : public QObject {
 
   // Undo machinery
   struct PendingUndo {
-    enum Kind { None, Task, Event, Person, Status, Profile } kind = None;
+    enum Kind { None, Task, BulkTasks, Event, Person, Status, Profile } kind = None;
 
     // payload — only the field matching `kind` is populated
     ::Task task;
@@ -444,6 +469,10 @@ class AppController : public QObject {
     QVariantMap status;
     ::Profile profile;
     int row = -1;
+    // Bulk-task delete — every task and its original row index. Ordered
+    // by ascending row so re-insertion in the same order is safe.
+    QVector<::Task> tasks;
+    QVector<int> rows;
     // when a task is deleted, events lose their taskId — record what to restore
     QVector<QPair<QString, QString>> detachedEventIds;  // (eventId, originalTaskId)
     // when a status is deleted, tasks get re-homed — record what to restore
@@ -454,6 +483,11 @@ class AppController : public QObject {
   QTimer* m_undoTimer = nullptr;
   void armUndo(int seconds);
   void cancelUndo();
+
+  // Selection state
+  QSet<QString> m_selectedTaskIds;
+  QStringList m_selectedTaskIdsList;  // ordered cache for QML
+  void rebuildSelectionList_();
 
   std::unique_ptr<heap::chrono::ChronoParser> m_chrono;
 

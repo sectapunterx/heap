@@ -9,7 +9,7 @@ endif()
 
 # Qt6::Test (provides QSignalSpy) is needed by heap_notify_tests even when
 # this file is included as a subdirectory of the main project.
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Test)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Qml Test)
 
 include(FetchContent)
 
@@ -103,3 +103,62 @@ target_link_libraries(heap_notify_tests PRIVATE
 )
 
 add_test(NAME heap_notify_tests COMMAND heap_notify_tests)
+
+# ─── Selection (AppController multi-select) tests ───
+# Cover the multi-select state machine and bulk ops on AppController:
+# toggle/set/clear/selectAll, bulk delete with undo restoration, bulk
+# move/archive, and clearSelection on view/profile change.
+#
+# Links the same sources as the main `heap` target *minus* QML registration
+# (no Qt6::Quick) — AppController's own implementation only needs Core/Gui/
+# Widgets/Qml + Test. Uses offscreen QGuiApplication + AppDataLocation test
+# mode so it runs headless and never touches the user's real state file.
+set(HEAP_SELECTION_SOURCES
+        test_selection.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_SELECTION_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_selection_tests ${HEAP_SELECTION_SOURCES})
+set_target_properties(heap_selection_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_selection_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_selection_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+        GTest::gtest_main
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_selection_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_selection_tests COMMAND heap_selection_tests)

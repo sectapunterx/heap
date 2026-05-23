@@ -82,6 +82,15 @@ QtObject {
             "siderail.tip.hotkeys": "Hotkeys · keys and bindings",
             "siderail.tip.tweaks": "Tweaks · theme, density, workday",
             "siderail.tip.settings": "Settings",
+            "siderail.tip.archive": "Archive · restore or purge old tickets",
+
+            // ── ArchiveView ──
+            "archive.title": "Archive",
+            "archive.count": "archived tickets",
+            "archive.selectAll": "Select all",
+            "archive.restoreSelected": "Restore selected",
+            "archive.empty.title": "Archive is empty",
+            "archive.empty.hint": "Tickets you archive show up here. Multi-select + restore to bring them back.",
 
             // ── FilterBar ──
             "filter.all": "All",
@@ -477,7 +486,15 @@ QtObject {
             "settings.about.version": "Version",
             "settings.about.channel": "Channel",
             "settings.about.storage": "Storage",
-            "settings.about.engine": "Engine"
+            "settings.about.engine": "Engine",
+
+            // ── Selection action bar ──
+            "selection.bar.count": "%1 selected",
+            "selection.bar.move": "Move to…",
+            "selection.bar.archive": "Archive",
+            "selection.bar.unarchive": "Unarchive",
+            "selection.bar.delete": "Delete",
+            "selection.bar.clear": "Clear"
         },
         ru: {
             // ── Common ──
@@ -545,6 +562,15 @@ QtObject {
             "siderail.tip.hotkeys": "Hotkeys · клавиши и биндинги",
             "siderail.tip.tweaks": "Tweaks · тема, плотность, рабочий день",
             "siderail.tip.settings": "Settings",
+            "siderail.tip.archive": "Архив · вернуть или удалить старые тикеты",
+
+            // ── ArchiveView ──
+            "archive.title": "Архив",
+            "archive.count": "архивных тикетов",
+            "archive.selectAll": "Выделить все",
+            "archive.restoreSelected": "Вернуть выделенные",
+            "archive.empty.title": "Архив пуст",
+            "archive.empty.hint": "Тикеты, отправленные в архив, появятся здесь. Множественный выбор + «Вернуть».",
 
             "filter.all": "Все",
             "filter.mine": "Мои",
@@ -917,7 +943,15 @@ QtObject {
             "settings.about.version": "Версия",
             "settings.about.channel": "Канал",
             "settings.about.storage": "Хранилище",
-            "settings.about.engine": "Движок"
+            "settings.about.engine": "Движок",
+
+            // ── Selection action bar ──
+            "selection.bar.count": "Выделено: %1",
+            "selection.bar.move": "Переместить…",
+            "selection.bar.archive": "Архивировать",
+            "selection.bar.unarchive": "Из архива",
+            "selection.bar.delete": "Удалить",
+            "selection.bar.clear": "Снять"
         }
     })
 

@@ -15,6 +15,49 @@ Item {
     signal taskClicked(string id)
     signal toggleShowDone()
 
+    // Selection plumbing — flat across buckets (reading order).
+    property string shiftAnchorId: ""
+    Connections {
+        target: AppController
+
+        function onSelectedTaskIdsChanged() {
+            if (AppController.selectionCount === 0) root.shiftAnchorId = "";
+        }
+    }
+
+    function _flatVisibleIds() {
+        const out = [];
+        for (const b of root.bucketOrder) {
+            const list = root.groups[b] || [];
+            for (let i = 0; i < list.length; i++) out.push(list[i].id);
+        }
+        return out;
+    }
+
+    function selectAllVisible() {
+        AppController.setSelectedTaskIds(_flatVisibleIds());
+    }
+
+    function _rangeSelect(targetId) {
+        const ordered = _flatVisibleIds();
+        if (ordered.length === 0) return;
+        const haveAnchor = root.shiftAnchorId && ordered.indexOf(root.shiftAnchorId) >= 0;
+        if (!haveAnchor) {
+            root.shiftAnchorId = targetId;
+            AppController.toggleTaskSelection(targetId);
+            return;
+        }
+        const ai = ordered.indexOf(root.shiftAnchorId);
+        const ti = ordered.indexOf(targetId);
+        const lo = Math.min(ai, ti);
+        const hi = Math.max(ai, ti);
+        const merged = AppController.selectedTaskIds.slice();
+        for (let i = lo; i <= hi; i++) {
+            if (merged.indexOf(ordered[i]) < 0) merged.push(ordered[i]);
+        }
+        AppController.setSelectedTaskIds(merged);
+    }
+
     readonly property var bucketOrder: ["overdue", "today", "tomorrow", "thisweek", "nextweek", "later", "nodl"]
     readonly property var bucketMeta: ({
         overdue:  ({ name: "Overdue",     icon: "!", color: Theme.p0,           tone: "danger"  }),
@@ -308,11 +351,15 @@ Item {
                                         readonly property var rd: parent && parent.rowData ? parent.rowData : null
                                         readonly property var t: rd ? rd.task : null
                                         readonly property var st: t ? root.statusInfo(t.status) : null
+                                        readonly property bool _selected: t && AppController.selectionCount >= 0
+                                            && AppController.isTaskSelected(t.id)
                                         width: parent ? parent.width : 0
                                         radius: 8
-                                        color: rowMA.containsMouse ? Theme.panel2 : Theme.panel
-                                        border.color: rowMA.containsMouse ? Theme.borderStrong : Theme.border
-                                        border.width: 1
+                                        color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
+                                            : rowMA.containsMouse ? Theme.panel2 : Theme.panel
+                                        border.color: _selected ? Theme.accent
+                                            : rowMA.containsMouse ? Theme.borderStrong : Theme.border
+                                        border.width: _selected ? 2 : 1
                                         implicitHeight: rowContent.implicitHeight + 16
 
                                         // Left accent stripe
@@ -430,7 +477,19 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.taskClicked(tlRow.t.id)
+                                            acceptedButtons: Qt.LeftButton
+                                            onClicked: (mouse) => {
+                                                const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
+                                                const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
+                                                if (ctrl) {
+                                                    AppController.toggleTaskSelection(tlRow.t.id);
+                                                } else if (shift) {
+                                                    root._rangeSelect(tlRow.t.id);
+                                                } else {
+                                                    if (AppController.selectionCount > 0) AppController.clearSelection();
+                                                    root.taskClicked(tlRow.t.id);
+                                                }
+                                            }
                                         }
                                     }
                                 }
