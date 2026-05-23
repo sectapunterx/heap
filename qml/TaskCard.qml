@@ -11,15 +11,24 @@ Rectangle {
     property string taskId: task ? task.id : ""
     readonly property bool _isStuck: card.task && card.task.blockedStuck === true
     readonly property bool _isArchived: card.task && card.task.archived === true
+    // Selection state — re-evaluates via AppController.selectedTaskIdsChanged
+    // (selectionCount is read in the binding so QML tracks the dependency).
+    readonly property bool _selected: AppController.selectionCount >= 0
+        && AppController.isTaskSelected(card.taskId)
     signal clicked()
 
+    signal rangeSelectRequested(string anchorId)
+
     radius: 8
-    color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55) : Theme.panel2
+    color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
+        : _selected ? Theme.withAlpha(Theme.accent, 0.10)
+            : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
+        : _selected ? Theme.accent
                 : _isStuck ? Theme.p0
                 : hoverArea.containsMouse ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active ? 2 : (_isStuck ? 2 : 1)
+    border.width: dragArea.drag.active ? 2 : (_selected ? 2 : (_isStuck ? 2 : 1))
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
@@ -239,6 +248,29 @@ Rectangle {
         }
     }
 
+    // "+N" badge shown while dragging a selected card with siblings.
+    Rectangle {
+        visible: dragArea.drag.active && card._selected && AppController.selectionCount > 1
+        anchors.top: parent.top; anchors.right: parent.right
+        anchors.margins: -6
+        z: 5
+        width: bulkT.implicitWidth + 10
+        height: 18
+        radius: 9
+        color: Theme.accent
+        border.color: Theme.accentStrong
+        border.width: 1
+        Text {
+            id: bulkT
+            anchors.centerIn: parent
+            text: "+" + (AppController.selectionCount - 1)
+            color: "#06121a"
+            font.family: Theme.fontMono
+            font.pixelSize: 10
+            font.weight: Font.DemiBold
+        }
+    }
+
     MouseArea {
         id: hoverArea
         anchors.fill: parent
@@ -263,7 +295,18 @@ Rectangle {
             card.Drag.drop();
             card.x = card.homeX; card.y = card.homeY;
             didDrag = false;
-            if (!wasDrag && mouse.button === Qt.LeftButton) card.clicked();
+            if (wasDrag || mouse.button !== Qt.LeftButton) return;
+
+            const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
+            const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
+            if (ctrl) {
+                AppController.toggleTaskSelection(card.taskId);
+            } else if (shift) {
+                card.rangeSelectRequested(card.taskId);
+            } else {
+                if (AppController.selectionCount > 0) AppController.clearSelection();
+                card.clicked();
+            }
         }
     }
 

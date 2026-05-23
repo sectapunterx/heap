@@ -50,6 +50,11 @@ Rectangle {
             glyph: "◫"; tooltipText: I18n.t("siderail.tip.week")
                    active: AppController.currentView === "week"
                    onActivated: AppController.currentView = "week" }
+        RailBtn {
+            glyph: "▤"; tooltipText: I18n.t("siderail.tip.archive")
+            active: AppController.currentView === "archive"
+            onActivated: AppController.currentView = "archive"
+        }
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 

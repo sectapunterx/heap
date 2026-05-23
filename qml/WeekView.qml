@@ -14,6 +14,68 @@ Item {
     signal eventClicked(string id)
     signal dayClicked(date d)
 
+    // Shift-click anchor + day for range select. Shift across days falls back
+    // to single-toggle since the visible-chip order isn't a single flat list.
+    property string shiftAnchorId: ""
+    property int    shiftAnchorDay: -1
+    Connections {
+        target: AppController
+
+        function onSelectedTaskIdsChanged() {
+            if (AppController.selectionCount === 0) {
+                root.shiftAnchorId = "";
+                root.shiftAnchorDay = -1;
+            }
+        }
+    }
+
+    function _renderedIdsForDay(dayIdx) {
+        if (dayIdx < 0 || dayIdx >= days.length) return [];
+        const list = days[dayIdx].tasks.slice(0, 4);
+        const ids = [];
+        for (let i = 0; i < list.length; i++) ids.push(list[i].id);
+        return ids;
+    }
+
+    function _dayIndexOfTask(taskId) {
+        for (let i = 0; i < days.length; i++) {
+            const ids = _renderedIdsForDay(i);
+            if (ids.indexOf(taskId) >= 0) return i;
+        }
+        return -1;
+    }
+
+    function selectAllVisible() {
+        const ids = [];
+        for (let i = 0; i < days.length; i++) {
+            const part = _renderedIdsForDay(i);
+            for (let j = 0; j < part.length; j++) ids.push(part[j]);
+        }
+        AppController.setSelectedTaskIds(ids);
+    }
+
+    function _rangeSelect(targetId) {
+        const targetDay = _dayIndexOfTask(targetId);
+        if (targetDay < 0) return;
+        if (root.shiftAnchorId === "" || root.shiftAnchorDay !== targetDay
+            || _renderedIdsForDay(targetDay).indexOf(root.shiftAnchorId) < 0) {
+            root.shiftAnchorId = targetId;
+            root.shiftAnchorDay = targetDay;
+            AppController.toggleTaskSelection(targetId);
+            return;
+        }
+        const ordered = _renderedIdsForDay(targetDay);
+        const ai = ordered.indexOf(root.shiftAnchorId);
+        const ti = ordered.indexOf(targetId);
+        const lo = Math.min(ai, ti);
+        const hi = Math.max(ai, ti);
+        const merged = AppController.selectedTaskIds.slice();
+        for (let i = lo; i <= hi; i++) {
+            if (merged.indexOf(ordered[i]) < 0) merged.push(ordered[i]);
+        }
+        AppController.setSelectedTaskIds(merged);
+    }
+
     readonly property int hoursStart: AppController.workdayStart
     readonly property int hoursEnd:   AppController.workdayEnd
     readonly property int hourH: 38
@@ -329,12 +391,16 @@ Item {
                                     model: headCol.modelData.tasks.slice(0, 4)
                                     delegate: Rectangle {
                                         required property var modelData
+                                        readonly property bool _selected: AppController.selectionCount >= 0
+                                            && AppController.isTaskSelected(modelData.id)
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 22
                                         radius: 4
-                                        color: chipMA.containsMouse ? Theme.panel2 : Theme.panel3
-                                        border.color: Theme.withAlpha(Theme.priorityColor(modelData.priority), 0.45)
-                                        border.width: 1
+                                        color: _selected ? Theme.withAlpha(Theme.accent, 0.18)
+                                            : chipMA.containsMouse ? Theme.panel2 : Theme.panel3
+                                        border.color: _selected ? Theme.accent
+                                            : Theme.withAlpha(Theme.priorityColor(modelData.priority), 0.45)
+                                        border.width: _selected ? 2 : 1
 
                                         RowLayout {
                                             anchors.fill: parent
@@ -363,7 +429,19 @@ Item {
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
-                                            onClicked: root.taskClicked(modelData.id)
+                                            acceptedButtons: Qt.LeftButton
+                                            onClicked: (mouse) => {
+                                                const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
+                                                const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
+                                                if (ctrl) {
+                                                    AppController.toggleTaskSelection(modelData.id);
+                                                } else if (shift) {
+                                                    root._rangeSelect(modelData.id);
+                                                } else {
+                                                    if (AppController.selectionCount > 0) AppController.clearSelection();
+                                                    root.taskClicked(modelData.id);
+                                                }
+                                            }
                                             ToolTip.visible: containsMouse
                                             ToolTip.delay: 400
                                             ToolTip.text: modelData.title

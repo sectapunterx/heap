@@ -172,17 +172,27 @@ ApplicationWindow {
                     onClearPriorities: win.prioritiesFilter = ({})
                     onToggleArchived: win.showArchived = !win.showArchived
                 }
-                Loader {
-                    id: viewLoader
+                Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    sourceComponent: {
-                        if (AppController.currentView === "timeline") return timelineComp;
-                        if (AppController.currentView === "week")     return weekComp;
-                        if (AppController.currentView === "docs")     return docsComp;
-                        if (AppController.currentView === "notes")    return notesComp;
-                        if (AppController.currentView === "settings") return settingsComp;
-                        return boardComp;
+                    Loader {
+                        id: viewLoader
+                        anchors.fill: parent
+                        sourceComponent: {
+                            if (AppController.currentView === "timeline") return timelineComp;
+                            if (AppController.currentView === "week") return weekComp;
+                            if (AppController.currentView === "archive") return archiveComp;
+                            if (AppController.currentView === "docs") return docsComp;
+                            if (AppController.currentView === "notes") return notesComp;
+                            if (AppController.currentView === "settings") return settingsComp;
+                            return boardComp;
+                        }
+                    }
+                    SelectionBar {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        anchors.bottom: parent.bottom
+                        anchors.bottomMargin: 16
+                        z: 50
                     }
                 }
                 Component {
@@ -216,6 +226,14 @@ ApplicationWindow {
                         showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onEventClicked: (id) => eventEditor.showForId(id)
+                    }
+                }
+                Component {
+                    id: archiveComp
+                    ArchiveView {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                     }
                 }
                 Component {
@@ -465,6 +483,33 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: topBar.focusSearch()
+    }
+
+    Shortcut {
+        sequence: _kbd("selection.selectAll")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+            && (AppController.currentView === "board"
+                || AppController.currentView === "timeline"
+                || AppController.currentView === "week")
+        onActivated: {
+            const v = viewLoader.item;
+            if (v && v.selectAllVisible) v.selectAllVisible();
+        }
+    }
+    Shortcut {
+        sequence: _kbd("selection.clearSel")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+            && AppController.selectionCount > 0
+        onActivated: AppController.clearSelection()
+    }
+    Shortcut {
+        sequence: _kbd("selection.deleteSel")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+            && AppController.selectionCount > 0
+        onActivated: AppController.deleteSelectedTasks()
     }
 
     Connections {

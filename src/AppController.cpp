@@ -110,6 +110,26 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.quick-capture.label", {"Quick-capture task", "Быстрое создание задачи"}},
       {"shortcut.quick-capture.desc",
        {"Open Quick-capture with on-the-fly date parsing.", "Открыть Quick-capture с разбором даты на лету."}},
+      {"shortcut.selection.selectAll.label", {"Select all visible", "Выделить все видимые"}},
+      {"shortcut.selection.selectAll.desc",
+       {"Select every ticket visible in the current view.", "Выделить все тикеты, видимые в текущем виде."}},
+      {"shortcut.selection.clearSel.label", {"Clear selection", "Снять выделение"}},
+      {"shortcut.selection.clearSel.desc", {"Drop the current multi-selection.", "Сбросить текущее множественное выделение."}},
+      {"shortcut.selection.deleteSel.label", {"Delete selection", "Удалить выделенные"}},
+      {"shortcut.selection.deleteSel.desc",
+       {"Delete every selected ticket (undoable for 5s).", "Удалить все выделенные тикеты (отменимо 5 с)."}},
+      // ---- Selection action bar ----
+      {"selection.bar.count", {"%1 selected", "Выделено: %1"}},
+      {"selection.bar.move", {"Move to…", "Переместить…"}},
+      {"selection.bar.archive", {"Archive", "Архивировать"}},
+      {"selection.bar.unarchive", {"Unarchive", "Из архива"}},
+      {"selection.bar.delete", {"Delete", "Удалить"}},
+      {"selection.bar.clear", {"Clear", "Снять"}},
+      {"selection.toast.deleted", {"Deleted %1 tasks", "Удалено задач: %1"}},
+      {"selection.toast.restored", {"Restored %1 tasks", "Восстановлено задач: %1"}},
+      {"selection.toast.moved", {"Moved %1 tasks", "Перемещено задач: %1"}},
+      {"selection.toast.archived", {"Archived %1 tasks", "В архив: %1"}},
+      {"selection.toast.unarchived", {"Unarchived %1 tasks", "Из архива: %1"}},
       // ---- Notification copy ----
       {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
       {"notify.deadlineWhen.h1", {"in 1 hour", "через час"}},
@@ -382,6 +402,7 @@ void AppController::setCurrentView(const QString& v) {
     return;
   }
   m_currentView = v;
+  clearSelection();
   emit currentViewChanged();
   scheduleSave();
 }
@@ -543,6 +564,22 @@ void AppController::saveTask(const QVariantMap& draft) {
   const bool isNew = draft.value("_isNew").toBool();
   if(isNew && t.title.trimmed().isEmpty()) {
     return;
+  }
+
+  // Preserve fields the editor doesn't expose. Without this, opening an
+  // archived ticket and hitting Save silently unarchives it (struct
+  // defaults to archived=false), and any edit wipes statusChangedAt,
+  // breaking auto-archive-after-N-days. If the draft explicitly carries
+  // the flag (round-tripped through taskById), honour it.
+  if(!isNew) {
+    const QString originalForLookup = draft.value("_originalId").toString().trimmed();
+    const QString priorId = originalForLookup.isEmpty() ? t.id : originalForLookup;
+    const int existing = m_tasks.indexOfId(priorId);
+    if(existing >= 0) {
+      const Task& prev = m_tasks.items().at(existing);
+      t.archived = draft.contains("archived") ? draft.value("archived").toBool() : prev.archived;
+      t.statusChangedAt = prev.statusChangedAt;
+    }
   }
 
   // ── Rename path ──
@@ -1006,6 +1043,7 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["status"] = t.status;
   m["deadline"] = t.deadline;
   m["branch"] = t.branch;
+  m["archived"] = t.archived;
   return m;
 }
 
@@ -1216,6 +1254,19 @@ void AppController::undoLastDeletion() {
         m_events.setTaskId(pair.first, pair.second);
       }
       emit toast(tr_("task.restored").arg(m_pendingUndo.task.id));
+      break;
+    }
+    case PendingUndo::BulkTasks: {
+      // m_pendingUndo.tasks/rows captured in ascending row order; re-insert
+      // in that same order so earlier indices stay valid.
+      for(int i = 0; i < m_pendingUndo.tasks.size(); ++i) {
+        const int row = qBound(0, m_pendingUndo.rows.value(i, m_tasks.rowCount()), m_tasks.rowCount());
+        m_tasks.insertAt(row, m_pendingUndo.tasks.at(i));
+      }
+      for(const auto& pair : m_pendingUndo.detachedEventIds) {
+        m_events.setTaskId(pair.first, pair.second);
+      }
+      emit toast(tr_("selection.toast.restored").arg(m_pendingUndo.tasks.size()));
       break;
     }
     case PendingUndo::Event: {
@@ -1815,6 +1866,7 @@ void AppController::setActiveProfileId(const QString& id) {
   if(next < 0) {
     return;
   }
+  clearSelection();
   snapshotActiveProfile();
   m_activeProfileId = id;
   applyProfileToModels(m_profiles[next]);
@@ -2300,6 +2352,9 @@ void AppController::seedShortcutCatalog() {
   add("undo", "Ctrl+Z");
   add("search.focus", "Ctrl+F");
   add("quick-capture", "Ctrl+Shift+Space");
+  add("selection.selectAll", "Ctrl+A");
+  add("selection.clearSel", "Esc");
+  add("selection.deleteSel", "Del");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;
@@ -2501,6 +2556,189 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
 void AppController::setArchived(const QString& taskId, bool archived) {
   m_tasks.setArchived(taskId, archived);
   scheduleSave();
+}
+
+// ─────────────────────────────────────────────────── Multi-select ──
+
+bool AppController::isTaskSelected(const QString& id) const {
+  return m_selectedTaskIds.contains(id);
+}
+
+void AppController::rebuildSelectionList_() {
+  // Stable order: by current row in m_tasks. Tasks no longer present (e.g.
+  // deleted while selected) drop out of the list.
+  QVector<QPair<int, QString>> rows;
+  rows.reserve(m_selectedTaskIds.size());
+  for(const QString& id : m_selectedTaskIds) {
+    const int r = m_tasks.indexOfId(id);
+    if(r >= 0) {
+      rows.append({r, id});
+    }
+  }
+  std::sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) {
+    return a.first < b.first;
+  });
+  QSet<QString> live;
+  QStringList list;
+  list.reserve(rows.size());
+  for(const auto& p : rows) {
+    list.append(p.second);
+    live.insert(p.second);
+  }
+  m_selectedTaskIds = live;
+  m_selectedTaskIdsList = list;
+}
+
+void AppController::toggleTaskSelection(const QString& id) {
+  if(id.isEmpty()) {
+    return;
+  }
+  if(m_selectedTaskIds.contains(id)) {
+    m_selectedTaskIds.remove(id);
+  } else {
+    m_selectedTaskIds.insert(id);
+  }
+  rebuildSelectionList_();
+  emit selectedTaskIdsChanged();
+}
+
+void AppController::setTaskSelected(const QString& id, bool selected) {
+  if(id.isEmpty()) {
+    return;
+  }
+  const bool had = m_selectedTaskIds.contains(id);
+  if(selected == had) {
+    return;
+  }
+  if(selected) {
+    m_selectedTaskIds.insert(id);
+  } else {
+    m_selectedTaskIds.remove(id);
+  }
+  rebuildSelectionList_();
+  emit selectedTaskIdsChanged();
+}
+
+void AppController::setSelectedTaskIds(const QStringList& ids) {
+  const QSet<QString> next(ids.constBegin(), ids.constEnd());
+  if(next == m_selectedTaskIds) {
+    return;
+  }
+  m_selectedTaskIds = next;
+  rebuildSelectionList_();
+  emit selectedTaskIdsChanged();
+}
+
+void AppController::clearSelection() {
+  if(m_selectedTaskIds.isEmpty() && m_selectedTaskIdsList.isEmpty()) {
+    return;
+  }
+  m_selectedTaskIds.clear();
+  m_selectedTaskIdsList.clear();
+  emit selectedTaskIdsChanged();
+}
+
+void AppController::deleteSelectedTasks() {
+  if(m_selectedTaskIdsList.isEmpty()) {
+    return;
+  }
+
+  // Snapshot tasks + rows in ascending-row order for clean re-insertion.
+  QVector<QPair<int, ::Task>> snap;
+  snap.reserve(m_selectedTaskIdsList.size());
+  for(const QString& id : m_selectedTaskIdsList) {
+    const int row = m_tasks.indexOfId(id);
+    if(row < 0) {
+      continue;
+    }
+    snap.append({row, m_tasks.items().at(row)});
+  }
+  if(snap.isEmpty()) {
+    clearSelection();
+    return;
+  }
+  std::sort(snap.begin(), snap.end(), [](const auto& a, const auto& b) {
+    return a.first < b.first;
+  });
+
+  cancelUndo();
+  m_pendingUndo = {};
+  m_pendingUndo.kind = PendingUndo::BulkTasks;
+  m_pendingUndo.tasks.reserve(snap.size());
+  m_pendingUndo.rows.reserve(snap.size());
+  QSet<QString> ids;
+  for(const auto& p : snap) {
+    m_pendingUndo.rows.append(p.first);
+    m_pendingUndo.tasks.append(p.second);
+    ids.insert(p.second.id);
+  }
+  for(const auto& e : m_events.items()) {
+    if(ids.contains(e.taskId)) {
+      m_pendingUndo.detachedEventIds.append({e.id, e.taskId});
+    }
+  }
+  // Detach events first, then remove tasks. Removal order doesn't matter
+  // for removeById; we walk the snapshot in any direction.
+  for(const QString& id : std::as_const(ids)) {
+    m_events.detachTask(id);
+  }
+  for(const auto& p : snap) {
+    m_tasks.removeById(p.second.id);
+  }
+
+  const int n = snap.size();
+  armUndo(5);
+  emit undoableToast(tr_("selection.toast.deleted").arg(n), 5);
+  clearSelection();
+  scheduleSave();
+}
+
+void AppController::moveSelectedTasksToStatus(const QString& statusId) {
+  if(m_selectedTaskIdsList.isEmpty() || statusId.isEmpty()) {
+    return;
+  }
+  if(statusIndexOf(statusId) < 0) {
+    return;
+  }
+  int moved = 0;
+  for(const QString& id : m_selectedTaskIdsList) {
+    const int row = m_tasks.indexOfId(id);
+    if(row < 0) {
+      continue;
+    }
+    if(m_tasks.items().at(row).status == statusId) {
+      continue;
+    }
+    m_tasks.setStatus(id, statusId);
+    m_tasks.stampStatusChange(id);
+    ++moved;
+  }
+  if(moved > 0) {
+    emit toast(tr_("selection.toast.moved").arg(moved));
+    scheduleSave();
+  }
+}
+
+void AppController::setSelectedTasksArchived(bool archived) {
+  if(m_selectedTaskIdsList.isEmpty()) {
+    return;
+  }
+  int n = 0;
+  for(const QString& id : m_selectedTaskIdsList) {
+    if(m_tasks.indexOfId(id) < 0) {
+      continue;
+    }
+    m_tasks.setArchived(id, archived);
+    ++n;
+  }
+  if(n > 0) {
+    emit toast(tr_(archived ? "selection.toast.archived" : "selection.toast.unarchived").arg(n));
+    // Drop the selection after a bulk archive/restore. Tickets just left
+    // the current view (archive view loses unarchived ones; board loses
+    // archived ones), so keeping the prior selection is confusing.
+    clearSelection();
+    scheduleSave();
+  }
 }
 
 void AppController::notify(const QString& title, const QString& body, const QString& kind) {
