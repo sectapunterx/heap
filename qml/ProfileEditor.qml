@@ -69,9 +69,9 @@ Popup {
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
-            text: root.mode === "create"    ? "Новый профиль"
-                : root.mode === "rename"    ? "Переименовать профиль"
-                                            : "Дублировать профиль"
+            text: root.mode === "create" ? I18n.t("editor.profile.new")
+                : root.mode === "rename" ? I18n.t("editor.profile.rename")
+                    : I18n.t("editor.profile.dup")
             color: Theme.text
             font.pixelSize: 14
             font.weight: Font.DemiBold
@@ -79,7 +79,7 @@ Popup {
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
-            text: "НАЗВАНИЕ"
+            text: I18n.t("common.title").toUpperCase()
             color: Theme.textMuted; font.pixelSize: 10
             font.weight: Font.DemiBold; font.letterSpacing: 1
         }
@@ -96,7 +96,7 @@ Popup {
 
         Text {
             Layout.leftMargin: 18; Layout.rightMargin: 18
-            text: "ЦВЕТ"
+            text: I18n.t("common.color").toUpperCase()
             color: Theme.textMuted; font.pixelSize: 10
             font.weight: Font.DemiBold; font.letterSpacing: 1
         }
@@ -127,11 +127,13 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.topMargin: 8; Layout.bottomMargin: 16
             Item { Layout.fillWidth: true }
-            PillButton { text: "Отмена"; onClicked: root.close() }
+            PillButton {
+                text: I18n.t("common.cancel"); onClicked: root.close()
+            }
             PillButton {
                 id: saveBtn
                 primary: true
-                text: root.mode === "rename" ? "Сохранить" : "Создать"
+                text: root.mode === "rename" ? I18n.t("editor.btn.save") : I18n.t("editor.btn.create")
                 function activate() {
                     const name = nameField.text.trim();
                     if (name.length === 0) return;

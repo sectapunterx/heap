@@ -99,15 +99,25 @@ Popup {
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
-                SectLabel { text: "Внешний вид" }
-                FieldLabel { text: "Тема" }
+                SectLabel {
+                    text: I18n.t("tweaks.section.appearance")
+                }
+                FieldLabel {
+                    text: I18n.t("tweaks.theme")
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 4
-                    SegButton { text: "Тёмная";  active: AppController.theme === "dark";  onClicked: AppController.theme = "dark" }
-                    SegButton { text: "Светлая"; active: AppController.theme === "light"; onClicked: AppController.theme = "light" }
+                    SegButton {
+                        text: I18n.t("settings.appearance.theme.dark"); active: AppController.theme === "dark"; onClicked: AppController.theme = "dark"
+                    }
+                    SegButton {
+                        text: I18n.t("settings.appearance.theme.light"); active: AppController.theme === "light"; onClicked: AppController.theme = "light"
+                    }
                 }
-                FieldLabel { text: "Плотность"; topPadding: 6 }
+                FieldLabel {
+                    text: I18n.t("tweaks.density.label"); topPadding: 6
+                }
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 4
@@ -120,7 +130,9 @@ Popup {
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
-                SectLabel { text: "Акцент" }
+                SectLabel {
+                    text: I18n.t("tweaks.accent")
+                }
                 Flow {
                     Layout.fillWidth: true
                     spacing: 6
@@ -148,14 +160,16 @@ Popup {
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
-                SectLabel { text: "Доступность" }
+                SectLabel {
+                    text: I18n.t("tweaks.section.access")
+                }
                 ToggleRow {
-                    label: "Reduced motion"
+                    label: I18n.t("settings.appearance.reducedMotion")
                     checked: !!root._appearanceValue("reducedMotion", false)
                     onToggled: (v) => root._setAppearance("reducedMotion", v)
                 }
                 ToggleRow {
-                    label: "High contrast"
+                    label: I18n.t("settings.appearance.highContrast")
                     checked: !!root._appearanceValue("highContrast", false)
                     onToggled: (v) => root._setAppearance("highContrast", v)
                 }
@@ -164,7 +178,7 @@ Popup {
             // Hint: deeper config still lives in Settings.
             Text {
                 Layout.fillWidth: true
-                text: "Все остальные параметры — в Settings"
+                text: I18n.t("tweaks.allInSettings")
                 color: Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: 10

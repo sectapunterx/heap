@@ -141,7 +141,7 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18
             spacing: 8
             Text {
-                text: root.isNew ? "Новая задача" : "Редактировать задачу"
+                text: root.isNew ? I18n.t("editor.new.task") : I18n.t("editor.edit.task")
                 color: Theme.text
                 font.pixelSize: 14
                 font.weight: Font.DemiBold
@@ -160,7 +160,7 @@ Popup {
         }
 
         FieldLabel {
-            text: "ID ТИКЕТА"; Layout.leftMargin: 18; Layout.rightMargin: 18
+            text: I18n.t("editor.label.ticketId").toUpperCase(); Layout.leftMargin: 18; Layout.rightMargin: 18
         }
         TextField {
             id: idField
@@ -168,7 +168,7 @@ Popup {
             Layout.fillWidth: true
             // New tasks: TODO placeholder — final id is generated on save.
             // Edit: pre-filled with the current id (still editable).
-            placeholderText: root.isNew ? "TODO — присвоится при сохранении"
+            placeholderText: root.isNew ? I18n.t("editor.ph.ticketId")
                                         : "LTE-XXXX"
             font.family: Theme.fontMono
             background: FieldBg {
@@ -183,13 +183,13 @@ Popup {
         }
 
         FieldLabel {
-            text: "ЗАГОЛОВОК"; Layout.leftMargin: 18; Layout.rightMargin: 18
+            text: I18n.t("editor.label.title").toUpperCase(); Layout.leftMargin: 18; Layout.rightMargin: 18
         }
         TextField {
             id: titleField
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
-            placeholderText: "Короткое summary"
+            placeholderText: I18n.t("editor.ph.titleShort")
             background: FieldBg {
             }
             color: Theme.text
@@ -197,7 +197,7 @@ Popup {
         }
 
         FieldLabel {
-            text: "ОПИСАНИЕ"; Layout.leftMargin: 18; Layout.rightMargin: 18
+            text: I18n.t("editor.label.desc").toUpperCase(); Layout.leftMargin: 18; Layout.rightMargin: 18
         }
         ScrollView {
             Layout.leftMargin: 18; Layout.rightMargin: 18
@@ -205,7 +205,7 @@ Popup {
             Layout.preferredHeight: 70
             TextArea {
                 id: descField
-                placeholderText: "Контекст, ссылки, спецификация…"
+                placeholderText: I18n.t("editor.ph.desc")
                 wrapMode: TextEdit.Wrap
                 background: FieldBg {
                 }
@@ -221,10 +221,10 @@ Popup {
             columnSpacing: 10
             rowSpacing: 4
             FieldLabel {
-                text: "СТАТУС"
+                text: I18n.t("editor.label.status").toUpperCase()
             }
             FieldLabel {
-                text: "ПРИОРИТЕТ"
+                text: I18n.t("editor.label.priority").toUpperCase()
             }
             ComboBox {
                 id: statusBox
@@ -253,7 +253,7 @@ Popup {
                 }
             }
             FieldLabel {
-                text: "ДЕДЛАЙН (любой формат)"
+                text: I18n.t("editor.label.deadline").toUpperCase()
             }
             FieldLabel {
                 text: "BRANCH"
@@ -264,7 +264,7 @@ Popup {
                 TextField {
                     id: deadlineField
                     Layout.fillWidth: true
-                    placeholderText: "завтра, 22 мая, in 2 weeks…"
+                    placeholderText: I18n.t("editor.ph.deadline")
                     font.family: Theme.fontMono
                     background: Rectangle {
                         radius: 6
@@ -287,7 +287,7 @@ Popup {
                     }
                     ToolTip.visible: hovered && text.length > 0 &&
                         root._deadlinePreview && !root._deadlinePreview.ok
-                    ToolTip.text: "не распознано"
+                    ToolTip.text: I18n.t("editor.tip.unrecognized")
                 }
                 Timer {
                     id: deadlinePreviewTimer
@@ -343,7 +343,7 @@ Popup {
             spacing: 8
             PillButton {
                 visible: !root.isNew
-                text: "Удалить"
+                text: I18n.t("common.delete")
                 danger: true
                 onClicked: {
                     AppController.deleteTask(idField.text);
@@ -354,11 +354,11 @@ Popup {
                 Layout.fillWidth: true
             }
             PillButton {
-                text: "Отмена"
+                text: I18n.t("common.cancel")
                 onClicked: root.close()
             }
             PillButton {
-                text: root.isNew ? "Создать" : "Сохранить"
+                text: root.isNew ? I18n.t("editor.btn.create") : I18n.t("editor.btn.save")
                 primary: true
                 onClicked: {
                     // New tasks: if user left idField blank, fall back to the

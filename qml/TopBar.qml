@@ -137,17 +137,27 @@ Rectangle {
                         onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
                     }
                     QQC.MenuSeparator {}
-                    QQC.MenuItem { text: "+ Новый профиль…";        onTriggered: root.newProfileRequested() }
-                    QQC.MenuItem { text: "Переименовать активный…"; onTriggered: root.renameProfileRequested() }
-                    QQC.MenuItem { text: "Дублировать активный…";   onTriggered: root.duplicateProfileRequested() }
                     QQC.MenuItem {
-                        text: "Удалить активный"
+                        text: I18n.t("topbar.profile.new"); onTriggered: root.newProfileRequested()
+                    }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.profile.rename"); onTriggered: root.renameProfileRequested()
+                    }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested()
+                    }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.profile.delete")
                         enabled: AppController.profiles.length > 1
                         onTriggered: AppController.deleteProfile(AppController.activeProfileId)
                     }
                     QQC.MenuSeparator {}
-                    QQC.MenuItem { text: "Импорт из JSON…"; onTriggered: root.importJsonRequested() }
-                    QQC.MenuItem { text: "Экспорт в JSON…"; onTriggered: root.exportJsonRequested() }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested()
+                    }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested()
+                    }
                 }
             }
         }
@@ -240,7 +250,7 @@ Rectangle {
                 TextField {
                     id: searchField
                     Layout.fillWidth: true
-                    placeholderText: "Поиск задач, ID, branch…"
+                    placeholderText: I18n.t("topbar.search")
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
                     font.family: Theme.fontUi

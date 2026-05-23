@@ -196,7 +196,7 @@ Item {
                                     onActivated: AppController.moveStatus(col.statusId, col.index + 1)
                                 }
                                 HoverIcon {
-                                    glyph: "×"; tip: "Удалить колонку"
+                                    glyph: "×"; tip: I18n.t("kanban.deleteColumn")
                                     danger: true
                                     visible: headHover.containsMouse && AppController.statuses.length > 1
                                     onActivated: AppController.deleteStatus(col.statusId)
@@ -340,7 +340,7 @@ Item {
                                         visible: col.visibleCount === 0
                                         width: bodyCol.width
                                         topPadding: 12
-                                        text: "— пусто —"
+                                        text: I18n.t("kanban.empty")
                                         color: Theme.textDim
                                         font.italic: true
                                         font.pixelSize: 11
@@ -420,7 +420,7 @@ Item {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: "Новая колонка"
+                        text: I18n.t("kanban.newColumn")
                         color: addColMA.containsMouse ? Theme.text : Theme.textDim
                         font.pixelSize: 12
                     }
@@ -463,8 +463,12 @@ Item {
         contentItem: ColumnLayout {
             spacing: 10
             Item { Layout.preferredHeight: 4 }
-            Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "Новая колонка"; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
-            Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "НАЗВАНИЕ"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Text {
+                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
+            }
+            Text {
+                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
             TextField {
                 id: nameField
                 Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
@@ -474,7 +478,9 @@ Item {
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: saveBtn.activate()
             }
-            Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "ЦВЕТ"; color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Text {
+                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
             Row {
                 Layout.leftMargin: 18; Layout.rightMargin: 18
                 spacing: 6
@@ -494,10 +500,12 @@ Item {
             RowLayout {
                 Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 16; Layout.topMargin: 8
                 Item { Layout.fillWidth: true }
-                PillButton { text: "Отмена"; onClicked: addColumnPopup.close() }
+                PillButton {
+                    text: I18n.t("common.cancel"); onClicked: addColumnPopup.close()
+                }
                 PillButton {
                     id: saveBtn
-                    text: "Создать"; primary: true
+                    text: I18n.t("kanban.create"); primary: true
                     function activate() {
                         const n = nameField.text.trim();
                         if (n.length === 0) return;

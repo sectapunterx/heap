@@ -282,29 +282,33 @@ Rectangle {
                 rightPadding: 12
             }
         }
-        QQC.MenuItem { text: "✎  Редактировать";          onTriggered: card.clicked() }
+        QQC.MenuItem {
+            text: "✎  " + I18n.t("taskcard.edit"); onTriggered: card.clicked()
+        }
         QQC.MenuSeparator {}
         QQC.MenuItem {
-            text: "⏰  Запланировать в календарь"
+            text: "⏰  " + I18n.t("taskcard.schedule")
             onTriggered: {
                 if (!card.task) return;
                 AppController.scheduleTask(card.task.id, 14, AppController.selectedDate);
             }
         }
         QQC.MenuItem {
-            text: "⎘  Копировать ID"
+            text: "⎘  " + I18n.t("taskcard.copyId")
             onTriggered: {
                 if (card.task && card.task.id) AppController.copyToClipboard(card.task.id);
             }
         }
         QQC.MenuItem {
-            text: "⎇  Копировать branch"
+            text: "⎇  " + I18n.t("taskcard.copyBranch")
             enabled: card.task && card.task.branch && String(card.task.branch).length > 0
             onTriggered: {
                 if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
             }
         }
         QQC.MenuSeparator {}
-        QQC.MenuItem { text: "×  Удалить"; onTriggered: AppController.deleteTask(card.taskId) }
+        QQC.MenuItem {
+            text: "×  " + I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
+        }
     }
 }

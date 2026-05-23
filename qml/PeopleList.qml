@@ -26,7 +26,7 @@ Rectangle {
             Layout.fillWidth: true
             spacing: 6
             Text {
-                text: "КОМУ НАПИСАТЬ"
+                text: I18n.t("people.label.title")
                 color: Theme.textMuted
                 font.pixelSize: 11
                 font.letterSpacing: 1
@@ -71,7 +71,7 @@ Rectangle {
                     onClicked: root.newPersonRequested()
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 400
-                    ToolTip.text: "Добавить контакт"
+                    ToolTip.text: I18n.t("people.tip.add")
                 }
             }
         }
@@ -201,7 +201,7 @@ Rectangle {
                                 onClicked: root.personRequested(prow.id)
                                 ToolTip.visible: containsMouse
                                 ToolTip.delay: 400
-                                ToolTip.text: "Редактировать"
+                                ToolTip.text: I18n.t("people.tip.edit")
                             }
                         }
                     }
@@ -221,9 +221,9 @@ Rectangle {
                         Text {
                             id: stT
                             anchors.centerIn: parent
-                            text: prow.state === "todo" ? "НАПИСАТЬ"
-                                : prow.state === "pinged" ? "НАПИСАЛ"
-                                : "ОТВЕТИЛ"
+                            text: prow.state === "todo" ? I18n.t("people.state.todo.tag")
+                                : prow.state === "pinged" ? I18n.t("people.state.pinged.tag")
+                                    : I18n.t("people.state.replied.tag")
                             color: prow.state === "pinged" ? Theme.p1
                                  : prow.state === "replied" ? Theme.stDone
                                  : Theme.textMuted
@@ -239,7 +239,7 @@ Rectangle {
                             onClicked: AppController.cyclePerson(prow.id)
                             ToolTip.visible: containsMouse
                             ToolTip.delay: 400
-                            ToolTip.text: "написать → написал → ответил"
+                            ToolTip.text: I18n.t("people.tip.cycle")
                         }
                     }
                 }

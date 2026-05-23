@@ -31,6 +31,122 @@
 namespace {
 constexpr int kBackupIntervalSeconds = 5 * 60;
 constexpr int kBackupRetentionCount = 20;
+
+// EN/RU string table for toast / system messages emitted from C++. QML chrome
+// lives in qml/I18n.qml — this map only covers text produced by AppController
+// itself. Keep keys stable: they are referenced from rewrite sites below.
+struct I18nEntry {
+  const char* en;
+  const char* ru;
+};
+
+const QHash<QString, I18nEntry>& i18nTable() {
+  static const QHash<QString, I18nEntry> table = {
+      {"task.created", {"Created: %1", "Создано: %1"}},
+      {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
+      {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
+      {"event.deleted", {"Deleted event: %1", "Удалено событие: %1"}},
+      {"event.restored", {"Restored: %1", "Восстановлено: %1"}},
+      {"event.scheduled", {"%1 scheduled for %2", "%1 запланировано на %2"}},
+      {"person.added", {"Added: %1", "Добавлен: %1"}},
+      {"person.deleted", {"Removed: %1", "Удалён: %1"}},
+      {"person.restored", {"Restored: %1", "Восстановлён: %1"}},
+      {"status.added", {"Column added: %1", "Колонка добавлена: %1"}},
+      {"status.deleted", {"Column removed: %1", "Удалена колонка: %1"}},
+      {"status.restored", {"Column restored: %1", "Восстановлена колонка: %1"}},
+      {"profile.created", {"Profile created: %1", "Профиль создан: %1"}},
+      {"profile.deleted", {"Profile removed: %1", "Удалён профиль: %1"}},
+      {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
+      {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
+      {"profile.exported", {"Profile exported: %1", "Профиль экспортирован: %1"}},
+      {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
+      {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
+      {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
+      {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
+      {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
+      {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
+      {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
+      {"import.emptyJson", {"Empty JSON", "Пустой JSON"}},
+      {"import.invalidJson", {"Invalid JSON", "Невалидный JSON"}},
+      {"import.missingProfile", {"JSON has no 'profile' block or expected fields", "В JSON нет блока 'profile' или ожидаемых полей"}},
+      {"import.emptyPath", {"Empty path", "Пустой путь"}},
+      {"import.openFail", {"Cannot open: ", "Не открывается: "}},
+      {"event.newDefault", {"New event", "Новое событие"}},
+      // ---- Shortcuts catalog (labels + descriptions) ----
+      {"shortcut.palette.open.label", {"Open Command Palette", "Открыть Command Palette"}},
+      {"shortcut.palette.open.desc",
+       {"Global fuzzy search across tasks, docs, profiles.", "Глобальный fuzzy-поиск задач, доков, профилей."}},
+      {"shortcut.task.new.label", {"New task", "Новая задача"}},
+      {"shortcut.task.new.desc", {"Create a ticket in the active profile.", "Создать тикет в активном профиле."}},
+      {"shortcut.view.board.label", {"Go to Board", "Перейти в Board"}},
+      {"shortcut.view.board.desc", {"Kanban of the active profile.", "Канбан активного профиля."}},
+      {"shortcut.view.timeline.label", {"Go to Timeline", "Перейти в Timeline"}},
+      {"shortcut.view.timeline.desc", {"Feed by deadlines.", "Лента по дедлайнам."}},
+      {"shortcut.view.week.label", {"Go to Week", "Перейти в Week"}},
+      {"shortcut.view.week.desc", {"Seven-day planner.", "Семидневный планировщик."}},
+      {"shortcut.view.docs.label", {"Go to Docs", "Перейти в Docs"}},
+      {"shortcut.view.docs.desc", {"Specs, links, snippets, contacts.", "Спеки, ссылки, сниппеты, контакты."}},
+      {"shortcut.view.notes.label", {"Go to Notes", "Перейти в Notes"}},
+      {"shortcut.view.notes.desc", {"Markdown canvas of the active profile.", "Markdown-канвас активного профиля."}},
+      {"shortcut.view.settings.label", {"Go to Settings", "Перейти в Settings"}},
+      {"shortcut.view.settings.desc",
+       {"Full settings panel: profile, appearance, integrations.", "Полная панель настроек: профиль, внешний вид, интеграции."}},
+      {"shortcut.profile.next.label", {"Next profile", "Следующий профиль"}},
+      {"shortcut.profile.next.desc", {"Cycle forward through profiles.", "Циклит по списку профилей вперёд."}},
+      {"shortcut.profile.prev.label", {"Previous profile", "Предыдущий профиль"}},
+      {"shortcut.profile.prev.desc", {"Cycle backward through profiles.", "Циклит по списку профилей назад."}},
+      {"shortcut.profile.exportMd.label", {"Export profile to Markdown", "Экспорт профиля в Markdown"}},
+      {"shortcut.profile.exportMd.desc",
+       {"Puts a markdown summary of the active profile into the clipboard.", "Кладёт markdown-выжимку активного профиля в буфер."}},
+      {"shortcut.tweaks.open.label", {"Open Tweaks", "Открыть Tweaks"}},
+      {"shortcut.tweaks.open.desc", {"Theme, density, workday.", "Тема, плотность, рабочий день."}},
+      {"shortcut.hotkeys.open.label", {"Open Hotkeys", "Открыть Hotkeys"}},
+      {"shortcut.hotkeys.open.desc", {"This panel.", "Эта панель."}},
+      {"shortcut.undo.label", {"Undo deletion", "Отменить удаление"}},
+      {"shortcut.undo.desc",
+       {"Restore the last deleted task / event / profile.", "Восстановить последнюю удалённую задачу/событие/профиль."}},
+      {"shortcut.search.focus.label", {"Focus search", "Фокус в поиск"}},
+      {"shortcut.search.focus.desc", {"Move the cursor to the header search field.", "Перевести курсор в строку поиска в шапке."}},
+      {"shortcut.quick-capture.label", {"Quick-capture task", "Быстрое создание задачи"}},
+      {"shortcut.quick-capture.desc",
+       {"Open Quick-capture with on-the-fly date parsing.", "Открыть Quick-capture с разбором даты на лету."}},
+      // ---- Notification copy ----
+      {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
+      {"notify.deadlineWhen.h1", {"in 1 hour", "через час"}},
+      {"notify.deadlineWhen.hN", {"in %1 h", "через %1 ч"}},
+      {"notify.standupTitle", {"Standup soon", "Standup скоро"}},
+      {"notify.standupBody", {"In %1 min", "Через %1 мин"}},
+  };
+  return table;
+}
+
+// Localized month/weekday names used by humanDate() / shortDate(). Kept
+// inline so we don't depend on the host system locale being available.
+const QStringList& monthNamesLong(const QString& lang) {
+  static const QStringList en = {
+      "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
+  static const QStringList ru = {
+      "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"};
+  return (lang == "ru") ? ru : en;
+}
+
+const QStringList& monthNamesShort(const QString& lang) {
+  static const QStringList en = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
+  static const QStringList ru = {"янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"};
+  return (lang == "ru") ? ru : en;
+}
+
+const QStringList& weekdayNamesLong(const QString& lang) {
+  static const QStringList en = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
+  static const QStringList ru = {"понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"};
+  return (lang == "ru") ? ru : en;
+}
+
+const QStringList& weekdayNamesShort(const QString& lang) {
+  static const QStringList en = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
+  static const QStringList ru = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
+  return (lang == "ru") ? ru : en;
+}
 }  // namespace
 
 AppController::AppController(QObject* parent) :
@@ -89,6 +205,12 @@ AppController::AppController(QObject* parent) :
 
   seedShortcutCatalog();
 
+  // Re-localize shortcut catalog when language flips so the Settings →
+  // Shortcuts list and HotkeysPanel labels update in place.
+  connect(this, &AppController::languageChanged, this, [this]() {
+    seedShortcutCatalog();
+  });
+
   loadStateOnStart();
   m_automationTimer->start();
 
@@ -127,8 +249,9 @@ AppController::AppController(QObject* parent) :
     p.name = "Example";
     p.color = "#5cc2dd";
     p.createdAt = QDateTime::currentDateTime();
-    p.tasks = SampleData::tasks();
-    p.people = SampleData::people();
+    const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
+    p.tasks = SampleData::tasks(seedLang);
+    p.people = SampleData::people(seedLang);
     QVariantList st;
     for(const auto& m : SampleData::statuses()) {
       st.push_back(m);
@@ -139,7 +262,7 @@ AppController::AppController(QObject* parent) :
     m_activeProfileId = p.id;
 
     // Events are global; tag the sample events with this default profile.
-    QVector<CalEvent> sampleEvents = SampleData::events(m_today);
+    QVector<CalEvent> sampleEvents = SampleData::events(m_today, seedLang);
     for(CalEvent& e : sampleEvents) {
       e.profileId = p.id;
     }
@@ -228,6 +351,30 @@ void AppController::setDensity(const QString& d) {
   m_density = d;
   emit densityChanged();
   scheduleSave();
+}
+
+void AppController::setLanguage(const QString& v) {
+  const QString norm = (v == "ru") ? QStringLiteral("ru") : QStringLiteral("en");
+  if(norm == m_language) {
+    return;
+  }
+  m_language = norm;
+  emit languageChanged();
+  // Date helpers (shortDate, humanDate) depend on m_language — nudge any
+  // bindings that read them by re-emitting selectedDateChanged. Cheap, and
+  // keeps QML chrome that references AppController.shortDate(selectedDate)
+  // in sync without per-binding wiring.
+  emit selectedDateChanged();
+  scheduleSave();
+}
+
+QString AppController::tr_(const QString& key) const {
+  const auto& table = i18nTable();
+  const auto it = table.constFind(key);
+  if(it == table.constEnd()) {
+    return key;
+  }
+  return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
 }
 
 void AppController::setCurrentView(const QString& v) {
@@ -420,7 +567,7 @@ void AppController::saveTask(const QVariantMap& draft) {
 
   m_tasks.upsert(t);
   if(isNew) {
-    emit toast(QString("Создано: %1").arg(t.id));
+    emit toast(tr_("task.created").arg(t.id));
   }
   scheduleSave();
 }
@@ -443,14 +590,14 @@ void AppController::deleteTask(const QString& id) {
   m_events.detachTask(id);
   m_tasks.removeById(id);
   armUndo(5);
-  emit undoableToast(QString("Удалена: %1").arg(id), 5);
+  emit undoableToast(tr_("task.deleted").arg(id), 5);
   scheduleSave();
 }
 
 QVariantMap AppController::newEventDraft(double startHour, const QDate& date) const {
   QVariantMap m;
   m["id"] = QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-  m["title"] = QString("Новое событие");
+  m["title"] = tr_("event.newDefault");
   m["type"] = "sync";
   m["start"] = startHour;
   m["end"] = startHour + 1.0;
@@ -545,7 +692,7 @@ void AppController::deleteEvent(const QString& id) {
   m_pendingUndo.row = row;
   m_events.removeById(id);
   armUndo(5);
-  emit undoableToast(QString("Удалено событие: %1").arg(m_pendingUndo.event.title), 5);
+  emit undoableToast(tr_("event.deleted").arg(m_pendingUndo.event.title), 5);
   scheduleSave();
 }
 
@@ -566,7 +713,7 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   e.taskId = t.id;
   e.profileId = m_activeProfileId;
   m_events.upsert(e);
-  emit toast(QString("%1 запланировано на %2").arg(t.id, eventHourLabel(startHour)));
+  emit toast(tr_("event.scheduled").arg(t.id, eventHourLabel(startHour)));
   scheduleSave();
 }
 
@@ -654,7 +801,7 @@ void AppController::savePerson(const QVariantMap& draft) {
   }
   m_people.upsert(p);
   if(isNew) {
-    emit toast(QString("Добавлен: %1").arg(p.name));
+    emit toast(tr_("person.added").arg(p.name));
   }
   scheduleSave();
 }
@@ -703,7 +850,7 @@ void AppController::deletePerson(const QString& id) {
   m_pendingUndo.row = row;
   m_people.removeById(id);
   armUndo(5);
-  emit undoableToast(QString("Удалён: %1").arg(m_pendingUndo.person.name), 5);
+  emit undoableToast(tr_("person.deleted").arg(m_pendingUndo.person.name), 5);
   scheduleSave();
 }
 
@@ -758,7 +905,7 @@ void AppController::addStatus(const QString& name, const QString& color) {
   m["color"] = QColor(color.isEmpty() ? QStringLiteral("#5cc2dd") : color);
   m_statuses.append(m);
   emit statusesChanged();
-  emit toast(QString("Колонка добавлена: %1").arg(name));
+  emit toast(tr_("status.added").arg(name));
   scheduleSave();
 }
 
@@ -841,7 +988,7 @@ void AppController::deleteStatus(const QString& id) {
   m_statuses.removeAt(i);
   emit statusesChanged();
   armUndo(5);
-  emit undoableToast(QString("Удалена колонка: %1").arg(name), 5);
+  emit undoableToast(tr_("status.deleted").arg(name), 5);
   scheduleSave();
 }
 
@@ -884,8 +1031,18 @@ QString AppController::humanDate(const QDate& date) const {
   if(!date.isValid()) {
     return {};
   }
-  const QLocale ru(QLocale::Russian, QLocale::Russia);
-  return ru.toString(date, "dddd, d MMMM");
+  const int dow = date.dayOfWeek();  // 1=Mon..7=Sun
+  const int mon = date.month();      // 1..12
+  if(dow < 1 || dow > 7 || mon < 1 || mon > 12) {
+    return {};
+  }
+  const QString day = weekdayNamesLong(m_language).at(dow - 1);
+  const QString month = monthNamesLong(m_language).at(mon - 1);
+  if(m_language == "ru") {
+    return QString("%1, %2 %3").arg(day).arg(date.day()).arg(month);
+  }
+  // EN: "Friday, May 15"
+  return QString("%1, %2 %3").arg(day, month).arg(date.day());
 }
 
 QString AppController::deadlineBucket(const QDate& deadline) const {
@@ -935,8 +1092,18 @@ QString AppController::shortDate(const QDate& d) const {
   if(!d.isValid()) {
     return {};
   }
-  const QLocale ru(QLocale::Russian, QLocale::Russia);
-  return ru.toString(d, "ddd, d MMM");
+  const int dow = d.dayOfWeek();
+  const int mon = d.month();
+  if(dow < 1 || dow > 7 || mon < 1 || mon > 12) {
+    return {};
+  }
+  const QString day = weekdayNamesShort(m_language).at(dow - 1);
+  const QString month = monthNamesShort(m_language).at(mon - 1);
+  if(m_language == "ru") {
+    return QString("%1, %2 %3").arg(day).arg(d.day()).arg(month);
+  }
+  // EN: "Fri, 15 May"
+  return QString("%1, %2 %3").arg(day).arg(d.day()).arg(month);
 }
 
 int AppController::isoWeekNumber(const QDate& d) const {
@@ -1048,17 +1215,17 @@ void AppController::undoLastDeletion() {
       for(const auto& pair : m_pendingUndo.detachedEventIds) {
         m_events.setTaskId(pair.first, pair.second);
       }
-      emit toast(QString("Восстановлена: %1").arg(m_pendingUndo.task.id));
+      emit toast(tr_("task.restored").arg(m_pendingUndo.task.id));
       break;
     }
     case PendingUndo::Event: {
       m_events.insertAt(m_pendingUndo.row, m_pendingUndo.event);
-      emit toast(QString("Восстановлено: %1").arg(m_pendingUndo.event.title));
+      emit toast(tr_("event.restored").arg(m_pendingUndo.event.title));
       break;
     }
     case PendingUndo::Person: {
       m_people.insertAt(m_pendingUndo.row, m_pendingUndo.person);
-      emit toast(QString("Восстановлён: %1").arg(m_pendingUndo.person.name));
+      emit toast(tr_("person.restored").arg(m_pendingUndo.person.name));
       break;
     }
     case PendingUndo::Status: {
@@ -1068,7 +1235,7 @@ void AppController::undoLastDeletion() {
         m_tasks.setStatus(pair.first, pair.second);
       }
       emit statusesChanged();
-      emit toast(QString("Восстановлена колонка: %1").arg(m_pendingUndo.status.value("name").toString()));
+      emit toast(tr_("status.restored").arg(m_pendingUndo.status.value("name").toString()));
       break;
     }
     case PendingUndo::Profile: {
@@ -1081,7 +1248,7 @@ void AppController::undoLastDeletion() {
       applyProfileToModels(m_pendingUndo.profile);
       emit profilesChanged();
       emit activeProfileChanged();
-      emit toast(QString("Восстановлен профиль: %1").arg(m_pendingUndo.profile.name));
+      emit toast(tr_("profile.restored").arg(m_pendingUndo.profile.name));
       break;
     }
     default:
@@ -1454,6 +1621,7 @@ void AppController::saveStateNow() {
   QJsonObject s;
   s["theme"] = m_theme;
   s["density"] = m_density;
+  s["language"] = m_language;
   s["currentView"] = m_currentView;
   s["workdayStart"] = m_workdayStart;
   s["workdayEnd"] = m_workdayEnd;
@@ -1514,6 +1682,11 @@ void AppController::loadStateOnStart() {
     if(s.contains("density")) {
       m_density = s["density"].toString();
       emit densityChanged();
+    }
+    if(s.contains("language")) {
+      const QString v = s["language"].toString();
+      m_language = (v == "ru") ? QStringLiteral("ru") : QStringLiteral("en");
+      emit languageChanged();
     }
     if(s.contains("currentView")) {
       m_currentView = s["currentView"].toString();
@@ -1662,7 +1835,7 @@ QString AppController::createProfile(const QString& name, const QString& color) 
   applyProfileToModels(p);
   emit profilesChanged();
   emit activeProfileChanged();
-  emit toast(QString("Профиль создан: %1").arg(p.name));
+  emit toast(tr_("profile.created").arg(p.name));
   scheduleSave();
   return p.id;
 }
@@ -1735,7 +1908,7 @@ void AppController::deleteProfile(const QString& id) {
   }
   emit profilesChanged();
   armUndo(5);
-  emit undoableToast(QString("Удалён профиль: %1").arg(name), 5);
+  emit undoableToast(tr_("profile.deleted").arg(name), 5);
   scheduleSave();
 }
 
@@ -1769,7 +1942,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   applyProfileToModels(copy);
   emit profilesChanged();
   emit activeProfileChanged();
-  emit toast(QString("Дублирован профиль: %1").arg(copy.name));
+  emit toast(tr_("profile.duplicated").arg(copy.name));
   scheduleSave();
   return copy.id;
 }
@@ -1823,7 +1996,7 @@ int AppController::renameTaskIdPrefix(const QString& oldPrefix, const QString& n
       applyProfileToModels(m_profiles[ai]);
     }
     scheduleSave();
-    emit toast(QString("Переименовано задач: %1").arg(renamed));
+    emit toast(tr_("tasks.renamed").arg(renamed));
   }
 
   return renamed;
@@ -1866,7 +2039,7 @@ bool AppController::restoreFromBackup(const QString& fileName) {
   m_profiles.clear();
   m_activeProfileId.clear();
   loadStateOnStart();
-  emit toast(QString("Восстановлено из %1").arg(fileName));
+  emit toast(tr_("backup.restored").arg(fileName));
   return true;
 }
 
@@ -2012,17 +2185,17 @@ bool AppController::exportActiveProfileToFile(const QUrl& fileUrl) const {
   if(!f.commit()) {
     return false;
   }
-  const_cast<AppController*>(this)->emit toast(QStringLiteral("Профиль экспортирован: %1").arg(QFileInfo(path).fileName()));
+  const_cast<AppController*>(this)->emit toast(tr_("profile.exported").arg(QFileInfo(path).fileName()));
   return true;
 }
 
 QString AppController::importProfileFromJson(const QString& jsonText, bool activate) {
   if(jsonText.trimmed().isEmpty()) {
-    return QStringLiteral("Пустой JSON");
+    return tr_("import.emptyJson");
   }
   const QJsonDocument doc = QJsonDocument::fromJson(jsonText.toUtf8());
   if(doc.isNull() || !doc.isObject()) {
-    return QStringLiteral("Невалидный JSON");
+    return tr_("import.invalidJson");
   }
   const QJsonObject root = doc.object();
 
@@ -2033,7 +2206,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   } else if(root.contains("id") && root.contains("name")) {
     profileObj = root;
   } else {
-    return QStringLiteral("В JSON нет блока 'profile' или ожидаемых полей");
+    return tr_("import.missingProfile");
   }
 
   Profile imported = profileFromJson(profileObj);
@@ -2065,7 +2238,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     emit activeProfileChanged();
   }
   emit profilesChanged();
-  emit toast(QStringLiteral("Импортирован профиль: %1").arg(imported.name));
+  emit toast(tr_("profile.imported").arg(imported.name));
   scheduleSave();
   return QString();
 }
@@ -2073,11 +2246,11 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
 QString AppController::importProfileFromFile(const QUrl& fileUrl, bool activate) {
   const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
   if(path.isEmpty()) {
-    return QStringLiteral("Пустой путь");
+    return tr_("import.emptyPath");
   }
   QFile f(path);
   if(!f.open(QIODevice::ReadOnly)) {
-    return QStringLiteral("Не открывается: ") + f.errorString();
+    return tr_("import.openFail") + f.errorString();
   }
   const QString text = QString::fromUtf8(f.readAll());
   return importProfileFromJson(text, activate);
@@ -2085,39 +2258,56 @@ QString AppController::importProfileFromFile(const QUrl& fileUrl, bool activate)
 
 // ─────────────────────────────────────────────── Shortcuts catalog ──
 
-namespace {
-QVariantMap makeShortcut(const char* id, const char* label, const char* desc, const char* defaultSeq) {
-  QVariantMap m;
-  m["id"] = QString::fromUtf8(id);
-  m["label"] = QString::fromUtf8(label);
-  m["description"] = QString::fromUtf8(desc);
-  m["defaultSequence"] = QString::fromUtf8(defaultSeq);
-  m["sequence"] = QString::fromUtf8(defaultSeq);
-  return m;
-}
-}  // namespace
-
 void AppController::seedShortcutCatalog() {
+  // Snapshot any user-set sequences before the labels are rebuilt so a
+  // language flip preserves rebinds.
+  QMap<QString, QString> existingOverrides;
+  for(const QVariant& v : m_shortcuts) {
+    const QVariantMap m = v.toMap();
+    const QString id = m.value("id").toString();
+    const QString def = m.value("defaultSequence").toString();
+    const QString cur = m.value("sequence").toString();
+    if(cur != def) {
+      existingOverrides.insert(id, cur);
+    }
+  }
+
+  auto add = [this](const char* id, const char* defaultSeq) {
+    QVariantMap m;
+    const QString sid = QString::fromUtf8(id);
+    m["id"] = sid;
+    m["label"] = tr_(QString("shortcut.%1.label").arg(sid));
+    m["description"] = tr_(QString("shortcut.%1.desc").arg(sid));
+    m["defaultSequence"] = QString::fromUtf8(defaultSeq);
+    m["sequence"] = QString::fromUtf8(defaultSeq);
+    m_shortcuts.append(m);
+  };
+
   m_shortcuts.clear();
-  m_shortcuts.append(makeShortcut("palette.open", "Открыть Command Palette", "Глобальный fuzzy-поиск задач, доков, профилей.", "Ctrl+K"));
-  m_shortcuts.append(makeShortcut("task.new", "Новая задача", "Создать тикет в активном профиле.", "Ctrl+N"));
-  m_shortcuts.append(makeShortcut("view.board", "Перейти в Board", "Канбан активного профиля.", "Ctrl+1"));
-  m_shortcuts.append(makeShortcut("view.timeline", "Перейти в Timeline", "Лента по дедлайнам.", "Ctrl+2"));
-  m_shortcuts.append(makeShortcut("view.week", "Перейти в Week", "Семидневный планировщик.", "Ctrl+3"));
-  m_shortcuts.append(makeShortcut("view.docs", "Перейти в Docs", "Спеки, ссылки, сниппеты, контакты.", "Ctrl+4"));
-  m_shortcuts.append(makeShortcut("view.notes", "Перейти в Notes", "Markdown-канвас активного профиля.", "Ctrl+5"));
-  m_shortcuts.append(
-      makeShortcut("view.settings", "Перейти в Settings", "Полная панель настроек: профиль, внешний вид, интеграции.", "Ctrl+6"));
-  m_shortcuts.append(makeShortcut("profile.next", "Следующий профиль", "Циклит по списку профилей вперёд.", "Ctrl+]"));
-  m_shortcuts.append(makeShortcut("profile.prev", "Предыдущий профиль", "Циклит по списку профилей назад.", "Ctrl+["));
-  m_shortcuts.append(
-      makeShortcut("profile.exportMd", "Экспорт профиля в Markdown", "Кладёт markdown-выжимку активного профиля в буфер.", "Ctrl+Shift+E"));
-  m_shortcuts.append(makeShortcut("tweaks.open", "Открыть Tweaks", "Тема, плотность, рабочий день.", "Ctrl+,"));
-  m_shortcuts.append(makeShortcut("hotkeys.open", "Открыть Hotkeys", "Эта панель.", "Ctrl+/"));
-  m_shortcuts.append(makeShortcut("undo", "Отменить удаление", "Восстановить последнюю удалённую задачу/событие/профиль.", "Ctrl+Z"));
-  m_shortcuts.append(makeShortcut("search.focus", "Фокус в поиск", "Перевести курсор в строку поиска в шапке.", "Ctrl+F"));
-  m_shortcuts.append(
-      makeShortcut("quick-capture", "Быстрое создание задачи", "Открыть Quick-capture с разбором даты на лету.", "Ctrl+Shift+Space"));
+  add("palette.open", "Ctrl+K");
+  add("task.new", "Ctrl+N");
+  add("view.board", "Ctrl+1");
+  add("view.timeline", "Ctrl+2");
+  add("view.week", "Ctrl+3");
+  add("view.docs", "Ctrl+4");
+  add("view.notes", "Ctrl+5");
+  add("view.settings", "Ctrl+6");
+  add("profile.next", "Ctrl+]");
+  add("profile.prev", "Ctrl+[");
+  add("profile.exportMd", "Ctrl+Shift+E");
+  add("tweaks.open", "Ctrl+,");
+  add("hotkeys.open", "Ctrl+/");
+  add("undo", "Ctrl+Z");
+  add("search.focus", "Ctrl+F");
+  add("quick-capture", "Ctrl+Shift+Space");
+
+  if(!existingOverrides.isEmpty()) {
+    QVariantMap asMap;
+    for(auto it = existingOverrides.constBegin(); it != existingOverrides.constEnd(); ++it) {
+      asMap.insert(it.key(), it.value());
+    }
+    applyShortcutOverrides(asMap);
+  }
   emit shortcutsChanged();
 }
 
@@ -2221,7 +2411,7 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
         const QString freedLabel = o.value("label").toString();
         o["sequence"] = QString();
         m_shortcuts[j] = o;
-        emit toast(QString("Освобождено: %1").arg(freedLabel));
+        emit toast(tr_("slot.freed").arg(freedLabel));
       }
     }
   }
@@ -2273,7 +2463,7 @@ void AppController::resetAllShortcuts() {
   if(changed) {
     emit shortcutsChanged();
     scheduleSave();
-    emit toast("Хоткеи сброшены к дефолту");
+    emit toast(tr_("hotkeys.reset"));
   }
 }
 
@@ -2301,7 +2491,7 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
     const QVariantMap s = settingsMap();
     const QVariantMap tasks = s.value("tasks").toMap();
     if(tasks.value("requireBranchOnReview", true).toBool() && t.branch.trimmed().isEmpty()) {
-      emit toast(QStringLiteral("Заполни branch — этого требует Settings"));
+      emit toast(tr_("branch.required"));
       return false;
     }
   }
@@ -2469,9 +2659,9 @@ void AppController::runAutomation() {
         continue;
       }
       m_lastReminderDay[sentinel] = today;
-      const QString when = (hoursLeft <= 1) ? QStringLiteral("через час") : QStringLiteral("через %1 ч").arg(hoursLeft);
+      const QString when = (hoursLeft <= 1) ? tr_("notify.deadlineWhen.h1") : tr_("notify.deadlineWhen.hN").arg(hoursLeft);
       notifyTask(
-          t.id, QStringLiteral("Дедлайн %1").arg(when), QStringLiteral("%1 (%2)").arg(t.title, t.priority), QStringLiteral("deadline"));
+          t.id, tr_("notify.deadlineTitle").arg(when), QStringLiteral("%1 (%2)").arg(t.title, t.priority), QStringLiteral("deadline"));
     }
   }
 
@@ -2487,7 +2677,7 @@ void AppController::runAutomation() {
         const QString sentinel = QStringLiteral("standup:%1").arg(today.toString(Qt::ISODate));
         if(m_lastReminderDay.value(sentinel) != today) {
           m_lastReminderDay[sentinel] = today;
-          notify(QStringLiteral("Standup скоро"), QStringLiteral("Через %1 мин").arg(minsLeft), QStringLiteral("standup"));
+          notify(tr_("notify.standupTitle"), tr_("notify.standupBody").arg(minsLeft), QStringLiteral("standup"));
         }
       }
     }
@@ -2648,7 +2838,7 @@ void AppController::snoozeDeadline(const QString& taskId, int seconds) {
   m_tasks.upsert(t);
   // Forget the "already notified today" memo so the new horizon is honoured.
   m_lastReminderDay.remove(QStringLiteral("dl:") + taskId);
-  emit toast(QStringLiteral("%1: дедлайн отложен").arg(taskId));
+  emit toast(tr_("deadline.snoozed").arg(taskId));
   scheduleSave();
 }
 

@@ -38,34 +38,42 @@ Rectangle {
         spacing: 6
 
         // View switcher
-        RailBtn { glyph: "▦"; tooltipText: "Board (Kanban)"
+        RailBtn {
+            glyph: "▦"; tooltipText: I18n.t("siderail.tip.board")
                    active: AppController.currentView === "board"
                    onActivated: AppController.currentView = "board" }
-        RailBtn { glyph: "☰"; tooltipText: "Timeline (по дедлайнам)"
+        RailBtn {
+            glyph: "☰"; tooltipText: I18n.t("siderail.tip.timeline")
                    active: AppController.currentView === "timeline"
                    onActivated: AppController.currentView = "timeline" }
-        RailBtn { glyph: "◫"; tooltipText: "Week (7 дней)"
+        RailBtn {
+            glyph: "◫"; tooltipText: I18n.t("siderail.tip.week")
                    active: AppController.currentView === "week"
                    onActivated: AppController.currentView = "week" }
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
-        RailBtn { glyph: "⊘"; tooltipText: "Blocked"
+        RailBtn {
+            glyph: "⊘"; tooltipText: I18n.t("siderail.tip.blocked")
                    countText: root._blockedCount > 0 ? root._blockedCount : ""
                    countColor: Theme.p0 }
-        RailBtn { glyph: "⎇"; tooltipText: "Code Review"
+        RailBtn {
+            glyph: "⎇"; tooltipText: I18n.t("siderail.tip.review")
                    countText: root._reviewCount > 0 ? root._reviewCount : ""
                    countColor: Theme.stReview }
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
-        RailBtn { glyph: "C++"; tooltipText: "C++ References (Docs)"; fontPx: 10
+        RailBtn {
+            glyph: "C++"; tooltipText: I18n.t("siderail.tip.cppRefs"); fontPx: 10
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }
-        RailBtn { glyph: "§"; tooltipText: "Docs"
+        RailBtn {
+            glyph: "§"; tooltipText: I18n.t("siderail.tip.docs")
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }
-        RailBtn { glyph: "✎"; tooltipText: "Notes · markdown-заметки"
+        RailBtn {
+            glyph: "✎"; tooltipText: I18n.t("siderail.tip.notes")
                    active: AppController.currentView === "notes"
                    onActivated: AppController.currentView = "notes" }
 
@@ -74,18 +82,18 @@ Rectangle {
         RailBtn {
             id: hotkeysBtn
             glyph: "⌨"
-            tooltipText: "Hotkeys · клавиши и биндинги"
+            tooltipText: I18n.t("siderail.tip.hotkeys")
             onActivated: root.openHotkeys(hotkeysBtn)
         }
         RailBtn {
             id: tweaksBtn
             glyph: "✦"
-            tooltipText: "Tweaks · тема, плотность, рабочий день"
+            tooltipText: I18n.t("siderail.tip.tweaks")
             onActivated: root.openTweaks(tweaksBtn)
         }
         RailBtn {
             glyph: "⚙"
-            tooltipText: "Settings"
+            tooltipText: I18n.t("siderail.tip.settings")
             active: AppController.currentView === "settings"
             onActivated: AppController.currentView = "settings"
             Layout.bottomMargin: 14

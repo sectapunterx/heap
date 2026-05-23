@@ -71,6 +71,7 @@ qt_add_executable(heap WIN32
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 set_source_files_properties(qml/Brand.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
+set_source_files_properties(qml/I18n.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # URI stays "TodoCpp" so existing `import TodoCpp` statements throughout qml/
 # don't have to be touched. The user-facing app name is heap.
@@ -81,6 +82,7 @@ qt_add_qml_module(heap
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
+        qml/I18n.qml
         qml/TopBar.qml
         qml/SideRail.qml
         qml/FilterBar.qml
