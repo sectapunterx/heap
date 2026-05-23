@@ -2620,7 +2620,7 @@ void AppController::setTaskSelected(const QString& id, bool selected) {
 }
 
 void AppController::setSelectedTaskIds(const QStringList& ids) {
-  QSet<QString> next(ids.constBegin(), ids.constEnd());
+  const QSet<QString> next(ids.constBegin(), ids.constEnd());
   if(next == m_selectedTaskIds) {
     return;
   }
