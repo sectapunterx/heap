@@ -162,3 +162,22 @@ if (UNIX AND NOT APPLE)
 endif ()
 
 add_test(NAME heap_selection_tests COMMAND heap_selection_tests)
+
+# ─── Aggregate target ───
+# Build target that depends on every executable defined in this directory.
+# CI builds `heap_all_tests`; adding a new test exe via add_executable() in
+# this CMakeLists.txt is enough — no CI workflow edit needed.
+#
+# Filters BUILDSYSTEM_TARGETS to EXECUTABLE so FetchContent-pulled libraries
+# (gtest, gtest_main) defined in their own subdirectory are not picked up
+# anyway, but the type guard keeps the rule explicit.
+get_property(_heap_dir_targets DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        PROPERTY BUILDSYSTEM_TARGETS)
+set(_heap_test_exes "")
+foreach (_t IN LISTS _heap_dir_targets)
+    get_target_property(_type ${_t} TYPE)
+    if (_type STREQUAL "EXECUTABLE")
+        list(APPEND _heap_test_exes ${_t})
+    endif ()
+endforeach ()
+add_custom_target(heap_all_tests DEPENDS ${_heap_test_exes})
