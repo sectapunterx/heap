@@ -249,8 +249,9 @@ AppController::AppController(QObject* parent) :
     p.name = "Example";
     p.color = "#5cc2dd";
     p.createdAt = QDateTime::currentDateTime();
-    p.tasks = SampleData::tasks();
-    p.people = SampleData::people();
+    const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
+    p.tasks = SampleData::tasks(seedLang);
+    p.people = SampleData::people(seedLang);
     QVariantList st;
     for(const auto& m : SampleData::statuses()) {
       st.push_back(m);
@@ -261,7 +262,7 @@ AppController::AppController(QObject* parent) :
     m_activeProfileId = p.id;
 
     // Events are global; tag the sample events with this default profile.
-    QVector<CalEvent> sampleEvents = SampleData::events(m_today);
+    QVector<CalEvent> sampleEvents = SampleData::events(m_today, seedLang);
     for(CalEvent& e : sampleEvents) {
       e.profileId = p.id;
     }

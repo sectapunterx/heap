@@ -589,7 +589,7 @@ Item {
                         TextField {
                             id: docsSearch
                             Layout.fillWidth: true
-                            placeholderText: "Поиск: 36.331, RRC, asan, valgrind…"
+                            placeholderText: I18n.t("docs.search.placeholder")
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             font.family: Theme.fontUi
@@ -691,7 +691,7 @@ Item {
                             }
                             Text {
                                 Layout.fillWidth: true
-                                text: "Новая секция"
+                                text: I18n.t("docs.newSection")
                                 color: addSecMA.containsMouse ? Theme.accentStrong : Theme.text
                                 font.pixelSize: 12
                             }
@@ -944,7 +944,9 @@ Item {
                                 ColumnLayout {
                                     spacing: 0
                                     Text { text: "Snippets"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
-                                    Text { text: "Часто используемые команды и шаблоны кода"; color: Theme.textMuted; font.pixelSize: 12 }
+                                    Text {
+                                        text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: 12
+                                    }
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
@@ -989,7 +991,9 @@ Item {
                                 ColumnLayout {
                                     spacing: 0
                                     Text { text: "Contacts & Channels"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
-                                    Text { text: "Кому пинговать в ММ и где обсуждать"; color: Theme.textMuted; font.pixelSize: 12 }
+                                    Text {
+                                        text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: 12
+                                    }
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
@@ -1543,7 +1547,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
                             AppController.copyToClipboard(sCard.snip.code || "");
-                            root.showToast("Скопировано: " + (sCard.snip.title || ""));
+                            root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
                         }
                     }
                 }
@@ -1607,7 +1611,7 @@ Item {
                 text: "Copy"
                 onTriggered: {
                     AppController.copyToClipboard(sCard.snip.code || "");
-                    root.showToast("Скопировано: " + (sCard.snip.title || ""));
+                    root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
                 }
             }
             QQC.MenuItem { text: "Edit…"; onTriggered: root.openSnippetEdit(sCard.idx) }
