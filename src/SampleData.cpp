@@ -1,34 +1,39 @@
 #include "SampleData.h"
 
 namespace {
-Task mkTask(const char *id, const char *title, const char *desc,
-            const char *pri, const char *status, const QDate &dl,
-            const char *branch) {
-    Task t;
-    t.id = id; t.title = QString::fromUtf8(title); t.desc = QString::fromUtf8(desc);
-    t.priority = pri; t.status = status; t.deadline = dl; t.branch = branch;
-    return t;
+Task mkTask(const char* id, const char* title, const char* desc, const char* pri, const char* status, const QDate& dl, const char* branch) {
+  Task t;
+  t.id = id;
+  t.title = QString::fromUtf8(title);
+  t.desc = QString::fromUtf8(desc);
+  t.priority = pri;
+  t.status = status;
+  t.deadline = dl;
+  t.branch = branch;
+  return t;
 }
-}
+}  // namespace
 
 namespace SampleData {
 
 QVector<QVariantMap> statuses() {
-    // { id, name, color }
-    return {
-        { { "id", "backlog" }, { "name", "Backlog"     }, { "color", QColor("#8a8e98") } },
-        { { "id", "todo"    }, { "name", "To Do"       }, { "color", QColor("#9aa3b4") } },
-        { { "id", "prog"    }, { "name", "In Progress" }, { "color", QColor("#5aa9e6") } },
-        { { "id", "half"    }, { "name", "50/50"       }, { "color", QColor("#dcb86b") } },
-        { { "id", "blocked" }, { "name", "Blocked"     }, { "color", QColor("#e6624c") } },
-        { { "id", "review"  }, { "name", "Code Review" }, { "color", QColor("#c07acf") } },
-        { { "id", "done"    }, { "name", "Done"        }, { "color", QColor("#6ec18a") } },
-    };
+  // { id, name, color }
+  return {
+      {{"id", "backlog"}, {"name", "Backlog"}, {"color", QColor("#8a8e98")}},
+      {{"id", "todo"}, {"name", "To Do"}, {"color", QColor("#9aa3b4")}},
+      {{"id", "prog"}, {"name", "In Progress"}, {"color", QColor("#5aa9e6")}},
+      {{"id", "half"}, {"name", "50/50"}, {"color", QColor("#dcb86b")}},
+      {{"id", "blocked"}, {"name", "Blocked"}, {"color", QColor("#e6624c")}},
+      {{"id", "review"}, {"name", "Code Review"}, {"color", QColor("#c07acf")}},
+      {{"id", "done"}, {"name", "Done"}, {"color", QColor("#6ec18a")}},
+  };
 }
 
 QVector<Task> tasks(Lang lang) {
   const QDate today = QDate::currentDate();
-    auto d = [&](int n){ return today.addDays(n); };
+  auto d = [&](int n) {
+    return today.addDays(n);
+  };
   if(lang == Lang::Ru) {
     return {
         mkTask("LTE-2398",
@@ -226,11 +231,11 @@ QVector<CalEvent> events(const QDate& today, Lang lang) {
   };
   if(lang == Lang::Ru) {
     return {
-        mk("ev-1", "Daily standup", "standup", 10.0,  10.25, "LTE Core team"),
-            mk("ev-2", "1:1 с Олегом",       "oneone",  11.0,  11.5,  "Олег Т."),
-            mk("ev-3", "Focus: LTE-2398",    "focus",   13.0,  15.0,  "🔒 deep work"),
-            mk("ev-4", "LTE Team Sync",      "sync",    16.0,  16.5,  "8 человек"),
-            mk("ev-5", "Code review: GTP-U", "sync", 17.0, 17.5, "Andrey, Виктор"),
+        mk("ev-1", "Daily standup", "standup", 10.0, 10.25, "LTE Core team"),
+        mk("ev-2", "1:1 с Олегом", "oneone", 11.0, 11.5, "Олег Т."),
+        mk("ev-3", "Focus: LTE-2398", "focus", 13.0, 15.0, "🔒 deep work"),
+        mk("ev-4", "LTE Team Sync", "sync", 16.0, 16.5, "8 человек"),
+        mk("ev-5", "Code review: GTP-U", "sync", 17.0, 17.5, "Andrey, Виктор"),
     };
   }
   return {
@@ -264,13 +269,13 @@ QVector<Person> people(Lang lang) {
     };
   }
   return {
-      mk("p1", "Oleg T.",    "Tech Lead",       "Clarify reading of 24.301 §5.5.1.2.5 (cause #15 vs #11)",     "todo",    QColor("#d97a6c")),
-        mk("p2", "Masha K.",   "QA",              "Ask for the full S1AP trace on LTE-2401 from operator X",     "todo",    QColor("#c87fc7")),
-        mk("p3", "Andrey S.",  "Senior C++ dev",  "Nudge review on PR #4471 (PCAP rotation)",                    "pinged",  QColor("#6cc4b8")),
-        mk("p4", "Victor L.",  "Architect",       "30 min slot — discuss SIMD trade-off on ARM (LTE-2502)",      "todo",    QColor("#7da8d9")),
-        mk("p5", "Ekaterina",  "PM",              "Confirm acceptance criteria for LTE-2412",                    "replied", QColor("#dcc06a")),
-        mk("p6", "Hiroshi M.", "PHY team",        "Ask about SRS dedicated config — are there tests?",            "todo",    QColor("#7cc492")),
-    };
+      mk("p1", "Oleg T.", "Tech Lead", "Clarify reading of 24.301 §5.5.1.2.5 (cause #15 vs #11)", "todo", QColor("#d97a6c")),
+      mk("p2", "Masha K.", "QA", "Ask for the full S1AP trace on LTE-2401 from operator X", "todo", QColor("#c87fc7")),
+      mk("p3", "Andrey S.", "Senior C++ dev", "Nudge review on PR #4471 (PCAP rotation)", "pinged", QColor("#6cc4b8")),
+      mk("p4", "Victor L.", "Architect", "30 min slot — discuss SIMD trade-off on ARM (LTE-2502)", "todo", QColor("#7da8d9")),
+      mk("p5", "Ekaterina", "PM", "Confirm acceptance criteria for LTE-2412", "replied", QColor("#dcc06a")),
+      mk("p6", "Hiroshi M.", "PHY team", "Ask about SRS dedicated config — are there tests?", "todo", QColor("#7cc492")),
+  };
 }
 
-} // namespace SampleData
+}  // namespace SampleData

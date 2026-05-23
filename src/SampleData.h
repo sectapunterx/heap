@@ -12,4 +12,4 @@ QVector<Task> tasks(Lang lang = Lang::En);
 QVector<CalEvent> events(const QDate& today, Lang lang = Lang::En);
 QVector<Person> people(Lang lang = Lang::En);
 QVector<QVariantMap> statuses();
-}
+}  // namespace SampleData
