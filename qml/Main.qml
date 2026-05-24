@@ -327,6 +327,9 @@ ApplicationWindow {
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
     QuickCapturePopup { id: quickCapture }
+    QuickCaptureNotesPopup {
+        id: quickCaptureNotes
+    }
 
     // GitWatcher → TaskEditor bridge: TopBar "Open" button on the focus
     // banner emits openTaskRequested; route it through the same showFor()
@@ -391,6 +394,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: quickCapture.open()
+    }
+    Shortcut {
+        sequence: _kbd("quick-capture-notes")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: quickCaptureNotes.open()
     }
     Shortcut {
         sequence: _kbd("view.board")

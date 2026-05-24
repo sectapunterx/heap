@@ -209,6 +209,11 @@ QtObject {
             "quick.detect.person": "person",
             "quick.detect.note": "note",
             "quick.create": "Create",
+            "quickNote.title": "Quick note",
+            "quickNote.placeholder": "Type a note… (Shift+Enter for newline, Enter saves)",
+            "quickNote.hint": "Enter — save · Shift+Enter — newline · Esc — discard",
+            "quickNote.discard.title": "Discard this note?",
+            "quickNote.discard.hint": "Enter — discard · Esc — keep editing",
 
             // ── CommandPalette ──
             "palette.placeholder": "Type a command or search…",
@@ -685,6 +690,11 @@ QtObject {
             "quick.detect.person": "человек",
             "quick.detect.note": "заметка",
             "quick.create": "Создать",
+            "quickNote.title": "Быстрая заметка",
+            "quickNote.placeholder": "Напишите заметку… (Shift+Enter — перенос, Enter — сохранить)",
+            "quickNote.hint": "Enter — сохранить · Shift+Enter — перенос · Esc — отменить",
+            "quickNote.discard.title": "Отменить создание заметки?",
+            "quickNote.discard.hint": "Enter — отменить · Esc — продолжить ввод",
 
             "palette.placeholder": "Введи команду или поищи…",
             "palette.empty": "Ничего не найдено",

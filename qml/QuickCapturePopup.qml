@@ -20,12 +20,6 @@ Popup {
     property var _meta: ({title: "", desc: "", handles: []})
     property string _title: ""
 
-    // @autocomplete state — repopulated whenever the cursor sits inside an
-    // "@token" being typed in inputField.
-    property var _atSuggestions: []
-    property int _atSelectedIdx: 0
-    readonly property bool _atVisible: _atSuggestions && _atSuggestions.length > 0
-
     // Single source of truth lives in heap::text::extractMeta (C++) and is
     // unit-tested. QML just forwards.
     function _extractMeta(raw) {
@@ -71,62 +65,6 @@ Popup {
         } else {
             _title = meta.title.trim();
         }
-    }
-
-    // ── @autocomplete ──
-    // Word characters that may appear inside a handle (Latin / Cyrillic /
-    // digits / ".-_"). The leading "@" is matched separately.
-    readonly property var _handleCharRe: /[A-Za-zА-Яа-яЁё0-9_.\-]/
-
-    function _currentAtRange() {
-        const text = inputField.text;
-        const caret = inputField.cursorPosition;
-        let start = caret;
-        while (start > 0 && root._handleCharRe.test(text.charAt(start - 1)))
-            --start;
-        if (start === 0 || text.charAt(start - 1) !== "@") return null;
-        // Check the char BEFORE "@" — must be start-of-string or whitespace
-        // (otherwise we're inside an e-mail or some non-handle token).
-        if (start >= 2) {
-            const lead = text.charAt(start - 2);
-            if (!/\s|[,;(]/.test(lead)) return null;
-        }
-        return { start: start - 1, end: caret, prefix: text.substring(start, caret) };
-    }
-
-    function _refreshAtSuggestions() {
-        const r = _currentAtRange();
-        if (!r) { _atSuggestions = []; return; }
-        const q = (r.prefix || "").toLowerCase();
-        const people = AppController.people;
-        const out = [];
-        for (let i = 0; i < people.rowCount(); ++i) {
-            const idx  = people.index(i, 0);
-            const id   = String(people.data(idx, Qt.UserRole + 1) || "");
-            const name = String(people.data(idx, Qt.UserRole + 2) || "");
-            if (q.length === 0
-                || id.toLowerCase().indexOf(q) === 0
-                || name.toLowerCase().indexOf(q) >= 0) {
-                out.push({id: id, name: name});
-            }
-            if (out.length >= 8) break;
-        }
-        _atSuggestions = out;
-        _atSelectedIdx = 0;
-    }
-
-    function _acceptAtSuggestion() {
-        if (!_atVisible) return false;
-        const r = _currentAtRange();
-        if (!r) return false;
-        const pick = _atSuggestions[_atSelectedIdx];
-        const before = inputField.text.substring(0, r.start);
-        const after  = inputField.text.substring(r.end);
-        const insert = "@" + pick.id + " ";
-        inputField.text = before + insert + after;
-        inputField.cursorPosition = (before + insert).length;
-        _atSuggestions = [];
-        return true;
     }
 
     // Detect intent from free-text. Returns "focus" | "sync" | "ticket" | "none".
@@ -266,8 +204,7 @@ Popup {
         inputField.text = "";
         _preview = {ok: false};
         _title = "";
-        _atSuggestions = [];
-        _atSelectedIdx = 0;
+        at.dismiss();
         inputField.forceActiveFocus();
     }
 
@@ -303,98 +240,48 @@ Popup {
             }
             color: Theme.text
             placeholderTextColor: Theme.textDim
-            onTextChanged: { previewTimer.restart(); root._refreshAtSuggestions(); }
-            onCursorPositionChanged: root._refreshAtSuggestions()
+            onTextChanged: { previewTimer.restart(); at.refresh(); }
+            onCursorPositionChanged: at.refresh()
             Keys.onPressed: (e) => {
-                if (root._atVisible) {
+                if (at.isOpen) {
                     if (e.key === Qt.Key_Down) {
-                        root._atSelectedIdx = Math.min(
-                            root._atSuggestions.length - 1,
-                            root._atSelectedIdx + 1);
-                        e.accepted = true; return;
+                        at.moveSelection(+1);
+                        e.accepted = true;
+                        return;
                     }
                     if (e.key === Qt.Key_Up) {
-                        root._atSelectedIdx = Math.max(0, root._atSelectedIdx - 1);
-                        e.accepted = true; return;
+                        at.moveSelection(-1);
+                        e.accepted = true;
+                        return;
                     }
                     if (e.key === Qt.Key_Tab
                         || (e.key === Qt.Key_Return && (e.modifiers & Qt.ShiftModifier))
                         || (e.key === Qt.Key_Enter && (e.modifiers & Qt.ShiftModifier))) {
                         // Tab or Shift+Enter → insert suggestion, stay in field.
-                        if (root._acceptAtSuggestion()) { e.accepted = true; return; }
+                        if (at.accept()) {
+                            e.accepted = true;
+                            return;
+                        }
                     }
                     if (e.key === Qt.Key_Escape) {
-                        root._atSuggestions = [];
+                        at.dismiss();
                         e.accepted = true; return;
                     }
                 }
             }
             Keys.onReturnPressed: {
-                if (root._atVisible) { root._acceptAtSuggestion(); return; }
+                if (at.isOpen) {
+                    at.accept();
+                    return;
+                }
                 root._submit();
             }
             Keys.onEnterPressed: {
-                if (root._atVisible) { root._acceptAtSuggestion(); return; }
-                root._submit();
-            }
-        }
-
-        // Suggestion dropdown — only present while the cursor is inside an
-        // "@token" with at least one matching person.
-        Rectangle {
-            visible: root._atVisible
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            Layout.fillWidth: true
-            Layout.preferredHeight: visible
-                ? Math.min(root._atSuggestions.length, 6) * 26 + 2
-                : 0
-            radius: 6
-            color: Theme.panel2
-            border.color: Theme.border
-            border.width: 1
-            ListView {
-                anchors.fill: parent
-                anchors.margins: 1
-                clip: true
-                model: root._atSuggestions
-                interactive: false
-                delegate: Rectangle {
-                    required property var modelData
-                    required property int index
-                    width: ListView.view.width
-                    height: 26
-                    color: index === root._atSelectedIdx
-                        ? Theme.withAlpha(Theme.accent, 0.18)
-                        : "transparent"
-                    Row {
-                        anchors.fill: parent
-                        anchors.leftMargin: 10; anchors.rightMargin: 10
-                        spacing: 8
-                        Text {
-                            text: "@" + modelData.id
-                            color: Theme.accentStrong
-                            font.family: Theme.fontMono
-                            font.pixelSize: 11
-                            anchors.verticalCenter: parent.verticalCenter
-                        }
-                        Text {
-                            text: "· " + modelData.name
-                            color: Theme.textMuted
-                            font.pixelSize: 11
-                            anchors.verticalCenter: parent.verticalCenter
-                            elide: Text.ElideRight
-                        }
-                    }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            root._atSelectedIdx = index;
-                            root._acceptAtSuggestion();
-                            inputField.forceActiveFocus();
-                        }
-                    }
+                if (at.isOpen) {
+                    at.accept();
+                    return;
                 }
+                root._submit();
             }
         }
 
@@ -465,5 +352,10 @@ Popup {
                 onClicked: root._submit()
             }
         }
+    }
+
+    MentionAutocomplete {
+        id: at
+        target: inputField
     }
 }
