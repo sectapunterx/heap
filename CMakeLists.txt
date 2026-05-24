@@ -114,6 +114,8 @@ qt_add_qml_module(heap
         qml/BrandLogo.qml
         qml/SplashScreen.qml
         qml/QuickCapturePopup.qml
+        qml/QuickCaptureNotesPopup.qml
+        qml/MentionAutocomplete.qml
     SOURCES
         src/AppController.h
         src/Models.h

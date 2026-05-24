@@ -110,6 +110,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.quick-capture.label", {"Quick-capture task", "Быстрое создание задачи"}},
       {"shortcut.quick-capture.desc",
        {"Open Quick-capture with on-the-fly date parsing.", "Открыть Quick-capture с разбором даты на лету."}},
+      {"shortcut.quick-capture-notes.label", {"Quick-capture note", "Быстрая заметка"}},
+      {"shortcut.quick-capture-notes.desc",
+       {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть Quick-capture для Заметок (дописывает в блок Notes)."}},
       {"shortcut.selection.selectAll.label", {"Select all visible", "Выделить все видимые"}},
       {"shortcut.selection.selectAll.desc",
        {"Select every ticket visible in the current view.", "Выделить все тикеты, видимые в текущем виде."}},
@@ -467,6 +470,25 @@ void AppController::setNotesState(const QString& v) {
   m_notesState = v;
   emit notesStateChanged();
   scheduleSave();
+}
+
+void AppController::appendNoteEntry(const QString& text) {
+  const QString body = text.trimmed();
+  if(body.isEmpty()) {
+    return;
+  }
+  const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
+  QString next;
+  if(m_notesState.trimmed().isEmpty()) {
+    next = QStringLiteral("### %1\n\n%2").arg(stamp, body);
+  } else {
+    next = m_notesState;
+    while(next.endsWith(QLatin1Char('\n'))) {
+      next.chop(1);
+    }
+    next += QStringLiteral("\n\n----\n### %1\n\n%2").arg(stamp, body);
+  }
+  setNotesState(next);
 }
 
 void AppController::setAppSettingsJson(const QString& v) {
@@ -2352,6 +2374,7 @@ void AppController::seedShortcutCatalog() {
   add("undo", "Ctrl+Z");
   add("search.focus", "Ctrl+F");
   add("quick-capture", "Ctrl+Shift+Space");
+  add("quick-capture-notes", "Ctrl+Shift+N");
   add("selection.selectAll", "Ctrl+A");
   add("selection.clearSel", "Esc");
   add("selection.deleteSel", "Del");

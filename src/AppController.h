@@ -172,6 +172,11 @@ class AppController : public QObject {
 
   void setNotesState(const QString& v);
 
+  // QuickCapture for Notes: appends `text` to notesState separated by a
+  // timestamped horizontal-rule header. First entry gets the heading only
+  // (no leading HR — there is nothing to separate from yet).
+  Q_INVOKABLE void appendNoteEntry(const QString& text);
+
   QString appSettingsJson() const {
     return m_appSettingsJson;
   }
