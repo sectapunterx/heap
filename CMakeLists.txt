@@ -65,6 +65,7 @@ qt_add_executable(heap WIN32
     src/text/TaskTextUtils.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
+    src/sync/JsonMerger.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.rc>
 )
@@ -131,6 +132,7 @@ qt_add_qml_module(heap
         src/git/GitWatcher.h
         src/text/TaskTextUtils.h
         src/notify/NotificationCenter.h
+        src/sync/JsonMerger.h
 )
 
 target_include_directories(heap PRIVATE src)
