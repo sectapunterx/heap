@@ -14,6 +14,8 @@
 
 #include <memory>
 
+class QJsonObject;
+
 namespace heap::chrono {
 class ChronoParser;
 }
@@ -480,6 +482,12 @@ class AppController : public QObject {
   QString backupDirPath() const;
   void rotateBackupIfDue();
   void pruneBackups(int keep);
+  // Crash/corruption recovery for loadStateOnStart(): find the newest backup
+  // that still parses (returns its object + path), and move a damaged
+  // state.json aside so a fresh seed can never silently overwrite it.
+  bool recoverFromNewestBackup(QJsonObject& out, QString& fromPath);
+  void quarantineCorruptState(const QString& path);
+  QString m_recoveryNotice;  // deferred toast shown once the UI is up
   int statusIndexOf(const QString& id) const;
 
   // Undo machinery

@@ -63,6 +63,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
+      {"data.recovered",
+       {"Your data file was unreadable — recovered from backup %1",
+        "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
+      {"data.corruptKept",
+       {"Your data file was unreadable and no backup was found. The damaged file was "
+        "kept as state.corrupt-*.json.",
+        "Файл данных был нечитаем, бэкап не найден. Повреждённый файл сохранён как "
+        "state.corrupt-*.json."}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
@@ -251,6 +259,16 @@ AppController::AppController(QObject* parent) :
   m_globalHotkey = heap::platform::GlobalHotkey::create(this);
   connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
   registerGlobalHotkeys();
+
+  // If loadStateOnStart() had to recover from a backup or quarantine a corrupt
+  // file, surface it once the QML toast bar exists (singleShot fires after the
+  // engine has loaded Main.qml and this event loop starts).
+  if(!m_recoveryNotice.isEmpty()) {
+    QTimer::singleShot(0, this, [this]() {
+      emit toast(m_recoveryNotice);
+      m_recoveryNotice.clear();
+    });
+  }
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -1685,6 +1703,43 @@ void AppController::pruneBackups(int keep) {
   }
 }
 
+bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath) {
+  QDir d(backupDirPath());
+  // Newest first — return the most recent backup that still parses as an object.
+  const QFileInfoList backups = d.entryInfoList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
+  for(const QFileInfo& fi : backups) {
+    QFile bf(fi.absoluteFilePath());
+    if(!bf.open(QFile::ReadOnly)) {
+      continue;
+    }
+    const QJsonDocument doc = QJsonDocument::fromJson(bf.readAll());
+    bf.close();
+    if(!doc.isNull() && doc.isObject()) {
+      out = doc.object();
+      fromPath = fi.absoluteFilePath();
+      return true;
+    }
+  }
+  return false;
+}
+
+void AppController::quarantineCorruptState(const QString& path) {
+  if(!QFile::exists(path)) {
+    return;
+  }
+  const QFileInfo fi(path);
+  const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+  QString target = fi.absolutePath() + "/state.corrupt-" + stamp + ".json";
+  // Avoid clobbering an earlier quarantine from the same second.
+  int n = 1;
+  while(QFile::exists(target)) {
+    target = fi.absolutePath() + "/state.corrupt-" + stamp + "-" + QString::number(n++) + ".json";
+  }
+  if(!QFile::rename(path, target)) {
+    qWarning("todocpp: could not quarantine corrupt state.json to %s", qUtf8Printable(target));
+  }
+}
+
 void AppController::saveStateNow() {
   if(m_loading) {
     return;
@@ -1748,14 +1803,44 @@ void AppController::saveStateNow() {
 }
 
 void AppController::loadStateOnStart() {
-  QFile f(stateFilePath());
-  if(!f.exists() || !f.open(QFile::ReadOnly)) {
-    return;
+  const QString path = stateFilePath();
+  QFile f(path);
+  if(!f.exists()) {
+    return;  // genuine first run — nothing to load, seed demo silently
   }
-  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-  if(doc.isNull() || !doc.isObject()) {
-    return;
+
+  // The file exists, so from here on any failure is corruption / an unreadable
+  // file, NOT a first run. We must never let the caller silently seed demo data
+  // and overwrite it: try to recover from the newest valid backup, otherwise
+  // quarantine the damaged file so the subsequent save cannot destroy it.
+  QJsonDocument doc;
+  bool ok = false;
+  if(f.open(QFile::ReadOnly)) {
+    doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    ok = !doc.isNull() && doc.isObject();
   }
+
+  if(!ok) {
+    QJsonObject recovered;
+    QString recoveredFrom;
+    if(recoverFromNewestBackup(recovered, recoveredFrom)) {
+      // Quarantine the corrupt original, then promote the recovered backup to
+      // be the live state so future debounced saves continue from good data.
+      quarantineCorruptState(path);
+      QFile::copy(recoveredFrom, path);
+      doc = QJsonDocument(recovered);
+      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName());
+    } else {
+      // No usable backup. Preserve the damaged file under a distinct name and
+      // fall through to a fresh seed — the user keeps a recoverable copy and a
+      // visible warning instead of a silent wipe.
+      quarantineCorruptState(path);
+      m_recoveryNotice = tr_("data.corruptKept");
+      return;
+    }
+  }
+
   const QJsonObject root = doc.object();
 
   m_loading = true;

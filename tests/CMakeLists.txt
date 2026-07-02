@@ -267,6 +267,60 @@ endif ()
 
 add_test(NAME heap_platform_tests COMMAND heap_platform_tests)
 
+# ─── Persistence (corrupt-state recovery) tests ───
+# Cover AppController::loadStateOnStart() crash/corruption handling (HEAP-50):
+# recover from the newest valid backup, otherwise quarantine the damaged
+# state.json instead of letting the demo seed overwrite it. Same headless boot
+# (offscreen QPA + AppDataLocation test mode) as the selection / notes suites.
+set(HEAP_PERSISTENCE_SOURCES
+        test_persistence.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_PERSISTENCE_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_persistence_tests ${HEAP_PERSISTENCE_SOURCES})
+set_target_properties(heap_persistence_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_persistence_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_persistence_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_persistence_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_persistence_tests COMMAND heap_persistence_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
