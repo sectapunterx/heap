@@ -60,6 +60,13 @@ class AppController : public QObject {
   Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
   Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
+  // ---- Onboarding (first run) ----
+  // welcomeSeen: the welcome dialog has been shown/dismissed at least once.
+  // demoActive: the profile is still the seeded demo, so the "this is demo
+  // data" banner should offer to start fresh. Both persist in the settings blob.
+  Q_PROPERTY(bool welcomeSeen READ welcomeSeen NOTIFY onboardingChanged)
+  Q_PROPERTY(bool demoActive READ demoActive NOTIFY onboardingChanged)
+
   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
   Q_PROPERTY(QString activeProfileId READ activeProfileId WRITE setActiveProfileId NOTIFY activeProfileChanged)
 
@@ -192,6 +199,24 @@ class AppController : public QObject {
   bool hasPendingUndo() const {
     return m_pendingUndo.kind != PendingUndo::None;
   }
+
+  // ---- Onboarding ----
+  bool welcomeSeen() const {
+    return m_welcomeSeen;
+  }
+
+  bool demoActive() const {
+    return m_demoActive;
+  }
+
+  // Mark the welcome dialog as shown (persists; never re-shown after this).
+  Q_INVOKABLE void markWelcomeSeen();
+  // Hide the demo banner without clearing anything ("keep exploring").
+  Q_INVOKABLE void dismissDemo();
+  // Clear the active profile's demo content (tasks, people, events, notes,
+  // docs) to give the user a blank workspace; keeps the profile and its
+  // columns. Also clears the demo banner.
+  Q_INVOKABLE void startFresh();
 
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
@@ -399,6 +424,7 @@ class AppController : public QObject {
   void appSettingsJsonChanged();
   void statusesChanged();
   void pendingUndoChanged();
+  void onboardingChanged();
   void profilesChanged();
   void activeProfileChanged();
   void shortcutsChanged();
@@ -438,6 +464,8 @@ class AppController : public QObject {
   QString m_docsState;
   QString m_notesState;
   QString m_appSettingsJson;
+  bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
+  bool m_demoActive = false;   // onboarding: profile still holds seeded demo
 
   // Profiles
   QVector<Profile> m_profiles;

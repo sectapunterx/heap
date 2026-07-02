@@ -73,6 +73,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Файл данных был нечитаем, бэкап не найден. Повреждённый файл сохранён как "
         "state.corrupt-*.json."}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
+      {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
@@ -328,6 +329,11 @@ AppController::AppController(QObject* parent) :
     applyProfileToModels(p);
     emit profilesChanged();
     emit activeProfileChanged();
+
+    // Fresh install: show the welcome dialog and flag the seeded demo so the
+    // board can offer "start fresh". (welcomeSeen stays false from its default.)
+    m_demoActive = true;
+    emit onboardingChanged();
     scheduleSave();
   }
 
@@ -1347,6 +1353,52 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
   emit toast(tr_("profile.mdCopied"));
 }
 
+void AppController::markWelcomeSeen() {
+  if(m_welcomeSeen) {
+    return;
+  }
+  m_welcomeSeen = true;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+void AppController::dismissDemo() {
+  if(!m_demoActive) {
+    return;
+  }
+  m_demoActive = false;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+void AppController::startFresh() {
+  // Wipe the active profile's seeded demo content, leaving an empty but usable
+  // workspace: keep the profile and its kanban columns, drop tasks / people /
+  // this profile's events / notes / docs.
+  m_tasks.reset({});
+  m_people.reset({});
+
+  QVector<CalEvent> kept;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.profileId != m_activeProfileId) {
+      kept.append(e);
+    }
+  }
+  m_events.reset(kept);
+
+  m_notesState.clear();
+  emit notesStateChanged();
+  m_docsState.clear();
+  emit docsStateChanged();
+
+  m_demoActive = false;
+  emit onboardingChanged();
+
+  snapshotActiveProfile();
+  scheduleSave();
+  emit toast(tr_("onboarding.startedFresh"));
+}
+
 QString AppController::classifyTaskKind(const QString& text) const {
   using heap::text::TaskKind;
   switch(heap::text::classifyKind(text)) {
@@ -1866,6 +1918,8 @@ void AppController::saveStateNow() {
   s["workdayEnd"] = m_workdayEnd;
   s["crumbProject"] = m_crumbProject;
   s["crumbUser"] = m_crumbUser;
+  s["welcomeSeen"] = m_welcomeSeen;
+  s["demoActive"] = m_demoActive;
 
   // Keyboard shortcut overrides — store every entry (so a user-cleared
   // binding survives a restart even if the default is non-empty).
@@ -1978,6 +2032,12 @@ void AppController::loadStateOnStart() {
       m_crumbUser = s["crumbUser"].toString();
       emit crumbUserChanged();
     }
+    // Onboarding flags. An existing state.json that predates them means a
+    // returning user — don't show the welcome again (default welcomeSeen=true),
+    // and there is no seeded demo to offer clearing (demoActive=false).
+    m_welcomeSeen = s.contains("welcomeSeen") ? s["welcomeSeen"].toBool() : true;
+    m_demoActive = s.contains("demoActive") ? s["demoActive"].toBool() : false;
+    emit onboardingChanged();
     if(s.contains("shortcuts")) {
       QVariantMap overrides;
       const QJsonObject shortcutsObj = s["shortcuts"].toObject();

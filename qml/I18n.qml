@@ -49,6 +49,23 @@ QtObject {
             "common.yesterday": "Yesterday",
             "common.never": "never",
 
+            // ── Onboarding (welcome + demo banner) ──
+            "welcome.title": "Welcome to heap.",
+            "welcome.subtitle": "Your board, calendar, and notes — one native app, offline, yours.",
+            "welcome.board.title": "Board",
+            "welcome.board.desc": "Drag-and-drop kanban with priorities, deadlines and git branches.",
+            "welcome.calendar.title": "Calendar",
+            "welcome.calendar.desc": "Drag a task onto the day grid to time-block focus work.",
+            "welcome.capture.title": "Quick capture",
+            "welcome.capture.desc": "Press Ctrl+Shift+Space anywhere — the window pops up to capture a task.",
+            "welcome.palette.title": "Command palette",
+            "welcome.palette.desc": "Ctrl+K jumps to any task, doc, person or profile.",
+            "welcome.demoNote": "The board is loaded with sample data so you can explore. Clear it anytime with “Start fresh”.",
+            "welcome.getStarted": "Get started",
+            "demo.banner.text": "You're looking at demo data.",
+            "demo.banner.startFresh": "Start fresh",
+            "demo.banner.keep": "Keep exploring",
+
             // ── TopBar / SideRail ──
             "topbar.search": "Search tasks, IDs, branches…",
             "topbar.placeholder": "What needs doing today?",
@@ -538,6 +555,23 @@ QtObject {
             "common.tomorrow": "Завтра",
             "common.yesterday": "Вчера",
             "common.never": "никогда",
+
+            // ── Онбординг (приветствие + баннер демо) ──
+            "welcome.title": "Добро пожаловать в heap.",
+            "welcome.subtitle": "Доска, календарь и заметки — одно нативное приложение, офлайн, ваше.",
+            "welcome.board.title": "Доска",
+            "welcome.board.desc": "Канбан с drag-and-drop, приоритетами, дедлайнами и git-ветками.",
+            "welcome.calendar.title": "Календарь",
+            "welcome.calendar.desc": "Перетащите задачу на сетку дня, чтобы забронировать время на фокус.",
+            "welcome.capture.title": "Быстрый захват",
+            "welcome.capture.desc": "Нажмите Ctrl+Shift+Space где угодно — окно всплывёт для создания задачи.",
+            "welcome.palette.title": "Командная палитра",
+            "welcome.palette.desc": "Ctrl+K — переход к любой задаче, доку, человеку или профилю.",
+            "welcome.demoNote": "Доска заполнена демо-данными для знакомства. Очистить в любой момент — «Начать с чистого листа».",
+            "welcome.getStarted": "Начать",
+            "demo.banner.text": "Сейчас показаны демо-данные.",
+            "demo.banner.startFresh": "Начать с чистого листа",
+            "demo.banner.keep": "Оставить пока",
 
             "topbar.search": "Поиск задач, ID, branch…",
             "topbar.placeholder": "Что нужно сделать сегодня?",

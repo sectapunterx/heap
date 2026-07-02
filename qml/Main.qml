@@ -44,6 +44,9 @@ ApplicationWindow {
     Component.onCompleted: {
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
+        // First run: greet the user once the overlay is ready.
+        if (!AppController.welcomeSeen)
+            Qt.callLater(welcome.open);
     }
 
     // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
@@ -185,6 +188,39 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
+
+                // First-run demo banner: offer to clear the seeded sample data.
+                Rectangle {
+                    Layout.fillWidth: true
+                    visible: AppController.demoActive
+                    implicitHeight: visible ? 40 : 0
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 10
+                        spacing: 10
+                        Text {
+                            text: "✦  " + I18n.t("demo.banner.text")
+                            color: Theme.text
+                            font.pixelSize: 12
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        PillButton {
+                            text: I18n.t("demo.banner.startFresh")
+                            primary: true
+                            onClicked: AppController.startFresh()
+                        }
+                        PillButton {
+                            text: I18n.t("demo.banner.keep")
+                            onClicked: AppController.dismissDemo()
+                        }
+                    }
+                }
+
                 FilterBar {
                     Layout.fillWidth: true
                     visible: AppController.currentView !== "docs"
@@ -362,6 +398,7 @@ ApplicationWindow {
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
+    WelcomePopup { id: welcome }
     QuickCapturePopup { id: quickCapture }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes
