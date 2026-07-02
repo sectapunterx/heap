@@ -52,6 +52,14 @@ for visual reference. The brand bundle lives under `design/brand-export/`; see [
 - **Automation.** A 60-second tick auto-archives done tasks, surfaces blocked-stuck warnings, and fires deadline and
   standup reminders via the system tray. Respects quiet hours.
 
+## Documentation
+
+- [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough of the
+  whole app, including the Quick-capture syntax.
+- [**Keyboard reference**](docs/HOTKEYS.md) — every (rebindable) shortcut.
+- [**Data & backups**](docs/DATA.md) — where your data lives, backups, and
+  moving a profile between machines.
+
 ## Build
 
 Requires Qt 6.4+ and a C++20 toolchain.
@@ -168,24 +176,28 @@ cmake --build build -j
 ## Keyboard
 
 Defaults. Every entry is rebindable from **Settings → Shortcuts** or the
-floating Hotkeys panel.
+floating Hotkeys panel. Full list: [docs/HOTKEYS.md](docs/HOTKEYS.md).
 
 | Action            | Default      |
 | ----------------- | ------------ |
 | Open palette      | `Ctrl+K` / `Ctrl+P` |
 | New task          | `Ctrl+N`     |
+| Quick-capture task  | `Ctrl+Shift+Space` |
+| Quick-capture note  | `Ctrl+Shift+N` |
 | Switch to Board   | `Ctrl+1`     |
 | Switch to Timeline| `Ctrl+2`     |
 | Switch to Week    | `Ctrl+3`     |
 | Switch to Docs    | `Ctrl+4`     |
 | Switch to Notes   | `Ctrl+5`     |
-| Switch to Settings| `Ctrl+,`     |
-| Next profile      | `Ctrl+Tab`   |
-| Prev profile      | `Ctrl+Shift+Tab` |
-| Focus search      | `/`          |
+| Switch to Settings| `Ctrl+6`     |
+| Next profile      | `Ctrl+]`     |
+| Prev profile      | `Ctrl+[`     |
+| Export profile → Markdown | `Ctrl+Shift+E` |
+| Focus search      | `Ctrl+F`     |
 | Undo last deletion| `Ctrl+Z`     |
-| Open Tweaks       | `Ctrl+T`     |
-| Open Hotkeys      | `Ctrl+Shift+K` |
+| Open Tweaks       | `Ctrl+,`     |
+| Open Hotkeys      | `Ctrl+/`     |
+| Select all / clear / delete | `Ctrl+A` / `Esc` / `Del` |
 
 ## Accessibility
 
