@@ -1934,16 +1934,16 @@ Item {
                         Layout.topMargin: 4
                         Layout.fillWidth: true
                         AboutRow {
-                            label: I18n.t("settings.about.version"); value: "0.4.2 — build 240617"
+                            label: I18n.t("settings.about.version"); value: Brand.version
                         }
                         AboutRow {
                             label: I18n.t("settings.about.channel"); value: "stable"
                         }
                         AboutRow {
-                            label: I18n.t("settings.about.storage"); value: "~/.local/share/todocpp"
+                            label: I18n.t("settings.about.storage"); value: AppController.dataDir
                         }
                         AboutRow {
-                            label: I18n.t("settings.about.engine"); value: "Qt 6.4 + QML"
+                            label: I18n.t("settings.about.engine"); value: "Qt " + AppController.qtVersion + " · QML"
                         }
                     }
                 }

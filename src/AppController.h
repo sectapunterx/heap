@@ -81,6 +81,10 @@ class AppController : public QObject {
   // it to surface the developer-only "show unimplemented" toggle.
   Q_PROPERTY(bool debugBuild READ debugBuild CONSTANT)
 
+  // Runtime facts for Settings → About (so nothing is hardcoded / stale).
+  Q_PROPERTY(QString dataDir READ dataDir CONSTANT)
+  Q_PROPERTY(QString qtVersion READ qtVersion CONSTANT)
+
   // ---- Git focus banner ----
   Q_PROPERTY(QString focusedTaskId READ focusedTaskId NOTIFY focusedGitChanged)
   Q_PROPERTY(QString focusedBranch READ focusedBranch NOTIFY focusedGitChanged)
@@ -261,6 +265,11 @@ class AppController : public QObject {
     return false;
 #endif
   }
+
+  // Actual writable data directory (where state.json / backups live) and the
+  // Qt runtime version — resolved at runtime for the About panel.
+  QString dataDir() const;
+  QString qtVersion() const;
 
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());

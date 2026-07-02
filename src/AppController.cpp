@@ -1530,6 +1530,14 @@ QString AppController::backupDirPath() const {
   return dir;
 }
 
+QString AppController::dataDir() const {
+  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+}
+
+QString AppController::qtVersion() const {
+  return QString::fromLatin1(qVersion());
+}
+
 void AppController::scheduleSave() {
   if(m_loading || !m_saveTimer) {
     return;
