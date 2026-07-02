@@ -26,6 +26,10 @@ namespace heap::notify {
 class NotificationCenter;
 }
 
+namespace heap::platform {
+class GlobalHotkey;
+}
+
 class AppController : public QObject {
   Q_OBJECT
   QML_ELEMENT
@@ -399,6 +403,9 @@ class AppController : public QObject {
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
   void selectedTaskIdsChanged();
+  // Raised by the OS-level global hotkey (Quick-capture from anywhere). QML
+  // brings the window forward and opens the capture popup.
+  void quickCaptureRequested();
 
  private slots:
   void runAutomation();
@@ -437,6 +444,11 @@ class AppController : public QObject {
   void seedShortcutCatalog();
   void applyShortcutOverrides(const QVariantMap& overrides);
   QString normalizeSequence(const QString& raw) const;
+
+  // Global hotkey — OS-level Quick-capture trigger (works unfocused). Re-armed
+  // from the "quick-capture" catalog sequence whenever it changes.
+  std::unique_ptr<heap::platform::GlobalHotkey> m_globalHotkey;
+  void registerGlobalHotkey();
 
   // Automation
   QTimer* m_automationTimer = nullptr;

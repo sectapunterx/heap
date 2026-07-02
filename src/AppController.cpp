@@ -5,6 +5,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
 #include "notify/NotificationCenter.h"
+#include "platform/GlobalHotkey.h"
 #include "text/TaskTextUtils.h"
 
 #include <QApplication>
@@ -236,6 +237,14 @@ AppController::AppController(QObject* parent) :
 
   loadStateOnStart();
   m_automationTimer->start();
+
+  // ---- Global hotkey (OS-level Quick-capture) ----
+  // Registered after loadStateOnStart() so any user rebind of "quick-capture"
+  // is already applied. On non-Windows platforms this is a no-op and the app
+  // relies on the in-app QML shortcut instead.
+  m_globalHotkey = heap::platform::GlobalHotkey::create(this);
+  connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::quickCaptureRequested);
+  registerGlobalHotkey();
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -2389,6 +2398,20 @@ void AppController::seedShortcutCatalog() {
   emit shortcutsChanged();
 }
 
+void AppController::registerGlobalHotkey() {
+  if(!m_globalHotkey) {
+    return;
+  }
+  // The global capture hotkey mirrors the in-app "quick-capture" binding, so
+  // one place in Settings → Hotkeys controls both. RegisterHotKey intercepts
+  // the combination even when the window is focused, so the in-app QML
+  // Shortcut only fires as a fallback when the OS registration is refused.
+  const QString seq = shortcutFor(QStringLiteral("quick-capture"));
+  if(seq.isEmpty() || !m_globalHotkey->registerHotkey(seq)) {
+    m_globalHotkey->unregister();
+  }
+}
+
 int AppController::shortcutIndexOf(const QString& id) const {
   for(int i = 0; i < m_shortcuts.size(); ++i) {
     if(m_shortcuts[i].toMap().value("id").toString() == id) {
@@ -2497,6 +2520,9 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
   m["sequence"] = seq;
   m_shortcuts[i] = m;
   emit shortcutsChanged();
+  if(id == QStringLiteral("quick-capture")) {
+    registerGlobalHotkey();
+  }
   scheduleSave();
   return true;
 }
@@ -2524,6 +2550,9 @@ void AppController::resetShortcut(const QString& id) {
   m["sequence"] = def;
   m_shortcuts[i] = m;
   emit shortcutsChanged();
+  if(id == QStringLiteral("quick-capture")) {
+    registerGlobalHotkey();
+  }
   scheduleSave();
 }
 
@@ -2541,6 +2570,7 @@ void AppController::resetAllShortcuts() {
   if(changed) {
     emit shortcutsChanged();
     scheduleSave();
+    registerGlobalHotkey();
     emit toast(tr_("hotkeys.reset"));
   }
 }

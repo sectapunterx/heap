@@ -77,6 +77,15 @@ ApplicationWindow {
     Connections {
         target: AppController
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
+        // OS-level global hotkey fired while the window may be minimized or in
+        // the background: bring it forward, then open Quick-capture.
+        function onQuickCaptureRequested() {
+            if (win.visibility === Window.Minimized || win.visibility === Window.Hidden)
+                win.show();
+            win.raise();
+            win.requestActivate();
+            quickCapture.open();
+        }
         function onToast(msg) { toast.show(msg) }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {

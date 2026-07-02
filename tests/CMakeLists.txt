@@ -129,9 +129,16 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_SELECTION_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_SELECTION_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -185,9 +192,16 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_NOTES_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_NOTES_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -217,6 +231,41 @@ if (UNIX AND NOT APPLE)
 endif ()
 
 add_test(NAME heap_notes_tests COMMAND heap_notes_tests)
+
+# ─── Platform (global hotkey) tests ───
+# Cover heap::platform::decodeSequence — the portable QKeySequence → (key,mods)
+# parser the Windows RegisterHotKey backend feeds off. On Windows the native
+# backend is linked too (create() references it); elsewhere the .cpp compiles
+# with the no-op fallback.
+set(HEAP_PLATFORM_SOURCES
+        test_global_hotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+)
+if (WIN32)
+    list(APPEND HEAP_PLATFORM_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+
+add_executable(heap_platform_tests ${HEAP_PLATFORM_SOURCES})
+set_target_properties(heap_platform_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_platform_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_platform_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        GTest::gtest
+        GTest::gtest_main
+)
+if (WIN32)
+    target_link_libraries(heap_platform_tests PRIVATE user32)
+endif ()
+
+add_test(NAME heap_platform_tests COMMAND heap_platform_tests)
 
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
