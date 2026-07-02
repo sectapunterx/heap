@@ -641,4 +641,30 @@ ApplicationWindow {
         anchors.horizontalCenter: parent.horizontalCenter
         z: 100
     }
+
+    // Launch splash — covers the window until the scene is ready, then fades.
+    // Honours reduced motion (no bar animation, no fade, dismissed promptly).
+    SplashScreen {
+        id: splash
+        anchors.fill: parent
+        z: 9999
+        autoAnimate: !Theme.reducedMotion
+        autoDuration: 900
+        onFinished: splashFade.start()
+
+        // Swallow input while the splash is up.
+        MouseArea { anchors.fill: parent }
+
+        // Reduced motion: the internal progress animation is off, so dismiss
+        // via a short timer instead.
+        Component.onCompleted: if (Theme.reducedMotion) splashReducedDismiss.start()
+        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.finished() }
+
+        NumberAnimation {
+            id: splashFade
+            target: splash; property: "opacity"; to: 0
+            duration: Theme.reducedMotion ? 0 : 350; easing.type: Easing.OutCubic
+            onFinished: splash.visible = false
+        }
+    }
 }
