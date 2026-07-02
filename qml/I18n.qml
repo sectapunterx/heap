@@ -126,6 +126,10 @@ QtObject {
 
             // ── Kanban / TaskCard ──
             "kanban.empty": "— empty —",
+            "board.empty.title": "No tasks yet",
+            "board.empty.hint": "Press Ctrl+N to add your first task, or use quick-capture (Ctrl+Shift+Space).",
+            "day.noEvents": "No events today — drag an empty slot to create one, or drop a task to schedule it.",
+            "week.noEvents": "No events this week — switch to Day and drag to create one.",
             "kanban.dropHere": "Drop here",
             "kanban.deleteColumn": "Delete column",
             "kanban.newColumn": "New column",
@@ -630,6 +634,10 @@ QtObject {
             "filter.sort.updated": "По обновлению",
 
             "kanban.empty": "— пусто —",
+            "board.empty.title": "Пока нет задач",
+            "board.empty.hint": "Нажми Ctrl+N, чтобы добавить первую задачу, или быстрый захват (Ctrl+Shift+Space).",
+            "day.noEvents": "Событий сегодня нет — потяни пустой слот, чтобы создать, или брось задачу для планирования.",
+            "week.noEvents": "Событий на этой неделе нет — переключись на День и потяни, чтобы создать.",
             "kanban.dropHere": "Перетащи сюда",
             "kanban.deleteColumn": "Удалить колонку",
             "kanban.newColumn": "Новая колонка",

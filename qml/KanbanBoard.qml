@@ -664,4 +664,36 @@ Item {
             ToolTip.delay: 400
         }
     }
+
+    // ── Board-level empty state ──
+    // Shown when the profile has no tasks at all (e.g. right after "Start
+    // fresh"). Non-interactive so the column "+" affordances stay reachable.
+    property int _boardTotal: AppController.tasks.rowCount()
+    Connections {
+        target: AppController.tasks
+        function onModelReset()   { root._boardTotal = AppController.tasks.rowCount() }
+        function onRowsInserted() { root._boardTotal = AppController.tasks.rowCount() }
+        function onRowsRemoved()  { root._boardTotal = AppController.tasks.rowCount() }
+    }
+    Column {
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 48, 360)
+        spacing: 8
+        visible: root._boardTotal === 0
+        Text {
+            anchors.horizontalCenter: parent.horizontalCenter
+            text: I18n.t("board.empty.title")
+            color: Theme.text
+            font.pixelSize: 15
+            font.weight: Font.DemiBold
+        }
+        Text {
+            width: parent.width
+            horizontalAlignment: Text.AlignHCenter
+            wrapMode: Text.WordWrap
+            text: I18n.t("board.empty.hint")
+            color: Theme.textMuted
+            font.pixelSize: 12
+        }
+    }
 }

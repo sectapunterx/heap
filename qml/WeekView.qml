@@ -198,6 +198,14 @@ Item {
     // those reads and re-evaluates this binding when any of them changes.
     readonly property var days: buildDays()
 
+    // True when the visible week has neither task deadlines nor events, so the
+    // grid would otherwise read as blank/broken.
+    readonly property bool weekEmpty: {
+        for (let i = 0; i < days.length; i++)
+            if (days[i].tasks.length > 0 || days[i].events.length > 0) return false;
+        return true;
+    }
+
     // Flattened events with per-week day index so interactive drag/resize
     // can position them absolutely (and move across day columns).
     function buildFlatEvents() {
@@ -721,5 +729,18 @@ Item {
                 }
             }
         }
+    }
+
+    // Empty-week hint — shown only when the week has no tasks and no events, so
+    // the grid does not read as blank. Non-interactive.
+    Text {
+        anchors.centerIn: parent
+        width: parent.width - 64
+        visible: root.weekEmpty
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: I18n.t("week.noEvents")
+        color: Theme.textDim
+        font.pixelSize: 12
     }
 }
