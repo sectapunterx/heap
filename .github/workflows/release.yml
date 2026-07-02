@@ -1,23 +1,55 @@
-name: Release Portable
+name: Release
 
+# Cross-platform packaging. Fires automatically when a version tag is pushed
+# (git tag v1.2.3 && git push --tags) and can also be run manually, in which
+# case a dated tag vYYYY.MM.DD-<sha> is minted.
 on:
+  push:
+    tags:
+      - "v*"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    runs-on: windows-latest
-
+  # ──────────────────────────────────────────────────────────────────
+  # Resolve the release tag once so every packaging job agrees on the
+  # artifact naming and the publish job knows what to tag.
+  # ──────────────────────────────────────────────────────────────────
+  meta:
+    name: Resolve tag
+    runs-on: ubuntu-24.04
+    outputs:
+      tag: ${{ steps.tag.outputs.value }}
     steps:
-      # ── Full history checkout (needed for release notes) ──────────
-      - name: Checkout
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Compute release tag
+        id: tag
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [ "${{ github.ref_type }}" = "tag" ]; then
+            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=v$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ──────────────────────────────────────────────────────────────────
+  # Windows: portable zip (proven windeployqt bundle) + Inno Setup
+  # installer (.exe).
+  # ──────────────────────────────────────────────────────────────────
+  package-windows:
+    name: Package (Windows)
+    needs: meta
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      # ── Install MSYS2 + Qt6 ───────────────────────────────────────
       - name: Setup MSYS2 (UCRT64)
         id: msys2
         uses: msys2/setup-msys2@v2
@@ -32,98 +64,226 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-gcc
 
-      # ── Expose MSYS2 ucrt64/bin to every subsequent step ──────────
-      # Without this, windeployqt cannot find qmlimportscanner
-      # when Ninja invokes the portable target via cmd.exe
       - name: Add MSYS2 ucrt64/bin to PATH
         shell: pwsh
         run: |
           $ucrt = "${{ steps.msys2.outputs.msys2-location }}\ucrt64\bin"
-          Write-Output "Adding to PATH: $ucrt"
           "$ucrt" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
 
-      # ── Locate Qt6 libexec so windeployqt finds qmlimportscanner ──
-      # MSYS2 packages place qmlimportscanner under ucrt64/share/qt6/libexec
-      # (or ucrt64/share/qt6/bin in older packages). windeployqt resolves
-      # this via QLibraryInfo paths baked at build time, which doesn't
-      # always match the setup-msys2 install root (D:/a/_temp/msys64/...).
-      # Probe the filesystem instead of hard-coding.
       - name: Add Qt6 tool dirs to PATH
         shell: msys2 {0}
         run: |
           set -eu
-          # Inside the msys2 shell, /ucrt64 is the install root. Probe both
-          # the canonical msys path and the action's reported install dir.
           SCANNER=$(find /ucrt64 -name 'qmlimportscanner.exe' -print -quit 2>/dev/null || true)
-          if [ -z "$SCANNER" ]; then
-            MSYS_BASE_UNIX=$(cygpath -u "${{ steps.msys2.outputs.msys2-location }}")
-            SCANNER=$(find "$MSYS_BASE_UNIX/ucrt64" -name 'qmlimportscanner.exe' -print -quit 2>/dev/null || true)
+          if [ -n "$SCANNER" ]; then
+            cygpath -w "$(dirname "$SCANNER")" >> "$GITHUB_PATH"
           fi
-          if [ -z "$SCANNER" ]; then
-            echo "::error::qmlimportscanner.exe not found anywhere under /ucrt64"
-            exit 1
-          fi
-          echo "qmlimportscanner: $SCANNER"
-          SCANNER_DIR_WIN=$(cygpath -w "$(dirname "$SCANNER")")
-          echo "$SCANNER_DIR_WIN" >> "$GITHUB_PATH"
-          # Also expose share/qt6/bin or libexec (one is the canonical tools
-          # dir; the other may not exist depending on Qt6 packaging). Use
-          # `if/then` so that a missing directory does NOT make `set -e`
-          # tear down the step.
           for d in /ucrt64/share/qt6/bin /ucrt64/share/qt6/libexec; do
-            if [ -d "$d" ]; then
-              cygpath -w "$d" >> "$GITHUB_PATH"
-            fi
+            [ -d "$d" ] && cygpath -w "$d" >> "$GITHUB_PATH" || true
           done
 
-      # ── CMake configure ───────────────────────────────────────────
-      - name: Configure
+      - name: Configure & build
         shell: msys2 {0}
         run: |
           MSYS_ROOT=$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")
-          cmake -B build -G Ninja \
-            -DCMAKE_BUILD_TYPE=Release \
-            -DMSYS_ROOT="$MSYS_ROOT"
+          cmake -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DMSYS_ROOT="$MSYS_ROOT"
+          cmake --build build --target heap --parallel $(nproc)
 
-      # ── Build the binary ──────────────────────────────────────────
-      - name: Build heap
-        shell: msys2 {0}
-        run: cmake --build build --target heap --parallel $(nproc)
-
-      # ── Assemble portable bundle via CMake target ─────────────────
-      - name: Build portable bundle
+      - name: Assemble portable bundle
         shell: msys2 {0}
         run: |
           set -eu
-          MSYS_BASE="${{ steps.msys2.outputs.msys2-location }}"
-          MSYS_BASE_UNIX=$(cygpath -u "$MSYS_BASE")
-          # Prepend Qt6 tool dirs so windeployqt (and the qmlimportscanner
-          # subprocess it spawns) can be found by Ninja → cmd.exe.
+          MSYS_BASE_UNIX=$(cygpath -u "${{ steps.msys2.outputs.msys2-location }}")
           export PATH="$MSYS_BASE_UNIX/ucrt64/bin:$MSYS_BASE_UNIX/ucrt64/share/qt6/libexec:$MSYS_BASE_UNIX/ucrt64/share/qt6/bin:$PATH"
           cmake --build build --target portable
 
-      # ── Pack into zip (PowerShell is built-in on windows-latest) ──
-      - name: Zip bundle
+      - name: Zip portable bundle
+        shell: pwsh
+        run: Compress-Archive -Path "build\heap-portable\*" -DestinationPath "heap-${{ needs.meta.outputs.tag }}-windows-portable.zip"
+
+      # Inno Setup ships an installer that drops Start-menu shortcuts and an
+      # uninstaller. It packages the exact same portable bundle directory.
+      - name: Install Inno Setup
+        shell: pwsh
+        run: choco install innosetup --no-progress -y
+
+      - name: Build installer
         shell: pwsh
         run: |
-          Compress-Archive `
-            -Path   "build\heap-portable\*" `
-            -DestinationPath "heap-portable-windows.zip"
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            /DAppVersion="${{ needs.meta.outputs.tag }}" `
+            /DBundleDir="$($PWD.Path)\build\heap-portable" `
+            "/Fheap-${{ needs.meta.outputs.tag }}-windows-setup" `
+            installer\heap.iss
 
-      # ── Generate tag: vYYYY.MM.DD-<short-sha> ─────────────────────
-      - name: Compute release tag
-        id: tag
-        shell: pwsh
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-windows
+          path: |
+            heap-${{ needs.meta.outputs.tag }}-windows-portable.zip
+            installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────────────
+  # Linux: .deb (dpkg-deb) + AppImage (linuxdeploy). The AppImage step is
+  # best-effort — if the linuxdeploy toolchain hiccups, the .deb still ships.
+  # ──────────────────────────────────────────────────────────────────
+  package-linux:
+    name: Package (Linux)
+    needs: meta
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install toolchain
         run: |
-          $date = Get-Date -Format "yyyy.MM.dd"
-          $sha  = git rev-parse --short HEAD
-          "value=v$date-$sha" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ file \
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev \
+            libgl1-mesa-dev libegl1-mesa-dev
 
-      # ── Publish GitHub Release with the archive ───────────────────
-      - name: Publish release
+      - name: Configure & build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
+          cmake --build build --parallel --target heap
+
+      - name: Stage install tree
+        run: |
+          set -eu
+          VER="${{ needs.meta.outputs.tag }}"; VER="${VER#v}"
+          DEST="pkgroot"
+          install -Dm755 build/heap                                   "$DEST/usr/bin/heap"
+          install -Dm644 packaging/linux/heap.desktop                 "$DEST/usr/share/applications/heap.desktop"
+          install -Dm644 design/brand-export/icon/heap-icon.svg       "$DEST/usr/share/icons/hicolor/scalable/apps/heap.svg"
+          # Debian control metadata.
+          mkdir -p "$DEST/DEBIAN"
+          sed "s/@VERSION@/${VER}/" packaging/linux/control.in > "$DEST/DEBIAN/control"
+
+      - name: Build .deb
+        run: |
+          set -eu
+          dpkg-deb --build --root-owner-group pkgroot "heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb"
+
+      - name: Build AppImage
+        id: appimage
+        continue-on-error: true
+        run: |
+          set -eu
+          curl -fsSL -o linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          chmod +x linuxdeploy linuxdeploy-plugin-qt
+          # ubuntu-24.04 has fuse3, not libfuse2 — run the AppImage tools by
+          # self-extracting instead of mounting.
+          export APPIMAGE_EXTRACT_AND_RUN=1
+          export QML_SOURCES_PATHS="$PWD/qml"
+          export OUTPUT="heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
+          # --icon-filename must match the desktop file's Icon=heap key.
+          ./linuxdeploy --appdir AppDir \
+            --executable build/heap \
+            --desktop-file packaging/linux/heap.desktop \
+            --icon-file design/brand-export/icon/heap-icon.svg \
+            --icon-filename heap \
+            --plugin qt --output appimage
+
+      - name: Upload Linux artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-linux
+          path: |
+            heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb
+            heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+          if-no-files-found: warn
+
+  # ──────────────────────────────────────────────────────────────────
+  # macOS: .app via macdeployqt + .dmg. Unsigned by default; if the
+  # signing secrets are present the bundle is codesigned + notarized.
+  # ──────────────────────────────────────────────────────────────────
+  package-macos:
+    name: Package (macOS)
+    needs: meta
+    runs-on: macos-14
+    # Job-level env so the optional signing step's `if:` can read it (a step's
+    # own env is not reliably visible to its own `if`, and `secrets` cannot be
+    # referenced in `if` directly).
+    env:
+      MACOS_CERT_P12: ${{ secrets.MACOS_CERT_P12 }}
+      MACOS_CERT_PASSWORD: ${{ secrets.MACOS_CERT_PASSWORD }}
+      MACOS_NOTARY_APPLE_ID: ${{ secrets.MACOS_NOTARY_APPLE_ID }}
+      MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
+      MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Ninja
+        run: brew install ninja
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.7.*"
+          modules: qtdeclarative
+
+      - name: Configure & build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
+          cmake --build build --parallel --target heap
+
+      - name: Deploy + make .dmg
+        run: |
+          set -eu
+          APP="build/heap.app"
+          test -d "$APP" || { echo "::error::expected an .app bundle at $APP"; exit 1; }
+          macdeployqt "$APP" -qmldir="$PWD/qml" -dmg
+          mv build/heap.dmg "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+
+      # Codesign + notarize only when the Apple secrets are configured. See
+      # docs/PACKAGING.md for the required secret names.
+      - name: Codesign & notarize (optional)
+        if: ${{ env.MACOS_CERT_P12 != '' }}
+        run: |
+          set -eu
+          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
+          security create-keychain -p ci build.keychain
+          security default-keychain -s build.keychain
+          security unlock-keychain -p ci build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
+          codesign --deep --force --options runtime --sign "Developer ID Application" "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          xcrun notarytool submit "heap-${{ needs.meta.outputs.tag }}-macos.dmg" \
+            --apple-id "$MACOS_NOTARY_APPLE_ID" --password "$MACOS_NOTARY_PASSWORD" \
+            --team-id "$MACOS_NOTARY_TEAM_ID" --wait
+          xcrun stapler staple "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+
+      - name: Upload macOS artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-macos
+          path: heap-${{ needs.meta.outputs.tag }}-macos.dmg
+          if-no-files-found: error
+
+  # ──────────────────────────────────────────────────────────────────
+  # Publish: gather every platform artifact into one GitHub Release.
+  # ──────────────────────────────────────────────────────────────────
+  publish:
+    name: Publish release
+    needs: [meta, package-windows, package-linux, package-macos]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: List artifacts
+        run: find dist -type f -printf '%p (%s bytes)\n'
+
+      - name: Publish
         uses: softprops/action-gh-release@v2
         with:
-          tag_name:               ${{ steps.tag.outputs.value }}
-          name:                   "heap ${{ steps.tag.outputs.value }}"
+          tag_name: ${{ needs.meta.outputs.tag }}
+          name: "heap ${{ needs.meta.outputs.tag }}"
           generate_release_notes: true
-          files:                  heap-portable-windows.zip
+          files: dist/**/*

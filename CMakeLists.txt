@@ -49,7 +49,10 @@ find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Svg)
 
 qt_standard_project_setup(REQUIRES 6.4)
 
-qt_add_executable(heap WIN32
+# WIN32 → GUI subsystem on Windows (no console); MACOSX_BUNDLE → a .app on
+# macOS so windeployqt/macdeployqt and `install(... BUNDLE ...)` have a bundle
+# to operate on. Each keyword applies only to its own platform.
+qt_add_executable(heap WIN32 MACOSX_BUNDLE
     src/main.cpp
     src/AppController.cpp
     src/Models.cpp
