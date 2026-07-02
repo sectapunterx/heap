@@ -533,7 +533,7 @@ class AppController : public QObject {
 
   // Undo machinery
   struct PendingUndo {
-    enum Kind { None, Task, BulkTasks, Event, Person, Status, Profile } kind = None;
+    enum Kind { None, Task, BulkTasks, Event, Person, Status, Profile, TaskMove, TaskArchive } kind = None;
 
     // payload — only the field matching `kind` is populated
     ::Task task;
@@ -542,6 +542,10 @@ class AppController : public QObject {
     QVariantMap status;
     ::Profile profile;
     int row = -1;
+    // TaskMove / TaskArchive — the single task and the value to restore.
+    QString taskId;
+    QString prevStatus;
+    bool prevArchived = false;
     // Bulk-task delete — every task and its original row index. Ordered
     // by ascending row so re-insertion in the same order is safe.
     QVector<::Task> tasks;

@@ -46,6 +46,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.created", {"Created: %1", "Создано: %1"}},
       {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
       {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
+      {"task.moved", {"%1 → %2", "%1 → %2"}},
+      {"task.moveUndone", {"Move undone: %1", "Перемещение отменено: %1"}},
+      {"task.archived", {"Archived: %1", "В архиве: %1"}},
+      {"task.unarchived", {"Unarchived: %1", "Из архива: %1"}},
+      {"task.archiveUndone", {"Restored: %1", "Восстановлено: %1"}},
       {"event.deleted", {"Deleted event: %1", "Удалено событие: %1"}},
       {"event.restored", {"Restored: %1", "Восстановлено: %1"}},
       {"event.scheduled", {"%1 scheduled for %2", "%1 запланировано на %2"}},
@@ -561,7 +566,17 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     }
   }
   const QString taskId = t.id;
+  const QString prevStatus = t.status;
   m_tasks.setStatus(id, newStatus);
+
+  // Arm undo so a mis-drag to the wrong column is reversible (previously
+  // moveTask had no undo at all).
+  cancelUndo();
+  m_pendingUndo = {};
+  m_pendingUndo.kind = PendingUndo::TaskMove;
+  m_pendingUndo.taskId = taskId;
+  m_pendingUndo.prevStatus = prevStatus;
+  armUndo(5);
 
   // Re-evaluate blocked-stuck set (the task may have left "blocked").
   if(m_blockedStuckIds.remove(id)) {
@@ -578,7 +593,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     }
   }
 
-  emit toast(QString("%1 → %2").arg(taskId, statusName));
+  emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
   scheduleSave();
 }
 
@@ -1503,6 +1518,20 @@ void AppController::undoLastDeletion() {
       emit profilesChanged();
       emit activeProfileChanged();
       emit toast(tr_("profile.restored").arg(m_pendingUndo.profile.name));
+      break;
+    }
+    case PendingUndo::TaskMove: {
+      if(m_tasks.indexOfId(m_pendingUndo.taskId) >= 0) {
+        m_tasks.setStatus(m_pendingUndo.taskId, m_pendingUndo.prevStatus);
+        emit toast(tr_("task.moveUndone").arg(m_pendingUndo.taskId));
+      }
+      break;
+    }
+    case PendingUndo::TaskArchive: {
+      if(m_tasks.indexOfId(m_pendingUndo.taskId) >= 0) {
+        m_tasks.setArchived(m_pendingUndo.taskId, m_pendingUndo.prevArchived);
+        emit toast(tr_("task.archiveUndone").arg(m_pendingUndo.taskId));
+      }
       break;
     }
     default:
@@ -2903,7 +2932,25 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
 }
 
 void AppController::setArchived(const QString& taskId, bool archived) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  const bool prev = m_tasks.items().at(row).archived;
+  if(prev == archived) {
+    return;
+  }
   m_tasks.setArchived(taskId, archived);
+
+  // Arm undo so an accidental (un)archive is reversible.
+  cancelUndo();
+  m_pendingUndo = {};
+  m_pendingUndo.kind = PendingUndo::TaskArchive;
+  m_pendingUndo.taskId = taskId;
+  m_pendingUndo.prevArchived = prev;
+  armUndo(5);
+
+  emit undoableToast(tr_(archived ? "task.archived" : "task.unarchived").arg(taskId), 5);
   scheduleSave();
 }
 
