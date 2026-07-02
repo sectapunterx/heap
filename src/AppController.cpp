@@ -60,6 +60,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
       {"profile.exported", {"Profile exported: %1", "Профиль экспортирован: %1"}},
+      {"profile.mdCopied", {"Profile Markdown copied to clipboard", "Markdown профиля скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
@@ -1249,6 +1250,101 @@ void AppController::copyToClipboard(const QString& text) {
   if(auto* cb = QGuiApplication::clipboard()) {
     cb->setText(text);
   }
+}
+
+void AppController::copyActiveProfileMarkdownToClipboard() {
+  snapshotActiveProfile();  // flush live models into the active Profile first
+  const int pi = profileIndexOf(m_activeProfileId);
+  if(pi < 0) {
+    return;
+  }
+  const Profile& p = m_profiles[pi];
+
+  const auto renderTask = [](const Task& t) {
+    QString line = QStringLiteral("- ");
+    if(!t.priority.isEmpty()) {
+      line += QStringLiteral("**[") + t.priority + QStringLiteral("]** ");
+    }
+    if(!t.id.isEmpty()) {
+      line += QStringLiteral("`") + t.id + QStringLiteral("` ");
+    }
+    line += t.title;
+    QStringList meta;
+    if(t.deadline.isValid()) {
+      meta << QStringLiteral("deadline: ") + t.deadline.toString(Qt::ISODate);
+    }
+    if(!t.branch.isEmpty()) {
+      meta << QStringLiteral("branch: ") + t.branch;
+    }
+    if(!meta.isEmpty()) {
+      line += QStringLiteral("  — ") + meta.join(QStringLiteral(" · "));
+    }
+    return line;
+  };
+
+  QString md;
+  md += QStringLiteral("# ") + p.name + QStringLiteral("\n\n");
+  md += QStringLiteral("_Exported ") + QDate::currentDate().toString(Qt::ISODate) + QStringLiteral("_\n");
+
+  // Tasks grouped by column, in the profile's status order; archived hidden.
+  md += QStringLiteral("\n## Tasks\n");
+  QSet<QString> knownStatus;
+  for(const QVariant& sv : p.statuses) {
+    const QVariantMap sm = sv.toMap();
+    const QString sid = sm.value(QStringLiteral("id")).toString();
+    knownStatus.insert(sid);
+    QStringList lines;
+    for(const Task& t : p.tasks) {
+      if(!t.archived && t.status == sid) {
+        lines << renderTask(t);
+      }
+    }
+    if(lines.isEmpty()) {
+      continue;
+    }
+    md += QStringLiteral("\n### ") + sm.value(QStringLiteral("name")).toString() + QStringLiteral(" (") +
+          QString::number(lines.size()) + QStringLiteral(")\n");
+    md += lines.join(QStringLiteral("\n")) + QStringLiteral("\n");
+  }
+  // Tasks whose status is not one of the profile's columns.
+  QStringList orphan;
+  for(const Task& t : p.tasks) {
+    if(!t.archived && !knownStatus.contains(t.status)) {
+      orphan << renderTask(t);
+    }
+  }
+  if(!orphan.isEmpty()) {
+    md += QStringLiteral("\n### Other (") + QString::number(orphan.size()) + QStringLiteral(")\n");
+    md += orphan.join(QStringLiteral("\n")) + QStringLiteral("\n");
+  }
+
+  // People.
+  if(!p.people.isEmpty()) {
+    md += QStringLiteral("\n## People\n");
+    for(const Person& pe : p.people) {
+      QString line = QStringLiteral("- **") + pe.name + QStringLiteral("**");
+      QStringList meta;
+      if(!pe.role.isEmpty()) {
+        meta << pe.role;
+      }
+      if(!pe.question.isEmpty()) {
+        meta << QStringLiteral("Q: ") + pe.question;
+      }
+      if(!meta.isEmpty()) {
+        line += QStringLiteral(" — ") + meta.join(QStringLiteral(" · "));
+      }
+      md += line + QStringLiteral("\n");
+    }
+  }
+
+  // Notes (raw markdown of the active profile).
+  const QString notes = p.notesState.trimmed();
+  if(!notes.isEmpty()) {
+    md += QStringLiteral("\n## Notes\n\n") + notes + QStringLiteral("\n");
+  }
+
+  copyToClipboard(md);
+  emit toast(tr_("profile.mdCopied"));
 }
 
 QString AppController::classifyTaskKind(const QString& text) const {

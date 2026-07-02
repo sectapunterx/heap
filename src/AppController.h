@@ -328,6 +328,10 @@ class AppController : public QObject {
   // Profile JSON import / export (replaces the older Markdown export).
   Q_INVOKABLE QString exportActiveProfileJson() const;
   Q_INVOKABLE bool exportActiveProfileToFile(const QUrl& fileUrl) const;
+  // Render a Markdown summary of the active profile (tasks grouped by column,
+  // people, notes) and put it on the clipboard. Bound to the profile.exportMd
+  // shortcut (Ctrl+Shift+E).
+  Q_INVOKABLE void copyActiveProfileMarkdownToClipboard();
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 
