@@ -46,6 +46,19 @@ ApplicationWindow {
             AppController.currentView = INITIAL_VIEW;
     }
 
+    // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
+    // notification tray fallback), the window hides instead of quitting so the
+    // global capture hotkeys can summon it back. The tray menu's "Quit" calls
+    // QCoreApplication::quit() directly, so a real exit bypasses this. On Linux
+    // there is no tray icon, so closing quits as usual.
+    readonly property bool _minimizeToTray: Qt.platform.os === "windows" || Qt.platform.os === "osx"
+    onClosing: (close) => {
+        if (win._minimizeToTray) {
+            close.accepted = false;
+            win.hide();
+        }
+    }
+
     function activeCount() {
         return AppController.countByStatus("prog") + AppController.countByStatus("half");
     }
@@ -74,18 +87,32 @@ ApplicationWindow {
         function onDataChanged()  { win._scheduleMap = win.scheduleMap() }
         function onModelReset()   { win._scheduleMap = win.scheduleMap() }
     }
+    // Bring the window to the foreground from any state (minimized, hidden to
+    // tray, or merely unfocused). Shared by the two global-capture hotkeys and
+    // the tray "Show" affordance.
+    function _summon() {
+        if (win.visibility === Window.Minimized || win.visibility === Window.Hidden || !win.visible)
+            win.show();
+        win.raise();
+        win.requestActivate();
+    }
+
     Connections {
         target: AppController
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
-        // OS-level global hotkey fired while the window may be minimized or in
-        // the background: bring it forward, then open Quick-capture.
+        // OS-level global hotkeys fired while the window may be minimized, in
+        // the background, or hidden to the tray: bring it forward, then open the
+        // matching Quick-capture popup.
         function onQuickCaptureRequested() {
-            if (win.visibility === Window.Minimized || win.visibility === Window.Hidden)
-                win.show();
-            win.raise();
-            win.requestActivate();
+            win._summon();
             quickCapture.open();
         }
+        function onQuickCaptureNotesRequested() {
+            win._summon();
+            quickCaptureNotes.open();
+        }
+        // Tray click / "Show heap." menu entry — just restore the window.
+        function onShowWindowRequested() { win._summon(); }
         function onToast(msg) { toast.show(msg) }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {

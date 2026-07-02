@@ -403,9 +403,13 @@ class AppController : public QObject {
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
   void selectedTaskIdsChanged();
-  // Raised by the OS-level global hotkey (Quick-capture from anywhere). QML
-  // brings the window forward and opens the capture popup.
+  // Raised by the OS-level global hotkeys (Quick-capture from anywhere). QML
+  // brings the window forward and opens the matching capture popup.
   void quickCaptureRequested();
+  void quickCaptureNotesRequested();
+  // Raised when the user asks to restore the window from the tray (tray click
+  // or the tray menu's "Show" entry). QML un-hides and activates the window.
+  void showWindowRequested();
 
  private slots:
   void runAutomation();
@@ -445,10 +449,13 @@ class AppController : public QObject {
   void applyShortcutOverrides(const QVariantMap& overrides);
   QString normalizeSequence(const QString& raw) const;
 
-  // Global hotkey — OS-level Quick-capture trigger (works unfocused). Re-armed
-  // from the "quick-capture" catalog sequence whenever it changes.
+  // Global hotkeys — OS-level Quick-capture triggers (work unfocused). Re-armed
+  // from the matching catalog sequences whenever they change. Each combination
+  // is registered under one of these ids and routed back in onGlobalHotkey().
+  enum GlobalHotkeyId { HotkeyQuickCapture = 1, HotkeyQuickCaptureNotes = 2 };
   std::unique_ptr<heap::platform::GlobalHotkey> m_globalHotkey;
-  void registerGlobalHotkey();
+  void registerGlobalHotkeys();
+  void onGlobalHotkey(int id);
 
   // Automation
   QTimer* m_automationTimer = nullptr;

@@ -7,8 +7,10 @@
 
 namespace heap::platform {
 
-// System-wide (global) hotkey. Fires `activated()` even when the heap. window
-// is not focused — this is what powers Quick-capture-from-anywhere.
+// System-wide (global) hotkey manager. Fires `activated(id)` even when the
+// heap. window is not focused — this is what powers Quick-capture-from-anywhere.
+// Several combinations can be registered at once, each under a caller-chosen
+// integer `id` (e.g. one for quick-capture-task, one for quick-capture-note).
 //
 // Backends:
 //   Windows → RegisterHotKey + a QAbstractNativeEventFilter that watches for
@@ -22,15 +24,19 @@ class GlobalHotkey : public QObject {
   static std::unique_ptr<GlobalHotkey> create(QObject* parent = nullptr);
   ~GlobalHotkey() override = default;
 
-  // Register `seq` given as QKeySequence portable text ("Ctrl+Shift+Space").
-  // Replaces any previously registered combination. Returns false when the
-  // platform is unsupported, the sequence is unparseable, or the OS refused
-  // the combination (already owned by another application).
-  virtual bool registerHotkey(const QString& seq) = 0;
-  virtual void unregister() = 0;
+  // Register `seq` (QKeySequence portable text, e.g. "Ctrl+Shift+Space") under
+  // `id`. Re-registering the same `id` replaces its previous combination.
+  // Returns false when the platform is unsupported, the sequence is
+  // unparseable, or the OS refused the combination (already owned elsewhere).
+  virtual bool registerHotkey(int id, const QString& seq) = 0;
+  // Release the combination bound to `id` (no-op if `id` is not registered).
+  virtual void unregister(int id) = 0;
+  // Release every registered combination.
+  virtual void unregisterAll() = 0;
 
  signals:
-  void activated();
+  // Emitted with the `id` the fired combination was registered under.
+  void activated(int id);
 
  protected:
   using QObject::QObject;

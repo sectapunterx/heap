@@ -69,6 +69,11 @@ class NotificationCenter : public QObject {
   void dismissed(const QString& notificationId);
   // Emitted when the user clicks the toast body (default activation).
   void activated(const QString& notificationId);
+  // Tray-icon presence signals (only the tray backend emits these). The app
+  // uses them to run windowless: restore the window on a tray click / "Show",
+  // and exit for real on "Quit". Backends without a tray never emit them.
+  void showWindowRequested();
+  void quitRequested();
 
  protected:
   using QObject::QObject;

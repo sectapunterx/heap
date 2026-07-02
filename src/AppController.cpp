@@ -201,6 +201,12 @@ AppController::AppController(QObject* parent) :
   m_notifier = heap::notify::NotificationCenter::create(this);
   connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked, this, &AppController::onNotifierAction);
   connect(m_notifier.get(), &heap::notify::NotificationCenter::activated, this, &AppController::onNotifierActivated);
+  // The tray backend (Windows/macOS) doubles as the app's presence when the
+  // window is hidden: clicking the icon or its "Show" entry restores the
+  // window, and "Quit" exits for real. Forwarded to QML / the event loop.
+  connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this,
+          &AppController::showWindowRequested);
+  connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() { QCoreApplication::quit(); });
 
   // Route notification(...) → native toast + in-app toast bar, respecting
   // quiet hours and the user's `notifications.desktopNotif` / `soundOnPing`
@@ -238,13 +244,13 @@ AppController::AppController(QObject* parent) :
   loadStateOnStart();
   m_automationTimer->start();
 
-  // ---- Global hotkey (OS-level Quick-capture) ----
-  // Registered after loadStateOnStart() so any user rebind of "quick-capture"
-  // is already applied. On non-Windows platforms this is a no-op and the app
-  // relies on the in-app QML shortcut instead.
+  // ---- Global hotkeys (OS-level Quick-capture) ----
+  // Registered after loadStateOnStart() so any user rebind of the capture
+  // sequences is already applied. On non-Windows platforms this is a no-op and
+  // the app relies on the in-app QML shortcuts instead.
   m_globalHotkey = heap::platform::GlobalHotkey::create(this);
-  connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::quickCaptureRequested);
-  registerGlobalHotkey();
+  connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
+  registerGlobalHotkeys();
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -2398,17 +2404,34 @@ void AppController::seedShortcutCatalog() {
   emit shortcutsChanged();
 }
 
-void AppController::registerGlobalHotkey() {
+void AppController::registerGlobalHotkeys() {
   if(!m_globalHotkey) {
     return;
   }
-  // The global capture hotkey mirrors the in-app "quick-capture" binding, so
-  // one place in Settings → Hotkeys controls both. RegisterHotKey intercepts
-  // the combination even when the window is focused, so the in-app QML
-  // Shortcut only fires as a fallback when the OS registration is refused.
-  const QString seq = shortcutFor(QStringLiteral("quick-capture"));
-  if(seq.isEmpty() || !m_globalHotkey->registerHotkey(seq)) {
-    m_globalHotkey->unregister();
+  // Each global capture hotkey mirrors its in-app catalog binding, so one place
+  // in Settings → Hotkeys controls both. RegisterHotKey intercepts the
+  // combination even when the window is focused, so the in-app QML Shortcut
+  // only fires as a fallback when the OS registration is refused.
+  const auto arm = [this](int id, const QString& catalogId) {
+    const QString seq = shortcutFor(catalogId);
+    if(seq.isEmpty() || !m_globalHotkey->registerHotkey(id, seq)) {
+      m_globalHotkey->unregister(id);
+    }
+  };
+  arm(HotkeyQuickCapture, QStringLiteral("quick-capture"));
+  arm(HotkeyQuickCaptureNotes, QStringLiteral("quick-capture-notes"));
+}
+
+void AppController::onGlobalHotkey(int id) {
+  switch(id) {
+    case HotkeyQuickCapture:
+      emit quickCaptureRequested();
+      break;
+    case HotkeyQuickCaptureNotes:
+      emit quickCaptureNotesRequested();
+      break;
+    default:
+      break;
   }
 }
 
@@ -2520,9 +2543,9 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
   m["sequence"] = seq;
   m_shortcuts[i] = m;
   emit shortcutsChanged();
-  if(id == QStringLiteral("quick-capture")) {
-    registerGlobalHotkey();
-  }
+  // Re-arm both capture hotkeys — the change may have retargeted a capture
+  // binding or freed one via conflict resolution above.
+  registerGlobalHotkeys();
   scheduleSave();
   return true;
 }
@@ -2550,9 +2573,7 @@ void AppController::resetShortcut(const QString& id) {
   m["sequence"] = def;
   m_shortcuts[i] = m;
   emit shortcutsChanged();
-  if(id == QStringLiteral("quick-capture")) {
-    registerGlobalHotkey();
-  }
+  registerGlobalHotkeys();
   scheduleSave();
 }
 
@@ -2570,7 +2591,7 @@ void AppController::resetAllShortcuts() {
   if(changed) {
     emit shortcutsChanged();
     scheduleSave();
-    registerGlobalHotkey();
+    registerGlobalHotkeys();
     emit toast(tr_("hotkeys.reset"));
   }
 }

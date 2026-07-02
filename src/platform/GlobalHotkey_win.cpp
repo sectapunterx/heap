@@ -3,6 +3,7 @@
 #include <QAbstractNativeEventFilter>
 #include <QByteArray>
 #include <QCoreApplication>
+#include <QSet>
 
 // <windows.h> must come after the Qt includes so its min/max macros don't
 // clobber Qt headers.
@@ -12,9 +13,10 @@ namespace heap::platform {
 
 namespace {
 
-// Arbitrary per-process hotkey id. RegisterHotKey with a null window handle
-// posts WM_HOTKEY as a thread message identified by this id.
-constexpr int kHotkeyId = 0xB33F;
+// Base for the per-process Win32 hotkey ids. RegisterHotKey with a null window
+// handle posts WM_HOTKEY as a thread message identified by this id; the caller
+// id is added to the base so several combinations coexist in one process.
+constexpr int kHotkeyIdBase = 0xB33F;
 
 UINT toWinMods(int qtMods) {
   UINT m = 0;
@@ -78,14 +80,14 @@ class WinHotkey : public GlobalHotkey, public QAbstractNativeEventFilter {
   }
 
   ~WinHotkey() override {
-    unregister();
+    unregisterAll();
     if(auto* app = QCoreApplication::instance()) {
       app->removeNativeEventFilter(this);
     }
   }
 
-  bool registerHotkey(const QString& seq) override {
-    unregister();
+  bool registerHotkey(int id, const QString& seq) override {
+    unregister(id);
     int key = 0;
     int mods = 0;
     if(!decodeSequence(seq, key, mods)) {
@@ -95,18 +97,24 @@ class WinHotkey : public GlobalHotkey, public QAbstractNativeEventFilter {
     if(vk == 0) {
       return false;
     }
-    if(!::RegisterHotKey(nullptr, kHotkeyId, toWinMods(mods), vk)) {
+    if(!::RegisterHotKey(nullptr, kHotkeyIdBase + id, toWinMods(mods), vk)) {
       return false;
     }
-    m_registered = true;
+    m_registered.insert(id);
     return true;
   }
 
-  void unregister() override {
-    if(m_registered) {
-      ::UnregisterHotKey(nullptr, kHotkeyId);
-      m_registered = false;
+  void unregister(int id) override {
+    if(m_registered.remove(id)) {
+      ::UnregisterHotKey(nullptr, kHotkeyIdBase + id);
     }
+  }
+
+  void unregisterAll() override {
+    for(const int id : m_registered) {
+      ::UnregisterHotKey(nullptr, kHotkeyIdBase + id);
+    }
+    m_registered.clear();
   }
 
   bool nativeEventFilter(const QByteArray& eventType, void* message, qintptr* /*result*/) override {
@@ -114,15 +122,18 @@ class WinHotkey : public GlobalHotkey, public QAbstractNativeEventFilter {
       return false;
     }
     auto* msg = static_cast<MSG*>(message);
-    if(msg != nullptr && msg->message == WM_HOTKEY && static_cast<int>(msg->wParam) == kHotkeyId) {
-      emit activated();
-      return true;
+    if(msg != nullptr && msg->message == WM_HOTKEY) {
+      const int id = static_cast<int>(msg->wParam) - kHotkeyIdBase;
+      if(m_registered.contains(id)) {
+        emit activated(id);
+        return true;
+      }
     }
     return false;
   }
 
  private:
-  bool m_registered = false;
+  QSet<int> m_registered;
 };
 
 }  // namespace
