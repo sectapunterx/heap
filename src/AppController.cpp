@@ -2429,11 +2429,25 @@ QString AppController::exportActiveProfileJson() const {
   p.statuses = m_statuses;
   p.docsState = m_docsState;
   p.notesState = m_notesState;
+  QJsonObject profObj = profileToJson(p);
+
+  // Events live in the global pool, so profileToJson() cannot see them — a
+  // profile export used to silently drop the whole calendar. Include the
+  // events attributed to this profile so the export is a complete snapshot;
+  // import re-attributes them to the (possibly re-slugged) imported profile.
+  QVector<CalEvent> profileEvents;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.profileId == m_activeProfileId) {
+      profileEvents.append(e);
+    }
+  }
+  profObj["events"] = eventsToJson(profileEvents);
+
   QJsonObject root;
   root["schemaVersion"] = 3;
   root["kind"] = "todocpp.profile";
   root["exportedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-  root["profile"] = profileToJson(p);
+  root["profile"] = profObj;
   return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
@@ -2479,7 +2493,8 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     return tr_("import.missingProfile");
   }
 
-  Profile imported = profileFromJson(profileObj);
+  QVector<CalEvent> importedEvents;
+  Profile imported = profileFromJson(profileObj, &importedEvents);
   if(imported.name.trimmed().isEmpty()) {
     imported.name = QStringLiteral("Imported");
   }
@@ -2502,6 +2517,17 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     snapshotActiveProfile();
   }
   m_profiles.push_back(imported);
+
+  // Hoist the imported calendar events into the global pool, re-attributed to
+  // the (possibly re-slugged) imported profile and given fresh ids so they can
+  // never collide with existing events — including on a same-instance
+  // round-trip where the source ids are already present.
+  for(CalEvent& e : importedEvents) {
+    e.profileId = imported.id;
+    e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    m_events.upsert(e);
+  }
+
   if(activate) {
     m_activeProfileId = imported.id;
     applyProfileToModels(imported);
