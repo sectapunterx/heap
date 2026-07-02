@@ -768,7 +768,7 @@ QtObject {
             "week.weekOf": "Неделя %1",
             "day.allDay": "Весь день",
             "day.newEvent": "+ Новое событие",
-            "day.dragHint": "Drag empty area → создать · drag task → запланировать",
+            "day.dragHint": "Тащи пустую область → создать · тащи задачу → запланировать",
             "people.label.title": "КОМУ НАПИСАТЬ",
             "people.tip.add": "Добавить контакт",
             "people.tip.edit": "Редактировать",
