@@ -218,6 +218,22 @@ endif ()
 
 add_test(NAME heap_notes_tests COMMAND heap_notes_tests)
 
+# ─── Integrations (tracker-sync StatusMap) tests ───
+# Pure status/priority translation for the post-release tracker sync. No QObject,
+# no network — Qt6::Core only.
+add_executable(heap_integrations_tests
+        test_integrations.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
+)
+target_include_directories(heap_integrations_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_integrations_tests PRIVATE
+        Qt6::Core
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_integrations_tests COMMAND heap_integrations_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
