@@ -480,6 +480,24 @@ endif ()
 
 add_test(NAME heap_onboarding_tests COMMAND heap_onboarding_tests)
 
+# ─── Sample data (seed content) tests ───
+# Cover SampleData seed invariants (HEAP-56): events spread across the week and
+# the demo content is generic, not the old telecom workload. Uses only the plain
+# Task/Person/CalEvent structs, so it links SampleData.cpp alone (Qt6::Gui for
+# QColor in people()); no QApplication needed.
+add_executable(heap_sampledata_tests
+        test_sampledata.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+)
+target_include_directories(heap_sampledata_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sampledata_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml   # Models.h includes <qqmlregistration.h>
+        GTest::gtest
+)
+add_test(NAME heap_sampledata_tests COMMAND heap_sampledata_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
