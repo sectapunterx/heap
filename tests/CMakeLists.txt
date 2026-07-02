@@ -218,6 +218,21 @@ endif ()
 
 add_test(NAME heap_notes_tests COMMAND heap_notes_tests)
 
+# ─── Query (Notes query-language parser) tests ───
+# Pure tokenizer/parser for the embedded Notes query language. Qt6::Core only.
+add_executable(heap_query_tests
+        test_query_parser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/QueryParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/QueryParser.h
+)
+target_include_directories(heap_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_query_tests PRIVATE
+        Qt6::Core
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_query_tests COMMAND heap_query_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in

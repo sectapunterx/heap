@@ -63,6 +63,7 @@ qt_add_executable(heap WIN32
     src/git/BranchTaskMatcher.cpp
     src/git/GitWatcher.cpp
     src/text/TaskTextUtils.cpp
+    src/query/QueryParser.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
@@ -130,6 +131,7 @@ qt_add_qml_module(heap
         src/git/GitTypes.h
         src/git/GitWatcher.h
         src/text/TaskTextUtils.h
+        src/query/QueryParser.h
         src/notify/NotificationCenter.h
 )
 
