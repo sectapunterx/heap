@@ -218,6 +218,74 @@ endif ()
 
 add_test(NAME heap_notes_tests COMMAND heap_notes_tests)
 
+# ─── Models (QAbstractListModel subclasses) tests ───
+# Direct role-mapping / upsert / mutation-guard / git-info / cycleState /
+# todoCount coverage. Pure: no AppController, no QApplication (QSignalSpy on
+# direct-connected signals needs no event loop).
+add_executable(heap_models_tests
+        test_models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+)
+set_target_properties(heap_models_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_models_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_models_tests COMMAND heap_models_tests)
+
+# ─── AppController (shortcuts / scheduling / date + wrapper logic) tests ───
+# Same headless boot + source set as heap_selection_tests, swapping the test
+# TU. Custom main() (offscreen QPA + test-mode paths), so link gtest only.
+set(HEAP_APPCTRL_SOURCES
+        test_appcontroller.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_APPCTRL_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_appcontroller_tests ${HEAP_APPCTRL_SOURCES})
+set_target_properties(heap_appcontroller_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_appcontroller_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_appcontroller_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_appcontroller_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+add_test(NAME heap_appcontroller_tests COMMAND heap_appcontroller_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in

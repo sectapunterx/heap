@@ -229,3 +229,93 @@ TEST(Slug, AlreadyLowercase) {
     EXPECT_EQ(slugifyPersonName(QStringLiteral("alex zaharov")),
               QString("a.zaharov"));
 }
+
+// ─── classifyKind: Contact-vs-Focus precedence + EN verbs ─────────────
+
+TEST(Classify, ContactBeatsFocus) {
+    EXPECT_EQ(classifyKind(QStringLiteral("напомни @viktor фокус")),
+              TaskKind::Contact);
+    EXPECT_EQ(classifyKind(QStringLiteral("напомни @viktor про синк и фокус")),
+              TaskKind::Contact);
+}
+
+TEST(Classify, ContactLosesToTicketWithFocus) {
+    EXPECT_EQ(classifyKind(QStringLiteral("задача: напомни @viktor фокус")),
+              TaskKind::Ticket);
+}
+
+TEST(Classify, HandleAtStartOfString) {
+    // '@' at start-of-string uses the '^' boundary alternative.
+    EXPECT_EQ(classifyKind(QStringLiteral("@viktor напиши срочно")),
+              TaskKind::Contact);
+}
+
+TEST(Classify, EmailWithVerbIsNotContact) {
+    // Verb present, but the only '@' is inside an e-mail (letter before '@')
+    // → not a valid handle → not Contact.
+    EXPECT_EQ(classifyKind(QStringLiteral("написать на a@b.com")),
+              TaskKind::None);
+}
+
+// ─── extractMeta: first-'//' split, URL footgun, desc handles ─────────
+
+TEST(ExtractMeta, SplitsOnFirstDoubleSlashOnly) {
+    const auto m = extractMeta(QStringLiteral("a // b // c"));
+    EXPECT_EQ(m.title, QString("a"));
+    EXPECT_EQ(m.desc, QString("b // c"));
+}
+
+TEST(ExtractMeta, TrailingDoubleSlashEmptyDesc) {
+    const auto m = extractMeta(QStringLiteral("title //"));
+    EXPECT_EQ(m.title, QString("title"));
+    EXPECT_TRUE(m.desc.isEmpty());
+}
+
+TEST(ExtractMeta, UrlDoubleSlashFootgun) {
+    // Documented limitation (TaskTextUtils.h): a URL '//' still trips the
+    // comment split. Pinned so an intentional future fix is a conscious change.
+    const auto m = extractMeta(QStringLiteral("see https://example.com"));
+    EXPECT_EQ(m.title, QString("see https:"));
+    EXPECT_EQ(m.desc, QString("example.com"));
+    EXPECT_TRUE(m.handles.isEmpty());
+}
+
+TEST(ExtractMeta, HandleInDescNotCollected) {
+    // Handle collection runs on the pre-'//' body only.
+    const auto m = extractMeta(QStringLiteral("review PR // ask @viktor"));
+    EXPECT_TRUE(m.handles.isEmpty());
+    EXPECT_EQ(m.desc, QString("ask @viktor"));
+}
+
+TEST(ExtractMeta, MultiHandleCommaSemicolonParen) {
+    const auto a = extractMeta(QStringLiteral("sync @alice, @bob; @carol"));
+    ASSERT_EQ(a.handles.size(), 3);
+    EXPECT_EQ(a.handles.at(0), QString("alice"));
+    EXPECT_EQ(a.handles.at(1), QString("bob"));
+    EXPECT_EQ(a.handles.at(2), QString("carol"));
+
+    const auto b = extractMeta(QStringLiteral("call (@dave)"));
+    ASSERT_EQ(b.handles.size(), 1);
+    EXPECT_EQ(b.handles.at(0), QString("dave"));
+}
+
+// ─── slugifyPersonName: digraph initial, empty-transliteration fallback ─
+
+TEST(Slug, DigraphFirstInitialTakesLeadingChar) {
+    // A first name whose Cyrillic initial transliterates to a digraph keeps
+    // only the leading char of that digraph.
+    EXPECT_EQ(slugifyPersonName(QStringLiteral("Женя Иванов")), QString("z.ivanov"));
+    EXPECT_EQ(slugifyPersonName(QStringLiteral("Юрий Петров")), QString("y.petrov"));
+    EXPECT_EQ(slugifyPersonName(QStringLiteral("Яна Смирнова")), QString("y.smirnova"));
+}
+
+TEST(Slug, EmptyTransliterationFallbacks) {
+    // First token → empty: bare last name, no initial/dot.
+    EXPECT_EQ(slugifyPersonName(QStringLiteral("- Ivanov")), QString("ivanov"));
+    // Last token → empty: full first token, not just its initial.
+    EXPECT_EQ(slugifyPersonName(QStringLiteral("Ivan .")), QString("ivan"));
+    // Both empty → empty.
+    EXPECT_TRUE(slugifyPersonName(QStringLiteral("- .")).isEmpty());
+    // Single soft-sign token transliterates to empty.
+    EXPECT_TRUE(slugifyPersonName(QStringLiteral("ь")).isEmpty());
+}
