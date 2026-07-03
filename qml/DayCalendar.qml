@@ -34,18 +34,83 @@ Item {
         }
         _eventsToday = n;
     }
+    // ── Overlap layout ────────────────────────────────────────────────
+    // Map of event id → { col, cols } describing which column an event sits in
+    // and how many columns its overlap cluster spans. Events that share a time
+    // window are packed side-by-side (2 overlapping → 50% width each, 3 → 33%,
+    // …) instead of stacking on top of each other. Recomputed on every model
+    // mutation and day change.
+    property var _overlap: ({})
+    function _recomputeOverlaps() {
+        const d = AppController.selectedDate;
+        const m = AppController.events;
+        const evs = [];
+        for (let i = 0; i < m.rowCount(); i++) {
+            const idx = m.index(i, 0);
+            const ed = m.data(idx, Qt.UserRole + 7);
+            if (!root.isSameDay(ed, d)) continue;
+            evs.push({
+                id:    String(m.data(idx, Qt.UserRole + 1)),
+                start: Number(m.data(idx, Qt.UserRole + 4)),
+                end:   Number(m.data(idx, Qt.UserRole + 5))
+            });
+        }
+        // Sort by start, then end — required for the sweep below.
+        evs.sort((a, b) => (a.start - b.start) || (a.end - b.end));
+
+        const map = {};
+        // Assign columns within one overlap cluster, then commit the cluster's
+        // total column count to every member so their widths match.
+        function flush(cluster) {
+            const colEnds = [];  // last end-time occupying each column
+            for (let k = 0; k < cluster.length; k++) {
+                const e = cluster[k];
+                let placed = false;
+                for (let c = 0; c < colEnds.length; c++) {
+                    if (e.start >= colEnds[c] - 1e-9) {  // column is free again
+                        colEnds[c] = e.end;
+                        e._col = c;
+                        placed = true;
+                        break;
+                    }
+                }
+                if (!placed) { e._col = colEnds.length; colEnds.push(e.end); }
+            }
+            const total = Math.max(1, colEnds.length);
+            for (let k = 0; k < cluster.length; k++)
+                map[cluster[k].id] = { col: cluster[k]._col, cols: total };
+        }
+
+        let cluster = [];
+        let clusterEnd = -1;
+        for (let i = 0; i < evs.length; i++) {
+            const e = evs[i];
+            if (cluster.length === 0) { cluster = [e]; clusterEnd = e.end; continue; }
+            if (e.start < clusterEnd - 1e-9) {   // overlaps the running cluster
+                cluster.push(e);
+                clusterEnd = Math.max(clusterEnd, e.end);
+            } else {
+                flush(cluster);
+                cluster = [e];
+                clusterEnd = e.end;
+            }
+        }
+        if (cluster.length > 0) flush(cluster);
+        _overlap = map;
+    }
+
     Connections {
         target: AppController.events
-        function onRowsInserted() { root._recountEventsToday() }
-        function onRowsRemoved()  { root._recountEventsToday() }
-        function onDataChanged()  { root._recountEventsToday() }
-        function onModelReset()   { root._recountEventsToday() }
+        function onRowsInserted() { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onRowsRemoved()  { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onDataChanged()  { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onModelReset()   { root._recountEventsToday(); root._recomputeOverlaps() }
     }
     Connections {
         target: AppController
-        function onSelectedDateChanged() { root._recountEventsToday() }
+        function onSelectedDateChanged() { root._recountEventsToday(); root._recomputeOverlaps() }
     }
-    Component.onCompleted: _recountEventsToday()
+    Component.onCompleted: { _recountEventsToday(); _recomputeOverlaps() }
 
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
@@ -309,10 +374,15 @@ Item {
                                     ? AppController.profileById(profileId)
                                     : null
 
+                                // Side-by-side overlap slot (see root._overlap).
+                                readonly property var slot: root._overlap[id] || ({ col: 0, cols: 1 })
+                                readonly property real colGap: 3
+                                readonly property real colW: parent.width / Math.max(1, slot.cols)
+
                                 visible: root.isSameDay(date, AppController.selectedDate)
-                                x: 0
+                                x: slot.col * colW
                                 y: (effStart - root.hoursStart) * Theme.hourH + dragDy
-                                width: parent.width
+                                width: Math.max(20, colW - colGap)
                                 height: Math.max(20, (effEnd - effStart) * Theme.hourH - 2)
                                 radius: 6
                                 color: Theme.withAlpha(Theme.eventColor(type), 0.16)
