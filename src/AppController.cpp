@@ -1889,7 +1889,7 @@ void AppController::pruneBackups(int keep) {
 }
 
 bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath) {
-  QDir d(backupDirPath());
+  const QDir d(backupDirPath());
   // Newest first — return the most recent backup that still parses as an object.
   const QFileInfoList backups = d.entryInfoList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
   for(const QFileInfo& fi : backups) {
