@@ -70,10 +70,6 @@ Rectangle {
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         RailBtn {
-            glyph: "C++"; tooltipText: I18n.t("siderail.tip.cppRefs"); fontPx: 10
-                   active: AppController.currentView === "docs"
-                   onActivated: AppController.currentView = "docs" }
-        RailBtn {
             glyph: "§"; tooltipText: I18n.t("siderail.tip.docs")
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }
