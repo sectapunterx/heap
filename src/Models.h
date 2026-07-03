@@ -89,6 +89,7 @@ class TaskModel : public QAbstractListModel {
     PrUrlRole,
     GitAheadRole,
     GitBehindRole,
+    RecentCommitsRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
@@ -132,6 +133,7 @@ class TaskModel : public QAbstractListModel {
     int prNumber = 0;
     int ahead = 0;
     int behind = 0;
+    QVariantList recentCommits;  // [ {sha, subject}, … ] mentioning this task
   };
 
   QVector<Task> m_items;

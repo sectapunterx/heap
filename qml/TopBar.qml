@@ -196,6 +196,88 @@ Rectangle {
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
                 }
+                // ── Live PR state on the focused repo (HEAP-76) ──
+                Rectangle {
+                    id: prBadge
+                    property var pr: AppController.focusedRepoState
+                                     ? AppController.focusedRepoState.pr : null
+                    visible: pr && String(pr.state || "").length > 0
+                          && Number(pr.number || 0) > 0
+                    radius: 4
+                    implicitWidth: prBadgeT.implicitWidth + 12
+                    implicitHeight: 18
+                    color: {
+                        const s = prBadge.pr ? String(prBadge.pr.state || "") : "";
+                        if (s === "merged") return Theme.withAlpha(Theme.mFocus, 0.20);
+                        if (s === "closed") return Theme.withAlpha(Theme.textDim, 0.20);
+                        return Theme.withAlpha(Theme.p1, 0.20);
+                    }
+                    border.width: 1
+                    border.color: {
+                        const s = prBadge.pr ? String(prBadge.pr.state || "") : "";
+                        if (s === "merged") return Theme.mFocus;
+                        if (s === "closed") return Theme.textDim;
+                        return Theme.p1;
+                    }
+                    Text {
+                        id: prBadgeT
+                        anchors.centerIn: parent
+                        text: {
+                            if (!prBadge.pr) return "";
+                            const n = prBadge.pr.number || 0;
+                            const s = String(prBadge.pr.state || "");
+                            const d = prBadge.pr.draft === true ? " · draft" : "";
+                            return "PR #" + n + " " + s + d;
+                        }
+                        color: Theme.accentStrong
+                        font.family: Theme.fontMono
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                    MouseArea {
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: (prBadge.pr && prBadge.pr.url)
+                                     ? Qt.PointingHandCursor : Qt.ArrowCursor
+                        onClicked: if (prBadge.pr && prBadge.pr.url)
+                                       Qt.openUrlExternally(prBadge.pr.url)
+                    }
+                }
+                // ── CI check rollup on the focused repo (HEAP-76) ──
+                Rectangle {
+                    id: ciBadge
+                    property string ci: (AppController.focusedRepoState
+                                         && AppController.focusedRepoState.pr)
+                        ? String(AppController.focusedRepoState.pr.checks || "") : ""
+                    visible: ci.length > 0
+                    radius: 4
+                    implicitWidth: ciT.implicitWidth + 12
+                    implicitHeight: 18
+                    color: {
+                        if (ciBadge.ci === "passing") return Theme.withAlpha(Theme.mFocus, 0.20);
+                        if (ciBadge.ci === "failing") return Theme.withAlpha(Theme.p0, 0.20);
+                        return Theme.withAlpha(Theme.p2, 0.20);
+                    }
+                    border.width: 1
+                    border.color: {
+                        if (ciBadge.ci === "passing") return Theme.mFocus;
+                        if (ciBadge.ci === "failing") return Theme.p0;
+                        return Theme.p2;
+                    }
+                    Text {
+                        id: ciT
+                        anchors.centerIn: parent
+                        text: {
+                            if (ciBadge.ci === "passing") return "CI ✓";
+                            if (ciBadge.ci === "failing") return "CI ✗";
+                            return "CI …";
+                        }
+                        color: Theme.text
+                        font.family: Theme.fontMono
+                        font.pixelSize: 10
+                        font.weight: Font.DemiBold
+                    }
+                }
                 Rectangle {
                     radius: 4
                     color: openMA.containsMouse ? Theme.accentStrong : "transparent"

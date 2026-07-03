@@ -1,5 +1,7 @@
 #include "Models.h"
 
+#include <algorithm>
+
 QHash<int, QByteArray> TaskModel::roleNames() const {
   return {
       {IdRole, "id"},
@@ -17,6 +19,7 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {PrUrlRole, "prUrl"},
       {GitAheadRole, "gitAhead"},
       {GitBehindRole, "gitBehind"},
+      {RecentCommitsRole, "recentCommits"},
   };
 }
 
@@ -56,6 +59,8 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return m_git.value(t.id).ahead;
     case GitBehindRole:
       return m_git.value(t.id).behind;
+    case RecentCommitsRole:
+      return m_git.value(t.id).recentCommits;
   }
   return {};
 }
@@ -88,8 +93,11 @@ void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   if(info.contains(QStringLiteral("behind"))) {
     g.behind = info.value(QStringLiteral("behind")).toInt();
   }
+  if(info.contains(QStringLiteral("recentCommits"))) {
+    g.recentCommits = info.value(QStringLiteral("recentCommits")).toList();
+  }
   const QModelIndex mi = index(row, 0);
-  emit dataChanged(mi, mi, {PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole});
+  emit dataChanged(mi, mi, {PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
 }
 
 void TaskModel::clearAllGitInfo() {
@@ -98,7 +106,8 @@ void TaskModel::clearAllGitInfo() {
     return;
   }
   m_git.clear();
-  emit dataChanged(index(0, 0), index(m_items.size() - 1, 0), {PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole});
+  emit dataChanged(
+      index(0, 0), index(m_items.size() - 1, 0), {PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
 }
 
 int TaskModel::indexOfId(const QString& id) const {
@@ -155,12 +164,8 @@ void TaskModel::setBlockedStuckIds(const QSet<QString>& ids) {
   int hi = -1;
   for(int i = 0; i < m_items.size(); ++i) {
     if(changed.contains(m_items[i].id)) {
-      if(i < lo) {
-        lo = i;
-      }
-      if(i > hi) {
-        hi = i;
-      }
+      lo = std::min(i, lo);
+      hi = std::max(i, hi);
     }
   }
   if(hi < 0) {
