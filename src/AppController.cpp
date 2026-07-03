@@ -128,6 +128,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.quick-capture-notes.label", {"Quick-capture note", "Быстрая заметка"}},
       {"shortcut.quick-capture-notes.desc",
        {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть Quick-capture для Заметок (дописывает в блок Notes)."}},
+      {"shortcut.view.archive.label", {"Go to Archive", "Перейти в Архив"}},
+      {"shortcut.view.archive.desc", {"Archived tickets of the active profile.", "Архивные тикеты активного профиля."}},
+      {"shortcut.theme.toggle.label", {"Toggle light / dark", "Переключить светлую/тёмную"}},
+      {"shortcut.theme.toggle.desc", {"Flip the app theme between dark and light.", "Переключить тему приложения между тёмной и светлой."}},
+      {"shortcut.person.new.label", {"New contact", "Новый контакт"}},
+      {"shortcut.person.new.desc", {"Add a person to the active profile.", "Добавить человека в активный профиль."}},
+      {"shortcut.profile.new.label", {"New profile", "Новый профиль"}},
+      {"shortcut.profile.new.desc", {"Create a new profile.", "Создать новый профиль."}},
       {"shortcut.selection.selectAll.label", {"Select all visible", "Выделить все видимые"}},
       {"shortcut.selection.selectAll.desc",
        {"Select every ticket visible in the current view.", "Выделить все тикеты, видимые в текущем виде."}},
@@ -2710,6 +2718,10 @@ void AppController::seedShortcutCatalog() {
   add("search.focus", "Ctrl+F");
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
+  add("view.archive", "Ctrl+7");
+  add("theme.toggle", "Ctrl+Shift+T");
+  add("person.new", "Ctrl+Shift+U");
+  add("profile.new", "Ctrl+Shift+P");
   add("selection.selectAll", "Ctrl+A");
   add("selection.clearSel", "Esc");
   add("selection.deleteSel", "Del");

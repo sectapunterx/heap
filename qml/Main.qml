@@ -511,6 +511,30 @@ ApplicationWindow {
         onActivated: AppController.currentView = "settings"
     }
     Shortcut {
+        sequence: _kbd("view.archive")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "archive"
+    }
+    Shortcut {
+        sequence: _kbd("theme.toggle")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.theme = (AppController.theme === "dark" ? "light" : "dark")
+    }
+    Shortcut {
+        sequence: _kbd("person.new")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: personEditor.showFor(AppController.newPersonDraft())
+    }
+    Shortcut {
+        sequence: _kbd("profile.new")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: profileEditor.showCreate()
+    }
+    Shortcut {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
