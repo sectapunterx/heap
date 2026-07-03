@@ -49,8 +49,12 @@ find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Svg)
 
 qt_standard_project_setup(REQUIRES 6.4)
 
-qt_add_executable(heap WIN32
-    src/main.cpp
+# ── Core library: all app logic + the TodoCpp QML module ──────────
+# Extracted from the heap executable so the Qt Quick Test harness (tests/) can
+# link the same C++ types + QML module and instantiate real components
+# (SideRail, KanbanBoard, FilterBar, …) against a live AppController. The heap
+# executable below becomes a thin shell that just loads Main.qml.
+qt_add_library(heap_core STATIC
     src/AppController.cpp
     src/Models.cpp
     src/SampleData.cpp
@@ -68,7 +72,6 @@ qt_add_executable(heap WIN32
     src/platform/GlobalHotkey.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
-        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.rc>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -77,7 +80,7 @@ set_source_files_properties(qml/I18n.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
 
 # URI stays "TodoCpp" so existing `import TodoCpp` statements throughout qml/
 # don't have to be touched. The user-facing app name is heap.
-qt_add_qml_module(heap
+qt_add_qml_module(heap_core
     URI TodoCpp
     VERSION 1.0
     RESOURCE_PREFIX "/qt/qml"
@@ -138,8 +141,8 @@ qt_add_qml_module(heap
         src/platform/GlobalHotkey.h
 )
 
-target_include_directories(heap PRIVATE src)
-target_link_libraries(heap PRIVATE
+target_include_directories(heap_core PUBLIC src)
+target_link_libraries(heap_core PUBLIC
     Qt6::Core
     Qt6::Gui
     Qt6::Qml
@@ -148,20 +151,31 @@ target_link_libraries(heap PRIVATE
     Qt6::Widgets
 )
 if(UNIX AND NOT APPLE)
-    target_link_libraries(heap PRIVATE Qt6::DBus)
+    target_link_libraries(heap_core PUBLIC Qt6::DBus)
 endif()
 
 # Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
 # can adapt the Settings UI: unimplemented sections are shown disabled in
 # Release, and the "show unimplemented" toggle is added in Debug only.
-target_compile_definitions(heap PRIVATE
+target_compile_definitions(heap_core PRIVATE
     $<$<CONFIG:Debug>:HEAP_DEBUG_BUILD=1>
     $<$<CONFIG:RelWithDebInfo>:HEAP_DEBUG_BUILD=1>
 )
 if (TARGET Qt6::Svg)
-    target_link_libraries(heap PRIVATE Qt6::Svg)
-    target_compile_definitions(heap PRIVATE HEAP_HAS_SVG=1)
+    target_link_libraries(heap_core PUBLIC Qt6::Svg)
+    target_compile_definitions(heap_core PRIVATE HEAP_HAS_SVG=1)
 endif()
+
+# ── Application executable — thin shell that loads Main.qml from heap_core ──
+qt_add_executable(heap WIN32
+    src/main.cpp
+    $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.rc>
+)
+# Link the QML module plugin too: for a statically-linked qml module the plugin
+# carries the type-registration + qmlcache resource init. Linking only the
+# backing library lets the linker drop those symbols, so `import TodoCpp` (and
+# Main.qml) fail to load at runtime. Linking the plugin force-references them.
+target_link_libraries(heap PRIVATE heap_core heap_coreplugin)
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
 qt_add_resources(heap "brand"

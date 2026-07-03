@@ -656,6 +656,8 @@ add_test(NAME heap_view_tests COMMAND heap_view_tests)
 find_package(Qt6 REQUIRED COMPONENTS QuickTest Quick QuickControls2)
 
 add_executable(heap_qml_tests quick_test_main.cpp)
+# AUTOMOC for the Setup QObject in quick_test_main.cpp (has Q_OBJECT).
+set_target_properties(heap_qml_tests PROPERTIES AUTOMOC ON)
 
 # QUICK_TEST_MAIN scans this directory for tst_*.qml at runtime. Baking it as a
 # compile definition is the canonical wiring (more reliable than -input across
@@ -663,12 +665,12 @@ add_executable(heap_qml_tests quick_test_main.cpp)
 target_compile_definitions(heap_qml_tests PRIVATE
         QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
 
+# Link the app's core library + its QML module plugin so the tests can
+# `import TodoCpp` and instantiate real components (SideRail, KanbanBoard,
+# FilterBar, …) against a live AppController. heap_core PUBLIC-links Quick etc.
 target_link_libraries(heap_qml_tests PRIVATE
-        Qt6::Core
-        Qt6::Gui
-        Qt6::Qml
-        Qt6::Quick
-        Qt6::QuickControls2
+        heap_core
+        heap_coreplugin
         Qt6::QuickTest
 )
 
