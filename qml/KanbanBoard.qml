@@ -23,6 +23,41 @@ Item {
         function onSelectedTaskIdsChanged() {
             if (AppController.selectionCount === 0) root.shiftAnchorId = "";
         }
+
+        // Sidebar Blocked / Code Review buttons jump the board to a column.
+        function onFocusedStatusChanged() {
+            if (AppController.focusedStatus.length > 0) root.focusColumn(AppController.focusedStatus);
+        }
+    }
+
+    // ── Column focus (sidebar Blocked / Code Review buttons) ──────────
+    // Scroll the target status column into view and briefly highlight it.
+    property string _focusPulseStatus: ""
+    NumberAnimation {
+        id: colScrollAnim
+        target: hscroll; property: "contentX"
+        duration: Theme.scaledMs(260); easing.type: Easing.OutCubic
+    }
+    Timer { id: focusPulseTimer; interval: 1100; onTriggered: root._focusPulseStatus = "" }
+
+    function focusColumn(statusId) {
+        const st = AppController.statuses;
+        let idx = -1;
+        for (let i = 0; i < st.length; ++i) { if (st[i].id === statusId) { idx = i; break; } }
+        if (idx < 0) return;
+        const colW = 280 + rowL.spacing;                 // column width + Row spacing
+        const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
+        colScrollAnim.to = Math.max(0, Math.min(idx * colW, maxX));
+        colScrollAnim.restart();
+        root._focusPulseStatus = statusId;
+        focusPulseTimer.restart();
+    }
+
+    // A focus requested from another view fires focusedStatusChanged before this
+    // board exists; pick it up once the board is created and laid out.
+    Component.onCompleted: {
+        if (AppController.focusedStatus && AppController.focusedStatus.length > 0)
+            Qt.callLater(function() { root.focusColumn(AppController.focusedStatus); });
     }
 
     // Walk every column's TaskCard repeater, collect ids of currently
@@ -156,14 +191,18 @@ Item {
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
                     readonly property bool isLast:  index === AppController.statuses.length - 1
+                    // Briefly emphasised when the sidebar Blocked / Code Review
+                    // button jumps focus to this column.
+                    readonly property bool focusPulse: root._focusPulseStatus === col.statusId
 
                     width: 280
                     height: rowL.height
                     radius: Theme.radius
                     color: Theme.panel
-                    border.color: dragOver ? Theme.accent : Theme.border
-                    border.width: 1
+                    border.color: (dragOver || focusPulse) ? Theme.accent : Theme.border
+                    border.width: focusPulse ? 2 : 1
                     clip: true
+                    Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(180) } }
 
                     ColumnLayout {
                         anchors.fill: parent

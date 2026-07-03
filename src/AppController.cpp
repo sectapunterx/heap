@@ -455,6 +455,17 @@ void AppController::setCurrentView(const QString& v) {
   scheduleSave();
 }
 
+void AppController::focusStatusColumn(const QString& statusId) {
+  // Sidebar Blocked / Code Review entry point: make sure the Board is the
+  // active view, then flag the target status column so KanbanBoard can scroll
+  // to and briefly highlight it. focusedStatus is transient UI state (not
+  // persisted). Emitted unconditionally so a repeat click re-triggers the
+  // scroll/pulse even when the same column is already focused.
+  setCurrentView(QStringLiteral("board"));
+  m_focusedStatus = statusId;
+  emit focusedStatusChanged();
+}
+
 void AppController::setWorkdayStart(int v) {
   v = qBound(0, v, 23);
   if(v >= m_workdayEnd) {
