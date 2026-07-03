@@ -279,6 +279,14 @@ class AppController : public QObject {
   QString dataDir() const;
   QString qtVersion() const;
 
+  // ---- Diagnostics (HEAP-64) ----
+  // Open the rotating-log directory in the system file manager.
+  Q_INVOKABLE void openLogsFolder() const;
+  // Open a pre-filled GitHub "new issue" page carrying version / OS / Qt
+  // version / recent-log-tail diagnostics, so a user can file a report in one
+  // click.
+  Q_INVOKABLE void reportAnIssue() const;
+
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
   // Post the given rich payload via the native notification backend.

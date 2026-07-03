@@ -56,6 +56,7 @@ qt_standard_project_setup(REQUIRES 6.4)
 # executable below becomes a thin shell that just loads Main.qml.
 qt_add_library(heap_core STATIC
     src/AppController.cpp
+    src/Logger.cpp
     src/Models.cpp
     src/SampleData.cpp
     src/CodeHighlighter.cpp

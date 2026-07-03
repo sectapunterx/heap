@@ -1948,6 +1948,45 @@ Item {
                     }
                 }
             }
+            SectionCard {
+                ColumnLayout {
+                    spacing: 12
+                    Layout.fillWidth: true
+                    Sub {
+                        label: I18n.t("settings.about.diagnostics")
+                    }
+                    Text {
+                        text: I18n.t("settings.about.diagnostics.hint")
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            radius: 6
+                            color: reportMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            implicitWidth: reportTxt.implicitWidth + 24; implicitHeight: 30
+                            Text {
+                                id: reportTxt; anchors.centerIn: parent; text: I18n.t("settings.about.reportIssue"); color: Theme.text; font.pixelSize: 12
+                            }
+                            MouseArea { id: reportMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.reportAnIssue() }
+                        }
+                        Rectangle {
+                            radius: 6
+                            color: logsMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            implicitWidth: logsTxt.implicitWidth + 24; implicitHeight: 30
+                            Text {
+                                id: logsTxt; anchors.centerIn: parent; text: I18n.t("settings.about.openLogs"); color: Theme.text; font.pixelSize: 12
+                            }
+                            MouseArea { id: logsMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLogsFolder() }
+                        }
+                    }
+                }
+            }
         }
     }
 

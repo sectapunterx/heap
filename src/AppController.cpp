@@ -1,4 +1,5 @@
 #include "AppController.h"
+#include "Logger.h"
 #include "SampleData.h"
 
 #include "chrono/ChronoParser.h"
@@ -10,7 +11,9 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QCoreApplication>
 #include <QDateTime>
+#include <QDesktopServices>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -23,8 +26,11 @@
 #include <QLocale>
 #include <QSaveFile>
 #include <QStandardPaths>
+#include <QSysInfo>
 #include <QSystemTrayIcon>
 #include <QTime>
+#include <QUrl>
+#include <QUrlQuery>
 #include <QUuid>
 
 #include <cmath>
@@ -1589,6 +1595,35 @@ QString AppController::dataDir() const {
 
 QString AppController::qtVersion() const {
   return QString::fromLatin1(qVersion());
+}
+
+void AppController::openLogsFolder() const {
+  QDesktopServices::openUrl(QUrl::fromLocalFile(heap::logging::logDirPath()));
+}
+
+void AppController::reportAnIssue() const {
+  const QString body = QStringLiteral(
+                           "<!-- Describe the problem above this line. The diagnostics below are "
+                           "filled in automatically — please keep them. -->\n\n"
+                           "---\n"
+                           "**Diagnostics**\n"
+                           "- heap version: %1\n"
+                           "- OS: %2 (%3)\n"
+                           "- Qt: %4\n\n"
+                           "<details><summary>Recent log tail</summary>\n\n"
+                           "```\n%5\n```\n</details>\n")
+                           .arg(QCoreApplication::applicationVersion(),
+                                QSysInfo::prettyProductName(),
+                                QSysInfo::currentCpuArchitecture(),
+                                QString::fromLatin1(qVersion()),
+                                heap::logging::logTail());
+
+  QUrl url(QStringLiteral("https://github.com/sectapunterx/heap/issues/new"));
+  QUrlQuery query;
+  query.addQueryItem(QStringLiteral("title"), QStringLiteral("[bug] "));
+  query.addQueryItem(QStringLiteral("body"), body);
+  url.setQuery(query);
+  QDesktopServices::openUrl(url);
 }
 
 void AppController::scheduleSave() {

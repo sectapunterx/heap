@@ -516,6 +516,10 @@ QtObject {
             "settings.about.channel": "Channel",
             "settings.about.storage": "Storage",
             "settings.about.engine": "Engine",
+            "settings.about.diagnostics": "Diagnostics",
+            "settings.about.diagnostics.hint": "Logs are written locally under your data folder. Reporting an issue opens GitHub with your version and a recent log tail pre-filled.",
+            "settings.about.reportIssue": "Report an issue",
+            "settings.about.openLogs": "Open logs folder",
 
             // ── Selection action bar ──
             "selection.bar.count": "%1 selected",
@@ -1002,6 +1006,10 @@ QtObject {
             "settings.about.channel": "Канал",
             "settings.about.storage": "Хранилище",
             "settings.about.engine": "Движок",
+            "settings.about.diagnostics": "Диагностика",
+            "settings.about.diagnostics.hint": "Логи пишутся локально в папке данных. «Сообщить о проблеме» открывает GitHub с уже заполненной версией и хвостом лога.",
+            "settings.about.reportIssue": "Сообщить о проблеме",
+            "settings.about.openLogs": "Открыть папку логов",
 
             // ── Selection action bar ──
             "selection.bar.count": "Выделено: %1",
