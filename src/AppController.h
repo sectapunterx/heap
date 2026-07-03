@@ -465,6 +465,9 @@ class AppController : public QObject {
   Q_INVOKABLE void openFocusedTask();
   Q_INVOKABLE QStringList collectPrefixes() const;
   Q_INVOKABLE void refreshGitForTaskBranch(const QString& taskId);
+  // Create (and switch to) the task's branch from a task card. Honors the
+  // configured integrations.github.branchTemplate; toasts the result.
+  Q_INVOKABLE void createBranchForTask(const QString& taskId);
 
  signals:
   void selectedDateChanged();
@@ -639,4 +642,5 @@ class AppController : public QObject {
   void applyGitSettingsFromMap(const QVariantMap& git);
   void onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
+  void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
 };

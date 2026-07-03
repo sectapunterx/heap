@@ -310,6 +310,7 @@ AppController::AppController(QObject* parent) :
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
+  connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
   connect(
       m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
         const heap::git::BranchTaskMatcher m(collectPrefixes());
@@ -3642,6 +3643,58 @@ void AppController::refreshGitForTaskBranch(const QString& taskId) {
   const QStringList repos = m_gitWatcher->snapshot().keys();
   for(const QString& repo : repos) {
     m_gitWatcher->requestPrFetch(repo, br);
+  }
+}
+
+void AppController::createBranchForTask(const QString& taskId) {
+  if(!m_gitWatcher) {
+    return;
+  }
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);  // copy — mutated below on success
+
+  // Prefer the currently focused repo; otherwise the first watched repo.
+  QString repo = m_focusedRepo;
+  const QStringList repos = m_gitWatcher->snapshot().keys();
+  if(repo.isEmpty() && !repos.isEmpty()) {
+    repo = repos.first();
+  }
+  if(repo.isEmpty()) {
+    emit toast(tr("No git repository configured — add one in Settings › Git"));
+    return;
+  }
+
+  const QString templ = settingsMap().value("integrations").toMap().value("github").toMap().value("branchTemplate").toString();
+  const QString branch = heap::git::BranchTaskMatcher::branchNameForTask(t.id, t.title, templ);
+  if(branch.isEmpty()) {
+    emit toast(tr("Could not derive a branch name for %1").arg(t.id));
+    return;
+  }
+
+  QString err;
+  if(!m_gitWatcher->createBranch(repo, branch, &err)) {
+    emit toast(tr("Branch create failed: %1").arg(err));
+    return;
+  }
+  // Record the branch on the task so the card shows it and copy-branch works.
+  t.branch = branch;
+  m_tasks.upsert(t);
+  scheduleSave();
+  emit toast(tr("Created branch %1").arg(branch));
+}
+
+void AppController::onGitCommits(const QString& repo, const QVariantMap& commitsByTask) {
+  Q_UNUSED(repo);
+  for(auto it = commitsByTask.constBegin(); it != commitsByTask.constEnd(); ++it) {
+    if(m_tasks.indexOfId(it.key()) < 0) {
+      continue;
+    }
+    QVariantMap entry;
+    entry["recentCommits"] = it.value();
+    m_tasks.setGitInfoForId(it.key(), entry);
   }
 }
 

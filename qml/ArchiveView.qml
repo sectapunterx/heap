@@ -89,6 +89,7 @@ Item {
                 prUrl: m.data(idx, Qt.UserRole + 13),
                 gitAhead: m.data(idx, Qt.UserRole + 14),
                 gitBehind: m.data(idx, Qt.UserRole + 15),
+                recentCommits: m.data(idx, Qt.UserRole + 16),
             };
             if (!root.passesFilter(t)) continue;
             out.push(t);

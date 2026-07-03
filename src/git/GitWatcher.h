@@ -18,74 +18,87 @@
 namespace heap::git {
 
 class GitWatcher : public QObject {
-    Q_OBJECT
-public:
-    explicit GitWatcher(QObject *parent = nullptr);
-    ~GitWatcher() override;
+  Q_OBJECT
+ public:
+  explicit GitWatcher(QObject* parent = nullptr);
+  ~GitWatcher() override;
 
-    void setWatchedRepos(const QStringList &paths);
-    void setPrefixes(const QStringList &prefixes);
-    void setPrFetchEnabled(bool on);
+  void setWatchedRepos(const QStringList& paths);
+  void setPrefixes(const QStringList& prefixes);
+  void setPrFetchEnabled(bool on);
 
-    QStringList watchedRepos() const;
-    QVariantMap snapshot() const;
+  QStringList watchedRepos() const;
+  QVariantMap snapshot() const;
 
-    QString lastTaskId() const { return m_lastTaskId; }
-    QString lastBranch() const { return m_lastBranch; }
-    QString lastRepo()   const { return m_lastRepo;   }
+  QString lastTaskId() const {
+    return m_lastTaskId;
+  }
 
-    void requestPrFetch(const QString &repoPath, const QString &branch);
+  QString lastBranch() const {
+    return m_lastBranch;
+  }
 
-signals:
-    void branchChanged(const QString &repoPath,
-                       const QString &branch,
-                       const QString &taskId);
-    void repoStateUpdated(const QString &repoPath, const QVariantMap &state);
-    void prInfoUpdated(const QString &repoPath,
-                       const QString &branch,
-                       const QVariantMap &pr);
+  QString lastRepo() const {
+    return m_lastRepo;
+  }
 
-private slots:
-    void onFsPathChanged(const QString &path);
-    void onDebounceFired();
+  void requestPrFetch(const QString& repoPath, const QString& branch);
 
-private:
-    QFileSystemWatcher *m_fsw{};
-    QTimer             *m_debounce{};
-    QSet<QString>       m_pendingRepos;
+  // Create and switch to a new branch (`git checkout -b`). Synchronous —
+  // the caller drives it from a one-click UI action. Returns false and sets
+  // *errorOut (if non-null) on failure (git missing, dirty tree, name clash).
+  bool createBranch(const QString& repoPath, const QString& branchName, QString* errorOut);
 
-    QHash<QString, RepoConfig> m_configs;        // repoPath → config
-    QHash<QString, RepoState>  m_state;          // repoPath → state
-    QHash<QString, QString>    m_watchedFileOwner; // file path → repoPath
+ signals:
+  void branchChanged(const QString& repoPath, const QString& branch, const QString& taskId);
+  void repoStateUpdated(const QString& repoPath, const QVariantMap& state);
+  void prInfoUpdated(const QString& repoPath, const QString& branch, const QVariantMap& pr);
+  // Recent commits mentioning a task id, grouped by task:
+  // { taskId → [ {sha, subject}, … ] }. Refreshed whenever HEAD moves.
+  void commitsUpdated(const QString& repoPath, const QVariantMap& commitsByTask);
 
-    QString m_lastRepo, m_lastBranch, m_lastTaskId;
+ private slots:
+  void onFsPathChanged(const QString& path);
+  void onDebounceFired();
 
-    struct CacheEntry { PrInfo info; QElapsedTimer age; };
-    QHash<QString, CacheEntry> m_prCache;        // key = repo + '\n' + branch
-    static constexpr qint64 kPrTtlMs = 60'000;
+ private:
+  QFileSystemWatcher* m_fsw{};
+  QTimer* m_debounce{};
+  QSet<QString> m_pendingRepos;
 
-    QHash<QString, QPointer<QProcess>> m_inflight; // dedup spawns by key
+  QHash<QString, RepoConfig> m_configs;        // repoPath → config
+  QHash<QString, RepoState> m_state;           // repoPath → state
+  QHash<QString, QString> m_watchedFileOwner;  // file path → repoPath
 
-    QString m_ghPath, m_glabPath, m_gitPath;
-    bool    m_prEnabled = true;
+  QString m_lastRepo, m_lastBranch, m_lastTaskId;
 
-    BranchTaskMatcher m_matcher;
+  struct CacheEntry {
+    PrInfo info;
+    QElapsedTimer age;
+  };
 
-    void addRepo(const QString &path);
-    void removeRepo(const QString &path);
-    void rewatchFiles(const RepoConfig &cfg);
-    void recomputeForRepo(const QString &path);
-    void fetchAheadBehindAsync(const QString &repoPath, const QString &branch);
-    void fetchPrAsync(const QString &repoPath,
-                      const QString &branch,
-                      bool emitOneShot);
+  QHash<QString, CacheEntry> m_prCache;  // key = repo + '\n' + branch
+  static constexpr qint64 kPrTtlMs = 60'000;
 
-    static QString cacheKey(const QString &repo, const QString &branch);
-    static QString upstreamForBranch(const QString &gitDir,
-                                     const QString &branch);
-    static QString readHeadText(const QString &gitDir);
-    static QString readShaForBranch(const QString &gitDir,
-                                    const QString &branch);
+  QHash<QString, QPointer<QProcess>> m_inflight;  // dedup spawns by key
+
+  QString m_ghPath, m_glabPath, m_gitPath;
+  bool m_prEnabled = true;
+
+  BranchTaskMatcher m_matcher;
+
+  void addRepo(const QString& path);
+  void removeRepo(const QString& path);
+  void rewatchFiles(const RepoConfig& cfg);
+  void recomputeForRepo(const QString& path);
+  void fetchAheadBehindAsync(const QString& repoPath, const QString& branch);
+  void fetchCommitsAsync(const QString& repoPath);
+  void fetchPrAsync(const QString& repoPath, const QString& branch, bool emitOneShot);
+
+  static QString cacheKey(const QString& repo, const QString& branch);
+  static QString upstreamForBranch(const QString& gitDir, const QString& branch);
+  static QString readHeadText(const QString& gitDir);
+  static QString readShaForBranch(const QString& gitDir, const QString& branch);
 };
 
-} // namespace heap::git
+}  // namespace heap::git

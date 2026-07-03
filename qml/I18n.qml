@@ -150,6 +150,7 @@ QtObject {
             "taskcard.schedule": "Schedule in calendar",
             "taskcard.copyId": "Copy ID",
             "taskcard.copyBranch": "Copy branch",
+            "taskcard.createBranch": "Create branch",
 
             // ── TaskEditor / EventEditor / PersonEditor / ProfileEditor ──
             "editor.new.task": "New task",
@@ -669,6 +670,7 @@ QtObject {
             "taskcard.schedule": "Запланировать в календарь",
             "taskcard.copyId": "Копировать ID",
             "taskcard.copyBranch": "Копировать branch",
+            "taskcard.createBranch": "Создать ветку",
 
             "editor.new.task": "Новая задача",
             "editor.edit.task": "Редактировать задачу",

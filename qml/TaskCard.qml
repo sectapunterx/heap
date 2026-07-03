@@ -177,6 +177,37 @@ Rectangle {
                     font.weight: Font.DemiBold
                 }
             }
+            // Recent commits mentioning this task id — fed by GitWatcher git-log
+            // parsing. Tooltip shows the most recent subject.
+            Rectangle {
+                id: commitChip
+                visible: card.task && card.task.recentCommits && card.task.recentCommits.length > 0
+                radius: 4
+                color: Theme.withAlpha(Theme.textDim, 0.14)
+                border.color: Theme.border
+                border.width: 1
+                implicitWidth: commitT.implicitWidth + 10
+                implicitHeight: commitT.implicitHeight + 2
+                Text {
+                    id: commitT
+                    anchors.centerIn: parent
+                    text: "◇ " + (card.task && card.task.recentCommits ? card.task.recentCommits.length : 0)
+                    color: Theme.textMuted
+                    font.family: Theme.fontMono
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                }
+                QQC.ToolTip.visible: commitMA.containsMouse && commitChip.visible
+                QQC.ToolTip.text: (card.task && card.task.recentCommits && card.task.recentCommits.length > 0)
+                    ? (card.task.recentCommits[0].sha + "  " + card.task.recentCommits[0].subject)
+                    : ""
+                MouseArea {
+                    id: commitMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    acceptedButtons: Qt.NoButton
+                }
+            }
         }
 
         Text {
@@ -347,6 +378,12 @@ Rectangle {
             enabled: card.task && card.task.branch && String(card.task.branch).length > 0
             onTriggered: {
                 if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
+            }
+        }
+        QQC.MenuItem {
+            text: "⎇+  " + I18n.t("taskcard.createBranch")
+            onTriggered: {
+                if (card.task && card.task.id) AppController.createBranchForTask(card.task.id);
             }
         }
         QQC.MenuSeparator {}
