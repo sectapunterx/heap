@@ -6,6 +6,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
 import TodoCpp
+import "Mention.js" as Mention
 
 Item {
     id: root
@@ -164,9 +165,9 @@ Item {
             ? "@" + _slugifyName(e.label) + " "
             : "#" + e.id + " ";
         const pos = editor.cursorPosition;
-        const txt = editor.text;
-        editor.text = txt.substring(0, acTriggerPos) + insert + txt.substring(pos);
-        editor.cursorPosition = acTriggerPos + insert.length;
+        // Replace the "@filter" / "#filter" span in place (remove + insert) so
+        // the caret stays at the edit point instead of resetting to 0. (HEAP-65)
+        Mention.commit(editor, acTriggerPos, pos, insert);
         _hideAutocomplete();
     }
 
