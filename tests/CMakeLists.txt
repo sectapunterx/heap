@@ -757,6 +757,21 @@ target_link_libraries(heap_query_tests PRIVATE
 )
 add_test(NAME heap_query_tests COMMAND heap_query_tests)
 
+# ─── Sync (JsonMerger 3-way merge) tests ───
+# Pure structural merge for the non-git BYOS backends. Qt6::Core only.
+add_executable(heap_json_merger_tests
+        test_json_merger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/JsonMerger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/JsonMerger.h
+)
+target_include_directories(heap_json_merger_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_json_merger_tests PRIVATE
+        Qt6::Core
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_json_merger_tests COMMAND heap_json_merger_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
