@@ -673,9 +673,15 @@ target_compile_definitions(heap_qml_tests PRIVATE
 # Link the app's core library + its QML module plugin so the tests can
 # `import TodoCpp` and instantiate real components (SideRail, KanbanBoard,
 # FilterBar, …) against a live AppController. heap_core PUBLIC-links Quick etc.
+#
+# heap_coreplugin is force-linked WHOLE_ARCHIVE: it is a static library whose
+# only job is a translation unit with the module's type-registration static
+# initializer. Nothing in the test references a symbol from it, so a normal link
+# lets the linker drop the whole archive (works on Windows by luck, stripped on
+# Linux → "SideRail is not a type" at runtime). WHOLE_ARCHIVE keeps the init.
 target_link_libraries(heap_qml_tests PRIVATE
         heap_core
-        heap_coreplugin
+        "$<LINK_LIBRARY:WHOLE_ARCHIVE,heap_coreplugin>"
         Qt6::QuickTest
 )
 
