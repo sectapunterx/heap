@@ -233,7 +233,12 @@ AppController::AppController(QObject* parent) :
       return;
     }
     const QVariantMap notif = settingsMap().value("notifications").toMap();
-    if(notif.value("desktopNotif", true).toBool() && m_notifier) {
+    // Only raise an OS toast when the window is NOT focused. When the app is
+    // active the in-app Toast bar (emitted below) already surfaces the message;
+    // showing both is the "notification appears twice on Windows" bug (HEAP-47)
+    // — one styled in-app toast plus one plain system balloon.
+    const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
+    if(notif.value("desktopNotif", true).toBool() && m_notifier && !appActive) {
       heap::notify::Notification n;
       n.id = QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch());
       n.title = title;
@@ -3440,7 +3445,12 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
     return;
   }
   const QVariantMap notif = settingsMap().value("notifications").toMap();
-  if(!notif.value("desktopNotif", true).toBool() || !m_notifier) {
+  // Suppress the OS toast when notifications are disabled, unavailable, or the
+  // window is currently focused. In the focused case the in-app Toast bar below
+  // already shows the message — emitting both is the double-notification bug on
+  // Windows (HEAP-47): one styled in-app toast and one plain system balloon.
+  const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
+  if(!notif.value("desktopNotif", true).toBool() || !m_notifier || appActive) {
     // Fallback path — still surface via in-app toast for visibility.
     emit toast(body);
     return;
