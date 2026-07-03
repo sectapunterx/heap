@@ -252,6 +252,13 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   package-macos:
     name: Package (macOS)
+    # Disabled: install-qt-action fails to provision Qt6 on macos-14/arm64,
+    # which blocked the whole Release. macOS packaging is tracked separately in
+    # HEAP-68 (macOS support). Re-enable by setting the repo variable
+    # RELEASE_MACOS=true and restoring package-macos to `publish.needs` once the
+    # Qt install is fixed. (A repo variable, not a literal `false`, so actionlint
+    # doesn't reject a constant if-condition.)
+    if: ${{ vars.RELEASE_MACOS == 'true' }}
     needs: meta
     runs-on: macos-14
     # Job-level env so the optional signing step's `if:` can read it (a step's
@@ -318,7 +325,9 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   publish:
     name: Publish release
-    needs: [meta, package-windows, package-linux, package-macos]
+    # package-macos intentionally omitted — it is disabled (HEAP-68). Re-add it
+    # here when macOS packaging is restored.
+    needs: [meta, package-windows, package-linux]
     runs-on: ubuntu-24.04
     steps:
       - name: Download all artifacts
