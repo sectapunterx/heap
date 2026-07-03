@@ -35,12 +35,15 @@ for visual reference. The brand bundle lives under `design/brand-export/`; see [
 
 - **Kanban board.** Drag-and-drop columns, status color picker, per-card priority chips, branch decoration,
   scheduled-time pill.
+- **Git-aware.** heap. watches the working copy: the current branch is matched to a task by id, the matching card
+  is decorated with its branch, and a focused-repo banner surfaces branch and PR state — so the board tracks what
+  you're actually building, with no manual linking.
 - **Timeline.** Overdue / today / tomorrow / week / later buckets, with sub-grouping by date and a show-done toggle.
 - **Week view.** 7-day grid with all-day deadline chips and an hourly event grid. Drag, resize, and cross-day move for
   events.
 - **Day calendar.** Drag-to-create events, top and bottom resize, drop a task to schedule a focus block, live now-line.
-- **Docs.** Sections (3GPP, internal, C++, tools) with custom fields. Snippet editor with syntax highlighting. Contact
-  cards.
+- **Docs.** Custom sections (API, internal, C++, tooling) with custom fields. Snippet editor with syntax
+  highlighting. Contact cards.
 - **Notes.** Per-profile markdown canvas with `@people` and `#ticket`
   autocomplete.
 - **Profiles.** Feature-scoped workspaces with JSON import and export.
@@ -60,7 +63,12 @@ for visual reference. The brand bundle lives under `design/brand-export/`; see [
 - [**Data & backups**](docs/DATA.md) — where your data lives, backups, and
   moving a profile between machines.
 
-## Build
+## Get it
+
+**Prebuilt binaries** — a Windows installer, a Linux AppImage, and a portable zip are attached to each
+[GitHub release](https://github.com/sectapunterx/heap/releases). No dependencies to install; download and run.
+
+## Build from source
 
 Requires Qt 6.4+ and a C++20 toolchain.
 
@@ -119,14 +127,22 @@ cmake --build build -j
 
 ```
 .
-├─ CMakeLists.txt          ← qt_add_executable + qt_add_qml_module + qt_add_resources
+├─ CMakeLists.txt          ← heap_core (qt_add_library + qt_add_qml_module) + thin heap exe
 ├─ src/
 │  ├─ main.cpp             ← QApplication entry, window icon, signal handlers
 │  ├─ AppController.{h,cpp}← QML_SINGLETON exposing models, profiles, automation, undo
 │  ├─ Models.{h,cpp}       ← TaskModel / EventModel / PersonModel (QAbstractListModel)
 │  ├─ SampleData.{h,cpp}   ← seed tasks / events / people for first run
 │  ├─ CodeHighlighter.{h,cpp}  ← QSyntaxHighlighter for the docs snippet editor
-│  └─ NotesHighlighter.{h,cpp} ← markdown highlighter for the Notes view
+│  ├─ NotesHighlighter.{h,cpp} ← markdown highlighter for the Notes view
+│  ├─ chrono/              ← natural-language date parser (Quick-capture)
+│  ├─ git/                 ← GitWatcher + branch↔task matcher (git-aware board)
+│  ├─ text/                ← task-text classification / parsing helpers
+│  ├─ notify/              ← cross-platform notifications (tray / D-Bus)
+│  ├─ platform/            ← global hotkey backend (Win32 RegisterHotKey)
+│  ├─ integrations/        ← tracker-sync status mapping (post-release)
+│  ├─ sync/                ← BYOS serializer + 3-way JSON merge
+│  └─ query/              ← Notes query-language parser
 ├─ qml/
 │  ├─ Main.qml             ← top-level window
 │  ├─ Theme.qml            ← singleton: surfaces, accent (reactive), highContrast, reducedMotion
@@ -141,7 +157,7 @@ cmake --build build -j
 │  ├─ WeekView.qml         ← 7-day grid with interactive events
 │  ├─ DayCalendar.qml      ← hourly grid with drag-to-create + resize handles
 │  ├─ MiniWeek.qml         ← week navigator with per-day dots
-│  ├─ PeopleList.qml       ← "Кому написать" todo → pinged → replied
+│  ├─ PeopleList.qml       ← people to follow up with: todo → pinged → replied
 │  ├─ DocsView.qml         ← docs canvas (sections, snippets, contacts)
 │  ├─ DocsEditor.qml       ← modal editor for docs / snippets / contacts
 │  ├─ NotesView.qml        ← markdown notes canvas
