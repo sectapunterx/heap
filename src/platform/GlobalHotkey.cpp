@@ -19,11 +19,14 @@ namespace {
 class NullHotkey : public GlobalHotkey {
  public:
   using GlobalHotkey::GlobalHotkey;
+
   bool registerHotkey(int /*id*/, const QString& /*seq*/) override {
     return false;
   }
+
   void unregister(int /*id*/) override {
   }
+
   void unregisterAll() override {
   }
 };

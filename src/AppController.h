@@ -496,6 +496,7 @@ class AppController : public QObject {
   // from the matching catalog sequences whenever they change. Each combination
   // is registered under one of these ids and routed back in onGlobalHotkey().
   enum GlobalHotkeyId { HotkeyQuickCapture = 1, HotkeyQuickCaptureNotes = 2 };
+
   std::unique_ptr<heap::platform::GlobalHotkey> m_globalHotkey;
   void registerGlobalHotkeys();
   void onGlobalHotkey(int id);

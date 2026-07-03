@@ -33,10 +33,14 @@ class TrayBackend : public NotificationCenter {
     // setContextMenu.
     auto* menu = new QMenu();
     QAction* showAction = menu->addAction(QStringLiteral("Show heap."));
-    connect(showAction, &QAction::triggered, this, [this]() { emit showWindowRequested(); });
+    connect(showAction, &QAction::triggered, this, [this]() {
+      emit showWindowRequested();
+    });
     menu->addSeparator();
     QAction* quitAction = menu->addAction(QStringLiteral("Quit"));
-    connect(quitAction, &QAction::triggered, this, [this]() { emit quitRequested(); });
+    connect(quitAction, &QAction::triggered, this, [this]() {
+      emit quitRequested();
+    });
     m_tray->setContextMenu(menu);
     m_menu = menu;
 

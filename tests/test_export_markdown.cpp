@@ -49,9 +49,11 @@ class MarkdownExportTest : public ::testing::Test {
     app_->tasks()->reset({});
     app_->people()->reset({});
   }
+
   void TearDown() override {
     app_.reset();
   }
+
   std::unique_ptr<AppController> app_;
 };
 

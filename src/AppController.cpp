@@ -70,8 +70,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
-       {"Your data file was unreadable — recovered from backup %1",
-        "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
+       {"Your data file was unreadable — recovered from backup %1", "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
       {"data.corruptKept",
        {"Your data file was unreadable and no backup was found. The damaged file was "
         "kept as state.corrupt-*.json.",
@@ -219,9 +218,10 @@ AppController::AppController(QObject* parent) :
   // The tray backend (Windows/macOS) doubles as the app's presence when the
   // window is hidden: clicking the icon or its "Show" entry restores the
   // window, and "Quit" exits for real. Forwarded to QML / the event loop.
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this,
-          &AppController::showWindowRequested);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() { QCoreApplication::quit(); });
+  connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this, &AppController::showWindowRequested);
+  connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
+    QCoreApplication::quit();
+  });
 
   // Route notification(...) → native toast + in-app toast bar, respecting
   // quiet hours and the user's `notifications.desktopNotif` / `soundOnPing`
@@ -1323,8 +1323,8 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
     if(lines.isEmpty()) {
       continue;
     }
-    md += QStringLiteral("\n### ") + sm.value(QStringLiteral("name")).toString() + QStringLiteral(" (") +
-          QString::number(lines.size()) + QStringLiteral(")\n");
+    md += QStringLiteral("\n### ") + sm.value(QStringLiteral("name")).toString() + QStringLiteral(" (") + QString::number(lines.size()) +
+          QStringLiteral(")\n");
     md += lines.join(QStringLiteral("\n")) + QStringLiteral("\n");
   }
   // Tasks whose status is not one of the profile's columns.

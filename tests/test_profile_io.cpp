@@ -42,9 +42,11 @@ class ProfileIoTest : public ::testing::Test {
   void SetUp() override {
     app_ = std::make_unique<AppController>();
   }
+
   void TearDown() override {
     app_.reset();
   }
+
   std::unique_ptr<AppController> app_;
 };
 

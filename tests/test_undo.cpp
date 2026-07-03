@@ -42,6 +42,7 @@ class UndoTest : public ::testing::Test {
     app_ = std::make_unique<AppController>();
     app_->tasks()->reset({makeTask(QStringLiteral("T-1"), QStringLiteral("todo"))});
   }
+
   void TearDown() override {
     app_.reset();
   }
@@ -50,6 +51,7 @@ class UndoTest : public ::testing::Test {
     const int row = app_->tasks()->indexOfId(id);
     return app_->tasks()->data(app_->tasks()->index(row, 0), kStatusRole).toString();
   }
+
   bool archivedOf(const QString& id) const {
     const int row = app_->tasks()->indexOfId(id);
     return app_->tasks()->data(app_->tasks()->index(row, 0), kArchivedRole).toBool();
