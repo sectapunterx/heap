@@ -3,14 +3,15 @@
 </p>
 
 <p align="center">
-  A native desktop board, calendar, and notebook for engineers.
+  <b>A local-first desktop workspace for engineers — board, calendar, docs, and notes in one native window.</b>
 </p>
 
 <div align="center">
 
+[![CI](https://github.com/sectapunterx/heap/actions/workflows/ci.yml/badge.svg)](https://github.com/sectapunterx/heap/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/sectapunterx/heap?sort=semver)](https://github.com/sectapunterx/heap/releases)
 [![Qt 6](https://img.shields.io/badge/Qt-6.4%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
-[![CMake](https://img.shields.io/badge/CMake-3.21%2B-064f8c?logo=cmake&logoColor=white)](https://cmake.org/)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
 </div>
@@ -19,58 +20,45 @@
 
 ## What it is
 
-heap. is a single-binary Qt 6 / QML application. One process, no Electron, no browser, no remote services. Tasks,
-events, docs, snippets, and contacts live side by side in a per-profile workspace persisted as a JSON blob in the user
-data directory.
+heap. is a **single native binary** — a Qt 6 / QML application, not an Electron shell. Your tasks, calendar events,
+docs, snippets, and contacts live side by side in one window and persist as a JSON blob on your own disk.
 
-The app was ported from a React prototype that still ships under `design/`
-for visual reference. The brand bundle lives under `design/brand-export/`; see [
-`design/brand-export/README.md`](design/brand-export/README.md) for tokens, mark geometry, and asset paths.
+**No browser. No servers. No accounts. No telemetry.** It starts fast, runs offline, and the board is *git-aware* —
+it watches your working copy and matches the current branch to the task you're on.
 
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-readme-banner.svg" width="100%" alt="heap. — work, in one place.">
+  <img src="docs/assets/img/screens/board-full.png" width="100%" alt="heap. board view: kanban columns, pinned calendar, and people pane">
 </p>
 
-## Highlights
+## Why heap.
 
-- **Kanban board.** Drag-and-drop columns, status color picker, per-card priority chips, branch decoration,
-  scheduled-time pill.
-- **Git-aware.** heap. watches the working copy: the current branch is matched to a task by id, the matching card
-  is decorated with its branch, and a focused-repo banner surfaces branch and PR state — so the board tracks what
-  you're actually building, with no manual linking.
-- **Timeline.** Overdue / today / tomorrow / week / later buckets, with sub-grouping by date and a show-done toggle.
-- **Week view.** 7-day grid with all-day deadline chips and an hourly event grid. Drag, resize, and cross-day move for
-  events.
-- **Day calendar.** Drag-to-create events, top and bottom resize, drop a task to schedule a focus block, live now-line.
-- **Docs.** Custom sections (API, internal, C++, tooling) with custom fields. Snippet editor with syntax
-  highlighting. Contact cards.
-- **Notes.** Per-profile markdown canvas with `@people` and `#ticket`
-  autocomplete.
-- **Profiles.** Feature-scoped workspaces with JSON import and export.
-- **Command palette.** `Ctrl+K` fuzzy search across tasks, docs, snippets, contacts, people, and profiles.
-- **Hotkeys.** Rebindable catalog with inline capture.
-- **Settings.** 10 sections (profile, appearance, notifications, calendar,
-  tasks, shortcuts, C++, integrations, data, about). Persists as JSON.
-- **Tweaks panel.** Theme, density, accent, reduced motion, high contrast.
-- **Automation.** A 60-second tick auto-archives done tasks, surfaces blocked-stuck warnings, and fires deadline and
-  standup reminders via the system tray. Respects quiet hours.
+- **Local-first.** State is one JSON file under `QStandardPaths::AppDataLocation`, backed up daily. Your data never
+  leaves the machine.
+- **Git-aware.** The active branch is matched to a task by id, the matching card is decorated with its branch, and a
+  focused-repo banner surfaces branch + PR state — no manual linking.
+- **Keyboard-first.** A `Ctrl+K` command palette, global quick-capture from anywhere, and a fully rebindable shortcut
+  map.
+- **One window, six surfaces.** Board, week, day, docs, notes, people — one process, one palette, one state file.
+- **Native + light.** One binary, no installer required, no runtime services. Qt 6 / C++20.
 
-## Documentation
+## Features
 
-- [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough of the
-  whole app, including the Quick-capture syntax.
-- [**Keyboard reference**](docs/HOTKEYS.md) — every (rebindable) shortcut.
-- [**Data & backups**](docs/DATA.md) — where your data lives, backups, and
-  moving a profile between machines.
+**Plan** — Kanban board (drag-and-drop columns, priority chips, branch decoration, scheduled-time pill) · Timeline
+(overdue / today / week / later buckets).
+**Time** — Week view (7-day grid, drag/resize/cross-day events) · Day calendar (drag-to-create, resize, drop a task to
+schedule a focus block, live now-line).
+**Know** — Docs (custom sections + fields, snippet editor with syntax highlighting, contact cards) · Notes (per-profile
+markdown with `@people` / `#ticket` autocomplete).
+**Flow** — Git-aware board · Quick-capture task / note via a global hotkey · `Ctrl+K` command palette · Profiles
+(feature-scoped workspaces with JSON import/export) · Automation (60-second tick auto-archives, warns on stuck tasks,
+fires deadline + standup reminders; respects quiet hours).
 
 ## Get it
 
 **Prebuilt binaries** — a Windows installer, a Linux AppImage, and a portable zip are attached to each
-[GitHub release](https://github.com/sectapunterx/heap/releases). No dependencies to install; download and run.
+[**GitHub release**](https://github.com/sectapunterx/heap/releases). Download and run; nothing else to install.
 
-## Build from source
-
-Requires Qt 6.4+ and a C++20 toolchain.
+**Build from source** — three commands, any platform (Qt 6.4+ and a C++20 toolchain):
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -82,6 +70,7 @@ cmake --build build -j
 
 ```sh
 sudo apt install qt6-base-dev qt6-declarative-dev libqt6svg6-dev cmake g++
+cmake -S . -B build && cmake --build build -j
 ```
 
 ### macOS
@@ -114,14 +103,52 @@ cmake --build build -j
 4. Open the project in CLion. Under **Settings → Build, Execution, Deployment → Toolchains → + → MinGW**:
    - **Name:** `MSYS2 UCRT64`
    - **Toolset:** `C:\msys64\ucrt64`
-5. In **Settings → CMake**, add to **CMake options**:
-
-   ```
-   -DCMAKE_PREFIX_PATH=C:/msys64/ucrt64
-   ```
+5. In **Settings → CMake**, add to **CMake options**: `-DCMAKE_PREFIX_PATH=C:/msys64/ucrt64`
 6. Pick the `heap` run configuration. `Shift+F10` to launch.
 7. To run `heap.exe` outside CLion, add `C:\msys64\ucrt64\bin` to `PATH`, or bundle the Qt DLLs once with
    `windeployqt6 --qmldir ../qml heap.exe` from the build directory.
+
+## Keyboard
+
+Defaults — every entry is rebindable from **Settings → Shortcuts** or the floating Hotkeys panel. Full list:
+[docs/HOTKEYS.md](docs/HOTKEYS.md).
+
+| Action            | Default      | Action            | Default      |
+| ----------------- | ------------ | ----------------- | ------------ |
+| Command palette   | `Ctrl+K` / `Ctrl+P` | Quick-capture task | `Ctrl+Shift+Space` |
+| New task          | `Ctrl+N`     | Quick-capture note | `Ctrl+Shift+N` |
+| Board / Timeline / Week | `Ctrl+1` / `2` / `3` | Docs / Notes / Settings | `Ctrl+4` / `5` / `6` |
+| Next / prev profile | `Ctrl+]` / `Ctrl+[` | Export profile → Markdown | `Ctrl+Shift+E` |
+| Focus search      | `Ctrl+F`     | Undo last change  | `Ctrl+Z`     |
+| Tweaks / Hotkeys  | `Ctrl+,` / `Ctrl+/` | Select all / clear / delete | `Ctrl+A` / `Esc` / `Del` |
+
+## Documentation
+
+- [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough, including Quick-capture syntax.
+- [**Keyboard reference**](docs/HOTKEYS.md) — every (rebindable) shortcut.
+- [**Data & backups**](docs/DATA.md) — where your data lives, backups, moving a profile between machines.
+- [**Packaging**](docs/PACKAGING.md) — how the installer / AppImage / portable bundles are built.
+
+## Data & backups
+
+- **Profiles** own their tasks, people, statuses, docs, and notes. Events are global (the calendar spans every profile)
+  and carry an optional `profileId`.
+- **Everything** persists as JSON under `QStandardPaths::AppDataLocation`; settings live in a single `appSettingsJson`
+  blob edited by `SettingsView`.
+- **Backups** rotate daily under `<AppDataLocation>/backups/`; retention is configurable in **Settings → Data**. A
+  corrupt state file is recovered from the newest backup rather than overwritten.
+
+## Contributing
+
+```sh
+git clone https://github.com/sectapunterx/heap && cd heap
+cmake -S . -B build && cmake --build build -j        # app
+cmake --build build --target heap_all_tests          # tests
+ctest --test-dir build/tests --output-on-failure     # 21 suites
+```
+
+CI (`.github/workflows/ci.yml`) runs clang-format + clang-tidy, a Linux + Windows build/test matrix, and an
+ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_<short-desc>`; keep the tree green.
 
 ## Project layout
 
@@ -142,91 +169,22 @@ cmake --build build -j
 │  ├─ platform/            ← global hotkey backend (Win32 RegisterHotKey)
 │  ├─ integrations/        ← tracker-sync status mapping (post-release)
 │  ├─ sync/                ← BYOS serializer + 3-way JSON merge
-│  └─ query/              ← Notes query-language parser
-├─ qml/
-│  ├─ Main.qml             ← top-level window
-│  ├─ Theme.qml            ← singleton: surfaces, accent (reactive), highContrast, reducedMotion
-│  ├─ Brand.qml            ← singleton: heap. palette, identity tokens, tagline, asset paths
-│  ├─ BrandLogo.qml        ← lockup / mark / wordmark in native QML primitives
-│  ├─ TopBar.qml           ← BrandLogo, breadcrumbs, profile pill, search, +Task
-│  ├─ SideRail.qml         ← view switcher rail with badge counts
-│  ├─ FilterBar.qml        ← priority chips + Archived toggle + task counts
-│  ├─ KanbanBoard.qml      ← drag-and-drop board with status columns
-│  ├─ TaskCard.qml         ← per-task card (priority, branch, deadline, stuck, archived)
-│  ├─ TimelineView.qml     ← deadline-bucketed agenda
-│  ├─ WeekView.qml         ← 7-day grid with interactive events
-│  ├─ DayCalendar.qml      ← hourly grid with drag-to-create + resize handles
-│  ├─ MiniWeek.qml         ← week navigator with per-day dots
-│  ├─ PeopleList.qml       ← people to follow up with: todo → pinged → replied
-│  ├─ DocsView.qml         ← docs canvas (sections, snippets, contacts)
-│  ├─ DocsEditor.qml       ← modal editor for docs / snippets / contacts
-│  ├─ NotesView.qml        ← markdown notes canvas
-│  ├─ SettingsView.qml     ← 10-section settings UI
-│  ├─ TweaksPanel.qml      ← floating theme / accent / a11y quick controls
-│  ├─ HotkeysPanel.qml     ← rebindable shortcut catalog
-│  ├─ CommandPalette.qml   ← Ctrl+K fuzzy palette
-│  ├─ TaskEditor.qml       ← task modal
-│  ├─ EventEditor.qml      ← event modal
-│  ├─ PersonEditor.qml     ← contact modal
-│  ├─ ProfileEditor.qml    ← profile create / rename / duplicate modal
-│  ├─ ThinScrollBar.qml    ← shared thin translucent scrollbar
-│  ├─ Toast.qml            ← bottom-centered transient notifications
-│  └─ PillButton.qml       ← rounded primary / secondary button
-├─ design/
-│  ├─ *.jsx                ← original React prototype (reference only)
-│  ├─ styles.css           ← prototype stylesheet
-│  └─ brand-export/        ← heap. brand bundle: logos, app icon, surfaces, brandbook
+│  └─ query/               ← Notes query-language parser
+├─ qml/                    ← all views + singletons (Theme, Brand, I18n) — see below
+├─ tests/                  ← GoogleTest (C++) + Qt Quick Test (QML) suites
+├─ docs/                   ← single-page site + brandbook (GitHub Pages) + guides
+├─ design/                 ← original React prototype (reference) + brand-export bundle
 └─ README.md
 ```
 
-## State and data
-
-- **Profile snapshot.** Each profile owns its own tasks, people, statuses,
-  docs blob, and notes blob.
-- **Events.** Global, so the calendar reflects every profile at once. Each event carries an optional `profileId`
-  attribution.
-- **Settings.** Stored as `appSettingsJson` — one JSON blob persisted via
-  `QStandardPaths::AppDataLocation`. `SettingsView` is the canonical editor.
-- **Backups.** Rotated daily under `<AppDataLocation>/backups/`. Retention is configurable in **Settings → Data**.
-
-## Keyboard
-
-Defaults. Every entry is rebindable from **Settings → Shortcuts** or the
-floating Hotkeys panel. Full list: [docs/HOTKEYS.md](docs/HOTKEYS.md).
-
-| Action            | Default      |
-| ----------------- | ------------ |
-| Open palette      | `Ctrl+K` / `Ctrl+P` |
-| New task          | `Ctrl+N`     |
-| Quick-capture task  | `Ctrl+Shift+Space` |
-| Quick-capture note  | `Ctrl+Shift+N` |
-| Switch to Board   | `Ctrl+1`     |
-| Switch to Timeline| `Ctrl+2`     |
-| Switch to Week    | `Ctrl+3`     |
-| Switch to Docs    | `Ctrl+4`     |
-| Switch to Notes   | `Ctrl+5`     |
-| Switch to Settings| `Ctrl+6`     |
-| Next profile      | `Ctrl+]`     |
-| Prev profile      | `Ctrl+[`     |
-| Export profile → Markdown | `Ctrl+Shift+E` |
-| Focus search      | `Ctrl+F`     |
-| Undo last deletion| `Ctrl+Z`     |
-| Open Tweaks       | `Ctrl+,`     |
-| Open Hotkeys      | `Ctrl+/`     |
-| Select all / clear / delete | `Ctrl+A` / `Esc` / `Del` |
-
-## Accessibility
-
-- **Reduced motion.** **Tweaks → Reduced motion** mutes all transitions.
-  `Theme.scaledMs(n)` collapses to 0.
-- **High contrast.** **Tweaks → High contrast** strengthens border and text
-  tokens.
-- **Tab focus.** Focusable inputs paint an accent border when focused.
+The `qml/` tree holds one file per surface (`KanbanBoard`, `WeekView`, `DayCalendar`, `DocsView`, `NotesView`,
+`PeopleList`, …), the modal editors, and the `Theme` / `Brand` / `I18n` singletons. `BrandLogo.qml` paints the mark
+with native primitives so the brand renders without `Qt6::Svg`.
 
 ## Brand
 
-The heap. brand ships under `design/brand-export/` and is wired into the runtime via the `Brand` QML singleton. Tagline:
-*Work, in one place.* Long form, for editorial contexts only: *A quiet place for the work you owe.*
+Shipped under `design/brand-export/` and wired into the runtime via the `Brand` QML singleton.
+Tagline: *Work, in one place.*
 
 <table>
 <tr>
@@ -257,46 +215,10 @@ The heap. brand ships under `design/brand-export/` and is wired into the runtime
 </tr>
 </table>
 
-`BrandLogo.qml` paints the mark with `Rectangle` and `Canvas`, so the brand renders without `Qt6::Svg`. The exported SVG
-files are bundled into
-`qrc:/brand/...` for the app icon and any consumer that prefers vector assets.
-
-### Palette
-
-The product palette (cyan `accent`, status hues, surfaces) is the runtime UI. The identity-only tokens (`brandInk`,
-`brandAccent`) are used by the mark, the wordmark, and the lockup, so the brand sits behind the product instead of
-competing with it.
-
-| token         | dark      | light     | role                                 |
-|---------------|-----------|-----------|--------------------------------------|
-| `bg`          | `#0b0e13` | `#f3f5f8` | app background                       |
-| `bg2`         | `#11151c` | derived   | secondary surface                    |
-| `panel`       | `#14181f` | `#ffffff` | cards and panels                     |
-| `panel2`      | `#1a1f29` | derived   | nested cards                         |
-| `border`      | `#262d39` | `#dde3ec` | dividers, hairlines                  |
-| `text`        | `#e5ecf3` | `#11151c` | primary text                         |
-| `text3`       | `#8a94a3` | `#5f6878` | muted, labels                        |
-| `accent`      | `#3bccdd` | `#178ea0` | product accent (UI only)             |
-| `accent2`     | `#5fdaea` | derived   | hover, highlight                     |
-| `brandInk`    | `#8a94a3` | —         | identity ink (wordmark, mark stroke) |
-| `brandAccent` | `#2f5560` | —         | identity accent (mark fill, dot)     |
-| `iconInk`     | `#5f6878` | —         | app-icon mark, one stop darker       |
-| `iconAccent`  | `#1f3d45` | —         | app-icon fill, one stop darker       |
-
-| status       | hex       |
-| ------------ | --------- |
-| todo         | `#86a0bd` |
-| in-progress  | `#32b2e7` |
-| review       | `#bf94ec` |
-| done         | `#78be7a` |
-| warn         | `#fe9c3a` |
-
-Full token reference and asset map:
+Full palette, token reference, mark geometry, and asset map:
 [`design/brand-export/README.md`](design/brand-export/README.md).
 
 ## License
 
-MIT. See [LICENSE](LICENSE) (if present), or treat this repo as MIT-licensed.
-
-The brand assets under `design/brand-export/` are also MIT for use within this codebase. Fonts referenced (IBM Plex
-Sans, JetBrains Mono) ship under the SIL Open Font License; see their upstream repositories.
+MIT — see [LICENSE](LICENSE). Brand assets under `design/brand-export/` are MIT for use within this codebase. The
+referenced fonts (IBM Plex Sans, JetBrains Mono) ship under the SIL Open Font License; see their upstream repositories.
