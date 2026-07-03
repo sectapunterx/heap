@@ -22,6 +22,12 @@ struct Task {
   QString branch;
   QDateTime statusChangedAt;  // last time `status` was mutated
   bool archived = false;      // hidden from Board/Timeline once auto-archived
+  // Tracker-sync link (HEAP-74): set when this task mirrors an external issue.
+  // Empty for locally-created tasks. Used to route status pushes and to match
+  // pulled issues back to their task on the next sync.
+  QString externalId;        // e.g. GitHub issue number as a string
+  QString externalUrl;       // issue web URL
+  QString externalProvider;  // "github" | "jira" | "gitlab"
 };
 
 struct CalEvent {

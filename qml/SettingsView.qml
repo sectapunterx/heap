@@ -1584,6 +1584,19 @@ Item {
                                     onCommitted: (txt) => root.setNested("integrations", intCard.intKey, modelData.key, txt)
                                 }
                             }
+                            // GitHub 2-way sync (HEAP-74): pull issues as tasks.
+                            Rectangle {
+                                visible: intCard.intKey === "github"
+                                Layout.topMargin: 4
+                                radius: 6
+                                color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2
+                                border.color: Theme.border; border.width: 1
+                                implicitWidth: syncTxt.implicitWidth + 24; implicitHeight: 28
+                                Text {
+                                    id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 11
+                                }
+                                MouseArea { id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.syncNow() }
+                            }
                         }
                     }
                 }
