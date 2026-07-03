@@ -39,6 +39,7 @@ Rectangle {
 
         // View switcher
         RailBtn {
+            objectName: "rail-board"
             glyph: "▦"; tooltipText: I18n.t("siderail.tip.board")
                    active: AppController.currentView === "board"
                    onActivated: AppController.currentView = "board" }
@@ -59,12 +60,14 @@ Rectangle {
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         RailBtn {
+            objectName: "rail-blocked"
             glyph: "⊘"; tooltipText: I18n.t("siderail.tip.blocked")
                    countText: root._blockedCount > 0 ? root._blockedCount : ""
                    countColor: Theme.p0
                    active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
                    onActivated: AppController.focusStatusColumn("blocked") }
         RailBtn {
+            objectName: "rail-review"
             glyph: "⎇"; tooltipText: I18n.t("siderail.tip.review")
                    countText: root._reviewCount > 0 ? root._reviewCount : ""
                    countColor: Theme.stReview
@@ -74,6 +77,7 @@ Rectangle {
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 
         RailBtn {
+            objectName: "rail-docs"
             glyph: "§"; tooltipText: I18n.t("siderail.tip.docs")
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }

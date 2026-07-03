@@ -319,9 +319,18 @@ jobs:
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
+          # heap_qml_tests is a Qt Quick Test binary: it needs the QuickTest
+          # runtime lib (libqt6quicktest6) plus the QML runtime *modules* the
+          # tst_*.qml import (QtTest, QtQuick.Controls, Layouts, …) — the plain
+          # libqt6*6 runtime libs do not pull those qml6-module-* packages in.
           sudo apt-get install -y --no-install-recommends \
             libqt6core6 libqt6gui6 libqt6qml6 libqt6quick6 \
             libqt6quickcontrols2-6 libqt6widgets6 libqt6test6 \
+            libqt6quicktest6 \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-templates qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtqml-workerscript \
+            qml6-module-qttest \
             cmake ninja-build
 
       - name: Setup MSYS2 (windows)
@@ -393,10 +402,18 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
+          # QML runtime modules + QuickTest lib are needed at run time for
+          # heap_qml_tests (the -dev packages don't pull the qml6-module-*
+          # runtime plugins).
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ \
             qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev \
+            libqt6quicktest6 \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-templates qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtqml-workerscript \
+            qml6-module-qttest
 
       - name: Configure with sanitizers
         run: |

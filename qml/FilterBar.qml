@@ -42,6 +42,7 @@ Rectangle {
             model: ["P0", "P1", "P2", "P3"]
             delegate: Rectangle {
                 required property string modelData
+                objectName: "pri-" + modelData
                 property bool active: root.priorities[modelData] === true
                 radius: 999
                 color: active ? Theme.accentSoft : Theme.panel2
@@ -100,6 +101,7 @@ Rectangle {
         Item { Layout.fillWidth: true }
 
         Rectangle {
+            objectName: "archived-toggle"
             radius: 999
             color: root.showArchived ? Theme.accentSoft : Theme.panel2
             border.color: root.showArchived ? Theme.accent : Theme.border

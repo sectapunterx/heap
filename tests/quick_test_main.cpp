@@ -9,7 +9,16 @@
 // under AppDataLocation) never touch the real user data.
 #include <QObject>
 #include <QStandardPaths>
+#include <QtPlugin>
 #include <QtQuickTest/quicktest.h>
+
+// Explicitly instantiate the statically-linked TodoCpp module plugin so its
+// type registrations run. Auto-registration happens to work on Windows but is
+// stripped on Linux (the test references no plugin symbol otherwise), leaving
+// "SideRail is not a type" at runtime. Q_IMPORT_PLUGIN forces the static plugin
+// instance in; heap_core is WHOLE_ARCHIVE-linked so the module's qml resources
+// (qmldir + component .qml) are retained alongside it.
+Q_IMPORT_PLUGIN(TodoCppPlugin)
 
 class Setup : public QObject {
   Q_OBJECT
