@@ -41,9 +41,11 @@ class ViewFocusTest : public ::testing::Test {
         mk(QStringLiteral("D"), QStringLiteral("review")),
     });
   }
+
   void TearDown() override {
     app_.reset();
   }
+
   std::unique_ptr<AppController> app_;
 };
 
@@ -58,7 +60,7 @@ TEST_F(ViewFocusTest, FocusStatusColumnSwitchesToBoardAndRecordsStatus) {
 
   EXPECT_EQ(app_->currentView(), QStringLiteral("board"));
   EXPECT_EQ(app_->focusedStatus(), QStringLiteral("blocked"));
-  EXPECT_EQ(viewSpy.count(), 1);   // notes -> board
+  EXPECT_EQ(viewSpy.count(), 1);  // notes -> board
   EXPECT_GE(focusSpy.count(), 1);
 }
 
