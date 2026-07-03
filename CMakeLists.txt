@@ -35,7 +35,7 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_link_options(-fsanitize=address,undefined)
 endif()
 
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network)
 # DBus is only needed for the Linux native notifications backend.
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.2 REQUIRED COMPONENTS DBus)
@@ -75,6 +75,7 @@ qt_add_library(heap_core STATIC
     src/integrations/StatusMap.cpp
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
+    src/update/Updater.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
 )
@@ -150,12 +151,14 @@ qt_add_qml_module(heap_core
         src/integrations/IntegrationProvider.h
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h
+        src/update/Updater.h
 )
 
 target_include_directories(heap_core PUBLIC src)
 target_link_libraries(heap_core PUBLIC
     Qt6::Core
     Qt6::Gui
+    Qt6::Network
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
@@ -172,6 +175,10 @@ target_compile_definitions(heap_core PRIVATE
     $<$<CONFIG:Debug>:HEAP_DEBUG_BUILD=1>
     $<$<CONFIG:RelWithDebInfo>:HEAP_DEBUG_BUILD=1>
 )
+# Single source of truth for the app version: the project() VERSION above.
+# PUBLIC so the thin `heap` executable (src/main.cpp) inherits it for
+# setApplicationVersion; AppController exposes it to QML as `appVersion`.
+target_compile_definitions(heap_core PUBLIC HEAP_VERSION="${PROJECT_VERSION}")
 if (TARGET Qt6::Svg)
     target_link_libraries(heap_core PUBLIC Qt6::Svg)
     target_compile_definitions(heap_core PRIVATE HEAP_HAS_SVG=1)
