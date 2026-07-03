@@ -119,6 +119,7 @@ qt_add_qml_module(heap
         qml/QuickCaptureNotesPopup.qml
         qml/MentionAutocomplete.qml
         qml/WelcomePopup.qml
+        qml/Mention.js
     SOURCES
         src/AppController.h
         src/Models.h

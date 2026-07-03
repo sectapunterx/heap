@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import TodoCpp
+import "Mention.js" as Mention
 
 // Reusable autocomplete dropdown that floats above a target
 // TextField/TextArea at the caret. Supports two triggers:
@@ -135,12 +136,13 @@ Popup {
         const r = _currentTriggerRange();
         if (!r) return false;
         const pick = _suggestions[_selectedIdx];
-        const text = _text();
-        const before = text.substring(0, r.start);
-        const after = text.substring(r.end);
         const insert = r.trigger + pick.id + " ";
-        target.text = before + insert + after;
-        target.cursorPosition = (before + insert).length;
+        // Edit in place (remove + insert) rather than reassigning target.text:
+        // a whole-text assignment resets the caret to 0 on a TextArea/TextField,
+        // dropping the user back to the start of the document. (HEAP-65)
+        target.remove(r.start, r.end);
+        target.insert(r.start, insert);
+        target.cursorPosition = r.start + insert.length;
         _suggestions = [];
         _trigger = "";
         return true;

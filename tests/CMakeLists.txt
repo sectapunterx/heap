@@ -586,6 +586,36 @@ endif ()
 
 add_test(NAME heap_undo_tests COMMAND heap_undo_tests)
 
+# ─── QML (Qt Quick Test) tests ───
+# Drive the QML layer directly instead of only the C++ backend. Currently
+# covers the mention-commit helper (qml/Mention.js) — caret placement after an
+# @person / #ticket insertion (HEAP-65). Runs headless under the offscreen QPA
+# platform with the Basic Controls style. tst_*.qml live in tests/qml and are
+# discovered via the -input dir handed to the QUICK_TEST_MAIN runner.
+find_package(Qt6 REQUIRED COMPONENTS QuickTest Quick QuickControls2)
+
+add_executable(heap_qml_tests quick_test_main.cpp)
+
+# QUICK_TEST_MAIN scans this directory for tst_*.qml at runtime. Baking it as a
+# compile definition is the canonical wiring (more reliable than -input across
+# platforms); the source tree is present in local + CI checkouts.
+target_compile_definitions(heap_qml_tests PRIVATE
+        QUICK_TEST_SOURCE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/qml")
+
+target_link_libraries(heap_qml_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        Qt6::Quick
+        Qt6::QuickControls2
+        Qt6::QuickTest
+)
+
+add_test(NAME heap_qml_tests
+        COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+set_tests_properties(heap_qml_tests PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic")
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
