@@ -680,7 +680,7 @@ target_compile_definitions(heap_qml_tests PRIVATE
 # lets the linker drop the whole archive (works on Windows by luck, stripped on
 # Linux → "SideRail is not a type" at runtime). WHOLE_ARCHIVE keeps the init.
 target_link_libraries(heap_qml_tests PRIVATE
-        heap_core
+        "$<LINK_LIBRARY:WHOLE_ARCHIVE,heap_core>"
         "$<LINK_LIBRARY:WHOLE_ARCHIVE,heap_coreplugin>"
         Qt6::QuickTest
 )
