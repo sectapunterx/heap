@@ -73,6 +73,7 @@ qt_add_library(heap_core STATIC
     src/platform/GlobalHotkey.cpp
     src/integrations/StatusMap.cpp
     src/sync/SyncSerializer.cpp
+    src/sync/JsonMerger.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
 )
@@ -147,6 +148,7 @@ qt_add_qml_module(heap_core
         src/integrations/StatusMap.h
         src/integrations/IntegrationProvider.h
         src/sync/SyncSerializer.h
+        src/sync/JsonMerger.h
 )
 
 target_include_directories(heap_core PUBLIC src)
