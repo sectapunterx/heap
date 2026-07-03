@@ -1,0 +1,13 @@
+Package: heap
+Version: @VERSION@
+Section: utils
+Priority: optional
+Architecture: amd64
+Maintainer: heap. <noreply@users.noreply.github.com>
+Depends: libqt6core6 (>= 6.4), libqt6gui6 (>= 6.4), libqt6qml6 (>= 6.4), libqt6quick6 (>= 6.4), libqt6quickcontrols2-6 (>= 6.4), libqt6widgets6 (>= 6.4)
+Homepage: https://github.com/sectapunterx/todolist
+Description: Work, in one place — tasks, calendar, notes and docs
+ heap. is a keyboard-first desktop planner that unifies a kanban board, a
+ day/week calendar, freeform notes and per-feature docs into a single
+ profile-scoped workspace. Quick-capture parses dates, priorities and
+ @mentions from plain text so a task lands in under two seconds.
