@@ -402,10 +402,18 @@ jobs:
       - name: Install toolchain
         run: |
           sudo apt-get update
+          # QML runtime modules + QuickTest lib are needed at run time for
+          # heap_qml_tests (the -dev packages don't pull the qml6-module-*
+          # runtime plugins).
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ \
             qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev \
+            libqt6quicktest6 \
+            qml6-module-qtquick qml6-module-qtquick-controls \
+            qml6-module-qtquick-templates qml6-module-qtquick-layouts \
+            qml6-module-qtquick-window qml6-module-qtqml-workerscript \
+            qml6-module-qttest
 
       - name: Configure with sanitizers
         run: |

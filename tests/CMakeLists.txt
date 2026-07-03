@@ -655,7 +655,12 @@ add_test(NAME heap_view_tests COMMAND heap_view_tests)
 # discovered via the -input dir handed to the QUICK_TEST_MAIN runner.
 find_package(Qt6 REQUIRED COMPONENTS QuickTest Quick QuickControls2)
 
-add_executable(heap_qml_tests quick_test_main.cpp)
+# qt_add_executable (not plain add_executable) so Qt finalization runs
+# qt_import_qml_plugins(): the statically-linked TodoCpp module plugin
+# (heap_coreplugin) is imported and its type registrations survive. With a plain
+# add_executable the plugin init is stripped on Linux and `import TodoCpp` types
+# ("SideRail is not a type") fail to resolve at runtime.
+qt_add_executable(heap_qml_tests quick_test_main.cpp)
 # AUTOMOC for the Setup QObject in quick_test_main.cpp (has Q_OBJECT).
 set_target_properties(heap_qml_tests PROPERTIES AUTOMOC ON)
 
