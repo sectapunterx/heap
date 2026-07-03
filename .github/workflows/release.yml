@@ -45,6 +45,12 @@ jobs:
     name: Package (Windows)
     needs: meta
     runs-on: windows-latest
+    # Job-level env so the optional signing steps' `if:` can read the secret (a
+    # step's own env is not reliably visible to its own `if`, and `secrets`
+    # cannot be referenced in `if` directly). Mirrors the macOS signing pattern.
+    env:
+      WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
+      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -97,6 +103,32 @@ jobs:
           export PATH="$MSYS_BASE_UNIX/ucrt64/bin:$MSYS_BASE_UNIX/ucrt64/share/qt6/libexec:$MSYS_BASE_UNIX/ucrt64/share/qt6/bin:$PATH"
           cmake --build build --target portable
 
+      # Authenticode-sign heap.exe + the bundled Qt DLLs before they are
+      # packaged, so both the portable zip and the installer carry signed
+      # binaries. Runs only when the signing secret is configured — unsigned
+      # builds still ship (default). See docs/PACKAGING.md for the secrets.
+      - name: Sign binaries (optional)
+        if: ${{ env.WINDOWS_CERT_PFX != '' }}
+        shell: msys2 {0}
+        run: |
+          set -eu
+          pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-osslsigncode
+          printf '%s' "$WINDOWS_CERT_PFX" | base64 -d > cert.pfx
+          sign() {
+            osslsigncode sign \
+              -pkcs12 cert.pfx -pass "$WINDOWS_CERT_PASSWORD" \
+              -n "heap." -i "https://github.com/sectapunterx/heap" \
+              -ts http://timestamp.digicert.com -h sha256 \
+              -in "$1" -out "$1.signed"
+            mv -f "$1.signed" "$1"
+          }
+          find build/heap-portable -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0 |
+            while IFS= read -r -d '' f; do
+              echo "signing: $f"
+              sign "$f"
+            done
+          rm -f cert.pfx
+
       - name: Zip portable bundle
         shell: pwsh
         run: Compress-Archive -Path "build\heap-portable\*" -DestinationPath "heap-${{ needs.meta.outputs.tag }}-windows-portable.zip"
@@ -115,6 +147,24 @@ jobs:
             /DBundleDir="$($PWD.Path)\build\heap-portable" `
             "/Fheap-${{ needs.meta.outputs.tag }}-windows-setup" `
             installer\heap.iss
+
+      # Sign the finished installer .exe (the portable binaries it wraps were
+      # already signed above). Same gate — no-op without the cert secret.
+      - name: Sign installer (optional)
+        if: ${{ env.WINDOWS_CERT_PFX != '' }}
+        shell: msys2 {0}
+        run: |
+          set -eu
+          pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-osslsigncode
+          printf '%s' "$WINDOWS_CERT_PFX" | base64 -d > cert.pfx
+          SETUP="installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe"
+          osslsigncode sign \
+            -pkcs12 cert.pfx -pass "$WINDOWS_CERT_PASSWORD" \
+            -n "heap. installer" -i "https://github.com/sectapunterx/heap" \
+            -ts http://timestamp.digicert.com -h sha256 \
+            -in "$SETUP" -out "$SETUP.signed"
+          mv -f "$SETUP.signed" "$SETUP"
+          rm -f cert.pfx
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
