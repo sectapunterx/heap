@@ -67,6 +67,7 @@ qt_add_library(heap_core STATIC
     src/git/BranchTaskMatcher.cpp
     src/git/GitWatcher.cpp
     src/text/TaskTextUtils.cpp
+    src/query/QueryParser.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
@@ -139,6 +140,7 @@ qt_add_qml_module(heap_core
         src/git/GitTypes.h
         src/git/GitWatcher.h
         src/text/TaskTextUtils.h
+        src/query/QueryParser.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/integrations/IntegrationTypes.h
