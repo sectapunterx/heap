@@ -70,6 +70,7 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
+    src/integrations/StatusMap.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
 )
@@ -139,6 +140,9 @@ qt_add_qml_module(heap_core
         src/text/TaskTextUtils.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
+        src/integrations/IntegrationTypes.h
+        src/integrations/StatusMap.h
+        src/integrations/IntegrationProvider.h
 )
 
 target_include_directories(heap_core PUBLIC src)
