@@ -74,7 +74,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext& ctx, const QString
   line += '\n';
 
   {
-    QMutexLocker lock(&g_mutex);
+    const QMutexLocker lock(&g_mutex);
     if(g_logFile.isOpen()) {
       g_logFile.write(line.toUtf8());
       g_logFile.flush();
@@ -108,7 +108,7 @@ QString logFilePath() {
 }
 
 void installFileLogger() {
-  QMutexLocker lock(&g_mutex);
+  const QMutexLocker lock(&g_mutex);
   if(g_logFile.isOpen()) {
     return;
   }

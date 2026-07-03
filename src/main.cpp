@@ -17,12 +17,12 @@ void quitOnSignal(int) {
 
 int main(int argc, char* argv[]) {
   QApplication app(argc, argv);
-  app.setOrganizationName("heap");
-  app.setOrganizationDomain("heap.local");
-  app.setApplicationName("heap");
-  app.setApplicationDisplayName(QStringLiteral("heap."));
-  app.setApplicationVersion(QStringLiteral("0.4.2"));
-  app.setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
+  QApplication::setOrganizationName("heap");
+  QApplication::setOrganizationDomain("heap.local");
+  QApplication::setApplicationName("heap");
+  QApplication::setApplicationDisplayName(QStringLiteral("heap."));
+  QApplication::setApplicationVersion(QStringLiteral("0.4.2"));
+  QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
   // Route qDebug/qWarning/… to a rotating log file (must come after the
   // org/app names are set so AppDataLocation resolves to the heap folder).
@@ -35,7 +35,7 @@ int main(int argc, char* argv[]) {
   std::signal(SIGTERM, quitOnSignal);
 
   QString initialView;
-  const QStringList args = app.arguments();
+  const QStringList args = QApplication::arguments();
   for(int i = 1; i < args.size() - 1; ++i) {
     if(args[i] == "--view") {
       initialView = args[i + 1];
@@ -54,5 +54,5 @@ int main(int argc, char* argv[]) {
       },
       Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/TodoCpp/qml/Main.qml")));
-  return app.exec();
+  return QApplication::exec();
 }
