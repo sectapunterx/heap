@@ -177,7 +177,10 @@ if (TARGET Qt6::Svg)
 endif()
 
 # ── Application executable — thin shell that loads Main.qml from heap_core ──
-qt_add_executable(heap WIN32
+# WIN32 → GUI subsystem on Windows (no console); MACOSX_BUNDLE → a .app on macOS
+# so windeployqt/macdeployqt and `install(... BUNDLE ...)` have a bundle to
+# operate on. Each keyword applies only to its own platform. (HEAP-28)
+qt_add_executable(heap WIN32 MACOSX_BUNDLE
     src/main.cpp
     $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.rc>
 )
