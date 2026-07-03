@@ -7,14 +7,14 @@
 // The Setup object enables QStandardPaths test mode before any test loads, so
 // component tests that construct AppController (which reads/seeds state.json
 // under AppDataLocation) never touch the real user data.
-#include <QtQuickTest/quicktest.h>
-
 #include <QObject>
 #include <QStandardPaths>
+#include <QtQuickTest/quicktest.h>
 
 class Setup : public QObject {
   Q_OBJECT
  public slots:
+
   void applicationAvailable() {
     QStandardPaths::setTestModeEnabled(true);
   }
