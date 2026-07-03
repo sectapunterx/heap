@@ -717,6 +717,31 @@ target_link_libraries(heap_integrations_tests PRIVATE
 )
 add_test(NAME heap_integrations_tests COMMAND heap_integrations_tests)
 
+# ─── Sync (BYOS serializer) tests ───
+# Cover heap::sync::SyncSerializer — Profile/CalEvent ↔ git-friendly JSON with
+# stable (id-sorted) ordering and idempotent round-trips. Pure data code; needs
+# Qt6::Gui for QColor and Qt6::Qml only for the qqmlregistration.h header pulled
+# in transitively by Models.h.
+add_executable(heap_sync_tests
+        test_sync_serializer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.h
+)
+
+target_include_directories(heap_sync_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_sync_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        GTest::gtest
+        GTest::gtest_main
+)
+
+add_test(NAME heap_sync_tests COMMAND heap_sync_tests)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
