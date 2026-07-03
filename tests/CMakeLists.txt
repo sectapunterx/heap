@@ -288,9 +288,16 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_PERSISTENCE_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_PERSISTENCE_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -342,9 +349,16 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_EXPORT_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_EXPORT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -395,9 +409,16 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_PROFILE_IO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_PROFILE_IO_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -447,9 +468,16 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_ONBOARDING_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_ONBOARDING_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -518,9 +546,16 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_UNDO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_UNDO_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
