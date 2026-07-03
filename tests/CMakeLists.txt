@@ -116,6 +116,7 @@ add_test(NAME heap_notify_tests COMMAND heap_notify_tests)
 set(HEAP_SELECTION_SOURCES
         test_selection.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -179,6 +180,7 @@ add_test(NAME heap_selection_tests COMMAND heap_selection_tests)
 set(HEAP_NOTES_SOURCES
         test_notes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -275,6 +277,7 @@ add_test(NAME heap_platform_tests COMMAND heap_platform_tests)
 set(HEAP_PERSISTENCE_SOURCES
         test_persistence.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -336,6 +339,7 @@ add_test(NAME heap_persistence_tests COMMAND heap_persistence_tests)
 set(HEAP_EXPORT_SOURCES
         test_export_markdown.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -396,6 +400,7 @@ add_test(NAME heap_export_tests COMMAND heap_export_tests)
 set(HEAP_PROFILE_IO_SOURCES
         test_profile_io.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -455,6 +460,7 @@ add_test(NAME heap_profile_io_tests COMMAND heap_profile_io_tests)
 set(HEAP_ONBOARDING_SOURCES
         test_onboarding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -533,6 +539,7 @@ add_test(NAME heap_sampledata_tests COMMAND heap_sampledata_tests)
 set(HEAP_UNDO_SOURCES
         test_undo.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -594,6 +601,7 @@ add_test(NAME heap_undo_tests COMMAND heap_undo_tests)
 set(HEAP_VIEW_SOURCES
         test_view.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -798,6 +806,7 @@ add_test(NAME heap_models_tests COMMAND heap_models_tests)
 set(HEAP_APPCTRL_SOURCES
         test_appcontroller.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
