@@ -44,6 +44,22 @@ ApplicationWindow {
     Component.onCompleted: {
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
+        // First run: greet the user once the overlay is ready.
+        if (!AppController.welcomeSeen)
+            Qt.callLater(welcome.open);
+    }
+
+    // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
+    // notification tray fallback), the window hides instead of quitting so the
+    // global capture hotkeys can summon it back. The tray menu's "Quit" calls
+    // QCoreApplication::quit() directly, so a real exit bypasses this. On Linux
+    // there is no tray icon, so closing quits as usual.
+    readonly property bool _minimizeToTray: Qt.platform.os === "windows" || Qt.platform.os === "osx"
+    onClosing: (close) => {
+        if (win._minimizeToTray) {
+            close.accepted = false;
+            win.hide();
+        }
     }
 
     function activeCount() {
@@ -74,9 +90,32 @@ ApplicationWindow {
         function onDataChanged()  { win._scheduleMap = win.scheduleMap() }
         function onModelReset()   { win._scheduleMap = win.scheduleMap() }
     }
+    // Bring the window to the foreground from any state (minimized, hidden to
+    // tray, or merely unfocused). Shared by the two global-capture hotkeys and
+    // the tray "Show" affordance.
+    function _summon() {
+        if (win.visibility === Window.Minimized || win.visibility === Window.Hidden || !win.visible)
+            win.show();
+        win.raise();
+        win.requestActivate();
+    }
+
     Connections {
         target: AppController
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
+        // OS-level global hotkeys fired while the window may be minimized, in
+        // the background, or hidden to the tray: bring it forward, then open the
+        // matching Quick-capture popup.
+        function onQuickCaptureRequested() {
+            win._summon();
+            quickCapture.open();
+        }
+        function onQuickCaptureNotesRequested() {
+            win._summon();
+            quickCaptureNotes.open();
+        }
+        // Tray click / "Show heap." menu entry — just restore the window.
+        function onShowWindowRequested() { win._summon(); }
         function onToast(msg) { toast.show(msg) }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
@@ -149,6 +188,39 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
+
+                // First-run demo banner: offer to clear the seeded sample data.
+                Rectangle {
+                    Layout.fillWidth: true
+                    visible: AppController.demoActive
+                    implicitHeight: visible ? 40 : 0
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    RowLayout {
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 10
+                        spacing: 10
+                        Text {
+                            text: "✦  " + I18n.t("demo.banner.text")
+                            color: Theme.text
+                            font.pixelSize: 12
+                            Layout.fillWidth: true
+                            elide: Text.ElideRight
+                        }
+                        PillButton {
+                            text: I18n.t("demo.banner.startFresh")
+                            primary: true
+                            onClicked: AppController.startFresh()
+                        }
+                        PillButton {
+                            text: I18n.t("demo.banner.keep")
+                            onClicked: AppController.dismissDemo()
+                        }
+                    }
+                }
+
                 FilterBar {
                     Layout.fillWidth: true
                     visible: AppController.currentView !== "docs"
@@ -326,6 +398,7 @@ ApplicationWindow {
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
+    WelcomePopup { id: welcome }
     QuickCapturePopup { id: quickCapture }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes
@@ -567,5 +640,31 @@ ApplicationWindow {
         anchors.bottomMargin: 24
         anchors.horizontalCenter: parent.horizontalCenter
         z: 100
+    }
+
+    // Launch splash — covers the window until the scene is ready, then fades.
+    // Honours reduced motion (no bar animation, no fade, dismissed promptly).
+    SplashScreen {
+        id: splash
+        anchors.fill: parent
+        z: 9999
+        autoAnimate: !Theme.reducedMotion
+        autoDuration: 900
+        onFinished: splashFade.start()
+
+        // Swallow input while the splash is up.
+        MouseArea { anchors.fill: parent }
+
+        // Reduced motion: the internal progress animation is off, so dismiss
+        // via a short timer instead.
+        Component.onCompleted: if (Theme.reducedMotion) splashReducedDismiss.start()
+        Timer { id: splashReducedDismiss; interval: 250; onTriggered: splash.finished() }
+
+        NumberAnimation {
+            id: splashFade
+            target: splash; property: "opacity"; to: 0
+            duration: Theme.reducedMotion ? 0 : 350; easing.type: Easing.OutCubic
+            onFinished: splash.visible = false
+        }
     }
 }

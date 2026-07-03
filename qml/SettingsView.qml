@@ -1733,7 +1733,14 @@ Item {
     Component {
         id: sectionData
         ColumnLayout {
+            id: dataRoot
             spacing: 16
+            // Backups are read on demand (listBackups() is a plain invokable,
+            // not a notifying property). The Data section is rebuilt whenever
+            // the user opens it, so refreshing on completion keeps it current.
+            property var backups: []
+            function refreshBackups() { dataRoot.backups = AppController.listBackups(); }
+            Component.onCompleted: dataRoot.refreshBackups()
             SectionCard {
                 ColumnLayout {
                     spacing: 12
@@ -1757,6 +1764,78 @@ Item {
                             ({value: "weekly", label: I18n.t("settings.data.interval.weekly")})
                         ]
                         onSelected: (value) => root.set("data", "backupInterval", value)
+                    }
+                }
+            }
+            SectionCard {
+                ColumnLayout {
+                    spacing: 12
+                    Layout.fillWidth: true
+                    Sub {
+                        label: I18n.t("settings.data.restore")
+                    }
+                    Text {
+                        visible: dataRoot.backups.length === 0
+                        text: I18n.t("settings.data.restore.empty")
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Repeater {
+                        model: dataRoot.backups
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: 12
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 1
+                                Text { text: modelData.mtime; color: Theme.text; font.pixelSize: 12; font.family: Theme.fontMono }
+                                Text {
+                                    text: modelData.fileName + "  ·  " + modelData.sizeKb + " KB"
+                                    color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true
+                                }
+                            }
+                            // Two-step confirm: first click arms (restore
+                            // overwrites the live state), second within 3.5 s
+                            // performs it. Auto-disarms so a stray click is safe.
+                            Rectangle {
+                                id: restoreBtn
+                                property bool armed: false
+                                radius: 6
+                                color: restoreMA.containsMouse ? Theme.panel3 : Theme.panel2
+                                border.color: restoreBtn.armed ? Theme.p0 : Theme.border
+                                border.width: 1
+                                implicitWidth: restoreTxt.implicitWidth + 24
+                                implicitHeight: 28
+                                Text {
+                                    id: restoreTxt
+                                    anchors.centerIn: parent
+                                    text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
+                                    color: restoreBtn.armed ? Theme.p0 : Theme.text
+                                    font.pixelSize: 12
+                                }
+                                Timer { id: restoreDisarm; interval: 3500; onTriggered: restoreBtn.armed = false }
+                                MouseArea {
+                                    id: restoreMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        if (!restoreBtn.armed) {
+                                            restoreBtn.armed = true;
+                                            restoreDisarm.restart();
+                                        } else {
+                                            restoreBtn.armed = false;
+                                            restoreDisarm.stop();
+                                            AppController.restoreFromBackup(modelData.fileName);
+                                            dataRoot.refreshBackups();
+                                        }
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -1855,16 +1934,16 @@ Item {
                         Layout.topMargin: 4
                         Layout.fillWidth: true
                         AboutRow {
-                            label: I18n.t("settings.about.version"); value: "0.4.2 — build 240617"
+                            label: I18n.t("settings.about.version"); value: Brand.version
                         }
                         AboutRow {
                             label: I18n.t("settings.about.channel"); value: "stable"
                         }
                         AboutRow {
-                            label: I18n.t("settings.about.storage"); value: "~/.local/share/todocpp"
+                            label: I18n.t("settings.about.storage"); value: AppController.dataDir
                         }
                         AboutRow {
-                            label: I18n.t("settings.about.engine"); value: "Qt 6.4 + QML"
+                            label: I18n.t("settings.about.engine"); value: "Qt " + AppController.qtVersion + " · QML"
                         }
                     }
                 }

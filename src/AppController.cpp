@@ -5,6 +5,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
 #include "notify/NotificationCenter.h"
+#include "platform/GlobalHotkey.h"
 #include "text/TaskTextUtils.h"
 
 #include <QApplication>
@@ -45,6 +46,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.created", {"Created: %1", "Создано: %1"}},
       {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
       {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
+      {"task.moved", {"%1 → %2", "%1 → %2"}},
+      {"task.moveUndone", {"Move undone: %1", "Перемещение отменено: %1"}},
+      {"task.archived", {"Archived: %1", "В архиве: %1"}},
+      {"task.unarchived", {"Unarchived: %1", "Из архива: %1"}},
+      {"task.archiveUndone", {"Restored: %1", "Восстановлено: %1"}},
       {"event.deleted", {"Deleted event: %1", "Удалено событие: %1"}},
       {"event.restored", {"Restored: %1", "Восстановлено: %1"}},
       {"event.scheduled", {"%1 scheduled for %2", "%1 запланировано на %2"}},
@@ -59,10 +65,19 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.restored", {"Profile restored: %1", "Восстановлен профиль: %1"}},
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
       {"profile.exported", {"Profile exported: %1", "Профиль экспортирован: %1"}},
+      {"profile.mdCopied", {"Profile Markdown copied to clipboard", "Markdown профиля скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
+      {"data.recovered",
+       {"Your data file was unreadable — recovered from backup %1", "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
+      {"data.corruptKept",
+       {"Your data file was unreadable and no backup was found. The damaged file was "
+        "kept as state.corrupt-*.json.",
+        "Файл данных был нечитаем, бэкап не найден. Повреждённый файл сохранён как "
+        "state.corrupt-*.json."}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
+      {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
@@ -200,6 +215,13 @@ AppController::AppController(QObject* parent) :
   m_notifier = heap::notify::NotificationCenter::create(this);
   connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked, this, &AppController::onNotifierAction);
   connect(m_notifier.get(), &heap::notify::NotificationCenter::activated, this, &AppController::onNotifierActivated);
+  // The tray backend (Windows/macOS) doubles as the app's presence when the
+  // window is hidden: clicking the icon or its "Show" entry restores the
+  // window, and "Quit" exits for real. Forwarded to QML / the event loop.
+  connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this, &AppController::showWindowRequested);
+  connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
+    QCoreApplication::quit();
+  });
 
   // Route notification(...) → native toast + in-app toast bar, respecting
   // quiet hours and the user's `notifications.desktopNotif` / `soundOnPing`
@@ -236,6 +258,24 @@ AppController::AppController(QObject* parent) :
 
   loadStateOnStart();
   m_automationTimer->start();
+
+  // ---- Global hotkeys (OS-level Quick-capture) ----
+  // Registered after loadStateOnStart() so any user rebind of the capture
+  // sequences is already applied. On non-Windows platforms this is a no-op and
+  // the app relies on the in-app QML shortcuts instead.
+  m_globalHotkey = heap::platform::GlobalHotkey::create(this);
+  connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
+  registerGlobalHotkeys();
+
+  // If loadStateOnStart() had to recover from a backup or quarantine a corrupt
+  // file, surface it once the QML toast bar exists (singleShot fires after the
+  // engine has loaded Main.qml and this event loop starts).
+  if(!m_recoveryNotice.isEmpty()) {
+    QTimer::singleShot(0, this, [this]() {
+      emit toast(m_recoveryNotice);
+      m_recoveryNotice.clear();
+    });
+  }
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -294,6 +334,11 @@ AppController::AppController(QObject* parent) :
     applyProfileToModels(p);
     emit profilesChanged();
     emit activeProfileChanged();
+
+    // Fresh install: show the welcome dialog and flag the seeded demo so the
+    // board can offer "start fresh". (welcomeSeen stays false from its default.)
+    m_demoActive = true;
+    emit onboardingChanged();
     scheduleSave();
   }
 
@@ -521,7 +566,17 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     }
   }
   const QString taskId = t.id;
+  const QString prevStatus = t.status;
   m_tasks.setStatus(id, newStatus);
+
+  // Arm undo so a mis-drag to the wrong column is reversible (previously
+  // moveTask had no undo at all).
+  cancelUndo();
+  m_pendingUndo = {};
+  m_pendingUndo.kind = PendingUndo::TaskMove;
+  m_pendingUndo.taskId = taskId;
+  m_pendingUndo.prevStatus = prevStatus;
+  armUndo(5);
 
   // Re-evaluate blocked-stuck set (the task may have left "blocked").
   if(m_blockedStuckIds.remove(id)) {
@@ -538,7 +593,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     }
   }
 
-  emit toast(QString("%1 → %2").arg(taskId, statusName));
+  emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
   scheduleSave();
 }
 
@@ -1218,6 +1273,147 @@ void AppController::copyToClipboard(const QString& text) {
   }
 }
 
+void AppController::copyActiveProfileMarkdownToClipboard() {
+  snapshotActiveProfile();  // flush live models into the active Profile first
+  const int pi = profileIndexOf(m_activeProfileId);
+  if(pi < 0) {
+    return;
+  }
+  const Profile& p = m_profiles[pi];
+
+  const auto renderTask = [](const Task& t) {
+    QString line = QStringLiteral("- ");
+    if(!t.priority.isEmpty()) {
+      line += QStringLiteral("**[") + t.priority + QStringLiteral("]** ");
+    }
+    if(!t.id.isEmpty()) {
+      line += QStringLiteral("`") + t.id + QStringLiteral("` ");
+    }
+    line += t.title;
+    QStringList meta;
+    if(t.deadline.isValid()) {
+      meta << QStringLiteral("deadline: ") + t.deadline.toString(Qt::ISODate);
+    }
+    if(!t.branch.isEmpty()) {
+      meta << QStringLiteral("branch: ") + t.branch;
+    }
+    if(!meta.isEmpty()) {
+      line += QStringLiteral("  — ") + meta.join(QStringLiteral(" · "));
+    }
+    return line;
+  };
+
+  QString md;
+  md += QStringLiteral("# ") + p.name + QStringLiteral("\n\n");
+  md += QStringLiteral("_Exported ") + QDate::currentDate().toString(Qt::ISODate) + QStringLiteral("_\n");
+
+  // Tasks grouped by column, in the profile's status order; archived hidden.
+  md += QStringLiteral("\n## Tasks\n");
+  QSet<QString> knownStatus;
+  for(const QVariant& sv : p.statuses) {
+    const QVariantMap sm = sv.toMap();
+    const QString sid = sm.value(QStringLiteral("id")).toString();
+    knownStatus.insert(sid);
+    QStringList lines;
+    for(const Task& t : p.tasks) {
+      if(!t.archived && t.status == sid) {
+        lines << renderTask(t);
+      }
+    }
+    if(lines.isEmpty()) {
+      continue;
+    }
+    md += QStringLiteral("\n### ") + sm.value(QStringLiteral("name")).toString() + QStringLiteral(" (") + QString::number(lines.size()) +
+          QStringLiteral(")\n");
+    md += lines.join(QStringLiteral("\n")) + QStringLiteral("\n");
+  }
+  // Tasks whose status is not one of the profile's columns.
+  QStringList orphan;
+  for(const Task& t : p.tasks) {
+    if(!t.archived && !knownStatus.contains(t.status)) {
+      orphan << renderTask(t);
+    }
+  }
+  if(!orphan.isEmpty()) {
+    md += QStringLiteral("\n### Other (") + QString::number(orphan.size()) + QStringLiteral(")\n");
+    md += orphan.join(QStringLiteral("\n")) + QStringLiteral("\n");
+  }
+
+  // People.
+  if(!p.people.isEmpty()) {
+    md += QStringLiteral("\n## People\n");
+    for(const Person& pe : p.people) {
+      QString line = QStringLiteral("- **") + pe.name + QStringLiteral("**");
+      QStringList meta;
+      if(!pe.role.isEmpty()) {
+        meta << pe.role;
+      }
+      if(!pe.question.isEmpty()) {
+        meta << QStringLiteral("Q: ") + pe.question;
+      }
+      if(!meta.isEmpty()) {
+        line += QStringLiteral(" — ") + meta.join(QStringLiteral(" · "));
+      }
+      md += line + QStringLiteral("\n");
+    }
+  }
+
+  // Notes (raw markdown of the active profile).
+  const QString notes = p.notesState.trimmed();
+  if(!notes.isEmpty()) {
+    md += QStringLiteral("\n## Notes\n\n") + notes + QStringLiteral("\n");
+  }
+
+  copyToClipboard(md);
+  emit toast(tr_("profile.mdCopied"));
+}
+
+void AppController::markWelcomeSeen() {
+  if(m_welcomeSeen) {
+    return;
+  }
+  m_welcomeSeen = true;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+void AppController::dismissDemo() {
+  if(!m_demoActive) {
+    return;
+  }
+  m_demoActive = false;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+void AppController::startFresh() {
+  // Wipe the active profile's seeded demo content, leaving an empty but usable
+  // workspace: keep the profile and its kanban columns, drop tasks / people /
+  // this profile's events / notes / docs.
+  m_tasks.reset({});
+  m_people.reset({});
+
+  QVector<CalEvent> kept;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.profileId != m_activeProfileId) {
+      kept.append(e);
+    }
+  }
+  m_events.reset(kept);
+
+  m_notesState.clear();
+  emit notesStateChanged();
+  m_docsState.clear();
+  emit docsStateChanged();
+
+  m_demoActive = false;
+  emit onboardingChanged();
+
+  snapshotActiveProfile();
+  scheduleSave();
+  emit toast(tr_("onboarding.startedFresh"));
+}
+
 QString AppController::classifyTaskKind(const QString& text) const {
   using heap::text::TaskKind;
   switch(heap::text::classifyKind(text)) {
@@ -1324,6 +1520,20 @@ void AppController::undoLastDeletion() {
       emit toast(tr_("profile.restored").arg(m_pendingUndo.profile.name));
       break;
     }
+    case PendingUndo::TaskMove: {
+      if(m_tasks.indexOfId(m_pendingUndo.taskId) >= 0) {
+        m_tasks.setStatus(m_pendingUndo.taskId, m_pendingUndo.prevStatus);
+        emit toast(tr_("task.moveUndone").arg(m_pendingUndo.taskId));
+      }
+      break;
+    }
+    case PendingUndo::TaskArchive: {
+      if(m_tasks.indexOfId(m_pendingUndo.taskId) >= 0) {
+        m_tasks.setArchived(m_pendingUndo.taskId, m_pendingUndo.prevArchived);
+        emit toast(tr_("task.archiveUndone").arg(m_pendingUndo.taskId));
+      }
+      break;
+    }
     default:
       break;
   }
@@ -1347,6 +1557,14 @@ QString AppController::backupDirPath() const {
   const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/backups";
   QDir().mkpath(dir);
   return dir;
+}
+
+QString AppController::dataDir() const {
+  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+}
+
+QString AppController::qtVersion() const {
+  return QString::fromLatin1(qVersion());
 }
 
 void AppController::scheduleSave() {
@@ -1670,6 +1888,43 @@ void AppController::pruneBackups(int keep) {
   }
 }
 
+bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath) {
+  const QDir d(backupDirPath());
+  // Newest first — return the most recent backup that still parses as an object.
+  const QFileInfoList backups = d.entryInfoList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
+  for(const QFileInfo& fi : backups) {
+    QFile bf(fi.absoluteFilePath());
+    if(!bf.open(QFile::ReadOnly)) {
+      continue;
+    }
+    const QJsonDocument doc = QJsonDocument::fromJson(bf.readAll());
+    bf.close();
+    if(!doc.isNull() && doc.isObject()) {
+      out = doc.object();
+      fromPath = fi.absoluteFilePath();
+      return true;
+    }
+  }
+  return false;
+}
+
+void AppController::quarantineCorruptState(const QString& path) {
+  if(!QFile::exists(path)) {
+    return;
+  }
+  const QFileInfo fi(path);
+  const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+  QString target = fi.absolutePath() + "/state.corrupt-" + stamp + ".json";
+  // Avoid clobbering an earlier quarantine from the same second.
+  int n = 1;
+  while(QFile::exists(target)) {
+    target = fi.absolutePath() + "/state.corrupt-" + stamp + "-" + QString::number(n++) + ".json";
+  }
+  if(!QFile::rename(path, target)) {
+    qWarning("todocpp: could not quarantine corrupt state.json to %s", qUtf8Printable(target));
+  }
+}
+
 void AppController::saveStateNow() {
   if(m_loading) {
     return;
@@ -1700,6 +1955,8 @@ void AppController::saveStateNow() {
   s["workdayEnd"] = m_workdayEnd;
   s["crumbProject"] = m_crumbProject;
   s["crumbUser"] = m_crumbUser;
+  s["welcomeSeen"] = m_welcomeSeen;
+  s["demoActive"] = m_demoActive;
 
   // Keyboard shortcut overrides — store every entry (so a user-cleared
   // binding survives a restart even if the default is non-empty).
@@ -1733,14 +1990,44 @@ void AppController::saveStateNow() {
 }
 
 void AppController::loadStateOnStart() {
-  QFile f(stateFilePath());
-  if(!f.exists() || !f.open(QFile::ReadOnly)) {
-    return;
+  const QString path = stateFilePath();
+  QFile f(path);
+  if(!f.exists()) {
+    return;  // genuine first run — nothing to load, seed demo silently
   }
-  const QJsonDocument doc = QJsonDocument::fromJson(f.readAll());
-  if(doc.isNull() || !doc.isObject()) {
-    return;
+
+  // The file exists, so from here on any failure is corruption / an unreadable
+  // file, NOT a first run. We must never let the caller silently seed demo data
+  // and overwrite it: try to recover from the newest valid backup, otherwise
+  // quarantine the damaged file so the subsequent save cannot destroy it.
+  QJsonDocument doc;
+  bool ok = false;
+  if(f.open(QFile::ReadOnly)) {
+    doc = QJsonDocument::fromJson(f.readAll());
+    f.close();
+    ok = !doc.isNull() && doc.isObject();
   }
+
+  if(!ok) {
+    QJsonObject recovered;
+    QString recoveredFrom;
+    if(recoverFromNewestBackup(recovered, recoveredFrom)) {
+      // Quarantine the corrupt original, then promote the recovered backup to
+      // be the live state so future debounced saves continue from good data.
+      quarantineCorruptState(path);
+      QFile::copy(recoveredFrom, path);
+      doc = QJsonDocument(recovered);
+      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName());
+    } else {
+      // No usable backup. Preserve the damaged file under a distinct name and
+      // fall through to a fresh seed — the user keeps a recoverable copy and a
+      // visible warning instead of a silent wipe.
+      quarantineCorruptState(path);
+      m_recoveryNotice = tr_("data.corruptKept");
+      return;
+    }
+  }
+
   const QJsonObject root = doc.object();
 
   m_loading = true;
@@ -1782,6 +2069,12 @@ void AppController::loadStateOnStart() {
       m_crumbUser = s["crumbUser"].toString();
       emit crumbUserChanged();
     }
+    // Onboarding flags. An existing state.json that predates them means a
+    // returning user — don't show the welcome again (default welcomeSeen=true),
+    // and there is no seeded demo to offer clearing (demoActive=false).
+    m_welcomeSeen = s.contains("welcomeSeen") ? s["welcomeSeen"].toBool() : true;
+    m_demoActive = s.contains("demoActive") ? s["demoActive"].toBool() : false;
+    emit onboardingChanged();
     if(s.contains("shortcuts")) {
       QVariantMap overrides;
       const QJsonObject shortcutsObj = s["shortcuts"].toObject();
@@ -2233,11 +2526,25 @@ QString AppController::exportActiveProfileJson() const {
   p.statuses = m_statuses;
   p.docsState = m_docsState;
   p.notesState = m_notesState;
+  QJsonObject profObj = profileToJson(p);
+
+  // Events live in the global pool, so profileToJson() cannot see them — a
+  // profile export used to silently drop the whole calendar. Include the
+  // events attributed to this profile so the export is a complete snapshot;
+  // import re-attributes them to the (possibly re-slugged) imported profile.
+  QVector<CalEvent> profileEvents;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.profileId == m_activeProfileId) {
+      profileEvents.append(e);
+    }
+  }
+  profObj["events"] = eventsToJson(profileEvents);
+
   QJsonObject root;
   root["schemaVersion"] = 3;
   root["kind"] = "todocpp.profile";
   root["exportedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
-  root["profile"] = profileToJson(p);
+  root["profile"] = profObj;
   return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
@@ -2283,7 +2590,8 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     return tr_("import.missingProfile");
   }
 
-  Profile imported = profileFromJson(profileObj);
+  QVector<CalEvent> importedEvents;
+  Profile imported = profileFromJson(profileObj, &importedEvents);
   if(imported.name.trimmed().isEmpty()) {
     imported.name = QStringLiteral("Imported");
   }
@@ -2306,6 +2614,17 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     snapshotActiveProfile();
   }
   m_profiles.push_back(imported);
+
+  // Hoist the imported calendar events into the global pool, re-attributed to
+  // the (possibly re-slugged) imported profile and given fresh ids so they can
+  // never collide with existing events — including on a same-instance
+  // round-trip where the source ids are already present.
+  for(CalEvent& e : importedEvents) {
+    e.profileId = imported.id;
+    e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    m_events.upsert(e);
+  }
+
   if(activate) {
     m_activeProfileId = imported.id;
     applyProfileToModels(imported);
@@ -2387,6 +2706,37 @@ void AppController::seedShortcutCatalog() {
     applyShortcutOverrides(asMap);
   }
   emit shortcutsChanged();
+}
+
+void AppController::registerGlobalHotkeys() {
+  if(!m_globalHotkey) {
+    return;
+  }
+  // Each global capture hotkey mirrors its in-app catalog binding, so one place
+  // in Settings → Hotkeys controls both. RegisterHotKey intercepts the
+  // combination even when the window is focused, so the in-app QML Shortcut
+  // only fires as a fallback when the OS registration is refused.
+  const auto arm = [this](int id, const QString& catalogId) {
+    const QString seq = shortcutFor(catalogId);
+    if(seq.isEmpty() || !m_globalHotkey->registerHotkey(id, seq)) {
+      m_globalHotkey->unregister(id);
+    }
+  };
+  arm(HotkeyQuickCapture, QStringLiteral("quick-capture"));
+  arm(HotkeyQuickCaptureNotes, QStringLiteral("quick-capture-notes"));
+}
+
+void AppController::onGlobalHotkey(int id) {
+  switch(id) {
+    case HotkeyQuickCapture:
+      emit quickCaptureRequested();
+      break;
+    case HotkeyQuickCaptureNotes:
+      emit quickCaptureNotesRequested();
+      break;
+    default:
+      break;
+  }
 }
 
 int AppController::shortcutIndexOf(const QString& id) const {
@@ -2497,6 +2847,9 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
   m["sequence"] = seq;
   m_shortcuts[i] = m;
   emit shortcutsChanged();
+  // Re-arm both capture hotkeys — the change may have retargeted a capture
+  // binding or freed one via conflict resolution above.
+  registerGlobalHotkeys();
   scheduleSave();
   return true;
 }
@@ -2524,6 +2877,7 @@ void AppController::resetShortcut(const QString& id) {
   m["sequence"] = def;
   m_shortcuts[i] = m;
   emit shortcutsChanged();
+  registerGlobalHotkeys();
   scheduleSave();
 }
 
@@ -2541,6 +2895,7 @@ void AppController::resetAllShortcuts() {
   if(changed) {
     emit shortcutsChanged();
     scheduleSave();
+    registerGlobalHotkeys();
     emit toast(tr_("hotkeys.reset"));
   }
 }
@@ -2577,7 +2932,25 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
 }
 
 void AppController::setArchived(const QString& taskId, bool archived) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  const bool prev = m_tasks.items().at(row).archived;
+  if(prev == archived) {
+    return;
+  }
   m_tasks.setArchived(taskId, archived);
+
+  // Arm undo so an accidental (un)archive is reversible.
+  cancelUndo();
+  m_pendingUndo = {};
+  m_pendingUndo.kind = PendingUndo::TaskArchive;
+  m_pendingUndo.taskId = taskId;
+  m_pendingUndo.prevArchived = prev;
+  armUndo(5);
+
+  emit undoableToast(tr_(archived ? "task.archived" : "task.unarchived").arg(taskId), 5);
   scheduleSave();
 }
 

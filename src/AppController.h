@@ -14,6 +14,8 @@
 
 #include <memory>
 
+class QJsonObject;
+
 namespace heap::chrono {
 class ChronoParser;
 }
@@ -24,6 +26,10 @@ class GitWatcher;
 
 namespace heap::notify {
 class NotificationCenter;
+}
+
+namespace heap::platform {
+class GlobalHotkey;
 }
 
 class AppController : public QObject {
@@ -54,6 +60,13 @@ class AppController : public QObject {
   Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
   Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
 
+  // ---- Onboarding (first run) ----
+  // welcomeSeen: the welcome dialog has been shown/dismissed at least once.
+  // demoActive: the profile is still the seeded demo, so the "this is demo
+  // data" banner should offer to start fresh. Both persist in the settings blob.
+  Q_PROPERTY(bool welcomeSeen READ welcomeSeen NOTIFY onboardingChanged)
+  Q_PROPERTY(bool demoActive READ demoActive NOTIFY onboardingChanged)
+
   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
   Q_PROPERTY(QString activeProfileId READ activeProfileId WRITE setActiveProfileId NOTIFY activeProfileChanged)
 
@@ -67,6 +80,10 @@ class AppController : public QObject {
   // Compile-time flag — true for Debug / RelWithDebInfo builds. QML uses
   // it to surface the developer-only "show unimplemented" toggle.
   Q_PROPERTY(bool debugBuild READ debugBuild CONSTANT)
+
+  // Runtime facts for Settings → About (so nothing is hardcoded / stale).
+  Q_PROPERTY(QString dataDir READ dataDir CONSTANT)
+  Q_PROPERTY(QString qtVersion READ qtVersion CONSTANT)
 
   // ---- Git focus banner ----
   Q_PROPERTY(QString focusedTaskId READ focusedTaskId NOTIFY focusedGitChanged)
@@ -187,6 +204,24 @@ class AppController : public QObject {
     return m_pendingUndo.kind != PendingUndo::None;
   }
 
+  // ---- Onboarding ----
+  bool welcomeSeen() const {
+    return m_welcomeSeen;
+  }
+
+  bool demoActive() const {
+    return m_demoActive;
+  }
+
+  // Mark the welcome dialog as shown (persists; never re-shown after this).
+  Q_INVOKABLE void markWelcomeSeen();
+  // Hide the demo banner without clearing anything ("keep exploring").
+  Q_INVOKABLE void dismissDemo();
+  // Clear the active profile's demo content (tasks, people, events, notes,
+  // docs) to give the user a blank workspace; keeps the profile and its
+  // columns. Also clears the demo banner.
+  Q_INVOKABLE void startFresh();
+
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
   Q_INVOKABLE QVariantMap newTaskDraft(const QString& statusId) const;
@@ -230,6 +265,11 @@ class AppController : public QObject {
     return false;
 #endif
   }
+
+  // Actual writable data directory (where state.json / backups live) and the
+  // Qt runtime version — resolved at runtime for the About panel.
+  QString dataDir() const;
+  QString qtVersion() const;
 
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
@@ -322,6 +362,10 @@ class AppController : public QObject {
   // Profile JSON import / export (replaces the older Markdown export).
   Q_INVOKABLE QString exportActiveProfileJson() const;
   Q_INVOKABLE bool exportActiveProfileToFile(const QUrl& fileUrl) const;
+  // Render a Markdown summary of the active profile (tasks grouped by column,
+  // people, notes) and put it on the clipboard. Bound to the profile.exportMd
+  // shortcut (Ctrl+Shift+E).
+  Q_INVOKABLE void copyActiveProfileMarkdownToClipboard();
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 
@@ -389,6 +433,7 @@ class AppController : public QObject {
   void appSettingsJsonChanged();
   void statusesChanged();
   void pendingUndoChanged();
+  void onboardingChanged();
   void profilesChanged();
   void activeProfileChanged();
   void shortcutsChanged();
@@ -399,6 +444,13 @@ class AppController : public QObject {
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
   void selectedTaskIdsChanged();
+  // Raised by the OS-level global hotkeys (Quick-capture from anywhere). QML
+  // brings the window forward and opens the matching capture popup.
+  void quickCaptureRequested();
+  void quickCaptureNotesRequested();
+  // Raised when the user asks to restore the window from the tray (tray click
+  // or the tray menu's "Show" entry). QML un-hides and activates the window.
+  void showWindowRequested();
 
  private slots:
   void runAutomation();
@@ -421,6 +473,8 @@ class AppController : public QObject {
   QString m_docsState;
   QString m_notesState;
   QString m_appSettingsJson;
+  bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
+  bool m_demoActive = false;   // onboarding: profile still holds seeded demo
 
   // Profiles
   QVector<Profile> m_profiles;
@@ -437,6 +491,15 @@ class AppController : public QObject {
   void seedShortcutCatalog();
   void applyShortcutOverrides(const QVariantMap& overrides);
   QString normalizeSequence(const QString& raw) const;
+
+  // Global hotkeys — OS-level Quick-capture triggers (work unfocused). Re-armed
+  // from the matching catalog sequences whenever they change. Each combination
+  // is registered under one of these ids and routed back in onGlobalHotkey().
+  enum GlobalHotkeyId { HotkeyQuickCapture = 1, HotkeyQuickCaptureNotes = 2 };
+
+  std::unique_ptr<heap::platform::GlobalHotkey> m_globalHotkey;
+  void registerGlobalHotkeys();
+  void onGlobalHotkey(int id);
 
   // Automation
   QTimer* m_automationTimer = nullptr;
@@ -461,11 +524,17 @@ class AppController : public QObject {
   QString backupDirPath() const;
   void rotateBackupIfDue();
   void pruneBackups(int keep);
+  // Crash/corruption recovery for loadStateOnStart(): find the newest backup
+  // that still parses (returns its object + path), and move a damaged
+  // state.json aside so a fresh seed can never silently overwrite it.
+  bool recoverFromNewestBackup(QJsonObject& out, QString& fromPath);
+  void quarantineCorruptState(const QString& path);
+  QString m_recoveryNotice;  // deferred toast shown once the UI is up
   int statusIndexOf(const QString& id) const;
 
   // Undo machinery
   struct PendingUndo {
-    enum Kind { None, Task, BulkTasks, Event, Person, Status, Profile } kind = None;
+    enum Kind { None, Task, BulkTasks, Event, Person, Status, Profile, TaskMove, TaskArchive } kind = None;
 
     // payload — only the field matching `kind` is populated
     ::Task task;
@@ -474,6 +543,10 @@ class AppController : public QObject {
     QVariantMap status;
     ::Profile profile;
     int row = -1;
+    // TaskMove / TaskArchive — the single task and the value to restore.
+    QString taskId;
+    QString prevStatus;
+    bool prevArchived = false;
     // Bulk-task delete — every task and its original row index. Ordered
     // by ascending row so re-insertion in the same order is safe.
     QVector<::Task> tasks;

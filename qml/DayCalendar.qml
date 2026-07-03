@@ -514,4 +514,17 @@ Item {
             }
         }
     }
+
+    // No-events hint for an empty day — faint, non-interactive so drag-to-create
+    // on the grid underneath still works.
+    Text {
+        anchors.centerIn: parent
+        width: parent.width - 48
+        visible: root._eventsToday === 0
+        horizontalAlignment: Text.AlignHCenter
+        wrapMode: Text.WordWrap
+        text: I18n.t("day.noEvents")
+        color: Theme.textDim
+        font.pixelSize: 11
+    }
 }

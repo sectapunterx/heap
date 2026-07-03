@@ -77,12 +77,25 @@ Rectangle {
         }
 
         ListView {
+            id: peopleView
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
             spacing: 6
             model: AppController.people
             boundsBehavior: Flickable.StopAtBounds
+
+            // Empty state — the string existed in I18n but was never rendered.
+            Text {
+                anchors.centerIn: parent
+                width: parent.width - 32
+                visible: peopleView.count === 0
+                horizontalAlignment: Text.AlignHCenter
+                wrapMode: Text.WordWrap
+                text: I18n.t("people.empty")
+                color: Theme.textDim
+                font.pixelSize: 11
+            }
 
             delegate: Item {
                 id: prow

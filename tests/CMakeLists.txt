@@ -129,9 +129,16 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_SELECTION_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_SELECTION_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -185,9 +192,16 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
+if (WIN32)
+    list(APPEND HEAP_NOTES_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_NOTES_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -217,6 +231,360 @@ if (UNIX AND NOT APPLE)
 endif ()
 
 add_test(NAME heap_notes_tests COMMAND heap_notes_tests)
+
+# ─── Platform (global hotkey) tests ───
+# Cover heap::platform::decodeSequence — the portable QKeySequence → (key,mods)
+# parser the Windows RegisterHotKey backend feeds off. On Windows the native
+# backend is linked too (create() references it); elsewhere the .cpp compiles
+# with the no-op fallback.
+set(HEAP_PLATFORM_SOURCES
+        test_global_hotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+)
+if (WIN32)
+    list(APPEND HEAP_PLATFORM_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+
+add_executable(heap_platform_tests ${HEAP_PLATFORM_SOURCES})
+set_target_properties(heap_platform_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_platform_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_platform_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        GTest::gtest
+        GTest::gtest_main
+)
+if (WIN32)
+    target_link_libraries(heap_platform_tests PRIVATE user32)
+endif ()
+
+add_test(NAME heap_platform_tests COMMAND heap_platform_tests)
+
+# ─── Persistence (corrupt-state recovery) tests ───
+# Cover AppController::loadStateOnStart() crash/corruption handling (HEAP-50):
+# recover from the newest valid backup, otherwise quarantine the damaged
+# state.json instead of letting the demo seed overwrite it. Same headless boot
+# (offscreen QPA + AppDataLocation test mode) as the selection / notes suites.
+set(HEAP_PERSISTENCE_SOURCES
+        test_persistence.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (WIN32)
+    list(APPEND HEAP_PERSISTENCE_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_PERSISTENCE_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_persistence_tests ${HEAP_PERSISTENCE_SOURCES})
+set_target_properties(heap_persistence_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_persistence_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_persistence_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_persistence_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_persistence_tests COMMAND heap_persistence_tests)
+
+# ─── Markdown export tests ───
+# Cover AppController::copyActiveProfileMarkdownToClipboard() (HEAP-53): renders
+# the active profile to Markdown and puts it on the clipboard. Same headless
+# boot (offscreen QPA + AppDataLocation test mode) as the other AppController
+# suites; QClipboard works in-process under the offscreen platform.
+set(HEAP_EXPORT_SOURCES
+        test_export_markdown.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (WIN32)
+    list(APPEND HEAP_EXPORT_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_EXPORT_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_export_tests ${HEAP_EXPORT_SOURCES})
+set_target_properties(heap_export_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_export_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_export_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_export_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_export_tests COMMAND heap_export_tests)
+
+# ─── Profile I/O (export/import events) tests ───
+# Cover AppController profile export/import of calendar events (HEAP-54): export
+# includes the active profile's events, import restores them re-attributed with
+# fresh ids. Same headless boot as the other AppController suites.
+set(HEAP_PROFILE_IO_SOURCES
+        test_profile_io.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (WIN32)
+    list(APPEND HEAP_PROFILE_IO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_PROFILE_IO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_profile_io_tests ${HEAP_PROFILE_IO_SOURCES})
+set_target_properties(heap_profile_io_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_profile_io_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_profile_io_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_profile_io_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_profile_io_tests COMMAND heap_profile_io_tests)
+
+# ─── Onboarding (first-run flags + startFresh) tests ───
+# Cover AppController welcomeSeen / demoActive persistence and startFresh()
+# (HEAP-51). Same headless boot as the other AppController suites.
+set(HEAP_ONBOARDING_SOURCES
+        test_onboarding.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (WIN32)
+    list(APPEND HEAP_ONBOARDING_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_ONBOARDING_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_onboarding_tests ${HEAP_ONBOARDING_SOURCES})
+set_target_properties(heap_onboarding_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_onboarding_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_onboarding_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_onboarding_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_onboarding_tests COMMAND heap_onboarding_tests)
+
+# ─── Sample data (seed content) tests ───
+# Cover SampleData seed invariants (HEAP-56): events spread across the week and
+# the demo content is generic, not the old telecom workload. Uses only the plain
+# Task/Person/CalEvent structs, so it links SampleData.cpp alone (Qt6::Gui for
+# QColor in people()); no QApplication needed.
+add_executable(heap_sampledata_tests
+        test_sampledata.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+)
+target_include_directories(heap_sampledata_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sampledata_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml   # Models.h includes <qqmlregistration.h>
+        GTest::gtest
+)
+add_test(NAME heap_sampledata_tests COMMAND heap_sampledata_tests)
+
+# ─── Undo (task move / archive) tests ───
+# Cover the extended single-level undo (HEAP-59): moveTask and setArchived arm
+# undo and undoLastDeletion() restores the prior status / archived flag. Same
+# headless boot as the other AppController suites.
+set(HEAP_UNDO_SOURCES
+        test_undo.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (WIN32)
+    list(APPEND HEAP_UNDO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_UNDO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_undo_tests ${HEAP_UNDO_SOURCES})
+set_target_properties(heap_undo_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_undo_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_undo_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_undo_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_undo_tests COMMAND heap_undo_tests)
 
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
