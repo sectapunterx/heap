@@ -1,0 +1,52 @@
+name: Deploy Pages
+
+# The single-page site + brandbook live under docs/ and are hand-written static
+# HTML/CSS/JS (no Jekyll — see docs/.nojekyll). The legacy Jekyll Pages builder
+# errored opaquely and left the site stale, so publish via GitHub Actions
+# instead: reliable, with real build logs.
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - 'docs/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Least privilege for the deploy: read the repo, write Pages, mint the OIDC
+# token deploy-pages needs.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time; don't cancel an in-flight publish.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      # enablement: true flips the repo Pages source from the legacy builder to
+      # GitHub Actions on first run, so no manual Settings → Pages toggle.
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
+
+      - name: Upload docs/ as the Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
