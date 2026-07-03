@@ -8,11 +8,13 @@
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
 #include "text/TaskTextUtils.h"
+#include "update/Updater.h"
 
 #include <QApplication>
 #include <QClipboard>
 #include <QCoreApplication>
 #include <QDateTime>
+#include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
 #include <QFile>
@@ -34,6 +36,12 @@
 #include <QUuid>
 
 #include <cmath>
+
+// Version is injected by CMake (PROJECT_VERSION); this fallback keeps standalone
+// test targets that compile AppController.cpp directly building without it.
+#ifndef HEAP_VERSION
+#define HEAP_VERSION "0.0.0-dev"
+#endif
 
 namespace {
 constexpr int kBackupIntervalSeconds = 5 * 60;
@@ -316,6 +324,31 @@ AppController::AppController(QObject* parent) :
   applyGitSettingsFromMap(settingsMap().value("git").toMap());
   connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
     applyGitSettingsFromMap(settingsMap().value("git").toMap());
+  });
+
+  // ---- Auto-update (HEAP-63) ----
+  m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
+  connect(m_updater.get(), &heap::update::Updater::updateAvailable, this, [this](const QString& version, const QString& url) {
+    m_latestReleaseUrl = url;
+    m_updateStatus = tr("Update available: %1").arg(version);
+    emit updateStatusChanged();
+    emit updateAvailable(version, url);
+  });
+  connect(m_updater.get(), &heap::update::Updater::upToDate, this, [this](const QString&) {
+    m_updateStatus = tr("You're up to date");
+    emit updateStatusChanged();
+  });
+  connect(m_updater.get(), &heap::update::Updater::checkFailed, this, [this](const QString& error) {
+    qWarning() << "update check failed:" << error;
+    m_updateStatus = tr("Update check failed");
+    emit updateStatusChanged();
+  });
+  // Opt-out background check shortly after startup (never auto-downloads). The
+  // delay lets settings load and the QML toast bar come up first.
+  QTimer::singleShot(3000, this, [this]() {
+    if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
+      checkForUpdates();
+    }
   });
   connect(this, &AppController::activeProfileChanged, this, [this]() {
     if(m_gitWatcher) {
@@ -1597,6 +1630,10 @@ QString AppController::qtVersion() const {
   return QString::fromLatin1(qVersion());
 }
 
+QString AppController::appVersion() const {
+  return QString::fromLatin1(HEAP_VERSION);
+}
+
 void AppController::openLogsFolder() const {
   QDesktopServices::openUrl(QUrl::fromLocalFile(heap::logging::logDirPath()));
 }
@@ -1624,6 +1661,21 @@ void AppController::reportAnIssue() const {
   query.addQueryItem(QStringLiteral("body"), body);
   url.setQuery(query);
   QDesktopServices::openUrl(url);
+}
+
+void AppController::checkForUpdates() {
+  if(!m_updater || m_updater->isChecking()) {
+    return;
+  }
+  m_updateStatus = tr("Checking for updates…");
+  emit updateStatusChanged();
+  m_updater->checkForUpdates();
+}
+
+void AppController::openLatestRelease() const {
+  if(!m_latestReleaseUrl.isEmpty()) {
+    QDesktopServices::openUrl(QUrl(m_latestReleaseUrl));
+  }
 }
 
 void AppController::scheduleSave() {

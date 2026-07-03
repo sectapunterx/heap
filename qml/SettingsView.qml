@@ -175,6 +175,7 @@ Item {
             confluence: ({ connected: false, space: "" })
         },
         data: { autoBackup: true, backupInterval: "daily" },
+        updates: { autoCheck: true },
         git: {
             watchedRepos: [],
             autoMoveToInProgress: true,
@@ -423,7 +424,7 @@ Item {
                 }
 
                 Text {
-                    text: I18n.t("settings.footer.stable").arg(Brand.version)
+                    text: I18n.t("settings.footer.stable").arg(AppController.appVersion)
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -1934,7 +1935,7 @@ Item {
                         Layout.topMargin: 4
                         Layout.fillWidth: true
                         AboutRow {
-                            label: I18n.t("settings.about.version"); value: Brand.version
+                            label: I18n.t("settings.about.version"); value: AppController.appVersion
                         }
                         AboutRow {
                             label: I18n.t("settings.about.channel"); value: "stable"
@@ -1984,6 +1985,57 @@ Item {
                             }
                             MouseArea { id: logsMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLogsFolder() }
                         }
+                    }
+                }
+            }
+            SectionCard {
+                ColumnLayout {
+                    id: updatesCol
+                    property bool updateReady: false
+                    spacing: 12
+                    Layout.fillWidth: true
+                    Connections {
+                        target: AppController
+                        function onUpdateAvailable(version, url) { updatesCol.updateReady = true }
+                    }
+                    Sub {
+                        label: I18n.t("settings.about.updates")
+                    }
+                    Text {
+                        text: AppController.updateStatus === "" ? I18n.t("settings.about.updates.hint") : AppController.updateStatus
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    RowLayout {
+                        spacing: 8
+                        Rectangle {
+                            radius: 6
+                            color: checkMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            implicitWidth: checkTxt.implicitWidth + 24; implicitHeight: 30
+                            Text {
+                                id: checkTxt; anchors.centerIn: parent; text: I18n.t("settings.about.checkUpdates"); color: Theme.text; font.pixelSize: 12
+                            }
+                            MouseArea { id: checkMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.checkForUpdates() }
+                        }
+                        Rectangle {
+                            visible: updatesCol.updateReady
+                            radius: 6
+                            color: dlMA.containsMouse ? Theme.accent : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            implicitWidth: dlTxt.implicitWidth + 24; implicitHeight: 30
+                            Text {
+                                id: dlTxt; anchors.centerIn: parent; text: I18n.t("settings.about.download"); color: Theme.text; font.pixelSize: 12
+                            }
+                            MouseArea { id: dlMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLatestRelease() }
+                        }
+                    }
+                    SwitchRow {
+                        label: I18n.t("settings.about.autoCheck")
+                        checked: !!(root.settings.updates && root.settings.updates.autoCheck)
+                        onToggled: (checked) => root.set("updates", "autoCheck", checked)
                     }
                 }
             }

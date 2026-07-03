@@ -32,6 +32,10 @@ namespace heap::platform {
 class GlobalHotkey;
 }
 
+namespace heap::update {
+class Updater;
+}
+
 class AppController : public QObject {
   Q_OBJECT
   QML_ELEMENT
@@ -85,6 +89,12 @@ class AppController : public QObject {
   // Runtime facts for Settings → About (so nothing is hardcoded / stale).
   Q_PROPERTY(QString dataDir READ dataDir CONSTANT)
   Q_PROPERTY(QString qtVersion READ qtVersion CONSTANT)
+  Q_PROPERTY(QString appVersion READ appVersion CONSTANT)
+
+  // ---- Auto-update (HEAP-63) ----
+  // Human-readable result of the last update check, shown in Settings → About:
+  // "" (idle), a "checking" string, "up to date", or "update available: vX".
+  Q_PROPERTY(QString updateStatus READ updateStatus NOTIFY updateStatusChanged)
 
   // ---- Git focus banner ----
   Q_PROPERTY(QString focusedTaskId READ focusedTaskId NOTIFY focusedGitChanged)
@@ -278,6 +288,11 @@ class AppController : public QObject {
   // Qt runtime version — resolved at runtime for the About panel.
   QString dataDir() const;
   QString qtVersion() const;
+  QString appVersion() const;
+
+  QString updateStatus() const {
+    return m_updateStatus;
+  }
 
   // ---- Diagnostics (HEAP-64) ----
   // Open the rotating-log directory in the system file manager.
@@ -286,6 +301,13 @@ class AppController : public QObject {
   // version / recent-log-tail diagnostics, so a user can file a report in one
   // click.
   Q_INVOKABLE void reportAnIssue() const;
+
+  // ---- Auto-update (HEAP-63) ----
+  // Manually trigger a GitHub-Releases check (Settings → About → "Check for
+  // updates"). Result surfaces via updateStatus + the updateAvailable toast.
+  Q_INVOKABLE void checkForUpdates();
+  // Open the latest release's page in the browser — the "Download" action.
+  Q_INVOKABLE void openLatestRelease() const;
 
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
@@ -457,6 +479,9 @@ class AppController : public QObject {
   void blockedStuckChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
   void toast(const QString& message);
+  void updateStatusChanged();
+  // Emitted when a newer release is found — Main.qml shows an actionable toast.
+  void updateAvailable(const QString& version, const QString& url);
   void undoableToast(const QString& message, int seconds);
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
@@ -589,6 +614,11 @@ class AppController : public QObject {
 
   // ---- Git watcher ----
   std::unique_ptr<heap::git::GitWatcher> m_gitWatcher;
+
+  // ---- Auto-update (HEAP-63) ----
+  std::unique_ptr<heap::update::Updater> m_updater;
+  QString m_updateStatus;
+  QString m_latestReleaseUrl;
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name

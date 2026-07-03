@@ -9,6 +9,11 @@
 
 #include <csignal>
 
+// Injected by CMake from project() VERSION; fallback keeps ad-hoc builds sane.
+#ifndef HEAP_VERSION
+#define HEAP_VERSION "0.0.0-dev"
+#endif
+
 namespace {
 void quitOnSignal(int) {
   QCoreApplication::quit();
@@ -21,7 +26,7 @@ int main(int argc, char* argv[]) {
   QApplication::setOrganizationDomain("heap.local");
   QApplication::setApplicationName("heap");
   QApplication::setApplicationDisplayName(QStringLiteral("heap."));
-  QApplication::setApplicationVersion(QStringLiteral("0.4.2"));
+  QApplication::setApplicationVersion(QStringLiteral(HEAP_VERSION));
   QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
   // Route qDebug/qWarning/… to a rotating log file (must come after the

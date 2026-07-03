@@ -122,6 +122,12 @@ ApplicationWindow {
                 AppController.undoLastDeletion()
             });
         }
+        // A newer release was found — offer a one-click jump to the release page.
+        function onUpdateAvailable(version, url) {
+            toast.showWithAction(I18n.t("update.available").arg(version), I18n.t("update.download"), 10, function () {
+                Qt.openUrlExternally(url)
+            });
+        }
     }
 
     GridLayout {

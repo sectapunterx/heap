@@ -117,6 +117,7 @@ set(HEAP_SELECTION_SOURCES
         test_selection.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -156,6 +157,7 @@ target_include_directories(heap_selection_tests PRIVATE
 target_link_libraries(heap_selection_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -181,6 +183,7 @@ set(HEAP_NOTES_SOURCES
         test_notes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -220,6 +223,7 @@ target_include_directories(heap_notes_tests PRIVATE
 target_link_libraries(heap_notes_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -278,6 +282,7 @@ set(HEAP_PERSISTENCE_SOURCES
         test_persistence.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -317,6 +322,7 @@ target_include_directories(heap_persistence_tests PRIVATE
 target_link_libraries(heap_persistence_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -340,6 +346,7 @@ set(HEAP_EXPORT_SOURCES
         test_export_markdown.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -379,6 +386,7 @@ target_include_directories(heap_export_tests PRIVATE
 target_link_libraries(heap_export_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -401,6 +409,7 @@ set(HEAP_PROFILE_IO_SOURCES
         test_profile_io.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -440,6 +449,7 @@ target_include_directories(heap_profile_io_tests PRIVATE
 target_link_libraries(heap_profile_io_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -461,6 +471,7 @@ set(HEAP_ONBOARDING_SOURCES
         test_onboarding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -500,6 +511,7 @@ target_include_directories(heap_onboarding_tests PRIVATE
 target_link_libraries(heap_onboarding_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -540,6 +552,7 @@ set(HEAP_UNDO_SOURCES
         test_undo.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -579,6 +592,7 @@ target_include_directories(heap_undo_tests PRIVATE
 target_link_libraries(heap_undo_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -602,6 +616,7 @@ set(HEAP_VIEW_SOURCES
         test_view.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -641,6 +656,7 @@ target_include_directories(heap_view_tests PRIVATE
 target_link_libraries(heap_view_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -725,6 +741,25 @@ target_link_libraries(heap_integrations_tests PRIVATE
 )
 add_test(NAME heap_integrations_tests COMMAND heap_integrations_tests)
 
+# ─── Update (GitHub-Releases version compare) tests ───
+# Covers heap::update::isNewerVersion. Updater.cpp carries a QObject (the QNAM
+# client) so AUTOMOC + Qt6::Network are needed, but the tests exercise only the
+# pure comparison — no network I/O.
+add_executable(heap_update_tests
+        test_update.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.h
+)
+set_target_properties(heap_update_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_update_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_update_tests PRIVATE
+        Qt6::Core
+        Qt6::Network
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_update_tests COMMAND heap_update_tests)
+
 # ─── Sync (BYOS serializer) tests ───
 # Cover heap::sync::SyncSerializer — Profile/CalEvent ↔ git-friendly JSON with
 # stable (id-sorted) ordering and idempotent round-trips. Pure data code; needs
@@ -807,6 +842,7 @@ set(HEAP_APPCTRL_SOURCES
         test_appcontroller.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -846,6 +882,7 @@ target_include_directories(heap_appcontroller_tests PRIVATE
 target_link_libraries(heap_appcontroller_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        Qt6::Network
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test

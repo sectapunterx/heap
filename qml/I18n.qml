@@ -520,6 +520,13 @@ QtObject {
             "settings.about.diagnostics.hint": "Logs are written locally under your data folder. Reporting an issue opens GitHub with your version and a recent log tail pre-filled.",
             "settings.about.reportIssue": "Report an issue",
             "settings.about.openLogs": "Open logs folder",
+            "settings.about.updates": "Updates",
+            "settings.about.updates.hint": "Check GitHub for a newer release. heap never downloads or installs anything without you.",
+            "settings.about.checkUpdates": "Check for updates",
+            "settings.about.download": "Download",
+            "settings.about.autoCheck": "Check for updates automatically",
+            "update.available": "Update available: %1",
+            "update.download": "Download",
 
             // ── Selection action bar ──
             "selection.bar.count": "%1 selected",
@@ -1010,6 +1017,13 @@ QtObject {
             "settings.about.diagnostics.hint": "Логи пишутся локально в папке данных. «Сообщить о проблеме» открывает GitHub с уже заполненной версией и хвостом лога.",
             "settings.about.reportIssue": "Сообщить о проблеме",
             "settings.about.openLogs": "Открыть папку логов",
+            "settings.about.updates": "Обновления",
+            "settings.about.updates.hint": "Проверить наличие новой версии на GitHub. heap ничего не скачивает и не устанавливает без вашего согласия.",
+            "settings.about.checkUpdates": "Проверить обновления",
+            "settings.about.download": "Скачать",
+            "settings.about.autoCheck": "Проверять обновления автоматически",
+            "update.available": "Доступно обновление: %1",
+            "update.download": "Скачать",
 
             // ── Selection action bar ──
             "selection.bar.count": "Выделено: %1",

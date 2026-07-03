@@ -12,7 +12,8 @@ QtObject {
     readonly property string name:    "heap."
     readonly property string tagline: "Work, in one place."
     readonly property string taglineLong: "A quiet place for the work you owe."
-    readonly property string version: "0.4.2"
+    // Version is single-sourced from CMake PROJECT_VERSION via
+    // AppController.appVersion — do not hardcode it here.
 
     // ── Color palette (dark, primary) ─────────────────────────
     readonly property color bg:        "#0b0e13"
