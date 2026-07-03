@@ -73,6 +73,7 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
     src/integrations/StatusMap.cpp
+    src/integrations/GithubProvider.cpp
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
     src/update/Updater.cpp
@@ -148,6 +149,7 @@ qt_add_qml_module(heap_core
         src/platform/GlobalHotkey.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
+        src/integrations/GithubProvider.h
         src/integrations/IntegrationProvider.h
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h

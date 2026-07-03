@@ -36,6 +36,10 @@ namespace heap::update {
 class Updater;
 }
 
+namespace heap::integrations {
+class IntegrationProvider;
+}
+
 class AppController : public QObject {
   Q_OBJECT
   QML_ELEMENT
@@ -308,6 +312,11 @@ class AppController : public QObject {
   Q_INVOKABLE void checkForUpdates();
   // Open the latest release's page in the browser — the "Download" action.
   Q_INVOKABLE void openLatestRelease() const;
+
+  // ---- Tracker sync (HEAP-74) ----
+  // Pull issues from the configured GitHub repo and mirror them as tasks in the
+  // active profile. No-op (with a toast) when no provider is configured.
+  Q_INVOKABLE void syncNow();
 
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
@@ -619,6 +628,11 @@ class AppController : public QObject {
   std::unique_ptr<heap::update::Updater> m_updater;
   QString m_updateStatus;
   QString m_latestReleaseUrl;
+
+  // ---- Tracker sync (HEAP-74) ----
+  std::unique_ptr<heap::integrations::IntegrationProvider> m_syncProvider;
+  // Reconcile the GitHub provider with the current integrations settings.
+  void applyIntegrationSettings();
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
