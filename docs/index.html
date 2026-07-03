@@ -111,7 +111,7 @@
         <div class="hero-surface">
             <div class="surface-bar">
                 <div class="dots"><span></span><span></span><span></span></div>
-                <span>heap. — board · eNB-core / sprint-10</span>
+                <span>heap. — board · web-app / sprint-10</span>
                 <span class="meta">qml · 1920 × 1080</span>
             </div>
             <img src="assets/img/screens/board-full.png"
@@ -212,8 +212,8 @@
             <div class="feature-card">
                 <span class="num">05 · know</span>
                 <h4>Docs</h4>
-                <p>Sections (3GPP, internal, C++, tools) with custom fields. Snippet editor with syntax highlighting.
-                    Contact cards.</p>
+                <p>Custom sections (API, internal, C++, tooling) with custom fields. Snippet editor with syntax
+                    highlighting. Contact cards.</p>
             </div>
             <div class="feature-card">
                 <span class="num">06 · know</span>
@@ -238,6 +238,13 @@
                 <h4>Automation</h4>
                 <p>60-second tick auto-archives done tasks, surfaces blocked-stuck warnings, fires deadline and standup
                     reminders. Quiet hours respected.</p>
+            </div>
+            <div class="feature-card">
+                <span class="num">10 · git</span>
+                <h4>Git-aware</h4>
+                <p>Watches the working copy: the current branch is matched to a task by id, the card is decorated with
+                    its <span class="mono">branch</span>, and a focused-repo banner surfaces branch and PR state — no
+                    manual linking.</p>
             </div>
         </div>
     </section>
@@ -347,7 +354,7 @@
                 <div class="screen-caption">
                     <h4>Docs</h4>
                     <p>
-                        Sections (3GPP, internal, C++, tools) with custom fields. A snippet editor with syntax
+                        Custom sections (API, internal, C++, tooling) with custom fields. A snippet editor with syntax
                         highlighting and contact cards sit alongside.
                     </p>
                 </div>
@@ -387,6 +394,11 @@
                 <p class="desc">
                     The build is plain CMake. No package manager, no submodule recursion, no codegen. Qt 6.4+ and a
                     C++20 toolchain are the only prerequisites.
+                </p>
+                <p class="desc" style="font-size:15px;color:var(--text3);">
+                    Prefer a binary? A Windows installer, a Linux AppImage, and a portable zip ship on every
+                    <a href="https://github.com/sectapunterx/heap/releases"
+                       style="color:var(--text2);border-bottom:1px solid var(--border)">release</a>.
                 </p>
                 <p class="fine mono" style="margin-top:8px;">
                     cmake -S . -B build -DCMAKE_BUILD_TYPE=Release && cmake --build build -j
