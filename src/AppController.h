@@ -48,6 +48,7 @@ class AppController : public QObject {
   Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
+  Q_PROPERTY(QString focusedStatus READ focusedStatus NOTIFY focusedStatusChanged)
 
   Q_PROPERTY(int workdayStart READ workdayStart WRITE setWorkdayStart NOTIFY workdayChanged)
   Q_PROPERTY(int workdayEnd READ workdayEnd WRITE setWorkdayEnd NOTIFY workdayChanged)
@@ -152,6 +153,13 @@ class AppController : public QObject {
   }
 
   void setCurrentView(const QString& v);
+
+  QString focusedStatus() const {
+    return m_focusedStatus;
+  }
+
+  // Jump the Board to a specific status column (sidebar Blocked / Code Review).
+  Q_INVOKABLE void focusStatusColumn(const QString& statusId);
 
   int workdayStart() const {
     return m_workdayStart;
@@ -425,6 +433,7 @@ class AppController : public QObject {
   void densityChanged();
   void languageChanged();
   void currentViewChanged();
+  void focusedStatusChanged();
   void workdayChanged();
   void crumbProjectChanged();
   void crumbUserChanged();
@@ -466,6 +475,7 @@ class AppController : public QObject {
   QString m_density = "comfy";
   QString m_language = "en";
   QString m_currentView = "board";
+  QString m_focusedStatus;
   int m_workdayStart = 9;
   int m_workdayEnd = 19;
   QString m_crumbProject = "eNB-core";

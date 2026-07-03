@@ -61,11 +61,15 @@ Rectangle {
         RailBtn {
             glyph: "⊘"; tooltipText: I18n.t("siderail.tip.blocked")
                    countText: root._blockedCount > 0 ? root._blockedCount : ""
-                   countColor: Theme.p0 }
+                   countColor: Theme.p0
+                   active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
+                   onActivated: AppController.focusStatusColumn("blocked") }
         RailBtn {
             glyph: "⎇"; tooltipText: I18n.t("siderail.tip.review")
                    countText: root._reviewCount > 0 ? root._reviewCount : ""
-                   countColor: Theme.stReview }
+                   countColor: Theme.stReview
+                   active: AppController.currentView === "board" && AppController.focusedStatus === "review"
+                   onActivated: AppController.focusStatusColumn("review") }
 
         Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
 

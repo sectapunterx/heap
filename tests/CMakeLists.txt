@@ -586,6 +586,67 @@ endif ()
 
 add_test(NAME heap_undo_tests COMMAND heap_undo_tests)
 
+# ─── View navigation / status-column focus tests ───
+# Cover AppController::focusStatusColumn — the sidebar Blocked / Code Review
+# entry point (HEAP-69): switches to the board view and records the focused
+# status; plus countByStatus which feeds the sidebar badges. Same headless boot
+# as the other AppController suites.
+set(HEAP_VIEW_SOURCES
+        test_view.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
+)
+if (WIN32)
+    list(APPEND HEAP_VIEW_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (UNIX AND NOT APPLE)
+    list(APPEND HEAP_VIEW_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
+    )
+endif ()
+
+add_executable(heap_view_tests ${HEAP_VIEW_SOURCES})
+set_target_properties(heap_view_tests PROPERTIES AUTOMOC ON)
+
+target_include_directories(heap_view_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_view_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        GTest::gtest
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_view_tests PRIVATE Qt6::DBus)
+    endif ()
+endif ()
+
+add_test(NAME heap_view_tests COMMAND heap_view_tests)
+
 # ─── QML (Qt Quick Test) tests ───
 # Drive the QML layer directly instead of only the C++ backend. Currently
 # covers the mention-commit helper (qml/Mention.js) — caret placement after an
