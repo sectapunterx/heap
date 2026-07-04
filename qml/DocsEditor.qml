@@ -205,6 +205,14 @@ Popup {
                 }
             }
 
+            FieldLabel { text: "TAGS" }
+            FormField {
+                Layout.fillWidth: true
+                placeholderText: "comma, separated, tags"
+                text: root.draft.tags || ""
+                onTextChanged: root.draft.tags = text
+            }
+
             FieldLabel { text: "CODE" }
             ScrollView {
                 Layout.fillWidth: true; Layout.preferredHeight: 240

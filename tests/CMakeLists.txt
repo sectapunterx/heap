@@ -143,6 +143,7 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -218,6 +219,7 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -326,6 +328,7 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -399,6 +402,7 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -471,6 +475,7 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -542,6 +547,7 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -632,6 +638,7 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -705,6 +712,7 @@ set(HEAP_VIEW_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -996,6 +1004,7 @@ set(HEAP_APPCTRL_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)

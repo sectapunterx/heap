@@ -9,6 +9,7 @@
 #include "integrations/GitlabProvider.h"
 #include "integrations/JiraProvider.h"
 #include "integrations/StatusMap.h"
+#include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
 #include "text/TaskTextUtils.h"
@@ -608,6 +609,18 @@ void AppController::appendNoteEntry(const QString& text) {
     next += QStringLiteral("\n\n----\n### %1\n\n%2").arg(stamp, body);
   }
   setNotesState(next);
+}
+
+QStringList AppController::noteHeadings(const QString& markdown) const {
+  return heap::notes::collectHeadings(markdown);
+}
+
+QVariantList AppController::noteBacklinks(const QString& markdown) const {
+  return heap::notes::collectBacklinks(markdown);
+}
+
+int AppController::noteHeadingOffset(const QString& markdown, const QString& heading) const {
+  return heap::notes::headingOffset(markdown, heading);
 }
 
 void AppController::setAppSettingsJson(const QString& v) {
@@ -2769,7 +2782,16 @@ QVariantList AppController::commandPaletteEntries() const {
           m["kind"] = "snippet";
           m["label"] = sn["title"].toString();
           m["sub"] = QString("%1 · %2").arg(p.name, sn["lang"].toString());
-          m["body"] = cap(sn["code"].toString());
+          // Full-text (HEAP-79): language + tags + code so the palette can find
+          // a snippet by tag or language, not just its title.
+          QStringList tagList;
+          for(const auto& tg : sn["tags"].toArray()) {
+            const QString s = tg.toString().trimmed();
+            if(!s.isEmpty()) {
+              tagList << s;
+            }
+          }
+          m["body"] = cap(sn["lang"].toString() + QChar(' ') + tagList.join(QChar(' ')) + QChar(' ') + sn["code"].toString());
           m["profileId"] = p.id;
           m["idx"] = snipIdx++;
           m["color"] = p.color;

@@ -145,15 +145,15 @@ Item {
     ]
 
     property var snippets: [
-        { title: "Build с sanitizers", lang: "sh",
+        { title: "Build с sanitizers", lang: "sh", tags: ["build", "sanitizers"],
           code: "# AddressSanitizer\nbazel build --config=asan //enb/core/...\n\n# ThreadSanitizer (для гонок)\nbazel build --config=tsan //enb/core/...\n\n# UBSan + ASan combo\nbazel build --config=asan-ubsan //enb/core/..." },
-        { title: "GDB · attach к running eNB", lang: "sh",
+        { title: "GDB · attach к running eNB", lang: "sh", tags: ["debug", "gdb"],
           code: "sudo gdb -p $(pgrep -f enb-core)\n(gdb) info threads\n(gdb) thread apply all bt 30\n(gdb) bt full\n(gdb) p *self  # пример pretty-print" },
-        { title: "PCAP capture per-cell", lang: "sh",
+        { title: "PCAP capture per-cell", lang: "sh", tags: ["network", "capture"],
           code: "# S1AP (port 36412) + X2AP (36422) к указанному MME\ntcpdump -i any -w /tmp/lte-cell-3.pcap \\\n  'host 10.0.0.5 and (port 36412 or port 36422)'\n\n# C-plane + U-plane всё разом\ntcpdump -i any -w /tmp/full.pcap \\\n  'port 36412 or port 36422 or port 2152'" },
-        { title: "S1AP cause codes (36.413 §9.2.1.3)", lang: "cpp",
+        { title: "S1AP cause codes (36.413 §9.2.1.3)", lang: "cpp", tags: ["reference", "enum"],
           code: "enum class S1apCause : uint8_t {\n  RadioNetwork_Unspecified = 0,\n  Transport_Unspecified    = 1,\n  NAS_Unspecified          = 2,\n  Protocol_Unspecified     = 3,\n  Misc_Unspecified         = 4,\n};\n\n// Для UE Context Release Request (§9.1.4.5)\nconstexpr auto kUeCtxRelTimeout =\n  std::chrono::seconds{10};" },
-        { title: "Logging hot-path safe", lang: "cpp",
+        { title: "Logging hot-path safe", lang: "cpp", tags: ["logging", "perf"],
           code: "// В hot path — только структурированный bin-log,\n// никаких fmt::format / std::ostream.\nLOG_BIN(kHarqRetx, ueId, harqId, ndi, rv);\n\n// Slow-path (ошибки, init) — обычный log OK\nLOG_WARN(\"PDCP SN wrap on bearer {}\", drbId);" }
     ]
 
@@ -438,6 +438,14 @@ Item {
     }
 
     function saveSnippet(draft, idx) {
+        // The editor holds tags as a comma-separated string; store them as a
+        // normalized array so search/persistence stay structured (HEAP-79).
+        if (typeof draft.tags === "string") {
+            draft.tags = draft.tags.split(",").map(function (s) { return s.trim(); })
+                                   .filter(function (s) { return s.length > 0; });
+        } else if (!Array.isArray(draft.tags)) {
+            draft.tags = [];
+        }
         const list = snippets.slice();
         if (idx < 0 || idx === undefined) {
             list.push(draft);
@@ -1081,14 +1089,16 @@ Item {
         editor.kind = "snippet";
         editor.idx = -1;
         editor.isNew = true;
-        editor.draft = ({ title: "", lang: "sh", code: "" });
+        editor.draft = ({ title: "", lang: "sh", code: "", tags: "" });
         editor.open();
     }
     function openSnippetEdit(idx) {
         editor.kind = "snippet";
         editor.idx = idx;
         editor.isNew = false;
-        editor.draft = Object.assign({}, root.snippets[idx]);
+        const d = Object.assign({}, root.snippets[idx]);
+        d.tags = Array.isArray(d.tags) ? d.tags.join(", ") : (d.tags || "");
+        editor.draft = d;
         editor.open();
     }
     function openContactCreate() {

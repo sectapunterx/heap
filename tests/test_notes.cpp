@@ -10,6 +10,8 @@
 #include "AppController.h"
 #include "Models.h"
 
+#include "notes/NoteLinks.h"
+
 #include <QApplication>
 #include <QRegularExpression>
 #include <QSignalSpy>
@@ -176,6 +178,39 @@ TEST_F(NotesAppendTest, NoSignalWhenInputRejected) {
   app_->appendNoteEntry(QStringLiteral("\n\t\n"));
 
   EXPECT_EQ(spy.count(), 0);
+}
+
+// ─── Wiki-links / backlinks (HEAP-79) ─────────────────────────────────
+
+TEST(NoteLinks, CollectsHeadingsDeduped) {
+  const QString md = QStringLiteral("# Alpha\n\ntext\n## Beta\n### Alpha\n#### \n");
+  const QStringList h = heap::notes::collectHeadings(md);
+  ASSERT_EQ(h.size(), 2);  // "Alpha" deduped, empty heading skipped
+  EXPECT_EQ(h.at(0), QString("Alpha"));
+  EXPECT_EQ(h.at(1), QString("Beta"));
+}
+
+TEST(NoteLinks, BacklinksGroupByTargetWithResolution) {
+  const QString md = QStringLiteral("# Alpha\n\nsee [[Beta]] here\n\n## Beta\n\nrefers to [[Alpha]] and [[Ghost]]\n");
+  const QVariantList bl = heap::notes::collectBacklinks(md);
+  // Targets: Alpha, Beta, Ghost (sorted, case-insensitive).
+  ASSERT_EQ(bl.size(), 3);
+  const QVariantMap alpha = bl.at(0).toMap();
+  EXPECT_EQ(alpha.value("target").toString(), QString("Alpha"));
+  EXPECT_TRUE(alpha.value("resolved").toBool());  // heading "# Alpha" exists
+  ASSERT_EQ(alpha.value("refs").toList().size(), 1);
+  EXPECT_EQ(alpha.value("refs").toList().at(0).toMap().value("line").toInt(), 7);
+
+  const QVariantMap ghost = bl.at(2).toMap();
+  EXPECT_EQ(ghost.value("target").toString(), QString("Ghost"));
+  EXPECT_FALSE(ghost.value("resolved").toBool());  // no such heading
+}
+
+TEST(NoteLinks, HeadingOffsetFindsCaseInsensitive) {
+  const QString md = QStringLiteral("# Alpha\n\n## Beta gamma\n");
+  const int off = heap::notes::headingOffset(md, QStringLiteral("beta gamma"));
+  EXPECT_EQ(md.mid(off, 12), QString("## Beta gamm"));
+  EXPECT_EQ(heap::notes::headingOffset(md, QStringLiteral("nope")), -1);
 }
 
 // ─── headless boot (mirrors test_selection.cpp) ──────────────────────

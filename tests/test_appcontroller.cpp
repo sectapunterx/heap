@@ -266,6 +266,29 @@ TEST_F(AppControllerTest, CommandPaletteEntriesCarryBodyText) {
   EXPECT_TRUE(noteOk);
 }
 
+TEST_F(AppControllerTest, SnippetTagsAndLanguageReachPaletteBody) {
+  // A snippet whose match term lives only in its tags / language must be
+  // findable from the palette (HEAP-79 "first-class snippet library").
+  const QString docs = QStringLiteral(
+      "{\"sections\":[],\"contacts\":[],\"snippets\":["
+      "{\"title\":\"Interactive rebase\",\"lang\":\"sh\",\"tags\":[\"git\",\"workflow\"],\"code\":\"git rebase -i\"}]}");
+  app_->setDocsState(docs);
+  app_->flushSave();
+
+  bool ok = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value("kind").toString() == QStringLiteral("snippet") && m.value("label").toString() == QStringLiteral("Interactive rebase")) {
+      const QString body = m.value("body").toString();
+      EXPECT_TRUE(body.contains(QStringLiteral("git")));       // tag
+      EXPECT_TRUE(body.contains(QStringLiteral("workflow")));  // tag
+      EXPECT_TRUE(body.contains(QStringLiteral("sh")));        // language
+      ok = true;
+    }
+  }
+  EXPECT_TRUE(ok);
+}
+
 // ─── headless boot ────────────────────────────────────────────────────
 
 int main(int argc, char** argv) {
