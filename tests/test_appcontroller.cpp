@@ -312,6 +312,47 @@ TEST_F(AppControllerTest, TaskTimerStartStopAndSingleActive) {
   EXPECT_FALSE(timing(QStringLiteral("B")));
 }
 
+// ─── Recurring tasks + templates (HEAP-77) ────────────────────────────
+
+TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
+  Task t = mkTask(QStringLiteral("REC-1"), QStringLiteral("Daily standup"));
+  t.status = QStringLiteral("todo");
+  t.recurrence = QStringLiteral("every:day");
+  t.deadline = QDate(2026, 7, 4);
+  app_->tasks()->reset({t});
+  const int before = app_->tasks()->rowCount();
+
+  app_->moveTask(QStringLiteral("REC-1"), QStringLiteral("done"));
+
+  ASSERT_EQ(app_->tasks()->rowCount(), before + 1);
+  bool foundNext = false;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.id != QStringLiteral("REC-1") && x.recurrence == QStringLiteral("every:day")) {
+      EXPECT_EQ(x.status, QString("todo"));
+      EXPECT_EQ(x.deadline, QDate(2026, 7, 5));  // next day
+      foundNext = true;
+    }
+  }
+  EXPECT_TRUE(foundNext);
+}
+
+TEST_F(AppControllerTest, TemplateCreatesPrefilledChecklistTask) {
+  ASSERT_FALSE(app_->taskTemplates().isEmpty());
+  const int before = app_->tasks()->rowCount();
+
+  app_->createTaskFromTemplate(QStringLiteral("PR review"));
+
+  EXPECT_EQ(app_->tasks()->rowCount(), before + 1);
+  bool found = false;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.title.startsWith(QStringLiteral("Review PR"))) {
+      EXPECT_TRUE(x.desc.contains(QStringLiteral("- [ ]")));  // checklist markdown
+      found = true;
+    }
+  }
+  EXPECT_TRUE(found);
+}
+
 // ─── headless boot ────────────────────────────────────────────────────
 
 int main(int argc, char** argv) {

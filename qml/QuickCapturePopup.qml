@@ -155,6 +155,11 @@ Popup {
         if (_preview && _preview.ok && _preview.start) {
             draft.deadline = _preview.start;
         }
+        // Persist a parsed recurrence ("every weekday…") so completing the task
+        // regenerates it (HEAP-77).
+        if (_preview && _preview.recurrence && _preview.recurrence.length > 0) {
+            draft.recurrence = _preview.recurrence;
+        }
         AppController.saveTask(draft);
 
         // Calendar entry rules:

@@ -419,6 +419,7 @@ Item {
                                             required property var    recentCommits
                                             required property int    trackedSeconds
                                             required property bool   isTiming
+                                            required property string recurrence
                                             width: bodyCol.width
 
                                             readonly property var taskData: ({
@@ -429,7 +430,8 @@ Item {
                                                 prState: tc.prState, prNumber: tc.prNumber, prUrl: tc.prUrl,
                                                 gitAhead: tc.gitAhead, gitBehind: tc.gitBehind,
                                                 recentCommits: tc.recentCommits,
-                                                trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming
+                                                trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
+                                                recurrence: tc.recurrence
                                             })
                                             task: taskData
                                             scheduled: root.scheduleMap[tc.id] || ""
