@@ -2704,13 +2704,37 @@ QVariantList AppController::commandPaletteEntries() const {
     return id;
   };
 
+  // Full-text search (HEAP-80): each entry carries a `body` of the searchable
+  // text that is NOT already in label/sub (task descriptions, note/doc/snippet
+  // bodies, …). The palette scores over label+sub+body and shows a snippet when
+  // the hit is in the body. Kept bounded so rebuilding the list stays cheap.
+  constexpr int kBodyCap = 8000;
+  const auto cap = [](QString s) {
+    if(s.size() > kBodyCap) {
+      s.truncate(kBodyCap);
+    }
+    return s;
+  };
+
   for(const Profile& p : m_profiles) {
+    // Notes — the whole per-profile markdown blob is one searchable entry.
+    if(!p.notesState.trimmed().isEmpty()) {
+      QVariantMap m;
+      m["kind"] = "note";
+      m["label"] = QString("%1 · Notes").arg(p.name);
+      m["sub"] = p.name;
+      m["body"] = cap(p.notesState);
+      m["profileId"] = p.id;
+      m["color"] = p.color;
+      out.append(m);
+    }
     // Tasks
     for(const Task& t : p.tasks) {
       QVariantMap m;
       m["kind"] = "task";
       m["label"] = QString("%1 · %2").arg(t.id, t.title);
       m["sub"] = QString("%1 · %2").arg(p.name, statusName(p.statuses, t.status).toUpper());
+      m["body"] = cap(t.desc);
       m["profileId"] = p.id;
       m["taskId"] = t.id;
       m["color"] = p.color;
@@ -2731,6 +2755,7 @@ QVariantList AppController::commandPaletteEntries() const {
             m["kind"] = "doc";
             m["label"] = QString("%1 · %2").arg(it["ref"].toString(), it["title"].toString());
             m["sub"] = QString("%1 · %2").arg(p.name, secTitle);
+            m["body"] = cap(it["desc"].toString() + QChar(' ') + it["source"].toString());
             m["profileId"] = p.id;
             m["sectionId"] = secId;
             m["color"] = p.color;
@@ -2744,6 +2769,7 @@ QVariantList AppController::commandPaletteEntries() const {
           m["kind"] = "snippet";
           m["label"] = sn["title"].toString();
           m["sub"] = QString("%1 · %2").arg(p.name, sn["lang"].toString());
+          m["body"] = cap(sn["code"].toString());
           m["profileId"] = p.id;
           m["idx"] = snipIdx++;
           m["color"] = p.color;
@@ -2756,6 +2782,7 @@ QVariantList AppController::commandPaletteEntries() const {
           m["kind"] = "contact";
           m["label"] = c["name"].toString();
           m["sub"] = QString("%1 · %2").arg(p.name, c["role"].toString());
+          m["body"] = cap(c["channel"].toString() + QChar(' ') + c["mattermost"].toString());
           m["profileId"] = p.id;
           m["idx"] = contactIdx++;
           m["color"] = p.color;
@@ -2769,6 +2796,7 @@ QVariantList AppController::commandPaletteEntries() const {
       m["kind"] = "person";
       m["label"] = person.name;
       m["sub"] = QString("%1 · %2").arg(p.name, person.role);
+      m["body"] = cap(person.question);
       m["profileId"] = p.id;
       m["personId"] = person.id;
       m["color"] = p.color;
