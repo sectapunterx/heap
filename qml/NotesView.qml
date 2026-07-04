@@ -43,6 +43,12 @@ Item {
     property var    acMatches: []
     property int    acSelected: 0
 
+    // ── Backlinks pane (HEAP-79) ─────────────────────────────────────
+    // Recomputed live from the editor text (not the saved blob) so links show
+    // up as you type. Empty (and uncomputed) while the pane is hidden.
+    property bool showBacklinks: false
+    property var  _backlinks: showBacklinks ? AppController.noteBacklinks(editor.text) : []
+
     function _fuzzyScore(q, s) {
         if (q.length === 0) return 0;
         const ql = q.toLowerCase();
@@ -92,15 +98,24 @@ Item {
         return out;
     }
 
+    function _headingEntries() {
+        const out = [];
+        const hs = AppController.noteHeadings(editor.text);
+        for (let i = 0; i < hs.length; i++) {
+            out.push({ kind: "heading", id: "", label: hs[i], sub: "", color: Theme.accent });
+        }
+        return out;
+    }
+
     function _rebuildMatches() {
-        const source = acTrigger === "@" ? _peopleEntries()
-                     : acTrigger === "#" ? _taskEntries()
+        const source = acTrigger === "@"  ? _peopleEntries()
+                     : acTrigger === "#"  ? _taskEntries()
+                     : acTrigger === "[[" ? _headingEntries()
                      : [];
         const scored = [];
         for (let i = 0; i < source.length; i++) {
             const e = source[i];
-            const hay = (acTrigger === "@") ? e.label
-                                            : (e.id + " " + e.label);
+            const hay = (acTrigger === "#") ? (e.id + " " + e.label) : e.label;
             const sc = _fuzzyScore(acFilter, hay);
             if (sc < 0) continue;
             scored.push({ entry: e, score: sc });
@@ -125,10 +140,34 @@ Item {
         return /[\s.,;:!?()\[\]{}]/.test(ch);
     }
 
+    function _openAcPopup() {
+        if (acMatches.length === 0) { acPopup.close(); return; }
+        const cr = editor.cursorRectangle;
+        const p  = editor.mapToItem(root, cr.x, cr.y + cr.height);
+        acPopup.x = Math.min(p.x, root.width - acPopup.width - 8);
+        acPopup.y = Math.max(0, Math.min(p.y + 4, root.height - acPopup.height - 8));
+        if (!acPopup.opened) acPopup.open();
+    }
+
     function _detectAutocomplete() {
         const pos = editor.cursorPosition;
         const txt = editor.text;
         if (pos <= 0) { _hideAutocomplete(); return; }
+
+        // [[wiki-link]] trigger (HEAP-79) — filter may contain spaces, so scan
+        // to the nearest "[[" on the current line rather than a single word.
+        const lineStart = txt.lastIndexOf("\n", pos - 1) + 1;
+        const before = txt.substring(lineStart, pos);
+        const openIdx = before.lastIndexOf("[[");
+        if (openIdx >= 0 && before.substring(openIdx + 2).indexOf("]]") < 0) {
+            acTrigger    = "[[";
+            acTriggerPos = lineStart + openIdx;   // index of the first '['
+            acFilter     = before.substring(openIdx + 2);
+            _rebuildMatches();
+            _openAcPopup();
+            return;
+        }
+
         let i = pos - 1;
         while (i >= 0 && /[A-Za-z0-9_.\-]/.test(txt[i])) i--;
         if (i < 0) { _hideAutocomplete(); return; }
@@ -161,14 +200,34 @@ Item {
             return;
         }
         const e = acMatches[acSelected];
-        const insert = (acTrigger === "@")
-            ? "@" + _slugifyName(e.label) + " "
-            : "#" + e.id + " ";
+        const insert = (acTrigger === "@")  ? "@" + _slugifyName(e.label) + " "
+                     : (acTrigger === "[[") ? "[[" + e.label + "]] "
+                     : "#" + e.id + " ";
         const pos = editor.cursorPosition;
         // Replace the "@filter" / "#filter" span in place (remove + insert) so
         // the caret stays at the edit point instead of resetting to 0. (HEAP-65)
         Mention.commit(editor, acTriggerPos, pos, insert);
         _hideAutocomplete();
+    }
+
+    // Move the caret to `off` and scroll the editor so it is visible.
+    function _jumpToOffset(off) {
+        if (off < 0) return;
+        if (root.viewMode === "preview") root.viewMode = "split";
+        editor.forceActiveFocus();
+        editor.cursorPosition = off;
+        const cr = editor.positionToRectangle(off);
+        const maxY = Math.max(0, notesScroll.contentHeight - notesScroll.height);
+        notesScroll.contentY = Math.max(0, Math.min(cr.y - 40, maxY));
+    }
+    function _jumpToHeading(name) {
+        _jumpToOffset(AppController.noteHeadingOffset(editor.text, name));
+    }
+    function _jumpToLine(lineNum) {
+        const lines = editor.text.split("\n");
+        let off = 0;
+        for (let i = 0; i < lineNum - 1 && i < lines.length; i++) off += lines[i].length + 1;
+        _jumpToOffset(off);
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
@@ -220,6 +279,31 @@ Item {
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 11
+                }
+
+                // ── Backlinks pane toggle (HEAP-79) ────────────────────
+                Rectangle {
+                    Layout.preferredHeight: 24
+                    radius: 6
+                    color: root.showBacklinks ? Theme.accent : (blToggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                    border.color: root.showBacklinks ? Theme.accent : Theme.border
+                    border.width: 1
+                    implicitWidth: blToggleTxt.implicitWidth + 20
+                    Text {
+                        id: blToggleTxt
+                        anchors.centerIn: parent
+                        text: "⌗ Links"
+                        color: root.showBacklinks ? "#06121a" : Theme.textMuted
+                        font.pixelSize: 11
+                        font.weight: Font.Medium
+                    }
+                    MouseArea {
+                        id: blToggleMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.showBacklinks = !root.showBacklinks
+                    }
                 }
 
                 // ── Edit · Split · Preview toggle ──────────────────────
@@ -520,6 +604,87 @@ Item {
                     onLinkActivated: (link) => Qt.openUrlExternally(link)
                 }
             }
+
+            // ── Backlinks pane (HEAP-79) ──────────────────────────────
+            Rectangle {
+                visible: root.showBacklinks
+                Layout.preferredWidth: 240
+                Layout.fillHeight: true
+                color: Theme.panel
+                Rectangle { anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left; width: 1; color: Theme.border }
+                ColumnLayout {
+                    anchors.fill: parent
+                    anchors.margins: 12
+                    spacing: 8
+                    Text {
+                        text: "Backlinks"
+                        color: Theme.text
+                        font.pixelSize: 12
+                        font.weight: Font.DemiBold
+                    }
+                    Text {
+                        visible: root._backlinks.length === 0
+                        text: "No [[wiki-links]] yet.\nType [[ to link a heading."
+                        color: Theme.textDim
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    ListView {
+                        Layout.fillWidth: true
+                        Layout.fillHeight: true
+                        clip: true
+                        model: root._backlinks
+                        spacing: 8
+                        ScrollBar.vertical: ThinScrollBar {}
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            width: ListView.view.width
+                            spacing: 2
+                            RowLayout {
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Text {
+                                    text: (modelData.resolved ? "⌗ " : "⚠ ") + modelData.target
+                                    color: modelData.resolved ? Theme.mOneone : Theme.p1
+                                    font.pixelSize: 11
+                                    font.weight: Font.DemiBold
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: modelData.resolved ? Qt.PointingHandCursor : Qt.ArrowCursor
+                                        onClicked: if (modelData.resolved) root._jumpToHeading(modelData.target)
+                                    }
+                                }
+                                Text {
+                                    text: modelData.refs.length
+                                    color: Theme.textDim
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 10
+                                }
+                            }
+                            Repeater {
+                                model: modelData.refs
+                                delegate: Text {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: 10
+                                    text: "└ " + modelData.text
+                                    color: Theme.textMuted
+                                    font.pixelSize: 10
+                                    elide: Text.ElideRight
+                                    MouseArea {
+                                        anchors.fill: parent
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root._jumpToLine(modelData.line)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -552,6 +717,7 @@ Item {
             quote:        Theme.textMuted,
             mention:      Theme.mStandup,
             ticket:       Theme.p2,
+            wikilink:     Theme.mOneone,
             link:         Theme.accent,
             list:         Theme.accent,
             tableRow:     Theme.accentStrong,
@@ -630,6 +796,19 @@ Item {
                             font.weight: Font.DemiBold
                         }
                     }
+                    Rectangle {
+                        visible: modelData.kind === "heading"
+                        width: 22; height: 18; radius: 4
+                        color: "transparent"
+                        border.color: "#b58ad7"; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: "⌗"
+                            color: "#b58ad7"
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                    }
 
                     ColumnLayout {
                         Layout.fillWidth: true
@@ -642,8 +821,8 @@ Item {
                             Layout.fillWidth: true
                         }
                         Text {
-                            visible: modelData.sub.length > 0
-                            text: modelData.sub
+                            visible: (modelData.sub || "").length > 0
+                            text: modelData.sub || ""
                             color: Theme.textMuted
                             font.family: Theme.fontMono
                             font.pixelSize: 9
