@@ -800,16 +800,11 @@ add_test(NAME heap_qml_tests
 set_tests_properties(heap_qml_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic")
 
-# The static TodoCpp module's file-based components (SideRail, ArchiveView, …)
-# resolve in the Quick Test binary on Windows + macOS but NOT on Linux: `import
-# TodoCpp` succeeds yet "ArchiveView is not a type" — the qmlcachegen units for
-# the .qml components are not picked up from the static lib there. The suite is
-# still BUILT on Linux (link is validated) and runs in full on Windows CI +
-# locally; only its Linux *execution* is disabled so CI stays green. Tracked in
-# HEAP-71.
-if (UNIX AND NOT APPLE)
-    set_tests_properties(heap_qml_tests PROPERTIES DISABLED TRUE)
-endif ()
+# HEAP-71: the static TodoCpp module's file-based components (SideRail,
+# ArchiveView, …) failed to resolve in the Quick Test binary on Linux under
+# Ubuntu's apt Qt 6.4.2 (a qmlcachegen/static-module bug — "ArchiveView is not a
+# type"). CI now provisions Qt 6.8 via install-qt-action (matching local), where
+# they resolve, so Linux execution is re-enabled.
 
 # ─── Integrations (tracker-sync StatusMap) tests ───
 # Pure status/priority translation for the post-release tracker sync. No QObject,
