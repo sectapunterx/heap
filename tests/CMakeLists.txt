@@ -11,6 +11,14 @@ endif()
 # this file is included as a subdirectory of the main project.
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Widgets Qml Test)
 
+# macOS: suites that compile GlobalHotkey.cpp also compile GlobalHotkey_mac.mm
+# (added per-suite below), which uses Carbon. Link it for every test target here
+# (directory-scoped) and make sure Objective-C++ is available. (HEAP-68)
+if(APPLE)
+    enable_language(OBJCXX)
+    link_libraries("-framework Carbon")
+endif()
+
 include(FetchContent)
 
 FetchContent_Declare(
@@ -157,6 +165,11 @@ if (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
     )
 endif ()
+if (APPLE)
+    list(APPEND HEAP_SELECTION_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_SELECTION_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -233,6 +246,11 @@ if (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
     )
 endif ()
+if (APPLE)
+    list(APPEND HEAP_NOTES_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_NOTES_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -277,6 +295,11 @@ set(HEAP_PLATFORM_SOURCES
 if (WIN32)
     list(APPEND HEAP_PLATFORM_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (APPLE)
+    list(APPEND HEAP_PLATFORM_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
     )
 endif ()
 
@@ -340,6 +363,11 @@ set(HEAP_PERSISTENCE_SOURCES
 if (WIN32)
     list(APPEND HEAP_PERSISTENCE_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (APPLE)
+    list(APPEND HEAP_PERSISTENCE_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
     )
 endif ()
 if (UNIX AND NOT APPLE)
@@ -416,6 +444,11 @@ if (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
     )
 endif ()
+if (APPLE)
+    list(APPEND HEAP_EXPORT_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_EXPORT_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -489,6 +522,11 @@ if (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
     )
 endif ()
+if (APPLE)
+    list(APPEND HEAP_PROFILE_IO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_PROFILE_IO_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -559,6 +597,11 @@ set(HEAP_ONBOARDING_SOURCES
 if (WIN32)
     list(APPEND HEAP_ONBOARDING_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (APPLE)
+    list(APPEND HEAP_ONBOARDING_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
     )
 endif ()
 if (UNIX AND NOT APPLE)
@@ -652,6 +695,11 @@ if (WIN32)
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
     )
 endif ()
+if (APPLE)
+    list(APPEND HEAP_UNDO_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+    )
+endif ()
 if (UNIX AND NOT APPLE)
     list(APPEND HEAP_UNDO_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
@@ -724,6 +772,11 @@ set(HEAP_VIEW_SOURCES
 if (WIN32)
     list(APPEND HEAP_VIEW_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (APPLE)
+    list(APPEND HEAP_VIEW_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
     )
 endif ()
 if (UNIX AND NOT APPLE)
@@ -1011,6 +1064,11 @@ set(HEAP_APPCTRL_SOURCES
 if (WIN32)
     list(APPEND HEAP_APPCTRL_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+    )
+endif ()
+if (APPLE)
+    list(APPEND HEAP_APPCTRL_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
     )
 endif ()
 if (UNIX AND NOT APPLE)

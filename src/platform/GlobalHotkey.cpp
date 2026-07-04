@@ -9,6 +9,9 @@ namespace heap::platform {
 #if defined(Q_OS_WIN)
 // Defined in GlobalHotkey_win.cpp — only compiled on Windows.
 std::unique_ptr<GlobalHotkey> createWindowsHotkey(QObject* parent);
+#elif defined(Q_OS_MAC)
+// Defined in GlobalHotkey_mac.mm — only compiled on macOS.
+std::unique_ptr<GlobalHotkey> createMacHotkey(QObject* parent);
 #endif
 
 namespace {
@@ -36,6 +39,8 @@ class NullHotkey : public GlobalHotkey {
 std::unique_ptr<GlobalHotkey> GlobalHotkey::create(QObject* parent) {
 #if defined(Q_OS_WIN)
   return createWindowsHotkey(parent);
+#elif defined(Q_OS_MAC)
+  return createMacHotkey(parent);
 #else
   return std::make_unique<NullHotkey>(parent);
 #endif
