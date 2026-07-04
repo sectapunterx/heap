@@ -46,9 +46,11 @@ class AppControllerTest : public ::testing::Test {
     // defaults so every shortcut test starts from a known baseline.
     app_->resetAllShortcuts();
   }
+
   void TearDown() override {
     app_.reset();
   }
+
   std::unique_ptr<AppController> app_;
 };
 
@@ -106,7 +108,7 @@ TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {
   app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+K"));  // frees palette.open
   app_->resetShortcut(QStringLiteral("palette.open"));                      // default Ctrl+K conflicts with task.new
   EXPECT_EQ(app_->shortcutFor(QStringLiteral("palette.open")), QString("Ctrl+K"));
-  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString());       // swapped out
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString());  // swapped out
 }
 
 TEST_F(AppControllerTest, ResetShortcutAlreadyDefaultNoop) {
@@ -226,6 +228,42 @@ TEST_F(AppControllerTest, ExtractTaskMetaShape) {
 
   const QVariantMap plain = app_->extractTaskMeta(QStringLiteral("plain text no handles"));
   EXPECT_TRUE(plain.value(QStringLiteral("handles")).toStringList().isEmpty());
+}
+
+// ─── Full-text command-palette entries (HEAP-80) ──────────────────────
+
+TEST_F(AppControllerTest, CommandPaletteEntriesCarryBodyText) {
+  // Seed a task whose search term lives only in the description, and a note
+  // whose term lives only in the body; flush so the active profile picks both
+  // up (commandPaletteEntries reads the profile snapshot).
+  QVariantMap draft;
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("LTE-9001");
+  draft["title"] = QStringLiteral("Quiet title");
+  draft["desc"] = QStringLiteral("zebra hidden in the body");
+  draft["priority"] = QStringLiteral("P2");
+  draft["status"] = QStringLiteral("todo");
+  app_->saveTask(draft);
+  app_->setNotesState(QStringLiteral("a note mentioning platypus somewhere"));
+  app_->flushSave();
+
+  const QVariantList entries = app_->commandPaletteEntries();
+  bool taskBodyOk = false;
+  bool noteOk = false;
+  for(const QVariant& v : entries) {
+    const QVariantMap m = v.toMap();
+    if(m.value("kind").toString() == QStringLiteral("task") && m.value("taskId").toString() == QStringLiteral("LTE-9001")) {
+      // The term is absent from the label but present in the searchable body.
+      EXPECT_FALSE(m.value("label").toString().contains(QStringLiteral("zebra")));
+      EXPECT_TRUE(m.value("body").toString().contains(QStringLiteral("zebra")));
+      taskBodyOk = true;
+    }
+    if(m.value("kind").toString() == QStringLiteral("note") && m.value("body").toString().contains(QStringLiteral("platypus"))) {
+      noteOk = true;
+    }
+  }
+  EXPECT_TRUE(taskBodyOk);
+  EXPECT_TRUE(noteOk);
 }
 
 // ─── headless boot ────────────────────────────────────────────────────

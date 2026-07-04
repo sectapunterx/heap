@@ -52,19 +52,52 @@ Popup {
         return score;
     }
 
+    function _escapeHtml(s) {
+        return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+    }
+
+    // Build a StyledText snippet: ~30 chars of context on each side of the first
+    // occurrence of `q` in `body`, with the match emphasised. "" if not present.
+    function _snippetFor(body, q) {
+        if (!body || q.length < 2) return "";
+        const idx = body.toLowerCase().indexOf(q.toLowerCase());
+        if (idx < 0) return "";
+        const start = Math.max(0, idx - 30);
+        const end = Math.min(body.length, idx + q.length + 40);
+        const frag = body.substring(start, end).replace(/\s+/g, " ").trim();
+        const mi = frag.toLowerCase().indexOf(q.toLowerCase());
+        const lead = start > 0 ? "…" : "";
+        const tail = end < body.length ? "…" : "";
+        if (mi < 0) return lead + _escapeHtml(frag) + tail;
+        return lead + _escapeHtml(frag.substring(0, mi))
+             + "<b>" + _escapeHtml(frag.substring(mi, mi + q.length)) + "</b>"
+             + _escapeHtml(frag.substring(mi + q.length)) + tail;
+    }
+
     function _filterAndScore(q) {
         const out = [];
         const trimmed = (q || "").trim();
+        const ql = trimmed.toLowerCase();
         for (let i = 0; i < _entries.length; i++) {
             const e = _entries[i];
-            const sc = _fuzzyScore(trimmed, e.label + " " + (e.sub || ""));
-            if (sc < 0) continue;
-            // tiny boost so a task in the active profile floats up
+            let score = _fuzzyScore(trimmed, e.label + " " + (e.sub || ""));
+            let snippet = "";
+            // Full-text (HEAP-80): match the body too, with a context snippet.
+            if (trimmed.length >= 2 && e.body && e.body.toLowerCase().indexOf(ql) >= 0) {
+                snippet = _snippetFor(e.body, trimmed);
+                if (score < 0) score = 5;  // body-only hit — include below head matches
+            }
+            if (score < 0) continue;
+            // tiny boost so an entry in the active profile floats up
             const profBonus = (e.profileId === AppController.activeProfileId) ? 1 : 0;
-            out.push({ entry: e, score: sc + profBonus });
+            out.push({ entry: e, score: score + profBonus, snippet: snippet });
         }
         out.sort(function (a, b) { return b.score - a.score; });
-        return out.slice(0, 80).map(function (x) { return x.entry; });
+        return out.slice(0, 80).map(function (x) {
+            const c = Object.assign({}, x.entry);
+            c._snippet = x.snippet;
+            return c;
+        });
     }
 
     function _activate(entry) {
@@ -88,6 +121,8 @@ Popup {
                 root.navigateToContacts();
             } else if (entry.kind === "person") {
                 root.openPerson(entry.personId);
+            } else if (entry.kind === "note") {
+                AppController.currentView = "notes";
             }
             root.close();
         });
@@ -165,7 +200,7 @@ Popup {
                 required property var modelData
                 required property int index
                 width: ListView.view.width
-                height: 42
+                height: (modelData._snippet && modelData._snippet.length > 0) ? 58 : 42
                 color: index === root._selectedIdx ? Theme.panel2 : "transparent"
                 radius: 4
 
@@ -189,6 +224,7 @@ Popup {
                                     case "contact": return "C";
                                     case "profile": return "●";
                                     case "person":  return "P";
+                                    case "note":    return "N";
                                 }
                                 return "?";
                             }
@@ -210,10 +246,23 @@ Popup {
                             Layout.fillWidth: true
                         }
                         Text {
+                            visible: !(modelData._snippet && modelData._snippet.length > 0)
                             text: modelData.sub
                             color: Theme.textMuted
                             font.family: Theme.fontMono
                             font.pixelSize: 10
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
+                        // Full-text context snippet with the match emphasised
+                        // (HEAP-80). Shown in place of `sub` when the hit is in
+                        // the body rather than the title.
+                        Text {
+                            visible: modelData._snippet && modelData._snippet.length > 0
+                            text: modelData._snippet || ""
+                            textFormat: Text.StyledText
+                            color: Theme.textMuted
+                            font.pixelSize: 11
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
