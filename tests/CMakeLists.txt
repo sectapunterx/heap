@@ -122,6 +122,10 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -193,6 +197,10 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -297,6 +305,10 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -366,6 +378,10 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -434,6 +450,10 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -501,6 +521,10 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -587,6 +611,10 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -656,6 +684,10 @@ set(HEAP_VIEW_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -820,6 +852,42 @@ target_link_libraries(heap_github_tests PRIVATE
 )
 add_test(NAME heap_github_tests COMMAND heap_github_tests)
 
+# Jira provider parse/transition helpers — pure functions with canned JSON.
+add_executable(heap_jira_tests
+        test_jira.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+)
+set_target_properties(heap_jira_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_jira_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_jira_tests PRIVATE
+        Qt6::Core
+        Qt6::Network
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_jira_tests COMMAND heap_jira_tests)
+
+# GitLab provider parse/state helpers — pure functions with canned JSON.
+add_executable(heap_gitlab_tests
+        test_gitlab.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+)
+set_target_properties(heap_gitlab_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_gitlab_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_gitlab_tests PRIVATE
+        Qt6::Core
+        Qt6::Network
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_gitlab_tests COMMAND heap_gitlab_tests)
+
 # ─── Sync (BYOS serializer) tests ───
 # Cover heap::sync::SyncSerializer — Profile/CalEvent ↔ git-friendly JSON with
 # stable (id-sorted) ordering and idempotent round-trips. Pure data code; needs
@@ -907,6 +975,10 @@ set(HEAP_APPCTRL_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp

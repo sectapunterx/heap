@@ -6,6 +6,8 @@
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
 #include "integrations/GithubProvider.h"
+#include "integrations/GitlabProvider.h"
+#include "integrations/JiraProvider.h"
 #include "integrations/StatusMap.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
@@ -642,9 +644,15 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   m_tasks.setStatus(id, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
-  // closes the GitHub issue). No-op for locally-created, unlinked tasks.
-  if(m_syncProvider && !t.externalId.isEmpty() && t.externalProvider == QStringLiteral("github")) {
-    m_syncProvider->pushStatusChange(t.externalId, newStatus);
+  // closes the GitHub issue / transitions the Jira issue). Routed to whichever
+  // provider owns the task. No-op for locally-created, unlinked tasks.
+  if(!t.externalId.isEmpty() && !t.externalProvider.isEmpty()) {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() == t.externalProvider) {
+        provider->pushStatusChange(t.externalId, newStatus);
+        break;
+      }
+    }
   }
 
   // Arm undo so a mis-drag to the wrong column is reversible (previously
@@ -1698,83 +1706,123 @@ void AppController::openLatestRelease() const {
 }
 
 void AppController::syncNow() {
-  if(!m_syncProvider) {
-    emit toast(tr("Connect a GitHub repo in Settings → Integrations first"));
+  if(m_syncProviders.empty()) {
+    emit toast(tr("Connect a tracker in Settings → Integrations first"));
     return;
   }
-  emit toast(tr("Syncing with GitHub…"));
-  m_syncProvider->pullTasks();
+  emit toast(tr("Syncing…"));
+  for(const auto& provider : m_syncProviders) {
+    provider->pullTasks();
+  }
+}
+
+void AppController::mergeExternalTasks(const QString& providerId,
+                                       const QString& idPrefix,
+                                       const QVector<heap::integrations::ExternalTask>& issues) {
+  using heap::integrations::StatusMap;
+  for(const heap::integrations::ExternalTask& ext : issues) {
+    // Match an existing task by its stored external id; else create one.
+    QString existingId;
+    for(const Task& cur : m_tasks.items()) {
+      if(cur.externalProvider == providerId && cur.externalId == ext.externalId) {
+        existingId = cur.id;
+        break;
+      }
+    }
+    const int row = existingId.isEmpty() ? -1 : m_tasks.indexOfId(existingId);
+    Task t;
+    if(row >= 0) {
+      t = m_tasks.items().at(row);
+    } else {
+      t.id = idPrefix + ext.externalId;
+      t.statusChangedAt = QDateTime::currentDateTime();
+    }
+    t.title = ext.title;
+    t.desc = ext.body;
+    t.status = StatusMap::column(ext.status, {}, QStringLiteral("todo"));
+    if(!ext.priority.isEmpty()) {
+      t.priority = StatusMap::priority(ext.priority);
+    } else if(t.priority.isEmpty()) {
+      t.priority = QStringLiteral("P2");
+    }
+    t.externalId = ext.externalId;
+    t.externalUrl = ext.url;
+    t.externalProvider = providerId;
+    m_tasks.upsert(t);
+  }
+  if(!issues.isEmpty()) {
+    scheduleSave();
+  }
 }
 
 void AppController::applyIntegrationSettings() {
-  const QVariantMap gh = settingsMap().value("integrations").toMap().value("github").toMap();
-  const bool connected = gh.value("connected", false).toBool();
-  const QString repo = gh.value("repo").toString().trimmed();
-  const QString token = gh.value("token").toString().trimmed();
+  m_syncProviders.clear();
+  const QVariantMap integrations = settingsMap().value("integrations").toMap();
 
-  if(!connected || repo.isEmpty() || token.isEmpty()) {
-    m_syncProvider.reset();
-    return;
+  // Wire one provider's signals into the shared merge/push/toast handlers.
+  const auto wire = [this](heap::integrations::IntegrationProvider* provider, const QString& idPrefix, const QString& label) {
+    const QString providerId = provider->id();
+    connect(provider,
+            &heap::integrations::IntegrationProvider::tasksFetched,
+            this,
+            [this, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
+              mergeExternalTasks(providerId, idPrefix, issues);
+              emit toast(tr("Synced %1 issue(s) from %2").arg(issues.size()).arg(label));
+            });
+    connect(provider,
+            &heap::integrations::IntegrationProvider::taskPushed,
+            this,
+            [providerId](const QString& externalId, bool ok, const QString& error) {
+              if(!ok) {
+                qWarning() << providerId << "push failed for" << externalId << ":" << error;
+              }
+            });
+    connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
+      emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+    });
+  };
+
+  // GitHub (HEAP-74).
+  const QVariantMap gh = integrations.value("github").toMap();
+  if(gh.value("connected", false).toBool()) {
+    const QString repo = gh.value("repo").toString().trimmed();
+    const QString token = gh.value("token").toString().trimmed();
+    if(!repo.isEmpty() && !token.isEmpty()) {
+      auto provider = std::make_unique<heap::integrations::GithubProvider>(this);
+      provider->setConfig(repo, token);
+      wire(provider.get(), QStringLiteral("gh-"), QStringLiteral("GitHub"));
+      m_syncProviders.push_back(std::move(provider));
+    }
   }
 
-  auto provider = std::make_unique<heap::integrations::GithubProvider>(this);
-  provider->setConfig(repo, token);
+  // Jira (HEAP-75).
+  const QVariantMap jira = integrations.value("jira").toMap();
+  if(jira.value("connected", false).toBool()) {
+    const QString baseUrl = jira.value("baseUrl").toString().trimmed();
+    const QString email = jira.value("email").toString().trimmed();
+    const QString token = jira.value("token").toString().trimmed();
+    const QString jql = jira.value("jql").toString().trimmed();
+    if(!baseUrl.isEmpty() && !email.isEmpty() && !token.isEmpty()) {
+      auto provider = std::make_unique<heap::integrations::JiraProvider>(this);
+      provider->setConfig(baseUrl, email, token, jql);
+      wire(provider.get(), QStringLiteral("jira-"), QStringLiteral("Jira"));
+      m_syncProviders.push_back(std::move(provider));
+    }
+  }
 
-  connect(provider.get(),
-          &heap::integrations::IntegrationProvider::tasksFetched,
-          this,
-          [this](const QVector<heap::integrations::ExternalTask>& issues) {
-            using heap::integrations::StatusMap;
-            for(const heap::integrations::ExternalTask& ext : issues) {
-              // Match an existing task by its stored external id; else create one.
-              QString existingId;
-              for(const Task& cur : m_tasks.items()) {
-                if(cur.externalProvider == QStringLiteral("github") && cur.externalId == ext.externalId) {
-                  existingId = cur.id;
-                  break;
-                }
-              }
-              const int row = existingId.isEmpty() ? -1 : m_tasks.indexOfId(existingId);
-              Task t;
-              if(row >= 0) {
-                t = m_tasks.items().at(row);
-              } else {
-                t.id = QStringLiteral("gh-") + ext.externalId;
-                t.statusChangedAt = QDateTime::currentDateTime();
-              }
-              t.title = ext.title;
-              t.desc = ext.body;
-              t.status = StatusMap::column(ext.status, {}, QStringLiteral("todo"));
-              if(!ext.priority.isEmpty()) {
-                t.priority = StatusMap::priority(ext.priority);
-              } else if(t.priority.isEmpty()) {
-                t.priority = QStringLiteral("P2");
-              }
-              t.externalId = ext.externalId;
-              t.externalUrl = ext.url;
-              t.externalProvider = QStringLiteral("github");
-              m_tasks.upsert(t);
-            }
-            if(!issues.isEmpty()) {
-              scheduleSave();
-            }
-            emit toast(tr("Synced %1 issue(s) from GitHub").arg(issues.size()));
-          });
-
-  connect(provider.get(),
-          &heap::integrations::IntegrationProvider::taskPushed,
-          this,
-          [](const QString& externalId, bool ok, const QString& error) {
-            if(!ok) {
-              qWarning() << "github push failed for issue" << externalId << ":" << error;
-            }
-          });
-
-  connect(provider.get(), &heap::integrations::IntegrationProvider::connectionTested, this, [this](bool ok, const QString& error) {
-    emit toast(ok ? tr("GitHub connected") : tr("GitHub connection failed: %1").arg(error));
-  });
-
-  m_syncProvider = std::move(provider);
+  // GitLab (HEAP-75).
+  const QVariantMap gitlab = integrations.value("gitlab").toMap();
+  if(gitlab.value("connected", false).toBool()) {
+    const QString host = gitlab.value("host").toString().trimmed();
+    const QString project = gitlab.value("projectId").toString().trimmed();
+    const QString token = gitlab.value("token").toString().trimmed();
+    if(!host.isEmpty() && !project.isEmpty() && !token.isEmpty()) {
+      auto provider = std::make_unique<heap::integrations::GitlabProvider>(this);
+      provider->setConfig(host, project, token);
+      wire(provider.get(), QStringLiteral("gl-"), QStringLiteral("GitLab"));
+      m_syncProviders.push_back(std::move(provider));
+    }
+  }
 }
 
 void AppController::scheduleSave() {

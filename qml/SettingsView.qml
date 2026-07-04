@@ -168,8 +168,9 @@ Item {
             showAsmInline: false
         },
         integrations: {
-            jira:       ({ connected: false, url: "", project: "" }),
-            github:     ({ connected: false, org: "", branchTemplate: "{type}/{id}-{slug}" }),
+            jira:       ({ connected: false, baseUrl: "", email: "", token: "", jql: "" }),
+            github:     ({ connected: false, repo: "", token: "", branchTemplate: "{type}/{id}-{slug}" }),
+            gitlab:     ({ connected: false, host: "", projectId: "", token: "" }),
             mattermost: ({ connected: false, workspace: "", channel: "" }),
             pagerduty:  ({ connected: false, schedule: "" }),
             confluence: ({ connected: false, space: "" })
@@ -1467,6 +1468,13 @@ Item {
                         desc: I18n.t("settings.int.github.desc")
                     },
                     {
+                        key: "gitlab",
+                        name: "GitLab",
+                        icon: "▲",
+                        color: "#e2683c",
+                        desc: I18n.t("settings.int.gitlab.desc")
+                    },
+                    {
                         key: "mattermost",
                         name: "Mattermost",
                         icon: "#",
@@ -1498,14 +1506,20 @@ Item {
                         readonly property var conf: (root.settings.integrations && root.settings.integrations[intKey]) || ({})
                         readonly property var fieldsByKey: ({
                             "jira": [
-                                { key: "baseUrl",      label: "Base URL",        placeholder: "https://jira.company.com" },
-                                { key: "projectKey",   label: "Project key",     placeholder: "LTE",                        mono: true },
-                                { key: "token",        label: "API token",       placeholder: "***",                        mono: true }
+                                { key: "baseUrl",      label: "Base URL",        placeholder: "https://acme.atlassian.net" },
+                                { key: "email",        label: "Email",           placeholder: "you@company.com" },
+                                { key: "token",        label: "API token",       placeholder: "***",                        mono: true },
+                                { key: "jql",          label: "JQL",             placeholder: "project = LTE ORDER BY updated DESC", mono: true }
                             ],
                             "github": [
                                 { key: "repo",            label: "Repo",            placeholder: "org/name",                mono: true },
                                 { key: "token",           label: "Access token",    placeholder: "***",                     mono: true },
                                 { key: "branchTemplate",  label: "Branch template", placeholder: "feature/{id}-{slug}",     mono: true }
+                            ],
+                            "gitlab": [
+                                { key: "host",       label: "Host",         placeholder: "https://gitlab.com" },
+                                { key: "projectId",  label: "Project",      placeholder: "12345 or group/name",   mono: true },
+                                { key: "token",      label: "Access token", placeholder: "***",                   mono: true }
                             ],
                             "mattermost": [
                                 { key: "serverUrl", label: "Server URL", placeholder: "https://chat.company.com" },
@@ -1584,9 +1598,9 @@ Item {
                                     onCommitted: (txt) => root.setNested("integrations", intCard.intKey, modelData.key, txt)
                                 }
                             }
-                            // GitHub 2-way sync (HEAP-74): pull issues as tasks.
+                            // 2-way tracker sync (HEAP-74 GitHub, HEAP-75 Jira/GitLab): pull issues as tasks.
                             Rectangle {
-                                visible: intCard.intKey === "github"
+                                visible: ["github", "jira", "gitlab"].indexOf(intCard.intKey) >= 0
                                 Layout.topMargin: 4
                                 radius: 6
                                 color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2

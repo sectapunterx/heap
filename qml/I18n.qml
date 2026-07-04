@@ -477,6 +477,7 @@ QtObject {
             // Integrations section
             "settings.int.jira.desc": "Sync tasks, ID prefix, statuses",
             "settings.int.github.desc": "PR status, branch template, code-review pings",
+            "settings.int.gitlab.desc": "Sync issues, statuses, close on Done",
             "settings.int.mattermost.desc": "Notification routing, follow-ups",
             "settings.int.pagerduty.desc": "On-call schedule, incident escalation",
             "settings.int.confluence.desc": "Wiki + runbooks, link previews",
@@ -979,6 +980,7 @@ QtObject {
 
             "settings.int.jira.desc": "Sync задач, ID prefix, статусов",
             "settings.int.github.desc": "PR статус, branch template, code-review pings",
+            "settings.int.gitlab.desc": "Sync issues, статусов, close on Done",
             "settings.int.mattermost.desc": "Notification routing, follow-ups",
             "settings.int.pagerduty.desc": "On-call schedule, incident escalation",
             "settings.int.confluence.desc": "Wiki + runbooks, link previews",
