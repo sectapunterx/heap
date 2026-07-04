@@ -22,6 +22,7 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {RecentCommitsRole, "recentCommits"},
       {TrackedSecondsRole, "trackedSeconds"},
       {IsTimingRole, "isTiming"},
+      {RecurrenceRole, "recurrence"},
   };
 }
 
@@ -67,6 +68,8 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return t.trackedSeconds;
     case IsTimingRole:
       return t.timerStartedAt.isValid();
+    case RecurrenceRole:
+      return t.recurrence;
   }
   return {};
 }

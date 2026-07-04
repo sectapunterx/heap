@@ -12,6 +12,7 @@
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
+#include "recur/RecurrenceEngine.h"
 #include "text/TaskTextUtils.h"
 #include "update/Updater.h"
 
@@ -40,6 +41,7 @@
 #include <QUrlQuery>
 #include <QUuid>
 
+#include <algorithm>
 #include <cmath>
 
 // Version is injected by CMake (PROJECT_VERSION); this fallback keeps standalone
@@ -659,6 +661,9 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   }
   const QString taskId = t.id;
   const QString prevStatus = t.status;
+  // Capture before any upsert can invalidate the `t` reference (HEAP-77).
+  const QString recurrence = t.recurrence;
+  const QDate recurBase = t.deadline;
   m_tasks.setStatus(id, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
@@ -694,6 +699,38 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     const QVariantMap cal = s.value("calendar").toMap();
     if(cal.value("autoFocusBlock", true).toBool()) {
       scheduleFocusBlockFor(taskId);
+    }
+  }
+
+  // Recurring task completed → spawn the next occurrence (HEAP-77).
+  if(newStatus == QStringLiteral("done") && !recurrence.isEmpty()) {
+    const QDate base = recurBase.isValid() ? recurBase : QDate::currentDate();
+    const QDate next = heap::recur::nextOccurrence(recurrence, base);
+    const int srcRow = m_tasks.indexOfId(taskId);
+    if(next.isValid() && srcRow >= 0) {
+      Task copy = m_tasks.items().at(srcRow);  // clone title/desc/priority/branch
+      // Fresh unique id (strip any prior "-rN" suffix) so upsert inserts a new
+      // row rather than overwriting the just-completed one.
+      QString stem = taskId;
+      static const QRegularExpression kRSuffix(QStringLiteral("-r\\d+$"));
+      stem.remove(kRSuffix);
+      QString newId;
+      int n = 1;
+      do {
+        newId = stem + QStringLiteral("-r") + QString::number(n++);
+      } while(m_tasks.indexOfId(newId) >= 0);
+      copy.id = newId;
+      copy.status = QStringLiteral("todo");
+      copy.deadline = next;
+      copy.statusChangedAt = QDateTime::currentDateTime();
+      copy.trackedSeconds = 0;
+      copy.timerStartedAt = QDateTime();
+      copy.recurrence = recurrence;  // stays recurring
+      copy.externalId.clear();       // a new local occurrence, not the synced issue
+      copy.externalUrl.clear();
+      copy.externalProvider.clear();
+      m_tasks.upsert(copy);
+      emit toast(tr("Recurs: %1 due %2").arg(newId, next.toString(Qt::ISODate)));
     }
   }
 
@@ -733,6 +770,74 @@ QVariantMap AppController::newQuickTaskDraft() const {
   return m;
 }
 
+namespace {
+// Built-in task/checklist templates (HEAP-77). Checklists are markdown
+// `- [ ]` lines in the description — they render as checkboxes in the notes
+// preview and stay plain, editable text everywhere else.
+struct TaskTemplate {
+  QString name;
+  QString title;
+  QString desc;
+  QString priority;
+};
+
+const QVector<TaskTemplate>& builtinTemplates() {
+  static const QVector<TaskTemplate> kTemplates = {
+      {QStringLiteral("PR review"),
+       QStringLiteral("Review PR: "),
+       QStringLiteral("- [ ] Pull the branch and build\n- [ ] Tests pass locally\n- [ ] Logic + edge cases\n- [ ] Naming / style\n- [ ] "
+                      "No leftover debug code\n- [ ] Approve or request changes"),
+       QStringLiteral("P2")},
+      {QStringLiteral("Release checklist"),
+       QStringLiteral("Release "),
+       QStringLiteral("- [ ] Version bumped\n- [ ] Changelog updated\n- [ ] CI green on main\n- [ ] Tag pushed\n- [ ] Artifacts signed\n- "
+                      "[ ] Release notes published\n- [ ] Announce"),
+       QStringLiteral("P1")},
+      {QStringLiteral("Bug report"),
+       QStringLiteral("Bug: "),
+       QStringLiteral(
+           "**Steps to reproduce:**\n1. \n\n**Expected:**\n\n**Actual:**\n\n- [ ] Repro confirmed\n- [ ] Root cause\n- [ ] Fix + "
+           "test"),
+       QStringLiteral("P1")},
+  };
+  return kTemplates;
+}
+}  // namespace
+
+QVariantList AppController::taskTemplates() const {
+  QVariantList out;
+  for(const auto& t : builtinTemplates()) {
+    QVariantMap m;
+    m["name"] = t.name;
+    m["title"] = t.title;
+    m["desc"] = t.desc;
+    out.append(m);
+  }
+  return out;
+}
+
+void AppController::createTaskFromTemplate(const QString& name) {
+  const auto& templates = builtinTemplates();
+  const auto it = std::find_if(templates.cbegin(), templates.cend(), [&](const TaskTemplate& t) {
+    return t.name == name;
+  });
+  if(it == templates.cend()) {
+    return;
+  }
+  const QVariantMap draft = newTaskDraft(QStringLiteral("todo"));
+  Task t;
+  t.id = draft.value("id").toString();
+  t.title = it->title;
+  t.desc = it->desc;
+  t.priority = it->priority;
+  t.status = QStringLiteral("todo");
+  t.statusChangedAt = QDateTime::currentDateTime();
+  m_tasks.upsert(t);
+  scheduleSave();
+  emit toast(tr("Created from template: %1").arg(it->name));
+  emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
+}
+
 void AppController::saveTask(const QVariantMap& draft) {
   Task t;
   t.id = draft.value("id").toString().trimmed();
@@ -742,6 +847,7 @@ void AppController::saveTask(const QVariantMap& draft) {
   t.status = draft.value("status").toString();
   t.deadline = draft.value("deadline").toDate();
   t.branch = draft.value("branch").toString();
+  t.recurrence = draft.value("recurrence").toString();
   const bool isNew = draft.value("_isNew").toBool();
   if(isNew && t.title.trimmed().isEmpty()) {
     return;
@@ -763,6 +869,8 @@ void AppController::saveTask(const QVariantMap& draft) {
       // The editor exposes neither the tracker link nor the timer — carry both.
       t.trackedSeconds = prev.trackedSeconds;
       t.timerStartedAt = prev.timerStartedAt;
+      // Recurrence: honour the draft when it carries the key, else preserve.
+      t.recurrence = draft.contains("recurrence") ? draft.value("recurrence").toString() : prev.recurrence;
       t.externalId = prev.externalId;
       t.externalUrl = prev.externalUrl;
       t.externalProvider = prev.externalProvider;
@@ -1233,6 +1341,7 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["archived"] = t.archived;
   m["trackedSeconds"] = t.trackedSeconds;
   m["isTiming"] = t.timerStartedAt.isValid();
+  m["recurrence"] = t.recurrence;
   return m;
 }
 
@@ -1965,6 +2074,10 @@ QJsonArray tasksToJson(const QVector<Task>& xs) {
     if(t.timerStartedAt.isValid()) {
       o["timerStartedAt"] = t.timerStartedAt.toString(Qt::ISODate);
     }
+    // Recurrence (HEAP-77) — omitted for non-recurring tasks.
+    if(!t.recurrence.isEmpty()) {
+      o["recurrence"] = t.recurrence;
+    }
     // Tracker-sync link — only emitted for synced tasks so locally-created
     // task JSON stays byte-identical to before HEAP-74.
     if(!t.externalId.isEmpty()) {
@@ -1997,6 +2110,7 @@ QVector<Task> tasksFromJson(const QJsonArray& a) {
     t.archived = o["archived"].toBool(false);
     t.trackedSeconds = o["trackedSeconds"].toInt(0);
     t.timerStartedAt = QDateTime::fromString(o["timerStartedAt"].toString(), Qt::ISODate);
+    t.recurrence = o["recurrence"].toString();
     t.externalId = o["externalId"].toString();
     t.externalUrl = o["externalUrl"].toString();
     t.externalProvider = o["externalProvider"].toString();
@@ -2801,6 +2915,17 @@ bool AppController::restoreFromBackup(const QString& fileName) {
 
 QVariantList AppController::commandPaletteEntries() const {
   QVariantList out;
+
+  // Task templates (HEAP-77) — "New from template: …" actions.
+  for(const auto& t : builtinTemplates()) {
+    QVariantMap m;
+    m["kind"] = "template";
+    m["label"] = QStringLiteral("New from template: ") + t.name;
+    m["sub"] = QStringLiteral("template");
+    m["templateName"] = t.name;
+    m["color"] = QStringLiteral("#b58ad7");
+    out.append(m);
+  }
 
   // Profiles themselves.
   for(const Profile& p : m_profiles) {

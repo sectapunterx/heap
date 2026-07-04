@@ -92,6 +92,7 @@ Item {
                 recentCommits: m.data(idx, Qt.UserRole + 16),
                 trackedSeconds: m.data(idx, Qt.UserRole + 17),
                 isTiming: m.data(idx, Qt.UserRole + 18),
+                recurrence: m.data(idx, Qt.UserRole + 19),
             };
             if (!root.passesFilter(t)) continue;
             out.push(t);

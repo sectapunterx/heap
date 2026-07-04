@@ -36,6 +36,7 @@ Popup {
         priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(draft.priority || "P2"));
         branchField.text = draft.branch || "";
         deadlineField.text = formatDate(draft.deadline);
+        recurBox.currentIndex = Math.max(0, recurBox._vals.indexOf(draft.recurrence || ""));
         open();
         // Kick a one-shot PR/state refresh for this task's branch across all
         // watched repos. Result lands on TaskModel via repoStateUpdated and
@@ -336,6 +337,26 @@ Popup {
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }
+
+            FieldLabel { text: "RECURRENCE" }
+            FieldLabel { text: "" }
+            ComboBox {
+                id: recurBox
+                Layout.fillWidth: true
+                readonly property var _vals: ["", "every:day", "every:week", "every:weekday",
+                                              "every:mon", "every:tue", "every:wed", "every:thu", "every:fri"]
+                model: ["None", "Daily", "Weekly", "Weekdays",
+                        "Every Mon", "Every Tue", "Every Wed", "Every Thu", "Every Fri"]
+                background: FieldBg {
+                }
+                contentItem: Text {
+                    text: recurBox.displayText
+                    color: Theme.text
+                    leftPadding: 10
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+            Item {}
         }
 
         RowLayout {
@@ -393,7 +414,8 @@ Popup {
                         priority: priBox.currentText,
                         status: root.statusList()[statusBox.currentIndex],
                         deadline: root.parseDate(deadlineField.text),
-                        branch: branchField.text
+                        branch: branchField.text,
+                        recurrence: recurBox._vals[recurBox.currentIndex] || ""
                     };
                     AppController.saveTask(d);
                     // Same classification rules as QuickCapturePopup — only

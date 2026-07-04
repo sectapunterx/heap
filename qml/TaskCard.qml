@@ -33,6 +33,21 @@ Rectangle {
         if (m > 0) return m + "m " + sec + "s";
         return sec + "s";
     }
+    function _recurLabel(r) {
+        switch (r) {
+            case "every:day":     return "daily";
+            case "every:week":    return "weekly";
+            case "every:weekday": return "weekdays";
+            case "every:mon":     return "Mondays";
+            case "every:tue":     return "Tuesdays";
+            case "every:wed":     return "Wednesdays";
+            case "every:thu":     return "Thursdays";
+            case "every:fri":     return "Fridays";
+            case "every:sat":     return "Saturdays";
+            case "every:sun":     return "Sundays";
+        }
+        return r ? String(r).replace("every:", "") : "";
+    }
 
     radius: 8
     color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
@@ -274,6 +289,25 @@ Rectangle {
                 }
                 font.family: Theme.fontMono
                 font.pixelSize: 10
+            }
+            // Recurrence chip (HEAP-77).
+            Rectangle {
+                visible: card.task && card.task.recurrence && String(card.task.recurrence).length > 0
+                radius: 4
+                color: Theme.withAlpha(Theme.mOneone, 0.14)
+                border.color: Theme.mOneone
+                border.width: 1
+                implicitWidth: recurT.implicitWidth + 10
+                implicitHeight: recurT.implicitHeight + 2
+                Text {
+                    id: recurT
+                    anchors.centerIn: parent
+                    text: "🔁 " + card._recurLabel(card.task ? card.task.recurrence : "")
+                    color: Theme.mOneone
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
             }
             Item { Layout.fillWidth: true }
             // Time-tracking chip — click to start/stop; live while running.

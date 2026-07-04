@@ -27,6 +27,9 @@ struct Task {
   // stopped). Live elapsed = trackedSeconds + (now - timerStartedAt).
   int trackedSeconds = 0;
   QDateTime timerStartedAt;
+  // Recurrence (HEAP-77): "" = none, else a chrono token like "every:weekday".
+  // Completing (moving to done) a recurring task spawns the next occurrence.
+  QString recurrence;
   // Tracker-sync link (HEAP-74): set when this task mirrors an external issue.
   // Empty for locally-created tasks. Used to route status pushes and to match
   // pulled issues back to their task on the next sync.
@@ -97,6 +100,7 @@ class TaskModel : public QAbstractListModel {
     RecentCommitsRole,
     TrackedSecondsRole,
     IsTimingRole,
+    RecurrenceRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

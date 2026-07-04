@@ -261,6 +261,11 @@ class AppController : public QObject {
   // the project prefix — used by QuickCapture so the user is reminded to
   // assign a real ticket id later.
   Q_INVOKABLE QVariantMap newQuickTaskDraft() const;
+  // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
+  // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
+  // task (checklist in the description) onto the board.
+  Q_INVOKABLE QVariantList taskTemplates() const;
+  Q_INVOKABLE void createTaskFromTemplate(const QString& name);
   Q_INVOKABLE void saveTask(const QVariantMap& draft);
   Q_INVOKABLE void deleteTask(const QString& id);
   Q_INVOKABLE bool canTransitionStatus(const QString& taskId, const QString& newStatus);

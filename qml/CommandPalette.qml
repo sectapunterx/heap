@@ -123,6 +123,9 @@ Popup {
                 root.openPerson(entry.personId);
             } else if (entry.kind === "note") {
                 AppController.currentView = "notes";
+            } else if (entry.kind === "template") {
+                AppController.currentView = "board";
+                AppController.createTaskFromTemplate(entry.templateName);
             }
             root.close();
         });
@@ -225,6 +228,7 @@ Popup {
                                     case "profile": return "●";
                                     case "person":  return "P";
                                     case "note":    return "N";
+                                    case "template": return "✚";
                                 }
                                 return "?";
                             }
