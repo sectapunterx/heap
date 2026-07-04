@@ -9,6 +9,11 @@ if (WIN32)
     enable_language(RC)
 endif ()
 
+# Objective-C++ for the Carbon global-hotkey backend (GlobalHotkey_mac.mm). (HEAP-68)
+if (APPLE)
+    enable_language(OBJCXX)
+endif ()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -82,6 +87,7 @@ qt_add_library(heap_core STATIC
     src/update/Updater.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -175,6 +181,10 @@ target_link_libraries(heap_core PUBLIC
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
 endif()
+# Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm.
+if(APPLE)
+    target_link_libraries(heap_core PUBLIC "-framework Carbon")
+endif()
 
 # Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
 # can adapt the Settings UI: unimplemented sections are shown disabled in
@@ -225,6 +235,28 @@ qt_add_resources(heap "brand"
         design/brand-export/surfaces/heap-marketing-hero.svg
         design/brand-export/surfaces/heap-og-card.svg
 )
+
+# ── macOS .app bundle metadata (HEAP-68) ──
+# A real Info.plist (identifier, display name, high-DPI, min OS) instead of the
+# generic one Qt auto-generates. The .icns is optional: it is generated in CI
+# from the brand SVG (see .github/workflows) and only wired when present, so a
+# plain local build still succeeds with Qt's default icon.
+if(APPLE)
+    set(MACOSX_BUNDLE_EXECUTABLE_NAME "heap")
+    set(MACOSX_BUNDLE_BUNDLE_NAME "heap.")
+    set(MACOSX_BUNDLE_GUI_IDENTIFIER "local.heap.app")
+    set(MACOSX_BUNDLE_BUNDLE_VERSION "${PROJECT_VERSION}")
+    set(MACOSX_BUNDLE_SHORT_VERSION_STRING "${PROJECT_VERSION}")
+    set_target_properties(heap PROPERTIES
+        MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in")
+
+    set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap.icns")
+    if(EXISTS "${_heap_icns}")
+        set(MACOSX_BUNDLE_ICON_FILE "heap.icns")
+        target_sources(heap PRIVATE "${_heap_icns}")
+        set_source_files_properties("${_heap_icns}" PROPERTIES MACOSX_PACKAGE_LOCATION "Resources")
+    endif()
+endif()
 
 install(TARGETS heap
     BUNDLE  DESTINATION .

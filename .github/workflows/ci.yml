@@ -225,7 +225,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, windows-latest, macos-14]
     steps:
       - uses: actions/checkout@v4
 
@@ -270,6 +270,30 @@ jobs:
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-gcc
             mingw-w64-ucrt-x86_64-ccache
+
+      # macOS: build the .app bundle + tests to validate the native bundle,
+      # Objective-C++ Carbon hotkey backend, and tray-fallback notifications
+      # (HEAP-68). Qt 6.8.1 to match Linux.
+      - name: Install Qt6 (macos)
+        if: runner.os == 'macOS'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.1"
+          cache: true
+
+      - name: Install ninja (macos)
+        if: runner.os == 'macOS'
+        run: brew install ninja
+
+      - name: Configure (macos)
+        if: runner.os == 'macOS'
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build (macos)
+        if: runner.os == 'macOS'
+        run: |
+          cmake --build build --parallel --target heap heap_all_tests
 
       - name: Configure (linux)
         if: runner.os == 'Linux'
@@ -323,7 +347,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [ubuntu-24.04, windows-latest]
+        os: [ubuntu-24.04, windows-latest, macos-14]
     steps:
       - uses: actions/checkout@v4
 
@@ -357,6 +381,13 @@ jobs:
             mingw-w64-ucrt-x86_64-qt6-declarative
             mingw-w64-ucrt-x86_64-cmake
 
+      - name: Install Qt6 (macos)
+        if: runner.os == 'macOS'
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.1"
+          cache: true
+
       - name: Download build artifact
         uses: actions/download-artifact@v4
         with:
@@ -381,6 +412,15 @@ jobs:
       - name: Run ctest (windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
+        run: |
+          ctest --test-dir build/tests \
+            --output-on-failure \
+            --output-junit ctest-${{ matrix.os }}.xml
+
+      # macOS: native bash; install-qt-action put Qt on DYLD/CMAKE paths.
+      - name: Run ctest (macos)
+        if: runner.os == 'macOS'
+        shell: bash
         run: |
           ctest --test-dir build/tests \
             --output-on-failure \

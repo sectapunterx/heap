@@ -252,13 +252,9 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   package-macos:
     name: Package (macOS)
-    # Disabled: install-qt-action fails to provision Qt6 on macos-14/arm64,
-    # which blocked the whole Release. macOS packaging is tracked separately in
-    # HEAP-68 (macOS support). Re-enable by setting the repo variable
-    # RELEASE_MACOS=true and restoring package-macos to `publish.needs` once the
-    # Qt install is fixed. (A repo variable, not a literal `false`, so actionlint
-    # doesn't reject a constant if-condition.)
-    if: ${{ vars.RELEASE_MACOS == 'true' }}
+    # Re-enabled in HEAP-68: the earlier failure was install-qt-action on Qt
+    # 6.7.* / macos-14; 6.8.1 provisions fine (same version now used across CI),
+    # and the .app bundle (Info.plist + Carbon hotkey) builds there.
     needs: meta
     runs-on: macos-14
     # Job-level env so the optional signing step's `if:` can read it (a step's
@@ -279,7 +275,7 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.7.*"
+          version: "6.8.1"
           modules: qtdeclarative
 
       - name: Configure & build
@@ -325,9 +321,7 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   publish:
     name: Publish release
-    # package-macos intentionally omitted — it is disabled (HEAP-68). Re-add it
-    # here when macOS packaging is restored.
-    needs: [meta, package-windows, package-linux]
+    needs: [meta, package-windows, package-linux, package-macos]
     runs-on: ubuntu-24.04
     steps:
       - name: Download all artifacts
