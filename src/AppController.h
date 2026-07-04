@@ -266,6 +266,12 @@ class AppController : public QObject {
   Q_INVOKABLE bool canTransitionStatus(const QString& taskId, const QString& newStatus);
   Q_INVOKABLE void setArchived(const QString& taskId, bool archived);
 
+  // Time tracking (HEAP-78). start/stop the per-task timer (only one runs at a
+  // time); elapsedSecondsFor returns the live total incl. the running session.
+  Q_INVOKABLE void startTaskTimer(const QString& id);
+  Q_INVOKABLE void stopTaskTimer(const QString& id);
+  Q_INVOKABLE int elapsedSecondsFor(const QString& id) const;
+
   // ---- Multi-select API ----
   QStringList selectedTaskIds() const {
     return m_selectedTaskIdsList;
@@ -423,6 +429,9 @@ class AppController : public QObject {
   // people, notes) and put it on the clipboard. Bound to the profile.exportMd
   // shortcut (Ctrl+Shift+E).
   Q_INVOKABLE void copyActiveProfileMarkdownToClipboard();
+  // Weekly "what I shipped" report (HEAP-78): done tasks from the last 7 days
+  // with tracked time, copied to the clipboard as Markdown.
+  Q_INVOKABLE void copyWeeklyReportToClipboard();
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 

@@ -131,6 +131,26 @@ TEST_F(PersistenceTest, AbsentStateIsCleanFirstRun) {
   EXPECT_EQ(firstProfileName(app), QStringLiteral("Example"));
 }
 
+// Tracked time must survive an app restart (HEAP-78 "across sessions").
+TEST_F(PersistenceTest, TrackedSecondsSurvivesReload) {
+  {
+    AppController app;
+    Task t;
+    t.id = QStringLiteral("TIME-1");
+    t.title = QStringLiteral("timed");
+    t.status = QStringLiteral("todo");
+    t.priority = QStringLiteral("P2");
+    t.trackedSeconds = 4242;
+    app.tasks()->reset({t});
+    app.setCrumbUser(QStringLiteral("arm-save"));  // arm the save timer
+    app.flushSave();
+  }
+  AppController app2;
+  const int row = app2.tasks()->indexOfId(QStringLiteral("TIME-1"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app2.tasks()->items().at(row).trackedSeconds, 4242);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

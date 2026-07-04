@@ -13,6 +13,7 @@
 
 #include <QApplication>
 #include <QClipboard>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -91,6 +92,28 @@ TEST_F(MarkdownExportTest, ArchivedTasksAreExcluded) {
 
   EXPECT_TRUE(md.contains(QStringLiteral("`T-NEW`")));
   EXPECT_FALSE(md.contains(QStringLiteral("`T-OLD`")));
+}
+
+// ─── Weekly "what I shipped" report (HEAP-78) ─────────────────────────
+
+TEST_F(MarkdownExportTest, WeeklyReportIncludesRecentDoneWithTrackedTime) {
+  Task recent = makeTask(QStringLiteral("W-1"), QStringLiteral("Shipped this week"), QStringLiteral("P1"), QStringLiteral("done"));
+  recent.statusChangedAt = QDateTime::currentDateTime().addDays(-2);
+  recent.trackedSeconds = 3 * 3600 + 30 * 60;  // 3h30m
+  Task old = makeTask(QStringLiteral("W-OLD"), QStringLiteral("Shipped long ago"), QStringLiteral("P2"), QStringLiteral("done"));
+  old.statusChangedAt = QDateTime::currentDateTime().addDays(-30);
+  Task wip = makeTask(QStringLiteral("W-WIP"), QStringLiteral("Still going"), QStringLiteral("P1"), QStringLiteral("prog"));
+  wip.statusChangedAt = QDateTime::currentDateTime().addDays(-1);
+  app_->tasks()->reset({recent, old, wip});
+
+  app_->copyWeeklyReportToClipboard();
+  const QString md = QGuiApplication::clipboard()->text();
+
+  EXPECT_TRUE(md.contains(QStringLiteral("What I shipped"))) << md.toStdString();
+  EXPECT_TRUE(md.contains(QStringLiteral("`W-1`")));
+  EXPECT_TRUE(md.contains(QStringLiteral("3h 30m")));    // tracked time rendered
+  EXPECT_FALSE(md.contains(QStringLiteral("`W-OLD`")));  // >7 days → excluded
+  EXPECT_FALSE(md.contains(QStringLiteral("`W-WIP`")));  // not done → excluded
 }
 
 int main(int argc, char** argv) {

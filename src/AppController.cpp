@@ -85,6 +85,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.duplicated", {"Profile duplicated: %1", "Дублирован профиль: %1"}},
       {"profile.exported", {"Profile exported: %1", "Профиль экспортирован: %1"}},
       {"profile.mdCopied", {"Profile Markdown copied to clipboard", "Markdown профиля скопирован в буфер"}},
+      {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
@@ -132,6 +133,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.profile.exportMd.label", {"Export profile to Markdown", "Экспорт профиля в Markdown"}},
       {"shortcut.profile.exportMd.desc",
        {"Puts a markdown summary of the active profile into the clipboard.", "Кладёт markdown-выжимку активного профиля в буфер."}},
+      {"shortcut.profile.weeklyReport.label", {"Weekly shipped report", "Недельный отчёт"}},
+      {"shortcut.profile.weeklyReport.desc",
+       {"Copies a Markdown report of tasks marked done in the last 7 days, with tracked time.",
+        "Копирует Markdown-отчёт задач, завершённых за последние 7 дней, с учётом времени."}},
       {"shortcut.tweaks.open.label", {"Open Tweaks", "Открыть Tweaks"}},
       {"shortcut.tweaks.open.desc", {"Theme, density, workday.", "Тема, плотность, рабочий день."}},
       {"shortcut.hotkeys.open.label", {"Open Hotkeys", "Открыть Hotkeys"}},
@@ -755,7 +760,9 @@ void AppController::saveTask(const QVariantMap& draft) {
       const Task& prev = m_tasks.items().at(existing);
       t.archived = draft.contains("archived") ? draft.value("archived").toBool() : prev.archived;
       t.statusChangedAt = prev.statusChangedAt;
-      // The editor never exposes the tracker link — carry it across edits.
+      // The editor exposes neither the tracker link nor the timer — carry both.
+      t.trackedSeconds = prev.trackedSeconds;
+      t.timerStartedAt = prev.timerStartedAt;
       t.externalId = prev.externalId;
       t.externalUrl = prev.externalUrl;
       t.externalProvider = prev.externalProvider;
@@ -1224,6 +1231,8 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["deadline"] = t.deadline;
   m["branch"] = t.branch;
   m["archived"] = t.archived;
+  m["trackedSeconds"] = t.trackedSeconds;
+  m["isTiming"] = t.timerStartedAt.isValid();
   return m;
 }
 
@@ -1469,6 +1478,93 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
 
   copyToClipboard(md);
   emit toast(tr_("profile.mdCopied"));
+}
+
+namespace {
+QString formatTrackedDuration(int secs) {
+  const int h = secs / 3600;
+  const int m = (secs % 3600) / 60;
+  return h > 0 ? QStringLiteral("%1h %2m").arg(h).arg(m) : QStringLiteral("%1m").arg(m);
+}
+}  // namespace
+
+void AppController::copyWeeklyReportToClipboard() {
+  snapshotActiveProfile();
+  const int pi = profileIndexOf(m_activeProfileId);
+  if(pi < 0) {
+    return;
+  }
+  const Profile& p = m_profiles[pi];
+  const QDate since = QDate::currentDate().addDays(-7);
+
+  QVector<const Task*> shipped;
+  int totalSecs = 0;
+  for(const Task& t : p.tasks) {
+    if(t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.date() >= since) {
+      shipped.push_back(&t);
+      totalSecs += t.trackedSeconds;
+    }
+  }
+
+  QString md;
+  md += QStringLiteral("# What I shipped — ") + p.name + QStringLiteral("\n\n");
+  md += QStringLiteral("_") + since.toString(Qt::ISODate) + QStringLiteral(" → ") + QDate::currentDate().toString(Qt::ISODate) +
+        QStringLiteral("_\n\n");
+  if(shipped.isEmpty()) {
+    md += QStringLiteral("_Nothing marked done in the last 7 days._\n");
+  } else {
+    md += QStringLiteral("**") + QString::number(shipped.size()) + QStringLiteral(" task(s) shipped");
+    if(totalSecs > 0) {
+      md += QStringLiteral(" · ") + formatTrackedDuration(totalSecs) + QStringLiteral(" tracked");
+    }
+    md += QStringLiteral("**\n\n");
+    for(const Task* t : shipped) {
+      QString line = QStringLiteral("- ");
+      if(!t->id.isEmpty()) {
+        line += QStringLiteral("`") + t->id + QStringLiteral("` ");
+      }
+      line += t->title;
+      QStringList meta;
+      meta << QStringLiteral("done ") + t->statusChangedAt.date().toString(Qt::ISODate);
+      if(t->trackedSeconds > 0) {
+        meta << formatTrackedDuration(t->trackedSeconds);
+      }
+      line += QStringLiteral("  — ") + meta.join(QStringLiteral(" · "));
+      md += line + QStringLiteral("\n");
+    }
+  }
+
+  copyToClipboard(md);
+  emit toast(tr_("profile.weeklyCopied"));
+}
+
+void AppController::startTaskTimer(const QString& id) {
+  if(m_tasks.indexOfId(id) < 0) {
+    return;
+  }
+  m_tasks.startTiming(id);
+  scheduleSave();
+}
+
+void AppController::stopTaskTimer(const QString& id) {
+  if(m_tasks.indexOfId(id) < 0) {
+    return;
+  }
+  m_tasks.stopTiming(id);
+  scheduleSave();
+}
+
+int AppController::elapsedSecondsFor(const QString& id) const {
+  const int row = m_tasks.indexOfId(id);
+  if(row < 0) {
+    return 0;
+  }
+  const Task& t = m_tasks.items().at(row);
+  int secs = t.trackedSeconds;
+  if(t.timerStartedAt.isValid()) {
+    secs += static_cast<int>(t.timerStartedAt.secsTo(QDateTime::currentDateTime()));
+  }
+  return secs;
 }
 
 void AppController::markWelcomeSeen() {
@@ -1861,6 +1957,14 @@ QJsonArray tasksToJson(const QVector<Task>& xs) {
     o["branch"] = t.branch;
     o["statusChangedAt"] = t.statusChangedAt.isValid() ? t.statusChangedAt.toString(Qt::ISODate) : QString();
     o["archived"] = t.archived;
+    // Time tracking (HEAP-78) — omitted when zero/stopped so untimed task JSON
+    // stays byte-identical.
+    if(t.trackedSeconds > 0) {
+      o["trackedSeconds"] = t.trackedSeconds;
+    }
+    if(t.timerStartedAt.isValid()) {
+      o["timerStartedAt"] = t.timerStartedAt.toString(Qt::ISODate);
+    }
     // Tracker-sync link — only emitted for synced tasks so locally-created
     // task JSON stays byte-identical to before HEAP-74.
     if(!t.externalId.isEmpty()) {
@@ -1891,6 +1995,8 @@ QVector<Task> tasksFromJson(const QJsonArray& a) {
       t.statusChangedAt = QDateTime::currentDateTime();
     }
     t.archived = o["archived"].toBool(false);
+    t.trackedSeconds = o["trackedSeconds"].toInt(0);
+    t.timerStartedAt = QDateTime::fromString(o["timerStartedAt"].toString(), Qt::ISODate);
     t.externalId = o["externalId"].toString();
     t.externalUrl = o["externalUrl"].toString();
     t.externalProvider = o["externalProvider"].toString();
@@ -3006,6 +3112,7 @@ void AppController::seedShortcutCatalog() {
   add("profile.next", "Ctrl+]");
   add("profile.prev", "Ctrl+[");
   add("profile.exportMd", "Ctrl+Shift+E");
+  add("profile.weeklyReport", "Ctrl+Shift+W");
   add("tweaks.open", "Ctrl+,");
   add("hotkeys.open", "Ctrl+/");
   add("undo", "Ctrl+Z");
