@@ -22,6 +22,11 @@ struct Task {
   QString branch;
   QDateTime statusChangedAt;  // last time `status` was mutated
   bool archived = false;      // hidden from Board/Timeline once auto-archived
+  // Time tracking (HEAP-78). trackedSeconds is the accumulated total; while a
+  // timer runs, timerStartedAt marks when the current session began (invalid =
+  // stopped). Live elapsed = trackedSeconds + (now - timerStartedAt).
+  int trackedSeconds = 0;
+  QDateTime timerStartedAt;
   // Tracker-sync link (HEAP-74): set when this task mirrors an external issue.
   // Empty for locally-created tasks. Used to route status pushes and to match
   // pulled issues back to their task on the next sync.
@@ -90,6 +95,8 @@ class TaskModel : public QAbstractListModel {
     GitAheadRole,
     GitBehindRole,
     RecentCommitsRole,
+    TrackedSecondsRole,
+    IsTimingRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
@@ -100,6 +107,11 @@ class TaskModel : public QAbstractListModel {
   void setBlockedStuckIds(const QSet<QString>& ids);
   void setArchived(const QString& id, bool archived);
   void stampStatusChange(const QString& id);
+  // Time tracking (HEAP-78). startTiming marks a task running (stopping any
+  // other running task); stopTiming folds the elapsed session into
+  // trackedSeconds. Both emit dataChanged for the timing roles.
+  void startTiming(const QString& id);
+  void stopTiming(const QString& id);
 
   // Push live git-derived data for a task (PR state, ahead/behind). Only
   // keys present in \p info are updated; others stay as-is. Emits

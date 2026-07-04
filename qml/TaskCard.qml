@@ -19,6 +19,21 @@ Rectangle {
 
     signal rangeSelectRequested(string anchorId)
 
+    // Time tracking (HEAP-78): tick once a second while this task's timer runs
+    // so the elapsed chip stays live; _timerTick is read in the chip binding.
+    property int _timerTick: 0
+    Timer {
+        interval: 1000; repeat: true
+        running: card.task && card.task.isTiming === true
+        onTriggered: card._timerTick++
+    }
+    function _fmtElapsed(s) {
+        const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+        if (h > 0) return h + "h " + m + "m";
+        if (m > 0) return m + "m " + sec + "s";
+        return sec + "s";
+    }
+
     radius: 8
     color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
         : _selected ? Theme.withAlpha(Theme.accent, 0.10)
@@ -261,6 +276,41 @@ Rectangle {
                 font.pixelSize: 10
             }
             Item { Layout.fillWidth: true }
+            // Time-tracking chip — click to start/stop; live while running.
+            Rectangle {
+                visible: card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0)
+                radius: 4
+                color: card.task && card.task.isTiming ? Theme.withAlpha(Theme.p1, 0.18) : Theme.withAlpha(Theme.textDim, 0.14)
+                border.color: card.task && card.task.isTiming ? Theme.p1 : Theme.border
+                border.width: 1
+                implicitWidth: timerT.implicitWidth + 10
+                implicitHeight: timerT.implicitHeight + 2
+                Text {
+                    id: timerT
+                    anchors.centerIn: parent
+                    text: {
+                        card._timerTick;  // re-evaluate each tick while running
+                        if (!card.task) return "";
+                        const s = card.task.isTiming ? AppController.elapsedSecondsFor(card.task.id)
+                                                     : (card.task.trackedSeconds || 0);
+                        return (card.task.isTiming ? "▶ " : "⏱ ") + card._fmtElapsed(s);
+                    }
+                    color: card.task && card.task.isTiming ? Theme.p1 : Theme.textMuted
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+                MouseArea {
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        if (!card.task) return;
+                        if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
+                        else AppController.startTaskTimer(card.task.id);
+                    }
+                }
+            }
             Rectangle {
                 visible: card.scheduled && card.scheduled.length > 0
                 radius: 4
@@ -358,6 +408,15 @@ Rectangle {
         }
         QQC.MenuItem {
             text: "✎  " + I18n.t("taskcard.edit"); onTriggered: card.clicked()
+        }
+        QQC.MenuItem {
+            text: card.task && card.task.isTiming ? ("⏹  " + I18n.t("taskcard.stopTimer"))
+                                                  : ("▶  " + I18n.t("taskcard.startTimer"))
+            onTriggered: {
+                if (!card.task) return;
+                if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
+                else AppController.startTaskTimer(card.task.id);
+            }
         }
         QQC.MenuSeparator {}
         QQC.MenuItem {

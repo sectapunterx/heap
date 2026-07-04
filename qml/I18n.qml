@@ -151,6 +151,8 @@ QtObject {
             "taskcard.copyId": "Copy ID",
             "taskcard.copyBranch": "Copy branch",
             "taskcard.createBranch": "Create branch",
+            "taskcard.startTimer": "Start timer",
+            "taskcard.stopTimer": "Stop timer",
 
             // ── TaskEditor / EventEditor / PersonEditor / ProfileEditor ──
             "editor.new.task": "New task",
@@ -672,6 +674,8 @@ QtObject {
             "taskcard.copyId": "Копировать ID",
             "taskcard.copyBranch": "Копировать branch",
             "taskcard.createBranch": "Создать ветку",
+            "taskcard.startTimer": "Запустить таймер",
+            "taskcard.stopTimer": "Остановить таймер",
 
             "editor.new.task": "Новая задача",
             "editor.edit.task": "Редактировать задачу",

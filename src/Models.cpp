@@ -20,6 +20,8 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {GitAheadRole, "gitAhead"},
       {GitBehindRole, "gitBehind"},
       {RecentCommitsRole, "recentCommits"},
+      {TrackedSecondsRole, "trackedSeconds"},
+      {IsTimingRole, "isTiming"},
   };
 }
 
@@ -61,6 +63,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return m_git.value(t.id).behind;
     case RecentCommitsRole:
       return m_git.value(t.id).recentCommits;
+    case TrackedSecondsRole:
+      return t.trackedSeconds;
+    case IsTimingRole:
+      return t.timerStartedAt.isValid();
   }
   return {};
 }
@@ -138,6 +144,36 @@ void TaskModel::stampStatusChange(const QString& id) {
   m_items[row].statusChangedAt = QDateTime::currentDateTime();
   const QModelIndex mi = index(row, 0);
   emit dataChanged(mi, mi, {StatusChangedAtRole});
+}
+
+void TaskModel::startTiming(const QString& id) {
+  const int row = indexOfId(id);
+  if(row < 0 || m_items[row].timerStartedAt.isValid()) {
+    return;
+  }
+  // Only one task tracks at a time — stop any other running timer first.
+  for(int i = 0; i < m_items.size(); ++i) {
+    if(i != row && m_items[i].timerStartedAt.isValid()) {
+      stopTiming(m_items[i].id);
+    }
+  }
+  m_items[row].timerStartedAt = QDateTime::currentDateTime();
+  const QModelIndex mi = index(row, 0);
+  emit dataChanged(mi, mi, {TrackedSecondsRole, IsTimingRole});
+}
+
+void TaskModel::stopTiming(const QString& id) {
+  const int row = indexOfId(id);
+  if(row < 0 || !m_items[row].timerStartedAt.isValid()) {
+    return;
+  }
+  const qint64 elapsed = m_items[row].timerStartedAt.secsTo(QDateTime::currentDateTime());
+  if(elapsed > 0) {
+    m_items[row].trackedSeconds += static_cast<int>(elapsed);
+  }
+  m_items[row].timerStartedAt = QDateTime();  // clear → stopped
+  const QModelIndex mi = index(row, 0);
+  emit dataChanged(mi, mi, {TrackedSecondsRole, IsTimingRole});
 }
 
 void TaskModel::setArchived(const QString& id, bool archived) {

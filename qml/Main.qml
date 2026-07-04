@@ -573,6 +573,12 @@ ApplicationWindow {
         onActivated: AppController.copyActiveProfileMarkdownToClipboard()
     }
     Shortcut {
+        sequence: _kbd("profile.weeklyReport")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.copyWeeklyReportToClipboard()
+    }
+    Shortcut {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing

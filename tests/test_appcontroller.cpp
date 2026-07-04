@@ -289,6 +289,29 @@ TEST_F(AppControllerTest, SnippetTagsAndLanguageReachPaletteBody) {
   EXPECT_TRUE(ok);
 }
 
+// ─── Time tracking (HEAP-78) ──────────────────────────────────────────
+
+TEST_F(AppControllerTest, TaskTimerStartStopAndSingleActive) {
+  app_->tasks()->reset({mkTask(QStringLiteral("A"), QStringLiteral("a")), mkTask(QStringLiteral("B"), QStringLiteral("b"))});
+  const auto timing = [&](const QString& id) {
+    const int row = app_->tasks()->indexOfId(id);
+    return app_->tasks()->data(app_->tasks()->index(row, 0), TaskModel::IsTimingRole).toBool();
+  };
+
+  app_->startTaskTimer(QStringLiteral("A"));
+  EXPECT_TRUE(timing(QStringLiteral("A")));
+  EXPECT_GE(app_->elapsedSecondsFor(QStringLiteral("A")), 0);
+
+  // Only one timer runs at a time — starting B stops A.
+  app_->startTaskTimer(QStringLiteral("B"));
+  EXPECT_TRUE(timing(QStringLiteral("B")));
+  EXPECT_FALSE(timing(QStringLiteral("A")));
+
+  // Stopping clears the running flag.
+  app_->stopTaskTimer(QStringLiteral("B"));
+  EXPECT_FALSE(timing(QStringLiteral("B")));
+}
+
 // ─── headless boot ────────────────────────────────────────────────────
 
 int main(int argc, char** argv) {
