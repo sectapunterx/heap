@@ -74,6 +74,8 @@ qt_add_library(heap_core STATIC
     src/platform/GlobalHotkey.cpp
     src/integrations/StatusMap.cpp
     src/integrations/GithubProvider.cpp
+    src/integrations/JiraProvider.cpp
+    src/integrations/GitlabProvider.cpp
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
     src/update/Updater.cpp
@@ -150,6 +152,8 @@ qt_add_qml_module(heap_core
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
         src/integrations/GithubProvider.h
+        src/integrations/JiraProvider.h
+        src/integrations/GitlabProvider.h
         src/integrations/IntegrationProvider.h
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h

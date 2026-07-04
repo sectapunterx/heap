@@ -13,6 +13,7 @@
 #include <QVariantMap>
 
 #include <memory>
+#include <vector>
 
 class QJsonObject;
 
@@ -38,7 +39,8 @@ class Updater;
 
 namespace heap::integrations {
 class IntegrationProvider;
-}
+struct ExternalTask;
+}  // namespace heap::integrations
 
 class AppController : public QObject {
   Q_OBJECT
@@ -632,10 +634,15 @@ class AppController : public QObject {
   QString m_updateStatus;
   QString m_latestReleaseUrl;
 
-  // ---- Tracker sync (HEAP-74) ----
-  std::unique_ptr<heap::integrations::IntegrationProvider> m_syncProvider;
-  // Reconcile the GitHub provider with the current integrations settings.
+  // ---- Tracker sync (HEAP-74 GitHub, HEAP-75 Jira + GitLab) ----
+  // Every connected + configured provider runs concurrently; a task's
+  // externalProvider routes status pushes to the matching one.
+  std::vector<std::unique_ptr<heap::integrations::IntegrationProvider>> m_syncProviders;
+  // Reconcile the active providers with the current integrations settings.
   void applyIntegrationSettings();
+  // Fold a batch of pulled external tasks into the model. providerId tags the
+  // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
+  void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
