@@ -492,6 +492,7 @@ QtObject {
             // Git section
             "settings.git.repos": "Watched repositories",
             "settings.git.repos.hint": "Each path is the root of a git worktree (contains .git). Task prefix comes from Tasks → idPrefix.",
+            "settings.git.match.hint": "A branch links to a task only when its name contains %1-<number> — e.g. %1-42 or feature/%1-42-login. Otherwise the git banner stays hidden. With one prefix, a bare 3–7 digit number in the branch also matches.",
             "settings.git.autoOn": "Automations on checkout",
             "settings.git.autoMove": "Move task to In Progress",
             "settings.git.autoMove.hint": "When git checkout lands on a branch with a known task prefix.",
@@ -1005,6 +1006,7 @@ QtObject {
 
             "settings.git.repos": "Отслеживаемые репозитории",
             "settings.git.repos.hint": "Каждый путь — корень git worktree (содержит .git). Префикс задачи берётся из секции Tasks → idPrefix.",
+            "settings.git.match.hint": "Ветка связывается с задачей только если её имя содержит %1-<число> — например %1-42 или feature/%1-42-login. Иначе git-баннер не показывается. С одним префиксом подходит и просто число из 3–7 цифр в имени ветки.",
             "settings.git.autoOn": "Автоматизации при checkout",
             "settings.git.autoMove": "Перевести задачу в In Progress",
             "settings.git.autoMove.hint": "Когда git checkout попадает в ветку с известным префиксом задачи.",
