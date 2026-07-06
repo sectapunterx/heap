@@ -9,6 +9,12 @@
 
 #include <csignal>
 
+#ifdef Q_OS_MACOS
+#include <QQuickWindow>
+
+#include "platform/MacWindow.h"
+#endif
+
 // Injected by CMake from project() VERSION; fallback keeps ad-hoc builds sane.
 #ifndef HEAP_VERSION
 #define HEAP_VERSION "0.0.0-dev"
@@ -59,5 +65,15 @@ int main(int argc, char* argv[]) {
       },
       Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/TodoCpp/qml/Main.qml")));
+
+#ifdef Q_OS_MACOS
+  // Unify the title bar with the app's top strip (traffic lights inlaid).
+  if(!engine.rootObjects().isEmpty()) {
+    if(auto* win = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst())) {
+      heap::platform::applyUnifiedTitlebar(win);
+    }
+  }
+#endif
+
   return QApplication::exec();
 }

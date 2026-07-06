@@ -88,6 +88,7 @@ qt_add_library(heap_core STATIC
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/MacWindow.mm>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -183,9 +184,10 @@ target_link_libraries(heap_core PUBLIC
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
 endif()
-# Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm.
+# Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm;
+# AppKit backs the unified title bar (NSWindow restyle) in MacWindow.mm.
 if(APPLE)
-    target_link_libraries(heap_core PUBLIC "-framework Carbon")
+    target_link_libraries(heap_core PUBLIC "-framework Carbon" "-framework AppKit")
 endif()
 
 # Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
