@@ -14,11 +14,13 @@ on:
   workflow_dispatch:
 
 # Least privilege for the deploy: read the repo, write Pages, mint the OIDC
-# token deploy-pages needs.
+# token deploy-pages needs. `deployments: write` lets the prune step delete the
+# stale github-pages deployment records each publish leaves behind.
 permissions:
   contents: read
   pages: write
   id-token: write
+  deployments: write
 
 # One deploy at a time; don't cancel an in-flight publish.
 concurrency:
@@ -50,3 +52,25 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+
+      # Every publish mints a new github-pages deployment record; only the newest
+      # is live. Left alone they pile up in the Environments view (one per docs
+      # push). Keep just the deployment we published above and delete the rest —
+      # set each inactive first (required before an active deployment can be
+      # deleted), then remove it. Live site is unaffected.
+      - name: Prune stale Pages deployments
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+        run: |
+          set -euo pipefail
+          keep=$(gh api "repos/$REPO/deployments?environment=github-pages&per_page=1" --jq '.[0].id')
+          echo "keeping current deployment: $keep"
+          gh api --paginate "repos/$REPO/deployments?environment=github-pages&per_page=100" --jq '.[].id' \
+            | grep -vx "$keep" \
+            | while read -r id; do
+                gh api -X POST "repos/$REPO/deployments/$id/statuses" -f state=inactive >/dev/null 2>&1 || true
+                gh api -X DELETE "repos/$REPO/deployments/$id" >/dev/null 2>&1 \
+                  && echo "pruned deployment $id" \
+                  || echo "skip (undeletable) $id"
+              done
