@@ -1,8 +1,10 @@
 name: Release
 
-# Cross-platform packaging. Fires automatically when a version tag is pushed
-# (git tag v1.2.3 && git push --tags) and can also be run manually, in which
-# case a dated tag vYYYY.MM.DD-<sha> is minted.
+# Cross-platform packaging. Fires automatically when a semver tag is pushed
+# (git tag v1.2.3 && git push origin v1.2.3) — the tag drives every artifact
+# name and the published release. Running it manually (workflow_dispatch)
+# produces a dev test build (vX.Y.Z-dev.<sha>): artifacts are attached to the
+# run, but nothing is tagged or published.
 on:
   push:
     tags:
@@ -14,27 +16,60 @@ permissions:
 
 jobs:
   # ──────────────────────────────────────────────────────────────────
-  # Resolve the release tag once so every packaging job agrees on the
-  # artifact naming and the publish job knows what to tag.
+  # Resolve the version once so every packaging job agrees on artifact
+  # naming and the publish job knows what to tag. CMakeLists' project()
+  # VERSION is the single source of truth; a pushed tag must match it.
+  # Outputs:
+  #   tag        — vX.Y.Z (real) or vX.Y.Z-dev.<sha> (manual test build)
+  #   release    — "true" only for a pushed tag (gates the publish job)
+  #   prerelease — "true" for a hyphenated tag (rc/dev): never the update target
   # ──────────────────────────────────────────────────────────────────
   meta:
-    name: Resolve tag
+    name: Resolve version
     runs-on: ubuntu-24.04
     outputs:
-      tag: ${{ steps.tag.outputs.value }}
+      tag: ${{ steps.tag.outputs.tag }}
+      release: ${{ steps.tag.outputs.release }}
+      prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - name: Compute release tag
+      - name: Resolve version & release kind
         id: tag
         shell: bash
         run: |
           set -euo pipefail
+          # Single source of truth for the numeric version.
+          cmver=$(sed -nE 's/^project\(heap VERSION ([0-9]+\.[0-9]+\.[0-9]+).*/\1/p' CMakeLists.txt | head -n1)
+          if [ -z "$cmver" ]; then
+            echo "::error::could not read project VERSION from CMakeLists.txt"
+            exit 1
+          fi
           if [ "${{ github.ref_type }}" = "tag" ]; then
-            echo "value=${{ github.ref_name }}" >> "$GITHUB_OUTPUT"
+            # Real release: the pushed tag drives naming. Its numeric core must
+            # equal the CMake version so the binary and the release never drift.
+            tag="${{ github.ref_name }}"
+            core="${tag#v}"; core="${core%%-*}"
+            if [ "$core" != "$cmver" ]; then
+              echo "::error::tag $tag core ($core) != CMakeLists project version ($cmver) — bump CMakeLists.txt before tagging"
+              exit 1
+            fi
+            echo "tag=$tag" >> "$GITHUB_OUTPUT"
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            # A hyphen (e.g. v1.1.0-rc.1) marks a pre-release: published, but
+            # softprops keeps it off /releases/latest so the updater ignores it.
+            case "$tag" in
+              *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
+              *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+            esac
           else
-            echo "value=v$(date +%Y.%m.%d)-$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            # Manual dispatch = test build only. A SemVer-valid pre-release string
+            # so the in-app updater (Updater::isNewerVersion) ranks it OLDER than
+            # any real release. No tag is created; the publish job is skipped.
+            echo "tag=v${cmver}-dev.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "prerelease=true" >> "$GITHUB_OUTPUT"
           fi
 
   # ──────────────────────────────────────────────────────────────────
@@ -409,8 +444,11 @@ jobs:
     # publish whatever artifacts exist. A macOS failure no longer sinks the
     # whole release (it did twice before).
     needs: [meta, package-windows, package-linux, package-macos]
+    # release=true only for a pushed tag, so a manual (workflow_dispatch) run
+    # never publishes — its artifacts stay attached to the run as a test build.
     if: >-
       ${{ always() && needs.meta.result == 'success'
+          && needs.meta.outputs.release == 'true'
           && needs.package-windows.result == 'success'
           && needs.package-linux.result == 'success' }}
     runs-on: ubuntu-24.04
@@ -430,4 +468,8 @@ jobs:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: "heap ${{ needs.meta.outputs.tag }}"
           generate_release_notes: true
+          # A full release becomes /releases/latest (the updater's target); a
+          # hyphenated tag (rc/beta) is flagged pre-release and stays off latest.
+          prerelease: ${{ needs.meta.outputs.prerelease }}
+          make_latest: ${{ needs.meta.outputs.prerelease == 'false' }}
           files: dist/**/*
