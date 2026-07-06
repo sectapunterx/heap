@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the hardened-runtime / notarized macOS build. Consumed only
+  by the Developer-ID branch of release.yml's "Codesign the app" step; the
+  ad-hoc default build ignores it.
+
+  Qt's V4 JavaScript engine JIT-compiles QML/JS; under `codesign --options
+  runtime` that requires com.apple.security.cs.allow-jit or the app can crash
+  the moment it evaluates a binding. Every framework/plugin is signed with the
+  same identity, so Library Validation is satisfied and no
+  com.apple.security.cs.disable-library-validation is needed.
+-->
+<plist version="1.0">
+<dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+</dict>
+</plist>

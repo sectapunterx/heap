@@ -26,14 +26,31 @@ Release.
 | Windows  | `…-windows-setup.exe`    | Inno Setup ([`installer/heap.iss`](../installer/heap.iss)) wrapping the portable bundle |
 | Linux    | `…-linux-amd64.deb`      | `dpkg-deb` over [`packaging/linux/`](../packaging/linux/) staging |
 | Linux    | `…-linux-x86_64.AppImage`| `linuxdeploy` + the Qt plugin (best-effort; the `.deb` still ships if it fails) |
-| macOS    | `…-macos.dmg`            | `macdeployqt -dmg` (unsigned unless signing secrets are set) |
+| macOS    | `…-macos.dmg`            | `macdeployqt` → `hdiutil` drag-to-Applications dmg, **ad-hoc codesigned** (Developer ID + notarized when signing secrets are set) |
 
 ## macOS signing & notarization
 
-The `.dmg` is **unsigned** by default, so first launch requires a
-right-click → *Open*. To codesign + notarize automatically, add these repo
-secrets — the workflow's optional step activates when `MACOS_CERT_P12` is
-present:
+By default the `.app` inside the `.dmg` is **ad-hoc codesigned** (no paid Apple
+Developer ID required). This gives it a *valid* signature — without it, the
+`install_name_tool` rpath rewrites `macdeployqt` performs on the arm64 binary
+and Qt frameworks leave broken signatures, and a downloaded (quarantined) copy
+fails to launch with the fatal *"heap is damaged and can't be opened"*.
+
+Because the ad-hoc build is not notarized, first launch still shows the
+bypassable *"unidentified developer"* prompt. Open it either way:
+
+- **Right-click → *Open*** (then *Open* again in the dialog), or
+- strip the download quarantine flag:
+  ```bash
+  xattr -dr com.apple.quarantine /Applications/heap.app
+  ```
+
+To codesign with a *Developer ID Application* certificate, notarize and staple
+the ticket automatically — which removes the prompt entirely — add these repo
+secrets. The workflow's optional step activates when `MACOS_CERT_P12` is
+present (it also signs with a hardened runtime + the `allow-jit` entitlement in
+[`packaging/macos/heap.entitlements`](../packaging/macos/heap.entitlements) that
+Qt's JS engine needs):
 
 | Secret | Meaning |
 |--------|---------|
