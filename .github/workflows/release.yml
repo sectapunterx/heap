@@ -280,36 +280,117 @@ jobs:
         with:
           version: "6.8.1"
 
-      - name: Configure & build
-        run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
-          cmake --build build --parallel --target heap
-
-      - name: Deploy + make .dmg
+      # Generate the macOS app icon (.icns) from the brand SVG BEFORE configure,
+      # so CMake's `if(EXISTS heap.icns)` (a configure-time check) wires it into
+      # the bundle. Recipe mirrors design/brand-export/README.md
+      # (librsvg → iconset → iconutil). Without this the .app carries Qt's
+      # generic icon.
+      - name: Generate app icon (.icns)
         run: |
           set -eu
-          APP="build/heap.app"
-          test -d "$APP" || { echo "::error::expected an .app bundle at $APP"; exit 1; }
-          macdeployqt "$APP" -qmldir="$PWD/qml" -dmg
-          mv build/heap.dmg "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          brew install librsvg
+          SVG=design/brand-export/icon/heap-icon.svg
+          ICONSET="$RUNNER_TEMP/heap.iconset"
+          mkdir -p "$ICONSET"
+          for sz in 16 32 128 256 512; do
+            rsvg-convert -w "$sz"       -h "$sz"       -a "$SVG" -o "$ICONSET/icon_${sz}x${sz}.png"
+            rsvg-convert -w "$((sz*2))" -h "$((sz*2))" -a "$SVG" -o "$ICONSET/icon_${sz}x${sz}@2x.png"
+          done
+          iconutil -c icns "$ICONSET" -o design/brand-export/icon/heap.icns
+          test -f design/brand-export/icon/heap.icns
 
-      # Codesign + notarize only when the Apple secrets are configured. See
-      # docs/PACKAGING.md for the required secret names.
-      - name: Codesign & notarize (optional)
+      # arm64 (native to macos-14). CMAKE_OSX_DEPLOYMENT_TARGET pins the Mach-O
+      # `minos` to match Info.plist's LSMinimumSystemVersion (12.0) — otherwise it
+      # is stamped from the runner SDK (14), silently blocking macOS 12/13 users.
+      - name: Configure & build
+        run: |
+          set -eu
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHEAP_BUILD_TESTS=OFF \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build build --parallel --target heap
+          test -d build/heap.app
+
+      # Bundle Qt frameworks/plugins into the .app. NOTE: no -dmg — the .app must
+      # be code-signed AFTER macdeployqt (its install_name_tool rpath rewrites
+      # invalidate the linker's ad-hoc arm64 signatures, which is what makes the
+      # downloaded app read as "damaged") and BEFORE it is sealed into a read-only
+      # dmg. macdeployqt exits 0 even on failure, so verify the relocation worked.
+      - name: Deploy Qt into the bundle
+        run: |
+          set -eu
+          macdeployqt build/heap.app -qmldir="$PWD/qml"
+          test -d build/heap.app/Contents/Frameworks/QtCore.framework
+          if otool -L build/heap.app/Contents/MacOS/heap | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
+            echo "::error::macdeployqt left absolute Qt paths — relocation failed"
+            exit 1
+          fi
+
+      # Re-sign the bundle so the arm64 binary + rewritten frameworks carry a
+      # VALID signature — this is the fix for the fatal Gatekeeper "damaged"
+      # state. Developer ID + hardened runtime when the signing secret is present
+      # (sign inside-out, app last); otherwise an ad-hoc signature, which is
+      # enough to make the app openable via right-click → Open. Runs always
+      # (branches internally) — unlike the notarize step it is not secret-gated.
+      - name: Codesign the app
+        run: |
+          set -eu
+          APP=build/heap.app
+          if [ -n "${MACOS_CERT_P12:-}" ]; then
+            echo "$MACOS_CERT_P12" | base64 --decode > "$RUNNER_TEMP/cert.p12"
+            security create-keychain -p ci build.keychain
+            security set-keychain-settings -lut 21600 build.keychain
+            security default-keychain -s build.keychain
+            security unlock-keychain -p ci build.keychain
+            security import "$RUNNER_TEMP/cert.p12" -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
+            security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k ci build.keychain
+            IDENT="Developer ID Application"
+            # inside-out: nested dylibs (incl. QML plugins), then framework
+            # bundles, then the outer app. Consistent identity satisfies Library
+            # Validation, so no disable-library-validation entitlement is needed.
+            find "$APP" -name '*.dylib' -print0 \
+              | xargs -0 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" {}
+            find "$APP/Contents/Frameworks" -type d -name '*.framework' -print0 \
+              | xargs -0 -I{} codesign --force --options runtime --timestamp --sign "$IDENT" {}
+            codesign --force --options runtime --timestamp \
+              --entitlements packaging/macos/heap.entitlements --sign "$IDENT" "$APP"
+            rm -f "$RUNNER_TEMP/cert.p12"
+          else
+            codesign --force --deep --sign - "$APP"
+          fi
+          codesign --verify --deep --strict --verbose=2 "$APP"
+
+      # Assemble a drag-to-Applications .dmg by hand (hdiutil). This replaces
+      # `macdeployqt -dmg`, whose bare image (just heap.app, no /Applications
+      # target) is what made the mounted dmg look like a lone icon rather than an
+      # installer. create-dmg is avoided — it drives Finder via AppleScript, which
+      # hangs on headless runners.
+      - name: Build .dmg
+        run: |
+          set -eu
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          cp -R build/heap.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "heap" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov \
+            "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+
+      # Notarize only when the Apple secrets are configured — the .app is already
+      # signed + hardened above. Sign the dmg, submit, staple, accept-check. Do
+      # NOT run spctl on the ad-hoc default: it is expected to report "rejected".
+      # See docs/PACKAGING.md for the required secret names.
+      - name: Notarize & staple (optional)
         if: ${{ env.MACOS_CERT_P12 != '' }}
         run: |
           set -eu
-          echo "$MACOS_CERT_P12" | base64 --decode > cert.p12
-          security create-keychain -p ci build.keychain
-          security default-keychain -s build.keychain
-          security unlock-keychain -p ci build.keychain
-          security import cert.p12 -k build.keychain -P "$MACOS_CERT_PASSWORD" -T /usr/bin/codesign
-          security set-key-partition-list -S apple-tool:,apple: -s -k ci build.keychain
-          codesign --deep --force --options runtime --sign "Developer ID Application" "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
-          xcrun notarytool submit "heap-${{ needs.meta.outputs.tag }}-macos.dmg" \
+          DMG="heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          codesign --force --timestamp --sign "Developer ID Application" "$DMG"
+          xcrun notarytool submit "$DMG" \
             --apple-id "$MACOS_NOTARY_APPLE_ID" --password "$MACOS_NOTARY_PASSWORD" \
             --team-id "$MACOS_NOTARY_TEAM_ID" --wait
-          xcrun stapler staple "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          xcrun stapler staple "$DMG"
+          spctl -a -t open --context context:primary-signature -vv "$DMG"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4

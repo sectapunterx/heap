@@ -494,6 +494,68 @@ jobs:
           ctest --test-dir build-san/tests --output-on-failure
 
   # ──────────────────────────────────────────────────────────────────
+  # 7b. macOS packaging smoke-test.
+  # Exercises the release `.dmg` assembly on every push/PR using the ad-hoc
+  # signing path (no secrets), so a change that re-breaks the bundle signature
+  # or the dmg layout fails HERE — via `codesign --verify` — instead of
+  # silently shipping a "damaged" artifact from the tag-triggered Release
+  # workflow. Mirrors release.yml's package-macos (arm64, deployment target
+  # 12.0, macdeployqt relocation guard, ad-hoc sign, hdiutil drag-install dmg).
+  # ──────────────────────────────────────────────────────────────────
+  package-macos-smoke:
+    name: package (macOS smoke)
+    runs-on: macos-14
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@v4
+        with:
+          version: "6.8.1"
+          cache: true
+
+      - name: Install ninja
+        run: brew install ninja
+
+      - name: Configure & build
+        run: |
+          set -eu
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DHEAP_BUILD_TESTS=OFF \
+            -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0
+          cmake --build build --parallel --target heap
+          test -d build/heap.app
+
+      - name: Deploy + ad-hoc sign + assemble dmg
+        run: |
+          set -eu
+          macdeployqt build/heap.app -qmldir="$PWD/qml"
+          test -d build/heap.app/Contents/Frameworks/QtCore.framework
+          if otool -L build/heap.app/Contents/MacOS/heap | grep -Eiq '/Users/runner/work/.*Qt|/aqt'; then
+            echo "::error::macdeployqt left absolute Qt paths — relocation failed"
+            exit 1
+          fi
+          # The re-sign + verify that the original workflow was missing: an
+          # invalidated signature (the "damaged" bug) fails this verify.
+          codesign --force --deep --sign - build/heap.app
+          codesign --verify --deep --strict --verbose=2 build/heap.app
+          STAGE="$RUNNER_TEMP/dmg"
+          mkdir -p "$STAGE"
+          cp -R build/heap.app "$STAGE/"
+          ln -s /Applications "$STAGE/Applications"
+          hdiutil create -volname "heap" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov smoke.dmg
+
+      - name: Verify dmg mounts with the app + Applications target
+        run: |
+          set -eu
+          hdiutil attach smoke.dmg -nobrowse -mountpoint /Volumes/heap
+          test -d /Volumes/heap/heap.app
+          test -L /Volumes/heap/Applications
+          hdiutil detach /Volumes/heap
+
+  # ──────────────────────────────────────────────────────────────────
   # 8. Aggregator — single required status check for branch protection.
   #
   # Branch-protection rules in GitHub require each contributing job to be
@@ -519,6 +581,7 @@ jobs:
       - build
       - test
       - sanitizers
+      - package-macos-smoke
     runs-on: ubuntu-24.04
     timeout-minutes: 2
     steps:
