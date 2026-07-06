@@ -1713,7 +1713,7 @@ void AppController::resetToFirstRun() {
   QFile::remove(stateFilePath());
   QDir(backupDirPath()).removeRecursively();
   {
-    QDir dir(dataDir());
+    const QDir dir(dataDir());
     const QStringList corrupt = dir.entryList(QStringList{"state.corrupt-*.json"}, QDir::Files);
     for(const QString& f : corrupt) {
       QFile::remove(dir.filePath(f));
