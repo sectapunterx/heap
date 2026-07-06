@@ -10,9 +10,9 @@
 #include <csignal>
 
 #ifdef Q_OS_MACOS
-#include <QQuickWindow>
-
 #include "platform/MacWindow.h"
+
+#include <QQuickWindow>
 #endif
 
 // Injected by CMake from project() VERSION; fallback keeps ad-hoc builds sane.
