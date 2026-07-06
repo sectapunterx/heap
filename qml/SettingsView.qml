@@ -818,24 +818,25 @@ Item {
     }
 
     component SwatchRow: ColumnLayout {
+        id: swRoot
         property string label: ""
         property string value: ""
         property var options: []
         signal selected(string color)
         spacing: 4
         Layout.fillWidth: true
-        FieldLabel { label: parent.label }
+        FieldLabel { label: swRoot.label }
         Row {
             spacing: 6
             Repeater {
-                model: parent.parent.options
+                model: swRoot.options
                 delegate: Rectangle {
                     required property string modelData
                     width: 26; height: 26; radius: 13
                     color: modelData
-                    border.color: String(parent.parent.parent.value).toLowerCase() === modelData.toLowerCase() ? Theme.text : "transparent"
+                    border.color: String(swRoot.value).toLowerCase() === modelData.toLowerCase() ? Theme.text : "transparent"
                     border.width: 2
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.parent.parent.selected(modelData) }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: swRoot.selected(modelData) }
                 }
             }
         }
@@ -1242,6 +1243,7 @@ Item {
                         Layout.fillWidth: true; spacing: 10
                         TextRow {
                             Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
                             label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "LTE"
                             hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE")
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
@@ -1260,6 +1262,7 @@ Item {
                         }
                         SegRow {
                             Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
                             label: I18n.t("settings.tasks.defaultPriority")
                             value: (root.settings.tasks && root.settings.tasks.defaultPriority) || "P2"
                             options: ["P0", "P1", "P2", "P3"]
@@ -1943,9 +1946,11 @@ Item {
                     Layout.fillWidth: true
                     RowLayout {
                         spacing: 12
-                        Rectangle {
-                            width: 36; height: 36; radius: 8
-                            color: Theme.accent
+                        BrandLogo {
+                            variant: "mark"
+                            theme: Theme.dark ? "dark" : "light"
+                            Layout.preferredWidth: 36
+                            Layout.preferredHeight: 36
                         }
                         ColumnLayout {
                             spacing: 1
