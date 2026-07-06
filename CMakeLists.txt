@@ -117,6 +117,7 @@ qt_add_qml_module(heap_core
         qml/DocsEditor.qml
         qml/MiniWeek.qml
         qml/DayCalendar.qml
+        qml/DatePickerPopup.qml
         qml/PeopleList.qml
         qml/TaskEditor.qml
         qml/EventEditor.qml
