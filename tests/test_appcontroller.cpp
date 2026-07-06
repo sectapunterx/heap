@@ -13,6 +13,9 @@
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -351,6 +354,42 @@ TEST_F(AppControllerTest, TemplateCreatesPrefilledChecklistTask) {
     }
   }
   EXPECT_TRUE(found);
+}
+
+// ─── Git focus: prefix change re-matches the current branch ───────────
+
+TEST_F(AppControllerTest, GitPrefixChangeRematchesFocusedBranch) {
+  // Watched repo sitting on branch "HEAP-77-x". With prefix LTE the branch
+  // carries no recognizable task id (77 is too short for the lone-digit rule);
+  // switching the prefix to HEAP must make the banner pick it up WITHOUT any
+  // HEAD movement. Regression: setPrefixes updated the matcher but never re-ran
+  // the match on the branch already checked out, so the banner stayed stale
+  // until the next checkout.
+  QTemporaryDir repo;
+  ASSERT_TRUE(repo.isValid());
+  const QString gitDir = repo.path() + QStringLiteral("/.git");
+  ASSERT_TRUE(QDir().mkpath(gitDir));
+  {
+    QFile head(gitDir + QStringLiteral("/HEAD"));
+    ASSERT_TRUE(head.open(QIODevice::WriteOnly | QIODevice::Text));
+    head.write("ref: refs/heads/HEAP-77-x\n");
+  }
+  const QString repoPath = QDir(repo.path()).absolutePath();
+
+  const auto settings = [&](const QString& prefix) {
+    const QJsonObject root{{"tasks", QJsonObject{{"idPrefix", prefix}}}, {"git", QJsonObject{{"watchedRepos", QJsonArray{repoPath}}}}};
+    return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
+  };
+
+  app_->setAppSettingsJson(settings(QStringLiteral("LTE")));
+  EXPECT_EQ(app_->focusedBranch(), QStringLiteral("HEAP-77-x"));
+  EXPECT_EQ(app_->focusedTaskId(), QString());  // no match under LTE
+
+  app_->setAppSettingsJson(settings(QStringLiteral("HEAP")));
+  EXPECT_EQ(app_->focusedTaskId(), QStringLiteral("HEAP-77"));  // linked live
+
+  app_->setAppSettingsJson(settings(QStringLiteral("LTE")));
+  EXPECT_EQ(app_->focusedTaskId(), QString());  // un-match propagates too
 }
 
 // ─── headless boot ────────────────────────────────────────────────────

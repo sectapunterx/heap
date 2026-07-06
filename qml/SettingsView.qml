@@ -1639,6 +1639,14 @@ Item {
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap
                     }
+                    Text {
+                        Layout.fillWidth: true
+                        text: I18n.t("settings.git.match.hint")
+                                .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        wrapMode: Text.WordWrap
+                    }
                     Repeater {
                         model: (root.settings.git && root.settings.git.watchedRepos) || []
                         delegate: RowLayout {

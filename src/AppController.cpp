@@ -372,6 +372,7 @@ AppController::AppController(QObject* parent) :
   connect(this, &AppController::activeProfileChanged, this, [this]() {
     if(m_gitWatcher) {
       m_gitWatcher->setPrefixes(collectPrefixes());
+      refreshFocusedTaskId();
     }
   });
 
@@ -3972,6 +3973,24 @@ void AppController::applyGitSettingsFromMap(const QVariantMap& g) {
   m_gitWatcher->setPrefixes(collectPrefixes());
   m_gitWatcher->setWatchedRepos(repos);
   m_gitWatcher->setPrFetchEnabled(g.value("watchPrState", true).toBool());
+  // A prefix edit lands here (idPrefix lives in app settings) but leaves HEAD
+  // untouched, so re-match the branch we're already on for the banner.
+  refreshFocusedTaskId();
+}
+
+void AppController::refreshFocusedTaskId() {
+  if(m_focusedBranch.isEmpty() || m_focusedBranch == QStringLiteral("(detached HEAD)")) {
+    return;
+  }
+  const heap::git::BranchTaskMatcher m(collectPrefixes());
+  const auto mr = m.extract(m_focusedBranch);
+  const QString newId = mr.matched ? mr.taskId : QString();
+  if(newId == m_focusedTaskId) {
+    return;
+  }
+  m_focusedTaskId = newId;
+  m_dismissedBranches.remove(m_focusedBranch);  // re-arm banner for a now-matching branch
+  emit focusedGitChanged();
 }
 
 void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId) {

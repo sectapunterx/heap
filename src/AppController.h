@@ -679,6 +679,10 @@ class AppController : public QObject {
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
   void applyGitSettingsFromMap(const QVariantMap& git);
+  // Re-derive the focused branch's task id under the current id-prefix and
+  // refresh the banner. Needed because a prefix change (settings/profile) does
+  // not move HEAD, so no branchChanged fires to re-run the match on its own.
+  void refreshFocusedTaskId();
   void onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
