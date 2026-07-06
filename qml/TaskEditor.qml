@@ -296,6 +296,39 @@ Popup {
                     repeat: false
                     onTriggered: root._refreshDeadlinePreview()
                 }
+                // Calendar picker — fills the deadline field with a chosen date.
+                Rectangle {
+                    id: deadlineCalBtn
+                    Layout.preferredWidth: 32
+                    Layout.preferredHeight: 32
+                    radius: 6
+                    color: deadlineCalMA.containsMouse ? Theme.panel3 : Theme.panel2
+                    border.color: Theme.border; border.width: 1
+                    Rectangle {   // mini calendar glyph
+                        anchors.centerIn: parent
+                        width: 15; height: 14; radius: 2
+                        color: "transparent"
+                        border.color: Theme.textMuted; border.width: 1
+                        Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
+                    }
+                    MouseArea {
+                        id: deadlineCalMA
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: {
+                            const seed = (root._deadlinePreview && root._deadlinePreview.ok && root._deadlinePreview.start)
+                                ? root._deadlinePreview.start : null;
+                            deadlinePicker.openAt(seed, deadlineCalBtn);
+                        }
+                    }
+                    DatePickerPopup {
+                        id: deadlinePicker
+                        y: parent.height + 4
+                        onPicked: (value) => {
+                            deadlineField.text = root.formatDate(value);
+                            root._refreshDeadlinePreview();
+                        }
+                    }
+                }
                 Rectangle {
                     visible: root._deadlinePreview && root._deadlinePreview.ok
                     radius: 10

@@ -98,6 +98,49 @@ TEST_F(OnboardingTest, StartFreshClearsActiveProfileContent) {
   EXPECT_FALSE(app.demoActive());
 }
 
+TEST_F(OnboardingTest, ResetToFirstRunRebuildsFreshInstall) {
+  const QString base = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  {
+    AppController a;
+    // Make it look like a used install: onboarding done, custom content, a
+    // stale backup and a quarantined corrupt snapshot on disk.
+    a.markWelcomeSeen();
+    a.dismissDemo();
+    a.tasks()->reset({makeTask(QStringLiteral("T-1"))});
+    a.setNotesState(QStringLiteral("my notes"));
+    a.flushSave();
+    QDir().mkpath(base + QStringLiteral("/backups"));
+    {
+      QFile bk(base + QStringLiteral("/backups/state-old.json"));
+      ASSERT_TRUE(bk.open(QIODevice::WriteOnly));
+      bk.write("{}");
+    }
+    {
+      QFile cr(base + QStringLiteral("/state.corrupt-1.json"));
+      ASSERT_TRUE(cr.open(QIODevice::WriteOnly));
+      cr.write("{}");
+    }
+
+    a.resetToFirstRun();
+
+    // In memory: exactly a fresh install.
+    EXPECT_FALSE(a.welcomeSeen());
+    EXPECT_TRUE(a.demoActive());
+    EXPECT_EQ(a.profiles().size(), 1);
+    EXPECT_GT(a.tasks()->rowCount(), 0);  // demo content re-seeded
+    EXPECT_TRUE(a.notesState().isEmpty());
+    // On disk: stale backup + corrupt snapshot erased, fresh state.json written.
+    EXPECT_FALSE(QFile::exists(base + QStringLiteral("/backups/state-old.json")));
+    EXPECT_FALSE(QFile::exists(base + QStringLiteral("/state.corrupt-1.json")));
+    EXPECT_TRUE(QFile::exists(base + QStringLiteral("/state.json")));
+  }
+  // Persisted: a relaunch still lands on first-run onboarding + seeded content.
+  AppController b;
+  EXPECT_FALSE(b.welcomeSeen());
+  EXPECT_TRUE(b.demoActive());
+  EXPECT_GT(b.tasks()->rowCount(), 0);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

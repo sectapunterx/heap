@@ -16,6 +16,8 @@ Popup {
     Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
 
     property string eventId: ""
+    // The day this event falls on — editable via the calendar picker below.
+    property var pickedDate: AppController.selectedDate
 
     function showForId(id) {
         eventId = id;
@@ -28,6 +30,7 @@ Popup {
                 startField.text   = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 4));
                 endField.text     = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 5));
                 attField.text     = m.data(idx, Qt.UserRole + 6);
+                root.pickedDate   = m.data(idx, Qt.UserRole + 7);
                 contextField.text = m.data(idx, Qt.UserRole + 10) || "";
                 break;
             }
@@ -151,6 +154,45 @@ Popup {
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
             }
+
+            // DATE — pick the day this event/sync lands on.
+            Text {
+                Layout.columnSpan: 2
+                text: I18n.t("editor.label.date").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
+            Rectangle {
+                id: dateBtn
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                implicitHeight: 34
+                radius: 6
+                color: dateMA.containsMouse ? Theme.panel3 : Theme.panel2
+                border.color: Theme.border; border.width: 1
+                RowLayout {
+                    anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8
+                    spacing: 6
+                    Text {
+                        Layout.fillWidth: true
+                        text: Qt.formatDate(root.pickedDate, "ddd, d MMM yyyy")
+                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 12
+                    }
+                    Rectangle {   // mini calendar glyph
+                        width: 15; height: 14; radius: 2; color: "transparent"
+                        border.color: Theme.textMuted; border.width: 1
+                        Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
+                    }
+                }
+                MouseArea {
+                    id: dateMA
+                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: eventDatePicker.openAt(root.pickedDate, dateBtn)
+                }
+                DatePickerPopup {
+                    id: eventDatePicker
+                    y: parent.height + 4
+                    onPicked: (value) => root.pickedDate = value
+                }
+            }
         }
 
         // Free-form context label — rendered before the event title in the
@@ -187,12 +229,10 @@ Popup {
                 text: I18n.t("editor.btn.save"); primary: true
                 onClicked: {
                     const m = AppController.events;
-                    let curDate = AppController.selectedDate;
                     let curTaskId = "";
                     for (let i = 0; i < m.rowCount(); i++) {
                         const idx = m.index(i,0);
                         if (m.data(idx, Qt.UserRole + 1) === root.eventId) {
-                            curDate = m.data(idx, Qt.UserRole + 7);
                             curTaskId = m.data(idx, Qt.UserRole + 8);
                             break;
                         }
@@ -204,7 +244,7 @@ Popup {
                         start: root.parseHour(startField.text),
                         end: root.parseHour(endField.text),
                         attendees: attField.text,
-                        date: curDate,
+                        date: root.pickedDate,
                         taskId: curTaskId,
                         context: contextField.text
                     };

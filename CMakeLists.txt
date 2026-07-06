@@ -88,6 +88,7 @@ qt_add_library(heap_core STATIC
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/MacWindow.mm>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -113,10 +114,12 @@ qt_add_qml_module(heap_core
         qml/ArchiveView.qml
         qml/TimelineView.qml
         qml/WeekView.qml
+        qml/MonthView.qml
         qml/DocsView.qml
         qml/DocsEditor.qml
         qml/MiniWeek.qml
         qml/DayCalendar.qml
+        qml/DatePickerPopup.qml
         qml/PeopleList.qml
         qml/TaskEditor.qml
         qml/EventEditor.qml
@@ -181,9 +184,10 @@ target_link_libraries(heap_core PUBLIC
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
 endif()
-# Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm.
+# Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm;
+# AppKit backs the unified title bar (NSWindow restyle) in MacWindow.mm.
 if(APPLE)
-    target_link_libraries(heap_core PUBLIC "-framework Carbon")
+    target_link_libraries(heap_core PUBLIC "-framework Carbon" "-framework AppKit")
 endif()
 
 # Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
@@ -238,9 +242,11 @@ qt_add_resources(heap "brand"
 
 # ── macOS .app bundle metadata (HEAP-68) ──
 # A real Info.plist (identifier, display name, high-DPI, min OS) instead of the
-# generic one Qt auto-generates. The .icns is optional: it is generated in CI
-# from the brand SVG (see .github/workflows) and only wired when present, so a
-# plain local build still succeeds with Qt's default icon.
+# generic one Qt auto-generates, plus the Dock/Finder icon. The .icns is used
+# as-is when committed; otherwise it is generated here from the brand SVG at
+# configure time (rsvg-convert + iconutil — `brew install librsvg`), so every
+# macOS build (local dev, CI, release) carries the icon rather than only the
+# release pipeline. If the tools are missing it falls back to Qt's default.
 if(APPLE)
     set(MACOSX_BUNDLE_EXECUTABLE_NAME "heap")
     set(MACOSX_BUNDLE_BUNDLE_NAME "heap.")
@@ -251,6 +257,26 @@ if(APPLE)
         MACOSX_BUNDLE_INFO_PLIST "${CMAKE_SOURCE_DIR}/packaging/macos/Info.plist.in")
 
     set(_heap_icns "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap.icns")
+    set(_heap_icon_svg "${CMAKE_SOURCE_DIR}/design/brand-export/icon/heap-icon.svg")
+    if(NOT EXISTS "${_heap_icns}")
+        find_program(RSVG_CONVERT rsvg-convert)
+        find_program(ICONUTIL iconutil)
+        if(RSVG_CONVERT AND ICONUTIL AND EXISTS "${_heap_icon_svg}")
+            set(_iconset "${CMAKE_BINARY_DIR}/heap.iconset")
+            file(MAKE_DIRECTORY "${_iconset}")
+            foreach(sz 16 32 128 256 512)
+                math(EXPR sz2 "${sz} * 2")
+                execute_process(COMMAND "${RSVG_CONVERT}" -w ${sz}  -h ${sz}  -a "${_heap_icon_svg}" -o "${_iconset}/icon_${sz}x${sz}.png")
+                execute_process(COMMAND "${RSVG_CONVERT}" -w ${sz2} -h ${sz2} -a "${_heap_icon_svg}" -o "${_iconset}/icon_${sz}x${sz}@2x.png")
+            endforeach()
+            execute_process(COMMAND "${ICONUTIL}" -c icns "${_iconset}" -o "${CMAKE_BINARY_DIR}/heap.icns")
+            if(EXISTS "${CMAKE_BINARY_DIR}/heap.icns")
+                set(_heap_icns "${CMAKE_BINARY_DIR}/heap.icns")
+            endif()
+        else()
+            message(STATUS "heap: no heap.icns and rsvg-convert/iconutil unavailable — bundle will use Qt's default icon")
+        endif()
+    endif()
     if(EXISTS "${_heap_icns}")
         set(MACOSX_BUNDLE_ICON_FILE "heap.icns")
         target_sources(heap PRIVATE "${_heap_icns}")

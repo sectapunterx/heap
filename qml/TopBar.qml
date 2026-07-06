@@ -36,7 +36,10 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 16; anchors.rightMargin: 16
+        // On macOS the window uses a full-size content view, so the traffic-light
+        // buttons overlay the top-left of this bar — inset the content to clear them.
+        anchors.leftMargin: 16 + (Qt.platform.os === "osx" ? 62 : 0)
+        anchors.rightMargin: 16
         spacing: 14
 
         // Brand

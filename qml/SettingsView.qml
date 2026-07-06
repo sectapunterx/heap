@@ -818,24 +818,25 @@ Item {
     }
 
     component SwatchRow: ColumnLayout {
+        id: swRoot
         property string label: ""
         property string value: ""
         property var options: []
         signal selected(string color)
         spacing: 4
         Layout.fillWidth: true
-        FieldLabel { label: parent.label }
+        FieldLabel { label: swRoot.label }
         Row {
             spacing: 6
             Repeater {
-                model: parent.parent.options
+                model: swRoot.options
                 delegate: Rectangle {
                     required property string modelData
                     width: 26; height: 26; radius: 13
                     color: modelData
-                    border.color: String(parent.parent.parent.value).toLowerCase() === modelData.toLowerCase() ? Theme.text : "transparent"
+                    border.color: String(swRoot.value).toLowerCase() === modelData.toLowerCase() ? Theme.text : "transparent"
                     border.width: 2
-                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.parent.parent.selected(modelData) }
+                    MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: swRoot.selected(modelData) }
                 }
             }
         }
@@ -1242,6 +1243,7 @@ Item {
                         Layout.fillWidth: true; spacing: 10
                         TextRow {
                             Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
                             label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "LTE"
                             hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE")
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
@@ -1260,6 +1262,7 @@ Item {
                         }
                         SegRow {
                             Layout.fillWidth: true
+                            Layout.alignment: Qt.AlignTop
                             label: I18n.t("settings.tasks.defaultPriority")
                             value: (root.settings.tasks && root.settings.tasks.defaultPriority) || "P2"
                             options: ["P0", "P1", "P2", "P3"]
@@ -1921,6 +1924,41 @@ Item {
                         buttonText: I18n.t("settings.data.resetButton")
                         onTriggered: root.resetAll()
                     }
+                    // Full wipe → first-run. Two-step confirm (the button arms,
+                    // then commits) because this erases everything irreversibly.
+                    RowLayout {
+                        id: wipeRow
+                        property bool armed: false
+                        Layout.fillWidth: true
+                        spacing: 12
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Text { text: I18n.t("settings.data.wipe"); color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
+                            Text { text: I18n.t("settings.data.wipe.hint"); color: Theme.textMuted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        }
+                        Rectangle {
+                            radius: 6
+                            color: wipeRow.armed ? Theme.p0
+                                 : (wipeMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.20) : Theme.withAlpha(Theme.p0, 0.10))
+                            border.color: Theme.p0; border.width: 1
+                            implicitWidth: wipeTxt.implicitWidth + 24
+                            implicitHeight: 28
+                            Text {
+                                id: wipeTxt; anchors.centerIn: parent
+                                text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
+                                color: wipeRow.armed ? "#0b0b0f" : Theme.p0; font.pixelSize: 12; font.weight: Font.Medium
+                            }
+                            MouseArea {
+                                id: wipeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (!wipeRow.armed) { wipeRow.armed = true; wipeDisarm.restart(); }
+                                    else { wipeRow.armed = false; wipeDisarm.stop(); AppController.resetToFirstRun(); }
+                                }
+                            }
+                            Timer { id: wipeDisarm; interval: 3500; onTriggered: wipeRow.armed = false }
+                        }
+                    }
                 }
             }
         }
@@ -1943,9 +1981,11 @@ Item {
                     Layout.fillWidth: true
                     RowLayout {
                         spacing: 12
-                        Rectangle {
-                            width: 36; height: 36; radius: 8
-                            color: Theme.accent
+                        BrandLogo {
+                            variant: "mark"
+                            theme: Theme.dark ? "dark" : "light"
+                            Layout.preferredWidth: 36
+                            Layout.preferredHeight: 36
                         }
                         ColumnLayout {
                             spacing: 1

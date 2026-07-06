@@ -235,6 +235,7 @@ ApplicationWindow {
                     viewLabel: AppController.currentView === "board" ? "Board"
                              : AppController.currentView === "timeline" ? "Timeline"
                              : AppController.currentView === "week" ? "Week"
+                             : AppController.currentView === "month" ? "Month"
                              : "Docs"
                     priorities: win.prioritiesFilter
                     totalCount: win._taskCount
@@ -259,6 +260,7 @@ ApplicationWindow {
                         sourceComponent: {
                             if (AppController.currentView === "timeline") return timelineComp;
                             if (AppController.currentView === "week") return weekComp;
+                            if (AppController.currentView === "month") return monthComp;
                             if (AppController.currentView === "archive") return archiveComp;
                             if (AppController.currentView === "docs") return docsComp;
                             if (AppController.currentView === "notes") return notesComp;
@@ -299,6 +301,16 @@ ApplicationWindow {
                 Component {
                     id: weekComp
                     WeekView {
+                        searchText: win.searchText
+                        prioritiesFilter: win.prioritiesFilter
+                        showArchived: win.showArchived
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+                        onEventClicked: (id) => eventEditor.showForId(id)
+                    }
+                }
+                Component {
+                    id: monthComp
+                    MonthView {
                         searchText: win.searchText
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
@@ -405,6 +417,16 @@ ApplicationWindow {
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
     WelcomePopup { id: welcome }
+
+    // After a "delete all data" reset the controller rebuilds a fresh install;
+    // jump back to the board and re-greet the user, mirroring true first-run.
+    Connections {
+        target: AppController
+        function onFirstRunReset() {
+            AppController.currentView = "board";
+            Qt.callLater(welcome.open);
+        }
+    }
     QuickCapturePopup { id: quickCapture }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes

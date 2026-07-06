@@ -253,6 +253,10 @@ class AppController : public QObject {
   // docs) to give the user a blank workspace; keeps the profile and its
   // columns. Also clears the demo banner.
   Q_INVOKABLE void startFresh();
+  // Nuke everything — profiles, tasks, notes, docs, events, settings, the
+  // on-disk state.json + backups — and re-seed the Example profile with the
+  // first-run onboarding, so the app is exactly "as new" on this device.
+  Q_INVOKABLE void resetToFirstRun();
 
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
@@ -509,6 +513,9 @@ class AppController : public QObject {
   void statusesChanged();
   void pendingUndoChanged();
   void onboardingChanged();
+  // Emitted after resetToFirstRun() rebuilds a fresh install — Main.qml re-opens
+  // the Welcome dialog and surfaces a confirmation toast.
+  void firstRunReset();
   void profilesChanged();
   void activeProfileChanged();
   void shortcutsChanged();
@@ -563,6 +570,9 @@ class AppController : public QObject {
   void snapshotActiveProfile();
   void applyProfileToModels(const Profile& p);
   Profile makeStartingProfile(const QString& name, const QString& color) const;
+  // Seed the first-run "Example" profile (demo tasks/people/events) + onboarding
+  // flags. Shared by the constructor's fresh-install path and resetToFirstRun().
+  void seedExampleProfile();
 
   // Shortcuts
   QVariantList m_shortcuts;  // [{id,label,description,defaultSequence,sequence}]
