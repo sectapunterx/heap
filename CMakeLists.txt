@@ -113,6 +113,7 @@ qt_add_qml_module(heap_core
         qml/ArchiveView.qml
         qml/TimelineView.qml
         qml/WeekView.qml
+        qml/MonthView.qml
         qml/DocsView.qml
         qml/DocsEditor.qml
         qml/MiniWeek.qml

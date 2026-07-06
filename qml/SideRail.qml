@@ -52,6 +52,10 @@ Rectangle {
                    active: AppController.currentView === "week"
                    onActivated: AppController.currentView = "week" }
         RailBtn {
+            glyph: "⊞"; tooltipText: I18n.t("siderail.tip.month")
+                   active: AppController.currentView === "month"
+                   onActivated: AppController.currentView = "month" }
+        RailBtn {
             glyph: "▤"; tooltipText: I18n.t("siderail.tip.archive")
             active: AppController.currentView === "archive"
             onActivated: AppController.currentView = "archive"
