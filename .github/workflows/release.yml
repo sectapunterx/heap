@@ -55,22 +55,26 @@ jobs:
               echo "::error::tag $tag core ($core) != CMakeLists project version ($cmver) — bump CMakeLists.txt before tagging"
               exit 1
             fi
-            echo "tag=$tag" >> "$GITHUB_OUTPUT"
-            echo "release=true" >> "$GITHUB_OUTPUT"
+            release=true
             # A hyphen (e.g. v1.1.0-rc.1) marks a pre-release: published, but
             # softprops keeps it off /releases/latest so the updater ignores it.
             case "$tag" in
-              *-*) echo "prerelease=true"  >> "$GITHUB_OUTPUT" ;;
-              *)   echo "prerelease=false" >> "$GITHUB_OUTPUT" ;;
+              *-*) prerelease=true ;;
+              *)   prerelease=false ;;
             esac
           else
             # Manual dispatch = test build only. A SemVer-valid pre-release string
             # so the in-app updater (Updater::isNewerVersion) ranks it OLDER than
             # any real release. No tag is created; the publish job is skipped.
-            echo "tag=v${cmver}-dev.$(git rev-parse --short HEAD)" >> "$GITHUB_OUTPUT"
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            echo "prerelease=true" >> "$GITHUB_OUTPUT"
+            tag="v${cmver}-dev.$(git rev-parse --short HEAD)"
+            release=false
+            prerelease=true
           fi
+          {
+            echo "tag=$tag"
+            echo "release=$release"
+            echo "prerelease=$prerelease"
+          } >> "$GITHUB_OUTPUT"
 
   # ──────────────────────────────────────────────────────────────────
   # Windows: portable zip (proven windeployqt bundle) + Inno Setup
