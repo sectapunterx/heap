@@ -34,3 +34,15 @@ TEST(UpdateVersionCompare, HandlesDifferentComponentCounts) {
   EXPECT_FALSE(isNewerVersion("1.0.0", "1.0"));
   EXPECT_FALSE(isNewerVersion("1", "1.0.0"));
 }
+
+TEST(UpdateVersionCompare, DevBuildRanksBelowMatchingRelease) {
+  // The Release workflow names manual test builds vX.Y.Z-dev.<sha> — a SemVer
+  // pre-release of the same numeric core. A user on that dev build must be
+  // offered the matching real release, and a user already on the release must
+  // NOT be offered a dev build of the same version. This is the contract the CI
+  // naming scheme relies on (see .github/workflows/release.yml meta job).
+  EXPECT_TRUE(isNewerVersion("1.0.0-dev.abc1234", "v1.0.0"));
+  EXPECT_FALSE(isNewerVersion("1.0.0", "v1.0.0-dev.abc1234"));
+  // A newer real release still outranks an older dev build.
+  EXPECT_TRUE(isNewerVersion("1.0.0-dev.abc1234", "v1.1.0"));
+}

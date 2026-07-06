@@ -30,7 +30,7 @@ Item {
     // Public knobs
     property real progress: 0.0          // 0..1; bind to your loader's progress
     property string status: "initializing allocator…"
-    property string buildInfo: "v" + AppController.appVersion + " · build 240617"
+    property string buildInfo: "v" + AppController.appVersion
     property string channel: "stable · channel"
     property bool autoAnimate: true      // demo: animate the loading bar
     property int autoDuration: 1200

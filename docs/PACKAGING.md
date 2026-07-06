@@ -7,16 +7,29 @@ Release.
 
 ## Triggering a release
 
-- **On a version tag (primary path):**
+The version lives in **one** place — `project(heap VERSION X.Y.Z …)` in
+[`CMakeLists.txt`](../CMakeLists.txt). The release tag mirrors it, and the
+workflow refuses to publish if the two disagree.
+
+- **Cut a release (primary path):** bump `CMakeLists.txt` to the new version,
+  land it on `master`, then push the matching semver tag:
   ```bash
   git tag v1.2.3
   git push origin v1.2.3
   ```
-  The workflow uses the tag name verbatim for the release and artifact names.
+  The tag name is used verbatim for the release and artifact names. A guard in
+  the `meta` job fails the run if the tag's numeric core (`1.2.3`) does not
+  equal the CMake version. The release is marked **latest**, so the in-app
+  updater picks it up.
 
-- **Manually:** run the *Release* workflow from the Actions tab
-  (`workflow_dispatch`). A dated tag `vYYYY.MM.DD-<short-sha>` is minted
-  automatically.
+- **Pre-release:** push a hyphenated tag such as `v1.2.3-rc.1` (its core must
+  still match CMake). It is published but flagged **pre-release** and kept off
+  `/releases/latest`, so the auto-updater never offers it.
+
+- **Manual test build:** run the *Release* workflow from the Actions tab
+  (`workflow_dispatch`). It builds a `vX.Y.Z-dev.<short-sha>` bundle and
+  attaches the artifacts to the workflow run — **nothing is tagged or
+  published**. Use it to smoke-test packaging without cutting a release.
 
 ## Artifacts
 
