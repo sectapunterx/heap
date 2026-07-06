@@ -405,6 +405,16 @@ ApplicationWindow {
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
     WelcomePopup { id: welcome }
+
+    // After a "delete all data" reset the controller rebuilds a fresh install;
+    // jump back to the board and re-greet the user, mirroring true first-run.
+    Connections {
+        target: AppController
+        function onFirstRunReset() {
+            AppController.currentView = "board";
+            Qt.callLater(welcome.open);
+        }
+    }
     QuickCapturePopup { id: quickCapture }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes

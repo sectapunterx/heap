@@ -1924,6 +1924,41 @@ Item {
                         buttonText: I18n.t("settings.data.resetButton")
                         onTriggered: root.resetAll()
                     }
+                    // Full wipe → first-run. Two-step confirm (the button arms,
+                    // then commits) because this erases everything irreversibly.
+                    RowLayout {
+                        id: wipeRow
+                        property bool armed: false
+                        Layout.fillWidth: true
+                        spacing: 12
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Text { text: I18n.t("settings.data.wipe"); color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
+                            Text { text: I18n.t("settings.data.wipe.hint"); color: Theme.textMuted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                        }
+                        Rectangle {
+                            radius: 6
+                            color: wipeRow.armed ? Theme.p0
+                                 : (wipeMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.20) : Theme.withAlpha(Theme.p0, 0.10))
+                            border.color: Theme.p0; border.width: 1
+                            implicitWidth: wipeTxt.implicitWidth + 24
+                            implicitHeight: 28
+                            Text {
+                                id: wipeTxt; anchors.centerIn: parent
+                                text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
+                                color: wipeRow.armed ? "#0b0b0f" : Theme.p0; font.pixelSize: 12; font.weight: Font.Medium
+                            }
+                            MouseArea {
+                                id: wipeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    if (!wipeRow.armed) { wipeRow.armed = true; wipeDisarm.restart(); }
+                                    else { wipeRow.armed = false; wipeDisarm.stop(); AppController.resetToFirstRun(); }
+                                }
+                            }
+                            Timer { id: wipeDisarm; interval: 3500; onTriggered: wipeRow.armed = false }
+                        }
+                    }
                 }
             }
         }

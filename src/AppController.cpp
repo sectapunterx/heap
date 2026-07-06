@@ -378,39 +378,7 @@ AppController::AppController(QObject* parent) :
   // Fresh install or unreadable state — seed a single "Example" profile
   // from SampleData so the app boots with something sensible.
   if(m_profiles.isEmpty()) {
-    Profile p;
-    p.id = "default";
-    p.name = "Example";
-    p.color = "#5cc2dd";
-    p.createdAt = QDateTime::currentDateTime();
-    const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
-    p.tasks = SampleData::tasks(seedLang);
-    p.people = SampleData::people(seedLang);
-    QVariantList st;
-    for(const auto& m : SampleData::statuses()) {
-      st.push_back(m);
-    }
-    p.statuses = st;
-    p.docsState.clear();
-    m_profiles.push_back(p);
-    m_activeProfileId = p.id;
-
-    // Events are global; tag the sample events with this default profile.
-    QVector<CalEvent> sampleEvents = SampleData::events(m_today, seedLang);
-    for(CalEvent& e : sampleEvents) {
-      e.profileId = p.id;
-    }
-    m_events.reset(sampleEvents);
-
-    applyProfileToModels(p);
-    emit profilesChanged();
-    emit activeProfileChanged();
-
-    // Fresh install: show the welcome dialog and flag the seeded demo so the
-    // board can offer "start fresh". (welcomeSeen stays false from its default.)
-    m_demoActive = true;
-    emit onboardingChanged();
-    scheduleSave();
+    seedExampleProfile();
   }
 
   // ── Person-id migration ──
@@ -1692,6 +1660,116 @@ void AppController::dismissDemo() {
   m_demoActive = false;
   emit onboardingChanged();
   scheduleSave();
+}
+
+void AppController::seedExampleProfile() {
+  // Seed a single "Example" profile from SampleData + turn on the first-run
+  // onboarding. Called on a genuine fresh install and by resetToFirstRun().
+  Profile p;
+  p.id = "default";
+  p.name = "Example";
+  p.color = "#5cc2dd";
+  p.createdAt = QDateTime::currentDateTime();
+  const SampleData::Lang seedLang = (m_language == "ru") ? SampleData::Lang::Ru : SampleData::Lang::En;
+  p.tasks = SampleData::tasks(seedLang);
+  p.people = SampleData::people(seedLang);
+  QVariantList st;
+  for(const auto& m : SampleData::statuses()) {
+    st.push_back(m);
+  }
+  p.statuses = st;
+  p.docsState.clear();
+  m_profiles.push_back(p);
+  m_activeProfileId = p.id;
+
+  // Events are global; tag the sample events with this default profile.
+  QVector<CalEvent> sampleEvents = SampleData::events(m_today, seedLang);
+  for(CalEvent& e : sampleEvents) {
+    e.profileId = p.id;
+  }
+  m_events.reset(sampleEvents);
+
+  applyProfileToModels(p);
+  emit profilesChanged();
+  emit activeProfileChanged();
+
+  // Fresh install: show the welcome dialog and flag the seeded demo so the
+  // board can offer "start fresh". (welcomeSeen stays false from its default.)
+  m_demoActive = true;
+  emit onboardingChanged();
+  scheduleSave();
+}
+
+void AppController::resetToFirstRun() {
+  // Destructive: erase every trace of user data — on disk and in memory — and
+  // re-seed the app exactly as a fresh install (Example profile + onboarding).
+  // m_loading gates the debounced writer so nothing persists a half-torn state
+  // while we tear it down.
+  m_loading = true;
+
+  // 1. Remove persisted state so a crash mid-reset can't half-recover and the
+  //    next launch sees a genuine first run. Backups + quarantined corrupt
+  //    snapshots must go too, or loadStateOnStart would resurrect old data.
+  QFile::remove(stateFilePath());
+  QDir(backupDirPath()).removeRecursively();
+  {
+    QDir dir(dataDir());
+    const QStringList corrupt = dir.entryList(QStringList{"state.corrupt-*.json"}, QDir::Files);
+    for(const QString& f : corrupt) {
+      QFile::remove(dir.filePath(f));
+    }
+  }
+
+  // 2. Drop transient UI state that points at rows we're about to delete.
+  if(m_undoTimer) {
+    m_undoTimer->stop();
+  }
+  m_pendingUndo = PendingUndo{};
+  emit pendingUndoChanged();
+  clearSelection();
+  m_focusedStatus.clear();
+  emit focusedStatusChanged();
+
+  // 3. Reset preferences to their defaults. Language is preserved so the
+  //    reseeded demo + UI stay in the user's tongue.
+  m_theme = "dark";
+  m_density = "comfy";
+  m_currentView = "board";
+  m_workdayStart = 9;
+  m_workdayEnd = 19;
+  m_crumbProject = "eNB-core";
+  m_crumbUser = "You";
+  m_selectedDate = m_today;
+  m_appSettingsJson.clear();
+  resetAllShortcuts();
+  emit themeChanged();
+  emit densityChanged();
+  emit currentViewChanged();
+  emit workdayChanged();
+  emit crumbProjectChanged();
+  emit crumbUserChanged();
+  emit selectedDateChanged();
+  emit appSettingsJsonChanged();
+
+  // 4. Clear every profile + model, then re-seed like a fresh install.
+  m_profiles.clear();
+  m_activeProfileId.clear();
+  m_events.reset({});
+  m_tasks.reset({});
+  m_people.reset({});
+  m_notesState.clear();
+  emit notesStateChanged();
+  m_docsState.clear();
+  emit docsStateChanged();
+
+  m_welcomeSeen = false;
+  m_demoActive = false;  // seedExampleProfile flips this back on
+  seedExampleProfile();
+
+  // 5. Persist the fresh state immediately and let the UI re-onboard.
+  m_loading = false;
+  saveStateNow();
+  emit firstRunReset();
 }
 
 void AppController::startFresh() {

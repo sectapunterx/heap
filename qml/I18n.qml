@@ -515,6 +515,10 @@ QtObject {
             "settings.data.reset": "Reset all settings",
             "settings.data.reset.hint": "Roll back to defaults. Profiles, tasks and notes are preserved.",
             "settings.data.resetButton": "Reset all",
+            "settings.data.wipe": "Delete all data",
+            "settings.data.wipe.hint": "Erase every profile, task, note, doc and backup on this device and restart as a fresh install — with the welcome guide and example data. This cannot be undone.",
+            "settings.data.wipeButton": "Delete everything",
+            "settings.data.wipe.confirm": "Click again to confirm",
 
             // About section
             "settings.about.version": "Version",
@@ -1018,6 +1022,10 @@ QtObject {
             "settings.data.reset": "Сбросить все настройки",
             "settings.data.reset.hint": "Откатить к значениям по умолчанию. Профили, задачи и заметки останутся.",
             "settings.data.resetButton": "Reset all",
+            "settings.data.wipe": "Удалить все данные",
+            "settings.data.wipe.hint": "Стереть все профили, задачи, заметки, документы и резервные копии на этом устройстве и запустить приложение как при первой установке — с приветствием и примерами. Отменить нельзя.",
+            "settings.data.wipeButton": "Удалить всё",
+            "settings.data.wipe.confirm": "Нажмите ещё раз",
 
             "settings.about.version": "Версия",
             "settings.about.channel": "Канал",
