@@ -45,10 +45,13 @@ it watches your working copy and matches the current branch to the task you're o
 
 **Plan** — Kanban board (drag-and-drop columns, priority chips, branch decoration, scheduled-time pill) · Timeline
 (overdue / today / week / later buckets).
+
 **Time** — Week view (7-day grid, drag/resize/cross-day events) · Day calendar (drag-to-create, resize, drop a task to
 schedule a focus block, live now-line).
+
 **Know** — Docs (custom sections + fields, snippet editor with syntax highlighting, contact cards) · Notes (per-profile
 markdown with `@people` / `#ticket` autocomplete).
+
 **Flow** — Git-aware board · Quick-capture task / note via a global hotkey · `Ctrl+K` command palette · Profiles
 (feature-scoped workspaces with JSON import/export) · Automation (60-second tick auto-archives, warns on stuck tasks,
 fires deadline + standup reminders; respects quiet hours).
