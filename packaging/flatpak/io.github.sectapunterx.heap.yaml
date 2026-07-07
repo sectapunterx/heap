@@ -1,7 +1,7 @@
 # Flathub manifest for heap. — DRAFT.
 #
 # Build/test locally BEFORE opening the Flathub PR:
-#   flatpak install flathub org.kde.Platform//6.8 org.kde.Sdk//6.8
+#   flatpak install flathub org.kde.Platform//6.9 org.kde.Sdk//6.9
 #   flatpak-builder --user --install --force-clean build-dir \
 #     packaging/flatpak/io.github.sectapunterx.heap.yaml
 #   flatpak run io.github.sectapunterx.heap
@@ -10,12 +10,12 @@
 # open a PR. See docs/DISTRIBUTION.md.
 #
 # TODO before PR:
-#   - Confirm the latest org.kde.Platform runtime-version on Flathub (6.8/6.9).
+#   - Browser OAuth needs Qt 6.9 (KDE runtime 6.9); on 6.8 it stubs out to PAT.
 #   - If post-install paths fail, prefix with the source-checkout root.
 # (Screenshots already wired to docs/assets/img/screens/* in the .metainfo.xml.)
 id: io.github.sectapunterx.heap
 runtime: org.kde.Platform
-runtime-version: '6.8'
+runtime-version: '6.9'
 sdk: org.kde.Sdk
 command: heap
 finish-args:
@@ -57,8 +57,8 @@ modules:
     sources:
       - type: git
         url: https://github.com/sectapunterx/heap.git
-        tag: v0.4.2
-        commit: b3006e0b06bc373c540eec44f8f37e9d0e6f1492
+        tag: v0.5.0
+        commit: 67a79b4122e82a966a43ba177d25bb7114bfc1e2
     # install(TARGETS heap RUNTIME DESTINATION bin) puts the binary in /app/bin.
     # The desktop/icon/metainfo are shipped under the app-id name, as Flathub
     # requires.

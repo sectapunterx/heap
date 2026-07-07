@@ -1,12 +1,12 @@
 {
-    "version": "0.4.2",
+    "version": "0.5.0",
     "description": "Native desktop kanban, calendar and docs for engineers. Qt 6 / QML / C++20, single binary.",
     "homepage": "https://github.com/sectapunterx/heap",
     "license": "MIT",
     "architecture": {
         "64bit": {
-            "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-windows-portable.zip",
-            "hash": "070a61a39db7e50413a150d6060f8ecff9da9aea10afcc786bec2ac5b814034e"
+            "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-windows-portable.zip",
+            "hash": "50d1ccea6dc64502619fb619cb87f94f6943c7f19da84794570e594be4cee05a"
         }
     },
     "bin": "heap.exe",
