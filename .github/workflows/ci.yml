@@ -247,7 +247,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 
@@ -280,7 +280,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 
@@ -370,7 +370,7 @@ jobs:
         if: runner.os == 'Linux'
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 
@@ -390,7 +390,7 @@ jobs:
         if: runner.os == 'macOS'
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 
@@ -471,7 +471,7 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 
@@ -519,7 +519,7 @@ jobs:
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 

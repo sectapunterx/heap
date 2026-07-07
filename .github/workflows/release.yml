@@ -305,8 +305,9 @@ jobs:
   package-macos:
     name: Package (macOS)
     # Re-enabled in HEAP-68: the earlier failure was install-qt-action on Qt
-    # 6.7.* / macos-14; 6.8.1 provisions fine (same version now used across CI),
-    # and the .app bundle (Info.plist + Carbon hotkey) builds there.
+    # 6.7.* / macos-14; 6.9.1 provisions fine (same version now used across CI),
+    # and the .app bundle (Info.plist + Carbon hotkey) builds there. Qt 6.9+ is
+    # required for the browser-OAuth device flow (QOAuth2DeviceAuthorizationFlow).
     needs: meta
     runs-on: macos-14
     # Job-level env so the optional signing step's `if:` can read it (a step's
@@ -331,7 +332,7 @@ jobs:
         # on aqt — SecretStore falls back to secrets.json on macOS.
         uses: jurplel/install-qt-action@v4
         with:
-          version: "6.8.1"
+          version: "6.9.1"
           modules: qtnetworkauth
 
       # Generate the macOS app icon (.icns) from the brand SVG BEFORE configure,
