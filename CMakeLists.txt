@@ -368,12 +368,15 @@ if(WIN32)
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libgcc_s_seh-1.dll" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libwinpthread-1.dll" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${MSYS_QML_DIR}/QtQuick"  "${PORTABLE_DIR}/QtQuick"
-                # windeployqt bundles Qt's own DLLs but not qtkeychain (non-Qt
-                # module) nor the transitive compression deps of Qt6Gui/Qt6Core
-                # (brotli/zstd/zlib). Walk the full ldd closure of the deployed
-                # exe and copy any dep still resolving to ucrt64/bin — the gap.
+                # windeployqt bundles Qt's own DLLs + plugins but not qtkeychain
+                # (a non-Qt module) nor the transitive non-Qt deps of
+                # Qt6Core/Qt6Gui/plugins (pcre2/zlib/zstd/double-conversion/
+                # freetype/harfbuzz/icu/brotli/libjpeg/...). Statically walk the
+                # PE import table of every bundled DLL/exe (objdump, not ldd —
+                # ldd on CI lists only direct imports) and copy each dep from
+                # ucrt64/bin; fails the build if the closure is incomplete.
                 COMMAND bash "${CMAKE_SOURCE_DIR}/packaging/windows/copy-deps.sh"
-                        "${PORTABLE_DIR}/$<TARGET_FILE_NAME:heap>" "${PORTABLE_DIR}"
+                        "${PORTABLE_DIR}" "${MSYS_BIN_DIR}"
                 COMMENT "Assembling portable bundle → ${PORTABLE_DIR}"
         )
     else()
