@@ -75,7 +75,7 @@ bool TrelloProvider::isConfigured() const {
 
 namespace {
 
-QUrl trelloUrl(const QString& path, const QString& key, const QString& token, QList<QPair<QString, QString>> extra = {}) {
+QUrl trelloUrl(const QString& path, const QString& key, const QString& token, const QList<QPair<QString, QString>>& extra = {}) {
   QUrl url(QStringLiteral("https://api.trello.com/1") + path);
   QUrlQuery q;
   q.addQueryItem(QStringLiteral("key"), key);

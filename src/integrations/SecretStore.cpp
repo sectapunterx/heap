@@ -21,11 +21,11 @@ namespace {
 const QString kService = QStringLiteral("heap.integrations");
 }
 
-SecretStore::SecretStore(QObject* parent) : QObject(parent) {
+SecretStore::SecretStore(QObject* parent) : QObject(parent), m_keychain(false) {
 #ifdef HEAP_USE_KEYCHAIN
   m_keychain = true;
 #else
-  m_keychain = false;
+
   loadFallbackFile();
 #endif
 }
