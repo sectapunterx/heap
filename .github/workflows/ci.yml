@@ -159,7 +159,7 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             clang-tidy clang-format cmake ninja-build \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev libgl1-mesa-dev
+            qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-networkauth-dev libgl1-mesa-dev
 
       - name: Configure (compile_commands.json)
         run: |
@@ -249,6 +249,7 @@ jobs:
         with:
           version: "6.8.1"
           cache: true
+          modules: qtnetworkauth
 
       - name: Setup ccache (linux)
         if: runner.os == 'Linux'
@@ -266,6 +267,7 @@ jobs:
             mingw-w64-ucrt-x86_64-qt6-base
             mingw-w64-ucrt-x86_64-qt6-declarative
             mingw-w64-ucrt-x86_64-qt6-tools
+            mingw-w64-ucrt-x86_64-qt6-networkauth
             mingw-w64-ucrt-x86_64-cmake
             mingw-w64-ucrt-x86_64-ninja
             mingw-w64-ucrt-x86_64-gcc
@@ -280,6 +282,7 @@ jobs:
         with:
           version: "6.8.1"
           cache: true
+          modules: qtnetworkauth
 
       - name: Install ninja (macos)
         if: runner.os == 'macOS'
@@ -369,6 +372,7 @@ jobs:
         with:
           version: "6.8.1"
           cache: true
+          modules: qtnetworkauth
 
       - name: Setup MSYS2 (windows)
         if: runner.os == 'Windows'
@@ -379,6 +383,7 @@ jobs:
           install: >-
             mingw-w64-ucrt-x86_64-qt6-base
             mingw-w64-ucrt-x86_64-qt6-declarative
+            mingw-w64-ucrt-x86_64-qt6-networkauth
             mingw-w64-ucrt-x86_64-cmake
 
       - name: Install Qt6 (macos)
@@ -387,6 +392,7 @@ jobs:
         with:
           version: "6.8.1"
           cache: true
+          modules: qtnetworkauth
 
       - name: Download build artifact
         uses: actions/download-artifact@v4
@@ -467,6 +473,7 @@ jobs:
         with:
           version: "6.8.1"
           cache: true
+          modules: qtnetworkauth
 
       - name: Configure with sanitizers
         run: |
@@ -514,6 +521,7 @@ jobs:
         with:
           version: "6.8.1"
           cache: true
+          modules: qtnetworkauth
 
       - name: Install ninja
         run: brew install ninja
