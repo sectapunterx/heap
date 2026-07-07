@@ -3,10 +3,6 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QNetworkAccessManager>
-#include <QNetworkReply>
-#include <QNetworkRequest>
-#include <QUrl>
 
 namespace heap::integrations {
 
@@ -50,80 +46,6 @@ QVector<ExternalTask> parseGithubIssues(const QByteArray& json) {
     out.append(t);
   }
   return out;
-}
-
-GithubProvider::GithubProvider(QObject* parent) : IntegrationProvider(parent), m_nam(new QNetworkAccessManager(this)) {
-}
-
-GithubProvider::~GithubProvider() = default;
-
-void GithubProvider::setConfig(const QString& repo, const QString& token) {
-  m_repo = repo.trimmed();
-  m_token = token.trimmed();
-}
-
-bool GithubProvider::isConfigured() const {
-  return !m_token.isEmpty() && m_repo.contains('/');
-}
-
-namespace {
-
-// Build an authenticated GitHub API request for `path` under the repo.
-QNetworkRequest apiRequest(const QString& repo, const QString& token, const QString& path) {
-  QNetworkRequest req{QUrl(QStringLiteral("https://api.github.com/repos/") + repo + path)};
-  req.setRawHeader("Accept", "application/vnd.github+json");
-  req.setRawHeader("User-Agent", "heap-sync");
-  req.setRawHeader("Authorization", QByteArrayLiteral("token ") + token.toUtf8());
-  req.setRawHeader("X-GitHub-Api-Version", "2022-11-28");
-  return req;
-}
-
-}  // namespace
-
-void GithubProvider::testConnection() {
-  if(!isConfigured()) {
-    emit connectionTested(false, QStringLiteral("GitHub repo/token not configured"));
-    return;
-  }
-  QNetworkReply* reply = m_nam->get(apiRequest(m_repo, m_token, QString()));
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-    reply->deleteLater();
-    emit connectionTested(reply->error() == QNetworkReply::NoError, reply->errorString());
-  });
-}
-
-void GithubProvider::pullTasks() {
-  if(!isConfigured()) {
-    emit tasksFetched({});
-    return;
-  }
-  QNetworkReply* reply = m_nam->get(apiRequest(m_repo, m_token, QStringLiteral("/issues?state=all&per_page=100")));
-  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
-    reply->deleteLater();
-    if(reply->error() != QNetworkReply::NoError) {
-      emit tasksFetched({});
-      return;
-    }
-    emit tasksFetched(parseGithubIssues(reply->readAll()));
-  });
-}
-
-void GithubProvider::pushStatusChange(const QString& externalId, const QString& newStatus) {
-  if(!isConfigured() || externalId.isEmpty()) {
-    emit taskPushed(externalId, false, QStringLiteral("not configured"));
-    return;
-  }
-  QNetworkRequest req = apiRequest(m_repo, m_token, QStringLiteral("/issues/") + externalId);
-  req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
-  QJsonObject body;
-  body.insert(QStringLiteral("state"), githubStateForColumn(newStatus));
-  const QByteArray payload = QJsonDocument(body).toJson(QJsonDocument::Compact);
-
-  QNetworkReply* reply = m_nam->sendCustomRequest(req, QByteArrayLiteral("PATCH"), payload);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId]() {
-    reply->deleteLater();
-    emit taskPushed(externalId, reply->error() == QNetworkReply::NoError, reply->errorString());
-  });
 }
 
 }  // namespace heap::integrations

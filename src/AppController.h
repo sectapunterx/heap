@@ -39,6 +39,7 @@ class Updater;
 
 namespace heap::integrations {
 class IntegrationProvider;
+class SecretStore;
 struct ExternalTask;
 }  // namespace heap::integrations
 
@@ -338,10 +339,26 @@ class AppController : public QObject {
   // Open the latest release's page in the browser — the "Download" action.
   Q_INVOKABLE void openLatestRelease() const;
 
-  // ---- Tracker sync (HEAP-74) ----
-  // Pull issues from the configured GitHub repo and mirror them as tasks in the
+  // ---- Tracker sync (HEAP-74/75) ----
+  // Pull issues from every connected tracker and mirror them as tasks in the
   // active profile. No-op (with a toast) when no provider is configured.
   Q_INVOKABLE void syncNow();
+  // Pull from a single connected provider (the per-card "Sync now" button).
+  Q_INVOKABLE void syncProvider(const QString& providerId);
+  // Validate the current credentials for one provider and toast the result.
+  Q_INVOKABLE void testIntegration(const QString& providerId);
+  // Start the browser OAuth flow for a provider; on success stores the access
+  // token in the keychain and marks the provider connected (authMode=oauth).
+  Q_INVOKABLE void connectOAuth(const QString& providerId);
+  // The full integration catalogue (id, name, colour, fields, …) for the
+  // Settings → Integrations cards. Data-driven from the provider registry.
+  Q_INVOKABLE QVariantList integrationCatalog() const;
+  // Secret (token/key) accessors — secrets live in the OS keychain, never in
+  // state.json, so QML reads/writes them through these instead of the settings
+  // blob.
+  Q_INVOKABLE QString integrationSecret(const QString& providerId, const QString& field) const;
+  Q_INVOKABLE bool hasIntegrationSecret(const QString& providerId, const QString& field) const;
+  Q_INVOKABLE void setIntegrationSecret(const QString& providerId, const QString& field, const QString& value);
 
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
@@ -522,6 +539,9 @@ class AppController : public QObject {
   void blockedStuckChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
   void toast(const QString& message);
+  // Device-flow OAuth: prompts the Integrations card to show a "enter this code
+  // in your browser" banner. An empty `code` clears the banner (flow finished).
+  void oauthDeviceCode(const QString& providerId, const QString& code, const QString& verificationUri);
   void updateStatusChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
@@ -670,8 +690,18 @@ class AppController : public QObject {
   // Every connected + configured provider runs concurrently; a task's
   // externalProvider routes status pushes to the matching one.
   std::vector<std::unique_ptr<heap::integrations::IntegrationProvider>> m_syncProviders;
+  // Access tokens for the trackers, kept in the OS keychain (HEAP-74/75).
+  heap::integrations::SecretStore* m_secretStore = nullptr;
+  // Drives optional periodic pulls (integrations.autoSyncMinutes).
+  QTimer* m_syncTimer = nullptr;
   // Reconcile the active providers with the current integrations settings.
   void applyIntegrationSettings();
+  // Merge a provider's non-secret settings with its keychain secrets.
+  QVariantMap integrationConfig(const QString& providerId) const;
+  // Write one non-secret integration field into the settings blob and persist.
+  void setIntegrationField(const QString& providerId, const QString& field, const QVariant& value);
+  // One-time move of any plaintext tokens found in state.json into the keychain.
+  void migrateLegacySecrets();
   // Fold a batch of pulled external tasks into the model. providerId tags the
   // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
   void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);

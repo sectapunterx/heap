@@ -140,6 +140,17 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -187,6 +198,7 @@ target_link_libraries(heap_selection_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -221,6 +233,17 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -268,6 +291,7 @@ target_link_libraries(heap_notes_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -340,6 +364,17 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -387,6 +422,7 @@ target_link_libraries(heap_persistence_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -419,6 +455,17 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -466,6 +513,7 @@ target_link_libraries(heap_export_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -497,6 +545,17 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -544,6 +603,7 @@ target_link_libraries(heap_profile_io_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -574,6 +634,17 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -621,6 +692,7 @@ target_link_libraries(heap_onboarding_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -670,6 +742,17 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -717,6 +800,7 @@ target_link_libraries(heap_undo_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -749,6 +833,17 @@ set(HEAP_VIEW_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -796,6 +891,7 @@ target_link_libraries(heap_view_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
@@ -889,6 +985,7 @@ target_include_directories(heap_update_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(heap_update_tests PRIVATE
         Qt6::Core
         Qt6::Network
+        Qt6::NetworkAuth
         GTest::gtest
         GTest::gtest_main
 )
@@ -909,6 +1006,7 @@ target_include_directories(heap_github_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(heap_github_tests PRIVATE
         Qt6::Core
         Qt6::Network
+        Qt6::NetworkAuth
         GTest::gtest
         GTest::gtest_main
 )
@@ -928,6 +1026,7 @@ target_include_directories(heap_jira_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_link_libraries(heap_jira_tests PRIVATE
         Qt6::Core
         Qt6::Network
+        Qt6::NetworkAuth
         GTest::gtest
         GTest::gtest_main
 )
@@ -945,10 +1044,44 @@ target_include_directories(heap_gitlab_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}
 target_link_libraries(heap_gitlab_tests PRIVATE
         Qt6::Core
         Qt6::Network
+        Qt6::NetworkAuth
         GTest::gtest
         GTest::gtest_main
 )
 add_test(NAME heap_gitlab_tests COMMAND heap_gitlab_tests)
+
+# ─── Generic REST provider engine + registry + Trello + SecretStore tests ───
+# Covers the descriptor-driven FieldMap parser, the provider registry's field
+# mappings, the bespoke Trello parsers and the SecretStore cache. SecretStore is
+# built here without HEAP_USE_KEYCHAIN so it uses its file fallback (no keychain
+# dependency in the test). Providers carry QNAM QObjects → AUTOMOC + Network.
+add_executable(heap_rest_providers_tests
+        test_rest_providers.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+)
+set_target_properties(heap_rest_providers_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_rest_providers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_rest_providers_tests PRIVATE
+        Qt6::Core
+        Qt6::Network
+        Qt6::NetworkAuth
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_rest_providers_tests COMMAND heap_rest_providers_tests)
 
 # ─── Sync (BYOS serializer) tests ───
 # Cover heap::sync::SyncSerializer — Profile/CalEvent ↔ git-friendly JSON with
@@ -1041,6 +1174,17 @@ set(HEAP_APPCTRL_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
@@ -1088,6 +1232,7 @@ target_link_libraries(heap_appcontroller_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Network
+        Qt6::NetworkAuth
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test

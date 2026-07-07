@@ -68,8 +68,8 @@ Item {
             id: "integrations",
             icon: "⎘",
             title: I18n.t("settings.section.integrations.title"),
-            sub: I18n.t("settings.section.integrations.sub"),
-          unimplemented: true },
+            sub: I18n.t("settings.section.integrations.sub")
+        },
         {id: "git", icon: "⎇", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
         {id: "data", icon: "↯", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
         {id: "help", icon: "?", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
@@ -168,12 +168,12 @@ Item {
             showAsmInline: false
         },
         integrations: {
-            jira:       ({ connected: false, baseUrl: "", email: "", token: "", jql: "" }),
-            github:     ({ connected: false, repo: "", token: "", branchTemplate: "{type}/{id}-{slug}" }),
-            gitlab:     ({ connected: false, host: "", projectId: "", token: "" }),
-            mattermost: ({ connected: false, workspace: "", channel: "" }),
-            pagerduty:  ({ connected: false, schedule: "" }),
-            confluence: ({ connected: false, space: "" })
+            // Tokens/keys are NOT stored here — they live in the OS keychain via
+            // AppController.setIntegrationSecret. Only non-secret config persists.
+            autoSyncMinutes: 0,
+            jira:   ({ connected: false, baseUrl: "", email: "", jql: "" }),
+            github: ({ connected: false, repo: "", branchTemplate: "{type}/{id}-{slug}" }),
+            gitlab: ({ connected: false, host: "", projectId: "" })
         },
         data: { autoBackup: true, backupInterval: "daily" },
         updates: { autoCheck: true },
@@ -1459,160 +1459,272 @@ Item {
     Component {
         id: sectionIntegrations
         ColumnLayout {
+            id: intSection
             spacing: 12
-            Repeater {
-                model: [
-                    {key: "jira", name: "Jira", icon: "J", color: "#5aa3e6", desc: I18n.t("settings.int.jira.desc")},
-                    {
-                        key: "github",
-                        name: "GitHub",
-                        icon: "◯",
-                        color: "#5a6371",
-                        desc: I18n.t("settings.int.github.desc")
-                    },
-                    {
-                        key: "gitlab",
-                        name: "GitLab",
-                        icon: "▲",
-                        color: "#e2683c",
-                        desc: I18n.t("settings.int.gitlab.desc")
-                    },
-                    {
-                        key: "mattermost",
-                        name: "Mattermost",
-                        icon: "#",
-                        color: "#c07acf",
-                        desc: I18n.t("settings.int.mattermost.desc")
-                    },
-                    {
-                        key: "pagerduty",
-                        name: "PagerDuty",
-                        icon: "!",
-                        color: "#6ec18a",
-                        desc: I18n.t("settings.int.pagerduty.desc")
-                    },
-                    {
-                        key: "confluence",
-                        name: "Confluence",
-                        icon: "§",
-                        color: "#5aa3e6",
-                        desc: I18n.t("settings.int.confluence.desc")
+
+            // Device-flow OAuth banner state (GitHub): the code the user types in
+            // the browser. Set from AppController.oauthDeviceCode; empty = hidden.
+            property string dcProvider: ""
+            property string dcCode: ""
+            property string dcUri: ""
+            Connections {
+                target: AppController
+                function onOauthDeviceCode(provider, code, uri) {
+                    intSection.dcProvider = provider
+                    intSection.dcCode = code
+                    intSection.dcUri = uri
+                }
+            }
+
+            // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
+            SectionCard {
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 12
+                    ColumnLayout {
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
+                        Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: 11 }
                     }
-                ]
+                    Repeater {
+                        model: [
+                            { label: I18n.t("settings.integrations.off"), v: 0 },
+                            { label: "15m", v: 15 },
+                            { label: "30m", v: 30 },
+                            { label: "60m", v: 60 }
+                        ]
+                        delegate: Rectangle {
+                            required property var modelData
+                            readonly property int cur: (root.settings.integrations && root.settings.integrations.autoSyncMinutes) || 0
+                            radius: 6
+                            implicitWidth: asTxt.implicitWidth + 20; implicitHeight: 26
+                            color: cur === modelData.v ? Theme.accent : (asMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                            border.color: cur === modelData.v ? Theme.accent : Theme.border; border.width: 1
+                            Text {
+                                id: asTxt; anchors.centerIn: parent; text: modelData.label
+                                color: parent.cur === modelData.v ? "#06121a" : Theme.text; font.pixelSize: 11
+                            }
+                            MouseArea {
+                                id: asMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: root.set("integrations", "autoSyncMinutes", modelData.v)
+                            }
+                        }
+                    }
+                }
+            }
+
+            // One card per registered provider — the catalogue is the single
+            // source of truth (AppController.integrationCatalog), so adding a
+            // provider in C++ surfaces a card here with no QML change.
+            Repeater {
+                model: AppController.integrationCatalog()
                 delegate: SectionCard {
                     required property var modelData
                     ColumnLayout {
                         id: intCard
                         spacing: 10
                         Layout.fillWidth: true
-                        readonly property string intKey: modelData.key
+                        readonly property string intKey: modelData.id
                         readonly property var conf: (root.settings.integrations && root.settings.integrations[intKey]) || ({})
-                        readonly property var fieldsByKey: ({
-                            "jira": [
-                                { key: "baseUrl",      label: "Base URL",        placeholder: "https://acme.atlassian.net" },
-                                { key: "email",        label: "Email",           placeholder: "you@company.com" },
-                                { key: "token",        label: "API token",       placeholder: "***",                        mono: true },
-                                { key: "jql",          label: "JQL",             placeholder: "project = LTE ORDER BY updated DESC", mono: true }
-                            ],
-                            "github": [
-                                { key: "repo",            label: "Repo",            placeholder: "org/name",                mono: true },
-                                { key: "token",           label: "Access token",    placeholder: "***",                     mono: true },
-                                { key: "branchTemplate",  label: "Branch template", placeholder: "feature/{id}-{slug}",     mono: true }
-                            ],
-                            "gitlab": [
-                                { key: "host",       label: "Host",         placeholder: "https://gitlab.com" },
-                                { key: "projectId",  label: "Project",      placeholder: "12345 or group/name",   mono: true },
-                                { key: "token",      label: "Access token", placeholder: "***",                   mono: true }
-                            ],
-                            "mattermost": [
-                                { key: "serverUrl", label: "Server URL", placeholder: "https://chat.company.com" },
-                                { key: "channel",   label: "Channel",    placeholder: "#team-eNB",                       mono: true },
-                                { key: "webhook",   label: "Webhook",    placeholder: "https://.../hooks/...",           mono: true }
-                            ],
-                            "pagerduty": [
-                                { key: "serviceId", label: "Service ID", placeholder: "PXXXXXX",  mono: true },
-                                { key: "apiKey",    label: "API key",    placeholder: "***",      mono: true }
-                            ],
-                            "confluence": [
-                                { key: "baseUrl",  label: "Base URL",  placeholder: "https://wiki.company.com" },
-                                { key: "spaceKey", label: "Space key", placeholder: "ENB",                     mono: true },
-                                { key: "token",    label: "API token", placeholder: "***",                     mono: true }
-                            ]
-                        })
+                        readonly property bool isConn: intCard.conf.connected === true
+                        readonly property bool isOAuth: modelData.oauth === true
+                        // One-click browser sign-in is only offered when a client ID
+                        // exists — baked into the build (oauthReady) or entered under
+                        // Advanced (self-hosted). Otherwise the card is PAT-only, so
+                        // gitea/forgejo never show a dead "No OAuth app" button.
+                        readonly property bool canOneClick: modelData.oauthReady === true
+                            || (intCard.isOAuth && intCard.conf.clientId !== undefined && String(intCard.conf.clientId).length > 0)
+                        // Collapsed by default; connected cards start open. Assigning
+                        // to `open`/`advanced` on click breaks the initial binding.
+                        property bool open: intCard.isConn
+                        property bool advanced: false
 
-                        RowLayout {
+                        // ── Header — click anywhere to expand / collapse ──
+                        Item {
                             Layout.fillWidth: true
-                            spacing: 12
-                            Rectangle {
-                                width: 32; height: 32; radius: 6
-                                color: modelData.color
-                                Text { anchors.centerIn: parent; text: modelData.icon; color: "#06121a"; font.pixelSize: 14; font.weight: Font.DemiBold }
-                            }
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: 1
-                                Text { text: modelData.name; color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                Text { text: modelData.desc; color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
-                            }
-                            Text {
-                                text: intCard.conf.connected ? I18n.t("common.connected") : I18n.t("common.disconnected")
-                                color: intCard.conf.connected ? Theme.mFocus : Theme.textDim
-                                font.family: Theme.fontMono; font.pixelSize: 10
-                            }
-                            Rectangle {
-                                radius: 6
-                                color: intCard.conf.connected
-                                       ? (toggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
-                                       : (toggleMA.containsMouse ? Theme.accentStrong : Theme.accent)
-                                border.color: intCard.conf.connected ? Theme.border : Theme.accent
-                                border.width: 1
-                                implicitWidth: toggleTxt.implicitWidth + 18; implicitHeight: 26
+                            implicitHeight: hdrRow.implicitHeight
+                            RowLayout {
+                                id: hdrRow
+                                anchors.left: parent.left; anchors.right: parent.right
+                                anchors.verticalCenter: parent.verticalCenter
+                                spacing: 12
+                                Rectangle {
+                                    width: 32; height: 32; radius: 6
+                                    color: modelData.color
+                                    Text { anchors.centerIn: parent; text: modelData.icon; color: "#06121a"; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                }
+                                ColumnLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 1
+                                    Text { text: modelData.name; color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                }
                                 Text {
-                                    id: toggleTxt
-                                    anchors.centerIn: parent
-                                    text: intCard.conf.connected ? I18n.t("common.disconnect") : I18n.t("common.connect")
-                                    color: intCard.conf.connected ? Theme.text : "#06121a"
-                                    font.pixelSize: 11; font.weight: Font.Medium
+                                    text: intCard.isConn ? I18n.t("common.connected") : I18n.t("common.disconnected")
+                                    color: intCard.isConn ? Theme.mFocus : Theme.textDim
+                                    font.family: Theme.fontMono; font.pixelSize: 10
                                 }
-                                MouseArea {
-                                    id: toggleMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.setNested("integrations", intCard.intKey, "connected", !intCard.conf.connected)
+                                Text {
+                                    text: intCard.open ? "▾" : "▸"   // ▾ / ▸
+                                    color: Theme.textDim; font.pixelSize: 12
                                 }
+                            }
+                            MouseArea {
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: intCard.open = !intCard.open
                             }
                         }
 
-                        // Per-integration config fields, visible only when connected.
+                        // ── Body (only when expanded) ──
                         ColumnLayout {
-                            visible: intCard.conf.connected === true
+                            visible: intCard.open
                             Layout.fillWidth: true
                             Layout.leftMargin: 44
-                            spacing: 6
-                            Repeater {
-                                model: intCard.fieldsByKey[intCard.intKey] || []
-                                delegate: TextRow {
-                                    required property var modelData
-                                    label: modelData.label
-                                    placeholder: modelData.placeholder
-                                    mono: !!modelData.mono
-                                    value: (intCard.conf && intCard.conf[modelData.key]) || ""
-                                    onCommitted: (txt) => root.setNested("integrations", intCard.intKey, modelData.key, txt)
+                            spacing: 8
+
+                            // Device-flow banner: show the code the user must
+                            // enter in the browser (GitHub). Auto-clears on finish.
+                            Rectangle {
+                                visible: intSection.dcCode !== "" && intSection.dcProvider === intCard.intKey
+                                Layout.fillWidth: true
+                                radius: 6
+                                color: Theme.panel2
+                                border.color: Theme.accent; border.width: 1
+                                implicitHeight: dcCol.implicitHeight + 16
+                                ColumnLayout {
+                                    id: dcCol
+                                    anchors.left: parent.left; anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.margins: 10
+                                    spacing: 4
+                                    Text {
+                                        text: I18n.t("settings.integrations.deviceCodePrompt")
+                                        color: Theme.textMuted; font.pixelSize: 11
+                                        Layout.fillWidth: true; wrapMode: Text.WordWrap
+                                    }
+                                    TextEdit {
+                                        text: intSection.dcCode
+                                        readOnly: true; selectByMouse: true
+                                        color: Theme.text; font.family: Theme.fontMono
+                                        font.pixelSize: 20; font.weight: Font.DemiBold
+                                    }
+                                    Text {
+                                        text: intSection.dcUri
+                                        color: Theme.mFocus; font.family: Theme.fontMono; font.pixelSize: 10
+                                    }
                                 }
                             }
-                            // 2-way tracker sync (HEAP-74 GitHub, HEAP-75 Jira/GitLab): pull issues as tasks.
+
+                            // One-click browser connect: the primary action for
+                            // OAuth providers. No fields to fill — credentials come
+                            // from the app's registered OAuth app (or Advanced).
                             Rectangle {
-                                visible: ["github", "jira", "gitlab"].indexOf(intCard.intKey) >= 0
-                                Layout.topMargin: 4
+                                visible: intCard.canOneClick && !intCard.isConn
+                                Layout.fillWidth: true
                                 radius: 6
-                                color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2
-                                border.color: Theme.border; border.width: 1
-                                implicitWidth: syncTxt.implicitWidth + 24; implicitHeight: 28
-                                Text {
-                                    id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 11
+                                color: oauthMA.containsMouse ? Theme.accentStrong : Theme.accent
+                                border.color: Theme.accent; border.width: 1
+                                implicitHeight: 34
+                                Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: "#06121a"; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                MouseArea { id: oauthMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.connectOAuth(intCard.intKey) }
+                            }
+                            Text {
+                                visible: intCard.canOneClick && !intCard.isConn
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: I18n.t("settings.integrations.connectBrowserHint")
+                                color: Theme.textDim; font.pixelSize: 10
+                            }
+                            // OAuth-capable but no client ID yet (self-hosted gitea/
+                            // forgejo): tell the user to add one under Advanced.
+                            Text {
+                                visible: intCard.isOAuth && !intCard.canOneClick && !intCard.isConn
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: I18n.t("settings.integrations.oauthNeedsId")
+                                color: Theme.textDim; font.pixelSize: 10
+                            }
+
+                            // Advanced disclosure — hides the credential/scope
+                            // fields (token, repo, client ID…) so they don't clutter
+                            // the default view. Shown for OAuth cards and connected
+                            // cards; non-OAuth cards that aren't connected show the
+                            // fields directly (a token is required to connect).
+                            Text {
+                                visible: intCard.canOneClick || intCard.isConn
+                                text: (intCard.advanced ? "▾  " : "▸  ") + I18n.t("settings.integrations.advanced")
+                                color: Theme.textMuted; font.pixelSize: 11
+                                MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: intCard.advanced = !intCard.advanced }
+                            }
+
+                            // Credential / scope fields. Secret fields (token/key)
+                            // go to the OS keychain via setIntegrationSecret — never
+                            // into state.json.
+                            ColumnLayout {
+                                visible: intCard.advanced || (!intCard.canOneClick && !intCard.isConn)
+                                Layout.fillWidth: true
+                                spacing: 6
+                                Repeater {
+                                    model: modelData.fields
+                                    delegate: TextRow {
+                                        required property var modelData
+                                        label: modelData.label
+                                        placeholder: modelData.placeholder
+                                        mono: !!modelData.mono
+                                        value: modelData.secret
+                                               ? AppController.integrationSecret(intCard.intKey, modelData.key)
+                                               : ((intCard.conf && intCard.conf[modelData.key]) || "")
+                                        onCommitted: (txt) => modelData.secret
+                                            ? AppController.setIntegrationSecret(intCard.intKey, modelData.key, txt)
+                                            : root.setNested("integrations", intCard.intKey, modelData.key, txt)
+                                    }
                                 }
-                                MouseArea { id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.syncNow() }
+                            }
+
+                            // Actions: manual connect (non-OAuth) / test / sync / disconnect.
+                            RowLayout {
+                                Layout.topMargin: 2
+                                spacing: 8
+                                Rectangle {
+                                    visible: !intCard.canOneClick && !intCard.isConn
+                                    radius: 6
+                                    color: connMA.containsMouse ? Theme.accentStrong : Theme.accent
+                                    border.color: Theme.accent; border.width: 1
+                                    implicitWidth: connTxt.implicitWidth + 24; implicitHeight: 28
+                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: "#06121a"; font.pixelSize: 11; font.weight: Font.Medium }
+                                    MouseArea { id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setNested("integrations", intCard.intKey, "connected", true) }
+                                }
+                                Rectangle {
+                                    visible: intCard.advanced || intCard.isConn || !intCard.canOneClick
+                                    radius: 6
+                                    color: testMA.containsMouse ? Theme.panel3 : Theme.panel2
+                                    border.color: Theme.border; border.width: 1
+                                    implicitWidth: testTxt.implicitWidth + 24; implicitHeight: 28
+                                    Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: 11 }
+                                    MouseArea { id: testMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.testIntegration(intCard.intKey) }
+                                }
+                                Rectangle {
+                                    visible: intCard.isConn
+                                    radius: 6
+                                    color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2
+                                    border.color: Theme.border; border.width: 1
+                                    implicitWidth: syncTxt.implicitWidth + 24; implicitHeight: 28
+                                    Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 11 }
+                                    MouseArea { id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.syncProvider(intCard.intKey) }
+                                }
+                                Item { Layout.fillWidth: true }
+                                Rectangle {
+                                    visible: intCard.isConn
+                                    radius: 6
+                                    color: discMA.containsMouse ? Theme.panel3 : Theme.panel2
+                                    border.color: Theme.border; border.width: 1
+                                    implicitWidth: discTxt.implicitWidth + 24; implicitHeight: 28
+                                    Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: 11 }
+                                    MouseArea { id: discMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setNested("integrations", intCard.intKey, "connected", false) }
+                                }
                             }
                         }
                     }
