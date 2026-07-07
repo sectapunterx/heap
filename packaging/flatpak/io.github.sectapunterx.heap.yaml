@@ -1,0 +1,53 @@
+# Flathub manifest for heap. — DRAFT.
+#
+# Build/test locally BEFORE opening the Flathub PR:
+#   flatpak install flathub org.kde.Platform//6.8 org.kde.Sdk//6.8
+#   flatpak-builder --user --install --force-clean build-dir \
+#     packaging/flatpak/io.github.sectapunterx.heap.yaml
+#   flatpak run io.github.sectapunterx.heap
+#
+# Then submit: fork github.com/flathub/flathub (branch `new-pr`), add this repo,
+# open a PR. See docs/DISTRIBUTION.md.
+#
+# TODO before PR:
+#   - Confirm the latest org.kde.Platform runtime-version on Flathub (6.8/6.9).
+#   - If post-install paths fail, prefix with the source-checkout root.
+# (Screenshots already wired to docs/assets/img/screens/* in the .metainfo.xml.)
+id: io.github.sectapunterx.heap
+runtime: org.kde.Platform
+runtime-version: '6.8'
+sdk: org.kde.Sdk
+command: heap
+finish-args:
+  - --share=ipc
+  - --socket=wayland
+  - --socket=fallback-x11
+  - --device=dri
+  - --filesystem=xdg-documents
+  - --filesystem=xdg-download
+cleanup:
+  - /include
+  - /lib/cmake
+  - /lib/pkgconfig
+  - '*.a'
+modules:
+  - name: heap
+    buildsystem: cmake-ninja
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DHEAP_BUILD_TESTS=OFF
+    sources:
+      - type: git
+        url: https://github.com/sectapunterx/heap.git
+        tag: v0.4.2
+        commit: b3006e0b06bc373c540eec44f8f37e9d0e6f1492
+    # install(TARGETS heap RUNTIME DESTINATION bin) puts the binary in /app/bin.
+    # The desktop/icon/metainfo are shipped under the app-id name, as Flathub
+    # requires.
+    post-install:
+      - install -Dm644 packaging/flatpak/io.github.sectapunterx.heap.desktop
+          /app/share/applications/io.github.sectapunterx.heap.desktop
+      - install -Dm644 packaging/flatpak/io.github.sectapunterx.heap.metainfo.xml
+          /app/share/metainfo/io.github.sectapunterx.heap.metainfo.xml
+      - install -Dm644 design/brand-export/icon/heap-icon.svg
+          /app/share/icons/hicolor/scalable/apps/io.github.sectapunterx.heap.svg

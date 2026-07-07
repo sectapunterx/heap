@@ -1,0 +1,16 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.installer.1.6.0.schema.json
+PackageIdentifier: sectapunterx.heap
+PackageVersion: 0.4.2
+InstallerType: inno
+Scope: user
+InstallModes:
+  - interactive
+  - silent
+  - silentWithProgress
+UpgradeBehavior: install
+Installers:
+  - Architecture: x64
+    InstallerUrl: https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-windows-setup.exe
+    InstallerSha256: D8D3F75B1D2247115D1769397933E243DFAEDE32E5C4A8318F47907E8E91F9AA
+ManifestType: installer
+ManifestVersion: 1.6.0

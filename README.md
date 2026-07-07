@@ -58,6 +58,16 @@ fires deadline + standup reminders; respects quiet hours).
 **Prebuilt binaries** — a Windows installer, a Linux AppImage, and a portable zip are attached to each
 [**GitHub release**](https://github.com/sectapunterx/heap/releases). Download and run; nothing else to install.
 
+**Package managers** — Windows via [Scoop](https://scoop.sh):
+
+```powershell
+scoop bucket add heap https://github.com/sectapunterx/heap
+scoop install heap
+```
+
+winget and Flathub (Linux) manifests are prepared and pending submission — see
+[`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
+
 **Build from source** — three commands, any platform (Qt 6.4+ and a C++20 toolchain):
 
 ```sh
