@@ -21,7 +21,7 @@ namespace {
 const QString kService = QStringLiteral("heap.integrations");
 }
 
-SecretStore::SecretStore(QObject* parent) : QObject(parent), m_keychain(false) {
+SecretStore::SecretStore(QObject* parent) : QObject(parent) {
 #ifdef HEAP_USE_KEYCHAIN
   m_keychain = true;
 #else
