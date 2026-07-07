@@ -54,6 +54,27 @@ TestCase {
         compare(got, "P1");
     }
 
+    // Integrations settings: the catalogue is C++-driven, and switching to the
+    // section must instantiate the card delegates (integrationCatalog(), the
+    // auto-sync selector, I18n descKey bindings) without a QML error.
+    function test_settingsview_integrations() {
+        const sv = load("SettingsView");
+        const cat = AppController.integrationCatalog();
+        verify(cat.length >= 12, "catalog should list all providers");
+        compare(cat[0].id, "github");
+        // fields is a QVariantList → indexable sequence in QML (Array.isArray is
+        // false for these, but the card Repeater consumes it as a model).
+        verify(cat[0].fields.length > 0, "provider must expose fields");
+        // A secret field is flagged so QML routes it to the keychain.
+        let hasSecret = false;
+        for (let i = 0; i < cat[0].fields.length; ++i) if (cat[0].fields[i].secret) hasSecret = true;
+        verify(hasSecret, "github must have a secret field");
+        // Render the integrations section — exercises the card delegate tree.
+        sv.activeSection = "integrations";
+        wait(50);
+        compare(sv.activeSection, "integrations");
+    }
+
     // SideRail integration: focusStatusColumn drives AppController view state
     // (the wiring the ⊘/⎇ buttons use). Exercises the live singleton the rail
     // component binds to.

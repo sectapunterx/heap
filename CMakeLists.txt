@@ -40,7 +40,7 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_link_options(-fsanitize=address,undefined)
 endif()
 
-find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network)
+find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network NetworkAuth)
 # DBus is only needed for the Linux native notifications backend.
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.2 REQUIRED COMPONENTS DBus)
@@ -51,6 +51,13 @@ endif()
 #   pacman -S mingw-w64-ucrt-x86_64-qt6-svg   (MSYS2 UCRT64)
 #   apt install libqt6svg6-dev                (Debian / Ubuntu)
 find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Svg)
+
+# QtKeychain stores integration access tokens in the OS keychain (Windows
+# Credential Manager / macOS Keychain / libsecret) instead of plaintext state.
+# Optional: when absent, SecretStore falls back to a private secrets.json.
+#   pacman -S mingw-w64-ucrt-x86_64-qtkeychain   (MSYS2 UCRT64)
+#   apt install qtkeychain-qt6-dev               (Debian / Ubuntu)
+find_package(Qt6Keychain QUIET)
 
 qt_standard_project_setup(REQUIRES 6.4)
 
@@ -82,6 +89,11 @@ qt_add_library(heap_core STATIC
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
     src/integrations/GitlabProvider.cpp
+    src/integrations/RestIssueProvider.cpp
+    src/integrations/ProviderRegistry.cpp
+    src/integrations/TrelloProvider.cpp
+    src/integrations/SecretStore.cpp
+    src/integrations/OAuthManager.cpp
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
     src/update/Updater.cpp
@@ -166,6 +178,12 @@ qt_add_qml_module(heap_core
         src/integrations/JiraProvider.h
         src/integrations/GitlabProvider.h
         src/integrations/IntegrationProvider.h
+        src/integrations/ProviderDescriptor.h
+        src/integrations/RestIssueProvider.h
+        src/integrations/ProviderRegistry.h
+        src/integrations/TrelloProvider.h
+        src/integrations/SecretStore.h
+        src/integrations/OAuthManager.h
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h
         src/update/Updater.h
@@ -176,6 +194,7 @@ target_link_libraries(heap_core PUBLIC
     Qt6::Core
     Qt6::Gui
     Qt6::Network
+    Qt6::NetworkAuth
     Qt6::Qml
     Qt6::Quick
     Qt6::QuickControls2
@@ -204,6 +223,16 @@ target_compile_definitions(heap_core PUBLIC HEAP_VERSION="${PROJECT_VERSION}")
 if (TARGET Qt6::Svg)
     target_link_libraries(heap_core PUBLIC Qt6::Svg)
     target_compile_definitions(heap_core PRIVATE HEAP_HAS_SVG=1)
+endif()
+
+# QtKeychain (imported target `qt6keychain`) backs SecretStore's OS-keychain
+# path; when it isn't found, SecretStore compiles the secrets.json fallback.
+if (TARGET qt6keychain)
+    target_link_libraries(heap_core PUBLIC qt6keychain)
+    target_compile_definitions(heap_core PRIVATE HEAP_USE_KEYCHAIN=1)
+    message(STATUS "heap: integration tokens stored in the OS keychain (QtKeychain)")
+else()
+    message(STATUS "heap: QtKeychain not found — integration tokens use the secrets.json fallback")
 endif()
 
 # ── Application executable — thin shell that loads Main.qml from heap_core ──

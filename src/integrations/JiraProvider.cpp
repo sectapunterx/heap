@@ -155,8 +155,13 @@ void JiraProvider::pullTasks() {
   QUrlQuery q;
   q.addQueryItem(QStringLiteral("jql"), m_jql.isEmpty() ? QStringLiteral("order by updated DESC") : m_jql);
   q.addQueryItem(QStringLiteral("maxResults"), QStringLiteral("100"));
+  // The new /search/jql endpoint requires an explicit `fields` list (omitting it
+  // returns only ids); the parser needs exactly these.
   q.addQueryItem(QStringLiteral("fields"), QStringLiteral("summary,description,status,priority,labels,updated"));
-  const QString path = QStringLiteral("/search?") + q.query(QUrl::FullyEncoded);
+  // Atlassian retired GET /rest/api/3/search (2025); /search/jql is the
+  // replacement. It paginates by `nextPageToken` and no longer returns `total`;
+  // a single 100-issue page is sufficient for v1.
+  const QString path = QStringLiteral("/search/jql?") + q.query(QUrl::FullyEncoded);
   const QString site = m_baseUrl;
   QNetworkReply* reply = m_nam->get(apiRequest(m_baseUrl, m_email, m_token, path));
   connect(reply, &QNetworkReply::finished, this, [this, reply, site]() {

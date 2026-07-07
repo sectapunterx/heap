@@ -5,9 +5,11 @@
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
-#include "integrations/GithubProvider.h"
-#include "integrations/GitlabProvider.h"
-#include "integrations/JiraProvider.h"
+#include "integrations/OAuthManager.h"
+#include "integrations/ProviderDescriptor.h"
+#include "integrations/ProviderRegistry.h"
+#include "integrations/RestIssueProvider.h"
+#include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
@@ -32,6 +34,7 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QLocale>
+#include <QPair>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -364,7 +367,23 @@ AppController::AppController(QObject* parent) :
     }
   });
 
-  // ---- Tracker sync (HEAP-74) ----
+  // ---- Tracker sync (HEAP-74/75) ----
+  m_secretStore = new heap::integrations::SecretStore(this);
+  m_syncTimer = new QTimer(this);
+  m_syncTimer->setSingleShot(false);
+  connect(m_syncTimer, &QTimer::timeout, this, &AppController::syncNow);
+  // Move any legacy plaintext tokens out of state.json, then load the keychain.
+  migrateLegacySecrets();
+  QVector<QPair<QString, QString>> secretKeys;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    for(const QString& f : d.secretKeys) {
+      secretKeys.append({d.id, f});
+    }
+  }
+  // Providers that need a secret build after the async keychain read completes.
+  m_secretStore->load(secretKeys, [this]() {
+    applyIntegrationSettings();
+  });
   applyIntegrationSettings();
   connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
     applyIntegrationSettings();
@@ -2079,47 +2098,260 @@ void AppController::applyIntegrationSettings() {
     });
   };
 
-  // GitHub (HEAP-74).
-  const QVariantMap gh = integrations.value("github").toMap();
-  if(gh.value("connected", false).toBool()) {
-    const QString repo = gh.value("repo").toString().trimmed();
-    const QString token = gh.value("token").toString().trimmed();
-    if(!repo.isEmpty() && !token.isEmpty()) {
-      auto provider = std::make_unique<heap::integrations::GithubProvider>(this);
-      provider->setConfig(repo, token);
-      wire(provider.get(), QStringLiteral("gh-"), QStringLiteral("GitHub"));
+  // Build every connected + configured provider from the registry. Generic
+  // trackers run on RestIssueProvider; the awkward few (Jira, Trello) are
+  // bespoke. Adding a provider is a registry entry — no change here.
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    const QVariantMap cfg = integrationConfig(d.id);
+    if(!cfg.value(QStringLiteral("connected"), false).toBool()) {
+      continue;
+    }
+    std::unique_ptr<heap::integrations::IntegrationProvider> provider;
+    if(d.bespoke) {
+      provider = heap::integrations::makeBespokeProvider(d.id, cfg, this);
+    } else {
+      auto rest = std::make_unique<heap::integrations::RestIssueProvider>(d, this);
+      rest->setConfig(cfg);
+      if(rest->isConfigured()) {
+        provider = std::move(rest);
+      }
+    }
+    if(provider) {
+      wire(provider.get(), d.id + QStringLiteral("-"), d.displayName);
       m_syncProviders.push_back(std::move(provider));
     }
   }
 
-  // Jira (HEAP-75).
-  const QVariantMap jira = integrations.value("jira").toMap();
-  if(jira.value("connected", false).toBool()) {
-    const QString baseUrl = jira.value("baseUrl").toString().trimmed();
-    const QString email = jira.value("email").toString().trimmed();
-    const QString token = jira.value("token").toString().trimmed();
-    const QString jql = jira.value("jql").toString().trimmed();
-    if(!baseUrl.isEmpty() && !email.isEmpty() && !token.isEmpty()) {
-      auto provider = std::make_unique<heap::integrations::JiraProvider>(this);
-      provider->setConfig(baseUrl, email, token, jql);
-      wire(provider.get(), QStringLiteral("jira-"), QStringLiteral("Jira"));
-      m_syncProviders.push_back(std::move(provider));
+  // Optional periodic auto-sync (integrations.autoSyncMinutes: 0 = off).
+  const int mins = integrations.value(QStringLiteral("autoSyncMinutes")).toInt();
+  if(m_syncTimer) {
+    if(mins > 0 && !m_syncProviders.empty()) {
+      m_syncTimer->start(mins * 60 * 1000);
+    } else {
+      m_syncTimer->stop();
     }
   }
+}
 
-  // GitLab (HEAP-75).
-  const QVariantMap gitlab = integrations.value("gitlab").toMap();
-  if(gitlab.value("connected", false).toBool()) {
-    const QString host = gitlab.value("host").toString().trimmed();
-    const QString project = gitlab.value("projectId").toString().trimmed();
-    const QString token = gitlab.value("token").toString().trimmed();
-    if(!host.isEmpty() && !project.isEmpty() && !token.isEmpty()) {
-      auto provider = std::make_unique<heap::integrations::GitlabProvider>(this);
-      provider->setConfig(host, project, token);
-      wire(provider.get(), QStringLiteral("gl-"), QStringLiteral("GitLab"));
-      m_syncProviders.push_back(std::move(provider));
+QVariantMap AppController::integrationConfig(const QString& providerId) const {
+  QVariantMap cfg = settingsMap().value("integrations").toMap().value(providerId).toMap();
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(d && m_secretStore) {
+    for(const QString& field : d->secretKeys) {
+      cfg.insert(field, m_secretStore->value(providerId, field));
     }
   }
+  return cfg;
+}
+
+void AppController::migrateLegacySecrets() {
+  if(!m_secretStore) {
+    return;
+  }
+  QVariantMap settings = settingsMap();
+  QVariantMap integrations = settings.value("integrations").toMap();
+  bool changed = false;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(!integrations.contains(d.id)) {
+      continue;
+    }
+    QVariantMap cfg = integrations.value(d.id).toMap();
+    for(const QString& field : d.secretKeys) {
+      const QString existing = cfg.value(field).toString();
+      if(!existing.isEmpty()) {
+        m_secretStore->setValue(d.id, field, existing);
+        cfg.remove(field);
+        changed = true;
+      }
+    }
+    integrations.insert(d.id, cfg);
+  }
+  if(changed) {
+    settings.insert(QStringLiteral("integrations"), integrations);
+    m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
+    emit appSettingsJsonChanged();
+    scheduleSave();
+  }
+}
+
+void AppController::syncProvider(const QString& providerId) {
+  for(const auto& provider : m_syncProviders) {
+    if(provider->id() == providerId) {
+      emit toast(tr("Syncing…"));
+      provider->pullTasks();
+      return;
+    }
+  }
+  emit toast(tr("Connect a tracker in Settings → Integrations first"));
+}
+
+void AppController::testIntegration(const QString& providerId) {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(!d) {
+    emit toast(tr("Unknown integration"));
+    return;
+  }
+  const QVariantMap cfg = integrationConfig(providerId);
+  heap::integrations::IntegrationProvider* provider = nullptr;
+  if(d->bespoke) {
+    provider = heap::integrations::makeBespokeProvider(providerId, cfg, this).release();
+  } else {
+    auto* rest = new heap::integrations::RestIssueProvider(*d, this);
+    rest->setConfig(cfg);
+    provider = rest;
+  }
+  if(!provider) {
+    emit toast(tr("%1 is not fully configured").arg(d->displayName));
+    return;
+  }
+  const QString label = d->displayName;
+  connect(
+      provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, provider, label](bool ok, const QString& error) {
+        emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+        provider->deleteLater();
+      });
+  provider->testConnection();
+}
+
+QVariantList AppController::integrationCatalog() const {
+  QVariantList out;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    QVariantMap m;
+    m.insert(QStringLiteral("id"), d.id);
+    m.insert(QStringLiteral("name"), d.displayName);
+    m.insert(QStringLiteral("color"), d.color);
+    m.insert(QStringLiteral("icon"), d.icon);
+    m.insert(QStringLiteral("descKey"), d.descKey);
+    m.insert(QStringLiteral("oauth"), d.oauth.supported);
+    // oauthReady = a client ID is baked in, so "Connect with browser" is truly
+    // one-click; otherwise the user must add one under Advanced first.
+    m.insert(QStringLiteral("oauthReady"), d.oauth.supported && !d.oauth.clientId.isEmpty());
+    QVariantList fields;
+    for(const heap::integrations::FieldSpec& f : d.uiFields) {
+      QVariantMap fm;
+      fm.insert(QStringLiteral("key"), f.key);
+      fm.insert(QStringLiteral("label"), f.label);
+      fm.insert(QStringLiteral("placeholder"), f.placeholder);
+      fm.insert(QStringLiteral("mono"), f.mono);
+      fm.insert(QStringLiteral("secret"), f.secret);
+      fields.append(fm);
+    }
+    m.insert(QStringLiteral("fields"), fields);
+    out.append(m);
+  }
+  return out;
+}
+
+QString AppController::integrationSecret(const QString& providerId, const QString& field) const {
+  return m_secretStore ? m_secretStore->value(providerId, field) : QString();
+}
+
+bool AppController::hasIntegrationSecret(const QString& providerId, const QString& field) const {
+  return m_secretStore && m_secretStore->has(providerId, field);
+}
+
+void AppController::setIntegrationSecret(const QString& providerId, const QString& field, const QString& value) {
+  if(m_secretStore) {
+    m_secretStore->setValue(providerId, field, value);
+  }
+  applyIntegrationSettings();
+}
+
+void AppController::setIntegrationField(const QString& providerId, const QString& field, const QVariant& value) {
+  QVariantMap settings = settingsMap();
+  QVariantMap integrations = settings.value(QStringLiteral("integrations")).toMap();
+  QVariantMap cfg = integrations.value(providerId).toMap();
+  cfg.insert(field, value);
+  integrations.insert(providerId, cfg);
+  settings.insert(QStringLiteral("integrations"), integrations);
+  m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
+  emit appSettingsJsonChanged();  // rebuilds providers + refreshes the QML settings copy
+  scheduleSave();
+}
+
+void AppController::connectOAuth(const QString& providerId) {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(!d || !d->oauth.supported) {
+    emit toast(tr("Browser sign-in is not available for this integration"));
+    return;
+  }
+  const QVariantMap cfg = integrationConfig(providerId);
+  // Prefer a user-entered client ID (self-hosted / Advanced), else the app's
+  // baked-in registered client ID. Only if both are empty is there nothing to do.
+  QString clientId = cfg.value(QStringLiteral("clientId")).toString().trimmed();
+  if(clientId.isEmpty()) {
+    clientId = d->oauth.clientId;
+  }
+  if(clientId.isEmpty()) {
+    emit toast(tr("No OAuth app configured — add a client ID under Advanced first"));
+    return;
+  }
+  QString clientSecret = cfg.value(QStringLiteral("clientSecret")).toString();
+  if(clientSecret.isEmpty()) {
+    clientSecret = d->oauth.clientSecret;
+  }
+  // {host} defaults to the descriptor fallback (e.g. gitlab.com) so gitlab.com
+  // users never type a host; self-hosted users enter one under Advanced.
+  QString host = cfg.value(QStringLiteral("host")).toString().trimmed();
+  if(host.isEmpty()) {
+    host = d->baseUrlFallback;
+  }
+  const QString base = cfg.value(QStringLiteral("baseUrl")).toString().trimmed();
+  const auto expandHost = [host, base](QString url) {
+    QString h = host;
+    QString b = base;
+    while(h.endsWith('/')) {
+      h.chop(1);
+    }
+    while(b.endsWith('/')) {
+      b.chop(1);
+    }
+    url.replace(QStringLiteral("{host}"), h);
+    url.replace(QStringLiteral("{baseUrl}"), b);
+    return url;
+  };
+
+  auto* mgr = new heap::integrations::OAuthManager(this);
+  heap::integrations::OAuthManager::Params p;
+  p.tokenUrl = expandHost(d->oauth.tokenUrl);
+  p.clientId = clientId;
+  p.clientSecret = clientSecret;
+  p.scope = d->oauth.scope;
+  p.usePkce = d->oauth.usePkce;
+  p.deviceFlow = d->oauth.deviceFlow;
+  // Device flow: authUrl is the device authorization endpoint (no loopback).
+  p.authUrl = expandHost(p.deviceFlow ? d->oauth.deviceAuthUrl : d->oauth.authUrl);
+
+  const QString label = d->displayName;
+  // Device flow surfaces a user code the person types in the browser — relay it
+  // to the Integrations card as a banner.
+  connect(mgr, &heap::integrations::OAuthManager::userCode, this, [this, providerId, label](const QString& code, const QString& uri) {
+    emit oauthDeviceCode(providerId, code, uri);
+    emit toast(tr("%1: open %2 and enter code %3").arg(label, uri, code));
+  });
+  connect(mgr, &heap::integrations::OAuthManager::finished, this, [this, providerId, label, mgr](const heap::integrations::OAuthResult& r) {
+    mgr->deleteLater();
+    emit oauthDeviceCode(providerId, QString(), QString());  // clear the banner
+    if(!r.ok) {
+      emit toast(tr("%1 sign-in failed: %2").arg(label, r.error));
+      return;
+    }
+    if(m_secretStore) {
+      m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
+      if(!r.refreshToken.isEmpty()) {
+        m_secretStore->setValue(providerId, QStringLiteral("refreshToken"), r.refreshToken);
+      }
+    }
+    setIntegrationField(providerId, QStringLiteral("authMode"), QStringLiteral("oauth"));
+    setIntegrationField(providerId, QStringLiteral("connected"), true);
+    emit toast(tr("%1 connected via browser").arg(label));
+  });
+  if(p.deviceFlow) {
+    emit toast(tr("Starting %1 browser sign-in…").arg(label));
+  } else {
+    emit toast(tr("Opening browser for %1 — OAuth redirect: %2").arg(label, heap::integrations::OAuthManager::redirectUri()));
+  }
+  mgr->start(p);
 }
 
 void AppController::scheduleSave() {
