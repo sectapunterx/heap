@@ -76,22 +76,49 @@ Qt's JS engine needs):
 ## Windows signing
 
 Windows binaries and the installer are **unsigned** by default, so SmartScreen
-shows an *"Unknown publisher"* warning on first download/run. To Authenticode-sign
-`heap.exe`, the bundled Qt DLLs and the setup `.exe` automatically, add these repo
-secrets — the workflow's optional signing steps activate when `WINDOWS_CERT_PFX`
-is present (mirrors the macOS pattern):
+shows an *"Unknown publisher"* warning on first download/run. Signing is wired to
+[**SignPath Foundation**](https://signpath.org) — free Authenticode code signing
+for qualifying open-source projects — and activates when `SIGNPATH_API_TOKEN` is
+present (mirrors the macOS optional-signing pattern). Unsigned builds still ship
+when it is absent.
 
-| Secret | Meaning |
-|--------|---------|
-| `WINDOWS_CERT_PFX` | base64 of an Authenticode code-signing `.pfx`/`.p12` certificate (OV or EV) |
-| `WINDOWS_CERT_PASSWORD` | password for that `.pfx` |
+**What signing does — and does not — do.** As of 2024 **no certificate removes
+the SmartScreen warning instantly** ([Microsoft
+Learn](https://learn.microsoft.com/en-us/windows/apps/package-and-deploy/smartscreen-reputation);
+EV lost its instant bypass). Signing (1) replaces *"Unknown publisher"* with the
+verified publisher **"SignPath Foundation"** (the certificate is issued to the
+Foundation, not to heap), and (2) lets SmartScreen reputation accumulate on that
+certificate so the warning fades over downloads. The Foundation cert is shared by
+many OSS projects, so it already carries some reputation — a head start over a
+fresh cert. The only way to a zero-warning first launch is Microsoft Store (MSIX)
+distribution, which is not used here.
 
-Signing uses [`osslsigncode`](https://github.com/mtrojnar/osslsigncode) with an
-RFC-3161 SHA-256 timestamp, so signatures stay valid after the certificate
-expires. An **EV** certificate earns SmartScreen reputation instantly; an **OV**
-certificate builds it up over downloads. The uninstaller (`unins000.exe`, which
-Inno generates on the target machine) is not signed — add Inno's
-`SignedUninstaller` directive later if that warning needs to go too.
+Post-2023 CA rules forbid downloadable `.pfx` keys for publicly-trusted
+certificates (keys must live on an HSM/token or a managed service), which is why
+signing goes through SignPath's cloud service rather than a `.pfx` secret. The
+flow: CI uploads the unsigned artifact as a GitHub workflow artifact,
+[`signpath/github-action-submit-signing-request`](https://docs.signpath.io/trusted-build-systems/github)
+submits a signing request, SignPath verifies the build origin, signs the
+configured PE files (with an RFC-3161 timestamp, so signatures outlive the cert),
+and returns the signed files. `heap.exe` + the bundled Qt DLLs are signed before
+packaging, then the setup `.exe` is signed after Inno builds it.
+
+Configure it after the SignPath Foundation application is approved:
+
+| Repo setting | Kind | Meaning |
+|--------------|------|---------|
+| `SIGNPATH_API_TOKEN` | secret | SignPath API token with submitter permission |
+| `SIGNPATH_ORG_ID` | variable | SignPath organization ID |
+| `SIGNPATH_PROJECT_SLUG` | variable | SignPath project slug (e.g. `heap`) |
+| `SIGNPATH_POLICY_SLUG` | variable | signing policy slug (e.g. `release-signing`) |
+
+In the SignPath console the project needs the **GitHub.com** trusted build system
+(with the SignPath GitHub App installed on the repo) and two **artifact
+configurations**: `portable` (recursively signs `*.exe`/`*.dll` in the bundle) and
+`installer` (signs the setup `.exe`). SignPath's OSS program requires every job up
+to the signing request to run on GitHub-hosted runners — `package-windows` already
+does. The uninstaller (`unins000.exe`, which Inno generates on the target machine)
+is not signed.
 
 ## Follow-ups (not yet automated)
 
