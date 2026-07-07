@@ -1,0 +1,4 @@
+# Shell scripts must stay LF even on Windows checkouts (core.autocrlf=true):
+# msys2/bash chokes on CRLF ("bad interpreter", "set -euo pipefail\r"), which
+# would break the Windows portable-bundle deploy step in CI.
+*.sh text eol=lf
