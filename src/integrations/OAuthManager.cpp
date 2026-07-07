@@ -5,9 +5,19 @@
 #include <QHostAddress>
 #include <QNetworkRequest>
 #include <QOAuth2AuthorizationCodeFlow>
-#include <QOAuth2DeviceAuthorizationFlow>
 #include <QOAuthHttpServerReplyHandler>
+#include <QtGlobal>
 #include <QTimer>
+
+// QOAuth2DeviceAuthorizationFlow and QAbstractOAuth2::setNetworkRequestModifier
+// both landed in Qt 6.9. Distro packaging (e.g. the Ubuntu .deb) still builds
+// against the system Qt 6.4, so degrade gracefully there: GitHub device sign-in
+// is unavailable (fall back to a token) and the GitLab loopback flow runs
+// without the JSON-Accept modifier — GitLab already returns JSON, so it works.
+#define HEAP_HAVE_OAUTH_DEVICE_FLOW (QT_VERSION >= QT_VERSION_CHECK(6, 9, 0))
+
+#if HEAP_HAVE_OAUTH_DEVICE_FLOW
+#include <QOAuth2DeviceAuthorizationFlow>
 
 namespace {
 // GitHub's OAuth endpoints (device/code, access_token) default to
@@ -19,6 +29,7 @@ void forceJsonAccept(QNetworkRequest& req, QAbstractOAuth::Stage) {
   req.setRawHeader("Accept", "application/json");
 }
 }  // namespace
+#endif
 
 namespace heap::integrations {
 
@@ -40,6 +51,11 @@ void OAuthManager::start(const Params& params) {
 }
 
 void OAuthManager::startDevice(const Params& params) {
+#if !HEAP_HAVE_OAUTH_DEVICE_FLOW
+  Q_UNUSED(params);
+  report({false, {}, {}, {}, QStringLiteral("browser sign-in for this provider needs Qt 6.9 or newer — use an access token")});
+}
+#else
   // OAuth 2.0 Device Authorization Grant (RFC 8628): request a short user code,
   // ask the user to enter it in the browser, then poll for the token. No secret,
   // no loopback — the right fit for GitHub in an open-source client.
@@ -90,6 +106,7 @@ void OAuthManager::startDevice(const Params& params) {
 
   m_deviceFlow->grant();
 }
+#endif
 
 void OAuthManager::startAuthCode(const Params& params) {
   // Loopback listener on a FIXED 127.0.0.1 port — must equal the redirect URI
@@ -104,7 +121,9 @@ void OAuthManager::startAuthCode(const Params& params) {
   m_flow->setAuthorizationUrl(QUrl(params.authUrl));
   m_flow->setTokenUrl(QUrl(params.tokenUrl));
   m_flow->setClientIdentifier(params.clientId);
+#if HEAP_HAVE_OAUTH_DEVICE_FLOW
   m_flow->setNetworkRequestModifier(this, forceJsonAccept);  // JSON token responses
+#endif
   if(!params.clientSecret.isEmpty()) {
     m_flow->setClientIdentifierSharedKey(params.clientSecret);
   }
@@ -155,9 +174,11 @@ void OAuthManager::report(const OAuthResult& result) {
   if(m_timeout) {
     m_timeout->stop();
   }
+#if HEAP_HAVE_OAUTH_DEVICE_FLOW
   if(m_deviceFlow) {
     m_deviceFlow->stopTokenPolling();
   }
+#endif
   if(m_handler) {
     m_handler->close();
   }
