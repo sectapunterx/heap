@@ -88,8 +88,7 @@ jobs:
     # step's own env is not reliably visible to its own `if`, and `secrets`
     # cannot be referenced in `if` directly). Mirrors the macOS signing pattern.
     env:
-      WINDOWS_CERT_PFX: ${{ secrets.WINDOWS_CERT_PFX }}
-      WINDOWS_CERT_PASSWORD: ${{ secrets.WINDOWS_CERT_PASSWORD }}
+      SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,29 +143,33 @@ jobs:
 
       # Authenticode-sign heap.exe + the bundled Qt DLLs before they are
       # packaged, so both the portable zip and the installer carry signed
-      # binaries. Runs only when the signing secret is configured — unsigned
-      # builds still ship (default). See docs/PACKAGING.md for the secrets.
-      - name: Sign binaries (optional)
-        if: ${{ env.WINDOWS_CERT_PFX != '' }}
-        shell: msys2 {0}
-        run: |
-          set -eu
-          pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-osslsigncode
-          printf '%s' "$WINDOWS_CERT_PFX" | base64 -d > cert.pfx
-          sign() {
-            osslsigncode sign \
-              -pkcs12 cert.pfx -pass "$WINDOWS_CERT_PASSWORD" \
-              -n "heap." -i "https://github.com/sectapunterx/heap" \
-              -ts http://timestamp.digicert.com -h sha256 \
-              -in "$1" -out "$1.signed"
-            mv -f "$1.signed" "$1"
-          }
-          find build/heap-portable -type f \( -iname '*.exe' -o -iname '*.dll' \) -print0 |
-            while IFS= read -r -d '' f; do
-              echo "signing: $f"
-              sign "$f"
-            done
-          rm -f cert.pfx
+      # binaries. Signing runs via SignPath Foundation (free OSS code signing):
+      # the unsigned bundle is uploaded as a workflow artifact, SignPath pulls
+      # it, signs the configured PE files, and the signed files are written back
+      # over build/heap-portable. Runs only when SIGNPATH_API_TOKEN is
+      # configured — unsigned builds still ship (default). See docs/PACKAGING.md.
+      - name: Upload unsigned portable bundle
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        id: upload-portable
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-portable
+          path: build/heap-portable
+
+      - name: Sign portable bundle (SignPath)
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: portable
+          github-artifact-id: ${{ steps.upload-portable.outputs.artifact-id }}
+          wait-for-completion: true
+          # Overwrite the bundle in place so the zip + installer below wrap the
+          # signed binaries.
+          output-artifact-directory: build/heap-portable
 
       - name: Zip portable bundle
         shell: pwsh
@@ -188,22 +191,29 @@ jobs:
             installer\heap.iss
 
       # Sign the finished installer .exe (the portable binaries it wraps were
-      # already signed above). Same gate — no-op without the cert secret.
-      - name: Sign installer (optional)
-        if: ${{ env.WINDOWS_CERT_PFX != '' }}
-        shell: msys2 {0}
-        run: |
-          set -eu
-          pacman -S --noconfirm --needed mingw-w64-ucrt-x86_64-osslsigncode
-          printf '%s' "$WINDOWS_CERT_PFX" | base64 -d > cert.pfx
-          SETUP="installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe"
-          osslsigncode sign \
-            -pkcs12 cert.pfx -pass "$WINDOWS_CERT_PASSWORD" \
-            -n "heap. installer" -i "https://github.com/sectapunterx/heap" \
-            -ts http://timestamp.digicert.com -h sha256 \
-            -in "$SETUP" -out "$SETUP.signed"
-          mv -f "$SETUP.signed" "$SETUP"
-          rm -f cert.pfx
+      # already signed above). Same SignPath flow, second artifact config — the
+      # signed setup.exe is written back over installer/Output. Same gate — no-op
+      # without the token secret.
+      - name: Upload unsigned installer
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        id: upload-installer
+        uses: actions/upload-artifact@v4
+        with:
+          name: unsigned-installer
+          path: installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe
+
+      - name: Sign installer (SignPath)
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        uses: signpath/github-action-submit-signing-request@v2
+        with:
+          api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
+          organization-id: ${{ vars.SIGNPATH_ORG_ID }}
+          project-slug: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+          signing-policy-slug: ${{ vars.SIGNPATH_POLICY_SLUG }}
+          artifact-configuration-slug: installer
+          github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
+          wait-for-completion: true
+          output-artifact-directory: installer/Output
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -461,6 +471,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          # Only the packaged per-platform bundles — NOT the unsigned-* SignPath
+          # transport artifacts, which would otherwise pollute the release with
+          # unsigned duplicates.
+          pattern: dist-*
           merge-multiple: true
 
       - name: List artifacts
