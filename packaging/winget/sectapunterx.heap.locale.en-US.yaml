@@ -1,0 +1,28 @@
+# yaml-language-server: $schema=https://aka.ms/winget-manifest.defaultLocale.1.6.0.schema.json
+PackageIdentifier: sectapunterx.heap
+PackageVersion: 0.4.2
+PackageLocale: en-US
+Publisher: sectapunterx
+PublisherUrl: https://github.com/sectapunterx
+PublisherSupportUrl: https://github.com/sectapunterx/heap/issues
+PackageName: heap.
+PackageUrl: https://github.com/sectapunterx/heap
+License: MIT
+LicenseUrl: https://github.com/sectapunterx/heap/blob/master/LICENSE
+Copyright: Copyright (c) sectapunterx
+ShortDescription: Native desktop kanban, calendar and docs for engineers.
+Description: |-
+  heap. is a native desktop kanban, calendar, and docs app for engineers.
+  Built with Qt 6 / QML / C++20, it ships as a single binary with a
+  per-profile JSON workspace — tasks, calendar, notes and docs in one place.
+Moniker: heap
+Tags:
+  - kanban
+  - todo
+  - calendar
+  - notes
+  - planner
+  - productivity
+  - qt
+ManifestType: defaultLocale
+ManifestVersion: 1.6.0

@@ -1,0 +1,68 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Flathub AppStream metainfo — DRAFT.
+     TODO before PR: replace the screenshot URL with a real, reachable image
+     (Flathub requires at least one). Validate with:
+       flatpak run org.freedesktop.appstream.cli validate \
+         packaging/flatpak/io.github.sectapunterx.heap.metainfo.xml -->
+<component type="desktop-application">
+  <id>io.github.sectapunterx.heap</id>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>MIT</project_license>
+  <name>heap.</name>
+  <summary>Native kanban, calendar and docs for engineers</summary>
+  <description>
+    <p>
+      heap. keeps tasks, calendar, notes and docs in one place. It is a native
+      desktop app built with Qt 6 / QML / C++20 — a single binary with a
+      per-profile JSON workspace, no accounts and no cloud required.
+    </p>
+    <p>Features:</p>
+    <ul>
+      <li>Kanban board for tasks</li>
+      <li>Calendar and schedule planning</li>
+      <li>Notes and documents</li>
+      <li>Local, per-profile JSON workspace</li>
+    </ul>
+  </description>
+  <launchable type="desktop-id">io.github.sectapunterx.heap.desktop</launchable>
+  <developer id="io.github.sectapunterx">
+    <name>sectapunterx</name>
+  </developer>
+  <url type="homepage">https://github.com/sectapunterx/heap</url>
+  <url type="bugtracker">https://github.com/sectapunterx/heap/issues</url>
+  <url type="vcs-browser">https://github.com/sectapunterx/heap</url>
+  <content_rating type="oars-1.1" />
+  <screenshots>
+    <screenshot type="default">
+      <caption>Board view — kanban columns, pinned calendar and people pane</caption>
+      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-full.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Week view — 7-day grid with drag/resize events</caption>
+      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-week.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Day calendar — drag-to-create and focus blocks</caption>
+      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/calendar-focus.png</image>
+    </screenshot>
+    <screenshot>
+      <caption>Docs — custom sections, snippets and contact cards</caption>
+      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-docs.png</image>
+    </screenshot>
+  </screenshots>
+  <categories>
+    <category>Office</category>
+    <category>ProjectManagement</category>
+  </categories>
+  <keywords>
+    <keyword>kanban</keyword>
+    <keyword>tasks</keyword>
+    <keyword>todo</keyword>
+    <keyword>calendar</keyword>
+    <keyword>notes</keyword>
+    <keyword>planner</keyword>
+  </keywords>
+  <releases>
+    <release version="0.4.2" date="2026-07-07" />
+  </releases>
+</component>

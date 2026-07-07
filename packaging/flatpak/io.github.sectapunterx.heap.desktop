@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=heap.
+GenericName=Task & schedule planner
+Comment=Work, in one place — tasks, calendar, notes, and docs
+Exec=heap
+Icon=io.github.sectapunterx.heap
+Terminal=false
+Categories=Office;ProjectManagement;Utility;
+Keywords=tasks;todo;kanban;calendar;notes;planner;
+StartupWMClass=heap

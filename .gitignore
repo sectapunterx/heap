@@ -14,3 +14,5 @@ CMakeFiles/
 /design/*
 !design/brand-export/
 cmake*
+# Local SignPath setup notes / artifact configs (do not commit)
+/signpath-setup/
