@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(heap VERSION 0.4.6 LANGUAGES CXX)
+project(heap VERSION 0.4.7 LANGUAGES CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
