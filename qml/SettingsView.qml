@@ -596,6 +596,15 @@ Item {
         return sections[0];
     }
 
+    // Deep-link entry from the Welcome guide ("Learn more →"). Switch to the
+    // Help section, then scroll to `anchor` once the body Loader has built
+    // HelpContent (deferred a tick so _findChildByName can see it).
+    function openHelp(anchor) {
+        activeSection = "help";
+        if (anchor && anchor.length > 0)
+            Qt.callLater(() => _scrollToAnchor(anchor));
+    }
+
     // In-page anchor scroll for HelpContent's TOC. Ported from DocsView.qml
     // (scrollToAnchor / findChildByName). Reuses bodyScroll + scrollAnim.
     function _scrollToAnchor(objectName) {

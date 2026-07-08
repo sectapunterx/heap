@@ -258,6 +258,9 @@ class AppController : public QObject {
   // on-disk state.json + backups — and re-seed the Example profile with the
   // first-run onboarding, so the app is exactly "as new" on this device.
   Q_INVOKABLE void resetToFirstRun();
+  // Re-open the welcome guide on demand (Settings → Help "Replay"). Purely a UI
+  // request — it does NOT touch welcomeSeen/demoActive or any persisted state.
+  Q_INVOKABLE void replayWelcome();
 
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
@@ -533,6 +536,9 @@ class AppController : public QObject {
   // Emitted after resetToFirstRun() rebuilds a fresh install — Main.qml re-opens
   // the Welcome dialog and surfaces a confirmation toast.
   void firstRunReset();
+  // Emitted by replayWelcome() — Main.qml re-opens the Welcome guide from step 0
+  // without changing any persisted onboarding flags.
+  void welcomeReplayRequested();
   void profilesChanged();
   void activeProfileChanged();
   void shortcutsChanged();
