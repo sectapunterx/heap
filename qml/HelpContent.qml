@@ -128,6 +128,11 @@ Item {
                     + "nothing goes to the cloud. Below — a tour of the sections. Click an item in the table "
                     + "of contents to jump to the topic you need."
             }
+            PillButton {
+                Layout.topMargin: 2
+                text: I18n.t("welcome.replay")
+                onClicked: AppController.replayWelcome()
+            }
         }
 
         // ─────────────────────────────────────────── TOC

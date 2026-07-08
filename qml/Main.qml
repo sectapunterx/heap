@@ -416,7 +416,27 @@ ApplicationWindow {
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     ProfileEditor { id: profileEditor }
-    WelcomePopup { id: welcome }
+    WelcomePopup {
+        id: welcome
+        // Per-step "open →" actions route here so the guide stays decoupled from
+        // the popups/editors Main owns. Each _doAction() already finished the
+        // guide, so the target surface is visible when we open it.
+        onOpenAction: (id) => {
+            if (id === "task-new")           taskEditor.showFor(AppController.newTaskDraft("todo"));
+            else if (id === "quick-capture") quickCapture.open();
+            else if (id === "palette")       cmdPalette.open();
+            else if (id === "hotkeys")       rail.openHotkeys(rail.hotkeysAnchor);
+        }
+        // "Learn more →" — jump to Settings and scroll the Help doc to the anchor.
+        onOpenHelp: (anchor) => {
+            AppController.currentView = "settings";
+            Qt.callLater(() => {
+                const v = viewLoader.item;
+                if (v && v.openHelp)
+                    v.openHelp(anchor);
+            });
+        }
+    }
 
     // After a "delete all data" reset the controller rebuilds a fresh install;
     // jump back to the board and re-greet the user, mirroring true first-run.
@@ -424,6 +444,11 @@ ApplicationWindow {
         target: AppController
         function onFirstRunReset() {
             AppController.currentView = "board";
+            Qt.callLater(welcome.open);
+        }
+        // Settings → Help "Replay" re-opens the guide (starts at step 0 via the
+        // popup's onAboutToShow) without touching any persisted onboarding flags.
+        function onWelcomeReplayRequested() {
             Qt.callLater(welcome.open);
         }
     }

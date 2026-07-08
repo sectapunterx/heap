@@ -1682,6 +1682,13 @@ void AppController::dismissDemo() {
   scheduleSave();
 }
 
+void AppController::replayWelcome() {
+  // UI-only request: ask Main.qml to re-open the welcome guide. Deliberately
+  // leaves m_welcomeSeen / m_demoActive untouched so replaying the tour never
+  // resurrects the demo banner or changes what persists.
+  emit welcomeReplayRequested();
+}
+
 void AppController::seedExampleProfile() {
   // Seed a single "Example" profile from SampleData + turn on the first-run
   // onboarding. Called on a genuine fresh install and by resetToFirstRun().

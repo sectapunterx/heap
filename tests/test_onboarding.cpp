@@ -14,6 +14,7 @@
 #include <QDate>
 #include <QDir>
 #include <QFile>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QVector>
@@ -68,6 +69,23 @@ TEST_F(OnboardingTest, DismissDemoPersists) {
   }
   AppController b;
   EXPECT_FALSE(b.demoActive());
+}
+
+TEST_F(OnboardingTest, ReplayWelcomeEmitsSignalAndKeepsState) {
+  AppController app;
+  app.markWelcomeSeen();
+  app.dismissDemo();
+  ASSERT_TRUE(app.welcomeSeen());
+  ASSERT_FALSE(app.demoActive());
+
+  QSignalSpy spy(&app, &AppController::welcomeReplayRequested);
+  app.replayWelcome();
+
+  // Replay is a pure UI request: it fires the signal but leaves the persisted
+  // onboarding flags exactly as they were (no demo banner resurrection).
+  EXPECT_EQ(spy.count(), 1);
+  EXPECT_TRUE(app.welcomeSeen());
+  EXPECT_FALSE(app.demoActive());
 }
 
 TEST_F(OnboardingTest, StartFreshClearsActiveProfileContent) {
