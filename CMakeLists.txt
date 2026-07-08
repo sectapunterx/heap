@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.21)
-project(heap VERSION 0.4.3 LANGUAGES CXX)
+project(heap VERSION 0.4.4 LANGUAGES CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
@@ -354,6 +354,32 @@ if(WIN32)
         set(_windeploy_path
             "${MSYS_BIN_DIR};${MSYS_QT_LIBEXEC};${MSYS_QT_SHARE_BIN}")
 
+        # Bundle the Universal CRT so the portable zip launches on a clean or
+        # older Windows. heap.exe and the qwindows platform plugin statically
+        # import api-ms-win-crt-*.dll; on a fully-updated Win10/11 those are an
+        # OS component, but on a fresh/un-updated/LTSC/Win8.1 machine they are
+        # absent and the loader aborts before main() with
+        # "api-ms-win-crt-runtime-l1-1-0.dll was not found". Copying the SDK's
+        # UCRT redist beside the exe (app-local deployment) is Microsoft's
+        # supported fix. The DLLs only import ntdll/kernel32, so the copy-deps
+        # closure stays clean.
+        file(GLOB _ucrt_redist_dirs
+             "C:/Program Files (x86)/Windows Kits/10/Redist/*/ucrt/DLLs/x64")
+        if(_ucrt_redist_dirs)
+            list(SORT _ucrt_redist_dirs)
+            list(GET _ucrt_redist_dirs -1 _ucrt_dir)
+            file(GLOB _ucrt_dlls "${_ucrt_dir}/*.dll")
+        endif()
+        if(_ucrt_dlls)
+            message(STATUS "Portable: bundling UCRT redist from ${_ucrt_dir}")
+            set(_copy_ucrt COMMAND ${CMAKE_COMMAND} -E copy ${_ucrt_dlls} "${PORTABLE_DIR}/")
+        else()
+            message(WARNING "Portable: Windows SDK UCRT redist not found — "
+                            "portable bundle will rely on the OS Universal CRT "
+                            "(fine on updated Win10/11, may fail on clean/old Windows).")
+            set(_copy_ucrt COMMAND ${CMAKE_COMMAND} -E true)
+        endif()
+
         add_custom_target(portable
                 DEPENDS heap
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
@@ -367,6 +393,9 @@ if(WIN32)
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libstdc++-6.dll"    "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libgcc_s_seh-1.dll" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "${MSYS_BIN_DIR}/libwinpthread-1.dll" "${PORTABLE_DIR}/"
+                # Universal CRT redist (see _copy_ucrt above) — no-op when the
+                # SDK redist was not found at configure time.
+                ${_copy_ucrt}
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${MSYS_QML_DIR}/QtQuick"  "${PORTABLE_DIR}/QtQuick"
                 # windeployqt bundles Qt's own DLLs + plugins but not qtkeychain
                 # (a non-Qt module) nor the transitive non-Qt deps of

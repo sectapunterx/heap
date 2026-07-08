@@ -91,6 +91,15 @@ while IFS= read -r dll; do
   if [ -n "${libmap[$dk]:-}" ]; then
     echo "  !! MISSING: $dll" >&2
     missing=$((missing + 1))
+  elif [[ "$dk" == qt6*.dll || "$dk" == libqt6keychain*.dll ]]; then
+    # A Qt module / qtkeychain we MUST ship, imported by a bundled PE but present
+    # in neither the bundle nor ucrt64/bin. The plain "not in ucrt64 ⇒ system DLL"
+    # rule above would silently ignore it — that is exactly how a build missing
+    # its qt6-svg package shipped a bundle without Qt6Svg.dll. Treat it as a hard
+    # error: the module's package is almost certainly not installed in the build
+    # environment.
+    echo "  !! MISSING (required Qt module — is its MSYS2 package installed?): $dll" >&2
+    missing=$((missing + 1))
   fi
 done < <(imports_of "${allpe[@]}")
 

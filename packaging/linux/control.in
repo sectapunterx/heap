@@ -4,7 +4,7 @@ Section: utils
 Priority: optional
 Architecture: amd64
 Maintainer: heap. <noreply@users.noreply.github.com>
-Depends: libqt6core6 (>= 6.4), libqt6gui6 (>= 6.4), libqt6qml6 (>= 6.4), libqt6quick6 (>= 6.4), libqt6quickcontrols2-6 (>= 6.4), libqt6widgets6 (>= 6.4)
+Depends: libqt6core6 (>= 6.4), libqt6gui6 (>= 6.4), libqt6qml6 (>= 6.4), libqt6quick6 (>= 6.4), libqt6quickcontrols2-6 (>= 6.4), libqt6svg6 (>= 6.4), libqt6widgets6 (>= 6.4)
 Homepage: https://github.com/sectapunterx/todolist
 Description: Work, in one place — tasks, calendar, notes and docs
  heap. is a keyboard-first desktop planner that unifies a kanban board, a
