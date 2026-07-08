@@ -269,6 +269,20 @@ jobs:
           set -eu
           dpkg-deb --build --root-owner-group pkgroot "heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb"
 
+      # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
+      # desktop/icon, laid out flat under a versioned top dir. Depends on system
+      # Qt 6 (Arch/source-install convention); install.sh warns if it is absent.
+      - name: Build tarball
+        run: |
+          set -eu
+          STAGE="heap-${{ needs.meta.outputs.tag }}-linux-x86_64"
+          rm -rf "$STAGE"
+          install -Dm755 build/heap                             "$STAGE/heap"
+          install -m644  packaging/linux/heap.desktop           "$STAGE/heap.desktop"
+          install -m644  design/brand-export/icon/heap-icon.svg "$STAGE/heap.svg"
+          install -m755  packaging/linux/install.sh             "$STAGE/install.sh"
+          tar -czf "$STAGE.tar.gz" "$STAGE"
+
       - name: Build AppImage
         id: appimage
         continue-on-error: true
@@ -296,6 +310,7 @@ jobs:
           name: dist-linux
           path: |
             heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb
+            heap-${{ needs.meta.outputs.tag }}-linux-x86_64.tar.gz
             heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
           if-no-files-found: warn
 
