@@ -263,6 +263,18 @@ qt_add_resources(heap "brand"
         design/brand-export/logo/heap-wordmark-light.svg
         design/brand-export/icon/heap-icon.svg
         design/brand-export/icon/favicon.svg
+        design/brand-export/icons/heap-01-board.svg
+        design/brand-export/icons/heap-02-timeline.svg
+        design/brand-export/icons/heap-03-week.svg
+        design/brand-export/icons/heap-04-month.svg
+        design/brand-export/icons/heap-05-archive.svg
+        design/brand-export/icons/heap-06-blocked.svg
+        design/brand-export/icons/heap-07-code-review.svg
+        design/brand-export/icons/heap-08-docs.svg
+        design/brand-export/icons/heap-09-notes.svg
+        design/brand-export/icons/heap-10-hotkeys.svg
+        design/brand-export/icons/heap-11-tweaks.svg
+        design/brand-export/icons/heap-12-settings.svg
         design/brand-export/surfaces/heap-splash.svg
         design/brand-export/surfaces/heap-readme-banner.svg
         design/brand-export/surfaces/heap-marketing-hero.svg
