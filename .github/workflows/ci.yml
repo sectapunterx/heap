@@ -41,7 +41,7 @@ jobs:
     timeout-minutes: 10
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
@@ -95,7 +95,7 @@ jobs:
   #   runs-on: ubuntu-24.04
   #   timeout-minutes: 10
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #       with: { fetch-depth: 0 }
   #     - name: Install Qt6 declarative tools
   #       run: |
@@ -123,7 +123,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
       - uses: raven-actions/actionlint@v2
         with:
           files: ".github/workflows/*.yml"
@@ -148,7 +148,7 @@ jobs:
     timeout-minutes: 25
     steps:
       - name: Checkout PR head
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
           ref: ${{ github.event.pull_request.head.ref }}
@@ -227,7 +227,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-latest, macos-14]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Ubuntu 24.04's apt ships Qt 6.4.2, which has a static-QML-module
       # qmlcachegen bug: file-based .qml components ("SideRail is not a type")
@@ -333,7 +333,7 @@ jobs:
 
       - name: Upload build artifact
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: build-${{ matrix.os }}
           path: build-${{ matrix.os }}.tar
@@ -352,7 +352,7 @@ jobs:
       matrix:
         os: [ubuntu-24.04, windows-latest, macos-14]
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       # Same Qt (install-qt-action 6.8.1) as the build job so the tarred build
       # tree matches the runtime. Qt's own QML modules ship with the install, so
@@ -395,7 +395,7 @@ jobs:
           modules: qtnetworkauth
 
       - name: Download build artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: build-${{ matrix.os }}
 
@@ -434,7 +434,7 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: test-results-${{ matrix.os }}
           path: build/tests/ctest-${{ matrix.os }}.xml
@@ -456,7 +456,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install build tools + system libs
         run: |
@@ -514,7 +514,7 @@ jobs:
     runs-on: macos-14
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Qt6
         uses: jurplel/install-qt-action@v4
@@ -618,7 +618,7 @@ jobs:
   #   timeout-minutes: 20
   #   needs: test
   #   steps:
-  #     - uses: actions/checkout@v4
+  #     - uses: actions/checkout@v7
   #
   #     - name: Install toolchain
   #       run: |
@@ -652,7 +652,7 @@ jobs:
   #
   #     - name: Upload coverage artifact
   #       if: always()
-  #       uses: actions/upload-artifact@v4
+  #       uses: actions/upload-artifact@v7
   #       with:
   #         name: coverage-lcov
   #         path: coverage.lcov

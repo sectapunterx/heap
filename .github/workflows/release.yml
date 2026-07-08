@@ -32,7 +32,7 @@ jobs:
       release: ${{ steps.tag.outputs.release }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
       - name: Resolve version & release kind
@@ -90,7 +90,7 @@ jobs:
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
@@ -154,7 +154,7 @@ jobs:
       - name: Upload unsigned portable bundle
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
         id: upload-portable
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-portable
           path: build/heap-portable
@@ -200,7 +200,7 @@ jobs:
       - name: Upload unsigned installer
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
         id: upload-installer
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: unsigned-installer
           path: installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe
@@ -219,7 +219,7 @@ jobs:
           output-artifact-directory: installer/Output
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-windows
           path: |
@@ -236,7 +236,7 @@ jobs:
     needs: meta
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install toolchain
         run: |
@@ -305,7 +305,7 @@ jobs:
             --plugin qt --output appimage
 
       - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-linux
           path: |
@@ -336,7 +336,7 @@ jobs:
       MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
       MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install Ninja
         run: brew install ninja
@@ -464,7 +464,7 @@ jobs:
           spctl -a -t open --context context:primary-signature -vv "$DMG"
 
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: dist-macos
           path: heap-${{ needs.meta.outputs.tag }}-macos.dmg
@@ -490,7 +490,7 @@ jobs:
     runs-on: ubuntu-24.04
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           # Only the packaged per-platform bundles — NOT the unsigned-* SignPath
