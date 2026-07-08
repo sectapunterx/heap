@@ -58,8 +58,30 @@ fires deadline + standup reminders; respects quiet hours).
 
 ## Get it
 
-**Prebuilt binaries** — a Windows installer, a Linux AppImage, and a portable zip are attached to each
-[**GitHub release**](https://github.com/sectapunterx/heap/releases). Download and run; nothing else to install.
+**Prebuilt binaries** — attached to each [**GitHub release**](https://github.com/sectapunterx/heap/releases):
+a Windows installer + portable zip, a macOS `.dmg`, and for Linux an AppImage, a `.deb`, and an
+`install.sh` tarball. Download and run; nothing else to install.
+
+**Linux (any distro)** — download `heap-<ver>-linux-x86_64.tar.gz`, unpack, run `install.sh`:
+
+```sh
+tar xzf heap-*-linux-x86_64.tar.gz
+cd heap-*-linux-x86_64
+./install.sh                 # system-wide as root, else into ~/.local (no sudo)
+```
+
+`install.sh` also takes `--prefix=DIR` and `--uninstall`. The tarball links against your distribution's
+Qt 6 (>= 6.4) — install it first if it is missing:
+
+```sh
+sudo pacman -S qt6-base qt6-declarative qt6-svg qt6-wayland                 # Arch
+sudo apt install libqt6core6 libqt6quick6 libqt6svg6 qml6-module-qtquick    # Debian / Ubuntu
+sudo dnf install qt6-qtbase qt6-qtdeclarative qt6-qtsvg                     # Fedora
+```
+
+Want a **self-contained** binary with Qt bundled in (nothing else to install)? Use the **AppImage** —
+`chmod +x heap-*-linux-x86_64.AppImage` and run it. On Debian / Ubuntu you can instead install the package
+directly: `sudo apt install ./heap-*-linux-amd64.deb`.
 
 **Package managers** — Windows via [Scoop](https://scoop.sh):
 
