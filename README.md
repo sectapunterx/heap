@@ -36,25 +36,70 @@ it watches your working copy and matches the current branch to the task you're o
   leaves the machine.
 - **Git-aware.** The active branch is matched to a task by id, the matching card is decorated with its branch, and a
   focused-repo banner surfaces branch + PR state — no manual linking.
-- **Keyboard-first.** A `Ctrl+K` command palette, global quick-capture from anywhere, and a fully rebindable shortcut
-  map.
-- **One window, six surfaces.** Board, week, day, docs, notes, people — one process, one palette, one state file.
-- **Native + light.** One binary, no installer required, no runtime services. Qt 6 / C++20.
+- **Connected, not locked-in.** Sync issues from GitHub, GitLab, Jira, Trello and nine more trackers — one-click OAuth
+  or a token, credentials kept in the OS keychain, status written back when you move a card. Your data still lives in
+  one local file.
+- **Keyboard-first.** A `Ctrl+K` command palette with full-text search, global quick-capture from anywhere, and a fully
+  rebindable shortcut map.
+- **One window, every surface.** Board, timeline, week, month, docs, notes, calendar, people — one process, one
+  palette, one state file.
+- **Native + light.** One binary, no installer required, no runtime services. Qt 6 / C++20. English and Russian.
 
 ## Features
 
-**Plan** — Kanban board (drag-and-drop columns, priority chips, branch decoration, scheduled-time pill) · Timeline
-(overdue / today / week / later buckets).
+**Plan** — Kanban board (drag-and-drop columns, priority chips, branch decoration, scheduled-time pill, recurring
+tasks) · Timeline (overdue / today / week / later buckets) · Archive for closed-out tickets.
 
-**Time** — Week view (7-day grid, drag/resize/cross-day events) · Day calendar (drag-to-create, resize, drop a task to
-schedule a focus block, live now-line).
+**Time** — Week view (7-day grid, drag/resize/cross-day events) · Month view · Day calendar (drag-to-create, resize,
+drop a task to schedule a focus block, live now-line).
 
 **Know** — Docs (custom sections + fields, snippet editor with syntax highlighting, contact cards) · Notes (per-profile
-markdown with `@people` / `#ticket` autocomplete).
+markdown with `@people` / `#ticket` autocomplete and a `status:blocked priority:P0 deadline:<7d` query language).
 
-**Flow** — Git-aware board · Quick-capture task / note via a global hotkey · `Ctrl+K` command palette · Profiles
-(feature-scoped workspaces with JSON import/export) · Automation (60-second tick auto-archives, warns on stuck tasks,
-fires deadline + standup reminders; respects quiet hours).
+**Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and nine more (Gitea, Forgejo, Redmine, Todoist,
+Asana, ClickUp, Sentry, Bitbucket) — one-click OAuth or a token, issues mirrored as cards, status written back on
+column move (GitHub / GitLab / Gitea / Forgejo), tokens in the OS keychain, optional timed auto-sync. See
+[`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md).
+
+**Flow** — Git-aware board · Quick-capture task / note via a global hotkey · `Ctrl+K` command palette (full-text search
+across tasks, notes, docs & snippets) · Profiles (feature-scoped workspaces with JSON import/export) · Automation
+(60-second tick auto-archives, warns on stuck tasks, fires deadline + standup reminders; respects quiet hours) ·
+Interactive first-run guide · In-app update check.
+
+## A look inside
+
+<table>
+<tr>
+  <td width="50%" valign="top">
+    <a href="docs/assets/img/screens/settings-integrations.png"><img src="docs/assets/img/screens/settings-integrations.png" alt="Tracker integrations — Settings"></a>
+    <sub><b>Integrations</b> — GitHub, GitLab, Jira, Trello + 9 more, one-click connect.</sub>
+  </td>
+  <td width="50%" valign="top">
+    <a href="docs/assets/img/screens/welcome.png"><img src="docs/assets/img/screens/welcome.png" alt="Interactive welcome guide"></a>
+    <sub><b>First run</b> — an interactive, skippable, replayable guided tour.</sub>
+  </td>
+</tr>
+<tr>
+  <td valign="top">
+    <a href="docs/assets/img/screens/board-timeline.png"><img src="docs/assets/img/screens/board-timeline.png" alt="Timeline view"></a>
+    <sub><b>Timeline</b> — every task bucketed by deadline.</sub>
+  </td>
+  <td valign="top">
+    <a href="docs/assets/img/screens/board-month.png"><img src="docs/assets/img/screens/board-month.png" alt="Month view"></a>
+    <sub><b>Month</b> — tasks and events across the whole month.</sub>
+  </td>
+</tr>
+<tr>
+  <td valign="top">
+    <a href="docs/assets/img/screens/board-docs.png"><img src="docs/assets/img/screens/board-docs.png" alt="Docs view"></a>
+    <sub><b>Docs</b> — sections, snippets with highlighting, contacts.</sub>
+  </td>
+  <td valign="top">
+    <a href="docs/assets/img/screens/board-notes.png"><img src="docs/assets/img/screens/board-notes.png" alt="Notes view"></a>
+    <sub><b>Notes</b> — markdown with <code>@people</code> / <code>#ticket</code> links.</sub>
+  </td>
+</tr>
+</table>
 
 ## Get it
 
@@ -156,11 +201,13 @@ Defaults — every entry is rebindable from **Settings → Shortcuts** or the fl
 | Next / prev profile | `Ctrl+]` / `Ctrl+[` | Export profile → Markdown | `Ctrl+Shift+E` |
 | Focus search      | `Ctrl+F`     | Undo last change  | `Ctrl+Z`     |
 | Tweaks / Hotkeys  | `Ctrl+,` / `Ctrl+/` | Select all / clear / delete | `Ctrl+A` / `Esc` / `Del` |
+| Archive / Weekly report | `Ctrl+7` / `Ctrl+Shift+W` | Toggle theme | `Ctrl+Shift+T` |
 
 ## Documentation
 
 - [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough, including Quick-capture syntax.
 - [**Keyboard reference**](docs/HOTKEYS.md) — every (rebindable) shortcut.
+- [**Tracker integrations**](docs/INTEGRATIONS.md) — connecting GitHub / GitLab / Jira / Trello and the rest.
 - [**Data & backups**](docs/DATA.md) — where your data lives, backups, moving a profile between machines.
 - [**Packaging**](docs/PACKAGING.md) — how the installer / AppImage / portable bundles are built.
 
@@ -179,7 +226,7 @@ Defaults — every entry is rebindable from **Settings → Shortcuts** or the fl
 git clone https://github.com/sectapunterx/heap && cd heap
 cmake -S . -B build && cmake --build build -j        # app
 cmake --build build --target heap_all_tests          # tests
-ctest --test-dir build/tests --output-on-failure     # 21 suites
+ctest --test-dir build/tests --output-on-failure     # 27 suites
 ```
 
 CI (`.github/workflows/ci.yml`) runs clang-format + clang-tidy, a Linux + Windows build/test matrix, and an
@@ -193,6 +240,7 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 ├─ src/
 │  ├─ main.cpp             ← QApplication entry, window icon, signal handlers
 │  ├─ AppController.{h,cpp}← QML_SINGLETON exposing models, profiles, automation, undo
+│  ├─ Logger.{h,cpp}       ← rotating file logger, installed from main
 │  ├─ Models.{h,cpp}       ← TaskModel / EventModel / PersonModel (QAbstractListModel)
 │  ├─ SampleData.{h,cpp}   ← seed tasks / events / people for first run
 │  ├─ CodeHighlighter.{h,cpp}  ← QSyntaxHighlighter for the docs snippet editor
@@ -200,11 +248,14 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 │  ├─ chrono/              ← natural-language date parser (Quick-capture)
 │  ├─ git/                 ← GitWatcher + branch↔task matcher (git-aware board)
 │  ├─ text/                ← task-text classification / parsing helpers
+│  ├─ notes/               ← note backlinks + @people / #ticket link parsing
+│  ├─ recur/               ← recurring-task engine
+│  ├─ query/               ← Notes query-language parser
 │  ├─ notify/              ← cross-platform notifications (tray / D-Bus)
 │  ├─ platform/            ← global hotkey backend (Win32 RegisterHotKey)
-│  ├─ integrations/        ← tracker-sync status mapping (post-release)
-│  ├─ sync/                ← BYOS serializer + 3-way JSON merge
-│  └─ query/               ← Notes query-language parser
+│  ├─ integrations/        ← tracker sync: 13 providers, OAuth, keychain, status map
+│  ├─ sync/                ← BYOS serializer + 3-way JSON merge (internal)
+│  └─ update/              ← GitHub-releases update check
 ├─ qml/                    ← all views + singletons (Theme, Brand, I18n) — see below
 ├─ tests/                  ← GoogleTest (C++) + Qt Quick Test (QML) suites
 ├─ docs/                   ← single-page site + brandbook (GitHub Pages) + guides
