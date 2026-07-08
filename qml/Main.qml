@@ -444,12 +444,65 @@ ApplicationWindow {
         target: AppController
         function onFirstRunReset() {
             AppController.currentView = "board";
+            welcome.step = 0;
             Qt.callLater(welcome.open);
         }
-        // Settings → Help "Replay" re-opens the guide (starts at step 0 via the
-        // popup's onAboutToShow) without touching any persisted onboarding flags.
+        // Settings → Help "Replay" re-opens the guide from the top without
+        // touching any persisted onboarding flags.
         function onWelcomeReplayRequested() {
+            welcome.step = 0;
             Qt.callLater(welcome.open);
+        }
+    }
+
+    // Floating "continue tour" affordance, shown only while the welcome guide is
+    // paused — i.e. the user tapped a step's "open →" / "Learn more →" and jumped
+    // to a surface. Clicking the pill brings the tour back at the same step; the
+    // ✕ gives up on it (marks it seen). This is what keeps an action from closing
+    // the guide irreversibly.
+    Rectangle {
+        id: resumeGuidePill
+        visible: welcome.paused
+        enabled: visible
+        z: 9000
+        anchors.horizontalCenter: parent.horizontalCenter
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: 24
+        radius: 20
+        height: 40
+        width: pillRow.implicitWidth + 28
+        color: Theme.panel
+        border.color: Theme.borderStrong
+        border.width: 1
+
+        // Click anywhere on the pill → resume the tour.
+        MouseArea {
+            anchors.fill: parent
+            cursorShape: Qt.PointingHandCursor
+            onClicked: welcome.open()
+        }
+        RowLayout {
+            id: pillRow
+            anchors.centerIn: parent
+            spacing: 12
+            Text {
+                text: I18n.t("welcome.resume")
+                color: Theme.text
+                font.pixelSize: 12
+                font.weight: Font.DemiBold
+            }
+            Rectangle { width: 1; height: 18; color: Theme.border }
+            Text {
+                text: "✕"
+                color: Theme.textMuted
+                font.pixelSize: 12
+                // Nested (declared last) so it wins the click over the pill.
+                MouseArea {
+                    anchors.fill: parent
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: welcome._finish()
+                }
+            }
         }
     }
     QuickCapturePopup { id: quickCapture }
