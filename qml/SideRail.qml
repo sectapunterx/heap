@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
+import QtQuick.Controls.impl
 import TodoCpp
 
 Rectangle {
@@ -40,23 +41,23 @@ Rectangle {
         // View switcher
         RailBtn {
             objectName: "rail-board"
-            glyph: "▦"; tooltipText: I18n.t("siderail.tip.board")
+            iconSource: "qrc:/brand/icons/heap-01-board.svg"; tooltipText: I18n.t("siderail.tip.board")
                    active: AppController.currentView === "board"
                    onActivated: AppController.currentView = "board" }
         RailBtn {
-            glyph: "☰"; tooltipText: I18n.t("siderail.tip.timeline")
+            iconSource: "qrc:/brand/icons/heap-02-timeline.svg"; tooltipText: I18n.t("siderail.tip.timeline")
                    active: AppController.currentView === "timeline"
                    onActivated: AppController.currentView = "timeline" }
         RailBtn {
-            glyph: "◫"; tooltipText: I18n.t("siderail.tip.week")
+            iconSource: "qrc:/brand/icons/heap-03-week.svg"; tooltipText: I18n.t("siderail.tip.week")
                    active: AppController.currentView === "week"
                    onActivated: AppController.currentView = "week" }
         RailBtn {
-            glyph: "⊞"; tooltipText: I18n.t("siderail.tip.month")
+            iconSource: "qrc:/brand/icons/heap-04-month.svg"; tooltipText: I18n.t("siderail.tip.month")
                    active: AppController.currentView === "month"
                    onActivated: AppController.currentView = "month" }
         RailBtn {
-            glyph: "▤"; tooltipText: I18n.t("siderail.tip.archive")
+            iconSource: "qrc:/brand/icons/heap-05-archive.svg"; tooltipText: I18n.t("siderail.tip.archive")
             active: AppController.currentView === "archive"
             onActivated: AppController.currentView = "archive"
         }
@@ -65,14 +66,14 @@ Rectangle {
 
         RailBtn {
             objectName: "rail-blocked"
-            glyph: "⊘"; tooltipText: I18n.t("siderail.tip.blocked")
+            iconSource: "qrc:/brand/icons/heap-06-blocked.svg"; tooltipText: I18n.t("siderail.tip.blocked")
                    countText: root._blockedCount > 0 ? root._blockedCount : ""
                    countColor: Theme.p0
                    active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
                    onActivated: AppController.focusStatusColumn("blocked") }
         RailBtn {
             objectName: "rail-review"
-            glyph: "⎇"; tooltipText: I18n.t("siderail.tip.review")
+            iconSource: "qrc:/brand/icons/heap-07-code-review.svg"; tooltipText: I18n.t("siderail.tip.review")
                    countText: root._reviewCount > 0 ? root._reviewCount : ""
                    countColor: Theme.stReview
                    active: AppController.currentView === "board" && AppController.focusedStatus === "review"
@@ -82,11 +83,11 @@ Rectangle {
 
         RailBtn {
             objectName: "rail-docs"
-            glyph: "§"; tooltipText: I18n.t("siderail.tip.docs")
+            iconSource: "qrc:/brand/icons/heap-08-docs.svg"; tooltipText: I18n.t("siderail.tip.docs")
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }
         RailBtn {
-            glyph: "✎"; tooltipText: I18n.t("siderail.tip.notes")
+            iconSource: "qrc:/brand/icons/heap-09-notes.svg"; tooltipText: I18n.t("siderail.tip.notes")
                    active: AppController.currentView === "notes"
                    onActivated: AppController.currentView = "notes" }
 
@@ -94,18 +95,18 @@ Rectangle {
 
         RailBtn {
             id: hotkeysBtn
-            glyph: "⌨"
+            iconSource: "qrc:/brand/icons/heap-10-hotkeys.svg"
             tooltipText: I18n.t("siderail.tip.hotkeys")
             onActivated: root.openHotkeys(hotkeysBtn)
         }
         RailBtn {
             id: tweaksBtn
-            glyph: "✦"
+            iconSource: "qrc:/brand/icons/heap-11-tweaks.svg"
             tooltipText: I18n.t("siderail.tip.tweaks")
             onActivated: root.openTweaks(tweaksBtn)
         }
         RailBtn {
-            glyph: "⚙"
+            iconSource: "qrc:/brand/icons/heap-12-settings.svg"
             tooltipText: I18n.t("siderail.tip.settings")
             active: AppController.currentView === "settings"
             onActivated: AppController.currentView = "settings"
@@ -115,12 +116,12 @@ Rectangle {
 
     component RailBtn: Item {
         id: btn
-        property string glyph: ""
+        property url iconSource
         property string tooltipText: ""
         property bool active: false
         property string countText: ""
         property color countColor: Theme.p0
-        property int fontPx: 14
+        property int iconSize: 20
         signal activated()
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredWidth: 36
@@ -131,12 +132,14 @@ Rectangle {
             color: btn.active ? Theme.accentSoft
                  : ma.containsMouse ? Theme.panel2 : "transparent"
         }
-        Text {
+        IconImage {
             anchors.centerIn: parent
-            text: btn.glyph
+            source: btn.iconSource
+            width: btn.iconSize
+            height: btn.iconSize
+            sourceSize.width: btn.iconSize * 2
+            sourceSize.height: btn.iconSize * 2
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
-            font.family: Theme.fontMono
-            font.pixelSize: btn.fontPx
         }
         Rectangle {
             visible: btn.countText !== ""
