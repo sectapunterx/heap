@@ -78,4 +78,21 @@ TestCase {
         w._learnMore("help-views");
         compare(helpAnchor, "help-views");
     }
+
+    // Regression: an action must PAUSE the tour (resumable), not finish it.
+    // Only Skip / Get started (via _finish) may mark the guide seen.
+    function test_action_pauses_not_finishes() {
+        const w = mk();
+        w.step = 2;
+        w._doAction({ kind: "view", arg: "board" });
+        verify(w.paused, "action should pause the tour");
+        compare(w.step, 2, "the step is preserved so the tour can resume where it was");
+        // Learn-more pauses too.
+        const w2 = mk();
+        w2._learnMore("help-tasks");
+        verify(w2.paused, "learn-more should pause the tour");
+        // _finish is the only path that clears paused (and marks seen).
+        w2._finish();
+        verify(!w2.paused, "finishing clears the paused flag");
+    }
 }

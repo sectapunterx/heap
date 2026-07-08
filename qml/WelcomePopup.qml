@@ -26,8 +26,14 @@ Popup {
     signal openHelp(string anchor)
 
     property int step: 0
-    // Always start from the top — matters for replay from Settings → Help.
-    onAboutToShow: step = 0
+    // While true the tour is merely paused: the user tapped a step's "open →" /
+    // "Learn more →" and jumped to a surface, so the guide hid itself instead of
+    // finishing. Main shows a "Continue tour" pill bound to this and reopens the
+    // popup at the same step. Distinct from finishing, which marks it seen.
+    // Cleared every time the popup is shown (fresh open or resume). Callers that
+    // start a fresh run set `step = 0` before open(); a resume leaves step as-is.
+    property bool paused: false
+    onAboutToShow: paused = false
 
     Overlay.modal: Rectangle {
         color: Qt.rgba(0, 0, 0, 0.6)
@@ -74,6 +80,9 @@ Popup {
     readonly property bool lastStep: step === steps.length - 1
 
     function _finish() {
+        // Real dismissal (Skip / Get started / giving up from the pill): mark it
+        // seen so it never auto-shows again.
+        root.paused = false;
         AppController.markWelcomeSeen();
         root.close();
     }
@@ -88,15 +97,21 @@ Popup {
             step--;
     }
     function _doAction(a) {
-        // Finish first, then jump — a modal must never cover the surface it opens.
-        _finish();
+        // Pause (do NOT finish) so the tour survives the detour: hide it, jump to
+        // the surface, and let Main's "Continue tour" pill bring it back at the
+        // same step. Never marks welcomeSeen here.
+        root.paused = true;
+        root.close();
         if (a.kind === "view")
             AppController.currentView = a.arg;
         else if (a.kind === "action")
             root.openAction(a.arg);
     }
     function _learnMore(anchor) {
-        _finish();
+        // Same pause-and-resume contract as _doAction — jumping into Help must
+        // not throw the tour away.
+        root.paused = true;
+        root.close();
         root.openHelp(anchor);
     }
 
