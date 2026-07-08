@@ -1,7 +1,8 @@
 // heap. — reusable lockup component rendered with native QML primitives.
-// Drawing the mark with Rectangle + Canvas (lines) avoids depending on
-// Qt6::Svg / the qsvg image-format plugin, so the brand always renders
-// even on minimal Qt installs.
+// The mark is the "stack" glyph: three stacked rounded bars (widest base,
+// brighter crown). Drawing it with plain Rectangles avoids depending on
+// Qt6::Svg / the qsvg image-format plugin, so the brand always renders even
+// on minimal Qt installs.
 //
 // Usage:
 //   BrandLogo { height: 28 }                       // horizontal lockup
@@ -32,20 +33,20 @@ Item {
                                   : variant === "wordmark" ? wordmarkAspect
                                                            : markAspect)
 
-    // Theme-resolved colors. Dark theme uses the quiet brand tokens
-    // (brandInk/brandAccent) so the identity sits behind the product instead
-    // of competing with the cyan `accent` used by the rest of the UI.
-    readonly property color _fillColor:   theme === "light" ? Brand.lightAccent
-                                        : theme === "mono"  ? monoColor
-            : Brand.brandAccent
-    readonly property color _strokeColor: theme === "light" ? "#5f6878"
-                                        : theme === "mono"  ? monoColor
-            : Brand.brandInk
-    readonly property color _textColor:   theme === "light" ? Brand.lightText
-                                        : theme === "mono"  ? monoColor
-            : Brand.brandInk
+    // Theme-resolved colors for the monochrome "stack" mark. On dark surfaces
+    // the glyph is a quiet slate with a brighter (white) crown bar; on light it
+    // inverts to near-black. "mono" collapses everything to monoColor.
+    readonly property color _inkColor:   theme === "light" ? "#404b58"
+                                       : theme === "mono"  ? monoColor
+            : "#c6d0dc"
+    readonly property color _crownColor: theme === "light" ? "#0b0e13"
+                                       : theme === "mono"  ? monoColor
+            : "#ffffff"
+    readonly property color _textColor:  theme === "light" ? "#0b0e13"
+                                       : theme === "mono"  ? monoColor
+            : "#e8eef4"
 
-    // ── Mark — root + 2 leaf rectangles wired by 2 diagonal connectors ──
+    // ── Mark — three stacked bars (widest base → brighter crown) ──
     Item {
         id: markBox
         visible: root.variant !== "wordmark"
@@ -54,77 +55,39 @@ Item {
         width: root.height
         height: root.height
 
-        // Connectors (the "tree" wiring) — drawn via Canvas because diagonal
-        // lines aren't ergonomic with plain Rectangle.
-        Canvas {
-            id: wiring
-            anchors.fill: parent
-            // Repaint whenever theme/size changes so colors and stroke width
-            // stay in sync with surrounding context.
-            property color strokeColor: root._strokeColor
-            onStrokeColorChanged: requestPaint()
-            onWidthChanged: requestPaint()
-            onHeightChanged: requestPaint()
-            onPaint: {
-                const ctx = getContext("2d");
-                ctx.reset();
-                const s = width / 100.0;       // SVG was 100x100
-                ctx.strokeStyle = strokeColor;
-                ctx.globalAlpha = 0.4;
-                ctx.lineWidth   = Math.max(1, 2 * s);
-                ctx.lineCap     = "round";
-                ctx.beginPath();
-                ctx.moveTo(50 * s, 26 * s); ctx.lineTo(26 * s, 60 * s);
-                ctx.moveTo(50 * s, 26 * s); ctx.lineTo(74 * s, 60 * s);
-                ctx.stroke();
-            }
+        // Geometry mirrors the 32-unit brand grid; radius = half the bar
+        // height for fully rounded ends. Base + middle share the ink color;
+        // the crown is the brighter accent bar.
+        Rectangle {   // base — widest
+            x: parent.width * (5 / 32);      y: parent.height * (20 / 32)
+            width: parent.width * (22 / 32); height: parent.height * (4.4 / 32)
+            radius: height / 2
+            color: root._inkColor
         }
-
-        // Root node — filled with accent.
-        Rectangle {
-            x: parent.width * 0.36
-            y: parent.height * 0.08
-            width:  parent.width * 0.28
-            height: parent.height * 0.20
-            radius: Math.max(2, width * 0.18)
-            color: root._fillColor
+        Rectangle {   // middle
+            x: parent.width * (8 / 32);      y: parent.height * (13.8 / 32)
+            width: parent.width * (16 / 32); height: parent.height * (4.4 / 32)
+            radius: height / 2
+            color: root._inkColor
         }
-        // Left leaf — outlined.
-        Rectangle {
-            x: parent.width * 0.10
-            y: parent.height * 0.60
-            width:  parent.width * 0.28
-            height: parent.height * 0.20
-            radius: Math.max(2, width * 0.18)
-            color: "transparent"
-            border.color: root._strokeColor
-            border.width: Math.max(1, parent.width * 0.025)
-            opacity: 0.75
-        }
-        // Right leaf — outlined.
-        Rectangle {
-            x: parent.width * 0.62
-            y: parent.height * 0.60
-            width:  parent.width * 0.28
-            height: parent.height * 0.20
-            radius: Math.max(2, width * 0.18)
-            color: "transparent"
-            border.color: root._strokeColor
-            border.width: Math.max(1, parent.width * 0.025)
-            opacity: 0.75
+        Rectangle {   // crown — narrowest, brightest
+            x: parent.width * (11 / 32);     y: parent.height * (7.6 / 32)
+            width: parent.width * (10 / 32); height: parent.height * (4.4 / 32)
+            radius: height / 2
+            color: root._crownColor
         }
     }
 
-    // ── Wordmark — "heap" with an accent-tinted period ────────────────
+    // ── Wordmark — "heap" with a slightly brighter period ──────────────
     Text {
         visible: root.variant !== "mark"
         anchors.left: markBox.visible ? markBox.right : parent.left
         anchors.leftMargin: markBox.visible ? Math.round(parent.height * 0.18) : 0
         anchors.verticalCenter: parent.verticalCenter
-        // RichText so the accent dot stays brand-colored while "heap" follows
-        // the surface text color.
+        // RichText so the period can carry the brighter crown tone while
+        // "heap" follows the surface text color.
         textFormat: Text.RichText
-        text: "heap<span style=\"color:" + root._fillColor + "\">.</span>"
+        text: "heap<span style=\"color:" + root._crownColor + "\">.</span>"
         color: root._textColor
         font.family: Brand.fontMono
         font.weight: Font.DemiBold

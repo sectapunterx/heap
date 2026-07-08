@@ -22,8 +22,8 @@
        Used by the mark, the wordmark, and any logo glyph.
        Replaces white-on-dark + cyan with dimmer slate tones so the
        identity reads as quiet, never punches the surface. */
-    --brand-ink: #8a94a3; /* replaces the white in marks / wordmarks */
-    --brand-accent: #2f5560; /* replaces the bright cyan in dot / root  */
+    --brand-ink: #c6d0dc; /* mark bars + wordmark ink (new mono stack) */
+    --brand-accent: #e8eef4; /* brighter crown bar + wordmark dot (mono) */
 
     --status-todo: #86a0bd;
     --status-prog: #32b2e7;

@@ -12,7 +12,7 @@ On first run heap. seeds an **Example** profile so nothing is empty. The window
 has three regions: the **side rail** (view switcher, left), the **main view**
 (center), and the **calendar + people** column (right).
 
-![The board with the calendar column](assets/img/screens/board-full.png)
+![The board with the calendar column](assets/img/screens/board-kanban.png)
 
 Switch views with `Ctrl+1…6`: **Board**, **Timeline**, **Week**, **Docs**,
 **Notes**, **Settings**.
@@ -44,7 +44,7 @@ Prefer a full form? `Ctrl+N` opens the task editor with every field.
 
 ## 3. Work the board
 
-![Board columns and cards](assets/img/screens/board-full.png)
+![Board columns and cards](assets/img/screens/board-kanban.png)
 
 - **Drag** cards between status columns; the color of each column is editable.
 - Cards show a **priority chip** (P0–P3), a **branch** tag, a **deadline**, and

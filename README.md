@@ -27,7 +27,7 @@ docs, snippets, and contacts live side by side in one window and persist as a JS
 it watches your working copy and matches the current branch to the task you're on.
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-full.png" width="100%" alt="heap. board view: kanban columns, pinned calendar, and people pane">
+  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board view: kanban columns, pinned calendar, and people pane">
 </p>
 
 ## Why heap.

@@ -22,8 +22,8 @@
        Used by the mark, the wordmark, and any logo glyph.
        Replaces white-on-dark + cyan with dimmer slate tones so the
        identity reads as quiet, never punches the surface. */
-    --brand-ink: #8a94a3; /* replaces the white in marks / wordmarks */
-    --brand-accent: #2f5560; /* replaces the bright cyan in dot / root  */
+    --brand-ink: #c6d0dc; /* mark bars + wordmark ink (new mono stack) */
+    --brand-accent: #e8eef4; /* brighter crown bar + wordmark dot (mono) */
 
     --status-todo: #86a0bd;
     --status-prog: #32b2e7;
@@ -369,15 +369,15 @@ p.fine {
 }
 
 /* ---------- the mark itself ----------
-   3-node binary heap: root in cyan, children in foreground.
+   The "stack" glyph: three stacked rounded bars — quiet ink base + brighter crown.
    Geometry is normalized in 32×32; we scale with width attribute on each instance.
 */
 /* Mark styles must be inline on the <symbol> children — CSS class selectors
    don't reach through <use>'s shadow tree. We only steer with inherited
    properties: `color` for currentColor (edges + child nodes), and the
    `--root-fill` custom property for the root node.
-   Default mark = brand-ink (slate) + brand-accent (dark teal) so the logo
-   feels quiet on every dark surface. */
+   Default mark = brand-ink (slate bars) + brand-accent (bright crown) so the
+   logo reads as one quiet monochrome stack on every dark surface. */
 .mark {
     display: block;
     color: var(--brand-ink);
@@ -406,7 +406,7 @@ p.fine {
 }
 
 .canvas.light .wm .dot {
-    color: var(--accent-d);
+    color: #0b0e13;
 }
 
 .lockup {
@@ -688,8 +688,8 @@ p.fine {
    pushed one stop further than the brand default so the icon disappears
    into a dark dock instead of floating above it. */
 .mark.on-icon {
-    color: #5f6878;
-    --root-fill: #1f3d45;
+    color: #c6d0dc;
+    --root-fill: #ffffff;
 }
 
 /* ---------- surface frames ---------- */
