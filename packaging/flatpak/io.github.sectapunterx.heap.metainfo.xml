@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!-- Flathub AppStream metainfo — DRAFT.
-     TODO before PR: replace the screenshot URL with a real, reachable image
-     (Flathub requires at least one). Validate with:
+     Screenshots point at committed images under docs/assets/img/screens/.
+     Validate with:
        flatpak run org.freedesktop.appstream.cli validate \
          packaging/flatpak/io.github.sectapunterx.heap.metainfo.xml -->
 <component type="desktop-application">
@@ -35,7 +35,7 @@
   <screenshots>
     <screenshot type="default">
       <caption>Board view — kanban columns, pinned calendar and people pane</caption>
-      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-full.png</image>
+      <image>https://raw.githubusercontent.com/sectapunterx/heap/master/docs/assets/img/screens/board-kanban.png</image>
     </screenshot>
     <screenshot>
       <caption>Week view — 7-day grid with drag/resize events</caption>
