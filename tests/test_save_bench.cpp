@@ -98,8 +98,8 @@ TEST(SaveLatency, TenThousandTasksSaveWithinBudget) {
   }
 
   const qint64 size = QFileInfo(appDataDir() + "/state.json").size();
-  std::cout << "[ save-latency ] tasks=" << kTaskCount << " state.json=" << (size / 1024) << " KiB"
-            << " best=" << best << "ms mean=" << (total / kRuns) << "ms budget=" << kBudgetMs << "ms" << std::endl;
+  std::cout << "[ save-latency ] tasks=" << kTaskCount << " state.json=" << (size / 1024) << " KiB" << " best=" << best
+            << "ms mean=" << (total / kRuns) << "ms budget=" << kBudgetMs << "ms" << std::endl;
 
   EXPECT_LE(best, kBudgetMs) << "A 10k-task profile no longer saves within the budget. This is the signal to "
                                 "segment the state file — report it, do not raise the budget.";
