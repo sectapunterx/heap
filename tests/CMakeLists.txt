@@ -1265,6 +1265,56 @@ endif ()
 
 add_test(NAME heap_appcontroller_tests COMMAND heap_appcontroller_tests)
 
+# ─── Lossless serialization round-trip + field-count guard (HEAP-131) ───
+# Pure: exercises heap::state (the live save path) and heap::sync::SyncSerializer
+# side by side. No AppController, no QApplication.
+add_executable(heap_roundtrip_tests
+        test_roundtrip.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/sync/SyncSerializer.cpp
+)
+set_target_properties(heap_roundtrip_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_roundtrip_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_roundtrip_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_roundtrip_tests COMMAND heap_roundtrip_tests)
+
+# ─── Schema migration (HEAP-146) and fault injection (HEAP-156) ───
+# Both boot a real AppController headless, so they reuse the AppController source
+# set above (each brings its own main()).
+foreach (_suite migration fault_injection save_bench)
+    set(_srcs ${HEAP_APPCTRL_SOURCES})
+    list(REMOVE_ITEM _srcs test_appcontroller.cpp)
+    list(APPEND _srcs test_${_suite}.cpp)
+
+    add_executable(heap_${_suite}_tests ${_srcs})
+    set_target_properties(heap_${_suite}_tests PROPERTIES AUTOMOC ON)
+    target_include_directories(heap_${_suite}_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+    target_link_libraries(heap_${_suite}_tests PRIVATE
+            Qt6::Core
+            Qt6::Gui
+            Qt6::Network
+            Qt6::NetworkAuth
+            Qt6::Widgets
+            Qt6::Qml
+            Qt6::Test
+            GTest::gtest
+    )
+    if (UNIX AND NOT APPLE)
+        find_package(Qt6 QUIET COMPONENTS DBus)
+        if (TARGET Qt6::DBus)
+            target_link_libraries(heap_${_suite}_tests PRIVATE Qt6::DBus)
+        endif ()
+    endif ()
+    add_test(NAME heap_${_suite}_tests COMMAND heap_${_suite}_tests)
+endforeach ()
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
