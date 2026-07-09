@@ -562,6 +562,48 @@ Item {
                             }
                         }
 
+                        // Layer 3b: tasks scheduled at a clock time (HEAP-115).
+                        // Before this, the only way a task's parsed time reached
+                        // the day view was a side focus-block event; now the
+                        // task's own scheduledAt puts it here.
+                        Repeater {
+                            model: AppController.tasks
+                            Rectangle {
+                                id: taskBlock
+                                required property string id
+                                required property string title
+                                required property var scheduledAt
+                                required property bool hasTime
+                                required property bool archived
+                                required property string status
+
+                                readonly property real startHour: hasTime && scheduledAt && scheduledAt.getHours
+                                    ? scheduledAt.getHours() + scheduledAt.getMinutes() / 60.0
+                                    : -1
+
+                                visible: !archived && status !== "done" && startHour >= 0
+                                         && root.isSameDay(scheduledAt, AppController.selectedDate)
+                                x: 0
+                                y: (startHour - root.hoursStart) * Theme.hourH
+                                width: Math.max(20, parent.width * 0.5 - 3)
+                                height: Theme.hourH - 2
+                                radius: 6
+                                color: Theme.withAlpha(Theme.eventColor("focus"), 0.10)
+                                border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.5)
+                                border.width: 1
+                                z: 4
+
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    text: "▸ " + taskBlock.title
+                                    color: Theme.text
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+
                         // Now line
                         Rectangle {
                             visible: root.isSameDay(root.now, AppController.selectedDate)

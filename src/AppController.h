@@ -12,6 +12,7 @@
 #include <QVariantList>
 #include <QVariantMap>
 
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -334,6 +335,28 @@ class AppController : public QObject {
   // version / recent-log-tail diagnostics, so a user can file a report in one
   // click.
   Q_INVOKABLE void reportAnIssue() const;
+  // The body reportAnIssue() pre-fills, built from purely local sources: app
+  // version, OS, Qt version, the log tail and the recovery log. Split out so the
+  // no-network-egress guarantee can be exercised without opening a browser.
+  Q_INVOKABLE QString issueReportBody() const;
+
+  // Fold a batch of pulled external tasks into the model. providerId tags the
+  // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
+  // Public so the sync merge can be exercised without a live tracker.
+  void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);
+
+  // ---- Durability audit (HEAP-156) ----
+  // Every quarantine / backup recovery / failed write, oldest first. Local file,
+  // never uploaded.
+  Q_INVOKABLE QVariantList recoveryLog() const;
+  // Copy the recovery log to `fileUrl` so it can be attached to a bug report.
+  Q_INVOKABLE bool exportRecoveryLog(const QUrl& fileUrl);
+
+  // Test seam: replaces the atomic QSaveFile write behind saveStateNow() so the
+  // fault-injection harness can truncate, corrupt, or drop the rename. Pass an
+  // empty std::function to restore the default writer.
+  using StateWriter = std::function<bool(const QString& path, const QByteArray& bytes)>;
+  static void setStateWriterForTesting(StateWriter writer);
 
   // ---- Auto-update (HEAP-63) ----
   // Manually trigger a GitHub-Releases check (Settings → About → "Check for
@@ -644,6 +667,10 @@ class AppController : public QObject {
   // state.json aside so a fresh seed can never silently overwrite it.
   bool recoverFromNewestBackup(QJsonObject& out, QString& fromPath);
   void quarantineCorruptState(const QString& path);
+  // Copies the pre-migration state.json into the backup dir before the schema
+  // ladder rewrites it. Exempt from retention pruning: it is the only pre-v4
+  // image of the user's data.
+  void retainPreMigrationBackup(const QString& path, int fromVersion);
   QString m_recoveryNotice;  // deferred toast shown once the UI is up
   int statusIndexOf(const QString& id) const;
 
@@ -708,9 +735,6 @@ class AppController : public QObject {
   void setIntegrationField(const QString& providerId, const QString& field, const QVariant& value);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
-  // Fold a batch of pulled external tasks into the model. providerId tags the
-  // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
-  void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name

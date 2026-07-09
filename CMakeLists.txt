@@ -70,7 +70,9 @@ qt_add_library(heap_core STATIC
     src/AppController.cpp
     src/Logger.cpp
     src/Models.cpp
+    src/RecoveryLog.cpp
     src/SampleData.cpp
+    src/StateSerializer.cpp
     src/CodeHighlighter.cpp
     src/NotesHighlighter.cpp
     src/chrono/ChronoTokenizer.cpp

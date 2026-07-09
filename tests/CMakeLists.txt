@@ -131,6 +131,8 @@ set(HEAP_SELECTION_SOURCES
         test_selection.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -224,6 +226,8 @@ set(HEAP_NOTES_SOURCES
         test_notes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -355,6 +359,8 @@ set(HEAP_PERSISTENCE_SOURCES
         test_persistence.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -446,6 +452,8 @@ set(HEAP_EXPORT_SOURCES
         test_export_markdown.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -536,6 +544,8 @@ set(HEAP_PROFILE_IO_SOURCES
         test_profile_io.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -625,6 +635,8 @@ set(HEAP_ONBOARDING_SOURCES
         test_onboarding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -733,6 +745,8 @@ set(HEAP_UNDO_SOURCES
         test_undo.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -824,6 +838,8 @@ set(HEAP_VIEW_SOURCES
         test_view.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
@@ -1165,6 +1181,8 @@ set(HEAP_APPCTRL_SOURCES
         test_appcontroller.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h

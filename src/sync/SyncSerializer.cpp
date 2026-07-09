@@ -1,7 +1,10 @@
+#include "FieldCount.h"
+
 #include "sync/SyncSerializer.h"
 
 #include <QJsonDocument>
 #include <QJsonValue>
+#include <QTime>
 
 #include <algorithm>
 
@@ -9,18 +12,55 @@ namespace heap::sync {
 
 namespace {
 
+// Kept in lockstep with src/StateSerializer.cpp: a field that only one of the
+// two serializers knows about is a field the sync transport will drop (HEAP-131).
+static_assert(heap::meta::fieldCount<Task>() == 21,
+              "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
+              "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<CalEvent>() == 10,
+              "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
+              "src/StateSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+
 // QDate/QDateTime ↔ ISO string, with invalid mapping to "" (round-trip safe).
+// Datetimes carry milliseconds out; Qt::ISODate parses them back and still
+// accepts the whole-second form written by older builds.
 QString dateToStr(const QDate& d) {
   return d.isValid() ? d.toString(Qt::ISODate) : QString();
 }
+
 QDate dateFromStr(const QString& s) {
   return s.isEmpty() ? QDate() : QDate::fromString(s, Qt::ISODate);
 }
+
 QString dateTimeToStr(const QDateTime& dt) {
-  return dt.isValid() ? dt.toString(Qt::ISODate) : QString();
+  return dt.isValid() ? dt.toString(Qt::ISODateWithMs) : QString();
 }
+
 QDateTime dateTimeFromStr(const QString& s) {
   return s.isEmpty() ? QDateTime() : QDateTime::fromString(s, Qt::ISODate);
+}
+
+QJsonArray labelsToJson(const QVector<Label>& labels) {
+  QJsonArray a;
+  for(const Label& l : labels) {
+    QJsonObject o;
+    o[QStringLiteral("id")] = l.id;
+    o[QStringLiteral("color")] = l.color;
+    a.append(o);
+  }
+  return a;
+}
+
+QVector<Label> labelsFromJson(const QJsonArray& a) {
+  QVector<Label> out;
+  out.reserve(a.size());
+  for(const QJsonValue& v : a) {
+    const QJsonObject o = v.toObject();
+    out.append(Label{o.value(QStringLiteral("id")).toString(), o.value(QStringLiteral("color")).toString()});
+  }
+  return out;
 }
 
 }  // namespace
@@ -42,6 +82,9 @@ QJsonArray SyncSerializer::sortedById(const QJsonArray& arr) {
 }
 
 // ── Task ──
+// Every field is emitted unconditionally: this file feeds a 3-way merge, and a
+// key that disappears when its value is default is a key the merger reads as
+// "deleted on the other side".
 QJsonObject SyncSerializer::taskToJson(const Task& t) {
   QJsonObject o;
   o[QStringLiteral("id")] = t.id;
@@ -49,10 +92,22 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   o[QStringLiteral("desc")] = t.desc;
   o[QStringLiteral("priority")] = t.priority;
   o[QStringLiteral("status")] = t.status;
-  o[QStringLiteral("deadline")] = dateToStr(t.deadline);
+  o[QStringLiteral("scheduledAt")] = dateTimeToStr(t.scheduledAt);
+  o[QStringLiteral("dueAt")] = dateTimeToStr(t.dueAt);
+  o[QStringLiteral("hasTime")] = t.hasTime;
   o[QStringLiteral("branch")] = t.branch;
   o[QStringLiteral("statusChangedAt")] = dateTimeToStr(t.statusChangedAt);
   o[QStringLiteral("archived")] = t.archived;
+  o[QStringLiteral("trackedSeconds")] = t.trackedSeconds;
+  o[QStringLiteral("timerStartedAt")] = dateTimeToStr(t.timerStartedAt);
+  o[QStringLiteral("recurrence")] = t.recurrence;
+  o[QStringLiteral("externalId")] = t.externalId;
+  o[QStringLiteral("externalUrl")] = t.externalUrl;
+  o[QStringLiteral("externalProvider")] = t.externalProvider;
+  o[QStringLiteral("labels")] = labelsToJson(t.labels);
+  o[QStringLiteral("estimateMinutes")] = t.estimateMinutes;
+  o[QStringLiteral("someday")] = t.someday;
+  o[QStringLiteral("assignee")] = t.assignee;
   return o;
 }
 
@@ -63,10 +118,30 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.desc = o.value(QStringLiteral("desc")).toString();
   t.priority = o.value(QStringLiteral("priority")).toString();
   t.status = o.value(QStringLiteral("status")).toString();
-  t.deadline = dateFromStr(o.value(QStringLiteral("deadline")).toString());
+  t.scheduledAt = dateTimeFromStr(o.value(QStringLiteral("scheduledAt")).toString());
+  t.dueAt = dateTimeFromStr(o.value(QStringLiteral("dueAt")).toString());
+  t.hasTime = o.value(QStringLiteral("hasTime")).toBool();
+  // A document written before HEAP-115 carries a bare date instead.
+  if(!t.scheduledAt.isValid() && !t.dueAt.isValid()) {
+    const QDate legacy = dateFromStr(o.value(QStringLiteral("deadline")).toString());
+    if(legacy.isValid()) {
+      t.scheduledAt = QDateTime(legacy, QTime(0, 0));
+      t.dueAt = t.scheduledAt;
+    }
+  }
   t.branch = o.value(QStringLiteral("branch")).toString();
   t.statusChangedAt = dateTimeFromStr(o.value(QStringLiteral("statusChangedAt")).toString());
   t.archived = o.value(QStringLiteral("archived")).toBool();
+  t.trackedSeconds = o.value(QStringLiteral("trackedSeconds")).toInt();
+  t.timerStartedAt = dateTimeFromStr(o.value(QStringLiteral("timerStartedAt")).toString());
+  t.recurrence = o.value(QStringLiteral("recurrence")).toString();
+  t.externalId = o.value(QStringLiteral("externalId")).toString();
+  t.externalUrl = o.value(QStringLiteral("externalUrl")).toString();
+  t.externalProvider = o.value(QStringLiteral("externalProvider")).toString();
+  t.labels = labelsFromJson(o.value(QStringLiteral("labels")).toArray());
+  t.estimateMinutes = o.value(QStringLiteral("estimateMinutes")).toInt();
+  t.someday = o.value(QStringLiteral("someday")).toBool();
+  t.assignee = o.value(QStringLiteral("assignee")).toString();
   return t;
 }
 

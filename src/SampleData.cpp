@@ -8,7 +8,10 @@ Task mkTask(const char* id, const char* title, const char* desc, const char* pri
   t.desc = QString::fromUtf8(desc);
   t.priority = pri;
   t.status = status;
-  t.deadline = dl;
+  if(dl.isValid()) {
+    t.scheduledAt = QDateTime(dl, QTime(0, 0));
+    t.dueAt = t.scheduledAt;
+  }
   t.branch = branch;
   return t;
 }

@@ -20,7 +20,8 @@ Task makeTask(const QString& id, const QString& title) {
   t.desc = QStringLiteral("desc of ") + id;
   t.priority = QStringLiteral("P1");
   t.status = QStringLiteral("prog");
-  t.deadline = QDate(2026, 7, 15);
+  t.dueAt = QDateTime(QDate(2026, 7, 15), QTime(0, 0));
+  t.scheduledAt = t.dueAt;
   t.branch = QStringLiteral("fix/") + id;
   t.statusChangedAt = QDateTime(QDate(2026, 7, 1), QTime(14, 30));
   t.archived = false;
@@ -84,7 +85,7 @@ TEST(SyncSerializer, TaskFieldsSurviveRoundTrip) {
   EXPECT_EQ(first.id, QString("T-1"));
   EXPECT_EQ(first.title, QString("first"));
   EXPECT_EQ(first.priority, QString("P1"));
-  EXPECT_EQ(first.deadline, QDate(2026, 7, 15));
+  EXPECT_EQ(first.dueAt, QDateTime(QDate(2026, 7, 15), QTime(0, 0)));
   EXPECT_EQ(first.statusChangedAt, QDateTime(QDate(2026, 7, 1), QTime(14, 30)));
   EXPECT_FALSE(first.archived);
   EXPECT_EQ(first.branch, QString("fix/T-1"));

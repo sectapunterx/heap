@@ -8,6 +8,8 @@
 #include "AppController.h"
 #include "Models.h"
 
+#include "integrations/IntegrationTypes.h"
+
 #include <QApplication>
 #include <QDate>
 #include <QDateTime>
@@ -321,7 +323,8 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   Task t = mkTask(QStringLiteral("REC-1"), QStringLiteral("Daily standup"));
   t.status = QStringLiteral("todo");
   t.recurrence = QStringLiteral("every:day");
-  t.deadline = QDate(2026, 7, 4);
+  t.dueAt = QDateTime(QDate(2026, 7, 4), QTime(0, 0));
+  t.scheduledAt = t.dueAt;
   app_->tasks()->reset({t});
   const int before = app_->tasks()->rowCount();
 
@@ -332,7 +335,7 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   for(const Task& x : app_->tasks()->items()) {
     if(x.id != QStringLiteral("REC-1") && x.recurrence == QStringLiteral("every:day")) {
       EXPECT_EQ(x.status, QString("todo"));
-      EXPECT_EQ(x.deadline, QDate(2026, 7, 5));  // next day
+      EXPECT_EQ(x.dueAt.date(), QDate(2026, 7, 5));  // next day
       foundNext = true;
     }
   }
@@ -393,6 +396,160 @@ TEST_F(AppControllerTest, GitPrefixChangeRematchesFocusedBranch) {
 }
 
 // ─── headless boot ────────────────────────────────────────────────────
+
+// ─── Time-aware save/edit (HEAP-115) ───
+
+// The isNew guard used to drop the parsed clock time on every edit of an
+// existing task. Editing one now keeps 09:00.
+TEST_F(AppControllerTest, EditingAnExistingTaskKeepsTheParsedClockTime) {
+  Task t = mkTask(QStringLiteral("EDIT-1"), QStringLiteral("standup"));
+  t.scheduledAt = QDateTime(QDate(2026, 7, 10), QTime(0, 0));
+  t.dueAt = t.scheduledAt;
+  app_->tasks()->reset({t});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("EDIT-1"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("EDIT-1");
+  draft["scheduledAt"] = QDateTime(QDate(2026, 7, 10), QTime(9, 0));
+  draft["dueAt"] = QDateTime(QDate(2026, 7, 10), QTime(9, 0));
+  draft["hasTime"] = true;
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("EDIT-1"));
+  ASSERT_GE(row, 0);
+  const Task& after = app_->tasks()->items().at(row);
+  EXPECT_EQ(after.scheduledAt, QDateTime(QDate(2026, 7, 10), QTime(9, 0)));
+  EXPECT_EQ(after.dueAt, QDateTime(QDate(2026, 7, 10), QTime(9, 0)));
+  EXPECT_TRUE(after.hasTime);
+}
+
+// A caller that only knows a date (an old draft, an import) still works.
+TEST_F(AppControllerTest, ALegacyDeadlineDraftKeyLandsAtMidnight) {
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("OLD-1");
+  draft["title"] = QStringLiteral("bare date");
+  draft["deadline"] = QDate(2026, 7, 8);
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("OLD-1"));
+  ASSERT_GE(row, 0);
+  const Task& t = app_->tasks()->items().at(row);
+  EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
+  EXPECT_FALSE(t.hasTime);
+}
+
+// snoozeDeadline shifts by whole days and keeps the clock time.
+TEST_F(AppControllerTest, SnoozeShiftsBothDatetimesAndKeepsTheTime) {
+  Task t = mkTask(QStringLiteral("SNZ-1"), QStringLiteral("ship"));
+  t.dueAt = QDateTime(QDate(2026, 7, 10), QTime(16, 0));
+  t.scheduledAt = t.dueAt;
+  t.hasTime = true;
+  app_->tasks()->reset({t});
+
+  app_->snoozeDeadline(QStringLiteral("SNZ-1"), 3600);
+
+  const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("SNZ-1")));
+  EXPECT_EQ(after.dueAt, QDateTime(QDate(2026, 7, 11), QTime(16, 0)));
+  EXPECT_EQ(after.scheduledAt, QDateTime(QDate(2026, 7, 11), QTime(16, 0)));
+}
+
+// ─── Pulled labels (HEAP-124) ───
+
+TEST_F(AppControllerTest, PulledIssueLabelsArePersistedOntoTheTask) {
+  heap::integrations::ExternalTask issue;
+  issue.providerId = QStringLiteral("github");
+  issue.externalId = QStringLiteral("68");
+  issue.url = QStringLiteral("https://github.com/sectapunterx/heap/issues/68");
+  issue.title = QStringLiteral("Portable build misses a DLL");
+  issue.status = QStringLiteral("open");
+  issue.labels = {QStringLiteral("bug"), QStringLiteral("windows")};
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("github-68"));
+  ASSERT_GE(row, 0);
+  const Task& t = app_->tasks()->items().at(row);
+  ASSERT_EQ(t.labels.size(), 2);
+  EXPECT_EQ(t.labels.at(0).id, QStringLiteral("bug"));
+  EXPECT_EQ(t.labels.at(1).id, QStringLiteral("windows"));
+  EXPECT_EQ(t.externalProvider, QStringLiteral("github"));
+
+  // …and they survive a save/reload of the editor draft.
+  QVariantMap draft = app_->taskById(QStringLiteral("github-68"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-68");
+  app_->saveTask(draft);
+  const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-68")));
+  ASSERT_EQ(after.labels.size(), 2);
+  EXPECT_EQ(after.labels.at(0).id, QStringLiteral("bug"));
+}
+
+TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("EST-1");
+  draft["title"] = QStringLiteral("plan the epic");
+  draft["estimateMinutes"] = 480;
+  draft["someday"] = true;
+  draft["labels"] = QVariantList{QStringLiteral("infra")};
+  app_->saveTask(draft);
+
+  const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("EST-1")));
+  EXPECT_EQ(t.estimateMinutes, 480);
+  EXPECT_TRUE(t.someday);
+  ASSERT_EQ(t.labels.size(), 1);
+  EXPECT_EQ(t.labels.at(0).id, QStringLiteral("infra"));
+}
+
+// The epic-level contract (HEAP-104): "review PR tomorrow 3pm" keeps its 3pm
+// through capture, an edit of the existing task, save, reload and export.
+TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
+  const QDateTime reference(QDate(2026, 7, 9), QTime(10, 0));
+  const QVariantMap parsed = app_->parseDateTime(QStringLiteral("review PR tomorrow 3pm"), reference);
+  ASSERT_TRUE(parsed.value(QStringLiteral("ok")).toBool());
+  ASSERT_TRUE(parsed.value(QStringLiteral("hasTime")).toBool());
+  const QDateTime at = parsed.value(QStringLiteral("start")).toDateTime();
+  ASSERT_EQ(at, QDateTime(QDate(2026, 7, 10), QTime(15, 0)));
+
+  // Capture, exactly as QuickCapturePopup does.
+  QVariantMap draft = app_->newQuickTaskDraft();
+  draft["_isNew"] = true;
+  draft["title"] = QStringLiteral("review PR");
+  draft["scheduledAt"] = at;
+  draft["dueAt"] = at;
+  draft["hasTime"] = true;
+  app_->saveTask(draft);
+  const QString id = draft.value("id").toString();
+
+  // Edit the existing task without touching the time (the old isNew guard's bug).
+  QVariantMap edit = app_->taskById(id);
+  edit["_isNew"] = false;
+  edit["_originalId"] = id;
+  edit["title"] = QStringLiteral("review PR (urgent)");
+  app_->saveTask(edit);
+
+  const Task& afterEdit = app_->tasks()->items().at(app_->tasks()->indexOfId(id));
+  EXPECT_EQ(afterEdit.dueAt, at) << "the edit dropped the clock time";
+  EXPECT_TRUE(afterEdit.hasTime);
+
+  // Save, then reload from disk in a fresh controller.
+  app_->flushSave();
+  {
+    AppController reloaded;
+    const int row = reloaded.tasks()->indexOfId(id);
+    ASSERT_GE(row, 0);
+    const Task& t = reloaded.tasks()->items().at(row);
+    EXPECT_EQ(t.dueAt, at) << "the clock time did not survive a reload";
+    EXPECT_EQ(t.scheduledAt, at);
+    EXPECT_TRUE(t.hasTime);
+  }
+
+  // Export carries it too.
+  const QString exported = app_->exportActiveProfileJson();
+  EXPECT_TRUE(exported.contains(QStringLiteral("2026-07-10T15:00:00"))) << exported.left(400).toStdString();
+}
 
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");

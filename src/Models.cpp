@@ -1,6 +1,49 @@
 #include "Models.h"
+#include "TaskDefer.h"
 
 #include <algorithm>
+
+QString externalKeyOf(const Task& t) {
+  if(t.externalId.isEmpty()) {
+    return {};
+  }
+  // Jira hands us the human key already ("PROJ-123"); the issue-number trackers
+  // hand us a bare number, which reads as "#123" everywhere they render it.
+  bool numeric = false;
+  t.externalId.toLongLong(&numeric);
+  return numeric ? QStringLiteral("#") + t.externalId : t.externalId;
+}
+
+QVariantList labelsToVariant(const QVector<Label>& labels) {
+  QVariantList out;
+  out.reserve(labels.size());
+  for(const Label& l : labels) {
+    out.append(QVariantMap{{QStringLiteral("id"), l.id}, {QStringLiteral("color"), l.color}});
+  }
+  return out;
+}
+
+QVector<Label> labelsFromVariant(const QVariantList& list) {
+  QVector<Label> out;
+  out.reserve(list.size());
+  for(const QVariant& v : list) {
+    // A plain string is accepted so the editor can hand over comma-separated
+    // text without inventing colours for it.
+    if(v.typeId() == QMetaType::QString) {
+      const QString id = v.toString().trimmed();
+      if(!id.isEmpty()) {
+        out.append(Label{id, {}});
+      }
+      continue;
+    }
+    const QVariantMap m = v.toMap();
+    const QString id = m.value(QStringLiteral("id")).toString().trimmed();
+    if(!id.isEmpty()) {
+      out.append(Label{id, m.value(QStringLiteral("color")).toString()});
+    }
+  }
+  return out;
+}
 
 QHash<int, QByteArray> TaskModel::roleNames() const {
   return {
@@ -23,6 +66,17 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {TrackedSecondsRole, "trackedSeconds"},
       {IsTimingRole, "isTiming"},
       {RecurrenceRole, "recurrence"},
+      {ScheduledAtRole, "scheduledAt"},
+      {DueAtRole, "dueAt"},
+      {HasTimeRole, "hasTime"},
+      {EstimateMinutesRole, "estimateMinutes"},
+      {SomedayRole, "someday"},
+      {DeferStateRole, "deferState"},
+      {ExternalProviderRole, "externalProvider"},
+      {ExternalUrlRole, "externalUrl"},
+      {ExternalKeyRole, "externalKey"},
+      {LabelsRole, "labels"},
+      {AssigneeRole, "assignee"},
   };
 }
 
@@ -43,7 +97,9 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case StatusRole:
       return t.status;
     case DeadlineRole:
-      return t.deadline;
+      // Kept a QDate: every calendar/timeline view does whole-day arithmetic on
+      // it. The clock component lives on DueAtRole / ScheduledAtRole.
+      return t.dueAt.isValid() ? t.dueAt.date() : QDate();
     case BranchRole:
       return t.branch;
     case StatusChangedAtRole:
@@ -70,6 +126,28 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return t.timerStartedAt.isValid();
     case RecurrenceRole:
       return t.recurrence;
+    case ScheduledAtRole:
+      return t.scheduledAt;
+    case DueAtRole:
+      return t.dueAt;
+    case HasTimeRole:
+      return t.hasTime;
+    case EstimateMinutesRole:
+      return t.estimateMinutes;
+    case SomedayRole:
+      return t.someday;
+    case DeferStateRole:
+      return heap::model::deferState(t, QDate::currentDate());
+    case ExternalProviderRole:
+      return t.externalProvider;
+    case ExternalUrlRole:
+      return t.externalUrl;
+    case ExternalKeyRole:
+      return externalKeyOf(t);
+    case LabelsRole:
+      return labelsToVariant(t.labels);
+    case AssigneeRole:
+      return t.assignee;
   }
   return {};
 }

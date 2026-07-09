@@ -6,6 +6,7 @@
 // setTaskId). Pure and headless — no AppController, no QApplication needed.
 
 #include "Models.h"
+#include "TaskDefer.h"
 
 #include <QColor>
 #include <QDate>
@@ -50,7 +51,8 @@ TEST(TaskModelData, MapsEveryRole) {
   t.priority = QStringLiteral("P1");
   t.status = QStringLiteral("prog");
   t.branch = QStringLiteral("feat/x");
-  t.deadline = QDate(2030, 1, 2);
+  t.dueAt = QDateTime(QDate(2030, 1, 2), QTime(0, 0));
+  t.scheduledAt = t.dueAt;
   t.archived = true;
   t.statusChangedAt = QDateTime(QDate(2030, 1, 2), QTime(9, 0));
   m.reset({t});
@@ -101,8 +103,8 @@ TEST(TaskModelUpsert, InsertAppendsUpdateReplacesInPlace) {
   EXPECT_EQ(m.rowCount(), 3);
   EXPECT_EQ(m.indexOfId(QStringLiteral("B")), 1);  // not moved to end
   EXPECT_EQ(m.data(m.index(1, 0), TaskModel::TitleRole).toString(), QString("new"));
-  EXPECT_EQ(ins.count(), 3);   // no new insert
-  EXPECT_EQ(chg.count(), 1);   // one update
+  EXPECT_EQ(ins.count(), 3);  // no new insert
+  EXPECT_EQ(chg.count(), 1);  // one update
 }
 
 // ─── TaskModel::setStatus / setArchived / stampStatusChange ───────────
@@ -340,8 +342,10 @@ TEST(PersonModelCycle, StateMachineAndDefault) {
 
 TEST(PersonModelState, SetStateGuardAndTodoCount) {
   PersonModel m;
-  m.reset({mkPerson(QStringLiteral("p1"), QStringLiteral("todo")), mkPerson(QStringLiteral("p2"), QStringLiteral("pinged")),
-           mkPerson(QStringLiteral("p3"), QStringLiteral("todo")), mkPerson(QStringLiteral("p4"), QStringLiteral("replied"))});
+  m.reset({mkPerson(QStringLiteral("p1"), QStringLiteral("todo")),
+           mkPerson(QStringLiteral("p2"), QStringLiteral("pinged")),
+           mkPerson(QStringLiteral("p3"), QStringLiteral("todo")),
+           mkPerson(QStringLiteral("p4"), QStringLiteral("replied"))});
   EXPECT_EQ(m.todoCount(), 2);
 
   QSignalSpy chg(&m, &QAbstractItemModel::dataChanged);
@@ -355,4 +359,119 @@ TEST(PersonModelState, SetStateGuardAndTodoCount) {
 
   PersonModel empty;
   EXPECT_EQ(empty.todoCount(), 0);
+}
+
+// ─── External-identity + label roles (HEAP-140) ───
+
+TEST(TaskModelExternalRoles, RoleNamesExposeTheTrackerLink) {
+  const TaskModel m;
+  const QHash<int, QByteArray> names = m.roleNames();
+  const QList<QByteArray> values = names.values();
+  for(const char* expected : {"externalProvider", "externalUrl", "externalKey", "labels", "assignee"}) {
+    EXPECT_TRUE(values.contains(QByteArray(expected))) << "missing role: " << expected;
+  }
+}
+
+TEST(TaskModelExternalRoles, PulledJiraIssueExposesItsKeyAndLabels) {
+  Task t;
+  t.id = QStringLiteral("jira-PROJ-7");
+  t.externalId = QStringLiteral("PROJ-7");
+  t.externalUrl = QStringLiteral("https://x.atlassian.net/browse/PROJ-7");
+  t.externalProvider = QStringLiteral("jira");
+  t.labels = {Label{QStringLiteral("backend"), QStringLiteral("#ff0000")}, Label{QStringLiteral("p1"), QString()}};
+  t.assignee = QStringLiteral("ann");
+
+  TaskModel m;
+  m.reset({t});
+  const QModelIndex i = m.index(0, 0);
+
+  EXPECT_EQ(m.data(i, TaskModel::ExternalProviderRole).toString(), QStringLiteral("jira"));
+  EXPECT_EQ(m.data(i, TaskModel::ExternalKeyRole).toString(), QStringLiteral("PROJ-7"));
+  EXPECT_EQ(m.data(i, TaskModel::ExternalUrlRole).toString(), t.externalUrl);
+  EXPECT_EQ(m.data(i, TaskModel::AssigneeRole).toString(), QStringLiteral("ann"));
+
+  const QVariantList labels = m.data(i, TaskModel::LabelsRole).toList();
+  ASSERT_EQ(labels.size(), 2);
+  EXPECT_EQ(labels.at(0).toMap().value(QStringLiteral("id")).toString(), QStringLiteral("backend"));
+  EXPECT_EQ(labels.at(0).toMap().value(QStringLiteral("color")).toString(), QStringLiteral("#ff0000"));
+  EXPECT_TRUE(labels.at(1).toMap().value(QStringLiteral("color")).toString().isEmpty());
+}
+
+// An issue-number tracker's key reads as "#123"; a purely local card has none.
+TEST(TaskModelExternalRoles, IssueNumberBecomesAHashKeyAndLocalCardsAreEmpty) {
+  Task gh;
+  gh.id = QStringLiteral("github-68");
+  gh.externalId = QStringLiteral("68");
+  gh.externalProvider = QStringLiteral("github");
+
+  Task local;
+  local.id = QStringLiteral("LTE-1");
+
+  TaskModel m;
+  m.reset({gh, local});
+  EXPECT_EQ(m.data(m.index(0, 0), TaskModel::ExternalKeyRole).toString(), QStringLiteral("#68"));
+
+  const QModelIndex li = m.index(1, 0);
+  EXPECT_TRUE(m.data(li, TaskModel::ExternalKeyRole).toString().isEmpty());
+  EXPECT_TRUE(m.data(li, TaskModel::ExternalProviderRole).toString().isEmpty());
+  EXPECT_TRUE(m.data(li, TaskModel::ExternalUrlRole).toString().isEmpty());
+  EXPECT_TRUE(m.data(li, TaskModel::LabelsRole).toList().isEmpty());
+  EXPECT_TRUE(m.data(li, TaskModel::AssigneeRole).toString().isEmpty());
+}
+
+// ─── Defer state (HEAP-124) ───
+
+TEST(DeferState, SomedayIsExcludedFromScheduledForTodayAndOnlyItsOwnPredicate) {
+  const QDate today(2026, 7, 9);
+
+  Task parked;
+  parked.scheduledAt = QDateTime(today, QTime(9, 0));  // scheduled, but parked
+  parked.someday = true;
+
+  EXPECT_FALSE(heap::model::isScheduledForToday(parked, today));
+  EXPECT_TRUE(heap::model::isSomeday(parked));
+  EXPECT_EQ(heap::model::deferState(parked, today), QStringLiteral("someday"));
+}
+
+TEST(DeferState, DerivesTodayScheduledAndAnytime) {
+  const QDate today(2026, 7, 9);
+
+  Task dueToday;
+  dueToday.scheduledAt = QDateTime(today, QTime(16, 0));
+  EXPECT_TRUE(heap::model::isScheduledForToday(dueToday, today));
+  EXPECT_EQ(heap::model::deferState(dueToday, today), QStringLiteral("today"));
+
+  Task overdue;
+  overdue.scheduledAt = QDateTime(today.addDays(-3), QTime(9, 0));
+  EXPECT_TRUE(heap::model::isScheduledForToday(overdue, today)) << "an overdue task is still on today's plate";
+
+  Task later;
+  later.scheduledAt = QDateTime(today.addDays(2), QTime(9, 0));
+  EXPECT_FALSE(heap::model::isScheduledForToday(later, today));
+  EXPECT_EQ(heap::model::deferState(later, today), QStringLiteral("scheduled"));
+
+  Task unscheduled;
+  EXPECT_FALSE(heap::model::isScheduledForToday(unscheduled, today));
+  EXPECT_EQ(heap::model::deferState(unscheduled, today), QStringLiteral("anytime"));
+}
+
+// The deadline role stays a QDate so every calendar view keeps its day math.
+TEST(TaskModelScheduling, DeadlineRoleIsTheDueDateWithoutItsClockTime) {
+  Task t;
+  t.dueAt = QDateTime(QDate(2026, 7, 11), QTime(16, 0));
+  t.scheduledAt = QDateTime(QDate(2026, 7, 10), QTime(9, 30));
+  t.hasTime = true;
+
+  TaskModel m;
+  m.reset({t});
+  const QModelIndex i = m.index(0, 0);
+
+  EXPECT_EQ(m.data(i, TaskModel::DeadlineRole).toDate(), QDate(2026, 7, 11));
+  EXPECT_EQ(m.data(i, TaskModel::DueAtRole).toDateTime(), t.dueAt);
+  EXPECT_EQ(m.data(i, TaskModel::ScheduledAtRole).toDateTime(), t.scheduledAt);
+  EXPECT_TRUE(m.data(i, TaskModel::HasTimeRole).toBool());
+
+  Task undated;
+  m.reset({undated});
+  EXPECT_FALSE(m.data(m.index(0, 0), TaskModel::DeadlineRole).toDate().isValid());
 }

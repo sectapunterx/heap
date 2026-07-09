@@ -1,6 +1,9 @@
 #include "AppController.h"
 #include "Logger.h"
+#include "RecoveryLog.h"
 #include "SampleData.h"
+#include "StateSerializer.h"
+#include "TaskDefer.h"
 
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
@@ -651,7 +654,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   const QString prevStatus = t.status;
   // Capture before any upsert can invalidate the `t` reference (HEAP-77).
   const QString recurrence = t.recurrence;
-  const QDate recurBase = t.deadline;
+  const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
   m_tasks.setStatus(id, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
@@ -709,7 +712,12 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       } while(m_tasks.indexOfId(newId) >= 0);
       copy.id = newId;
       copy.status = QStringLiteral("todo");
-      copy.deadline = next;
+      // Roll both datetimes onto the next occurrence, keeping the clock time the
+      // user set (a 09:00 standup recurs at 09:00, not at midnight).
+      const QTime dueTime = copy.dueAt.isValid() ? copy.dueAt.time() : QTime(0, 0);
+      const QTime schedTime = copy.scheduledAt.isValid() ? copy.scheduledAt.time() : QTime(0, 0);
+      copy.dueAt = QDateTime(next, dueTime);
+      copy.scheduledAt = QDateTime(next, schedTime);
       copy.statusChangedAt = QDateTime::currentDateTime();
       copy.trackedSeconds = 0;
       copy.timerStartedAt = QDateTime();
@@ -740,8 +748,13 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   m["desc"] = QString();
   m["priority"] = priorityDefault.isEmpty() ? QStringLiteral("P2") : priorityDefault;
   m["status"] = statusId.isEmpty() ? (statusDefault.isEmpty() ? QStringLiteral("todo") : statusDefault) : statusId;
-  m["deadline"] = QDate();
+  m["scheduledAt"] = QDateTime();
+  m["dueAt"] = QDateTime();
+  m["hasTime"] = false;
   m["branch"] = QString();
+  m["labels"] = QVariantList();
+  m["estimateMinutes"] = 0;
+  m["someday"] = false;
   return m;
 }
 
@@ -833,9 +846,25 @@ void AppController::saveTask(const QVariantMap& draft) {
   t.desc = draft.value("desc").toString();
   t.priority = draft.value("priority").toString();
   t.status = draft.value("status").toString();
-  t.deadline = draft.value("deadline").toDate();
   t.branch = draft.value("branch").toString();
   t.recurrence = draft.value("recurrence").toString();
+  // Scheduling (HEAP-115). The editors hand over full datetimes and say whether
+  // the clock component is real; a caller that only knows a date may still send
+  // the legacy `deadline` key, which lands at midnight on both fields.
+  t.scheduledAt = draft.value("scheduledAt").toDateTime();
+  t.dueAt = draft.value("dueAt").toDateTime();
+  t.hasTime = draft.value("hasTime").toBool();
+  if(!t.scheduledAt.isValid() && !t.dueAt.isValid() && draft.contains("deadline")) {
+    const QDate legacy = draft.value("deadline").toDate();
+    if(legacy.isValid()) {
+      t.scheduledAt = QDateTime(legacy, QTime(0, 0));
+      t.dueAt = t.scheduledAt;
+      t.hasTime = false;
+    }
+  }
+  t.estimateMinutes = draft.value("estimateMinutes").toInt();
+  t.someday = draft.value("someday").toBool();
+  t.labels = labelsFromVariant(draft.value("labels").toList());
   const bool isNew = draft.value("_isNew").toBool();
   if(isNew && t.title.trimmed().isEmpty()) {
     return;
@@ -862,6 +891,18 @@ void AppController::saveTask(const QVariantMap& draft) {
       t.externalId = prev.externalId;
       t.externalUrl = prev.externalUrl;
       t.externalProvider = prev.externalProvider;
+      // The editor never shows the tracker-supplied assignee, and the planning
+      // fields are honoured only when the draft actually carries them.
+      t.assignee = prev.assignee;
+      if(!draft.contains("labels")) {
+        t.labels = prev.labels;
+      }
+      if(!draft.contains("estimateMinutes")) {
+        t.estimateMinutes = prev.estimateMinutes;
+      }
+      if(!draft.contains("someday")) {
+        t.someday = prev.someday;
+      }
     }
   }
 
@@ -1324,12 +1365,21 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["desc"] = t.desc;
   m["priority"] = t.priority;
   m["status"] = t.status;
-  m["deadline"] = t.deadline;
+  m["scheduledAt"] = t.scheduledAt;
+  m["dueAt"] = t.dueAt;
+  m["hasTime"] = t.hasTime;
   m["branch"] = t.branch;
   m["archived"] = t.archived;
   m["trackedSeconds"] = t.trackedSeconds;
   m["isTiming"] = t.timerStartedAt.isValid();
   m["recurrence"] = t.recurrence;
+  m["labels"] = labelsToVariant(t.labels);
+  m["estimateMinutes"] = t.estimateMinutes;
+  m["someday"] = t.someday;
+  m["assignee"] = t.assignee;
+  m["externalKey"] = externalKeyOf(t);
+  m["externalUrl"] = t.externalUrl;
+  m["externalProvider"] = t.externalProvider;
   return m;
 }
 
@@ -1500,8 +1550,8 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
     }
     line += t.title;
     QStringList meta;
-    if(t.deadline.isValid()) {
-      meta << QStringLiteral("deadline: ") + t.deadline.toString(Qt::ISODate);
+    if(t.dueAt.isValid()) {
+      meta << QStringLiteral("deadline: ") + (t.hasTime ? t.dueAt.toString(Qt::ISODate) : t.dueAt.date().toString(Qt::ISODate));
     }
     if(!t.branch.isEmpty()) {
       meta << QStringLiteral("branch: ") + t.branch;
@@ -1988,22 +2038,45 @@ void AppController::openLogsFolder() const {
   QDesktopServices::openUrl(QUrl::fromLocalFile(heap::logging::logDirPath()));
 }
 
+QString AppController::issueReportBody() const {
+  QString body = QStringLiteral(
+                     "<!-- Describe the problem above this line. The diagnostics below are "
+                     "filled in automatically — please keep them. -->\n\n"
+                     "---\n"
+                     "**Diagnostics**\n"
+                     "- heap version: %1\n"
+                     "- OS: %2 (%3)\n"
+                     "- Qt: %4\n\n"
+                     "<details><summary>Recent log tail</summary>\n\n"
+                     "```\n%5\n```\n</details>\n")
+                     .arg(QCoreApplication::applicationVersion(),
+                          QSysInfo::prettyProductName(),
+                          QSysInfo::currentCpuArchitecture(),
+                          QString::fromLatin1(qVersion()),
+                          heap::logging::logTail());
+
+  // Corruption recoveries are the failures nobody reports because nobody sees
+  // them. Attach them to the report the user is already writing (HEAP-156).
+  const QString recovery = heap::recovery::tail();
+  if(!recovery.isEmpty()) {
+    body += QStringLiteral("\n<details><summary>Recovery log</summary>\n\n```\n%1\n```\n</details>\n").arg(recovery);
+  }
+  return body;
+}
+
+QVariantList AppController::recoveryLog() const {
+  return heap::recovery::entries();
+}
+
+bool AppController::exportRecoveryLog(const QUrl& fileUrl) {
+  const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+  const bool ok = heap::recovery::exportTo(path);
+  emit toast(ok ? tr("Recovery log saved") : tr("No recovery log to export"));
+  return ok;
+}
+
 void AppController::reportAnIssue() const {
-  const QString body = QStringLiteral(
-                           "<!-- Describe the problem above this line. The diagnostics below are "
-                           "filled in automatically — please keep them. -->\n\n"
-                           "---\n"
-                           "**Diagnostics**\n"
-                           "- heap version: %1\n"
-                           "- OS: %2 (%3)\n"
-                           "- Qt: %4\n\n"
-                           "<details><summary>Recent log tail</summary>\n\n"
-                           "```\n%5\n```\n</details>\n")
-                           .arg(QCoreApplication::applicationVersion(),
-                                QSysInfo::prettyProductName(),
-                                QSysInfo::currentCpuArchitecture(),
-                                QString::fromLatin1(qVersion()),
-                                heap::logging::logTail());
+  const QString body = issueReportBody();
 
   QUrl url(QStringLiteral("https://github.com/sectapunterx/heap/issues/new"));
   QUrlQuery query;
@@ -2071,6 +2144,12 @@ void AppController::mergeExternalTasks(const QString& providerId,
     t.externalId = ext.externalId;
     t.externalUrl = ext.url;
     t.externalProvider = providerId;
+    // Pulled labels used to be parsed and thrown away (HEAP-124). Trackers hand
+    // us names only, so the chip colour stays empty.
+    t.labels.clear();
+    for(const QString& name : ext.labels) {
+      t.labels.append(Label{name, {}});
+    }
     m_tasks.upsert(t);
   }
   if(!issues.isEmpty()) {
@@ -2369,220 +2448,9 @@ void AppController::scheduleSave() {
 }
 
 // ───────────────── (de)serialisation helpers ─────────────────
-namespace {
-
-QJsonArray tasksToJson(const QVector<Task>& xs) {
-  QJsonArray a;
-  for(const Task& t : xs) {
-    QJsonObject o;
-    o["id"] = t.id;
-    o["title"] = t.title;
-    o["desc"] = t.desc;
-    o["priority"] = t.priority;
-    o["status"] = t.status;
-    o["deadline"] = t.deadline.isValid() ? t.deadline.toString(Qt::ISODate) : QString();
-    o["branch"] = t.branch;
-    o["statusChangedAt"] = t.statusChangedAt.isValid() ? t.statusChangedAt.toString(Qt::ISODate) : QString();
-    o["archived"] = t.archived;
-    // Time tracking (HEAP-78) — omitted when zero/stopped so untimed task JSON
-    // stays byte-identical.
-    if(t.trackedSeconds > 0) {
-      o["trackedSeconds"] = t.trackedSeconds;
-    }
-    if(t.timerStartedAt.isValid()) {
-      o["timerStartedAt"] = t.timerStartedAt.toString(Qt::ISODate);
-    }
-    // Recurrence (HEAP-77) — omitted for non-recurring tasks.
-    if(!t.recurrence.isEmpty()) {
-      o["recurrence"] = t.recurrence;
-    }
-    // Tracker-sync link — only emitted for synced tasks so locally-created
-    // task JSON stays byte-identical to before HEAP-74.
-    if(!t.externalId.isEmpty()) {
-      o["externalId"] = t.externalId;
-      o["externalUrl"] = t.externalUrl;
-      o["externalProvider"] = t.externalProvider;
-    }
-    a.append(o);
-  }
-  return a;
-}
-
-QVector<Task> tasksFromJson(const QJsonArray& a) {
-  QVector<Task> v;
-  v.reserve(a.size());
-  for(const auto& it : a) {
-    const QJsonObject o = it.toObject();
-    Task t;
-    t.id = o["id"].toString();
-    t.title = o["title"].toString();
-    t.desc = o["desc"].toString();
-    t.priority = o["priority"].toString();
-    t.status = o["status"].toString();
-    t.deadline = QDate::fromString(o["deadline"].toString(), Qt::ISODate);
-    t.branch = o["branch"].toString();
-    t.statusChangedAt = QDateTime::fromString(o["statusChangedAt"].toString(), Qt::ISODate);
-    if(!t.statusChangedAt.isValid()) {
-      t.statusChangedAt = QDateTime::currentDateTime();
-    }
-    t.archived = o["archived"].toBool(false);
-    t.trackedSeconds = o["trackedSeconds"].toInt(0);
-    t.timerStartedAt = QDateTime::fromString(o["timerStartedAt"].toString(), Qt::ISODate);
-    t.recurrence = o["recurrence"].toString();
-    t.externalId = o["externalId"].toString();
-    t.externalUrl = o["externalUrl"].toString();
-    t.externalProvider = o["externalProvider"].toString();
-    v.append(t);
-  }
-  return v;
-}
-
-QJsonArray eventsToJson(const QVector<CalEvent>& xs) {
-  QJsonArray a;
-  for(const CalEvent& e : xs) {
-    QJsonObject o;
-    o["id"] = e.id;
-    o["title"] = e.title;
-    o["type"] = e.type;
-    o["start"] = e.start;
-    o["end"] = e.end;
-    o["attendees"] = e.attendees;
-    o["date"] = e.date.isValid() ? e.date.toString(Qt::ISODate) : QString();
-    o["taskId"] = e.taskId;
-    o["profileId"] = e.profileId;
-    o["context"] = e.context;
-    a.append(o);
-  }
-  return a;
-}
-
-QVector<CalEvent> eventsFromJson(const QJsonArray& a, const QString& fallbackProfileId = QString()) {
-  QVector<CalEvent> v;
-  v.reserve(a.size());
-  for(const auto& it : a) {
-    const QJsonObject o = it.toObject();
-    CalEvent e;
-    e.id = o["id"].toString();
-    e.title = o["title"].toString();
-    e.type = o["type"].toString();
-    e.start = o["start"].toDouble();
-    e.end = o["end"].toDouble();
-    e.attendees = o["attendees"].toString();
-    e.date = QDate::fromString(o["date"].toString(), Qt::ISODate);
-    e.taskId = o["taskId"].toString();
-    e.profileId = o.contains("profileId") ? o["profileId"].toString() : fallbackProfileId;
-    e.context = o["context"].toString();
-    v.append(e);
-  }
-  return v;
-}
-
-QJsonArray peopleToJson(const QVector<Person>& xs) {
-  QJsonArray a;
-  for(const Person& p : xs) {
-    QJsonObject o;
-    o["id"] = p.id;
-    o["name"] = p.name;
-    o["role"] = p.role;
-    o["question"] = p.question;
-    o["state"] = p.state;
-    o["color"] = p.color.name();
-    a.append(o);
-  }
-  return a;
-}
-
-QVector<Person> peopleFromJson(const QJsonArray& a) {
-  QVector<Person> v;
-  v.reserve(a.size());
-  for(const auto& it : a) {
-    const QJsonObject o = it.toObject();
-    Person p;
-    p.id = o["id"].toString();
-    p.name = o["name"].toString();
-    p.role = o["role"].toString();
-    p.question = o["question"].toString();
-    p.state = o["state"].toString();
-    p.color = QColor(o["color"].toString());
-    v.append(p);
-  }
-  return v;
-}
-
-QJsonArray statusesToJson(const QVariantList& xs) {
-  QJsonArray a;
-  for(const QVariant& v : xs) {
-    const QVariantMap m = v.toMap();
-    QJsonObject o;
-    o["id"] = m.value("id").toString();
-    o["name"] = m.value("name").toString();
-    const QVariant col = m.value("color");
-    o["color"] = col.canConvert<QColor>() ? col.value<QColor>().name() : col.toString();
-    a.append(o);
-  }
-  return a;
-}
-
-QVariantList statusesFromJson(const QJsonArray& a) {
-  QVariantList v;
-  for(const auto& it : a) {
-    const QJsonObject o = it.toObject();
-    QVariantMap m;
-    m["id"] = o["id"].toString();
-    m["name"] = o["name"].toString();
-    m["color"] = QColor(o["color"].toString());
-    v.append(m);
-  }
-  return v;
-}
-
-QJsonObject profileToJson(const Profile& p) {
-  QJsonObject o;
-  o["id"] = p.id;
-  o["name"] = p.name;
-  o["color"] = p.color;
-  o["createdAt"] = p.createdAt.isValid() ? p.createdAt.toString(Qt::ISODate) : QString();
-  o["tasks"] = tasksToJson(p.tasks);
-  o["people"] = peopleToJson(p.people);
-  o["statuses"] = statusesToJson(p.statuses);
-  if(!p.docsState.isEmpty()) {
-    const QJsonDocument d = QJsonDocument::fromJson(p.docsState.toUtf8());
-    if(!d.isNull() && d.isObject()) {
-      o["docs"] = d.object();
-    }
-  }
-  if(!p.notesState.isEmpty()) {
-    o["notes"] = p.notesState;
-  }
-  return o;
-}
-
-// Returns the parsed Profile and pulls out any nested "events" array (legacy
-// schema v2) so the caller can hoist them into the global event pool with
-// fallback profileId = p.id.
-Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents = nullptr) {
-  Profile p;
-  p.id = o["id"].toString();
-  p.name = o["name"].toString();
-  p.color = o["color"].toString();
-  p.createdAt = QDateTime::fromString(o["createdAt"].toString(), Qt::ISODate);
-  p.tasks = tasksFromJson(o["tasks"].toArray());
-  p.people = peopleFromJson(o["people"].toArray());
-  p.statuses = statusesFromJson(o["statuses"].toArray());
-  if(o.contains("docs")) {
-    p.docsState = QJsonDocument(o["docs"].toObject()).toJson(QJsonDocument::Compact);
-  }
-  if(o.contains("notes")) {
-    p.notesState = o["notes"].toString();
-  }
-  if(outLegacyEvents && o.contains("events")) {
-    const QVector<CalEvent> v = eventsFromJson(o["events"].toArray(), p.id);
-    outLegacyEvents->append(v);
-  }
-  return p;
-}
-
-}  // namespace
+// Live state.json (de)serialisation now lives in src/StateSerializer.cpp
+// (namespace heap::state) so the round-trip + field-count guards can exercise
+// the real save path instead of a look-alike (HEAP-131).
 
 // ───────────────── Profile helpers (private) ─────────────────
 
@@ -2668,7 +2536,33 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
   return p;
 }
 
-// ───────────────── Save / load (schema v2) ─────────────────
+// ───────────────── Save / load ─────────────────
+
+// The writer seam (HEAP-156). saveStateNow() never touches the filesystem
+// directly; it hands the serialized bytes to whatever is installed here. The
+// default is an atomic QSaveFile write; the fault-injection harness swaps in a
+// writer that truncates, corrupts or drops the rename.
+namespace {
+AppController::StateWriter g_stateWriter;
+
+bool defaultStateWriter(const QString& path, const QByteArray& bytes) {
+  QSaveFile f(path);
+  if(!f.open(QIODevice::WriteOnly)) {
+    qWarning("todocpp: cannot open state.json for writing: %s", qUtf8Printable(f.errorString()));
+    return false;
+  }
+  f.write(bytes);
+  if(!f.commit()) {
+    qWarning("todocpp: state.json commit failed: %s", qUtf8Printable(f.errorString()));
+    return false;
+  }
+  return true;
+}
+}  // namespace
+
+void AppController::setStateWriterForTesting(StateWriter writer) {
+  g_stateWriter = std::move(writer);
+}
 
 void AppController::rotateBackupIfDue() {
   const QVariantMap d = settingsMap().value("data").toMap();
@@ -2701,9 +2595,18 @@ void AppController::rotateBackupIfDue() {
 
 void AppController::pruneBackups(int keep) {
   QDir d(backupDirPath());
+  // Rotational snapshots only. The pre-migration copy retained by
+  // loadStateOnStart must survive retention: it is the only pre-v4 image of the
+  // user's data.
   const QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
-  for(int i = keep; i < all.size(); ++i) {
-    d.remove(all[i]);
+  int kept = 0;
+  for(const QString& name : all) {
+    if(name.contains(QLatin1String("premigration"))) {
+      continue;
+    }
+    if(++kept > keep) {
+      d.remove(name);
+    }
   }
 }
 
@@ -2741,7 +2644,10 @@ void AppController::quarantineCorruptState(const QString& path) {
   }
   if(!QFile::rename(path, target)) {
     qWarning("todocpp: could not quarantine corrupt state.json to %s", qUtf8Printable(target));
+    return;
   }
+  heap::recovery::append(QString::fromLatin1(heap::recovery::kQuarantined),
+                         {{QStringLiteral("from"), path}, {QStringLiteral("to"), target}});
 }
 
 void AppController::saveStateNow() {
@@ -2753,17 +2659,17 @@ void AppController::saveStateNow() {
   snapshotActiveProfile();
 
   QJsonObject root;
-  root["schemaVersion"] = 3;
+  root["schemaVersion"] = heap::state::kSchemaVersion;
   root["activeProfileId"] = m_activeProfileId;
 
   QJsonArray profilesArr;
   for(const Profile& p : m_profiles) {
-    profilesArr.append(profileToJson(p));
+    profilesArr.append(heap::state::profileToJson(p));
   }
   root["profiles"] = profilesArr;
 
   // Events are global (shown across profiles in the calendar).
-  root["events"] = eventsToJson(m_events.items());
+  root["events"] = heap::state::eventsToJson(m_events.items());
 
   QJsonObject s;
   s["theme"] = m_theme;
@@ -2797,14 +2703,13 @@ void AppController::saveStateNow() {
 
   rotateBackupIfDue();
 
-  QSaveFile f(stateFilePath());
-  if(!f.open(QIODevice::WriteOnly)) {
-    qWarning("todocpp: cannot open state.json for writing: %s", qUtf8Printable(f.errorString()));
-    return;
-  }
-  f.write(QJsonDocument(root).toJson(QJsonDocument::Indented));
-  if(!f.commit()) {
-    qWarning("todocpp: state.json commit failed: %s", qUtf8Printable(f.errorString()));
+  const QByteArray bytes = QJsonDocument(root).toJson(QJsonDocument::Indented);
+  const bool ok = g_stateWriter ? g_stateWriter(stateFilePath(), bytes) : defaultStateWriter(stateFilePath(), bytes);
+  if(!ok) {
+    // A failed write is the fault the user never sees. Leave a local record so
+    // "heap lost my edit" has evidence attached to the next bug report.
+    heap::recovery::append(QString::fromLatin1(heap::recovery::kWriteFailed),
+                           {{QStringLiteral("path"), stateFilePath()}, {QStringLiteral("bytes"), bytes.size()}});
   }
 }
 
@@ -2837,17 +2742,32 @@ void AppController::loadStateOnStart() {
       QFile::copy(recoveredFrom, path);
       doc = QJsonDocument(recovered);
       m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName());
+      heap::recovery::append(QString::fromLatin1(heap::recovery::kRecovered), {{QStringLiteral("from"), recoveredFrom}});
     } else {
       // No usable backup. Preserve the damaged file under a distinct name and
       // fall through to a fresh seed — the user keeps a recoverable copy and a
       // visible warning instead of a silent wipe.
       quarantineCorruptState(path);
       m_recoveryNotice = tr_("data.corruptKept");
+      heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered), {{QStringLiteral("path"), path}});
       return;
     }
   }
 
-  const QJsonObject root = doc.object();
+  QJsonObject root = doc.object();
+
+  // ----- schema ladder: field-level upgrades, before anything parses a task ---
+  // Version-gated and idempotent: a v4 document walks straight past this, so
+  // reopening the app never re-migrates. The original file is copied aside first
+  // — that copy is what a mid-migration failure reopens to, since it is the
+  // newest valid state-*.json in the backup dir.
+  const int onDiskSchema = root.value("schemaVersion").toInt(1);
+  if(onDiskSchema < heap::state::kSchemaVersion) {
+    retainPreMigrationBackup(path, onDiskSchema);
+    heap::state::migrateState(root, onDiskSchema);
+    heap::recovery::append(QString::fromLatin1(heap::recovery::kMigrated),
+                           {{QStringLiteral("from"), onDiskSchema}, {QStringLiteral("to"), heap::state::kSchemaVersion}});
+  }
 
   m_loading = true;
 
@@ -2908,7 +2828,8 @@ void AppController::loadStateOnStart() {
     }
   }
 
-  const int schema = root.value("schemaVersion").toInt(1);
+  // Structural decisions below key off what was on disk, not the migrated value.
+  const int schema = onDiskSchema;
   QVector<CalEvent> globalEvents;
 
   if(schema >= 2 && root.contains("profiles")) {
@@ -2917,7 +2838,7 @@ void AppController::loadStateOnStart() {
       // For v2, profiles still carried their own events — hoist them
       // into the global pool tagged with the source profile id.
       QVector<CalEvent> legacy;
-      m_profiles.push_back(profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr));
+      m_profiles.push_back(heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr));
       if(!legacy.isEmpty()) {
         globalEvents.append(legacy);
       }
@@ -2928,7 +2849,7 @@ void AppController::loadStateOnStart() {
     }
     // schema v3 keeps events at top level.
     if(schema >= 3 && root.contains("events")) {
-      globalEvents = eventsFromJson(root["events"].toArray());
+      globalEvents = heap::state::eventsFromJson(root["events"].toArray());
     }
   } else {
     // ----- schema v1: flat fields → wrap into one "Example" profile -----
@@ -2938,20 +2859,20 @@ void AppController::loadStateOnStart() {
     p.color = "#5cc2dd";
     p.createdAt = QDateTime::currentDateTime();
     if(root.contains("tasks")) {
-      p.tasks = tasksFromJson(root["tasks"].toArray());
+      p.tasks = heap::state::tasksFromJson(root["tasks"].toArray());
     }
     if(root.contains("people")) {
-      p.people = peopleFromJson(root["people"].toArray());
+      p.people = heap::state::peopleFromJson(root["people"].toArray());
     }
     if(root.contains("statuses")) {
-      p.statuses = statusesFromJson(root["statuses"].toArray());
+      p.statuses = heap::state::statusesFromJson(root["statuses"].toArray());
     }
     if(root.contains("docs")) {
       p.docsState = QJsonDocument(root["docs"].toObject()).toJson(QJsonDocument::Compact);
     }
     // Hoist any legacy top-level events into the global pool.
     if(root.contains("events")) {
-      globalEvents = eventsFromJson(root["events"].toArray(), p.id);
+      globalEvents = heap::state::eventsFromJson(root["events"].toArray(), p.id);
     }
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
@@ -2969,10 +2890,21 @@ void AppController::loadStateOnStart() {
   emit profilesChanged();
   emit activeProfileChanged();
 
-  // Force a rewrite to upgrade the on-disk file to v3 if we just migrated.
-  if(schema < 3) {
+  // Force a rewrite so the on-disk file lands at the current schema version.
+  if(schema < heap::state::kSchemaVersion) {
     scheduleSave();
   }
+}
+
+void AppController::retainPreMigrationBackup(const QString& path, int fromVersion) {
+  const QString dir = backupDirPath();
+  const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+  const QString target = dir + "/state-premigration-v" + QString::number(fromVersion) + "-" + stamp + ".json";
+  if(QFile::exists(target) || !QFile::copy(path, target)) {
+    return;
+  }
+  heap::recovery::append(QString::fromLatin1(heap::recovery::kPreMigration),
+                         {{QStringLiteral("from"), path}, {QStringLiteral("to"), target}, {QStringLiteral("schema"), fromVersion}});
 }
 
 // ───────────────────────────────────────────────────── Profiles API ──
@@ -3393,7 +3325,7 @@ QString AppController::exportActiveProfileJson() const {
   p.statuses = m_statuses;
   p.docsState = m_docsState;
   p.notesState = m_notesState;
-  QJsonObject profObj = profileToJson(p);
+  QJsonObject profObj = heap::state::profileToJson(p);
 
   // Events live in the global pool, so profileToJson() cannot see them — a
   // profile export used to silently drop the whole calendar. Include the
@@ -3405,10 +3337,10 @@ QString AppController::exportActiveProfileJson() const {
       profileEvents.append(e);
     }
   }
-  profObj["events"] = eventsToJson(profileEvents);
+  profObj["events"] = heap::state::eventsToJson(profileEvents);
 
   QJsonObject root;
-  root["schemaVersion"] = 3;
+  root["schemaVersion"] = heap::state::kSchemaVersion;
   root["kind"] = "todocpp.profile";
   root["exportedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
   root["profile"] = profObj;
@@ -3458,7 +3390,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   }
 
   QVector<CalEvent> importedEvents;
-  Profile imported = profileFromJson(profileObj, &importedEvents);
+  Profile imported = heap::state::profileFromJson(profileObj, &importedEvents);
   if(imported.name.trimmed().isEmpty()) {
     imported.name = QStringLiteral("Imported");
   }
@@ -4149,13 +4081,15 @@ void AppController::runAutomation() {
       if(t.archived) {
         continue;
       }
-      if(!t.deadline.isValid()) {
+      if(!t.dueAt.isValid()) {
         continue;
       }
       if(t.status == QStringLiteral("done")) {
         continue;
       }
-      const QDateTime deadlineAt(t.deadline, QTime(23, 59));
+      // A task due at a parsed clock time fires then; a bare due date keeps the
+      // old end-of-day horizon.
+      const QDateTime deadlineAt = t.hasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
       const qint64 hoursLeft = now.secsTo(deadlineAt) / 3600;
       if(hoursLeft < 0 || hoursLeft > leadHours) {
         continue;
@@ -4410,12 +4344,16 @@ void AppController::snoozeDeadline(const QString& taskId, int seconds) {
     return;
   }
   Task t = m_tasks.items().at(row);
-  if(!t.deadline.isValid()) {
+  if(!t.dueAt.isValid()) {
     return;
   }
   // Reminders are date-grained — bump to the next day so the dl: sentinel
-  // for "today" stops firing.
-  t.deadline = t.deadline.addDays((seconds + 86399) / 86400);
+  // for "today" stops firing. The clock time rides along.
+  const int days = (seconds + 86399) / 86400;
+  t.dueAt = t.dueAt.addDays(days);
+  if(t.scheduledAt.isValid()) {
+    t.scheduledAt = t.scheduledAt.addDays(days);
+  }
   m_tasks.upsert(t);
   // Forget the "already notified today" memo so the new horizon is honoured.
   m_lastReminderDay.remove(QStringLiteral("dl:") + taskId);

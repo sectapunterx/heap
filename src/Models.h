@@ -12,13 +12,30 @@
 #include <QVariantMap>
 #include <QVector>
 
+// One tag on a task (HEAP-124). `id` is the label text — it is what a tracker
+// calls the label and what the user types. `color` is a "#rrggbb" string, empty
+// when the source gave none.
+struct Label {
+  QString id;
+  QString color;
+
+  bool operator==(const Label&) const = default;
+};
+
 struct Task {
   QString id;
   QString title;
   QString desc;
   QString priority;  // P0..P3
   QString status;    // backlog/todo/prog/half/blocked/review/done
-  QDate deadline;    // invalid = none
+  // Time-aware scheduling (HEAP-115). `scheduledAt` is when the work is meant
+  // to happen, `dueAt` is when it is owed; either may be invalid (= none).
+  // `hasTime` says whether the clock component of both is meaningful — a bare
+  // date lands at 00:00 with hasTime=false, which is how a legacy QDate
+  // deadline migrates in.
+  QDateTime scheduledAt;
+  QDateTime dueAt;
+  bool hasTime = false;
   QString branch;
   QDateTime statusChangedAt;  // last time `status` was mutated
   bool archived = false;      // hidden from Board/Timeline once auto-archived
@@ -36,6 +53,13 @@ struct Task {
   QString externalId;        // e.g. GitHub issue number as a string
   QString externalUrl;       // issue web URL
   QString externalProvider;  // "github" | "jira" | "gitlab"
+  // Planning fields (HEAP-124).
+  QVector<Label> labels;
+  int estimateMinutes = 0;
+  bool someday = false;  // parked: never surfaces in a "scheduled today" view
+  QString assignee;      // tracker-supplied owner, empty for local tasks
+
+  bool operator==(const Task&) const = default;
 };
 
 struct CalEvent {
@@ -49,7 +73,18 @@ struct CalEvent {
   QString taskId;     // optional link to task in same profile
   QString profileId;  // optional attribution to a feature profile (empty = global)
   QString context;    // free-form context label rendered before the title in calendar views
+
+  bool operator==(const CalEvent&) const = default;
 };
+
+// Tracker-native issue key for a task: Jira stores "PROJ-123" verbatim, the
+// issue-number trackers store a bare number that reads as "#123". Empty for
+// locally-created tasks.
+QString externalKeyOf(const Task& t);
+
+// Labels across the QML boundary: a list of { id, color } maps.
+QVariantList labelsToVariant(const QVector<Label>& labels);
+QVector<Label> labelsFromVariant(const QVariantList& list);
 
 struct Person {
   QString id;
@@ -101,6 +136,21 @@ class TaskModel : public QAbstractListModel {
     TrackedSecondsRole,
     IsTimingRole,
     RecurrenceRole,
+    // HEAP-115 / HEAP-124: the datetime pair behind DeadlineRole, plus planning
+    // fields. DeadlineRole stays a QDate (dueAt's date) so existing views keep
+    // their all-day arithmetic.
+    ScheduledAtRole,
+    DueAtRole,
+    HasTimeRole,
+    EstimateMinutesRole,
+    SomedayRole,
+    DeferStateRole,
+    // HEAP-140: read-only reflections of the tracker link.
+    ExternalProviderRole,
+    ExternalUrlRole,
+    ExternalKeyRole,
+    LabelsRole,
+    AssigneeRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

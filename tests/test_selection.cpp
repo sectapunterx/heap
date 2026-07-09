@@ -264,7 +264,8 @@ TEST_F(SelectionTest, SaveTaskPreservesArchivedFlag) {
   QVector<Task> items;
   Task t = makeTask("T-1");
   t.title = "kept";
-  t.deadline = QDate(2030, 5, 22);
+  t.dueAt = QDateTime(QDate(2030, 5, 22), QTime(0, 0));
+  t.scheduledAt = t.dueAt;
   t.archived = true;
   items.append(t);
   app_->tasks()->reset(items);
@@ -280,7 +281,7 @@ TEST_F(SelectionTest, SaveTaskPreservesArchivedFlag) {
   ASSERT_GE(row, 0);
   const Task& after = app_->tasks()->items().at(row);
   EXPECT_TRUE(after.archived);
-  EXPECT_EQ(after.deadline, QDate(2030, 5, 22));
+  EXPECT_EQ(after.dueAt, QDateTime(QDate(2030, 5, 22), QTime(0, 0)));
   EXPECT_EQ(after.title, QStringLiteral("kept"));
 }
 

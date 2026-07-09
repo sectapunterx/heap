@@ -267,19 +267,28 @@ Rectangle {
                 property string dlText: {
                     if (!card.task || !card.task.deadline) return "";
                     const dl = card.task.deadline;
-                    if (!dl.getTime) return "";
+                    // An unset date arrives as an Invalid Date — truthy, but its
+                    // time is NaN, which used to render as "⏱ NaNd".
+                    if (!dl.getTime || isNaN(dl.getTime())) return "";
                     const t = AppController.today;
                     const ms = dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
                     const days = Math.round(ms / 86400000);
-                    if (days < 0) return "⏱ " + (-days) + "d overdue";
-                    if (days === 0) return "⏱ today";
-                    if (days === 1) return "⏱ tomorrow";
-                    return "⏱ " + days + "d";
+                    // A task due at a clock time shows it; a bare date does not.
+                    let clock = "";
+                    if (card.task.hasTime && card.task.dueAt && card.task.dueAt.getHours) {
+                        clock = " " + String(card.task.dueAt.getHours()).padStart(2, "0")
+                              + ":" + String(card.task.dueAt.getMinutes()).padStart(2, "0");
+                    }
+                    if (days < 0) return "⏱ " + (-days) + "d overdue" + clock;
+                    if (days === 0) return "⏱ today" + clock;
+                    if (days === 1) return "⏱ tomorrow" + clock;
+                    return "⏱ " + days + "d" + clock;
                 }
                 visible: dlText.length > 0
                 text: dlText
                 color: {
-                    if (!card.task || !card.task.deadline || !card.task.deadline.getTime) return Theme.textDim;
+                    if (!card.task || !card.task.deadline || !card.task.deadline.getTime
+                        || isNaN(card.task.deadline.getTime())) return Theme.textDim;
                     const dl = card.task.deadline;
                     const t = AppController.today;
                     const days = Math.round((dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime()) / 86400000);
@@ -289,6 +298,27 @@ Rectangle {
                 }
                 font.family: Theme.fontMono
                 font.pixelSize: 10
+            }
+            // Label chips (HEAP-124). Tracker-pulled labels carry no colour, so
+            // they fall back to the muted chip style.
+            Repeater {
+                model: card.task && card.task.labels ? card.task.labels : []
+                delegate: Rectangle {
+                    required property var modelData
+                    radius: 4
+                    color: Theme.withAlpha(modelData.color || Theme.textMuted, 0.14)
+                    border.color: modelData.color || Theme.border
+                    border.width: 1
+                    implicitWidth: labelT.implicitWidth + 10
+                    implicitHeight: labelT.implicitHeight + 2
+                    Text {
+                        id: labelT
+                        anchors.centerIn: parent
+                        text: modelData.id
+                        color: modelData.color || Theme.textMuted
+                        font.pixelSize: 10
+                    }
+                }
             }
             // Recurrence chip (HEAP-77).
             Rectangle {
