@@ -342,6 +342,31 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   EXPECT_TRUE(foundNext);
 }
 
+// Regression (HEAP-104 review): a recurring task that is scheduled but was never
+// given a due date must not gain a phantom midnight dueAt on its next
+// occurrence. Otherwise runAutomation() fires an end-of-day reminder for a
+// deadline the user never set, and the spurious dueAt is persisted forever.
+TEST_F(AppControllerTest, RecurringScheduledOnlyTaskKeepsAnInvalidDueDate) {
+  Task t = mkTask(QStringLiteral("REC-2"), QStringLiteral("Focus block"));
+  t.status = QStringLiteral("todo");
+  t.recurrence = QStringLiteral("every:day");
+  t.scheduledAt = QDateTime(QDate(2026, 7, 4), QTime(9, 0));
+  t.dueAt = QDateTime();  // scheduled, never owed
+  app_->tasks()->reset({t});
+
+  app_->moveTask(QStringLiteral("REC-2"), QStringLiteral("done"));
+
+  bool foundNext = false;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.id != QStringLiteral("REC-2") && x.recurrence == QStringLiteral("every:day")) {
+      foundNext = true;
+      EXPECT_FALSE(x.dueAt.isValid()) << "recurrence manufactured a due date the task never had";
+      EXPECT_EQ(x.scheduledAt, QDateTime(QDate(2026, 7, 5), QTime(9, 0))) << "the scheduled clock time must roll onto the next occurrence";
+    }
+  }
+  EXPECT_TRUE(foundNext);
+}
+
 TEST_F(AppControllerTest, TemplateCreatesPrefilledChecklistTask) {
   ASSERT_FALSE(app_->taskTemplates().isEmpty());
   const int before = app_->tasks()->rowCount();
@@ -484,6 +509,42 @@ TEST_F(AppControllerTest, PulledIssueLabelsArePersistedOntoTheTask) {
   const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-68")));
   ASSERT_EQ(after.labels.size(), 2);
   EXPECT_EQ(after.labels.at(0).id, QStringLiteral("bug"));
+}
+
+// Regression (HEAP-104 review): a label the user adds locally to a synced task
+// must survive the next pull. Sync used to clear() every label and re-add only
+// the tracker's, silently deleting user-authored chips on each sync.
+TEST_F(AppControllerTest, SyncPreservesUserAddedLocalLabels) {
+  heap::integrations::ExternalTask issue;
+  issue.providerId = QStringLiteral("github");
+  issue.externalId = QStringLiteral("68");
+  issue.url = QStringLiteral("https://github.com/sectapunterx/heap/issues/68");
+  issue.title = QStringLiteral("Portable build misses a DLL");
+  issue.status = QStringLiteral("open");
+  issue.labels = {QStringLiteral("bug")};
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  // The user adds a local chip the tracker knows nothing about.
+  QVariantMap draft = app_->taskById(QStringLiteral("github-68"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-68");
+  draft["labels"] =
+      QVariantList{QVariantMap{{QStringLiteral("id"), QStringLiteral("bug")}, {QStringLiteral("color"), QString()}},
+                   QVariantMap{{QStringLiteral("id"), QStringLiteral("urgent")}, {QStringLiteral("color"), QStringLiteral("#e6624c")}}};
+  app_->saveTask(draft);
+
+  // A second sync of the same issue — the tracker still only reports "bug".
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-68")));
+  QStringList ids;
+  for(const Label& l : after.labels) {
+    ids << l.id;
+  }
+  EXPECT_TRUE(ids.contains(QStringLiteral("urgent"))) << "sync wiped the user-added label";
+  EXPECT_TRUE(ids.contains(QStringLiteral("bug")));
 }
 
 TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {

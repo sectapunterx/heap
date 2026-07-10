@@ -712,12 +712,16 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       } while(m_tasks.indexOfId(newId) >= 0);
       copy.id = newId;
       copy.status = QStringLiteral("todo");
-      // Roll both datetimes onto the next occurrence, keeping the clock time the
-      // user set (a 09:00 standup recurs at 09:00, not at midnight).
-      const QTime dueTime = copy.dueAt.isValid() ? copy.dueAt.time() : QTime(0, 0);
-      const QTime schedTime = copy.scheduledAt.isValid() ? copy.scheduledAt.time() : QTime(0, 0);
-      copy.dueAt = QDateTime(next, dueTime);
-      copy.scheduledAt = QDateTime(next, schedTime);
+      // Roll each datetime onto the next occurrence, keeping the clock time the
+      // user set (a 09:00 standup recurs at 09:00, not at midnight). A field the
+      // task never carried stays invalid — rebuilding it would manufacture a
+      // phantom midnight deadline/schedule and fire spurious reminders.
+      if(copy.dueAt.isValid()) {
+        copy.dueAt = QDateTime(next, copy.dueAt.time());
+      }
+      if(copy.scheduledAt.isValid()) {
+        copy.scheduledAt = QDateTime(next, copy.scheduledAt.time());
+      }
       copy.statusChangedAt = QDateTime::currentDateTime();
       copy.trackedSeconds = 0;
       copy.timerStartedAt = QDateTime();
@@ -2145,10 +2149,18 @@ void AppController::mergeExternalTasks(const QString& providerId,
     t.externalUrl = ext.url;
     t.externalProvider = providerId;
     // Pulled labels used to be parsed and thrown away (HEAP-124). Trackers hand
-    // us names only, so the chip colour stays empty.
-    t.labels.clear();
+    // us names only (chip colour stays empty). Merge rather than clobber: a
+    // label the user added locally and the tracker doesn't know must survive the
+    // pull, and an existing chip keeps whatever colour it already had.
+    QSet<QString> present;
+    for(const Label& l : t.labels) {
+      present.insert(l.id);
+    }
     for(const QString& name : ext.labels) {
-      t.labels.append(Label{name, {}});
+      if(!present.contains(name)) {
+        t.labels.append(Label{name, {}});
+        present.insert(name);
+      }
     }
     m_tasks.upsert(t);
   }
