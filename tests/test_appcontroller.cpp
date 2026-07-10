@@ -8,6 +8,8 @@
 #include "AppController.h"
 #include "Models.h"
 
+#include "integrations/IntegrationTypes.h"
+
 #include <QApplication>
 #include <QDate>
 #include <QDateTime>
@@ -168,6 +170,72 @@ TEST_F(AppControllerTest, ScheduledLabelInvalidDateEmpty) {
   EXPECT_EQ(app_->scheduledLabelFor(QStringLiteral("T-1"), QDate()), QString());
 }
 
+// ─── sync task ⇄ event cascade delete (HEAP-104) ──────────────────────
+
+namespace {
+// A QuickCapture "sync": one task plus one linked meeting event.
+void seedSync(AppController* app, const QString& taskId) {
+  app->tasks()->reset({mkTask(taskId, QStringLiteral("синк"))});
+  app->events()->reset({});
+  QVariantMap ev = app->newEventDraft(13.0, QDate(2026, 7, 13));
+  ev["type"] = QStringLiteral("sync");
+  ev["taskId"] = taskId;
+  ev["title"] = QStringLiteral("синк");
+  app->saveEvent(ev);
+}
+}  // namespace
+
+TEST_F(AppControllerTest, DeleteTaskRemovesLinkedSyncEvent) {
+  seedSync(app_.get(), QStringLiteral("SYNC-1"));
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+
+  app_->deleteTask(QStringLiteral("SYNC-1"));
+  EXPECT_EQ(app_->tasks()->rowCount(), 0);
+  EXPECT_EQ(app_->events()->rowCount(), 0) << "the linked meeting event must go with the task";
+
+  // Undo brings both halves back, still linked.
+  app_->undoLastDeletion();
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  EXPECT_EQ(app_->events()->items().at(0).taskId, QStringLiteral("SYNC-1"));
+}
+
+TEST_F(AppControllerTest, DeleteSyncEventRemovesMirrorTask) {
+  seedSync(app_.get(), QStringLiteral("SYNC-1"));
+  const QString evId = app_->events()->items().at(0).id;
+
+  app_->deleteEvent(evId);
+  EXPECT_EQ(app_->events()->rowCount(), 0);
+  EXPECT_EQ(app_->tasks()->rowCount(), 0) << "the mirror task must go with the sync event";
+
+  app_->undoLastDeletion();
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  EXPECT_EQ(app_->tasks()->items().at(0).id, QStringLiteral("SYNC-1"));
+}
+
+TEST_F(AppControllerTest, DeleteFocusEventKeepsItsTask) {
+  // A focus block is a scheduled slice of a task, not a mirror — deleting the
+  // block just unschedules; the task stays.
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("x"))});
+  app_->scheduleTask(QStringLiteral("T-1"), 14.0, QDate(2026, 7, 13));
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  ASSERT_EQ(app_->events()->items().at(0).type, QStringLiteral("focus"));
+
+  app_->deleteEvent(app_->events()->items().at(0).id);
+  EXPECT_EQ(app_->events()->rowCount(), 0);
+  EXPECT_EQ(app_->tasks()->rowCount(), 1) << "a focus block must not delete its task";
+}
+
+TEST_F(AppControllerTest, DeleteTaskRemovesItsFocusBlock) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("x"))});
+  app_->scheduleTask(QStringLiteral("T-1"), 14.0, QDate(2026, 7, 13));
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+
+  app_->deleteTask(QStringLiteral("T-1"));
+  EXPECT_EQ(app_->events()->rowCount(), 0) << "the focus block must go with the deleted task";
+}
+
 // ─── eventHourLabel (24h default) ─────────────────────────────────────
 
 TEST_F(AppControllerTest, EventHourLabel24h) {
@@ -321,7 +389,8 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   Task t = mkTask(QStringLiteral("REC-1"), QStringLiteral("Daily standup"));
   t.status = QStringLiteral("todo");
   t.recurrence = QStringLiteral("every:day");
-  t.deadline = QDate(2026, 7, 4);
+  t.dueAt = QDateTime(QDate(2026, 7, 4), QTime(0, 0));
+  t.scheduledAt = t.dueAt;
   app_->tasks()->reset({t});
   const int before = app_->tasks()->rowCount();
 
@@ -332,8 +401,33 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   for(const Task& x : app_->tasks()->items()) {
     if(x.id != QStringLiteral("REC-1") && x.recurrence == QStringLiteral("every:day")) {
       EXPECT_EQ(x.status, QString("todo"));
-      EXPECT_EQ(x.deadline, QDate(2026, 7, 5));  // next day
+      EXPECT_EQ(x.dueAt.date(), QDate(2026, 7, 5));  // next day
       foundNext = true;
+    }
+  }
+  EXPECT_TRUE(foundNext);
+}
+
+// Regression (HEAP-104 review): a recurring task that is scheduled but was never
+// given a due date must not gain a phantom midnight dueAt on its next
+// occurrence. Otherwise runAutomation() fires an end-of-day reminder for a
+// deadline the user never set, and the spurious dueAt is persisted forever.
+TEST_F(AppControllerTest, RecurringScheduledOnlyTaskKeepsAnInvalidDueDate) {
+  Task t = mkTask(QStringLiteral("REC-2"), QStringLiteral("Focus block"));
+  t.status = QStringLiteral("todo");
+  t.recurrence = QStringLiteral("every:day");
+  t.scheduledAt = QDateTime(QDate(2026, 7, 4), QTime(9, 0));
+  t.dueAt = QDateTime();  // scheduled, never owed
+  app_->tasks()->reset({t});
+
+  app_->moveTask(QStringLiteral("REC-2"), QStringLiteral("done"));
+
+  bool foundNext = false;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.id != QStringLiteral("REC-2") && x.recurrence == QStringLiteral("every:day")) {
+      foundNext = true;
+      EXPECT_FALSE(x.dueAt.isValid()) << "recurrence manufactured a due date the task never had";
+      EXPECT_EQ(x.scheduledAt, QDateTime(QDate(2026, 7, 5), QTime(9, 0))) << "the scheduled clock time must roll onto the next occurrence";
     }
   }
   EXPECT_TRUE(foundNext);
@@ -393,6 +487,196 @@ TEST_F(AppControllerTest, GitPrefixChangeRematchesFocusedBranch) {
 }
 
 // ─── headless boot ────────────────────────────────────────────────────
+
+// ─── Time-aware save/edit (HEAP-115) ───
+
+// The isNew guard used to drop the parsed clock time on every edit of an
+// existing task. Editing one now keeps 09:00.
+TEST_F(AppControllerTest, EditingAnExistingTaskKeepsTheParsedClockTime) {
+  Task t = mkTask(QStringLiteral("EDIT-1"), QStringLiteral("standup"));
+  t.scheduledAt = QDateTime(QDate(2026, 7, 10), QTime(0, 0));
+  t.dueAt = t.scheduledAt;
+  app_->tasks()->reset({t});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("EDIT-1"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("EDIT-1");
+  draft["scheduledAt"] = QDateTime(QDate(2026, 7, 10), QTime(9, 0));
+  draft["dueAt"] = QDateTime(QDate(2026, 7, 10), QTime(9, 0));
+  draft["hasTime"] = true;
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("EDIT-1"));
+  ASSERT_GE(row, 0);
+  const Task& after = app_->tasks()->items().at(row);
+  EXPECT_EQ(after.scheduledAt, QDateTime(QDate(2026, 7, 10), QTime(9, 0)));
+  EXPECT_EQ(after.dueAt, QDateTime(QDate(2026, 7, 10), QTime(9, 0)));
+  EXPECT_TRUE(after.hasTime);
+}
+
+// A caller that only knows a date (an old draft, an import) still works.
+TEST_F(AppControllerTest, ALegacyDeadlineDraftKeyLandsAtMidnight) {
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("OLD-1");
+  draft["title"] = QStringLiteral("bare date");
+  draft["deadline"] = QDate(2026, 7, 8);
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("OLD-1"));
+  ASSERT_GE(row, 0);
+  const Task& t = app_->tasks()->items().at(row);
+  EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
+  EXPECT_FALSE(t.hasTime);
+}
+
+// snoozeDeadline shifts by whole days and keeps the clock time.
+TEST_F(AppControllerTest, SnoozeShiftsBothDatetimesAndKeepsTheTime) {
+  Task t = mkTask(QStringLiteral("SNZ-1"), QStringLiteral("ship"));
+  t.dueAt = QDateTime(QDate(2026, 7, 10), QTime(16, 0));
+  t.scheduledAt = t.dueAt;
+  t.hasTime = true;
+  app_->tasks()->reset({t});
+
+  app_->snoozeDeadline(QStringLiteral("SNZ-1"), 3600);
+
+  const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("SNZ-1")));
+  EXPECT_EQ(after.dueAt, QDateTime(QDate(2026, 7, 11), QTime(16, 0)));
+  EXPECT_EQ(after.scheduledAt, QDateTime(QDate(2026, 7, 11), QTime(16, 0)));
+}
+
+// ─── Pulled labels (HEAP-124) ───
+
+TEST_F(AppControllerTest, PulledIssueLabelsArePersistedOntoTheTask) {
+  heap::integrations::ExternalTask issue;
+  issue.providerId = QStringLiteral("github");
+  issue.externalId = QStringLiteral("68");
+  issue.url = QStringLiteral("https://github.com/sectapunterx/heap/issues/68");
+  issue.title = QStringLiteral("Portable build misses a DLL");
+  issue.status = QStringLiteral("open");
+  issue.labels = {QStringLiteral("bug"), QStringLiteral("windows")};
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("github-68"));
+  ASSERT_GE(row, 0);
+  const Task& t = app_->tasks()->items().at(row);
+  ASSERT_EQ(t.labels.size(), 2);
+  EXPECT_EQ(t.labels.at(0).id, QStringLiteral("bug"));
+  EXPECT_EQ(t.labels.at(1).id, QStringLiteral("windows"));
+  EXPECT_EQ(t.externalProvider, QStringLiteral("github"));
+
+  // …and they survive a save/reload of the editor draft.
+  QVariantMap draft = app_->taskById(QStringLiteral("github-68"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-68");
+  app_->saveTask(draft);
+  const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-68")));
+  ASSERT_EQ(after.labels.size(), 2);
+  EXPECT_EQ(after.labels.at(0).id, QStringLiteral("bug"));
+}
+
+// Regression (HEAP-104 review): a label the user adds locally to a synced task
+// must survive the next pull. Sync used to clear() every label and re-add only
+// the tracker's, silently deleting user-authored chips on each sync.
+TEST_F(AppControllerTest, SyncPreservesUserAddedLocalLabels) {
+  heap::integrations::ExternalTask issue;
+  issue.providerId = QStringLiteral("github");
+  issue.externalId = QStringLiteral("68");
+  issue.url = QStringLiteral("https://github.com/sectapunterx/heap/issues/68");
+  issue.title = QStringLiteral("Portable build misses a DLL");
+  issue.status = QStringLiteral("open");
+  issue.labels = {QStringLiteral("bug")};
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  // The user adds a local chip the tracker knows nothing about.
+  QVariantMap draft = app_->taskById(QStringLiteral("github-68"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-68");
+  draft["labels"] =
+      QVariantList{QVariantMap{{QStringLiteral("id"), QStringLiteral("bug")}, {QStringLiteral("color"), QString()}},
+                   QVariantMap{{QStringLiteral("id"), QStringLiteral("urgent")}, {QStringLiteral("color"), QStringLiteral("#e6624c")}}};
+  app_->saveTask(draft);
+
+  // A second sync of the same issue — the tracker still only reports "bug".
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  const Task& after = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-68")));
+  QStringList ids;
+  for(const Label& l : after.labels) {
+    ids << l.id;
+  }
+  EXPECT_TRUE(ids.contains(QStringLiteral("urgent"))) << "sync wiped the user-added label";
+  EXPECT_TRUE(ids.contains(QStringLiteral("bug")));
+}
+
+TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("EST-1");
+  draft["title"] = QStringLiteral("plan the epic");
+  draft["estimateMinutes"] = 480;
+  draft["someday"] = true;
+  draft["labels"] = QVariantList{QStringLiteral("infra")};
+  app_->saveTask(draft);
+
+  const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("EST-1")));
+  EXPECT_EQ(t.estimateMinutes, 480);
+  EXPECT_TRUE(t.someday);
+  ASSERT_EQ(t.labels.size(), 1);
+  EXPECT_EQ(t.labels.at(0).id, QStringLiteral("infra"));
+}
+
+// The epic-level contract (HEAP-104): "review PR tomorrow 3pm" keeps its 3pm
+// through capture, an edit of the existing task, save, reload and export.
+TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
+  const QDateTime reference(QDate(2026, 7, 9), QTime(10, 0));
+  const QVariantMap parsed = app_->parseDateTime(QStringLiteral("review PR tomorrow 3pm"), reference);
+  ASSERT_TRUE(parsed.value(QStringLiteral("ok")).toBool());
+  ASSERT_TRUE(parsed.value(QStringLiteral("hasTime")).toBool());
+  const QDateTime at = parsed.value(QStringLiteral("start")).toDateTime();
+  ASSERT_EQ(at, QDateTime(QDate(2026, 7, 10), QTime(15, 0)));
+
+  // Capture, exactly as QuickCapturePopup does.
+  QVariantMap draft = app_->newQuickTaskDraft();
+  draft["_isNew"] = true;
+  draft["title"] = QStringLiteral("review PR");
+  draft["scheduledAt"] = at;
+  draft["dueAt"] = at;
+  draft["hasTime"] = true;
+  app_->saveTask(draft);
+  const QString id = draft.value("id").toString();
+
+  // Edit the existing task without touching the time (the old isNew guard's bug).
+  QVariantMap edit = app_->taskById(id);
+  edit["_isNew"] = false;
+  edit["_originalId"] = id;
+  edit["title"] = QStringLiteral("review PR (urgent)");
+  app_->saveTask(edit);
+
+  const Task& afterEdit = app_->tasks()->items().at(app_->tasks()->indexOfId(id));
+  EXPECT_EQ(afterEdit.dueAt, at) << "the edit dropped the clock time";
+  EXPECT_TRUE(afterEdit.hasTime);
+
+  // Save, then reload from disk in a fresh controller.
+  app_->flushSave();
+  {
+    AppController reloaded;
+    const int row = reloaded.tasks()->indexOfId(id);
+    ASSERT_GE(row, 0);
+    const Task& t = reloaded.tasks()->items().at(row);
+    EXPECT_EQ(t.dueAt, at) << "the clock time did not survive a reload";
+    EXPECT_EQ(t.scheduledAt, at);
+    EXPECT_TRUE(t.hasTime);
+  }
+
+  // Export carries it too.
+  const QString exported = app_->exportActiveProfileJson();
+  EXPECT_TRUE(exported.contains(QStringLiteral("2026-07-10T15:00:00"))) << exported.left(400).toStdString();
+}
 
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");

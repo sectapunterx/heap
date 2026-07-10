@@ -10,6 +10,7 @@ Item {
     readonly property real pxPerMin: Theme.hourH / 60.0
 
     signal eventClicked(string id)
+    signal taskClicked(string id)
 
     function snapHour(h)  {
         const step = Math.max(1, Theme.snapMinutes) / 60.0;
@@ -99,18 +100,41 @@ Item {
         _overlap = map;
     }
 
+    // ── Task blocks vs. their meeting events ──────────────────────────
+    // A "sync" capture creates both a task (with a scheduled time, HEAP-115)
+    // and a meeting event linked back to it via taskId. The event is the
+    // richer representation (attendees, duration), so the task's own block is
+    // suppressed on any day where a linked event already stands in for it —
+    // otherwise the same "синк с @hb" draws twice. Keyed by task id, recomputed
+    // with the overlaps on every events-model or day change.
+    property var _linkedTaskIds: ({})
+    function _recomputeLinkedTasks() {
+        const d = AppController.selectedDate;
+        const m = AppController.events;
+        const map = {};
+        for (let i = 0; i < m.rowCount(); i++) {
+            const idx = m.index(i, 0);
+            const ed = m.data(idx, Qt.UserRole + 7);   // DateRole
+            if (!root.isSameDay(ed, d)) continue;
+            const tid = String(m.data(idx, Qt.UserRole + 8) || "");  // TaskIdRole
+            if (tid.length > 0) map[tid] = true;
+        }
+        _linkedTaskIds = map;
+    }
+    function _recomputeDay() { _recountEventsToday(); _recomputeOverlaps(); _recomputeLinkedTasks(); }
+
     Connections {
         target: AppController.events
-        function onRowsInserted() { root._recountEventsToday(); root._recomputeOverlaps() }
-        function onRowsRemoved()  { root._recountEventsToday(); root._recomputeOverlaps() }
-        function onDataChanged()  { root._recountEventsToday(); root._recomputeOverlaps() }
-        function onModelReset()   { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onRowsInserted() { root._recomputeDay() }
+        function onRowsRemoved()  { root._recomputeDay() }
+        function onDataChanged()  { root._recomputeDay() }
+        function onModelReset()   { root._recomputeDay() }
     }
     Connections {
         target: AppController
-        function onSelectedDateChanged() { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onSelectedDateChanged() { root._recomputeDay() }
     }
-    Component.onCompleted: { _recountEventsToday(); _recomputeOverlaps() }
+    Component.onCompleted: root._recomputeDay()
 
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
@@ -558,6 +582,61 @@ Item {
                                         evRect.pendingEndH = NaN;
                                     }
                                     onCanceled: { resizing = false; evRect.pendingEndH = NaN; }
+                                }
+                            }
+                        }
+
+                        // Layer 3b: tasks scheduled at a clock time (HEAP-115).
+                        // Before this, the only way a task's parsed time reached
+                        // the day view was a side focus-block event; now the
+                        // task's own scheduledAt puts it here.
+                        Repeater {
+                            model: AppController.tasks
+                            Rectangle {
+                                id: taskBlock
+                                required property string id
+                                required property string title
+                                objectName: "taskblock-" + id
+                                required property var scheduledAt
+                                required property bool hasTime
+                                required property bool archived
+                                required property string status
+
+                                readonly property real startHour: hasTime && scheduledAt && scheduledAt.getHours
+                                    ? scheduledAt.getHours() + scheduledAt.getMinutes() / 60.0
+                                    : -1
+
+                                visible: !archived && status !== "done" && startHour >= 0
+                                         && root.isSameDay(scheduledAt, AppController.selectedDate)
+                                         && !root._linkedTaskIds[id]
+                                x: 0
+                                y: (startHour - root.hoursStart) * Theme.hourH
+                                width: Math.max(20, parent.width * 0.5 - 3)
+                                height: Theme.hourH - 2
+                                radius: 6
+                                color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.18 : 0.10)
+                                border.color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.9 : 0.5)
+                                border.width: 1
+                                z: 4
+
+                                Text {
+                                    anchors.fill: parent
+                                    anchors.margins: 6
+                                    text: "▸ " + taskBlock.title
+                                    color: Theme.text
+                                    font.pixelSize: 11
+                                    elide: Text.ElideRight
+                                }
+
+                                // The block carried no MouseArea, so a click on it was
+                                // swallowed and the task never opened. Clicks must not
+                                // reach the create-an-event area underneath either.
+                                MouseArea {
+                                    id: openArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.taskClicked(taskBlock.id)
                                 }
                             }
                         }

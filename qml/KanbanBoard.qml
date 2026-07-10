@@ -358,6 +358,11 @@ Item {
                                 // outer hscroll: instant drag on cards.
                                 pressDelay: 0
 
+                                // Draggable thumb for tall columns — mouse wheel
+                                // already scrolls (WheelHandler below); this adds
+                                // a grabbable bar when a column overflows.
+                                ScrollBar.vertical: ThinScrollBar {}
+
                                 // Wheel scrolls this column vertically. When the column
                                 // has no overflow or is already at the top/bottom edge,
                                 // event.accepted = false lets the outer board scroll
@@ -420,6 +425,9 @@ Item {
                                             required property int    trackedSeconds
                                             required property bool   isTiming
                                             required property string recurrence
+                                            required property var    labels
+                                            required property var    dueAt
+                                            required property bool   hasTime
                                             width: bodyCol.width
 
                                             readonly property var taskData: ({
@@ -431,7 +439,8 @@ Item {
                                                 gitAhead: tc.gitAhead, gitBehind: tc.gitBehind,
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
-                                                recurrence: tc.recurrence
+                                                recurrence: tc.recurrence,
+                                                labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime
                                             })
                                             task: taskData
                                             scheduled: root.scheduleMap[tc.id] || ""

@@ -35,7 +35,11 @@ Popup {
         statusBox.currentIndex = Math.max(0, statusList().indexOf(draft.status));
         priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(draft.priority || "P2"));
         branchField.text = draft.branch || "";
-        deadlineField.text = formatDate(draft.deadline);
+        deadlineField.text = formatWhen(draft.dueAt, draft.hasTime);
+        scheduledField.text = formatWhen(draft.scheduledAt, draft.hasTime);
+        labelsField.text = labelsToText(draft.labels);
+        estimateField.text = draft.estimateMinutes > 0 ? String(draft.estimateMinutes) : "";
+        somedayBox.checked = !!draft.someday;
         recurBox.currentIndex = Math.max(0, recurBox._vals.indexOf(draft.recurrence || ""));
         open();
         // Kick a one-shot PR/state refresh for this task's branch across all
@@ -63,13 +67,54 @@ Popup {
         return d.getFullYear() + "-" + (d.getMonth() + 1).toString().padStart(2, "0") + "-" + d.getDate().toString().padStart(2, "0");
     }
 
+    // Renders a stored datetime back into the field. The clock part is only
+    // shown when the task actually carries one — a bare date must not come back
+    // as "… 00:00" and turn itself into a timed task on the next save.
+    function formatWhen(d, hasTime) {
+        if (!d || !d.getFullYear || isNaN(d.getTime())) return "";
+        const iso = formatDate(d);
+        if (!hasTime) return iso;
+        return iso + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+    }
+
+    // "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" — the shape formatWhen writes back into
+    // the field, parsed without going through the natural-language parser.
+    readonly property var _isoRe: /^(\d{4})-(\d{1,2})-(\d{1,2})(?:[ T](\d{1,2}):(\d{2}))?$/
+
     function parseDate(s) {
         if (!s) return undefined;
         const r = AppController.parseDateTime(s, new Date());
         if (r && r.ok && r.start) return r.start;
-        const parts = s.split("-");
-        if (parts.length !== 3) return undefined;
-        return new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2]));
+        const m = root._isoRe.exec(s.trim());
+        if (!m) return undefined;
+        return new Date(parseInt(m[1]), parseInt(m[2]) - 1, parseInt(m[3]),
+                        m[4] ? parseInt(m[4]) : 0, m[5] ? parseInt(m[5]) : 0);
+    }
+
+    // Does this field carry a clock time, as opposed to a bare date?
+    function parseHasTime(s) {
+        if (!s) return false;
+        const r = AppController.parseDateTime(s, new Date());
+        if (r && r.ok) return !!r.hasTime;
+        const m = root._isoRe.exec(s.trim());
+        return !!(m && m[4]);
+    }
+
+    function labelsToText(labels) {
+        if (!labels || !labels.length) return "";
+        const out = [];
+        for (let i = 0; i < labels.length; ++i) out.push(labels[i].id);
+        return out.join(", ");
+    }
+
+    function labelsFromText(s) {
+        const out = [];
+        const parts = (s || "").split(",");
+        for (let i = 0; i < parts.length; ++i) {
+            const id = parts[i].trim();
+            if (id.length > 0) out.push(id);
+        }
+        return out;
     }
 
     property var _deadlinePreview: ({ok: false})
@@ -283,7 +328,8 @@ Popup {
                     onEditingFinished: {
                         if (root._deadlinePreview && root._deadlinePreview.ok &&
                             root._deadlinePreview.start) {
-                            text = root.formatDate(root._deadlinePreview.start);
+                            text = root.formatWhen(root._deadlinePreview.start,
+                                                   root._deadlinePreview.hasTime);
                         }
                     }
                     ToolTip.visible: hovered && text.length > 0 &&
@@ -390,6 +436,50 @@ Popup {
                 }
             }
             Item {}
+
+            FieldLabel { text: "SCHEDULED" }
+            FieldLabel { text: "ESTIMATE (MIN)" }
+            TextField {
+                id: scheduledField
+                Layout.fillWidth: true
+                placeholderText: I18n.t("editor.ph.deadline")
+                font.family: Theme.fontMono
+                background: FieldBg {}
+                color: Theme.text
+                placeholderTextColor: Theme.textDim
+            }
+            TextField {
+                id: estimateField
+                Layout.fillWidth: true
+                placeholderText: "45"
+                font.family: Theme.fontMono
+                validator: IntValidator { bottom: 0; top: 100000 }
+                background: FieldBg {}
+                color: Theme.text
+                placeholderTextColor: Theme.textDim
+            }
+
+            FieldLabel { text: "LABELS" }
+            FieldLabel { text: "" }
+            TextField {
+                id: labelsField
+                Layout.fillWidth: true
+                placeholderText: "backlog, infra"
+                background: FieldBg {}
+                color: Theme.text
+                placeholderTextColor: Theme.textDim
+            }
+            CheckBox {
+                id: somedayBox
+                text: "Someday"
+                contentItem: Text {
+                    text: somedayBox.text
+                    color: Theme.text
+                    font.pixelSize: 12
+                    leftPadding: somedayBox.indicator.width + 6
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
         }
 
         RowLayout {
@@ -430,6 +520,15 @@ Popup {
                     const inlineDesc   = meta.desc;
                     const handleNames  = root._resolvePeopleNames(meta.handles);
 
+                    // Due and scheduled are typed independently; a task with only
+                    // a due date is scheduled for that day, which is what the
+                    // single deadline field always meant.
+                    const dueAt = root.parseDate(deadlineField.text);
+                    const schedTyped = root.parseDate(scheduledField.text);
+                    const scheduledAt = schedTyped || dueAt;
+                    const hasTime = root.parseHasTime(scheduledField.text)
+                                 || root.parseHasTime(deadlineField.text);
+
                     const d = {
                         _isNew: root.isNew,
                         // Pass the original id alongside the (possibly edited)
@@ -446,15 +545,19 @@ Popup {
                               : descField.text,
                         priority: priBox.currentText,
                         status: root.statusList()[statusBox.currentIndex],
-                        deadline: root.parseDate(deadlineField.text),
+                        scheduledAt: scheduledAt,
+                        dueAt: dueAt,
+                        hasTime: hasTime,
                         branch: branchField.text,
-                        recurrence: recurBox._vals[recurBox.currentIndex] || ""
+                        recurrence: recurBox._vals[recurBox.currentIndex] || "",
+                        labels: root.labelsFromText(labelsField.text),
+                        estimateMinutes: parseInt(estimateField.text || "0") || 0,
+                        someday: somedayBox.checked
                     };
                     AppController.saveTask(d);
-                    // Same classification rules as QuickCapturePopup — only
-                    // surface the parsed time on the calendar when the user
-                    // hinted at an event kind. "ticket"/"задача" wins over
-                    // everything (pure todo, never schedule).
+                    // The parsed clock time now lives on the task itself, so a
+                    // focus block is no longer needed to keep it. A "sync" still
+                    // means a meeting, and a meeting is a calendar event.
                     if (root.isNew
                         && root._deadlinePreview && root._deadlinePreview.ok
                         && root._deadlinePreview.hasTime
@@ -463,32 +566,26 @@ Popup {
                             (titleField.text || "") + " "
                           + (descField.text || "") + " "
                           + (deadlineField.text || ""));
-                        if (kind !== "ticket") {
-                            const dt = root._deadlinePreview.start;
+                        const dt = root._deadlinePreview.start;
+                        if (kind === "sync") {
                             const startHour = dt.getHours() + dt.getMinutes() / 60.0;
-                            if (kind === "focus") {
-                                AppController.scheduleTask(d.id, startHour, dt);
-                                AppController.selectedDate = dt;
-                            } else if (kind === "sync") {
-                                // Honour parsed range "12:00-13:00", else 30m.
-                                let endHour = startHour + 0.5;
-                                const pe = root._deadlinePreview.end;
-                                if (pe && pe.getTime && pe.getTime() > 0) {
-                                    const eh = pe.getHours() + pe.getMinutes() / 60.0;
-                                    if (eh > startHour) endHour = eh;
-                                }
-                                const ev = AppController.newEventDraft(startHour, dt);
-                                ev.type      = "sync";
-                                ev.title     = (cleanedTitle || "").substring(0, 40);
-                                ev.end       = endHour;
-                                ev.taskId    = d.id;
-                                ev.date      = dt;
-                                ev.attendees = handleNames.join(", ");
-                                AppController.saveEvent(ev);
-                                AppController.selectedDate = dt;
+                            // Honour parsed range "12:00-13:00", else 30m.
+                            let endHour = startHour + 0.5;
+                            const pe = root._deadlinePreview.end;
+                            if (pe && pe.getTime && pe.getTime() > 0) {
+                                const eh = pe.getHours() + pe.getMinutes() / 60.0;
+                                if (eh > startHour) endHour = eh;
                             }
-                            // kind === "none" → keep deadline date only.
+                            const ev = AppController.newEventDraft(startHour, dt);
+                            ev.type      = "sync";
+                            ev.title     = (cleanedTitle || "").substring(0, 40);
+                            ev.end       = endHour;
+                            ev.taskId    = d.id;
+                            ev.date      = dt;
+                            ev.attendees = handleNames.join(", ");
+                            AppController.saveEvent(ev);
                         }
+                        if (kind !== "ticket") AppController.selectedDate = dt;
                     }
                     root.close();
                 }

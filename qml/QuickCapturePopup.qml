@@ -103,6 +103,13 @@ Popup {
     }
 
     function _submit() {
+        // Recompute from the CURRENT text before reading anything. _meta/_title/
+        // _preview are otherwise only refreshed on an 80ms debounce, so hitting
+        // Enter right after typing (or after the mention popup rewrote the field)
+        // submits stale values: the "// comment" tail is dropped, and the parsed
+        // time/handles can lag a keystroke behind. Refreshing here makes submit a
+        // pure function of what is on screen.
+        _refreshPreview();
         if (_title.length === 0) return;
 
         // ── Contact-ping path ──
@@ -152,8 +159,12 @@ Popup {
         if (_meta && _meta.desc && _meta.desc.length > 0) {
             draft.desc = _meta.desc;
         }
+        // The parsed datetime lands on the task itself — including the clock
+        // time, which used to survive only as a side calendar block (HEAP-115).
         if (_preview && _preview.ok && _preview.start) {
-            draft.deadline = _preview.start;
+            draft.scheduledAt = _preview.start;
+            draft.dueAt = _preview.start;
+            draft.hasTime = !!_preview.hasTime;
         }
         // Persist a parsed recurrence ("every weekday…") so completing the task
         // regenerates it (HEAP-77).
@@ -162,9 +173,10 @@ Popup {
         }
         AppController.saveTask(draft);
 
-        // Calendar entry rules:
+        // Calendar entry rules. A parsed time is already stored on the task and
+        // shows up on the Day view, so only a meeting still needs an event:
         //  - "ticket"/"задача" → never schedule (pure todo item)
-        //  - "focus"           → focus block (deep-work, left column on calendar)
+        //  - "focus"           → the task's own scheduled time is the block
         //  - "sync"/"созвон"   → meeting on calendar (right column with созвоны)
         //  - none of the above → no calendar entry even if a time was parsed
         const noTime = !(_preview && _preview.ok && _preview.hasTime && _preview.start);
@@ -178,7 +190,6 @@ Popup {
         const startHour = d.getHours() + d.getMinutes() / 60.0;
 
         if (kind === "focus") {
-            AppController.scheduleTask(draft.id, startHour, d);
             AppController.selectedDate = d;
         } else if (kind === "sync") {
             // Honour parsed range "12:00-13:00", else default 30 min.
@@ -196,6 +207,12 @@ Popup {
             ev.taskId    = draft.id;
             ev.date      = d;
             ev.attendees = attendees;
+            // The "// comment" tail rides along onto the meeting itself, not
+            // just the linked task — it lands in the event's free-form context
+            // so the note shows up on the calendar block too.
+            if (_meta && _meta.desc && _meta.desc.length > 0) {
+                ev.context = _meta.desc;
+            }
             AppController.saveEvent(ev);
             AppController.selectedDate = d;
         }
@@ -237,6 +254,7 @@ Popup {
 
         TextField {
             id: inputField
+            objectName: "qc-input"
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
             placeholderText: I18n.t("quick.fieldPh")
             font.pixelSize: 14
