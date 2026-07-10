@@ -68,6 +68,56 @@ TestCase {
         compare(AppController.focusedStatus, "blocked");
     }
 
+    // DayCalendar: a task scheduled at a clock time renders a block in the grid,
+    // and clicking it opens the task. The block shipped as a bare Rectangle, so
+    // the click was swallowed and nothing happened (HEAP-115 regression). The
+    // second compare pins the other half: the click must not reach the
+    // create-an-event MouseArea layered underneath.
+    //
+    // Event rectangles are stacked above task blocks and would eat the click, so
+    // the probe day is emptied of events first. Test-mode AppDataLocation is not
+    // wiped between runs, so a leftover event on that day is a real hazard.
+    function test_daycalendar_click_task_block() {
+        const day = new Date();
+        day.setDate(day.getDate() + 400);
+        day.setHours(0, 0, 0, 0);
+
+        const evs = AppController.events;
+        for (let i = evs.rowCount() - 1; i >= 0; i--) {
+            const idx = evs.index(i, 0);
+            const d = evs.data(idx, Qt.UserRole + 7);   // date role
+            if (d && d.getFullYear
+                && d.getFullYear() === day.getFullYear()
+                && d.getMonth() === day.getMonth()
+                && d.getDate() === day.getDate())
+                AppController.deleteEvent(String(evs.data(idx, Qt.UserRole + 1)));
+        }
+
+        const at = new Date(day);
+        at.setHours(AppController.workdayStart, 0, 0, 0);
+
+        const draft = AppController.newTaskDraft("todo");
+        draft.title = "day-block click probe";
+        draft.scheduledAt = at;
+        draft.dueAt = at;
+        draft.hasTime = true;
+        AppController.saveTask(draft);
+
+        AppController.selectedDate = day;
+        const dc = make('import TodoCpp; DayCalendar { anchors.fill: parent }');
+        const block = findChild(dc, "taskblock-" + draft.id);
+        verify(block !== null, "scheduled task did not render a day-grid block");
+
+        let got = "";
+        dc.taskClicked.connect(function(tid) { got = tid; });
+        const eventsBefore = evs.rowCount();
+
+        mouseClick(block);
+
+        compare(got, draft.id);
+        compare(evs.rowCount(), eventsBefore);
+    }
+
     // SideRail: clicking Code Review focuses the review column.
     function test_siderail_click_review() {
         AppController.currentView = "week";

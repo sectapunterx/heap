@@ -400,6 +400,7 @@ ApplicationWindow {
                         SplitView.fillHeight: true
                         SplitView.minimumHeight: 120
                         onEventClicked: (id) => eventEditor.showForId(id)
+                        onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                     }
                     PeopleList {
                         SplitView.preferredHeight: 220

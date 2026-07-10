@@ -10,6 +10,7 @@ Item {
     readonly property real pxPerMin: Theme.hourH / 60.0
 
     signal eventClicked(string id)
+    signal taskClicked(string id)
 
     function snapHour(h)  {
         const step = Math.max(1, Theme.snapMinutes) / 60.0;
@@ -572,6 +573,7 @@ Item {
                                 id: taskBlock
                                 required property string id
                                 required property string title
+                                objectName: "taskblock-" + id
                                 required property var scheduledAt
                                 required property bool hasTime
                                 required property bool archived
@@ -588,8 +590,8 @@ Item {
                                 width: Math.max(20, parent.width * 0.5 - 3)
                                 height: Theme.hourH - 2
                                 radius: 6
-                                color: Theme.withAlpha(Theme.eventColor("focus"), 0.10)
-                                border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.5)
+                                color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.18 : 0.10)
+                                border.color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.9 : 0.5)
                                 border.width: 1
                                 z: 4
 
@@ -600,6 +602,17 @@ Item {
                                     color: Theme.text
                                     font.pixelSize: 11
                                     elide: Text.ElideRight
+                                }
+
+                                // The block carried no MouseArea, so a click on it was
+                                // swallowed and the task never opened. Clicks must not
+                                // reach the create-an-event area underneath either.
+                                MouseArea {
+                                    id: openArea
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.taskClicked(taskBlock.id)
                                 }
                             }
                         }
