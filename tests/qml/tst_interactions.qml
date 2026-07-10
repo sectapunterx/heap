@@ -169,6 +169,42 @@ TestCase {
         verify(!block.visible, "task block must be hidden once a linked meeting event exists");
     }
 
+    // QuickCapture "sync": one task + one linked meeting event, and the "// …"
+    // tail lands on the task description. Reproduces two reported bugs:
+    //   (a) the day view showed both the meeting event AND the task's own block
+    //       (the event's taskId must match the task id so the block is hidden);
+    //   (b) the "// comment" was dropped instead of saved to desc.
+    function test_quickcapture_sync_links_event_and_saves_comment() {
+        const tasks = AppController.tasks;
+        const evs   = AppController.events;
+        const tasksBefore = tasks.rowCount();
+        const evsBefore   = evs.rowCount();
+
+        const qc = make('import TodoCpp; QuickCapturePopup {}');
+        const input = findChild(qc, "qc-input");
+        verify(input !== null, "qc-input not found");
+
+        // No explicit _refreshPreview(): _submit() must recompute from the
+        // current text itself. Before that fix, the debounced _meta/_preview are
+        // still at their defaults here, so submit dropped the comment (and could
+        // create an unlinked event / no task at all).
+        input.text = "синк с @hb в 16:00 // обсудить релиз";
+        qc._submit();
+
+        compare(tasks.rowCount(), tasksBefore + 1, "expected exactly one new task");
+        compare(evs.rowCount(),   evsBefore + 1,   "expected exactly one meeting event");
+
+        const tIdx = tasks.index(tasks.rowCount() - 1, 0);
+        const taskId = String(tasks.data(tIdx, Qt.UserRole + 1));  // IdRole
+        const desc   = String(tasks.data(tIdx, Qt.UserRole + 3));  // DescRole
+
+        compare(desc, "обсудить релиз", "the // comment was not saved to the task desc");
+
+        const eIdx = evs.index(evs.rowCount() - 1, 0);
+        const evTaskId = String(evs.data(eIdx, Qt.UserRole + 8));  // TaskIdRole
+        compare(evTaskId, taskId, "meeting event not linked to task → day block duplicates it");
+    }
+
     // SideRail: clicking Code Review focuses the review column.
     function test_siderail_click_review() {
         AppController.currentView = "week";

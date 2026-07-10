@@ -103,6 +103,13 @@ Popup {
     }
 
     function _submit() {
+        // Recompute from the CURRENT text before reading anything. _meta/_title/
+        // _preview are otherwise only refreshed on an 80ms debounce, so hitting
+        // Enter right after typing (or after the mention popup rewrote the field)
+        // submits stale values: the "// comment" tail is dropped, and the parsed
+        // time/handles can lag a keystroke behind. Refreshing here makes submit a
+        // pure function of what is on screen.
+        _refreshPreview();
         if (_title.length === 0) return;
 
         // ── Contact-ping path ──
@@ -241,6 +248,7 @@ Popup {
 
         TextField {
             id: inputField
+            objectName: "qc-input"
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
             placeholderText: I18n.t("quick.fieldPh")
             font.pixelSize: 14
