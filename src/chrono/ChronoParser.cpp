@@ -458,8 +458,8 @@ class ChronoParser::Impl {
                   int bLast,
                   const ChronoLocale* primary,
                   const ChronoLocale* fallback) const {
-    int lo;
-    int hi;
+    int lo = 0;
+    int hi = 0;
     if(aLast < bFirst) {
       lo = aLast + 1;
       hi = bFirst - 1;
@@ -501,9 +501,9 @@ class ChronoParser::Impl {
   bool tryNumericDate(const QVector<Token>& toks, int i, DateMatch& out) const {
     if(i + 4 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
        toks[i + 2].kind == TokenKind::Number && toks[i + 3].kind == TokenKind::Dash && toks[i + 4].kind == TokenKind::Number) {
-      int a = toks[i].value;
-      int b = toks[i + 2].value;
-      int c = toks[i + 4].value;
+      const int a = toks[i].value;
+      const int b = toks[i + 2].value;
+      const int c = toks[i + 4].value;
       QDate d;
       if(toks[i].len == 4) {
         d = QDate(a, b, c);  // YYYY-MM-DD
@@ -569,8 +569,8 @@ class ChronoParser::Impl {
   QDate makeSlashDate(int a, int b, int year, bool dotted) const {
     // dotted: D.M (European convention always)
     // slashed: M/D or D/M based on user locale
-    int day;
-    int month;
+    int day = 0;
+    int month = 0;
     if(a > 12) {
       day = a;
       month = b;
