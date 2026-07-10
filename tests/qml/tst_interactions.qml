@@ -209,6 +209,26 @@ TestCase {
         compare(evContext, "обсудить релиз", "the // comment must also ride onto the sync event context");
     }
 
+    // TaskEditor: ticking "Someday" files the task under Backlog — the status
+    // box flips to Backlog immediately as feedback (saveTask enforces it too).
+    function test_taskeditor_someday_files_under_backlog() {
+        const te = make('import TodoCpp; TaskEditor {}');
+        const someday = findChild(te, "te-someday");
+        const status  = findChild(te, "te-status");
+        verify(someday !== null, "te-someday not found");
+        verify(status !== null,  "te-status not found");
+
+        // Backlog is a default column; find its index in the status box.
+        const sts = AppController.statuses;
+        let backlogIdx = -1;
+        for (let i = 0; i < sts.length; ++i) if (sts[i].id === "backlog") { backlogIdx = i; break; }
+        verify(backlogIdx >= 0, "expected a default backlog column");
+
+        status.currentIndex = (backlogIdx + 1) % sts.length;  // anything but backlog
+        someday.checked = true;
+        compare(status.currentIndex, backlogIdx, "ticking Someday must move the status box to Backlog");
+    }
+
     // SideRail: clicking Code Review focuses the review column.
     function test_siderail_click_review() {
         AppController.currentView = "week";

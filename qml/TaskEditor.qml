@@ -274,6 +274,7 @@ Popup {
             }
             ComboBox {
                 id: statusBox
+                objectName: "te-status"
                 Layout.fillWidth: true
                 model: root.statusNames()
                 background: FieldBg {
@@ -469,16 +470,39 @@ Popup {
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }
-            CheckBox {
-                id: somedayBox
-                text: "Someday"
-                contentItem: Text {
-                    text: somedayBox.text
-                    color: Theme.text
-                    font.pixelSize: 12
-                    leftPadding: somedayBox.indicator.width + 6
-                    verticalAlignment: Text.AlignVCenter
+            // Wrapper carries the hint across the whole cell so the meaning is
+            // discoverable on hover, not just over the tiny box.
+            Item {
+                id: somedayWrap
+                Layout.fillWidth: true
+                implicitWidth: somedayBox.implicitWidth
+                implicitHeight: somedayBox.implicitHeight
+
+                CheckBox {
+                    id: somedayBox
+                    objectName: "te-someday"
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    text: "Someday"
+                    // Parking a task as "someday" files it under Backlog. Reflect
+                    // that in the status box immediately; saveTask enforces it too.
+                    onCheckedChanged: if (checked) {
+                        const bi = root.statusList().indexOf("backlog");
+                        if (bi >= 0) statusBox.currentIndex = bi;
+                    }
+                    contentItem: Text {
+                        text: somedayBox.text
+                        color: Theme.text
+                        font.pixelSize: 12
+                        leftPadding: somedayBox.indicator.width + 6
+                        verticalAlignment: Text.AlignVCenter
+                    }
                 }
+
+                HoverHandler { id: somedayHover }
+                ToolTip.visible: somedayHover.hovered
+                ToolTip.delay: 400
+                ToolTip.text: "Park as someday — files this task under Backlog until you pick it up."
             }
         }
 

@@ -630,6 +630,35 @@ TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
   EXPECT_EQ(t.labels.at(0).id, QStringLiteral("infra"));
 }
 
+// A task saved as "someday" is filed under the backlog column, whatever status
+// the editor sent — that is what the checkbox means (parked, not now).
+TEST_F(AppControllerTest, SomedayTaskIsFiledUnderBacklog) {
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("SD-1");
+  draft["title"] = QStringLiteral("park me");
+  draft["status"] = QStringLiteral("prog");  // deliberately not backlog
+  draft["someday"] = true;
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("SD-1"));
+  ASSERT_GE(row, 0);
+  const Task& t = app_->tasks()->items().at(row);
+  EXPECT_EQ(t.status, QStringLiteral("backlog")) << "a someday task must land in the backlog";
+  EXPECT_TRUE(t.someday);
+
+  // Clearing someday leaves the status alone (no forced move back).
+  QVariantMap edit = app_->taskById(QStringLiteral("SD-1"));
+  edit["_isNew"] = false;
+  edit["_originalId"] = QStringLiteral("SD-1");
+  edit["status"] = QStringLiteral("todo");
+  edit["someday"] = false;
+  app_->saveTask(edit);
+  const Task& t2 = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("SD-1")));
+  EXPECT_FALSE(t2.someday);
+  EXPECT_EQ(t2.status, QStringLiteral("todo")) << "un-parking must not force a column";
+}
+
 // The epic-level contract (HEAP-104): "review PR tomorrow 3pm" keeps its 3pm
 // through capture, an edit of the existing task, save, reload and export.
 TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {

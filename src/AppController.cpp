@@ -930,6 +930,17 @@ void AppController::saveTask(const QVariantMap& draft) {
     }
   }
 
+  // A task parked as "someday" belongs in the backlog — send it there whenever
+  // the board still has a backlog column (users may rename or drop columns).
+  if(t.someday && t.status != QStringLiteral("backlog")) {
+    for(const auto& v : m_statuses) {
+      if(v.toMap().value("id").toString() == QStringLiteral("backlog")) {
+        t.status = QStringLiteral("backlog");
+        break;
+      }
+    }
+  }
+
   m_tasks.upsert(t);
   if(isNew) {
     emit toast(tr_("task.created").arg(t.id));
