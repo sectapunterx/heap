@@ -358,6 +358,11 @@ Item {
                                 // outer hscroll: instant drag on cards.
                                 pressDelay: 0
 
+                                // Draggable thumb for tall columns — mouse wheel
+                                // already scrolls (WheelHandler below); this adds
+                                // a grabbable bar when a column overflows.
+                                ScrollBar.vertical: ThinScrollBar {}
+
                                 // Wheel scrolls this column vertically. When the column
                                 // has no overflow or is already at the top/bottom edge,
                                 // event.accepted = false lets the outer board scroll
