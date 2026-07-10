@@ -581,3 +581,70 @@ TEST_F(Chrono, SpaceMinuteRequiresTwoDigits) {
     auto r = parserEn.parse("2 weeks", kRef);
     EXPECT_FALSE(r.ok);
 }
+
+// ── Reordered halves: date and time in any order, mention between (HEAP-104) ──
+// A weekday and a clock time may be typed in either order, and a mention or
+// connector may sit between them without breaking the parse.
+TEST_F(Chrono, RuTimeBeforeWeekday) {
+    auto r = parserRu.parse(QString::fromUtf8("13 00 понедельник"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25); EXPECT_TIME(r, 13, 0);
+    EXPECT_TRUE(r.hasTime);
+}
+TEST_F(Chrono, RuColonTimeBeforeWeekday) {
+    auto r = parserRu.parse(QString::fromUtf8("13:00 понедельник"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25); EXPECT_TIME(r, 13, 0);
+}
+TEST_F(Chrono, EnTimeBeforeWeekday) {
+    auto r = parserEn.parse("9:30 friday", kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 22); EXPECT_TIME(r, 9, 30);
+}
+TEST_F(Chrono, EnTimeBeforeRelative) {
+    auto r = parserEn.parse("2pm tomorrow", kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 21); EXPECT_TIME(r, 14, 0);
+}
+TEST_F(Chrono, RuMentionBetweenWeekdayAndTime) {
+    // The @handle extractMeta leaves in the title must not break adjacency.
+    auto r = parserRu.parse(QString::fromUtf8("понедельник @el 13 00"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25); EXPECT_TIME(r, 13, 0);
+}
+TEST_F(Chrono, RuMentionBetweenTimeAndWeekday) {
+    auto r = parserRu.parse(QString::fromUtf8("13 00 @el понедельник"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25); EXPECT_TIME(r, 13, 0);
+}
+TEST_F(Chrono, RuMentionBeforeBothHalves) {
+    auto r = parserRu.parse(QString::fromUtf8("@el понедельник 13 00"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25); EXPECT_TIME(r, 13, 0);
+}
+TEST_F(Chrono, RuAtConnectorBridgedBetweenReordered) {
+    // "в" connector between mention and time is bridged too.
+    auto r = parserRu.parse(QString::fromUtf8("понедельник @el в 13 00"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25); EXPECT_TIME(r, 13, 0);
+}
+TEST_F(Chrono, ReorderedConsumedCoversBothHalves) {
+    // The consumed span brackets both halves (and the noise between) so the
+    // caller strips them together and the mention never lingers in the title.
+    auto r = parserRu.parse(QString::fromUtf8("13 00 понедельник"), kRef);
+    EXPECT_OK(r);
+    EXPECT_EQ(r.consumed, QString::fromUtf8("13 00 понедельник"));
+}
+TEST_F(Chrono, RealWordGapIsNotBridged) {
+    // A real title word between the two halves must NOT be swallowed: the time
+    // is left unparsed rather than eating "отчет".
+    auto r = parserRu.parse(QString::fromUtf8("понедельник отчет 13 00"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25);
+    EXPECT_FALSE(r.hasTime);
+}
+TEST_F(Chrono, NumberGapIsNotBridged) {
+    // A bare number between the halves is content (a ticket id / quantity), not
+    // noise — it must not be absorbed into the consumed datetime span.
+    auto r = parserEn.parse("monday 42 at 3pm", kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25);
+    EXPECT_FALSE(r.hasTime);
+    EXPECT_EQ(r.consumed, QString("monday"));
+}
+TEST_F(Chrono, RuNumberGapIsNotBridged) {
+    auto r = parserRu.parse(QString::fromUtf8("понедельник 42 13 00"), kRef);
+    EXPECT_OK(r); EXPECT_DATE(r, 2026, 5, 25);
+    EXPECT_FALSE(r.hasTime);
+    EXPECT_EQ(r.consumed, QString::fromUtf8("понедельник"));
+}

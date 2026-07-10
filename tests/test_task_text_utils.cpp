@@ -160,6 +160,22 @@ TEST(ExtractMeta, MetaAndDescTogether) {
     EXPECT_EQ(m.handles.at(0), QString("viktor"));
 }
 
+TEST(ExtractMeta, DoubleSlashNoSpaceBefore) {
+    // "//" glued to the end of the body still splits off the comment.
+    const auto m = extractMeta(QStringLiteral("синк понедельник 13 00//lol"));
+    EXPECT_EQ(m.title, QString::fromUtf8("синк понедельник 13 00"));
+    EXPECT_EQ(m.desc, QString("lol"));
+}
+
+TEST(ExtractMeta, DoubleSlashNoSpaceEitherSide) {
+    // No space on either side of "//"; handle before it is still collected.
+    const auto m = extractMeta(QStringLiteral("синк @el//lol"));
+    EXPECT_EQ(m.title, QString::fromUtf8("синк @el"));
+    EXPECT_EQ(m.desc, QString("lol"));
+    ASSERT_EQ(m.handles.size(), 1);
+    EXPECT_EQ(m.handles.at(0), QString("el"));
+}
+
 TEST(ExtractMeta, OnlyComment) {
     const auto m = extractMeta(QStringLiteral("// just a thought"));
     EXPECT_TRUE(m.title.isEmpty());
