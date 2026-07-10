@@ -54,7 +54,7 @@ int lookupHash(const QHash<QString, int>& h, const QString& k, bool* found) {
 
 int lookupHashAny(const QString& k, const QHash<QString, int>& a, const QHash<QString, int>& b, bool* found) {
   bool f1 = false;
-  int v = lookupHash(a, k, &f1);
+  const int v = lookupHash(a, k, &f1);
   if(f1) {
     *found = true;
     return v;
@@ -70,7 +70,7 @@ bool inListAny(const QString& k, const QStringList& a, const QStringList& b) {
 
 class ChronoParser::Impl {
  public:
-  explicit Impl(QLocale loc) : m_loc(loc) {
+  explicit Impl(const QLocale& loc) : m_loc(loc) {
   }
 
   ParseResult parse(const QString& input, const QDateTime& refIn) const {
@@ -79,7 +79,7 @@ class ChronoParser::Impl {
     const ChronoLocale* primary = cyr ? &russianLocale() : &englishLocale();
     const ChronoLocale* fallback = cyr ? &englishLocale() : &russianLocale();
 
-    ChronoTokenizer tk;
+    const ChronoTokenizer tk;
     auto toks = tk.tokenize(input);
 
     // ── Primary pass ──
@@ -96,7 +96,7 @@ class ChronoParser::Impl {
       if(t.kind == TokenKind::Punct) {
         continue;
       }
-      FromMatch m = tryFromEx(toks, start, ref, primary, fallback);
+      const FromMatch m = tryFromEx(toks, start, ref, primary, fallback);
       if(m.ok) {
         best = m;
         break;
@@ -117,7 +117,8 @@ class ChronoParser::Impl {
     // phrases are never swallowed.
     if(best.hasExplicitDate && !best.hasTime) {
       TimeMatch tm;
-      int tFirst = -1, tLast = -1;
+      int tFirst = -1;
+      int tLast = -1;
       if(findTimeOutside(toks, best.dateFirst, best.dateLast, primary, fallback, tm, tFirst, tLast) &&
          gapIsNoise(toks, best.dateFirst, best.dateLast, tFirst, tLast, primary, fallback)) {
         best.hasTime = true;
@@ -132,7 +133,8 @@ class ChronoParser::Impl {
     } else if(!best.hasExplicitDate && best.hasTime) {
       DateMatch dm;
       QString rec;
-      int recF = -1, recL = -1;
+      int recF = -1;
+      int recL = -1;
       if(findDateOutside(toks, best.timeFirst, best.timeLast, ref, primary, fallback, dm, rec, recF, recL) &&
          gapIsNoise(toks, best.timeFirst, best.timeLast, (recF >= 0 ? recF : dm.firstTok), dm.lastTok, primary, fallback)) {
         best.hasExplicitDate = true;
@@ -149,7 +151,7 @@ class ChronoParser::Impl {
   QVector<ParseResult> parseAll(const QString& input, const QDateTime& refIn) const {
     QVector<ParseResult> out;
     QString remaining = input;
-    QDateTime ref = refIn.isValid() ? refIn : QDateTime::currentDateTime();
+    const QDateTime ref = refIn.isValid() ? refIn : QDateTime::currentDateTime();
     int globalOffset = 0;
 
     while(!remaining.isEmpty()) {
@@ -161,7 +163,7 @@ class ChronoParser::Impl {
       r.endOffset += globalOffset;
       out.push_back(r);
       // advance past consumed range
-      int adv = r.endOffset - globalOffset;
+      const int adv = r.endOffset - globalOffset;
       if(adv <= 0) {
         break;
       }
@@ -258,7 +260,8 @@ class ChronoParser::Impl {
     FromMatch out;
     DateMatch dm;
     QString recurrence;
-    int recFirst = -1, recLast = -1;
+    int recFirst = -1;
+    int recLast = -1;
     const bool dateOk = matchDate(toks, i, ref, primary, fallback, dm, recurrence, recFirst, recLast);
 
     TimeMatch tm;
@@ -381,7 +384,8 @@ class ChronoParser::Impl {
       }
       DateMatch cand;
       QString r;
-      int rf = -1, rl = -1;
+      int rf = -1;
+      int rl = -1;
       if(!matchDate(toks, p, ref, primary, fallback, cand, r, rf, rl)) {
         continue;
       }
@@ -454,7 +458,8 @@ class ChronoParser::Impl {
                   int bLast,
                   const ChronoLocale* primary,
                   const ChronoLocale* fallback) const {
-    int lo, hi;
+    int lo;
+    int hi;
     if(aLast < bFirst) {
       lo = aLast + 1;
       hi = bFirst - 1;
@@ -496,7 +501,9 @@ class ChronoParser::Impl {
   bool tryNumericDate(const QVector<Token>& toks, int i, DateMatch& out) const {
     if(i + 4 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
        toks[i + 2].kind == TokenKind::Number && toks[i + 3].kind == TokenKind::Dash && toks[i + 4].kind == TokenKind::Number) {
-      int a = toks[i].value, b = toks[i + 2].value, c = toks[i + 4].value;
+      int a = toks[i].value;
+      int b = toks[i + 2].value;
+      int c = toks[i + 4].value;
       QDate d;
       if(toks[i].len == 4) {
         d = QDate(a, b, c);  // YYYY-MM-DD
@@ -514,8 +521,8 @@ class ChronoParser::Impl {
     // DD.MM[.YYYY]
     if(i + 2 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dot &&
        toks[i + 2].kind == TokenKind::Number) {
-      int day = toks[i].value;
-      int month = toks[i + 2].value;
+      const int day = toks[i].value;
+      const int month = toks[i + 2].value;
       int year = QDate::currentDate().year();
       int last = i + 2;
       if(i + 4 < toks.size() && toks[i + 3].kind == TokenKind::Dot && toks[i + 4].kind == TokenKind::Number) {
@@ -525,7 +532,7 @@ class ChronoParser::Impl {
         }
         last = i + 4;
       }
-      QDate d(year, month, day);
+      const QDate d(year, month, day);
       if(d.isValid()) {
         out.date = d;
         out.firstTok = i;
@@ -537,8 +544,8 @@ class ChronoParser::Impl {
     // D/M[/Y] — slashes
     if(i + 2 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Slash &&
        toks[i + 2].kind == TokenKind::Number) {
-      int a = toks[i].value;
-      int b = toks[i + 2].value;
+      const int a = toks[i].value;
+      const int b = toks[i + 2].value;
       int year = QDate::currentDate().year();
       int last = i + 2;
       if(i + 4 < toks.size() && toks[i + 3].kind == TokenKind::Slash && toks[i + 4].kind == TokenKind::Number) {
@@ -548,7 +555,7 @@ class ChronoParser::Impl {
         }
         last = i + 4;
       }
-      QDate d = makeSlashDate(a, b, year, /*dotted=*/false);
+      const QDate d = makeSlashDate(a, b, year, /*dotted=*/false);
       if(d.isValid()) {
         out.date = d;
         out.firstTok = i;
@@ -562,7 +569,8 @@ class ChronoParser::Impl {
   QDate makeSlashDate(int a, int b, int year, bool dotted) const {
     // dotted: D.M (European convention always)
     // slashed: M/D or D/M based on user locale
-    int day, month;
+    int day;
+    int month;
     if(a > 12) {
       day = a;
       month = b;
@@ -573,7 +581,7 @@ class ChronoParser::Impl {
       day = a;
       month = b;
     } else {
-      bool monthFirst = m_loc.dateFormat(QLocale::ShortFormat).startsWith(QLatin1Char('M'), Qt::CaseInsensitive);
+      const bool monthFirst = m_loc.dateFormat(QLocale::ShortFormat).startsWith(QLatin1Char('M'), Qt::CaseInsensitive);
       if(monthFirst) {
         month = a;
         day = b;
@@ -594,9 +602,9 @@ class ChronoParser::Impl {
     // "22 mayWord"
     if(toks[i].kind == TokenKind::Number && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Word) {
       bool found = false;
-      int m = lookupHashAny(toks[i + 1].lower, primary->monthNames, fallback->monthNames, &found);
+      const int m = lookupHashAny(toks[i + 1].lower, primary->monthNames, fallback->monthNames, &found);
       if(found) {
-        int day = toks[i].value;
+        const int day = toks[i].value;
         int year = QDate::currentDate().year();
         int last = i + 1;
         if(i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Number) {
@@ -606,7 +614,7 @@ class ChronoParser::Impl {
           }
           last = i + 2;
         }
-        QDate d(year, m, day);
+        const QDate d(year, m, day);
         if(d.isValid()) {
           out.date = d;
           out.firstTok = i;
@@ -618,16 +626,16 @@ class ChronoParser::Impl {
     // "mayWord 22 [2026]"
     if(toks[i].kind == TokenKind::Word && i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Number) {
       bool found = false;
-      int m = lookupHashAny(toks[i].lower, primary->monthNames, fallback->monthNames, &found);
+      const int m = lookupHashAny(toks[i].lower, primary->monthNames, fallback->monthNames, &found);
       if(found) {
-        int day = toks[i + 1].value;
+        const int day = toks[i + 1].value;
         int year = QDate::currentDate().year();
         int last = i + 1;
         if(i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Number && toks[i + 2].value >= 1000) {
           year = toks[i + 2].value;
           last = i + 2;
         }
-        QDate d(year, m, day);
+        const QDate d(year, m, day);
         if(d.isValid()) {
           out.date = d;
           out.firstTok = i;
@@ -662,14 +670,14 @@ class ChronoParser::Impl {
       return false;
     }
     bool foundUnit = false;
-    int days = lookupHashAny(toks[i + 2].lower, primary->unitToDays, fallback->unitToDays, &foundUnit);
+    const int days = lookupHashAny(toks[i + 2].lower, primary->unitToDays, fallback->unitToDays, &foundUnit);
     if(!foundUnit) {
       return false;
     }
-    int n = toks[i + 1].value;
+    const int n = toks[i + 1].value;
 
-    bool isMonth = primary->monthUnits.contains(toks[i + 2].lower) || fallback->monthUnits.contains(toks[i + 2].lower);
-    bool isYear = primary->yearUnits.contains(toks[i + 2].lower) || fallback->yearUnits.contains(toks[i + 2].lower);
+    const bool isMonth = primary->monthUnits.contains(toks[i + 2].lower) || fallback->monthUnits.contains(toks[i + 2].lower);
+    const bool isYear = primary->yearUnits.contains(toks[i + 2].lower) || fallback->yearUnits.contains(toks[i + 2].lower);
 
     QDate d = ref.date();
     if(isYear) {
@@ -706,7 +714,7 @@ class ChronoParser::Impl {
       return false;
     }
     bool foundUnit = false;
-    int days = lookupHashAny(toks[i + 1].lower, primary->unitToDays, fallback->unitToDays, &foundUnit);
+    const int days = lookupHashAny(toks[i + 1].lower, primary->unitToDays, fallback->unitToDays, &foundUnit);
     if(!foundUnit) {
       return false;
     }
@@ -714,9 +722,9 @@ class ChronoParser::Impl {
       return false;
     }
 
-    int n = toks[i].value;
-    bool isMonth = primary->monthUnits.contains(toks[i + 1].lower) || fallback->monthUnits.contains(toks[i + 1].lower);
-    bool isYear = primary->yearUnits.contains(toks[i + 1].lower) || fallback->yearUnits.contains(toks[i + 1].lower);
+    const int n = toks[i].value;
+    const bool isMonth = primary->monthUnits.contains(toks[i + 1].lower) || fallback->monthUnits.contains(toks[i + 1].lower);
+    const bool isYear = primary->yearUnits.contains(toks[i + 1].lower) || fallback->yearUnits.contains(toks[i + 1].lower);
 
     QDate d = ref.date();
     if(isYear) {
@@ -744,7 +752,7 @@ class ChronoParser::Impl {
       return false;
     }
     bool found = false;
-    int off = lookupHashAny(toks[i].lower, primary->relativeAdjectives, fallback->relativeAdjectives, &found);
+    const int off = lookupHashAny(toks[i].lower, primary->relativeAdjectives, fallback->relativeAdjectives, &found);
     if(!found) {
       return false;
     }
@@ -776,11 +784,11 @@ class ChronoParser::Impl {
       return false;
     }
     bool found = false;
-    int iso = lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &found);
+    const int iso = lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &found);
     if(!found) {
       return false;
     }
-    int curIso = ref.date().dayOfWeek();
+    const int curIso = ref.date().dayOfWeek();
     int delta = (iso - curIso + 7) % 7;
     if(delta == 0) {
       delta = 7;
@@ -802,12 +810,12 @@ class ChronoParser::Impl {
       return false;
     }
     bool found = false;
-    int iso = lookupHashAny(toks[i].lower, primary->weekdayNames, fallback->weekdayNames, &found);
+    const int iso = lookupHashAny(toks[i].lower, primary->weekdayNames, fallback->weekdayNames, &found);
     if(!found) {
       return false;
     }
-    int curIso = ref.date().dayOfWeek();
-    int delta = (iso - curIso + 7) % 7;
+    const int curIso = ref.date().dayOfWeek();
+    const int delta = (iso - curIso + 7) % 7;
     out.date = ref.date().addDays(delta);
     out.firstTok = i;
     out.lastTok = i;
@@ -831,11 +839,11 @@ class ChronoParser::Impl {
     if(i + 1 >= toks.size() || toks[i + 1].kind != TokenKind::Word) {
       return false;
     }
-    QString w = toks[i + 1].lower;
+    const QString w = toks[i + 1].lower;
 
     // "every weekday"
     if(w == QStringLiteral("weekday") || w == QString::fromUtf8("будни")) {
-      int curIso = ref.date().dayOfWeek();
+      const int curIso = ref.date().dayOfWeek();
       QDate d = ref.date();
       if(curIso > 5) {
         d = d.addDays(8 - curIso);  // Sat->Mon, Sun->Mon
@@ -848,7 +856,7 @@ class ChronoParser::Impl {
     }
     // "every day" / "каждый день"
     bool foundUnit = false;
-    int days = lookupHashAny(w, primary->unitToDays, fallback->unitToDays, &foundUnit);
+    const int days = lookupHashAny(w, primary->unitToDays, fallback->unitToDays, &foundUnit);
     if(foundUnit && days == 1) {
       recurrence = QStringLiteral("every:day");
       out.date = ref.date();
@@ -865,13 +873,13 @@ class ChronoParser::Impl {
     }
     // "every <weekday>"
     bool found = false;
-    int iso = lookupHashAny(w, primary->weekdayNames, fallback->weekdayNames, &found);
+    const int iso = lookupHashAny(w, primary->weekdayNames, fallback->weekdayNames, &found);
     if(!found) {
       return false;
     }
     recurrence = QStringLiteral("every:") + isoDay3(iso);
-    int curIso = ref.date().dayOfWeek();
-    int delta = (iso - curIso + 7) % 7;
+    const int curIso = ref.date().dayOfWeek();
+    const int delta = (iso - curIso + 7) % 7;
     out.date = ref.date().addDays(delta);
     out.firstTok = i;
     out.lastTok = i + 1;
@@ -888,7 +896,7 @@ class ChronoParser::Impl {
     if(i >= toks.size() || toks[i].kind != TokenKind::Number) {
       return false;
     }
-    int hour = toks[i].value;
+    const int hour = toks[i].value;
     if(hour < 0 || hour > 23) {
       return false;
     }
@@ -966,8 +974,8 @@ class ChronoParser::Impl {
     // Try first time. For range form "N-M", allow bare hour.
     TimeMatch first;
     // Detect range "N - M[pm/am/:MM]" by lookahead.
-    bool isRangeShape = (i + 2 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
-                         toks[i + 2].kind == TokenKind::Number);
+    const bool isRangeShape = (i + 2 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
+                               toks[i + 2].kind == TokenKind::Number);
 
     if(!tryTimeOfDay(toks, i, primary, fallback, /*allowBareHour=*/(allowBareHour || isRangeShape), first)) {
       return false;
@@ -983,8 +991,8 @@ class ChronoParser::Impl {
                       /*allowBareHour=*/true,
                       second)) {
         // Meridiem on second propagates to first if first had none.
-        bool hasMer = second.hasMeridiem || first.hasMeridiem;
-        bool pm = second.hasMeridiem ? second.pm : first.pm;
+        const bool hasMer = second.hasMeridiem || first.hasMeridiem;
+        const bool pm = second.hasMeridiem ? second.pm : first.pm;
 
         out = first;
         out.hasRange = true;
@@ -1015,7 +1023,7 @@ class ChronoParser::Impl {
     if(!tryTimeOfDay(toks, i + 1, primary, fallback, /*allowBareHour=*/true, first)) {
       return false;
     }
-    int j = first.lastTok + 1;
+    const int j = first.lastTok + 1;
     if(j >= toks.size() || toks[j].kind != TokenKind::Word) {
       return false;
     }
