@@ -118,6 +118,57 @@ TestCase {
         compare(evs.rowCount(), eventsBefore);
     }
 
+    // DayCalendar: a task scheduled at a clock time draws its own block, but a
+    // "sync" capture also creates a meeting event linked to that task. The event
+    // stands in for the task, so the task's own block must be suppressed on that
+    // day — otherwise "синк с @hb" renders twice (HEAP-115 regression).
+    function test_daycalendar_hides_task_block_with_linked_event() {
+        const day = new Date();
+        day.setDate(day.getDate() + 402);
+        day.setHours(0, 0, 0, 0);
+
+        const evs = AppController.events;
+        for (let i = evs.rowCount() - 1; i >= 0; i--) {
+            const idx = evs.index(i, 0);
+            const ed = evs.data(idx, Qt.UserRole + 7);
+            if (ed && ed.getFullYear
+                && ed.getFullYear() === day.getFullYear()
+                && ed.getMonth() === day.getMonth()
+                && ed.getDate() === day.getDate())
+                AppController.deleteEvent(String(evs.data(idx, Qt.UserRole + 1)));
+        }
+
+        const at = new Date(day);
+        at.setHours(AppController.workdayStart + 1, 0, 0, 0);
+
+        const draft = AppController.newTaskDraft("todo");
+        draft.title = "синк dedup probe";
+        draft.scheduledAt = at;
+        draft.dueAt = at;
+        draft.hasTime = true;
+        AppController.saveTask(draft);
+
+        AppController.selectedDate = day;
+        const dc = make('import TodoCpp; DayCalendar { anchors.fill: parent }');
+        const block = findChild(dc, "taskblock-" + draft.id);
+
+        // Control: with no linked event, the block is visible.
+        verify(block !== null, "scheduled task did not render a day-grid block");
+        verify(block.visible, "task block should be visible before a linked event exists");
+
+        // Add the meeting event that links back to the task.
+        const ev = AppController.newEventDraft(AppController.workdayStart + 1, day);
+        ev.type = "sync";
+        ev.title = "синк dedup probe";
+        ev.taskId = draft.id;
+        ev.date = day;
+        AppController.saveEvent(ev);
+        wait(50);
+
+        // The linked event now stands in for the task → its block is hidden.
+        verify(!block.visible, "task block must be hidden once a linked meeting event exists");
+    }
+
     // SideRail: clicking Code Review focuses the review column.
     function test_siderail_click_review() {
         AppController.currentView = "week";

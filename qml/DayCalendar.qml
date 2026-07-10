@@ -100,18 +100,41 @@ Item {
         _overlap = map;
     }
 
+    // ── Task blocks vs. their meeting events ──────────────────────────
+    // A "sync" capture creates both a task (with a scheduled time, HEAP-115)
+    // and a meeting event linked back to it via taskId. The event is the
+    // richer representation (attendees, duration), so the task's own block is
+    // suppressed on any day where a linked event already stands in for it —
+    // otherwise the same "синк с @hb" draws twice. Keyed by task id, recomputed
+    // with the overlaps on every events-model or day change.
+    property var _linkedTaskIds: ({})
+    function _recomputeLinkedTasks() {
+        const d = AppController.selectedDate;
+        const m = AppController.events;
+        const map = {};
+        for (let i = 0; i < m.rowCount(); i++) {
+            const idx = m.index(i, 0);
+            const ed = m.data(idx, Qt.UserRole + 7);   // DateRole
+            if (!root.isSameDay(ed, d)) continue;
+            const tid = String(m.data(idx, Qt.UserRole + 8) || "");  // TaskIdRole
+            if (tid.length > 0) map[tid] = true;
+        }
+        _linkedTaskIds = map;
+    }
+    function _recomputeDay() { _recountEventsToday(); _recomputeOverlaps(); _recomputeLinkedTasks(); }
+
     Connections {
         target: AppController.events
-        function onRowsInserted() { root._recountEventsToday(); root._recomputeOverlaps() }
-        function onRowsRemoved()  { root._recountEventsToday(); root._recomputeOverlaps() }
-        function onDataChanged()  { root._recountEventsToday(); root._recomputeOverlaps() }
-        function onModelReset()   { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onRowsInserted() { root._recomputeDay() }
+        function onRowsRemoved()  { root._recomputeDay() }
+        function onDataChanged()  { root._recomputeDay() }
+        function onModelReset()   { root._recomputeDay() }
     }
     Connections {
         target: AppController
-        function onSelectedDateChanged() { root._recountEventsToday(); root._recomputeOverlaps() }
+        function onSelectedDateChanged() { root._recomputeDay() }
     }
-    Component.onCompleted: { _recountEventsToday(); _recomputeOverlaps() }
+    Component.onCompleted: root._recomputeDay()
 
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
@@ -585,6 +608,7 @@ Item {
 
                                 visible: !archived && status !== "done" && startHour >= 0
                                          && root.isSameDay(scheduledAt, AppController.selectedDate)
+                                         && !root._linkedTaskIds[id]
                                 x: 0
                                 y: (startHour - root.hoursStart) * Theme.hourH
                                 width: Math.max(20, parent.width * 0.5 - 3)
