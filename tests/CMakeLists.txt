@@ -938,8 +938,17 @@ target_compile_definitions(heap_qml_tests PRIVATE
 # initializer. Nothing in the test references a symbol from it, so a normal link
 # lets the linker drop the whole archive (works on Windows by luck, stripped on
 # Linux → "SideRail is not a type" at runtime). WHOLE_ARCHIVE keeps the init.
+# heap_core reaches this target twice: once explicitly here (WHOLE_ARCHIVE, so
+# the backing library's file-based QML component registrations are not stripped)
+# and once more as a DEFAULT-feature interface dependency that heap_coreplugin
+# propagates. CMake refuses the same library linked with two different link
+# features ("heap_core ... has already occurred with the feature
+# 'WHOLE_ARCHIVE'"), which fails configure on stock Ubuntu (apt Qt 6.4 /
+# CMake 3.28). Pin WHOLE_ARCHIVE for every occurrence of heap_core in this
+# target — including the propagated one — so both agree. (CMake >= 3.24)
+set_property(TARGET heap_qml_tests PROPERTY LINK_LIBRARY_OVERRIDE_heap_core WHOLE_ARCHIVE)
 target_link_libraries(heap_qml_tests PRIVATE
-        "$<LINK_LIBRARY:WHOLE_ARCHIVE,heap_core>"
+        heap_core
         "$<LINK_LIBRARY:WHOLE_ARCHIVE,heap_coreplugin>"
         Qt6::QuickTest
 )
