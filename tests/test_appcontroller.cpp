@@ -170,6 +170,72 @@ TEST_F(AppControllerTest, ScheduledLabelInvalidDateEmpty) {
   EXPECT_EQ(app_->scheduledLabelFor(QStringLiteral("T-1"), QDate()), QString());
 }
 
+// ─── sync task ⇄ event cascade delete (HEAP-104) ──────────────────────
+
+namespace {
+// A QuickCapture "sync": one task plus one linked meeting event.
+void seedSync(AppController* app, const QString& taskId) {
+  app->tasks()->reset({mkTask(taskId, QStringLiteral("синк"))});
+  app->events()->reset({});
+  QVariantMap ev = app->newEventDraft(13.0, QDate(2026, 7, 13));
+  ev["type"] = QStringLiteral("sync");
+  ev["taskId"] = taskId;
+  ev["title"] = QStringLiteral("синк");
+  app->saveEvent(ev);
+}
+}  // namespace
+
+TEST_F(AppControllerTest, DeleteTaskRemovesLinkedSyncEvent) {
+  seedSync(app_.get(), QStringLiteral("SYNC-1"));
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+
+  app_->deleteTask(QStringLiteral("SYNC-1"));
+  EXPECT_EQ(app_->tasks()->rowCount(), 0);
+  EXPECT_EQ(app_->events()->rowCount(), 0) << "the linked meeting event must go with the task";
+
+  // Undo brings both halves back, still linked.
+  app_->undoLastDeletion();
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  EXPECT_EQ(app_->events()->items().at(0).taskId, QStringLiteral("SYNC-1"));
+}
+
+TEST_F(AppControllerTest, DeleteSyncEventRemovesMirrorTask) {
+  seedSync(app_.get(), QStringLiteral("SYNC-1"));
+  const QString evId = app_->events()->items().at(0).id;
+
+  app_->deleteEvent(evId);
+  EXPECT_EQ(app_->events()->rowCount(), 0);
+  EXPECT_EQ(app_->tasks()->rowCount(), 0) << "the mirror task must go with the sync event";
+
+  app_->undoLastDeletion();
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  EXPECT_EQ(app_->tasks()->items().at(0).id, QStringLiteral("SYNC-1"));
+}
+
+TEST_F(AppControllerTest, DeleteFocusEventKeepsItsTask) {
+  // A focus block is a scheduled slice of a task, not a mirror — deleting the
+  // block just unschedules; the task stays.
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("x"))});
+  app_->scheduleTask(QStringLiteral("T-1"), 14.0, QDate(2026, 7, 13));
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  ASSERT_EQ(app_->events()->items().at(0).type, QStringLiteral("focus"));
+
+  app_->deleteEvent(app_->events()->items().at(0).id);
+  EXPECT_EQ(app_->events()->rowCount(), 0);
+  EXPECT_EQ(app_->tasks()->rowCount(), 1) << "a focus block must not delete its task";
+}
+
+TEST_F(AppControllerTest, DeleteTaskRemovesItsFocusBlock) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("x"))});
+  app_->scheduleTask(QStringLiteral("T-1"), 14.0, QDate(2026, 7, 13));
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+
+  app_->deleteTask(QStringLiteral("T-1"));
+  EXPECT_EQ(app_->events()->rowCount(), 0) << "the focus block must go with the deleted task";
+}
+
 // ─── eventHourLabel (24h default) ─────────────────────────────────────
 
 TEST_F(AppControllerTest, EventHourLabel24h) {

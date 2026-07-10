@@ -693,8 +693,15 @@ class AppController : public QObject {
     // by ascending row so re-insertion in the same order is safe.
     QVector<::Task> tasks;
     QVector<int> rows;
-    // when a task is deleted, events lose their taskId — record what to restore
-    QVector<QPair<QString, QString>> detachedEventIds;  // (eventId, originalTaskId)
+    // when a task (or bulk selection) is deleted, its linked calendar events
+    // are removed with it — record (originalRow, event) in ascending row order
+    // so undo re-inserts each block where it was.
+    QVector<QPair<int, ::CalEvent>> removedEvents;
+    // when a "sync" event is deleted, the task it mirrors is removed too —
+    // record it so undo brings both halves back.
+    ::Task coDeletedTask;
+    int coDeletedTaskRow = -1;
+    bool hadCoDeletedTask = false;
     // when a status is deleted, tasks get re-homed — record what to restore
     QVector<QPair<QString, QString>> reHomedTasks;  // (taskId, originalStatusId)
   };

@@ -947,12 +947,19 @@ void AppController::deleteTask(const QString& id) {
   m_pendingUndo.kind = PendingUndo::Task;
   m_pendingUndo.task = m_tasks.items().at(row);
   m_pendingUndo.row = row;
-  for(const auto& e : m_events.items()) {
+  // A task owns its calendar presence: the meeting event a QuickCapture "sync"
+  // spawned, plus any focus blocks dragged onto the day grid. Remove them with
+  // the task so a sync is deleted in one action, not two (HEAP-104). Capture
+  // (row, event) in ascending order for a faithful undo.
+  for(int i = 0; i < m_events.items().size(); ++i) {
+    const CalEvent& e = m_events.items().at(i);
     if(e.taskId == id) {
-      m_pendingUndo.detachedEventIds.append({e.id, e.taskId});
+      m_pendingUndo.removedEvents.append({i, e});
     }
   }
-  m_events.detachTask(id);
+  for(const auto& pair : m_pendingUndo.removedEvents) {
+    m_events.removeById(pair.second.id);
+  }
   m_tasks.removeById(id);
   armUndo(5);
   emit undoableToast(tr_("task.deleted").arg(id), 5);
@@ -1055,6 +1062,32 @@ void AppController::deleteEvent(const QString& id) {
   m_pendingUndo.kind = PendingUndo::Event;
   m_pendingUndo.event = m_events.items().at(row);
   m_pendingUndo.row = row;
+  // A QuickCapture "sync" is one thing shown twice: the meeting event and the
+  // task that mirrors it on the board. Deleting the meeting must take the mirror
+  // task with it, else the user has to hunt it down separately (HEAP-104). Only
+  // a "sync" owns its task — a "focus" block is just a scheduled slice of a task
+  // that must outlive the block.
+  const CalEvent ev = m_pendingUndo.event;
+  if(ev.type == QStringLiteral("sync") && !ev.taskId.isEmpty()) {
+    const int trow = m_tasks.indexOfId(ev.taskId);
+    if(trow >= 0) {
+      m_pendingUndo.coDeletedTask = m_tasks.items().at(trow);
+      m_pendingUndo.coDeletedTaskRow = trow;
+      m_pendingUndo.hadCoDeletedTask = true;
+      // Sweep the task's other blocks (a focus slice, say) so none is left
+      // pointing at a task that no longer exists.
+      for(int i = 0; i < m_events.items().size(); ++i) {
+        const CalEvent& sib = m_events.items().at(i);
+        if(sib.id != ev.id && sib.taskId == ev.taskId) {
+          m_pendingUndo.removedEvents.append({i, sib});
+        }
+      }
+      for(const auto& pair : m_pendingUndo.removedEvents) {
+        m_events.removeById(pair.second.id);
+      }
+      m_tasks.removeById(ev.taskId);
+    }
+  }
   m_events.removeById(id);
   armUndo(5);
   emit undoableToast(tr_("event.deleted").arg(m_pendingUndo.event.title), 5);
@@ -1935,8 +1968,9 @@ void AppController::undoLastDeletion() {
   switch(m_pendingUndo.kind) {
     case PendingUndo::Task: {
       m_tasks.insertAt(m_pendingUndo.row, m_pendingUndo.task);
-      for(const auto& pair : m_pendingUndo.detachedEventIds) {
-        m_events.setTaskId(pair.first, pair.second);
+      // removedEvents captured in ascending row order → re-insert in order.
+      for(const auto& pair : m_pendingUndo.removedEvents) {
+        m_events.insertAt(pair.first, pair.second);
       }
       emit toast(tr_("task.restored").arg(m_pendingUndo.task.id));
       break;
@@ -1948,14 +1982,26 @@ void AppController::undoLastDeletion() {
         const int row = qBound(0, m_pendingUndo.rows.value(i, m_tasks.rowCount()), m_tasks.rowCount());
         m_tasks.insertAt(row, m_pendingUndo.tasks.at(i));
       }
-      for(const auto& pair : m_pendingUndo.detachedEventIds) {
-        m_events.setTaskId(pair.first, pair.second);
+      for(const auto& pair : m_pendingUndo.removedEvents) {
+        m_events.insertAt(pair.first, pair.second);
       }
       emit toast(tr_("selection.toast.restored").arg(m_pendingUndo.tasks.size()));
       break;
     }
     case PendingUndo::Event: {
-      m_events.insertAt(m_pendingUndo.row, m_pendingUndo.event);
+      // Bring back a cascade-deleted mirror task first, then every event (the
+      // deleted one plus any swept siblings) in ascending original-row order.
+      if(m_pendingUndo.hadCoDeletedTask) {
+        m_tasks.insertAt(m_pendingUndo.coDeletedTaskRow, m_pendingUndo.coDeletedTask);
+      }
+      QVector<QPair<int, ::CalEvent>> evs = m_pendingUndo.removedEvents;
+      evs.append({m_pendingUndo.row, m_pendingUndo.event});
+      std::sort(evs.begin(), evs.end(), [](const auto& a, const auto& b) {
+        return a.first < b.first;
+      });
+      for(const auto& pair : evs) {
+        m_events.insertAt(pair.first, pair.second);
+      }
       emit toast(tr_("event.restored").arg(m_pendingUndo.event.title));
       break;
     }
@@ -3884,15 +3930,16 @@ void AppController::deleteSelectedTasks() {
     m_pendingUndo.tasks.append(p.second);
     ids.insert(p.second.id);
   }
-  for(const auto& e : m_events.items()) {
+  for(int i = 0; i < m_events.items().size(); ++i) {
+    const CalEvent& e = m_events.items().at(i);
     if(ids.contains(e.taskId)) {
-      m_pendingUndo.detachedEventIds.append({e.id, e.taskId});
+      m_pendingUndo.removedEvents.append({i, e});
     }
   }
-  // Detach events first, then remove tasks. Removal order doesn't matter
-  // for removeById; we walk the snapshot in any direction.
-  for(const QString& id : std::as_const(ids)) {
-    m_events.detachTask(id);
+  // Remove the linked events with their tasks (HEAP-104), then the tasks.
+  // Removal order doesn't matter for removeById; undo re-inserts by row.
+  for(const auto& pair : m_pendingUndo.removedEvents) {
+    m_events.removeById(pair.second.id);
   }
   for(const auto& p : snap) {
     m_tasks.removeById(p.second.id);
