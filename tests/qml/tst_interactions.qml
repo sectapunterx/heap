@@ -170,10 +170,12 @@ TestCase {
     }
 
     // QuickCapture "sync": one task + one linked meeting event, and the "// …"
-    // tail lands on the task description. Reproduces two reported bugs:
+    // tail lands on BOTH the task description and the event's context.
+    // Reproduces three reported bugs:
     //   (a) the day view showed both the meeting event AND the task's own block
     //       (the event's taskId must match the task id so the block is hidden);
-    //   (b) the "// comment" was dropped instead of saved to desc.
+    //   (b) the "// comment" was dropped instead of saved to desc;
+    //   (c) the comment was saved only to the task, not the sync event context.
     function test_quickcapture_sync_links_event_and_saves_comment() {
         const tasks = AppController.tasks;
         const evs   = AppController.events;
@@ -201,8 +203,10 @@ TestCase {
         compare(desc, "обсудить релиз", "the // comment was not saved to the task desc");
 
         const eIdx = evs.index(evs.rowCount() - 1, 0);
-        const evTaskId = String(evs.data(eIdx, Qt.UserRole + 8));  // TaskIdRole
+        const evTaskId  = String(evs.data(eIdx, Qt.UserRole + 8));   // TaskIdRole
+        const evContext = String(evs.data(eIdx, Qt.UserRole + 10));  // ContextRole
         compare(evTaskId, taskId, "meeting event not linked to task → day block duplicates it");
+        compare(evContext, "обсудить релиз", "the // comment must also ride onto the sync event context");
     }
 
     // SideRail: clicking Code Review focuses the review column.

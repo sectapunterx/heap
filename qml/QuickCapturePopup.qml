@@ -207,6 +207,12 @@ Popup {
             ev.taskId    = draft.id;
             ev.date      = d;
             ev.attendees = attendees;
+            // The "// comment" tail rides along onto the meeting itself, not
+            // just the linked task — it lands in the event's free-form context
+            // so the note shows up on the calendar block too.
+            if (_meta && _meta.desc && _meta.desc.length > 0) {
+                ev.context = _meta.desc;
+            }
             AppController.saveEvent(ev);
             AppController.selectedDate = d;
         }
