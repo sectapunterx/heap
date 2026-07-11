@@ -87,7 +87,11 @@ Popup {
             // Full-text (HEAP-80): match the body too, with a context snippet.
             if (trimmed.length >= 2 && e.body && e.body.toLowerCase().indexOf(ql) >= 0) {
                 snippet = _snippetFor(e.body, trimmed);
-                if (score < 0) score = 5;  // body-only hit — include below head matches
+                // Body hit floors the entry at tier 5 (below head matches). Use
+                // max, not `if (score < 0)`, so a weak-label match that _fuzzyScore
+                // now clamps to 0 still gets the body tier and isn't ranked below
+                // a pure body-only hit.
+                score = Math.max(score, 5);
             }
             if (score < 0) continue;
             // tiny boost so an entry in the active profile floats up

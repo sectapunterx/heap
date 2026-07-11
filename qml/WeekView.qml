@@ -335,6 +335,7 @@ Item {
                     model: root.days
                     delegate: Item {
                         id: headCol
+                        objectName: "wvHeadCol"
                         required property var modelData
                         required property int index
                         x: gridHost.gutterW + index * gridHost.dayW

@@ -48,4 +48,20 @@ TestCase {
         const out = cp._filterAndScore("z");
         compare(out.length, 1, "an entry containing the query char must be kept");
     }
+
+    // Body-hit tier: a weak label match that _fuzzyScore clamps to 0 plus a body
+    // hit (entry W) must not rank below a pure body-only hit (entry B). Both floor
+    // to the body tier, so a stable sort keeps input order (W before B).
+    // Pre-fix W stayed at 0 (the `if (score < 0)` rescue didn't fire) and sorted
+    // below B at 5. (_filterAndScore strips scores, so we assert order, not score.)
+    function test_body_hit_not_ranked_below_body_only() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._entries = [
+            { kind: "task", id: "W", label: "z" + "a".repeat(80) + "z", sub: "", body: "find zz now" },
+            { kind: "task", id: "B", label: "plain label", sub: "", body: "also zz here" }
+        ];
+        const out = cp._filterAndScore("zz");
+        compare(out.length, 2, "both body-containing entries must be kept");
+        compare(out[0].id, "W", "weak-label+body must not rank below a pure body-only hit");
+    }
 }

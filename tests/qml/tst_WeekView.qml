@@ -81,4 +81,26 @@ TestCase {
         verify(wv.isWeekendDate(new Date(2026, 0, 4)),  "Sunday is a weekend");
         verify(!wv.isWeekendDate(null), "null is not a weekend");
     }
+
+    // Delegate wiring: under a Sunday-first week the first header column IS
+    // Sunday and must be shaded as weekend. The old positional `index >= 5`
+    // returns false for column 0, so this fails if the delegate binding is
+    // reverted from isWeekendDate(date) back to the index test.
+    function test_weekend_delegate_binding_under_sunday_first() {
+        const savedSettings = AppController.appSettingsJson;
+        const savedDate = AppController.selectedDate;
+
+        AppController.appSettingsJson = JSON.stringify({ calendar: { weekStart: "sun" } });
+        compare(Theme.weekStart, "sun", "precondition: settings must drive weekStart");
+        AppController.selectedDate = new Date(2026, 0, 7);  // week starts Sun Jan 4
+
+        const wv2 = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        const col0 = findChild(wv2, "wvHeadCol");   // first Repeater delegate = index 0
+        verify(col0 !== null, "header column delegate not found");
+        compare(col0.modelData.date.getDay(), 0, "first column must be Sunday under weekStart=sun");
+        verify(col0.isWeekend, "the Sunday column must be shaded as weekend (not index >= 5)");
+
+        AppController.appSettingsJson = savedSettings;
+        AppController.selectedDate = savedDate;
+    }
 }
