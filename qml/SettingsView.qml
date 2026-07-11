@@ -1077,7 +1077,10 @@ Item {
                     SliderRow {
                         label: I18n.t("settings.notif.meetingLead")
                         unit: " min"; min: 0; max: 30; step: 1
-                        value: (root.settings.notifications && root.settings.notifications.meetingLead) || 5
+                        // Undefined-aware fallback: a stored 0 is a valid lead
+                        // (min is 0) and must not collapse to 5 via a falsy `||`.
+                        value: root.settings.notifications
+                               ? (root.settings.notifications.meetingLead ?? 5) : 5
                         onMoved: (value) => root.set("notifications", "meetingLead", value)
                     }
                 }
