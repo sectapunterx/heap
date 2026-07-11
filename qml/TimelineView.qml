@@ -126,7 +126,7 @@ Item {
                 const ad = a.deadline && a.deadline.getTime ? a.deadline.getTime() : 9e15;
                 const bd = b.deadline && b.deadline.getTime ? b.deadline.getTime() : 9e15;
                 if (ad !== bd) return ad - bd;
-                return (priRank[a.priority] || 9) - (priRank[b.priority] || 9);
+                return (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9);
             });
         }
         return groups;

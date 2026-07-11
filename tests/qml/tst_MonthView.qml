@@ -248,4 +248,47 @@ TestCase {
         AppController.deleteEvent(ev.id);
         AppController.selectedDate = prev;
     }
+
+    // Regression (priority-sort falsy-zero): within a day cell, tasks are sorted
+    // by priority with P0 the top tier. A `priRank[p] || 9` comparator demoted
+    // P0 (rank 0 is falsy) to the unknown-priority rank, sorting the most
+    // critical task LAST. Assert P0 precedes P1 in the same deadline cell.
+    function test_p0_task_sorts_before_p1_in_cell() {
+        const prev = AppController.selectedDate;
+        const day = new Date();
+        day.setDate(day.getDate() + 456);
+        day.setHours(12, 0, 0, 0);
+
+        const p1 = AppController.newTaskDraft("todo");
+        p1.title = "mv p1 probe"; p1.priority = "P1";
+        p1.scheduledAt = day; p1.dueAt = day; p1.hasTime = false;
+        AppController.saveTask(p1);
+
+        const p0 = AppController.newTaskDraft("todo");
+        p0.title = "mv p0 probe"; p0.priority = "P0";
+        p0.scheduledAt = day; p0.dueAt = day; p0.hasTime = false;
+        AppController.saveTask(p0);
+
+        AppController.selectedDate = day;
+        const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
+
+        let cell = null;
+        for (let k = 0; k < mv.cells.length; k++)
+            if (mv.isSameDay(mv.cells[k].date, day)) { cell = mv.cells[k]; break; }
+        verify(cell !== null, "grid must contain the deadline day cell");
+
+        // Robust to leftover tasks on the day: compare the two seeded ids by
+        // their position, not absolute index 0.
+        let iP0 = -1, iP1 = -1;
+        for (let i = 0; i < cell.tasks.length; i++) {
+            if (cell.tasks[i].id === p0.id) iP0 = i;
+            if (cell.tasks[i].id === p1.id) iP1 = i;
+        }
+        verify(iP0 >= 0 && iP1 >= 0, "both seeded tasks must be in the cell");
+        verify(iP0 < iP1, "P0 must sort before P1 (highest priority first)");
+
+        AppController.deleteTask(p0.id);
+        AppController.deleteTask(p1.id);
+        AppController.selectedDate = prev;
+    }
 }

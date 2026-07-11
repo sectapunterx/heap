@@ -98,7 +98,7 @@ Item {
             out.push(t);
         }
         const priRank = {P0: 0, P1: 1, P2: 2, P3: 3};
-        out.sort((a, b) => (priRank[a.priority] || 9) - (priRank[b.priority] || 9));
+        out.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
         return out;
     }
 
