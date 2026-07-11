@@ -210,6 +210,7 @@ Popup {
         }
         TextField {
             id: idField
+            objectName: "te-id"
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
             // New tasks: TODO placeholder — final id is generated on save.
@@ -422,11 +423,14 @@ Popup {
             FieldLabel { text: "" }
             ComboBox {
                 id: recurBox
+                objectName: "te-recurrence"
                 Layout.fillWidth: true
                 readonly property var _vals: ["", "every:day", "every:week", "every:weekday",
-                                              "every:mon", "every:tue", "every:wed", "every:thu", "every:fri"]
+                                              "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
+                                              "every:sat", "every:sun"]
                 model: ["None", "Daily", "Weekly", "Weekdays",
-                        "Every Mon", "Every Tue", "Every Wed", "Every Thu", "Every Fri"]
+                        "Every Mon", "Every Tue", "Every Wed", "Every Thu", "Every Fri",
+                        "Every Sat", "Every Sun"]
                 background: FieldBg {
                 }
                 contentItem: Text {
@@ -510,11 +514,15 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 8; Layout.bottomMargin: 16
             spacing: 8
             PillButton {
+                objectName: "te-delete"
                 visible: !root.isNew
                 text: I18n.t("common.delete")
                 danger: true
                 onClicked: {
-                    AppController.deleteTask(idField.text);
+                    // Delete the row that was opened, keyed by the stable
+                    // open-time id — NOT the live idField, which the user may
+                    // have edited (Save threads _originalId for the same reason).
+                    AppController.deleteTask(root._originalId);
                     root.close();
                 }
             }

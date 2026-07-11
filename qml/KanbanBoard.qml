@@ -260,6 +260,11 @@ Item {
                                         visible: col.renaming
                                         anchors.fill: parent
                                         text: col.statusName
+                                        // Typing breaks the declarative binding above; re-sync to the
+                                        // authoritative name every time the field opens so an
+                                        // Escape-cancelled edit can't linger and be auto-committed by
+                                        // the blur handler on the next rename.
+                                        onVisibleChanged: if (visible) text = col.statusName
                                         color: Theme.text
                                         background: Rectangle { radius: 4; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
                                         font.family: Theme.fontUi

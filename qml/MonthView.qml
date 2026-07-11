@@ -121,7 +121,7 @@ Item {
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
         for (let k = 0; k < cells.length; k++)
-            cells[k].tasks.sort((a, b) => (priRank[a.priority] || 9) - (priRank[b.priority] || 9));
+            cells[k].tasks.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
         return cells;
     }
     readonly property var cells: buildCells()

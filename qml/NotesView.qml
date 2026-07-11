@@ -64,7 +64,9 @@ Item {
         }
         if (i < ql.length) return -1;
         score -= lastPos * 0.05;
-        return score;
+        // Clamp: a late single-char match must not go negative and be dropped by
+        // the caller's `if (sc < 0) continue` as though the char were absent.
+        return Math.max(0, score);
     }
 
     function _peopleEntries() {
