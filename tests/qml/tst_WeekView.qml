@@ -69,4 +69,16 @@ TestCase {
         AppController.deleteTask(p1.id);
         AppController.selectedDate = prev;
     }
+
+    // Weekend shading tracks the real day-of-week, not the column position. The
+    // old `index >= 5` tinted Friday and missed Sunday under weekStart="sun";
+    // isWeekendDate keys off the date. Jan 2026: 1st=Thu, so 2nd=Fri, 3rd=Sat,
+    // 4th=Sun.
+    function test_weekend_tracks_real_day_not_column() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        verify(!wv.isWeekendDate(new Date(2026, 0, 2)), "Friday is not a weekend");
+        verify(wv.isWeekendDate(new Date(2026, 0, 3)),  "Saturday is a weekend");
+        verify(wv.isWeekendDate(new Date(2026, 0, 4)),  "Sunday is a weekend");
+        verify(!wv.isWeekendDate(null), "null is not a weekend");
+    }
 }

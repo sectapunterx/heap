@@ -93,6 +93,14 @@ Item {
         const offset = sundayFirst ? -dow : (dow === 0 ? -6 : 1 - dow);
         return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
     }
+    // Weekend shading must track the real day-of-week, not the column position:
+    // under weekStart="sun" column 5 is Friday and column 0 is Sunday, so the
+    // old `index >= 5` tinted Friday and missed Sunday.
+    function isWeekendDate(d) {
+        if (!d || !d.getDay) return false;
+        const w = d.getDay();
+        return w === 0 || w === 6;
+    }
     function fmtShort(d) {
         return AppController.shortDate(d);
     }
@@ -334,7 +342,7 @@ Item {
                         width: gridHost.dayW
                         height: headerBand.height
                         readonly property bool isToday: root.isSameDay(modelData.date, AppController.today)
-                        readonly property bool isWeekend: index >= 5
+                        readonly property bool isWeekend: root.isWeekendDate(modelData.date)
 
                         Rectangle {
                             anchors.fill: parent
@@ -524,7 +532,7 @@ Item {
                             width: gridHost.dayW
                             height: (root.hoursEnd - root.hoursStart) * root.hourH
                             readonly property bool isToday: root.isSameDay(modelData.date, AppController.today)
-                            readonly property bool isWeekend: index >= 5
+                            readonly property bool isWeekend: root.isWeekendDate(modelData.date)
 
                             Rectangle {
                                 anchors.fill: parent
@@ -649,7 +657,11 @@ Item {
                                 onPositionChanged: (mouse) => {
                                     const pt = weMove.mapToItem(gridContent, mouse.x, mouse.y);
                                     const wantX = pt.x - grabX;
-                                    const wantY = pt.y - grabY;
+                                    // grabY is weMove-local; its origin sits topMargin below the event
+                                    // top while pt/baseY are gridContent-absolute. Subtract the inset so
+                                    // a still pointer yields dy == 0 (no constant +6px bias). No left
+                                    // margin, so wantX needs no such correction.
+                                    const wantY = pt.y - grabY - weMove.anchors.topMargin;
                                     const dx = wantX - baseX;
                                     const dy = wantY - baseY;
                                     if (!didDrag && (Math.abs(dx) > 5 || Math.abs(dy) > 5)) didDrag = true;

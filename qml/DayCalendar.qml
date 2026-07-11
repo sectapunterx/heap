@@ -510,7 +510,11 @@ Item {
                                     }
                                     onPositionChanged: (mouse) => {
                                         const pt = moveArea.mapToItem(eventsLayer, mouse.x, mouse.y);
-                                        const wantY = pt.y - grabY;
+                                        // grabY is moveArea-local; moveArea's origin sits topMargin
+                                        // below the event top, while pt/baseY are eventsLayer-absolute.
+                                        // Subtract the inset so a still pointer yields dy == 0 (else a
+                                        // constant +6px bias trips didDrag and drops events late).
+                                        const wantY = pt.y - grabY - moveArea.anchors.topMargin;
                                         const dy = wantY - baseY;
                                         if (!didDrag && Math.abs(dy) > 5) didDrag = true;
                                         if (didDrag) evRect.dragDy = dy;
