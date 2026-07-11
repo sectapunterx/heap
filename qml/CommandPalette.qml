@@ -49,7 +49,9 @@ Popup {
         }
         if (i < ql.length) return -1;
         score -= lastPos * 0.05;  // prefer early matches
-        return score;
+        // A late single-char match can push score below 0; clamp so a real match
+        // never collides with the -1 no-match sentinel the caller filters on.
+        return Math.max(0, score);
     }
 
     function _escapeHtml(s) {
