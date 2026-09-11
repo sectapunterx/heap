@@ -515,7 +515,10 @@ Item {
                             Text {
                                 required property int index
                                 x: 0
-                                y: index * root.hourH - 6
+                                // Centred on its hour line, but never above the
+                                // top of the scroll area — the first label used
+                                // to be cut in half by the sticky header.
+                                y: Math.max(0, index * root.hourH - 6)
                                 width: gridHost.gutterW - 8
                                 horizontalAlignment: Text.AlignRight
                                 text: Theme.fmtHour(root.hoursStart + index)

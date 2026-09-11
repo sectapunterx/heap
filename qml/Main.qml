@@ -71,6 +71,13 @@ ApplicationWindow {
     // is left to the click handler below, which toggles. Positions are therefore
     // anchor-relative, but still clamped in window space so a rail button near
     // the bottom edge doesn't push the panel off-screen.
+    // Everything that floats at the bottom centre — the selection bar, the
+    // "continue tour" pill and the toast — used to be pinned to the same spot
+    // and simply drew on top of each other (deleting a multi-selection put the
+    // undo toast right over the selection bar). They stack instead.
+    readonly property int _selectionBarSpace: AppController.selectionCount > 0 ? 68 : 0
+    readonly property int _resumePillSpace: welcome.paused ? 52 : 0
+
     function _placePopover(pop, anchor) {
         const p = anchor.mapToItem(win.contentItem, 0, 0);
         const wantY = Math.max(8, Math.min(p.y, win.contentItem.height - pop.height - 8));
@@ -489,7 +496,7 @@ ApplicationWindow {
         z: 9000
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
+        anchors.bottomMargin: 24 + win._selectionBarSpace
         radius: 20
         height: 40
         width: pillRow.implicitWidth + 28
@@ -806,7 +813,7 @@ ApplicationWindow {
     Toast {
         id: toast
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
+        anchors.bottomMargin: 24 + win._selectionBarSpace + win._resumePillSpace
         anchors.horizontalCenter: parent.horizontalCenter
         z: 100
     }

@@ -340,6 +340,13 @@ QtObject {
             "notes.placeholderBody": "Start writing a note…  (markdown, @mentions and #tickets supported)",
             "notes.preview.empty": "Preview will appear as you type…",
             "notes.summary": "%1 lines  %2 @mentions  %3 #tickets",
+            "notes.header": "Notes · scratchpad",
+            "notes.mode.edit": "Edit",
+            "notes.mode.split": "Split",
+            "notes.mode.preview": "Preview",
+            "notes.links": "⌗ Links",
+            "notes.backlinks": "Backlinks",
+            "notes.backlinks.empty": "No [[wiki-links]] yet.\nType [[ to link a heading.",
 
             // ── PeopleList ──
             "people.title": "People to talk to",
@@ -919,6 +926,13 @@ QtObject {
             "notes.placeholderBody": "Начните писать заметку…  (поддерживается markdown, @упоминания и #тикеты)",
             "notes.preview.empty": "Превью появится по мере ввода…",
             "notes.summary": "%1 строк  %2 @mentions  %3 #tickets",
+            "notes.header": "Заметки · черновик",
+            "notes.mode.edit": "Текст",
+            "notes.mode.split": "Пополам",
+            "notes.mode.preview": "Превью",
+            "notes.links": "⌗ Ссылки",
+            "notes.backlinks": "Обратные ссылки",
+            "notes.backlinks.empty": "Пока нет ни одной [[wiki-ссылки]].\nНабери [[, чтобы сослаться на заголовок.",
 
             "people.title": "С кем поговорить",
             "people.empty": "Список пока пуст",

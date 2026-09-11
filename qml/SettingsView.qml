@@ -325,60 +325,74 @@ Item {
                     }
                 }
 
-                ColumnLayout {
+                // Scrollable: thirteen 44px rows plus the header and footer do
+                // not fit the window's minimum height, and without a scroll the
+                // layout just squeezed the rows into each other.
+                Flickable {
+                    id: navScroll
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     Layout.topMargin: 4
-                    spacing: 2
-                    Repeater {
-                        model: root.sections
-                        delegate: Rectangle {
-                            required property var modelData
-                            visible: {
-                                const q = root.searchText.toLowerCase().trim();
-                                if (q.length === 0) return true;
-                                return (modelData.title.toLowerCase().indexOf(q) >= 0
-                                     || modelData.sub.toLowerCase().indexOf(q) >= 0);
-                            }
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            radius: 6
-                            color: root.activeSection === modelData.id
-                                   ? Theme.accentSoft
-                                   : (navMA.containsMouse ? Theme.panel2 : "transparent")
-                            border.color: root.activeSection === modelData.id ? Theme.accent : "transparent"
-                            border.width: 1
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 10
-                                spacing: 10
-                                Text {
-                                    text: modelData.icon
-                                    color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
-                                    font.pixelSize: modelData.icon === "C++" ? 11 : 16
-                                    font.family: modelData.icon === "C++" ? Theme.fontMono : Theme.fontUi
-                                    font.weight: Font.DemiBold
-                                    Layout.preferredWidth: 24
-                                    horizontalAlignment: Text.AlignHCenter
+                    clip: true
+                    contentWidth: width
+                    contentHeight: navCol.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ThinScrollBar {}
+
+                    ColumnLayout {
+                        id: navCol
+                        width: navScroll.width
+                        spacing: 2
+                        Repeater {
+                            model: root.sections
+                            delegate: Rectangle {
+                                required property var modelData
+                                visible: {
+                                    const q = root.searchText.toLowerCase().trim();
+                                    if (q.length === 0) return true;
+                                    return (modelData.title.toLowerCase().indexOf(q) >= 0
+                                         || modelData.sub.toLowerCase().indexOf(q) >= 0);
                                 }
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 0
-                                    Text { text: modelData.title; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-                                    Text { text: modelData.sub;   color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 44
+                                Layout.minimumHeight: 44
+                                radius: 6
+                                color: root.activeSection === modelData.id
+                                       ? Theme.accentSoft
+                                       : (navMA.containsMouse ? Theme.panel2 : "transparent")
+                                border.color: root.activeSection === modelData.id ? Theme.accent : "transparent"
+                                border.width: 1
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10; anchors.rightMargin: 10
+                                    spacing: 10
+                                    Text {
+                                        text: modelData.icon
+                                        color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
+                                        font.pixelSize: modelData.icon === "C++" ? 11 : 16
+                                        font.family: modelData.icon === "C++" ? Theme.fontMono : Theme.fontUi
+                                        font.weight: Font.DemiBold
+                                        Layout.preferredWidth: 24
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Text { text: modelData.title; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
+                                        Text { text: modelData.sub;   color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    }
                                 }
-                            }
-                            MouseArea {
-                                id: navMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.activeSection = modelData.id
+                                MouseArea {
+                                    id: navMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.activeSection = modelData.id
+                                }
                             }
                         }
                     }
                 }
-
-                Item { Layout.fillHeight: true }
 
                 // Debug-only developer toggle. Lives in the nav footer so it
                 // never appears in Release builds. Drives `_showUnimplemented`
@@ -2251,7 +2265,20 @@ Item {
         Layout.fillWidth: true
         spacing: 16
         Text { text: aboutRow.label; color: Theme.textMuted; font.pixelSize: 11; Layout.preferredWidth: 80 }
-        Text { text: aboutRow.value; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 11; Layout.fillWidth: true }
+        // Elided: the storage path is long enough to stretch the card past the
+        // panel. The full value is on the tooltip.
+        Text {
+            text: aboutRow.value
+            color: Theme.text
+            font.family: Theme.fontMono
+            font.pixelSize: 11
+            Layout.fillWidth: true
+            elide: Text.ElideMiddle
+            HoverHandler { id: aboutHover }
+            ToolTip.visible: aboutHover.hovered && truncated
+            ToolTip.delay: 400
+            ToolTip.text: aboutRow.value
+        }
     }
 
     // ── Bridge to Main.qml for popups (HotkeysPanel, FileDialog) ──────

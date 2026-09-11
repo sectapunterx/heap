@@ -184,11 +184,20 @@ Item {
                         }
                     }
                     Item { Layout.fillWidth: true }
+                    // Elided: the hint is longer than the right-hand panel is
+                    // wide, so it used to run off the edge mid-word.
                     Text {
                         text: I18n.t("day.dragHint")
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignRight
+                        HoverHandler { id: hintHover }
+                        ToolTip.visible: hintHover.hovered && truncated
+                        ToolTip.delay: 400
+                        ToolTip.text: I18n.t("day.dragHint")
                     }
                 }
             }
