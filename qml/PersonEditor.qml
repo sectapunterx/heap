@@ -89,7 +89,7 @@ Popup {
             }
         }
 
-        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: "ID"
+        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.id")
                color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: idField

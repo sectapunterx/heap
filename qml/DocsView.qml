@@ -570,9 +570,9 @@ Item {
                 ColumnLayout {
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
-                    Text { text: "Docs · spec & references"; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
                     Text {
-                        text: root.totalDocs() + " entries · " + root.snippets.length + " snippets · " + root.contacts.length + " contacts"
+                        text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
@@ -801,20 +801,20 @@ Item {
 
                                 QQC.Menu {
                                     id: sectionMenu
-                                    QQC.MenuItem { text: "Add entry";        onTriggered: root.openDocCreate(secCol.section.id) }
-                                    QQC.MenuItem { text: "Rename / fields…"; onTriggered: root.openSectionEdit(secCol.section) }
+                                    QQC.MenuItem { text: I18n.t("docs.addEntry");       onTriggered: root.openDocCreate(secCol.section.id) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.renameFields"); onTriggered: root.openSectionEdit(secCol.section) }
                                     QQC.Menu {
-                                        title: "Sort by"
-                                        QQC.MenuItem { text: "Manual";     onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
-                                        QQC.MenuItem { text: "By ref";     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
-                                        QQC.MenuItem { text: "By title";   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
-                                        QQC.MenuItem { text: "By updated"; onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
+                                        title: I18n.t("docs.menu.sortBy")
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
                                     }
                                     QQC.MenuSeparator {}
-                                    QQC.MenuItem { text: "Move up";   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
-                                    QQC.MenuItem { text: "Move down"; enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
                                     QQC.MenuSeparator {}
-                                    QQC.MenuItem { text: "Delete section"; onTriggered: root.deleteSection(secCol.section.id) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(secCol.section.id) }
                                 }
 
                                 RowLayout {
@@ -890,7 +890,7 @@ Item {
                                         font.pixelSize: 11
                                     }
                                     PillButton {
-                                        text: "+ Add"
+                                        text: I18n.t("docs.add")
                                         onClicked: root.openDocCreate(secCol.section.id)
                                     }
                                 }
@@ -932,7 +932,7 @@ Item {
                                         anchors.centerIn: parent
                                         spacing: 4
                                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: "+"; color: Theme.textDim; font.pixelSize: 22 }
-                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Add entry"; color: Theme.textDim; font.pixelSize: 11 }
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("docs.addEntry"); color: Theme.textDim; font.pixelSize: 11 }
                                     }
                                     MouseArea {
                                         id: addCardMA
@@ -961,7 +961,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.accent }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: "Snippets"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
                                     Text {
                                         text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: 12
                                     }
@@ -974,7 +974,7 @@ Item {
                                     font.pixelSize: 11
                                 }
                                 PillButton {
-                                    text: "+ Add"
+                                    text: I18n.t("docs.add")
                                     onClicked: root.openSnippetCreate()
                                 }
                             }
@@ -1008,7 +1008,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.textMuted }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: "Contacts & Channels"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
                                     Text {
                                         text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: 12
                                     }
@@ -1021,7 +1021,7 @@ Item {
                                     font.pixelSize: 11
                                 }
                                 PillButton {
-                                    text: "+ Add"
+                                    text: I18n.t("docs.add")
                                     onClicked: root.openContactCreate()
                                 }
                             }
@@ -1239,24 +1239,24 @@ Item {
         QQC.Menu {
             id: navMenu
             QQC.MenuItem {
-                text: "Rename / fields…"
+                text: I18n.t("docs.menu.renameFields")
                 onTriggered: {
                     const s = root.sections.find(function (x) { return x.id === nav.sectionId; });
                     if (s) root.openSectionEdit(s);
                 }
             }
             QQC.Menu {
-                title: "Sort by"
-                QQC.MenuItem { text: "Manual";     onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
-                QQC.MenuItem { text: "By ref";     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
-                QQC.MenuItem { text: "By title";   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
-                QQC.MenuItem { text: "By updated"; onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
+                title: I18n.t("docs.menu.sortBy")
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
             }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
-            QQC.MenuItem { text: "Move down"; enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete section"; onTriggered: root.deleteSection(nav.sectionId) }
+            QQC.MenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(nav.sectionId) }
         }
     }
 
@@ -1402,7 +1402,7 @@ Item {
                 Item { Layout.fillWidth: true }
                 Text {
                     visible: (card.item.updated || "").length > 0
-                    text: "upd " + (card.item.updated || "")
+                    text: I18n.t("docs.updatedPrefix").arg(card.item.updated || "")
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -1514,16 +1514,16 @@ Item {
         QQC.Menu {
             id: docCardMenu
             QQC.MenuItem {
-                text: card.isInternal ? "Open (wiki)" : "Open URL ↗"
+                text: card.isInternal ? I18n.t("docs.menu.openWiki") : I18n.t("docs.menu.openUrl")
                 enabled: (card.item.url || "").length > 0
                 onTriggered: root.openExternal(card.item.url)
             }
-            QQC.MenuItem { text: "Edit…"; onTriggered: root.openDocEdit(card.sectionId, card.item) }
+            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openDocEdit(card.sectionId, card.item) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
-            QQC.MenuItem { text: "Move down"; onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
+            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
         }
     }
 
@@ -1573,7 +1573,7 @@ Item {
                     border.width: 1
                     implicitWidth: copyT.implicitWidth + 14
                     implicitHeight: 22
-                    Text { id: copyT; anchors.centerIn: parent; text: "copy"; color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    Text { id: copyT; anchors.centerIn: parent; text: I18n.t("docs.copyShort"); color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
                     MouseArea {
                         id: copySnMA
                         anchors.fill: parent
@@ -1646,18 +1646,18 @@ Item {
         QQC.Menu {
             id: snipMenu
             QQC.MenuItem {
-                text: "Copy"
+                text: I18n.t("docs.copy")
                 onTriggered: {
                     AppController.copyToClipboard(sCard.snip.code || "");
                     root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
                 }
             }
-            QQC.MenuItem { text: "Edit…"; onTriggered: root.openSnippetEdit(sCard.idx) }
+            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openSnippetEdit(sCard.idx) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
-            QQC.MenuItem { text: "Move down"; enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteSnippet(sCard.idx) }
+            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteSnippet(sCard.idx) }
         }
     }
 
@@ -1737,12 +1737,12 @@ Item {
 
         QQC.Menu {
             id: ccMenu
-            QQC.MenuItem { text: "Edit…"; onTriggered: root.openContactEdit(cc.idx) }
+            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openContactEdit(cc.idx) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
-            QQC.MenuItem { text: "Move down"; enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteContact(cc.idx) }
+            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteContact(cc.idx) }
         }
     }
 }

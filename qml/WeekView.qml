@@ -278,7 +278,7 @@ Item {
                     RowLayout {
                         spacing: 10
                         Text {
-                            text: "WEEK " + AppController.isoWeekNumber(weekStart)
+                            text: I18n.t("week.number").arg(AppController.isoWeekNumber(weekStart))
                             color: Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -294,13 +294,13 @@ Item {
                 }
                 Item { Layout.fillWidth: true }
                 Text {
-                    text: root.totalTasks() + " deadlines · " + root.totalEvents() + " events"
+                    text: I18n.t("week.summary").arg(I18n.deadlines(root.totalTasks())).arg(I18n.events(root.totalEvents()))
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 11
                 }
                 PillButton {
-                    text: "Today"
+                    text: I18n.t("common.today")
                     onClicked: AppController.selectedDate = AppController.today
                 }
                 PillButton {
@@ -385,7 +385,7 @@ Item {
                                     radius: 4
                                     color: Theme.accent
                                     implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: "TODAY"; color: "#06121a"; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: "#06121a"; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
                                 }
                             }
                             Text {
@@ -473,7 +473,7 @@ Item {
                                 }
                                 Text {
                                     visible: headCol.modelData.tasks.length > 4
-                                    text: "+ " + (headCol.modelData.tasks.length - 4) + " more"
+                                    text: I18n.t("week.more").arg(headCol.modelData.tasks.length - 4)
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: 10

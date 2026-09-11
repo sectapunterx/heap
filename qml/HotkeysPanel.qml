@@ -48,7 +48,7 @@ Popup {
                 anchors.leftMargin: 14; anchors.rightMargin: 8
                 spacing: 8
                 Text {
-                    text: "HOTKEYS"
+                    text: I18n.t("hotkeys.title").toUpperCase()
                     color: Theme.textMuted
                     font.pixelSize: 11
                     font.weight: Font.DemiBold

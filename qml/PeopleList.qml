@@ -40,17 +40,17 @@ Rectangle {
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount()
+                    text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount())
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
                 }
                 Connections {
                     target: AppController.people
-                    function onDataChanged()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
-                    function onRowsInserted()   { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
-                    function onRowsRemoved()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
-                    function onModelReset()     { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
+                    function onDataChanged()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    function onRowsInserted()   { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    function onRowsRemoved()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    function onModelReset()     { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
                 }
             }
             Item { Layout.fillWidth: true }
@@ -130,10 +130,10 @@ Rectangle {
 
                 QQC.Menu {
                     id: personMenu
-                    QQC.MenuItem { text: "Edit…"; onTriggered: root.personRequested(prow.id) }
-                    QQC.MenuItem { text: "Cycle state"; onTriggered: AppController.cyclePerson(prow.id) }
+                    QQC.MenuItem { text: I18n.t("people.menu.edit"); onTriggered: root.personRequested(prow.id) }
+                    QQC.MenuItem { text: I18n.t("people.menu.cycle"); onTriggered: AppController.cyclePerson(prow.id) }
                     QQC.MenuSeparator {}
-                    QQC.MenuItem { text: "Delete"; onTriggered: AppController.deletePerson(prow.id) }
+                    QQC.MenuItem { text: I18n.t("people.menu.delete"); onTriggered: AppController.deletePerson(prow.id) }
                 }
 
                 // 2) Hover indicator — a real Rectangle whose visibility is

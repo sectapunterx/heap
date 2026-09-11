@@ -1000,7 +1000,8 @@ Item {
                     SegRow {
                         label: I18n.t("settings.appearance.density")
                         value: AppController.density
-                        options: [ ({ value: "compact", label: "Compact" }), ({ value: "comfy", label: "Comfy" }) ]
+                        options: [ ({ value: "compact", label: I18n.t("common.density.compact") }),
+                                   ({ value: "comfy",   label: I18n.t("common.density.comfy") }) ]
                         onSelected: (value) => AppController.density = value
                     }
                     SwatchRow {
@@ -1308,7 +1309,9 @@ Item {
                     SegRow {
                         label: I18n.t("settings.tasks.defaultColumn")
                         value: (root.settings.tasks && root.settings.tasks.defaultStatus) || "todo"
-                        options: [ ({ value: "backlog", label: "Backlog" }), ({ value: "todo", label: "To Do" }), ({ value: "prog", label: "In Progress" }) ]
+                        options: [ ({ value: "backlog", label: I18n.t("settings.tasks.col.backlog") }),
+                                   ({ value: "todo",    label: I18n.t("settings.tasks.col.todo") }),
+                                   ({ value: "prog",    label: I18n.t("settings.tasks.col.prog") }) ]
                         onSelected: (value) => root.set("tasks", "defaultStatus", value)
                     }
                 }

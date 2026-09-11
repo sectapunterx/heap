@@ -253,7 +253,7 @@ Item {
                 ColumnLayout {
                     spacing: 1
                     Text {
-                        text: "Notes · scratchpad"
+                        text: I18n.t("notes.header")
                         color: Theme.text
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
@@ -294,7 +294,7 @@ Item {
                     Text {
                         id: blToggleTxt
                         anchors.centerIn: parent
-                        text: "⌗ Links"
+                        text: I18n.t("notes.links")
                         color: root.showBacklinks ? "#06121a" : Theme.textMuted
                         font.pixelSize: 11
                         font.weight: Font.Medium
@@ -624,14 +624,14 @@ Item {
                     anchors.margins: 12
                     spacing: 8
                     Text {
-                        text: "Backlinks"
+                        text: I18n.t("notes.backlinks")
                         color: Theme.text
                         font.pixelSize: 12
                         font.weight: Font.DemiBold
                     }
                     Text {
                         visible: root._backlinks.length === 0
-                        text: "No [[wiki-links]] yet.\nType [[ to link a heading."
+                        text: I18n.t("notes.backlinks.empty")
                         color: Theme.textDim
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap

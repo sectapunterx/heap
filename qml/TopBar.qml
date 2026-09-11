@@ -193,7 +193,7 @@ Rectangle {
                     font.pixelSize: 12
                 }
                 Text {
-                    text: "Working on " + AppController.focusedTaskId
+                    text: I18n.t("topbar.git.workingOn").arg(AppController.focusedTaskId)
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
                     font.pixelSize: 12
@@ -291,7 +291,7 @@ Rectangle {
                     Text {
                         id: openT
                         anchors.centerIn: parent
-                        text: "Open"
+                        text: I18n.t("topbar.git.open")
                         color: openMA.containsMouse ? Theme.bg : Theme.accentStrong
                         font.pixelSize: 10
                         font.weight: Font.Medium
@@ -389,7 +389,7 @@ Rectangle {
         }
 
         PillButton {
-            text: "+ Task"
+            text: I18n.t("topbar.newTask")
             primary: true
             onClicked: root.newTaskRequested()
         }

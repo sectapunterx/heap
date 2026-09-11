@@ -120,7 +120,7 @@ Rectangle {
                 Text {
                     id: stuckT
                     anchors.centerIn: parent
-                    text: "stuck"
+                    text: I18n.t("task.chip.stuck")
                     color: Theme.p0
                     font.family: Theme.fontUi
                     font.pixelSize: 9
@@ -137,7 +137,7 @@ Rectangle {
                 Text {
                     id: archT
                     anchors.centerIn: parent
-                    text: "arch"
+                    text: I18n.t("task.chip.arch")
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: 9
@@ -279,10 +279,10 @@ Rectangle {
                         clock = " " + String(card.task.dueAt.getHours()).padStart(2, "0")
                               + ":" + String(card.task.dueAt.getMinutes()).padStart(2, "0");
                     }
-                    if (days < 0) return "⏱ " + (-days) + "d overdue" + clock;
-                    if (days === 0) return "⏱ today" + clock;
-                    if (days === 1) return "⏱ tomorrow" + clock;
-                    return "⏱ " + days + "d" + clock;
+                    if (days < 0) return "⏱ " + I18n.t("task.due.overdue").arg(-days) + clock;
+                    if (days === 0) return "⏱ " + I18n.t("task.due.today") + clock;
+                    if (days === 1) return "⏱ " + I18n.t("task.due.tomorrow") + clock;
+                    return "⏱ " + I18n.t("task.due.inDays").arg(days) + clock;
                 }
                 visible: dlText.length > 0
                 text: dlText

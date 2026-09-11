@@ -60,13 +60,13 @@ Item {
 
     readonly property var bucketOrder: ["overdue", "today", "tomorrow", "thisweek", "nextweek", "later", "nodl"]
     readonly property var bucketMeta: ({
-        overdue:  ({ name: "Overdue",     icon: "!", color: Theme.p0,           tone: "danger"  }),
-        today:    ({ name: "Today",       icon: "●", color: Theme.accent,       tone: "today"   }),
-        tomorrow: ({ name: "Tomorrow",    icon: "○", color: Theme.p1,           tone: "soon"    }),
-        thisweek: ({ name: "This week",   icon: "▷", color: Theme.stProg,       tone: "normal"  }),
-        nextweek: ({ name: "Next week",   icon: "›", color: Theme.textMuted,    tone: "normal"  }),
-        later:    ({ name: "Later",       icon: "…", color: Theme.textDim,      tone: "normal"  }),
-        nodl:     ({ name: "No deadline", icon: "—", color: Theme.textDim,      tone: "normal"  })
+        overdue:  ({ name: I18n.t("timeline.bucket.overdue"),  icon: "!", color: Theme.p0,        tone: "danger"  }),
+        today:    ({ name: I18n.t("timeline.bucket.today"),    icon: "●", color: Theme.accent,    tone: "today"   }),
+        tomorrow: ({ name: I18n.t("timeline.bucket.tomorrow"), icon: "○", color: Theme.p1,        tone: "soon"    }),
+        thisweek: ({ name: I18n.t("timeline.bucket.thisweek"), icon: "▷", color: Theme.stProg,    tone: "normal"  }),
+        nextweek: ({ name: I18n.t("timeline.bucket.nextweek"), icon: "›", color: Theme.textMuted, tone: "normal"  }),
+        later:    ({ name: I18n.t("timeline.bucket.later"),    icon: "…", color: Theme.textDim,   tone: "normal"  }),
+        nodl:     ({ name: I18n.t("timeline.bucket.nodl"),     icon: "—", color: Theme.textDim,   tone: "normal"  })
     })
 
     function passesFilter(t) {
@@ -195,7 +195,9 @@ Item {
                         text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
                     }
                     Text {
-                        text: root.totalShown() + " task" + (root.totalShown() === 1 ? "" : "s") + " · today is " + AppController.today.toLocaleDateString(Qt.locale("en_US"), "yyyy-MM-dd")
+                        text: I18n.t("timeline.subtitle")
+                                .arg(I18n.tasks(root.totalShown()))
+                                .arg(AppController.today.toLocaleDateString(I18n.locale, "yyyy-MM-dd"))
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
@@ -214,7 +216,7 @@ Item {
                         anchors.centerIn: parent
                         spacing: 6
                         Rectangle { width: 8; height: 8; radius: 2; color: Theme.stDone }
-                        Text { text: "Show done"; color: root.showDone ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 12 }
+                        Text { text: I18n.t("timeline.showDone"); color: root.showDone ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 12 }
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -290,7 +292,7 @@ Item {
                                     leftPadding: 34
                                 }
                                 Text {
-                                    text: groupItem.list.length + " task" + (groupItem.list.length === 1 ? "" : "s")
+                                    text: I18n.tasks(groupItem.list.length)
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: 11

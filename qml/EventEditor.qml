@@ -119,7 +119,8 @@ Popup {
             ComboBox {
                 id: typeBox
                 Layout.fillWidth: true
-                model: ["Daily standup", "1:1", "Team sync", "Focus time"]
+                model: [I18n.t("event.type.standup"), I18n.t("event.type.oneone"),
+                        I18n.t("event.type.sync"), I18n.t("event.type.focus")]
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
             }
@@ -173,7 +174,7 @@ Popup {
                     spacing: 6
                     Text {
                         Layout.fillWidth: true
-                        text: Qt.formatDate(root.pickedDate, "ddd, d MMM yyyy")
+                        text: root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
                         color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 12
                     }
                     Rectangle {   // mini calendar glyph

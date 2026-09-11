@@ -307,7 +307,7 @@ Popup {
                 text: I18n.t("editor.label.deadline").toUpperCase()
             }
             FieldLabel {
-                text: "BRANCH"
+                text: I18n.t("editor.label.branch").toUpperCase()
             }
             RowLayout {
                 Layout.fillWidth: true
@@ -323,8 +323,8 @@ Popup {
                         border.color: deadlineField.text.length === 0
                             ? Theme.border
                             : (root._deadlinePreview && root._deadlinePreview.ok
-                                ? (Theme.accent || Theme.borderStrong)
-                                : (Theme.danger || "#c0392b"))
+                                ? Theme.accent
+                                : Theme.p0)
                         border.width: 1
                     }
                     color: Theme.text
@@ -384,7 +384,7 @@ Popup {
                     visible: root._deadlinePreview && root._deadlinePreview.ok
                     radius: 10
                     color: Theme.panel2
-                    border.color: Theme.accent || Theme.borderStrong
+                    border.color: Theme.accent
                     border.width: 1
                     implicitHeight: chipLabel.implicitHeight + 6
                     implicitWidth: chipLabel.implicitWidth + 14
@@ -422,7 +422,7 @@ Popup {
                 placeholderTextColor: Theme.textDim
             }
 
-            FieldLabel { text: "RECURRENCE" }
+            FieldLabel { text: I18n.t("editor.label.recurrence").toUpperCase() }
             FieldLabel { text: "" }
             ComboBox {
                 id: recurBox
@@ -431,9 +431,12 @@ Popup {
                 readonly property var _vals: ["", "every:day", "every:week", "every:weekday",
                                               "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
                                               "every:sat", "every:sun"]
-                model: ["None", "Daily", "Weekly", "Weekdays",
-                        "Every Mon", "Every Tue", "Every Wed", "Every Thu", "Every Fri",
-                        "Every Sat", "Every Sun"]
+                model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
+                        I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
+                        I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),
+                        I18n.t("editor.recur.everyWed"), I18n.t("editor.recur.everyThu"),
+                        I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
+                        I18n.t("editor.recur.everySun")]
                 background: FieldBg {
                 }
                 contentItem: Text {
@@ -445,8 +448,8 @@ Popup {
             }
             Item {}
 
-            FieldLabel { text: "SCHEDULED" }
-            FieldLabel { text: "ESTIMATE (MIN)" }
+            FieldLabel { text: I18n.t("editor.label.scheduled").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.estimate").toUpperCase() }
             TextField {
                 id: scheduledField
                 Layout.fillWidth: true
@@ -467,7 +470,7 @@ Popup {
                 placeholderTextColor: Theme.textDim
             }
 
-            FieldLabel { text: "LABELS" }
+            FieldLabel { text: I18n.t("editor.label.labels").toUpperCase() }
             FieldLabel { text: "" }
             TextField {
                 id: labelsField
@@ -490,7 +493,7 @@ Popup {
                     objectName: "te-someday"
                     anchors.left: parent.left
                     anchors.verticalCenter: parent.verticalCenter
-                    text: "Someday"
+                    text: I18n.t("editor.someday")
                     // Parking a task as "someday" files it under Backlog. Reflect
                     // that in the status box immediately; saveTask enforces it too.
                     onCheckedChanged: if (checked) {
@@ -509,7 +512,7 @@ Popup {
                 HoverHandler { id: somedayHover }
                 ToolTip.visible: somedayHover.hovered
                 ToolTip.delay: 400
-                ToolTip.text: "Park as someday — files this task under Backlog until you pick it up."
+                ToolTip.text: I18n.t("editor.someday.hint")
             }
         }
 

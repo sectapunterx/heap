@@ -175,8 +175,7 @@ Item {
                                 const y = d.getFullYear();
                                 const m = (d.getMonth()+1).toString().padStart(2,"0");
                                 const dd = d.getDate().toString().padStart(2,"0");
-                                const n = root._eventsToday;
-                                return y + "-" + m + "-" + dd + " · " + n + " event" + (n === 1 ? "" : "s");
+                                return y + "-" + m + "-" + dd + " · " + I18n.events(root._eventsToday);
                             }
                             color: Theme.textDim
                             font.family: Theme.fontMono

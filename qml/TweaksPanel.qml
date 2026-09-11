@@ -63,7 +63,7 @@ Popup {
                 anchors.fill: parent
                 anchors.leftMargin: 14; anchors.rightMargin: 8
                 Text {
-                    text: "TWEAKS"
+                    text: I18n.t("tweaks.title").toUpperCase()
                     color: Theme.textMuted
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
@@ -125,8 +125,8 @@ Popup {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 4
-                    SegButton { text: "Compact"; active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
-                    SegButton { text: "Comfy";   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
+                    SegButton { text: I18n.t("common.density.compact"); active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
+                    SegButton { text: I18n.t("common.density.comfy");   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
                 }
             }
 

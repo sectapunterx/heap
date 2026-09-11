@@ -279,7 +279,7 @@ Item {
                                         onDoubleClicked: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() }
                                         cursorShape: Qt.IBeamCursor
                                         ToolTip.visible: containsMouse
-                                        ToolTip.text: "Double-click to rename"
+                                        ToolTip.text: I18n.t("kanban.tip.rename")
                                         ToolTip.delay: 500
                                         hoverEnabled: true
                                     }
@@ -371,14 +371,14 @@ Item {
 
                             QQC.Menu {
                                 id: colHeaderMenu
-                                QQC.MenuItem { text: "Add task"; onTriggered: root.createInStatus(col.statusId) }
-                                QQC.MenuItem { text: "Rename"; onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
-                                QQC.MenuItem { text: "Change color…"; onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
+                                QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
+                                QQC.MenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
                                 QQC.MenuSeparator {}
-                                QQC.MenuItem { text: "Move left";  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
-                                QQC.MenuItem { text: "Move right"; enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                QQC.MenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                QQC.MenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 QQC.MenuSeparator {}
-                                QQC.MenuItem { text: "Delete column"; enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
                             }
                         }
 
@@ -535,7 +535,7 @@ Item {
                             }
                             QQC.Menu {
                                 id: bodyMenu
-                                QQC.MenuItem { text: "Add task"; onTriggered: root.createInStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
                             }
                         }
                     }
