@@ -248,14 +248,16 @@ ApplicationWindow {
 
                 FilterBar {
                     Layout.fillWidth: true
+                    // Archive brings its own header and its own counter, and the
+                    // fall-through label used to caption it "Docs".
                     visible: AppController.currentView !== "docs"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
-                    viewLabel: AppController.currentView === "board" ? "Board"
-                             : AppController.currentView === "timeline" ? "Timeline"
-                             : AppController.currentView === "week" ? "Week"
-                             : AppController.currentView === "month" ? "Month"
-                             : "Docs"
+                          && AppController.currentView !== "archive"
+                    viewLabel: AppController.currentView === "timeline" ? I18n.t("siderail.timeline")
+                             : AppController.currentView === "week" ? I18n.t("siderail.week")
+                             : AppController.currentView === "month" ? I18n.t("siderail.month")
+                             : I18n.t("siderail.board")
                     priorities: win.prioritiesFilter
                     totalCount: win._taskCount
                     activeCount: win._activeCount

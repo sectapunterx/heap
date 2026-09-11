@@ -135,9 +135,10 @@ Item {
     }
     function rangeTitle() {
         if (mode === "month")
-            return Qt.formatDate(anchorDate, "MMMM yyyy");
+            return I18n.monthName(anchorDate.getMonth()) + " " + anchorDate.getFullYear();
         const end = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + rows * 7 - 1);
-        return Qt.formatDate(gridStart, "d MMM") + " – " + Qt.formatDate(end, "d MMM yyyy");
+        return gridStart.toLocaleDateString(I18n.locale, "d MMM")
+             + " – " + end.toLocaleDateString(I18n.locale, "d MMM yyyy");
     }
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
@@ -216,7 +217,9 @@ Item {
                 color: todayMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: 11 }
-                MouseArea { id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.selectedDate = new Date() }
+                // AppController.today, like every other "today" in the app —
+                // a raw new Date() carries a time-of-day with it.
+                MouseArea { id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.selectedDate = AppController.today }
             }
         }
 
@@ -230,7 +233,11 @@ Item {
                     required property int index
                     Layout.fillWidth: true
                     horizontalAlignment: Text.AlignHCenter
-                    text: Qt.formatDate(new Date(root.gridStart.getFullYear(), root.gridStart.getMonth(), root.gridStart.getDate() + index), "ddd")
+                    // App language, not the system locale: MonthView used to say
+                    // "Mon" while the MiniWeek right next to it said "ПН".
+                    text: I18n.dayName(new Date(root.gridStart.getFullYear(),
+                                                root.gridStart.getMonth(),
+                                                root.gridStart.getDate() + index).getDay())
                     color: Theme.textDim; font.pixelSize: 10; font.weight: Font.DemiBold
                 }
             }
@@ -251,7 +258,7 @@ Item {
                     // `modelData` is their int index) can still read the cell.
                     readonly property var cell: modelData
                     readonly property bool _inMonth: root.mode !== "month" || modelData.date.getMonth() === root.anchorMonth
-                    readonly property bool _today: root.isSameDay(modelData.date, new Date())
+                    readonly property bool _today: root.isSameDay(modelData.date, AppController.today)
                     readonly property bool _sel: root.isSameDay(modelData.date, AppController.selectedDate)
                     Layout.fillWidth: true
                     Layout.fillHeight: true

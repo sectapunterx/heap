@@ -357,15 +357,32 @@ Rectangle {
                     background: Item {}
                     selectByMouse: true
                 }
+                // Shortcut hint. It used to read "⌘K" — a macOS glyph on every
+                // platform, and the wrong binding besides: Ctrl+K opens the
+                // command palette, focusing this field is search.focus. Now it
+                // shows the live binding and clicking it does what it says.
                 Rectangle {
+                    visible: kbd.text.length > 0
                     radius: 4
-                    border.color: Theme.border; border.width: 1
-                    color: "transparent"
+                    border.color: kbdMA.containsMouse ? Theme.borderStrong : Theme.border
+                    border.width: 1
+                    color: kbdMA.containsMouse ? Theme.panel3 : "transparent"
                     width: kbd.implicitWidth + 10; height: 16
                     Text {
                         id: kbd; anchors.centerIn: parent
-                        text: "⌘K"; color: Theme.textDim
+                        text: AppController.shortcutFor("search.focus")
+                        color: kbdMA.containsMouse ? Theme.text : Theme.textDim
                         font.family: Theme.fontMono; font.pixelSize: 10
+                    }
+                    MouseArea {
+                        id: kbdMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.focusSearch()
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 400
+                        ToolTip.text: I18n.t("topbar.searchHint").arg(kbd.text)
                     }
                 }
             }

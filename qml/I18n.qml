@@ -124,6 +124,7 @@ QtObject {
             "siderail.board": "Board",
             "siderail.timeline": "Timeline",
             "siderail.week": "Week",
+            "siderail.month": "Month",
             "siderail.docs": "Docs",
             "siderail.notes": "Notes",
             "siderail.people": "People",
@@ -710,6 +711,7 @@ QtObject {
             "siderail.board": "Доска",
             "siderail.timeline": "Лента",
             "siderail.week": "Неделя",
+            "siderail.month": "Месяц",
             "siderail.docs": "Доки",
             "siderail.notes": "Заметки",
             "siderail.people": "Люди",
@@ -1172,5 +1174,25 @@ QtObject {
         if (table[key] !== undefined) return table[key];
         if (dict.en[key] !== undefined) return dict.en[key];
         return key;
+    }
+
+    // ── Dates ────────────────────────────────────────────────────────
+    // Calendars used to pull names from three different places — a hardcoded
+    // ru_RU locale in MiniWeek, hardcoded English in WeekView, and the system
+    // locale in MonthView — so two calendars on the same screen disagreed.
+    // Everything goes through the app language now.
+    readonly property var locale: Qt.locale(lang === "ru" ? "ru_RU" : "en_US")
+
+    // Month 0..11, standalone form ("сентябрь", not "сентября").
+    function monthName(month) {
+        return locale.standaloneMonthName(month, Locale.LongFormat);
+    }
+    // JS day-of-week 0..6 (0 = Sunday), short form: "Mon" / "пн".
+    function dayName(jsDow) {
+        return locale.standaloneDayName(jsDow, Locale.ShortFormat);
+    }
+    // Same, upper-cased for the column strips ("MON" / "ПН").
+    function dayNameUpper(jsDow) {
+        return dayName(jsDow).toUpperCase();
     }
 }

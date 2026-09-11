@@ -80,8 +80,14 @@ Item {
     readonly property int hoursEnd:   AppController.workdayEnd
     readonly property int hourH: 38
     // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
-    // date regardless of which day the week starts on.
-    readonly property var dowLabelsByJsDow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    // date regardless of which day the week starts on. Names come from the app
+    // language — they used to be hardcoded English next to a localised date
+    // range in the same header.
+    readonly property var dowLabelsByJsDow: {
+        const out = [];
+        for (let i = 0; i < 7; i++) out.push(I18n.dayName(i));
+        return out;
+    }
 
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
