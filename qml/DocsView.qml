@@ -783,10 +783,16 @@ Item {
                                 id: secAnchor
                                 objectName: "sec-" + secCol.section.id
 
+                                // Hover drives the ✎ / × reveal below. It must be
+                                // a HoverHandler, not this MouseArea: hover stops
+                                // at the first item that accepts it, so the icons
+                                // disappeared as soon as the pointer reached them.
+                                property bool headerHovered: false
+                                HoverHandler { onHoveredChanged: secAnchor.headerHovered = hovered }
+
                                 MouseArea {
                                     id: secHover
                                     anchors.fill: parent
-                                    hoverEnabled: true
                                     acceptedButtons: Qt.RightButton
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) sectionMenu.popup()
@@ -827,7 +833,9 @@ Item {
                                                 font.weight: Font.DemiBold
                                             }
                                             Rectangle {
-                                                visible: secHover.containsMouse
+                                                opacity: secAnchor.headerHovered ? 1 : 0
+                                                enabled: secAnchor.headerHovered
+                                                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                                                 width: 22; height: 22; radius: 5
                                                 color: secEditMA.containsMouse ? Theme.panel2 : "transparent"
                                                 border.color: Theme.border; border.width: 1
@@ -841,7 +849,9 @@ Item {
                                                 }
                                             }
                                             Rectangle {
-                                                visible: secHover.containsMouse
+                                                opacity: secAnchor.headerHovered ? 1 : 0
+                                                enabled: secAnchor.headerHovered
+                                                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                                                 width: 22; height: 22; radius: 5
                                                 color: secDelMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : "transparent"
                                                 border.color: secDelMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
@@ -1283,8 +1293,13 @@ Item {
         property string docSectionId: sectionId
         height: cardCol.implicitHeight + 24
         radius: 10
-        color: cardMA.containsMouse ? Theme.panel2 : Theme.panel
-        border.color: cardMA.containsMouse ? Theme.borderStrong : Theme.border
+        // Hover state comes from a handler, not from cardMA: the card-wide
+        // MouseArea swallowed the hover of the overlay buttons on top of it, so
+        // they blinked out as the pointer approached.
+        property bool cardHovered: false
+        HoverHandler { onHoveredChanged: card.cardHovered = hovered }
+        color: cardHovered ? Theme.panel2 : Theme.panel
+        border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
         opacity: handleMA.drag.active ? 0.5 : 1.0
 
@@ -1329,7 +1344,7 @@ Item {
                 }
                 Text {
                     text: card.isInternal ? "→" : "↗"
-                    color: cardMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                    color: card.cardHovered ? Theme.accentStrong : Theme.textDim
                     font.pixelSize: 12
                 }
             }
@@ -1395,11 +1410,29 @@ Item {
             }
         }
 
+        MouseArea {
+            id: cardMA
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            cursorShape: Qt.PointingHandCursor
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton) docCardMenu.popup();
+                else root.openExternal(card.item.url);
+            }
+        }
+
         // Hover-overlay icons: ⋮⋮ drag handle (LMB drag-source), ✎ edit, × delete.
         // Keeping the drag-source to a small handle frees the rest of the card
         // for click + page-pan via the parent Flickable.
+        //
+        // Declared after cardMA so it stacks above it — otherwise every click on
+        // ✎ / × landed on the card-wide MouseArea and opened the document URL
+        // instead, which made the buttons decorative.
         Row {
-            visible: cardMA.containsMouse && !handleMA.drag.active
+            visible: !handleMA.drag.active
+            opacity: card.cardHovered ? 1 : 0
+            enabled: card.cardHovered
+            Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: 6
             spacing: 4
@@ -1445,18 +1478,6 @@ Item {
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.deleteDoc(card.sectionId, card.item.ref)
                 }
-            }
-        }
-
-        MouseArea {
-            id: cardMA
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
-            cursorShape: Qt.PointingHandCursor
-            onClicked: (mouse) => {
-                if (mouse.button === Qt.RightButton) docCardMenu.popup();
-                else root.openExternal(card.item.url);
             }
         }
 
@@ -1512,14 +1533,17 @@ Item {
         property int idx: -1
         radius: 10
         color: Theme.panel
-        border.color: snHover.containsMouse ? Theme.borderStrong : Theme.border
+        // See DocCard: a handler, so the ✎ / × on top don't steal the hover that
+        // reveals them.
+        property bool cardHovered: false
+        HoverHandler { onHoveredChanged: sCard.cardHovered = hovered }
+        border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
         implicitHeight: sCol.implicitHeight + 20
 
         MouseArea {
             id: snHover
             anchors.fill: parent
-            hoverEnabled: true
             acceptedButtons: Qt.RightButton
             onClicked: (mouse) => { if (mouse.button === Qt.RightButton) snipMenu.popup() }
         }
@@ -1562,7 +1586,9 @@ Item {
                     }
                 }
                 Rectangle {
-                    visible: snHover.containsMouse
+                    opacity: sCard.cardHovered ? 1 : 0
+                    enabled: sCard.cardHovered
+                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                     radius: 4
                     color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
                     border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
@@ -1572,7 +1598,9 @@ Item {
                     MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
                 }
                 Rectangle {
-                    visible: snHover.containsMouse
+                    opacity: sCard.cardHovered ? 1 : 0
+                    enabled: sCard.cardHovered
+                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                     radius: 4
                     color: delSnMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
                     border.color: delSnMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
@@ -1640,8 +1668,11 @@ Item {
         width: parent ? ((parent.width - (parent.columns - 1) * parent.columnSpacing) / parent.columns) : 240
         height: 56
         radius: 10
-        color: ccMA.containsMouse ? Theme.panel2 : Theme.panel
-        border.color: ccMA.containsMouse ? Theme.borderStrong : Theme.border
+        // See DocCard — handler-driven hover so the row buttons stay put.
+        property bool cardHovered: false
+        HoverHandler { onHoveredChanged: cc.cardHovered = hovered }
+        color: cardHovered ? Theme.panel2 : Theme.panel
+        border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
 
         RowLayout {
@@ -1672,7 +1703,9 @@ Item {
                 Text { text: cc.c.mattermost || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 10 }
             }
             Row {
-                visible: ccMA.containsMouse
+                opacity: cc.cardHovered ? 1 : 0
+                enabled: cc.cardHovered
+                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                 spacing: 4
                 Rectangle {
                     width: 22; height: 22; radius: 5
@@ -1693,7 +1726,6 @@ Item {
         MouseArea {
             id: ccMA
             anchors.fill: parent
-            hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             cursorShape: Qt.PointingHandCursor
             onClicked: (mouse) => {
