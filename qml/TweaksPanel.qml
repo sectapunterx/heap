@@ -9,6 +9,10 @@ Popup {
     focus: true
     padding: 0
     width: 280
+    // Main._togglePopover re-parents this to the rail button that opened it, so
+    // "outside the parent" means "outside the panel and its button": any press
+    // elsewhere in the app dismisses it, and a press on the button reaches the
+    // rail handler, which toggles.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
     readonly property var accentSwatches: [

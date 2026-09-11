@@ -12,6 +12,7 @@ Popup {
     padding: 0
     width: 460
     height: Math.min(580, Math.max(360, headerArea.height + listArea.contentHeight + footerArea.height + 8))
+    // Re-parented to the rail button by Main._togglePopover — see TweaksPanel.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
     // Tracks how many chip capture sessions are active (usually 0 or 1).

@@ -150,6 +150,16 @@ Popup {
     contentItem: ColumnLayout {
         spacing: 0
 
+        // The guide is a keyboard-first app's first screen, so it has to be
+        // drivable from the keyboard: ←/→ walk the steps, Enter advances (and
+        // finishes on the last one), Esc opts out exactly like the ✕.
+        focus: true
+        Keys.onEscapePressed: root._finish()
+        Keys.onLeftPressed:   root._back()
+        Keys.onRightPressed:  root._next()
+        Keys.onReturnPressed: root._next()
+        Keys.onEnterPressed:  root._next()
+
         // ── Header: glyph + title + progress dots + close ──
         RowLayout {
             Layout.topMargin: 20

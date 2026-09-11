@@ -7,7 +7,10 @@ Popup {
     id: root
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    // CloseOnPressOutside, not …OutsideParent: the popup's parent is the window
+    // content item, so "outside the parent" never happens and a click on the
+    // dimmed backdrop did nothing.
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
     width: 480
 

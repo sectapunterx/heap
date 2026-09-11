@@ -571,7 +571,7 @@ Item {
         id: addColumnPopup
         modal: true
         focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         padding: 0
         width: 360
         anchors.centerIn: Overlay.overlay
@@ -651,6 +651,10 @@ Item {
         id: colorPopup
         modal: false
         focus: true
+        // Parented to the swatch it was opened from (see openFor), so "outside
+        // the parent" is "outside the palette and the swatch" — a press anywhere
+        // else closes it, while a press on the swatch falls through to openFor,
+        // which toggles.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         padding: 8
         background: Rectangle { radius: 10; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
@@ -659,11 +663,17 @@ Item {
         readonly property var palette: addColumnPopup.palette
 
         function openFor(id, currentColor, anchorItem) {
+            const sameSwatch = colorPopup.opened && colorPopup.forStatusId === id;
+            colorPopup.close();
+            if (sameSwatch) return;
             forStatusId = id;
             if (anchorItem) {
-                const p = anchorItem.mapToItem(root, anchorItem.width / 2, anchorItem.height);
-                x = Math.max(8, p.x - 90);
-                y = p.y + 6;
+                colorPopup.parent = anchorItem;
+                const p = anchorItem.mapToItem(root, 0, 0);
+                const wantX = Math.max(8, Math.min(p.x + anchorItem.width / 2 - 90,
+                                                   root.width - colorPopup.width - 8));
+                colorPopup.x = wantX - p.x;
+                colorPopup.y = anchorItem.height + 6;
             }
             open();
         }

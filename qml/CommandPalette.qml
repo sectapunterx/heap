@@ -8,7 +8,7 @@ Popup {
     id: root
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
     width: 600
     height: 480
