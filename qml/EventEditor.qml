@@ -76,6 +76,39 @@ Popup {
         }
     }
 
+    // Shared by the Save button and the Ctrl+Return shortcut.
+    function _save() {
+        const m = AppController.events;
+        let curTaskId = "";
+        for (let i = 0; i < m.rowCount(); i++) {
+            const idx = m.index(i, 0);
+            if (m.data(idx, Qt.UserRole + 1) === root.eventId) {
+                curTaskId = m.data(idx, Qt.UserRole + 8);
+                break;
+            }
+        }
+        const d = {
+            id: root.eventId,
+            title: titleField.text,
+            type: ["standup", "oneone", "sync", "focus"][typeBox.currentIndex],
+            start: root.parseHour(startField.text),
+            end: root.parseHour(endField.text),
+            attendees: attField.text,
+            date: root.pickedDate,
+            taskId: curTaskId,
+            context: contextField.text
+        };
+        AppController.saveEvent(d);
+        root.close();
+    }
+
+    // Keyboard-first — see TaskEditor.
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: root.opened
+        onActivated: root._save()
+    }
+
     background: Rectangle {
         radius: 12
         color: Theme.panel
@@ -228,30 +261,7 @@ Popup {
             }
             PillButton {
                 text: I18n.t("editor.btn.save"); primary: true
-                onClicked: {
-                    const m = AppController.events;
-                    let curTaskId = "";
-                    for (let i = 0; i < m.rowCount(); i++) {
-                        const idx = m.index(i,0);
-                        if (m.data(idx, Qt.UserRole + 1) === root.eventId) {
-                            curTaskId = m.data(idx, Qt.UserRole + 8);
-                            break;
-                        }
-                    }
-                    const d = {
-                        id: root.eventId,
-                        title: titleField.text,
-                        type: ["standup","oneone","sync","focus"][typeBox.currentIndex],
-                        start: root.parseHour(startField.text),
-                        end: root.parseHour(endField.text),
-                        attendees: attField.text,
-                        date: root.pickedDate,
-                        taskId: curTaskId,
-                        context: contextField.text
-                    };
-                    AppController.saveEvent(d);
-                    root.close();
-                }
+                onClicked: root._save()
             }
         }
     }

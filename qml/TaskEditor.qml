@@ -170,7 +170,103 @@ Popup {
         return AppController.classifyTaskKind(text || "");
     }
 
+    // Shared by the Save button and the Ctrl+Return shortcut.
+    function _save() {
+        // New tasks: if user left idField blank, fall back to the
+        // auto-generated id captured in the draft. Edit: take the
+        // (possibly renamed) text from idField.
+        let finalId = idField.text.trim();
+        if (finalId.length === 0 && root.isNew) {
+            finalId = root.draft.id || "";
+        }
+        // Extract @handle attendees and "// comment" tail. Handles
+        // remain visible in the title — only the "//" tail is
+        // peeled off into the description.
+        const meta = root._extractMeta(titleField.text);
+        const cleanedTitle = meta.title;
+        const inlineDesc   = meta.desc;
+        const handleNames  = root._resolvePeopleNames(meta.handles);
+
+        // Due and scheduled are typed independently; a task with only
+        // a due date is scheduled for that day, which is what the
+        // single deadline field always meant.
+        const dueAt = root.parseDate(deadlineField.text);
+        const schedTyped = root.parseDate(scheduledField.text);
+        const scheduledAt = schedTyped || dueAt;
+        const hasTime = root.parseHasTime(scheduledField.text)
+                     || root.parseHasTime(deadlineField.text);
+
+        const d = {
+            _isNew: root.isNew,
+            // Pass the original id alongside the (possibly edited)
+            // new id so saveTask can rename rather than insert a
+            // duplicate row when the user changes the id field.
+            _originalId: root._originalId,
+            id: finalId,
+            title: cleanedTitle,
+            // Inline "//..." appends to the description field.
+            desc: inlineDesc.length > 0
+                  ? ((descField.text || "").trim().length > 0
+                      ? descField.text.trim() + "\n" + inlineDesc
+                      : inlineDesc)
+                  : descField.text,
+            priority: priBox.currentText,
+            status: root.statusList()[statusBox.currentIndex],
+            scheduledAt: scheduledAt,
+            dueAt: dueAt,
+            hasTime: hasTime,
+            branch: branchField.text,
+            recurrence: recurBox._vals[recurBox.currentIndex] || "",
+            labels: root.labelsFromText(labelsField.text),
+            estimateMinutes: parseInt(estimateField.text || "0") || 0,
+            someday: somedayBox.checked
+        };
+        AppController.saveTask(d);
+        // The parsed clock time now lives on the task itself, so a
+        // focus block is no longer needed to keep it. A "sync" still
+        // means a meeting, and a meeting is a calendar event.
+        if (root.isNew
+            && root._deadlinePreview && root._deadlinePreview.ok
+            && root._deadlinePreview.hasTime
+            && root._deadlinePreview.start) {
+            const kind = root._classifyKind(
+                (titleField.text || "") + " "
+              + (descField.text || "") + " "
+              + (deadlineField.text || ""));
+            const dt = root._deadlinePreview.start;
+            if (kind === "sync") {
+                const startHour = dt.getHours() + dt.getMinutes() / 60.0;
+                // Honour parsed range "12:00-13:00", else 30m.
+                let endHour = startHour + 0.5;
+                const pe = root._deadlinePreview.end;
+                if (pe && pe.getTime && pe.getTime() > 0) {
+                    const eh = pe.getHours() + pe.getMinutes() / 60.0;
+                    if (eh > startHour) endHour = eh;
+                }
+                const ev = AppController.newEventDraft(startHour, dt);
+                ev.type      = "sync";
+                ev.title     = (cleanedTitle || "").substring(0, 40);
+                ev.end       = endHour;
+                ev.taskId    = d.id;
+                ev.date      = dt;
+                ev.attendees = handleNames.join(", ");
+                AppController.saveEvent(ev);
+            }
+            if (kind !== "ticket") AppController.selectedDate = dt;
+        }
+        root.close();
+    }
+
     anchors.centerIn: Overlay.overlay
+
+    // Keyboard-first: Escape already closes, but there was no way to commit
+    // without reaching for the mouse. Plain Enter belongs to the text fields
+    // (and would fight the multi-line description), so Ctrl+Enter saves.
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: root.opened
+        onActivated: root._save()
+    }
 
     background: Rectangle {
         radius: 12
@@ -542,91 +638,7 @@ Popup {
             PillButton {
                 text: root.isNew ? I18n.t("editor.btn.create") : I18n.t("editor.btn.save")
                 primary: true
-                onClicked: {
-                    // New tasks: if user left idField blank, fall back to the
-                    // auto-generated id captured in the draft. Edit: take the
-                    // (possibly renamed) text from idField.
-                    let finalId = idField.text.trim();
-                    if (finalId.length === 0 && root.isNew) {
-                        finalId = root.draft.id || "";
-                    }
-                    // Extract @handle attendees and "// comment" tail. Handles
-                    // remain visible in the title — only the "//" tail is
-                    // peeled off into the description.
-                    const meta = root._extractMeta(titleField.text);
-                    const cleanedTitle = meta.title;
-                    const inlineDesc   = meta.desc;
-                    const handleNames  = root._resolvePeopleNames(meta.handles);
-
-                    // Due and scheduled are typed independently; a task with only
-                    // a due date is scheduled for that day, which is what the
-                    // single deadline field always meant.
-                    const dueAt = root.parseDate(deadlineField.text);
-                    const schedTyped = root.parseDate(scheduledField.text);
-                    const scheduledAt = schedTyped || dueAt;
-                    const hasTime = root.parseHasTime(scheduledField.text)
-                                 || root.parseHasTime(deadlineField.text);
-
-                    const d = {
-                        _isNew: root.isNew,
-                        // Pass the original id alongside the (possibly edited)
-                        // new id so saveTask can rename rather than insert a
-                        // duplicate row when the user changes the id field.
-                        _originalId: root._originalId,
-                        id: finalId,
-                        title: cleanedTitle,
-                        // Inline "//..." appends to the description field.
-                        desc: inlineDesc.length > 0
-                              ? ((descField.text || "").trim().length > 0
-                                  ? descField.text.trim() + "\n" + inlineDesc
-                                  : inlineDesc)
-                              : descField.text,
-                        priority: priBox.currentText,
-                        status: root.statusList()[statusBox.currentIndex],
-                        scheduledAt: scheduledAt,
-                        dueAt: dueAt,
-                        hasTime: hasTime,
-                        branch: branchField.text,
-                        recurrence: recurBox._vals[recurBox.currentIndex] || "",
-                        labels: root.labelsFromText(labelsField.text),
-                        estimateMinutes: parseInt(estimateField.text || "0") || 0,
-                        someday: somedayBox.checked
-                    };
-                    AppController.saveTask(d);
-                    // The parsed clock time now lives on the task itself, so a
-                    // focus block is no longer needed to keep it. A "sync" still
-                    // means a meeting, and a meeting is a calendar event.
-                    if (root.isNew
-                        && root._deadlinePreview && root._deadlinePreview.ok
-                        && root._deadlinePreview.hasTime
-                        && root._deadlinePreview.start) {
-                        const kind = root._classifyKind(
-                            (titleField.text || "") + " "
-                          + (descField.text || "") + " "
-                          + (deadlineField.text || ""));
-                        const dt = root._deadlinePreview.start;
-                        if (kind === "sync") {
-                            const startHour = dt.getHours() + dt.getMinutes() / 60.0;
-                            // Honour parsed range "12:00-13:00", else 30m.
-                            let endHour = startHour + 0.5;
-                            const pe = root._deadlinePreview.end;
-                            if (pe && pe.getTime && pe.getTime() > 0) {
-                                const eh = pe.getHours() + pe.getMinutes() / 60.0;
-                                if (eh > startHour) endHour = eh;
-                            }
-                            const ev = AppController.newEventDraft(startHour, dt);
-                            ev.type      = "sync";
-                            ev.title     = (cleanedTitle || "").substring(0, 40);
-                            ev.end       = endHour;
-                            ev.taskId    = d.id;
-                            ev.date      = dt;
-                            ev.attendees = handleNames.join(", ");
-                            AppController.saveEvent(ev);
-                        }
-                        if (kind !== "ticket") AppController.selectedDate = dt;
-                    }
-                    root.close();
-                }
+                onClicked: root._save()
             }
         }
     }

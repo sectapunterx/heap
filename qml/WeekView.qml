@@ -471,12 +471,24 @@ Item {
                                         }
                                     }
                                 }
+                                // The overflow count was dead text — the only way
+                                // to reach the hidden deadlines was to guess.
+                                // It selects the day, which is what the day view
+                                // on the right follows.
                                 Text {
                                     visible: headCol.modelData.tasks.length > 4
                                     text: I18n.t("week.more").arg(headCol.modelData.tasks.length - 4)
-                                    color: Theme.textDim
+                                    color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: 10
+                                    MouseArea {
+                                        id: moreMA
+                                        anchors.fill: parent
+                                        anchors.margins: -4
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: AppController.selectedDate = headCol.modelData.date
+                                    }
                                 }
                                 Text {
                                     visible: headCol.modelData.tasks.length === 0

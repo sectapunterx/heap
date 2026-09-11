@@ -136,7 +136,11 @@ Item {
             color: "#5cc2dd"
         },
         appearance: {
-            accent: Theme.accent,
+            // String, not the colour value type: JSON.stringify turns a colour
+            // into an {r,g,b,a,hsl…} object, and every swatch picker compares
+            // it with String(...) === "#rrggbb", so once this landed in
+            // state.json no accent ever showed up as the selected one.
+            accent: String(Theme._defaultAccent),
             fontUI: "IBM Plex Sans",
             fontMono: "JetBrains Mono",
             reducedMotion: false,
@@ -188,8 +192,12 @@ Item {
         }
     })
 
+    // First chip is the brand accent the app actually ships with, so the
+    // picker can show a selection on a profile that never changed it — the
+    // hardcoded "#5cc2dd" matched nothing (the brand cyan is #3bccdd), which
+    // left every swatch unringed.
     readonly property var accentSwatches: [
-        "#5cc2dd", "#6ec18a", "#c07acf", "#dcb86b",
+        String(Theme._defaultAccent), "#6ec18a", "#c07acf", "#dcb86b",
         "#e6624c", "#7da8d9", "#9aa3b4"
     ]
     readonly property var avatarSwatches: [
@@ -1006,9 +1014,9 @@ Item {
                     }
                     SwatchRow {
                         label: I18n.t("settings.appearance.accent")
-                        value: (root.settings.appearance && root.settings.appearance.accent) || Theme.accent
+                        value: String(Theme.accent)
                         options: root.accentSwatches
-                        onSelected: (color) => root.set("appearance", "accent", color)
+                        onSelected: (color) => root.set("appearance", "accent", String(color))
                     }
                 }
             }

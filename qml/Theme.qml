@@ -47,7 +47,12 @@ QtObject {
 
     // ── Accent — Brand cyan by default, settings overrides win ───────
     readonly property color _defaultAccent: dark ? Brand.accent : Brand.lightAccent
-    readonly property color accent:        _appearance.accent ? _appearance.accent : _defaultAccent
+    // Only a "#rrggbb" string counts. Older builds persisted the colour value
+    // type, which JSON turns into an {r,g,b,a,…} object; those profiles fall
+    // back to the default instead of carrying a broken accent around.
+    readonly property color accent: (typeof _appearance.accent === "string"
+                                     && _appearance.accent.length > 0)
+                                    ? _appearance.accent : _defaultAccent
     readonly property color accentStrong:  dark ? Qt.lighter(accent, 1.18) : Qt.darker(accent, 1.18)
     readonly property color accentSoft:    Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.12)
 

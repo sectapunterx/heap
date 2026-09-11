@@ -51,6 +51,33 @@ Popup {
         open();
     }
 
+    // Shared by the Save button and the Ctrl+Return shortcut.
+    function _save() {
+        const d = {
+            _isNew: root.isNew,
+            // Prefer the explicit idField value; fall back to the
+            // auto-suggested slug when the user left it blank.
+            id: (idField.text || "").trim().length > 0
+                  ? idField.text.trim()
+                  : AppController.suggestPersonId(
+                        nameField.text, root.draft.id || ""),
+            name: nameField.text,
+            role: roleField.text,
+            question: questionField.text,
+            state: root.states[stateBox.currentIndex],
+            color: root.palette[colorSwatch.selectedIndex]
+        };
+        AppController.savePerson(d);
+        root.close();
+    }
+
+    // Keyboard-first — see TaskEditor.
+    Shortcut {
+        sequences: ["Ctrl+Return", "Ctrl+Enter"]
+        enabled: root.opened
+        onActivated: root._save()
+    }
+
     background: Rectangle {
         radius: 12
         color: Theme.panel
@@ -195,24 +222,7 @@ Popup {
             PillButton {
                 text: root.isNew ? I18n.t("editor.btn.add") : I18n.t("editor.btn.save")
                 primary: true
-                onClicked: {
-                    const d = {
-                        _isNew: root.isNew,
-                        // Prefer the explicit idField value; fall back to the
-                        // auto-suggested slug when the user left it blank.
-                        id: (idField.text || "").trim().length > 0
-                              ? idField.text.trim()
-                              : AppController.suggestPersonId(
-                                    nameField.text, root.draft.id || ""),
-                        name: nameField.text,
-                        role: roleField.text,
-                        question: questionField.text,
-                        state: root.states[stateBox.currentIndex],
-                        color: root.palette[colorSwatch.selectedIndex]
-                    };
-                    AppController.savePerson(d);
-                    root.close();
-                }
+                onClicked: root._save()
             }
         }
     }

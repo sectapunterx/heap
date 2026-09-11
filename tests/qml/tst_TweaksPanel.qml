@@ -38,12 +38,14 @@ TestCase {
         verify(p !== null);
     }
 
-    // accentSwatches is the fixed chip palette mirrored from the Settings accent
-    // picker: exactly 7 hex colors, stable order.
+    // accentSwatches is the chip palette mirrored from the Settings accent
+    // picker: exactly 7 colors, stable order. The first one is the theme's own
+    // default accent so an untouched profile still shows a selected chip.
     function test_accent_swatches() {
         const p = make('import TodoCpp; TweaksPanel { }');
         compare(p.accentSwatches.length, 7);
-        compare(String(p.accentSwatches[0]).toLowerCase(), "#5cc2dd");
+        compare(String(p.accentSwatches[0]).toLowerCase(),
+                String(Theme._defaultAccent).toLowerCase());
         compare(String(p.accentSwatches[6]).toLowerCase(), "#9aa3b4");
     }
 

@@ -15,8 +15,12 @@ Popup {
     // rail handler, which toggles.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
+    // First chip is the brand accent the app actually ships with, so the
+    // picker can show a selection on a profile that never changed it — the
+    // hardcoded "#5cc2dd" matched nothing (the brand cyan is #3bccdd), which
+    // left every swatch unringed.
     readonly property var accentSwatches: [
-        "#5cc2dd", "#6ec18a", "#c07acf", "#dcb86b",
+        String(Theme._defaultAccent), "#6ec18a", "#c07acf", "#dcb86b",
         "#e6624c", "#7da8d9", "#9aa3b4"
     ]
 

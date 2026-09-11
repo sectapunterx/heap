@@ -204,8 +204,10 @@ Rectangle {
                     id: prBadge
                     property var pr: AppController.focusedRepoState
                                      ? AppController.focusedRepoState.pr : null
-                    visible: pr && String(pr.state || "").length > 0
-                          && Number(pr.number || 0) > 0
+                    // !! — with no PR the leading `pr &&` yields null, and QML
+                    // logs "Unable to assign [undefined] to bool" on every start.
+                    visible: !!(pr && String(pr.state || "").length > 0
+                                   && Number(pr.number || 0) > 0)
                     radius: 4
                     implicitWidth: prBadgeT.implicitWidth + 12
                     implicitHeight: 18
