@@ -78,26 +78,21 @@ Rectangle {
                 font.pixelSize: 11
             }
             Item { Layout.fillWidth: true }
-            ToolButton {
+            NavButton {
                 text: "‹"
+                tip: I18n.t("miniweek.prevWeek")
                 onClicked: AppController.selectedDate = new Date(root.refDate.getFullYear(), root.refDate.getMonth(), root.refDate.getDate() - 7)
-                background: Rectangle { color: parent.hovered ? Theme.panel2 : "transparent"; radius: 5 }
-                contentItem: Text { text: parent.text; color: Theme.textMuted; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                implicitWidth: 24; implicitHeight: 24
             }
-            ToolButton {
+            NavButton {
                 text: "•"
+                tip: I18n.t("common.today")
+                accent: true
                 onClicked: AppController.selectedDate = AppController.today
-                background: Rectangle { color: parent.hovered ? Theme.panel2 : "transparent"; radius: 5 }
-                contentItem: Text { text: parent.text; color: Theme.accentStrong; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                implicitWidth: 18; implicitHeight: 24
             }
-            ToolButton {
+            NavButton {
                 text: "›"
+                tip: I18n.t("miniweek.nextWeek")
                 onClicked: AppController.selectedDate = new Date(root.refDate.getFullYear(), root.refDate.getMonth(), root.refDate.getDate() + 7)
-                background: Rectangle { color: parent.hovered ? Theme.panel2 : "transparent"; radius: 5 }
-                contentItem: Text { text: parent.text; color: Theme.textMuted; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                implicitWidth: 24; implicitHeight: 24
             }
         }
 
@@ -162,5 +157,34 @@ Rectangle {
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         height: 1; color: Theme.border
+    }
+
+    // Week nav. All three are 24x24 — "today" used to be 18px wide, the
+    // smallest target in the app — and all three now say what they do.
+    component NavButton: Rectangle {
+        id: nav
+        property string text: ""
+        property string tip: ""
+        property bool accent: false
+        signal clicked()
+        implicitWidth: 24; implicitHeight: 24
+        radius: 5
+        color: navMA.containsMouse ? Theme.panel2 : "transparent"
+        Text {
+            anchors.centerIn: parent
+            text: nav.text
+            color: nav.accent ? Theme.accentStrong : Theme.textMuted
+            font.pixelSize: 13
+        }
+        MouseArea {
+            id: navMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: nav.clicked()
+            ToolTip.visible: containsMouse && nav.tip.length > 0
+            ToolTip.delay: 400
+            ToolTip.text: nav.tip
+        }
     }
 }

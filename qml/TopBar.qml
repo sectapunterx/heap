@@ -304,15 +304,29 @@ Rectangle {
                         onClicked: AppController.openFocusedTask()
                     }
                 }
-                Text {
-                    text: "×"
-                    color: Theme.textDim
-                    font.family: Theme.fontMono
-                    font.pixelSize: 14
+                // Dismiss. The hit area used to be the glyph's own bounds —
+                // roughly 8x16px — so the banner was hard to get rid of.
+                Rectangle {
+                    Layout.preferredWidth: 20
+                    Layout.preferredHeight: 20
+                    radius: 4
+                    color: dismissMA.containsMouse ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "×"
+                        color: dismissMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                        font.family: Theme.fontMono
+                        font.pixelSize: 14
+                    }
                     MouseArea {
+                        id: dismissMA
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: AppController.dismissGitBanner()
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 400
+                        ToolTip.text: I18n.t("topbar.git.dismiss")
                     }
                 }
             }

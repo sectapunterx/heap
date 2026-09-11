@@ -228,13 +228,33 @@ Item {
                                 anchors.fill: parent
                                 anchors.leftMargin: 12; anchors.rightMargin: 8
                                 spacing: 8
-                                Rectangle {
-                                    width: 10; height: 10; radius: 3
-                                    color: col.statusColor
-                                    MouseArea {
+                                // The swatch itself stays 10px, but it opens the
+                                // colour picker, so the thing you click is a
+                                // 20px box around it — a 10x10 target was barely
+                                // hittable and gave no hint it was a button.
+                                Item {
+                                    id: colorSwatch
+                                    Layout.preferredWidth: 20
+                                    Layout.preferredHeight: 20
+                                    Rectangle {
                                         anchors.fill: parent
+                                        radius: 5
+                                        color: swatchMA.containsMouse ? Theme.panel3 : "transparent"
+                                    }
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 10; height: 10; radius: 3
+                                        color: col.statusColor
+                                    }
+                                    MouseArea {
+                                        id: swatchMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: colorPopup.openFor(col.statusId, col.statusColor, this)
+                                        onClicked: colorPopup.openFor(col.statusId, col.statusColor, colorSwatch)
+                                        ToolTip.visible: containsMouse
+                                        ToolTip.delay: 400
+                                        ToolTip.text: I18n.t("kanban.changeColor")
                                     }
                                 }
                                 Item {

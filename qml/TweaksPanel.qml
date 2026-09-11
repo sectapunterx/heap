@@ -232,36 +232,38 @@ Popup {
     }
 
     component ToggleRow: RowLayout {
+        id: toggleRow
         property string label: ""
         property bool checked: false
         signal toggled(bool v)
         Layout.fillWidth: true
         spacing: 10
+
+        // Label included in the hit area — the 32x18 switch alone was a fiddly
+        // target. Handlers, not a MouseArea: an Item here would become a cell.
+        TapHandler { onTapped: toggleRow.toggled(!toggleRow.checked) }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+
         Text {
             Layout.fillWidth: true
-            text: parent.label
+            text: toggleRow.label
             color: Theme.text
             font.pixelSize: 12
         }
         Rectangle {
             width: 32; height: 18; radius: 9
-            color: parent.checked ? Theme.accent : Theme.panel3
-            border.color: parent.checked ? "transparent" : Theme.border
+            color: toggleRow.checked ? Theme.accent : Theme.panel3
+            border.color: toggleRow.checked ? "transparent" : Theme.border
             border.width: 1
             Behavior on color { ColorAnimation { duration: Theme.animMs } }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 y: 2
-                x: parent.parent.checked ? parent.width - width - 2 : 2
+                x: toggleRow.checked ? parent.width - width - 2 : 2
                 color: "#ffffff"
                 border.color: Qt.rgba(0, 0, 0, 0.18)
                 border.width: 1
                 Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }
-            }
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: parent.parent.toggled(!parent.parent.checked)
             }
         }
     }

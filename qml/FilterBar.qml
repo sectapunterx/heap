@@ -31,7 +31,8 @@ Rectangle {
         spacing: 8
 
         Text {
-            text: "<b><font color=\"" + Theme.text + "\">" + root.viewLabel + "</font></b> · Filters:"
+            text: "<b><font color=\"" + Theme.text + "\">" + root.viewLabel + "</font></b> · "
+                  + I18n.t("filter.label")
             textFormat: Text.RichText
             color: Theme.textMuted
             font.family: Theme.fontUi
@@ -41,12 +42,13 @@ Rectangle {
         Repeater {
             model: ["P0", "P1", "P2", "P3"]
             delegate: Rectangle {
+                id: priChip
                 required property string modelData
                 objectName: "pri-" + modelData
                 property bool active: root.priorities[modelData] === true
                 radius: 999
-                color: active ? Theme.accentSoft : Theme.panel2
-                border.color: active ? Theme.accent : Theme.border
+                color: active ? Theme.accentSoft : (priMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                border.color: active ? Theme.accent : (priMA.containsMouse ? Theme.borderStrong : Theme.border)
                 border.width: 1
                 implicitWidth: chRow.implicitWidth + 20
                 implicitHeight: 24
@@ -60,13 +62,15 @@ Rectangle {
                     }
                     Text {
                         text: modelData
-                        color: parent.parent.active ? Theme.accentStrong : Theme.textMuted
+                        color: priChip.active ? Theme.accentStrong : Theme.textMuted
                         font.family: Theme.fontUi
                         font.pixelSize: 12
                     }
                 }
                 MouseArea {
+                    id: priMA
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: root.togglePriority(modelData)
                 }
@@ -80,19 +84,22 @@ Rectangle {
                 return any;
             }
             radius: 999
-            border.color: Theme.border; border.width: 1
-            color: Theme.panel2
+            border.color: clrMA.containsMouse ? Theme.borderStrong : Theme.border
+            border.width: 1
+            color: clrMA.containsMouse ? Theme.panel3 : Theme.panel2
             implicitWidth: clrT.implicitWidth + 16
             implicitHeight: 24
             Text {
                 id: clrT
                 anchors.centerIn: parent
-                text: "clear"
-                color: Theme.textDim
+                text: I18n.t("filter.clear")
+                color: clrMA.containsMouse ? Theme.text : Theme.textDim
                 font.pixelSize: 11
             }
             MouseArea {
+                id: clrMA
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.clearPriorities()
             }
@@ -103,8 +110,8 @@ Rectangle {
         Rectangle {
             objectName: "archived-toggle"
             radius: 999
-            color: root.showArchived ? Theme.accentSoft : Theme.panel2
-            border.color: root.showArchived ? Theme.accent : Theme.border
+            color: root.showArchived ? Theme.accentSoft : (archMA.containsMouse ? Theme.panel3 : Theme.panel2)
+            border.color: root.showArchived ? Theme.accent : (archMA.containsMouse ? Theme.borderStrong : Theme.border)
             border.width: 1
             implicitWidth: archRow.implicitWidth + 16
             implicitHeight: 24
@@ -118,24 +125,29 @@ Rectangle {
                     font.pixelSize: 11
                 }
                 Text {
-                    text: "Archived"
+                    text: I18n.t("filter.archived")
                     color: root.showArchived ? Theme.accentStrong : Theme.textMuted
                     font.pixelSize: 12
                 }
             }
             MouseArea {
+                id: archMA
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: root.toggleArchived()
             }
         }
 
         Text {
-            text: root.totalCount + " tasks · " + root.activeCount + " active · "
-                  + root.blockedCount + " blocked · " + root.reviewCount + " review"
+            text: I18n.t("filter.counts")
+                    .arg(root.totalCount).arg(root.activeCount)
+                    .arg(root.blockedCount).arg(root.reviewCount)
             color: Theme.textDim
             font.family: Theme.fontMono
             font.pixelSize: 11
+            elide: Text.ElideRight
+            Layout.maximumWidth: implicitWidth
         }
     }
 }

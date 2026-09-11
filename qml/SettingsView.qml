@@ -700,34 +700,37 @@ Item {
     }
 
     component SwitchRow: RowLayout {
+        id: switchRow
         property string label: ""
         property string hint: ""
         property bool checked: false
         signal toggled(bool checked)
         Layout.fillWidth: true
         spacing: 12
+
+        // The whole row toggles, not just the 36x20 switch — aiming at the
+        // switch was the only way to flip a setting. Handlers rather than a
+        // MouseArea because an Item child would become a layout cell.
+        TapHandler { onTapped: switchRow.toggled(!switchRow.checked) }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
-            Text { text: parent.parent.label; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-            Text { visible: parent.parent.hint.length > 0; text: parent.parent.hint; color: Theme.textMuted; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text { text: switchRow.label; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
+            Text { visible: switchRow.hint.length > 0; text: switchRow.hint; color: Theme.textMuted; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
         }
         Rectangle {
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
-            color: parent.checked ? Theme.accent : Theme.panel3
-            border.color: parent.checked ? Theme.accent : Theme.border
+            color: switchRow.checked ? Theme.accent : Theme.panel3
+            border.color: switchRow.checked ? Theme.accent : Theme.border
             border.width: 1
             Rectangle {
                 width: 14; height: 14; radius: 7
                 color: "#fff"
                 anchors.verticalCenter: parent.verticalCenter
-                x: parent.parent.checked ? parent.width - width - 3 : 3
+                x: switchRow.checked ? parent.width - width - 3 : 3
                 Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
-            }
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: parent.parent.toggled(!parent.parent.checked)
             }
         }
     }

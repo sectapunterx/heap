@@ -11,6 +11,17 @@ Button {
     leftPadding: 12
     rightPadding: 12
 
+    // Every hand-rolled button in the app switches the cursor; this one is a
+    // Controls Button, which doesn't, so pills were the only clickable things
+    // that kept an arrow cursor. A HoverHandler adds it without touching clicks.
+    HoverHandler {
+        enabled: root.enabled
+        cursorShape: Qt.PointingHandCursor
+    }
+    // A disabled pill (e.g. "Create" before quick-capture has a title) used to
+    // look exactly like an enabled one.
+    opacity: enabled ? 1 : 0.45
+
     background: Rectangle {
         radius: 6
         color: primary ? Theme.accent

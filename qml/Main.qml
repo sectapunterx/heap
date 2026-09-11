@@ -512,13 +512,24 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
             }
             Rectangle { width: 1; height: 18; color: Theme.border }
-            Text {
-                text: "✕"
-                color: Theme.textMuted
-                font.pixelSize: 12
-                // Nested (declared last) so it wins the click over the pill.
+            // Give up on the tour. Nested (declared last) so it wins the click
+            // over the pill; sized to 22px because the glyph's own bounds were a
+            // ~10px target sitting right next to a much larger "resume" action.
+            Rectangle {
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: 22
+                radius: 5
+                color: giveUpMA.containsMouse ? Theme.panel3 : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: "✕"
+                    color: giveUpMA.containsMouse ? Theme.text : Theme.textMuted
+                    font.pixelSize: 12
+                }
                 MouseArea {
+                    id: giveUpMA
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: welcome._finish()
                 }
