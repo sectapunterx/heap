@@ -175,8 +175,7 @@ Item {
                                 const y = d.getFullYear();
                                 const m = (d.getMonth()+1).toString().padStart(2,"0");
                                 const dd = d.getDate().toString().padStart(2,"0");
-                                const n = root._eventsToday;
-                                return y + "-" + m + "-" + dd + " · " + n + " event" + (n === 1 ? "" : "s");
+                                return y + "-" + m + "-" + dd + " · " + I18n.events(root._eventsToday);
                             }
                             color: Theme.textDim
                             font.family: Theme.fontMono
@@ -184,11 +183,20 @@ Item {
                         }
                     }
                     Item { Layout.fillWidth: true }
+                    // Elided: the hint is longer than the right-hand panel is
+                    // wide, so it used to run off the edge mid-word.
                     Text {
                         text: I18n.t("day.dragHint")
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                        horizontalAlignment: Text.AlignRight
+                        HoverHandler { id: hintHover }
+                        ToolTip.visible: hintHover.hovered && truncated
+                        ToolTip.delay: 400
+                        ToolTip.text: I18n.t("day.dragHint")
                     }
                 }
             }

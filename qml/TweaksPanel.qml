@@ -9,10 +9,18 @@ Popup {
     focus: true
     padding: 0
     width: 280
+    // Main._togglePopover re-parents this to the rail button that opened it, so
+    // "outside the parent" means "outside the panel and its button": any press
+    // elsewhere in the app dismisses it, and a press on the button reaches the
+    // rail handler, which toggles.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
+    // First chip is the brand accent the app actually ships with, so the
+    // picker can show a selection on a profile that never changed it — the
+    // hardcoded "#5cc2dd" matched nothing (the brand cyan is #3bccdd), which
+    // left every swatch unringed.
     readonly property var accentSwatches: [
-        "#5cc2dd", "#6ec18a", "#c07acf", "#dcb86b",
+        String(Theme._defaultAccent), "#6ec18a", "#c07acf", "#dcb86b",
         "#e6624c", "#7da8d9", "#9aa3b4"
     ]
 
@@ -59,7 +67,7 @@ Popup {
                 anchors.fill: parent
                 anchors.leftMargin: 14; anchors.rightMargin: 8
                 Text {
-                    text: "TWEAKS"
+                    text: I18n.t("tweaks.title").toUpperCase()
                     color: Theme.textMuted
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
@@ -121,8 +129,8 @@ Popup {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 4
-                    SegButton { text: "Compact"; active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
-                    SegButton { text: "Comfy";   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
+                    SegButton { text: I18n.t("common.density.compact"); active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
+                    SegButton { text: I18n.t("common.density.comfy");   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
                 }
             }
 
@@ -228,36 +236,38 @@ Popup {
     }
 
     component ToggleRow: RowLayout {
+        id: toggleRow
         property string label: ""
         property bool checked: false
         signal toggled(bool v)
         Layout.fillWidth: true
         spacing: 10
+
+        // Label included in the hit area — the 32x18 switch alone was a fiddly
+        // target. Handlers, not a MouseArea: an Item here would become a cell.
+        TapHandler { onTapped: toggleRow.toggled(!toggleRow.checked) }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+
         Text {
             Layout.fillWidth: true
-            text: parent.label
+            text: toggleRow.label
             color: Theme.text
             font.pixelSize: 12
         }
         Rectangle {
             width: 32; height: 18; radius: 9
-            color: parent.checked ? Theme.accent : Theme.panel3
-            border.color: parent.checked ? "transparent" : Theme.border
+            color: toggleRow.checked ? Theme.accent : Theme.panel3
+            border.color: toggleRow.checked ? "transparent" : Theme.border
             border.width: 1
             Behavior on color { ColorAnimation { duration: Theme.animMs } }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 y: 2
-                x: parent.parent.checked ? parent.width - width - 2 : 2
+                x: toggleRow.checked ? parent.width - width - 2 : 2
                 color: "#ffffff"
                 border.color: Qt.rgba(0, 0, 0, 0.18)
                 border.width: 1
                 Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }
-            }
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: parent.parent.toggled(!parent.parent.checked)
             }
         }
     }

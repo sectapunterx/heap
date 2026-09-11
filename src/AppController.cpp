@@ -108,6 +108,12 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
+      // Timeline row badge — the only date arithmetic rendered from C++.
+      {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
+      {"deadline.today", {"today", "сегодня"}},
+      {"deadline.tomorrow", {"+1 day", "+1 день"}},
+      {"deadline.inDays", {"+%1 days", "+%1 дн."}},
+      {"deadline.inDaysShort", {"+%1d", "+%1 д"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
       {"import.emptyJson", {"Empty JSON", "Пустой JSON"}},
       {"import.invalidJson", {"Invalid JSON", "Невалидный JSON"}},
@@ -1496,18 +1502,18 @@ QString AppController::deadlineDiffLabel(const QDate& deadline) const {
   }
   const int d = m_today.daysTo(deadline);
   if(d < 0) {
-    return QString("%1d overdue").arg(-d);
+    return tr_("deadline.overdue").arg(-d);
   }
   if(d == 0) {
-    return QStringLiteral("today");
+    return tr_("deadline.today");
   }
   if(d == 1) {
-    return QStringLiteral("+1 day");
+    return tr_("deadline.tomorrow");
   }
   if(d < 7) {
-    return QString("+%1 days").arg(d);
+    return tr_("deadline.inDays").arg(d);
   }
-  return QString("+%1d").arg(d);
+  return tr_("deadline.inDaysShort").arg(d);
 }
 
 QString AppController::shortDate(const QDate& d) const {

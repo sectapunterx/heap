@@ -136,7 +136,11 @@ Item {
             color: "#5cc2dd"
         },
         appearance: {
-            accent: Theme.accent,
+            // String, not the colour value type: JSON.stringify turns a colour
+            // into an {r,g,b,a,hsl…} object, and every swatch picker compares
+            // it with String(...) === "#rrggbb", so once this landed in
+            // state.json no accent ever showed up as the selected one.
+            accent: String(Theme._defaultAccent),
             fontUI: "IBM Plex Sans",
             fontMono: "JetBrains Mono",
             reducedMotion: false,
@@ -188,8 +192,12 @@ Item {
         }
     })
 
+    // First chip is the brand accent the app actually ships with, so the
+    // picker can show a selection on a profile that never changed it — the
+    // hardcoded "#5cc2dd" matched nothing (the brand cyan is #3bccdd), which
+    // left every swatch unringed.
     readonly property var accentSwatches: [
-        "#5cc2dd", "#6ec18a", "#c07acf", "#dcb86b",
+        String(Theme._defaultAccent), "#6ec18a", "#c07acf", "#dcb86b",
         "#e6624c", "#7da8d9", "#9aa3b4"
     ]
     readonly property var avatarSwatches: [
@@ -325,60 +333,74 @@ Item {
                     }
                 }
 
-                ColumnLayout {
+                // Scrollable: thirteen 44px rows plus the header and footer do
+                // not fit the window's minimum height, and without a scroll the
+                // layout just squeezed the rows into each other.
+                Flickable {
+                    id: navScroll
                     Layout.fillWidth: true
+                    Layout.fillHeight: true
                     Layout.topMargin: 4
-                    spacing: 2
-                    Repeater {
-                        model: root.sections
-                        delegate: Rectangle {
-                            required property var modelData
-                            visible: {
-                                const q = root.searchText.toLowerCase().trim();
-                                if (q.length === 0) return true;
-                                return (modelData.title.toLowerCase().indexOf(q) >= 0
-                                     || modelData.sub.toLowerCase().indexOf(q) >= 0);
-                            }
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 44
-                            radius: 6
-                            color: root.activeSection === modelData.id
-                                   ? Theme.accentSoft
-                                   : (navMA.containsMouse ? Theme.panel2 : "transparent")
-                            border.color: root.activeSection === modelData.id ? Theme.accent : "transparent"
-                            border.width: 1
-                            RowLayout {
-                                anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 10
-                                spacing: 10
-                                Text {
-                                    text: modelData.icon
-                                    color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
-                                    font.pixelSize: modelData.icon === "C++" ? 11 : 16
-                                    font.family: modelData.icon === "C++" ? Theme.fontMono : Theme.fontUi
-                                    font.weight: Font.DemiBold
-                                    Layout.preferredWidth: 24
-                                    horizontalAlignment: Text.AlignHCenter
+                    clip: true
+                    contentWidth: width
+                    contentHeight: navCol.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ThinScrollBar {}
+
+                    ColumnLayout {
+                        id: navCol
+                        width: navScroll.width
+                        spacing: 2
+                        Repeater {
+                            model: root.sections
+                            delegate: Rectangle {
+                                required property var modelData
+                                visible: {
+                                    const q = root.searchText.toLowerCase().trim();
+                                    if (q.length === 0) return true;
+                                    return (modelData.title.toLowerCase().indexOf(q) >= 0
+                                         || modelData.sub.toLowerCase().indexOf(q) >= 0);
                                 }
-                                ColumnLayout {
-                                    Layout.fillWidth: true
-                                    spacing: 0
-                                    Text { text: modelData.title; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-                                    Text { text: modelData.sub;   color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 44
+                                Layout.minimumHeight: 44
+                                radius: 6
+                                color: root.activeSection === modelData.id
+                                       ? Theme.accentSoft
+                                       : (navMA.containsMouse ? Theme.panel2 : "transparent")
+                                border.color: root.activeSection === modelData.id ? Theme.accent : "transparent"
+                                border.width: 1
+                                RowLayout {
+                                    anchors.fill: parent
+                                    anchors.leftMargin: 10; anchors.rightMargin: 10
+                                    spacing: 10
+                                    Text {
+                                        text: modelData.icon
+                                        color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
+                                        font.pixelSize: modelData.icon === "C++" ? 11 : 16
+                                        font.family: modelData.icon === "C++" ? Theme.fontMono : Theme.fontUi
+                                        font.weight: Font.DemiBold
+                                        Layout.preferredWidth: 24
+                                        horizontalAlignment: Text.AlignHCenter
+                                    }
+                                    ColumnLayout {
+                                        Layout.fillWidth: true
+                                        spacing: 0
+                                        Text { text: modelData.title; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
+                                        Text { text: modelData.sub;   color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                    }
                                 }
-                            }
-                            MouseArea {
-                                id: navMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.activeSection = modelData.id
+                                MouseArea {
+                                    id: navMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.activeSection = modelData.id
+                                }
                             }
                         }
                     }
                 }
-
-                Item { Layout.fillHeight: true }
 
                 // Debug-only developer toggle. Lives in the nav footer so it
                 // never appears in Release builds. Drives `_showUnimplemented`
@@ -700,34 +722,37 @@ Item {
     }
 
     component SwitchRow: RowLayout {
+        id: switchRow
         property string label: ""
         property string hint: ""
         property bool checked: false
         signal toggled(bool checked)
         Layout.fillWidth: true
         spacing: 12
+
+        // The whole row toggles, not just the 36x20 switch — aiming at the
+        // switch was the only way to flip a setting. Handlers rather than a
+        // MouseArea because an Item child would become a layout cell.
+        TapHandler { onTapped: switchRow.toggled(!switchRow.checked) }
+        HoverHandler { cursorShape: Qt.PointingHandCursor }
+
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
-            Text { text: parent.parent.label; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-            Text { visible: parent.parent.hint.length > 0; text: parent.parent.hint; color: Theme.textMuted; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text { text: switchRow.label; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
+            Text { visible: switchRow.hint.length > 0; text: switchRow.hint; color: Theme.textMuted; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
         }
         Rectangle {
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
-            color: parent.checked ? Theme.accent : Theme.panel3
-            border.color: parent.checked ? Theme.accent : Theme.border
+            color: switchRow.checked ? Theme.accent : Theme.panel3
+            border.color: switchRow.checked ? Theme.accent : Theme.border
             border.width: 1
             Rectangle {
                 width: 14; height: 14; radius: 7
                 color: "#fff"
                 anchors.verticalCenter: parent.verticalCenter
-                x: parent.parent.checked ? parent.width - width - 3 : 3
+                x: switchRow.checked ? parent.width - width - 3 : 3
                 Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
-            }
-            MouseArea {
-                anchors.fill: parent
-                cursorShape: Qt.PointingHandCursor
-                onClicked: parent.parent.toggled(!parent.parent.checked)
             }
         }
     }
@@ -983,14 +1008,15 @@ Item {
                     SegRow {
                         label: I18n.t("settings.appearance.density")
                         value: AppController.density
-                        options: [ ({ value: "compact", label: "Compact" }), ({ value: "comfy", label: "Comfy" }) ]
+                        options: [ ({ value: "compact", label: I18n.t("common.density.compact") }),
+                                   ({ value: "comfy",   label: I18n.t("common.density.comfy") }) ]
                         onSelected: (value) => AppController.density = value
                     }
                     SwatchRow {
                         label: I18n.t("settings.appearance.accent")
-                        value: (root.settings.appearance && root.settings.appearance.accent) || Theme.accent
+                        value: String(Theme.accent)
                         options: root.accentSwatches
-                        onSelected: (color) => root.set("appearance", "accent", color)
+                        onSelected: (color) => root.set("appearance", "accent", String(color))
                     }
                 }
             }
@@ -1291,7 +1317,9 @@ Item {
                     SegRow {
                         label: I18n.t("settings.tasks.defaultColumn")
                         value: (root.settings.tasks && root.settings.tasks.defaultStatus) || "todo"
-                        options: [ ({ value: "backlog", label: "Backlog" }), ({ value: "todo", label: "To Do" }), ({ value: "prog", label: "In Progress" }) ]
+                        options: [ ({ value: "backlog", label: I18n.t("settings.tasks.col.backlog") }),
+                                   ({ value: "todo",    label: I18n.t("settings.tasks.col.todo") }),
+                                   ({ value: "prog",    label: I18n.t("settings.tasks.col.prog") }) ]
                         onSelected: (value) => root.set("tasks", "defaultStatus", value)
                     }
                 }
@@ -2248,7 +2276,20 @@ Item {
         Layout.fillWidth: true
         spacing: 16
         Text { text: aboutRow.label; color: Theme.textMuted; font.pixelSize: 11; Layout.preferredWidth: 80 }
-        Text { text: aboutRow.value; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 11; Layout.fillWidth: true }
+        // Elided: the storage path is long enough to stretch the card past the
+        // panel. The full value is on the tooltip.
+        Text {
+            text: aboutRow.value
+            color: Theme.text
+            font.family: Theme.fontMono
+            font.pixelSize: 11
+            Layout.fillWidth: true
+            elide: Text.ElideMiddle
+            HoverHandler { id: aboutHover }
+            ToolTip.visible: aboutHover.hovered && truncated
+            ToolTip.delay: 400
+            ToolTip.text: aboutRow.value
+        }
     }
 
     // ── Bridge to Main.qml for popups (HotkeysPanel, FileDialog) ──────

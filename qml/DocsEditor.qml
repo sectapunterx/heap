@@ -7,7 +7,7 @@ Popup {
     id: root
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
     anchors.centerIn: Overlay.overlay
 
@@ -77,20 +77,20 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
-                FieldLabel { text: "REF / CODE" }
-                FieldLabel { text: "VERSION" }
+                FieldLabel { text: I18n.t("docs.field.ref").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.version").toUpperCase() }
                 FormField { id: docRef     ; mono: true; placeholderText: "TS 36.331"
                             text: root.draft.ref || ""    ; onTextChanged: root.draft.ref = text }
                 FormField { id: docVersion ; mono: true; placeholderText: "v17.5.0"
                             text: root.draft.version || ""; onTextChanged: root.draft.version = text }
             }
 
-            FieldLabel { text: "TITLE" }
+            FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
             FormField { id: docTitle; placeholderText: "Title"
                         text: root.draft.title || ""; onTextChanged: root.draft.title = text
                         Layout.fillWidth: true }
 
-            FieldLabel { text: "DESCRIPTION" }
+            FieldLabel { text: I18n.t("docs.field.description").toUpperCase() }
             ScrollView {
                 Layout.fillWidth: true; Layout.preferredHeight: 78
                 TextArea {
@@ -105,7 +105,7 @@ Popup {
                 }
             }
 
-            FieldLabel { text: "URL" }
+            FieldLabel { text: I18n.t("docs.field.url").toUpperCase() }
             FormField {
                 id: docUrl; mono: true; placeholderText: I18n.t("docs.editor.url.ph")
                         text: root.draft.url || ""; onTextChanged: root.draft.url = text
@@ -113,8 +113,8 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
-                FieldLabel { text: "SOURCE" }
-                FieldLabel { text: "UPDATED" }
+                FieldLabel { text: I18n.t("docs.field.source").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.updated").toUpperCase() }
                 FormField { placeholderText: "ETSI, wiki.internal…"
                             text: root.draft.source || ""; onTextChanged: root.draft.source = text }
                 FormField { placeholderText: "today, 2 weeks ago…"
@@ -126,7 +126,7 @@ Popup {
                 visible: root.docCustomFields && root.docCustomFields.length > 0
                 Layout.fillWidth: true
                 spacing: 4
-                FieldLabel { text: "CUSTOM FIELDS" }
+                FieldLabel { text: I18n.t("docs.field.customFields").toUpperCase() }
                 Repeater {
                     model: root.docCustomFields
                     delegate: RowLayout {
@@ -156,7 +156,7 @@ Popup {
                 visible: root.isNew
                 spacing: 4
                 Layout.fillWidth: true
-                FieldLabel { text: "SECTION" }
+                FieldLabel { text: I18n.t("docs.field.section").toUpperCase() }
                 ComboBox {
                     id: docSection
                     Layout.fillWidth: true
@@ -185,8 +185,8 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
-                FieldLabel { text: "TITLE" }
-                FieldLabel { text: "LANGUAGE" }
+                FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.language").toUpperCase() }
                 FormField {
                     placeholderText: I18n.t("docs.editor.build.ph")
                     text: root.draft.title || ""
@@ -205,7 +205,7 @@ Popup {
                 }
             }
 
-            FieldLabel { text: "TAGS" }
+            FieldLabel { text: I18n.t("docs.field.tags").toUpperCase() }
             FormField {
                 Layout.fillWidth: true
                 placeholderText: "comma, separated, tags"
@@ -213,7 +213,7 @@ Popup {
                 onTextChanged: root.draft.tags = text
             }
 
-            FieldLabel { text: "CODE" }
+            FieldLabel { text: I18n.t("docs.field.code").toUpperCase() }
             ScrollView {
                 Layout.fillWidth: true; Layout.preferredHeight: 240
                 TextArea {
@@ -250,21 +250,21 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18
             spacing: 10
 
-            FieldLabel { text: "TITLE" }
+            FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
             FormField {
                 placeholderText: "3GPP / ETSI Standards"
                 text: root.draft.title || ""
                 onTextChanged: root.draft.title = text
             }
 
-            FieldLabel { text: "SUBTITLE" }
+            FieldLabel { text: I18n.t("docs.field.subtitle").toUpperCase() }
             FormField {
                 placeholderText: "External — LTE / E-UTRAN protocol specifications"
                 text: root.draft.subtitle || ""
                 onTextChanged: root.draft.subtitle = text
             }
 
-            FieldLabel { text: "ACCENT COLOR" }
+            FieldLabel { text: I18n.t("docs.field.accent").toUpperCase() }
             Row {
                 spacing: 6
                 Repeater {
@@ -412,22 +412,22 @@ Popup {
 
             GridLayout {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
-                FieldLabel { text: "NAME" }
-                FieldLabel { text: "ROLE" }
+                FieldLabel { text: I18n.t("docs.field.name").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.role").toUpperCase() }
                 FormField {
                     placeholderText: I18n.t("docs.editor.ph.fullName")
                             text: root.draft.name || ""; onTextChanged: root.draft.name = text }
                 FormField { placeholderText: "Tech Lead / QA / PHY team…"
                             text: root.draft.role || ""; onTextChanged: root.draft.role = text }
-                FieldLabel { text: "MATTERMOST CHANNEL" }
-                FieldLabel { text: "MATTERMOST HANDLE" }
+                FieldLabel { text: I18n.t("docs.field.mmChannel").toUpperCase() }
+                FieldLabel { text: I18n.t("docs.field.mmHandle").toUpperCase() }
                 FormField { mono: true; placeholderText: "#lte-core"
                             text: root.draft.channel || ""; onTextChanged: root.draft.channel = text }
                 FormField { mono: true; placeholderText: "@name.surname"
                             text: root.draft.mattermost || ""; onTextChanged: root.draft.mattermost = text }
             }
 
-            FieldLabel { text: "AVATAR COLOR" }
+            FieldLabel { text: I18n.t("docs.field.avatar").toUpperCase() }
             Row {
                 spacing: 6
                 Repeater {

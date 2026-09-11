@@ -25,8 +25,12 @@ Rectangle {
         return new Date(d.getFullYear(), d.getMonth(), d.getDate() + offset);
     }
 
-    // Indexed by JS day-of-week (0=Sun..6=Sat).
-    readonly property var dowLabelsByJsDow: ["SU", "MO", "TU", "WE", "TH", "FR", "SA"]
+    // Indexed by JS day-of-week (0=Sun..6=Sat), from the app language.
+    readonly property var dowLabelsByJsDow: {
+        const out = [];
+        for (let i = 0; i < 7; i++) out.push(I18n.dayNameUpper(i));
+        return out;
+    }
     function eventCountFor(d) {
         let n = 0;
         for (let i = 0; i < AppController.events.rowCount(); i++) {
@@ -62,10 +66,10 @@ Rectangle {
         RowLayout {
             spacing: 4
             Text {
-                text: {
-                    const ru = Qt.locale("ru_RU");
-                    return ru.standaloneMonthName(root.refDate.getMonth(), Locale.LongFormat);
-                }
+                // Was pinned to ru_RU regardless of the app language, so an
+                // English UI still read "сентябрь" — and next to MonthView,
+                // which uses the system locale, the two calendars disagreed.
+                text: I18n.monthName(root.refDate.getMonth())
                 color: Theme.text
                 font.pixelSize: 13
                 font.weight: Font.DemiBold
@@ -78,26 +82,21 @@ Rectangle {
                 font.pixelSize: 11
             }
             Item { Layout.fillWidth: true }
-            ToolButton {
+            NavButton {
                 text: "‹"
+                tip: I18n.t("miniweek.prevWeek")
                 onClicked: AppController.selectedDate = new Date(root.refDate.getFullYear(), root.refDate.getMonth(), root.refDate.getDate() - 7)
-                background: Rectangle { color: parent.hovered ? Theme.panel2 : "transparent"; radius: 5 }
-                contentItem: Text { text: parent.text; color: Theme.textMuted; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                implicitWidth: 24; implicitHeight: 24
             }
-            ToolButton {
+            NavButton {
                 text: "•"
+                tip: I18n.t("common.today")
+                accent: true
                 onClicked: AppController.selectedDate = AppController.today
-                background: Rectangle { color: parent.hovered ? Theme.panel2 : "transparent"; radius: 5 }
-                contentItem: Text { text: parent.text; color: Theme.accentStrong; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                implicitWidth: 18; implicitHeight: 24
             }
-            ToolButton {
+            NavButton {
                 text: "›"
+                tip: I18n.t("miniweek.nextWeek")
                 onClicked: AppController.selectedDate = new Date(root.refDate.getFullYear(), root.refDate.getMonth(), root.refDate.getDate() + 7)
-                background: Rectangle { color: parent.hovered ? Theme.panel2 : "transparent"; radius: 5 }
-                contentItem: Text { text: parent.text; color: Theme.textMuted; horizontalAlignment: Text.AlignHCenter; verticalAlignment: Text.AlignVCenter }
-                implicitWidth: 24; implicitHeight: 24
             }
         }
 
@@ -140,8 +139,14 @@ Rectangle {
                         Rectangle {
                             anchors.horizontalCenter: parent.horizontalCenter
                             width: 4; height: 4; radius: 2
-                            property int _rev: root._eventsRev
-                            visible: root.eventCountFor(parent.parent.modelData) > 0
+                            // _eventsRev has to be read inside the binding —
+                            // declaring it as a property next to it (as before)
+                            // creates no dependency, so the dot never refreshed
+                            // when an event was added or removed.
+                            visible: {
+                                root._eventsRev;
+                                return root.eventCountFor(parent.parent.modelData) > 0;
+                            }
                             color: Theme.accent
                             opacity: 0.85
                         }
@@ -162,5 +167,34 @@ Rectangle {
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         height: 1; color: Theme.border
+    }
+
+    // Week nav. All three are 24x24 — "today" used to be 18px wide, the
+    // smallest target in the app — and all three now say what they do.
+    component NavButton: Rectangle {
+        id: nav
+        property string text: ""
+        property string tip: ""
+        property bool accent: false
+        signal clicked()
+        implicitWidth: 24; implicitHeight: 24
+        radius: 5
+        color: navMA.containsMouse ? Theme.panel2 : "transparent"
+        Text {
+            anchors.centerIn: parent
+            text: nav.text
+            color: nav.accent ? Theme.accentStrong : Theme.textMuted
+            font.pixelSize: 13
+        }
+        MouseArea {
+            id: navMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: nav.clicked()
+            ToolTip.visible: containsMouse && nav.tip.length > 0
+            ToolTip.delay: 400
+            ToolTip.text: nav.tip
+        }
     }
 }

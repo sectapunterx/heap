@@ -40,17 +40,17 @@ Rectangle {
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount()
+                    text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount())
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
                 }
                 Connections {
                     target: AppController.people
-                    function onDataChanged()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
-                    function onRowsInserted()   { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
-                    function onRowsRemoved()    { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
-                    function onModelReset()     { badge.text = AppController.pendingPeopleCount() + " pending · " + AppController.people.rowCount() }
+                    function onDataChanged()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    function onRowsInserted()   { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    function onRowsRemoved()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    function onModelReset()     { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
                 }
             }
             Item { Layout.fillWidth: true }
@@ -108,26 +108,32 @@ Rectangle {
                 width: ListView.view ? ListView.view.width : 0
                 height: layout.implicitHeight + 12
 
-                // 1) MouseArea declared FIRST so its id is available when sibling
-                //    bindings evaluate, and so it sits below RowLayout in paint/
-                //    event order (later siblings draw on top, events hit them first).
+                // Row hover drives the highlight and the ✎ affordance. It has to
+                // be a HoverHandler: hover delivery stops at the first item that
+                // accepts it, so a MouseArea here lost hover the moment the
+                // pointer reached the ✎ on top of it — the row un-highlighted and
+                // the button faded out from under the cursor.
+                property bool rowHovered: false
+                HoverHandler { onHoveredChanged: prow.rowHovered = hovered }
+
+                // Declared before the RowLayout so it sits below it in paint /
+                // event order (later siblings draw on top, events hit them first).
                 MouseArea {
                     id: rowMA
                     anchors.fill: parent
-                    hoverEnabled: true
                     acceptedButtons: Qt.LeftButton | Qt.RightButton
-                    onDoubleClicked: root.personRequested(prow.id)
                     onClicked: (mouse) => {
                         if (mouse.button === Qt.RightButton) personMenu.popup();
+                        else root.personRequested(prow.id);
                     }
                 }
 
                 QQC.Menu {
                     id: personMenu
-                    QQC.MenuItem { text: "Edit…"; onTriggered: root.personRequested(prow.id) }
-                    QQC.MenuItem { text: "Cycle state"; onTriggered: AppController.cyclePerson(prow.id) }
+                    QQC.MenuItem { text: I18n.t("people.menu.edit"); onTriggered: root.personRequested(prow.id) }
+                    QQC.MenuItem { text: I18n.t("people.menu.cycle"); onTriggered: AppController.cyclePerson(prow.id) }
                     QQC.MenuSeparator {}
-                    QQC.MenuItem { text: "Delete"; onTriggered: AppController.deletePerson(prow.id) }
+                    QQC.MenuItem { text: I18n.t("people.menu.delete"); onTriggered: AppController.deletePerson(prow.id) }
                 }
 
                 // 2) Hover indicator — a real Rectangle whose visibility is
@@ -140,7 +146,7 @@ Rectangle {
                     color: Theme.panel3
                     border.color: Theme.border
                     border.width: 1
-                    opacity: rowMA.containsMouse ? 1.0 : 0.0
+                    opacity: prow.rowHovered ? 1.0 : 0.0
                     Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
                 }
 
@@ -194,7 +200,8 @@ Rectangle {
                     Item {
                         Layout.preferredWidth: 22
                         Layout.preferredHeight: 22
-                        opacity: rowMA.containsMouse ? 1.0 : 0.0
+                        opacity: prow.rowHovered ? 1.0 : 0.0
+                        enabled: prow.rowHovered
                         Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
                         Rectangle {
                             anchors.fill: parent

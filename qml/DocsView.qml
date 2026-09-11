@@ -570,9 +570,9 @@ Item {
                 ColumnLayout {
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
-                    Text { text: "Docs · spec & references"; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
                     Text {
-                        text: root.totalDocs() + " entries · " + root.snippets.length + " snippets · " + root.contacts.length + " contacts"
+                        text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
@@ -783,10 +783,16 @@ Item {
                                 id: secAnchor
                                 objectName: "sec-" + secCol.section.id
 
+                                // Hover drives the ✎ / × reveal below. It must be
+                                // a HoverHandler, not this MouseArea: hover stops
+                                // at the first item that accepts it, so the icons
+                                // disappeared as soon as the pointer reached them.
+                                property bool headerHovered: false
+                                HoverHandler { onHoveredChanged: secAnchor.headerHovered = hovered }
+
                                 MouseArea {
                                     id: secHover
                                     anchors.fill: parent
-                                    hoverEnabled: true
                                     acceptedButtons: Qt.RightButton
                                     onClicked: (mouse) => {
                                         if (mouse.button === Qt.RightButton) sectionMenu.popup()
@@ -795,20 +801,20 @@ Item {
 
                                 QQC.Menu {
                                     id: sectionMenu
-                                    QQC.MenuItem { text: "Add entry";        onTriggered: root.openDocCreate(secCol.section.id) }
-                                    QQC.MenuItem { text: "Rename / fields…"; onTriggered: root.openSectionEdit(secCol.section) }
+                                    QQC.MenuItem { text: I18n.t("docs.addEntry");       onTriggered: root.openDocCreate(secCol.section.id) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.renameFields"); onTriggered: root.openSectionEdit(secCol.section) }
                                     QQC.Menu {
-                                        title: "Sort by"
-                                        QQC.MenuItem { text: "Manual";     onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
-                                        QQC.MenuItem { text: "By ref";     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
-                                        QQC.MenuItem { text: "By title";   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
-                                        QQC.MenuItem { text: "By updated"; onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
+                                        title: I18n.t("docs.menu.sortBy")
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
+                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
                                     }
                                     QQC.MenuSeparator {}
-                                    QQC.MenuItem { text: "Move up";   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
-                                    QQC.MenuItem { text: "Move down"; enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
                                     QQC.MenuSeparator {}
-                                    QQC.MenuItem { text: "Delete section"; onTriggered: root.deleteSection(secCol.section.id) }
+                                    QQC.MenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(secCol.section.id) }
                                 }
 
                                 RowLayout {
@@ -827,7 +833,9 @@ Item {
                                                 font.weight: Font.DemiBold
                                             }
                                             Rectangle {
-                                                visible: secHover.containsMouse
+                                                opacity: secAnchor.headerHovered ? 1 : 0
+                                                enabled: secAnchor.headerHovered
+                                                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                                                 width: 22; height: 22; radius: 5
                                                 color: secEditMA.containsMouse ? Theme.panel2 : "transparent"
                                                 border.color: Theme.border; border.width: 1
@@ -841,7 +849,9 @@ Item {
                                                 }
                                             }
                                             Rectangle {
-                                                visible: secHover.containsMouse
+                                                opacity: secAnchor.headerHovered ? 1 : 0
+                                                enabled: secAnchor.headerHovered
+                                                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                                                 width: 22; height: 22; radius: 5
                                                 color: secDelMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : "transparent"
                                                 border.color: secDelMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
@@ -880,7 +890,7 @@ Item {
                                         font.pixelSize: 11
                                     }
                                     PillButton {
-                                        text: "+ Add"
+                                        text: I18n.t("docs.add")
                                         onClicked: root.openDocCreate(secCol.section.id)
                                     }
                                 }
@@ -922,7 +932,7 @@ Item {
                                         anchors.centerIn: parent
                                         spacing: 4
                                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: "+"; color: Theme.textDim; font.pixelSize: 22 }
-                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "Add entry"; color: Theme.textDim; font.pixelSize: 11 }
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("docs.addEntry"); color: Theme.textDim; font.pixelSize: 11 }
                                     }
                                     MouseArea {
                                         id: addCardMA
@@ -951,7 +961,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.accent }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: "Snippets"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
                                     Text {
                                         text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: 12
                                     }
@@ -964,7 +974,7 @@ Item {
                                     font.pixelSize: 11
                                 }
                                 PillButton {
-                                    text: "+ Add"
+                                    text: I18n.t("docs.add")
                                     onClicked: root.openSnippetCreate()
                                 }
                             }
@@ -998,7 +1008,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.textMuted }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: "Contacts & Channels"; color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
                                     Text {
                                         text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: 12
                                     }
@@ -1011,7 +1021,7 @@ Item {
                                     font.pixelSize: 11
                                 }
                                 PillButton {
-                                    text: "+ Add"
+                                    text: I18n.t("docs.add")
                                     onClicked: root.openContactCreate()
                                 }
                             }
@@ -1229,24 +1239,24 @@ Item {
         QQC.Menu {
             id: navMenu
             QQC.MenuItem {
-                text: "Rename / fields…"
+                text: I18n.t("docs.menu.renameFields")
                 onTriggered: {
                     const s = root.sections.find(function (x) { return x.id === nav.sectionId; });
                     if (s) root.openSectionEdit(s);
                 }
             }
             QQC.Menu {
-                title: "Sort by"
-                QQC.MenuItem { text: "Manual";     onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
-                QQC.MenuItem { text: "By ref";     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
-                QQC.MenuItem { text: "By title";   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
-                QQC.MenuItem { text: "By updated"; onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
+                title: I18n.t("docs.menu.sortBy")
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
+                QQC.MenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
             }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
-            QQC.MenuItem { text: "Move down"; enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete section"; onTriggered: root.deleteSection(nav.sectionId) }
+            QQC.MenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(nav.sectionId) }
         }
     }
 
@@ -1283,8 +1293,13 @@ Item {
         property string docSectionId: sectionId
         height: cardCol.implicitHeight + 24
         radius: 10
-        color: cardMA.containsMouse ? Theme.panel2 : Theme.panel
-        border.color: cardMA.containsMouse ? Theme.borderStrong : Theme.border
+        // Hover state comes from a handler, not from cardMA: the card-wide
+        // MouseArea swallowed the hover of the overlay buttons on top of it, so
+        // they blinked out as the pointer approached.
+        property bool cardHovered: false
+        HoverHandler { onHoveredChanged: card.cardHovered = hovered }
+        color: cardHovered ? Theme.panel2 : Theme.panel
+        border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
         opacity: handleMA.drag.active ? 0.5 : 1.0
 
@@ -1329,7 +1344,7 @@ Item {
                 }
                 Text {
                     text: card.isInternal ? "→" : "↗"
-                    color: cardMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                    color: card.cardHovered ? Theme.accentStrong : Theme.textDim
                     font.pixelSize: 12
                 }
             }
@@ -1387,7 +1402,7 @@ Item {
                 Item { Layout.fillWidth: true }
                 Text {
                     visible: (card.item.updated || "").length > 0
-                    text: "upd " + (card.item.updated || "")
+                    text: I18n.t("docs.updatedPrefix").arg(card.item.updated || "")
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -1395,11 +1410,29 @@ Item {
             }
         }
 
+        MouseArea {
+            id: cardMA
+            anchors.fill: parent
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            cursorShape: Qt.PointingHandCursor
+            onClicked: (mouse) => {
+                if (mouse.button === Qt.RightButton) docCardMenu.popup();
+                else root.openExternal(card.item.url);
+            }
+        }
+
         // Hover-overlay icons: ⋮⋮ drag handle (LMB drag-source), ✎ edit, × delete.
         // Keeping the drag-source to a small handle frees the rest of the card
         // for click + page-pan via the parent Flickable.
+        //
+        // Declared after cardMA so it stacks above it — otherwise every click on
+        // ✎ / × landed on the card-wide MouseArea and opened the document URL
+        // instead, which made the buttons decorative.
         Row {
-            visible: cardMA.containsMouse && !handleMA.drag.active
+            visible: !handleMA.drag.active
+            opacity: card.cardHovered ? 1 : 0
+            enabled: card.cardHovered
+            Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: 6
             spacing: 4
@@ -1448,18 +1481,6 @@ Item {
             }
         }
 
-        MouseArea {
-            id: cardMA
-            anchors.fill: parent
-            hoverEnabled: true
-            acceptedButtons: Qt.LeftButton | Qt.RightButton
-            cursorShape: Qt.PointingHandCursor
-            onClicked: (mouse) => {
-                if (mouse.button === Qt.RightButton) docCardMenu.popup();
-                else root.openExternal(card.item.url);
-            }
-        }
-
         // Drop target — top half inserts BEFORE, bottom half inserts AFTER
         DropArea {
             id: cardDrop
@@ -1493,16 +1514,16 @@ Item {
         QQC.Menu {
             id: docCardMenu
             QQC.MenuItem {
-                text: card.isInternal ? "Open (wiki)" : "Open URL ↗"
+                text: card.isInternal ? I18n.t("docs.menu.openWiki") : I18n.t("docs.menu.openUrl")
                 enabled: (card.item.url || "").length > 0
                 onTriggered: root.openExternal(card.item.url)
             }
-            QQC.MenuItem { text: "Edit…"; onTriggered: root.openDocEdit(card.sectionId, card.item) }
+            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openDocEdit(card.sectionId, card.item) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
-            QQC.MenuItem { text: "Move down"; onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
+            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
         }
     }
 
@@ -1512,14 +1533,17 @@ Item {
         property int idx: -1
         radius: 10
         color: Theme.panel
-        border.color: snHover.containsMouse ? Theme.borderStrong : Theme.border
+        // See DocCard: a handler, so the ✎ / × on top don't steal the hover that
+        // reveals them.
+        property bool cardHovered: false
+        HoverHandler { onHoveredChanged: sCard.cardHovered = hovered }
+        border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
         implicitHeight: sCol.implicitHeight + 20
 
         MouseArea {
             id: snHover
             anchors.fill: parent
-            hoverEnabled: true
             acceptedButtons: Qt.RightButton
             onClicked: (mouse) => { if (mouse.button === Qt.RightButton) snipMenu.popup() }
         }
@@ -1549,7 +1573,7 @@ Item {
                     border.width: 1
                     implicitWidth: copyT.implicitWidth + 14
                     implicitHeight: 22
-                    Text { id: copyT; anchors.centerIn: parent; text: "copy"; color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    Text { id: copyT; anchors.centerIn: parent; text: I18n.t("docs.copyShort"); color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
                     MouseArea {
                         id: copySnMA
                         anchors.fill: parent
@@ -1562,7 +1586,9 @@ Item {
                     }
                 }
                 Rectangle {
-                    visible: snHover.containsMouse
+                    opacity: sCard.cardHovered ? 1 : 0
+                    enabled: sCard.cardHovered
+                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                     radius: 4
                     color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
                     border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
@@ -1572,7 +1598,9 @@ Item {
                     MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
                 }
                 Rectangle {
-                    visible: snHover.containsMouse
+                    opacity: sCard.cardHovered ? 1 : 0
+                    enabled: sCard.cardHovered
+                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                     radius: 4
                     color: delSnMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
                     border.color: delSnMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
@@ -1618,18 +1646,18 @@ Item {
         QQC.Menu {
             id: snipMenu
             QQC.MenuItem {
-                text: "Copy"
+                text: I18n.t("docs.copy")
                 onTriggered: {
                     AppController.copyToClipboard(sCard.snip.code || "");
                     root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
                 }
             }
-            QQC.MenuItem { text: "Edit…"; onTriggered: root.openSnippetEdit(sCard.idx) }
+            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openSnippetEdit(sCard.idx) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
-            QQC.MenuItem { text: "Move down"; enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteSnippet(sCard.idx) }
+            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteSnippet(sCard.idx) }
         }
     }
 
@@ -1640,8 +1668,11 @@ Item {
         width: parent ? ((parent.width - (parent.columns - 1) * parent.columnSpacing) / parent.columns) : 240
         height: 56
         radius: 10
-        color: ccMA.containsMouse ? Theme.panel2 : Theme.panel
-        border.color: ccMA.containsMouse ? Theme.borderStrong : Theme.border
+        // See DocCard — handler-driven hover so the row buttons stay put.
+        property bool cardHovered: false
+        HoverHandler { onHoveredChanged: cc.cardHovered = hovered }
+        color: cardHovered ? Theme.panel2 : Theme.panel
+        border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
 
         RowLayout {
@@ -1672,7 +1703,9 @@ Item {
                 Text { text: cc.c.mattermost || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 10 }
             }
             Row {
-                visible: ccMA.containsMouse
+                opacity: cc.cardHovered ? 1 : 0
+                enabled: cc.cardHovered
+                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                 spacing: 4
                 Rectangle {
                     width: 22; height: 22; radius: 5
@@ -1693,7 +1726,6 @@ Item {
         MouseArea {
             id: ccMA
             anchors.fill: parent
-            hoverEnabled: true
             acceptedButtons: Qt.LeftButton | Qt.RightButton
             cursorShape: Qt.PointingHandCursor
             onClicked: (mouse) => {
@@ -1705,12 +1737,12 @@ Item {
 
         QQC.Menu {
             id: ccMenu
-            QQC.MenuItem { text: "Edit…"; onTriggered: root.openContactEdit(cc.idx) }
+            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openContactEdit(cc.idx) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Move up";   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
-            QQC.MenuItem { text: "Move down"; enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
+            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
             QQC.MenuSeparator {}
-            QQC.MenuItem { text: "Delete"; onTriggered: root.deleteContact(cc.idx) }
+            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteContact(cc.idx) }
         }
     }
 }

@@ -253,7 +253,7 @@ Item {
                 ColumnLayout {
                     spacing: 1
                     Text {
-                        text: "Notes · scratchpad"
+                        text: I18n.t("notes.header")
                         color: Theme.text
                         font.pixelSize: 14
                         font.weight: Font.DemiBold
@@ -294,7 +294,7 @@ Item {
                     Text {
                         id: blToggleTxt
                         anchors.centerIn: parent
-                        text: "⌗ Links"
+                        text: I18n.t("notes.links")
                         color: root.showBacklinks ? "#06121a" : Theme.textMuted
                         font.pixelSize: 11
                         font.weight: Font.Medium
@@ -309,42 +309,47 @@ Item {
                 }
 
                 // ── Edit · Split · Preview toggle ──────────────────────
-                Row {
-                    spacing: 0
-                    Repeater {
-                        model: [
-                            { id: "edit",    label: "Edit" },
-                            { id: "split",   label: "Split" },
-                            { id: "preview", label: "Preview" }
-                        ]
-                        delegate: Rectangle {
-                            required property var modelData
-                            required property int index
-                            readonly property bool active: root.viewMode === modelData.id
-                            implicitWidth: 64
-                            implicitHeight: 24
-                            radius: 0
-                            color: active ? Theme.accentSoft
-                                 : (segMA.containsMouse ? Theme.panel2 : "transparent")
-                            border.color: active ? Theme.accent : Theme.border
-                            border.width: 1
-                            // Merge borders into a continuous bar.
-                            Component.onCompleted: {
-                                if (index === 0)      { /* leftmost — full radius */ }
-                            }
-                            Text {
-                                anchors.centerIn: parent
-                                text: modelData.label
-                                color: parent.active ? Theme.accentStrong : Theme.textMuted
-                                font.pixelSize: 11
-                                font.weight: parent.active ? Font.DemiBold : Font.Medium
-                            }
-                            MouseArea {
-                                id: segMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.viewMode = modelData.id
+                // One frame around the group instead of a border per segment,
+                // which doubled up into a 2px seam between them.
+                Rectangle {
+                    Layout.preferredWidth: 3 * 64 + 6
+                    Layout.preferredHeight: 26
+                    radius: 6
+                    color: Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    Row {
+                        anchors.fill: parent
+                        anchors.margins: 3
+                        spacing: 0
+                        Repeater {
+                            model: [
+                                { id: "edit",    label: I18n.t("notes.mode.edit") },
+                                { id: "split",   label: I18n.t("notes.mode.split") },
+                                { id: "preview", label: I18n.t("notes.mode.preview") }
+                            ]
+                            delegate: Rectangle {
+                                required property var modelData
+                                readonly property bool active: root.viewMode === modelData.id
+                                width: 64
+                                height: parent.height
+                                radius: 4
+                                color: active ? Theme.accent
+                                     : (segMA.containsMouse ? Theme.panel3 : "transparent")
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: modelData.label
+                                    color: parent.active ? "#06121a" : Theme.text
+                                    font.pixelSize: 11
+                                    font.weight: parent.active ? Font.DemiBold : Font.Medium
+                                }
+                                MouseArea {
+                                    id: segMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: root.viewMode = modelData.id
+                                }
                             }
                         }
                     }
@@ -619,14 +624,14 @@ Item {
                     anchors.margins: 12
                     spacing: 8
                     Text {
-                        text: "Backlinks"
+                        text: I18n.t("notes.backlinks")
                         color: Theme.text
                         font.pixelSize: 12
                         font.weight: Font.DemiBold
                     }
                     Text {
                         visible: root._backlinks.length === 0
-                        text: "No [[wiki-links]] yet.\nType [[ to link a heading."
+                        text: I18n.t("notes.backlinks.empty")
                         color: Theme.textDim
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap

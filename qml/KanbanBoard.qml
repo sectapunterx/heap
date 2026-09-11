@@ -191,6 +191,13 @@ Item {
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
                     readonly property bool isLast:  index === AppController.statuses.length - 1
+                    // Drives the reveal of the header's move/delete icons. A
+                    // HoverHandler, not the MouseArea below the header row:
+                    // hover stops at the first item that accepts it, so with a
+                    // MouseArea driving this the icons vanished the moment the
+                    // pointer touched the column name (or one of the icons),
+                    // which made them impossible to click.
+                    property bool headerHovered: false
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
@@ -212,6 +219,7 @@ Item {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 38
                             color: Theme.panel2
+                            HoverHandler { onHoveredChanged: col.headerHovered = hovered }
                             Rectangle {
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                 height: 1; color: Theme.border
@@ -220,13 +228,33 @@ Item {
                                 anchors.fill: parent
                                 anchors.leftMargin: 12; anchors.rightMargin: 8
                                 spacing: 8
-                                Rectangle {
-                                    width: 10; height: 10; radius: 3
-                                    color: col.statusColor
-                                    MouseArea {
+                                // The swatch itself stays 10px, but it opens the
+                                // colour picker, so the thing you click is a
+                                // 20px box around it — a 10x10 target was barely
+                                // hittable and gave no hint it was a button.
+                                Item {
+                                    id: colorSwatch
+                                    Layout.preferredWidth: 20
+                                    Layout.preferredHeight: 20
+                                    Rectangle {
                                         anchors.fill: parent
+                                        radius: 5
+                                        color: swatchMA.containsMouse ? Theme.panel3 : "transparent"
+                                    }
+                                    Rectangle {
+                                        anchors.centerIn: parent
+                                        width: 10; height: 10; radius: 3
+                                        color: col.statusColor
+                                    }
+                                    MouseArea {
+                                        id: swatchMA
+                                        anchors.fill: parent
+                                        hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
-                                        onClicked: colorPopup.openFor(col.statusId, col.statusColor, this)
+                                        onClicked: colorPopup.openFor(col.statusId, col.statusColor, colorSwatch)
+                                        ToolTip.visible: containsMouse
+                                        ToolTip.delay: 400
+                                        ToolTip.text: I18n.t("kanban.changeColor")
                                     }
                                 }
                                 Item {
@@ -251,7 +279,7 @@ Item {
                                         onDoubleClicked: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() }
                                         cursorShape: Qt.IBeamCursor
                                         ToolTip.visible: containsMouse
-                                        ToolTip.text: "Double-click to rename"
+                                        ToolTip.text: I18n.t("kanban.tip.rename")
                                         ToolTip.delay: 500
                                         hoverEnabled: true
                                     }
@@ -290,21 +318,28 @@ Item {
                                     }
                                 }
 
-                                // Move-left / Move-right / Delete
+                                // Move-left / Move-right / Delete. `visible` only
+                                // carries the structural conditions; the reveal
+                                // rides on opacity so the header doesn't reflow
+                                // (name and counter used to jump sideways) and
+                                // the icons keep a stable position to click.
                                 HoverIcon {
-                                    glyph: "‹"; tip: "Move left"
-                                    visible: headHover.containsMouse && !col.isFirst
+                                    glyph: "‹"; tip: I18n.t("kanban.moveLeft")
+                                    visible: !col.isFirst
+                                    revealed: col.headerHovered
                                     onActivated: AppController.moveStatus(col.statusId, col.index - 1)
                                 }
                                 HoverIcon {
-                                    glyph: "›"; tip: "Move right"
-                                    visible: headHover.containsMouse && !col.isLast
+                                    glyph: "›"; tip: I18n.t("kanban.moveRight")
+                                    visible: !col.isLast
+                                    revealed: col.headerHovered
                                     onActivated: AppController.moveStatus(col.statusId, col.index + 1)
                                 }
                                 HoverIcon {
                                     glyph: "×"; tip: I18n.t("kanban.deleteColumn")
                                     danger: true
-                                    visible: headHover.containsMouse && AppController.statuses.length > 1
+                                    visible: AppController.statuses.length > 1
+                                    revealed: col.headerHovered
                                     onActivated: AppController.deleteStatus(col.statusId)
                                 }
 
@@ -329,7 +364,6 @@ Item {
                             MouseArea {
                                 id: headHover
                                 anchors.fill: parent
-                                hoverEnabled: true
                                 acceptedButtons: Qt.RightButton
                                 onClicked: (mouse) => { if (mouse.button === Qt.RightButton) colHeaderMenu.popup() }
                                 z: -1
@@ -337,14 +371,14 @@ Item {
 
                             QQC.Menu {
                                 id: colHeaderMenu
-                                QQC.MenuItem { text: "Add task"; onTriggered: root.createInStatus(col.statusId) }
-                                QQC.MenuItem { text: "Rename"; onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
-                                QQC.MenuItem { text: "Change color…"; onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
+                                QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
+                                QQC.MenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
                                 QQC.MenuSeparator {}
-                                QQC.MenuItem { text: "Move left";  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
-                                QQC.MenuItem { text: "Move right"; enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                QQC.MenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                QQC.MenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 QQC.MenuSeparator {}
-                                QQC.MenuItem { text: "Delete column"; enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
                             }
                         }
 
@@ -501,7 +535,7 @@ Item {
                             }
                             QQC.Menu {
                                 id: bodyMenu
-                                QQC.MenuItem { text: "Add task"; onTriggered: root.createInStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
                             }
                         }
                     }
@@ -571,7 +605,7 @@ Item {
         id: addColumnPopup
         modal: true
         focus: true
-        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
         padding: 0
         width: 360
         anchors.centerIn: Overlay.overlay
@@ -651,6 +685,10 @@ Item {
         id: colorPopup
         modal: false
         focus: true
+        // Parented to the swatch it was opened from (see openFor), so "outside
+        // the parent" is "outside the palette and the swatch" — a press anywhere
+        // else closes it, while a press on the swatch falls through to openFor,
+        // which toggles.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         padding: 8
         background: Rectangle { radius: 10; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
@@ -659,11 +697,17 @@ Item {
         readonly property var palette: addColumnPopup.palette
 
         function openFor(id, currentColor, anchorItem) {
+            const sameSwatch = colorPopup.opened && colorPopup.forStatusId === id;
+            colorPopup.close();
+            if (sameSwatch) return;
             forStatusId = id;
             if (anchorItem) {
-                const p = anchorItem.mapToItem(root, anchorItem.width / 2, anchorItem.height);
-                x = Math.max(8, p.x - 90);
-                y = p.y + 6;
+                colorPopup.parent = anchorItem;
+                const p = anchorItem.mapToItem(root, 0, 0);
+                const wantX = Math.max(8, Math.min(p.x + anchorItem.width / 2 - 90,
+                                                   root.width - colorPopup.width - 8));
+                colorPopup.x = wantX - p.x;
+                colorPopup.y = anchorItem.height + 6;
             }
             open();
         }
@@ -695,22 +739,31 @@ Item {
     // ── Inline components ───────────────────────────────────────────────────
 
     component HoverIcon: Rectangle {
+        id: hoverIcon
         property string glyph: ""
         property string tip: ""
         property bool danger: false
+        // Faded out rather than hidden: the slot stays in the header layout, so
+        // nothing shifts when the pointer arrives and the icon is already under
+        // the cursor when it fades in. `enabled` keeps the invisible state from
+        // being clickable.
+        property bool revealed: false
         signal activated()
         Layout.preferredWidth: 20
         Layout.preferredHeight: 20
         radius: 4
+        opacity: revealed ? 1 : 0
+        enabled: revealed
+        Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
         color: hoverIconMA.containsMouse ? (danger ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel3)
                                          : "transparent"
         border.color: hoverIconMA.containsMouse ? (danger ? Theme.p0 : Theme.border) : "transparent"
         border.width: 1
         Text {
             anchors.centerIn: parent
-            text: parent.glyph
-            color: hoverIconMA.containsMouse ? (parent.danger ? Theme.p0 : Theme.text) : Theme.textMuted
-            font.pixelSize: parent.glyph === "×" ? 13 : 12
+            text: hoverIcon.glyph
+            color: hoverIconMA.containsMouse ? (hoverIcon.danger ? Theme.p0 : Theme.text) : Theme.textMuted
+            font.pixelSize: hoverIcon.glyph === "×" ? 13 : 12
             font.weight: Font.DemiBold
         }
         MouseArea {
@@ -718,9 +771,9 @@ Item {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: parent.activated()
-            ToolTip.visible: containsMouse && parent.tip.length > 0
-            ToolTip.text: parent.tip
+            onClicked: hoverIcon.activated()
+            ToolTip.visible: containsMouse && hoverIcon.tip.length > 0
+            ToolTip.text: hoverIcon.tip
             ToolTip.delay: 400
         }
     }

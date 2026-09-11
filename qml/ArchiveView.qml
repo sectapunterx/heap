@@ -93,6 +93,11 @@ Item {
                 trackedSeconds: m.data(idx, Qt.UserRole + 17),
                 isTiming: m.data(idx, Qt.UserRole + 18),
                 recurrence: m.data(idx, Qt.UserRole + 19),
+                // TaskCard also reads these, so without them archived cards
+                // silently lost their labels and their clock time.
+                dueAt: m.data(idx, Qt.UserRole + 21),
+                hasTime: m.data(idx, Qt.UserRole + 22),
+                labels: m.data(idx, Qt.UserRole + 29),
             };
             if (!root.passesFilter(t)) continue;
             out.push(t);

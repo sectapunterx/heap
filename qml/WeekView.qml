@@ -80,8 +80,14 @@ Item {
     readonly property int hoursEnd:   AppController.workdayEnd
     readonly property int hourH: 38
     // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
-    // date regardless of which day the week starts on.
-    readonly property var dowLabelsByJsDow: ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+    // date regardless of which day the week starts on. Names come from the app
+    // language — they used to be hardcoded English next to a localised date
+    // range in the same header.
+    readonly property var dowLabelsByJsDow: {
+        const out = [];
+        for (let i = 0; i < 7; i++) out.push(I18n.dayName(i));
+        return out;
+    }
 
     function isSameDay(a, b) {
         if (!a || !b || !a.getFullYear || !b.getFullYear) return false;
@@ -272,7 +278,7 @@ Item {
                     RowLayout {
                         spacing: 10
                         Text {
-                            text: "WEEK " + AppController.isoWeekNumber(weekStart)
+                            text: I18n.t("week.number").arg(AppController.isoWeekNumber(weekStart))
                             color: Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: 11
@@ -288,13 +294,13 @@ Item {
                 }
                 Item { Layout.fillWidth: true }
                 Text {
-                    text: root.totalTasks() + " deadlines · " + root.totalEvents() + " events"
+                    text: I18n.t("week.summary").arg(I18n.deadlines(root.totalTasks())).arg(I18n.events(root.totalEvents()))
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 11
                 }
                 PillButton {
-                    text: "Today"
+                    text: I18n.t("common.today")
                     onClicked: AppController.selectedDate = AppController.today
                 }
                 PillButton {
@@ -379,7 +385,7 @@ Item {
                                     radius: 4
                                     color: Theme.accent
                                     implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: "TODAY"; color: "#06121a"; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: "#06121a"; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
                                 }
                             }
                             Text {
@@ -465,12 +471,24 @@ Item {
                                         }
                                     }
                                 }
+                                // The overflow count was dead text — the only way
+                                // to reach the hidden deadlines was to guess.
+                                // It selects the day, which is what the day view
+                                // on the right follows.
                                 Text {
                                     visible: headCol.modelData.tasks.length > 4
-                                    text: "+ " + (headCol.modelData.tasks.length - 4) + " more"
-                                    color: Theme.textDim
+                                    text: I18n.t("week.more").arg(headCol.modelData.tasks.length - 4)
+                                    color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: 10
+                                    MouseArea {
+                                        id: moreMA
+                                        anchors.fill: parent
+                                        anchors.margins: -4
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: AppController.selectedDate = headCol.modelData.date
+                                    }
                                 }
                                 Text {
                                     visible: headCol.modelData.tasks.length === 0
@@ -509,7 +527,10 @@ Item {
                             Text {
                                 required property int index
                                 x: 0
-                                y: index * root.hourH - 6
+                                // Centred on its hour line, but never above the
+                                // top of the scroll area — the first label used
+                                // to be cut in half by the sticky header.
+                                y: Math.max(0, index * root.hourH - 6)
                                 width: gridHost.gutterW - 8
                                 horizontalAlignment: Text.AlignRight
                                 text: Theme.fmtHour(root.hoursStart + index)

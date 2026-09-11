@@ -193,7 +193,7 @@ Rectangle {
                     font.pixelSize: 12
                 }
                 Text {
-                    text: "Working on " + AppController.focusedTaskId
+                    text: I18n.t("topbar.git.workingOn").arg(AppController.focusedTaskId)
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
                     font.pixelSize: 12
@@ -204,8 +204,10 @@ Rectangle {
                     id: prBadge
                     property var pr: AppController.focusedRepoState
                                      ? AppController.focusedRepoState.pr : null
-                    visible: pr && String(pr.state || "").length > 0
-                          && Number(pr.number || 0) > 0
+                    // !! — with no PR the leading `pr &&` yields null, and QML
+                    // logs "Unable to assign [undefined] to bool" on every start.
+                    visible: !!(pr && String(pr.state || "").length > 0
+                                   && Number(pr.number || 0) > 0)
                     radius: 4
                     implicitWidth: prBadgeT.implicitWidth + 12
                     implicitHeight: 18
@@ -291,7 +293,7 @@ Rectangle {
                     Text {
                         id: openT
                         anchors.centerIn: parent
-                        text: "Open"
+                        text: I18n.t("topbar.git.open")
                         color: openMA.containsMouse ? Theme.bg : Theme.accentStrong
                         font.pixelSize: 10
                         font.weight: Font.Medium
@@ -304,15 +306,29 @@ Rectangle {
                         onClicked: AppController.openFocusedTask()
                     }
                 }
-                Text {
-                    text: "×"
-                    color: Theme.textDim
-                    font.family: Theme.fontMono
-                    font.pixelSize: 14
+                // Dismiss. The hit area used to be the glyph's own bounds —
+                // roughly 8x16px — so the banner was hard to get rid of.
+                Rectangle {
+                    Layout.preferredWidth: 20
+                    Layout.preferredHeight: 20
+                    radius: 4
+                    color: dismissMA.containsMouse ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
+                    Text {
+                        anchors.centerIn: parent
+                        text: "×"
+                        color: dismissMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                        font.family: Theme.fontMono
+                        font.pixelSize: 14
+                    }
                     MouseArea {
+                        id: dismissMA
                         anchors.fill: parent
+                        hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: AppController.dismissGitBanner()
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 400
+                        ToolTip.text: I18n.t("topbar.git.dismiss")
                     }
                 }
             }
@@ -343,22 +359,39 @@ Rectangle {
                     background: Item {}
                     selectByMouse: true
                 }
+                // Shortcut hint. It used to read "⌘K" — a macOS glyph on every
+                // platform, and the wrong binding besides: Ctrl+K opens the
+                // command palette, focusing this field is search.focus. Now it
+                // shows the live binding and clicking it does what it says.
                 Rectangle {
+                    visible: kbd.text.length > 0
                     radius: 4
-                    border.color: Theme.border; border.width: 1
-                    color: "transparent"
+                    border.color: kbdMA.containsMouse ? Theme.borderStrong : Theme.border
+                    border.width: 1
+                    color: kbdMA.containsMouse ? Theme.panel3 : "transparent"
                     width: kbd.implicitWidth + 10; height: 16
                     Text {
                         id: kbd; anchors.centerIn: parent
-                        text: "⌘K"; color: Theme.textDim
+                        text: AppController.shortcutFor("search.focus")
+                        color: kbdMA.containsMouse ? Theme.text : Theme.textDim
                         font.family: Theme.fontMono; font.pixelSize: 10
+                    }
+                    MouseArea {
+                        id: kbdMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.focusSearch()
+                        ToolTip.visible: containsMouse
+                        ToolTip.delay: 400
+                        ToolTip.text: I18n.t("topbar.searchHint").arg(kbd.text)
                     }
                 }
             }
         }
 
         PillButton {
-            text: "+ Task"
+            text: I18n.t("topbar.newTask")
             primary: true
             onClicked: root.newTaskRequested()
         }

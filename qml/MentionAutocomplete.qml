@@ -193,7 +193,7 @@ Popup {
             height: 28
             color: index === ac._selectedIdx
                 ? Theme.withAlpha(Theme.accent, 0.18)
-                : "transparent"
+                : (rowMA.containsMouse ? Theme.withAlpha(Theme.accent, 0.08) : "transparent")
             Row {
                 anchors.fill: parent
                 anchors.leftMargin: 10
@@ -216,7 +216,9 @@ Popup {
                 }
             }
             MouseArea {
+                id: rowMA
                 anchors.fill: parent
+                hoverEnabled: true
                 cursorShape: Qt.PointingHandCursor
                 onClicked: {
                     ac._selectedIdx = index;

@@ -62,6 +62,42 @@ ApplicationWindow {
         }
     }
 
+    // Open a side-rail popover next to its button — or close it if that same
+    // button (or its shortcut) fired while the panel is already up.
+    //
+    // The popup is re-parented to the anchor so CloseOnPressOutsideParent means
+    // "pressed outside the panel and outside the button that owns it": a press
+    // anywhere else in the app dismisses it, while a press on the button itself
+    // is left to the click handler below, which toggles. Positions are therefore
+    // anchor-relative, but still clamped in window space so a rail button near
+    // the bottom edge doesn't push the panel off-screen.
+    // Everything that floats at the bottom centre — the selection bar, the
+    // "continue tour" pill and the toast — used to be pinned to the same spot
+    // and simply drew on top of each other (deleting a multi-selection put the
+    // undo toast right over the selection bar). They stack instead.
+    readonly property int _selectionBarSpace: AppController.selectionCount > 0 ? 68 : 0
+    readonly property int _resumePillSpace: welcome.paused ? 52 : 0
+
+    function _placePopover(pop, anchor) {
+        const p = anchor.mapToItem(win.contentItem, 0, 0);
+        const wantY = Math.max(8, Math.min(p.y, win.contentItem.height - pop.height - 8));
+        pop.x = anchor.width + 6;
+        pop.y = wantY - p.y;
+    }
+    function _togglePopover(pop, anchor) {
+        if (pop.opened) {
+            pop.close();
+            return;
+        }
+        pop.parent = anchor;
+        win._placePopover(pop, anchor);
+        pop.open();
+        // The Hotkeys panel sizes itself from its list's contentHeight, which is
+        // still 0 on the very first open — re-clamp once it has a real height so
+        // a bottom-anchored rail button can't push it off the window.
+        Qt.callLater(function () { win._placePopover(pop, anchor); });
+    }
+
     function activeCount() {
         return AppController.countByStatus("prog") + AppController.countByStatus("half");
     }
@@ -172,18 +208,8 @@ ApplicationWindow {
             id: rail
             Layout.row: 1; Layout.column: 0
             Layout.fillHeight: true
-            onOpenTweaks: (anchor) => {
-                const p = anchor.mapToItem(win.contentItem, 0, 0);
-                tweaks.x = p.x + anchor.width + 6;
-                tweaks.y = Math.max(8, Math.min(p.y, win.contentItem.height - tweaks.height - 8));
-                tweaks.open();
-            }
-            onOpenHotkeys: (anchor) => {
-                const p = anchor.mapToItem(win.contentItem, 0, 0);
-                hotkeys.x = p.x + anchor.width + 6;
-                hotkeys.y = Math.max(8, Math.min(p.y, win.contentItem.height - hotkeys.height - 8));
-                hotkeys.open();
-            }
+            onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
+            onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
         }
 
         // Main column: filter bar + active view
@@ -229,14 +255,16 @@ ApplicationWindow {
 
                 FilterBar {
                     Layout.fillWidth: true
+                    // Archive brings its own header and its own counter, and the
+                    // fall-through label used to caption it "Docs".
                     visible: AppController.currentView !== "docs"
                           && AppController.currentView !== "notes"
                           && AppController.currentView !== "settings"
-                    viewLabel: AppController.currentView === "board" ? "Board"
-                             : AppController.currentView === "timeline" ? "Timeline"
-                             : AppController.currentView === "week" ? "Week"
-                             : AppController.currentView === "month" ? "Month"
-                             : "Docs"
+                          && AppController.currentView !== "archive"
+                    viewLabel: AppController.currentView === "timeline" ? I18n.t("siderail.timeline")
+                             : AppController.currentView === "week" ? I18n.t("siderail.week")
+                             : AppController.currentView === "month" ? I18n.t("siderail.month")
+                             : I18n.t("siderail.board")
                     priorities: win.prioritiesFilter
                     totalCount: win._taskCount
                     activeCount: win._activeCount
@@ -468,7 +496,7 @@ ApplicationWindow {
         z: 9000
         anchors.horizontalCenter: parent.horizontalCenter
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
+        anchors.bottomMargin: 24 + win._selectionBarSpace
         radius: 20
         height: 40
         width: pillRow.implicitWidth + 28
@@ -493,13 +521,24 @@ ApplicationWindow {
                 font.weight: Font.DemiBold
             }
             Rectangle { width: 1; height: 18; color: Theme.border }
-            Text {
-                text: "✕"
-                color: Theme.textMuted
-                font.pixelSize: 12
-                // Nested (declared last) so it wins the click over the pill.
+            // Give up on the tour. Nested (declared last) so it wins the click
+            // over the pill; sized to 22px because the glyph's own bounds were a
+            // ~10px target sitting right next to a much larger "resume" action.
+            Rectangle {
+                Layout.preferredWidth: 22
+                Layout.preferredHeight: 22
+                radius: 5
+                color: giveUpMA.containsMouse ? Theme.panel3 : "transparent"
+                Text {
+                    anchors.centerIn: parent
+                    text: "✕"
+                    color: giveUpMA.containsMouse ? Theme.text : Theme.textMuted
+                    font.pixelSize: 12
+                }
                 MouseArea {
+                    id: giveUpMA
                     anchors.fill: parent
+                    hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: welcome._finish()
                 }
@@ -774,7 +813,7 @@ ApplicationWindow {
     Toast {
         id: toast
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
+        anchors.bottomMargin: 24 + win._selectionBarSpace + win._resumePillSpace
         anchors.horizontalCenter: parent.horizontalCenter
         z: 100
     }
