@@ -75,6 +75,21 @@ Prefer a full form? `Ctrl+N` opens the task editor with every field.
   `#ticket` autocomplete. `Ctrl+Shift+N` appends a quick note from anywhere.
   ![Notes](assets/img/screens/board-notes.png)
 
+  Write in full markdown: headings, nested lists, task lists, tables, fenced
+  code with syntax highlighting, block quotes, footnotes, and callouts such as
+  `> [!WARNING] Mind the migration`. `Ctrl+Shift+M` cycles edit → split →
+  preview; in split the two panes scroll together, clicking a rendered block
+  puts the cursor on the line that produced it, and ticking a checkbox in the
+  preview rewrites exactly one character of the source — undoable like any
+  other edit. The formatting keys are in [HOTKEYS.md](HOTKEYS.md#notes-editor).
+
+  Searching (`Ctrl+K`) finds notes by section rather than as one blob, so a hit
+  reads as `Notes › Release › Windows` and opens at that heading.
+
+  Images in a note render from disk. A remote image (`https://…`) is shown as a
+  link you can choose to follow rather than being fetched, because heap makes no
+  network requests you did not ask for.
+
 ## 6. Profiles
 
 A **profile** is a feature-scoped workspace: its own tasks, people, statuses,

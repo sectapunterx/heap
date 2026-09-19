@@ -249,9 +249,26 @@ Item {
                 text: "Notes"
             }
             Body {
-                text: "One markdown canvas per profile. Three modes: editor only, split (preview alongside), "
-                    + "preview only. Autocomplete for @user and #ticket pulls in the people and tasks of the "
-                    + "active profile."
+                text: "One markdown canvas per profile. Three modes — editor only, split, preview — cycled "
+                    + "with Ctrl+Shift+M. Autocomplete for @user and #ticket pulls in the people and tasks of "
+                    + "the active profile, and [[ links a heading in the same note."
+            }
+            Body {
+                text: "Full markdown: headings, nested and task lists, tables, fenced code with syntax "
+                    + "highlighting, quotes, footnotes and callouts like \"> [!WARNING] title\". In split "
+                    + "mode the panes scroll together, clicking a rendered block moves the cursor to the line "
+                    + "that produced it, and ticking a checkbox in the preview edits one character of the "
+                    + "source — undoable like anything else."
+            }
+            Body {
+                text: "Formatting keys work while the cursor is in the editor: Ctrl+B bold, Ctrl+I italic, "
+                    + "Ctrl+E code, Ctrl+K link, Ctrl+Shift+X strikethrough, Ctrl+Shift+H highlight, "
+                    + "Ctrl+Shift+L heading level, Tab and Shift+Tab to indent a list, Ctrl+Enter to tick a "
+                    + "checkbox. Enter continues the list or quote you are in."
+            }
+            Body {
+                text: "Images render from disk. A remote image is shown as a link you can follow rather than "
+                    + "being downloaded — heap makes no network requests you did not ask for."
             }
         }
 
