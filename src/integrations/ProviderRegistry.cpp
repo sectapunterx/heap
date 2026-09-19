@@ -253,6 +253,8 @@ ProviderDescriptor todoist() {
                               QStringLiteral("data:read"),
                               TokenStyle::FormBody);
   d.oauth.scopeSeparator = QStringLiteral(",");
+  // Todoist's allowlist documents "localhost is allowed", never the IP literal.
+  d.oauth.redirectHost = QStringLiteral("localhost");
   return d;  // pull-only
 }
 
@@ -287,7 +289,7 @@ ProviderDescriptor asana() {
                               HEAP_OAUTH_ASANA_CLIENT_SECRET,
                               QStringLiteral("https://app.asana.com/-/oauth_authorize"),
                               QStringLiteral("https://app.asana.com/-/oauth_token"),
-                              QStringLiteral("tasks:read workspaces:read users:read"),
+                              QStringLiteral("tasks:read projects:read workspaces:read users:read"),
                               TokenStyle::FormBody);
   d.oauth.usePkce = true;
   return d;  // pull-only

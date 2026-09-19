@@ -3183,6 +3183,7 @@ void AppController::connectOAuth(const QString& providerId) {
   p.extraAuthParams = d->oauth.extraAuthParams;
   p.clientIdParam = d->oauth.clientIdParam;
   p.redirectParam = d->oauth.redirectParam;
+  p.redirectHost = d->oauth.redirectHost;
   const bool deviceFlow = p.flow == heap::integrations::OAuthFlow::Device;
   // Device flow: authUrl is the device authorization endpoint (no loopback).
   p.authUrl = expandHost(deviceFlow ? d->oauth.deviceAuthUrl : d->oauth.authUrl);

@@ -35,6 +35,10 @@ credentials.
 
 ## Enabling one-click OAuth (maintainers)
 
+> Step-by-step registration for every provider — where to click, which scopes,
+> which loopback literal — lives in **[OAUTH-SETUP.md](OAUTH-SETUP.md)**. This
+> section is the mechanism behind it.
+
 One-click needs an **OAuth app registered with the provider**. Where those
 credentials come from depends on what the provider accepts.
 

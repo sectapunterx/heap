@@ -301,8 +301,8 @@ QString OAuthManager::redirectUri() {
   return redirectUriFor(kRedirectPort);
 }
 
-QString OAuthManager::redirectUriFor(quint16 port) {
-  return QStringLiteral("http://127.0.0.1:%1/").arg(port);
+QString OAuthManager::redirectUriFor(quint16 port, const QString& host) {
+  return QStringLiteral("http://%1:%2/").arg(host.isEmpty() ? QStringLiteral("127.0.0.1") : host).arg(port);
 }
 
 bool OAuthManager::deviceFlowAvailable() {
@@ -387,7 +387,7 @@ void OAuthManager::startAuthCode(const Params& params) {
     report({false, {}, {}, {}, tr("redirect port %1 is busy — close the other app and retry").arg(params.redirectPort)});
     return;
   }
-  const QString redirect = redirectUriFor(m_receiver->port());
+  const QString redirect = redirectUriFor(m_receiver->port(), params.redirectHost);
 
   // PKCE (RFC 7636) binds the code to this process. Send it whenever the
   // provider tolerates it, secret or not: another local process could have
