@@ -763,6 +763,10 @@ class AppController : public QObject {
   // (Asana workspace, ClickUp list, Sentry org/project, Bitbucket repo) can
   // still be missing afterwards.
   QStringList missingRequiredFields(const QString& providerId) const;
+  // Finish a Jira browser sign-in: ask accessible-resources which Atlassian
+  // site the new token was granted and cache its cloudId. A 3LO token is not
+  // bound to a site, and the gateway path needs that id.
+  void resolveJiraSite(const QString& accessToken, const QString& label);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
   // Renew an expiring OAuth access token, then run `then`. Providers that use a

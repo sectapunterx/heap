@@ -142,6 +142,26 @@ QString defaultJiraJql() {
   return QStringLiteral("assignee = currentUser() ORDER BY updated DESC");
 }
 
+JiraSite pickJiraSite(const QByteArray& accessibleResourcesJson, const QString& preferredUrl) {
+  const QJsonArray sites = QJsonDocument::fromJson(accessibleResourcesJson).array();
+  if(sites.isEmpty()) {
+    return {};
+  }
+  // A token can be granted several sites. If the card already names one, keep
+  // it — switching sites silently would repoint every synced issue.
+  const QString wanted = normalizeJiraBaseUrl(preferredUrl);
+  if(!wanted.isEmpty()) {
+    for(const auto& v : sites) {
+      const QJsonObject site = v.toObject();
+      if(normalizeJiraBaseUrl(site.value(QStringLiteral("url")).toString()) == wanted) {
+        return {site.value(QStringLiteral("id")).toString(), site.value(QStringLiteral("url")).toString()};
+      }
+    }
+  }
+  const QJsonObject first = sites.first().toObject();
+  return {first.value(QStringLiteral("id")).toString(), first.value(QStringLiteral("url")).toString()};
+}
+
 JiraProvider::JiraProvider(QObject* parent) : IntegrationProvider(parent), m_nam(new QNetworkAccessManager(this)) {
 }
 
@@ -152,24 +172,52 @@ void JiraProvider::setConfig(const QString& baseUrl, const QString& email, const
   m_email = email.trimmed();
   m_token = token.trimmed();
   m_jql = jql.trimmed();
+  m_oauth = false;
   // A new site means the previous gateway decision no longer applies.
   m_apiBase = m_baseUrl;
   m_usingGateway = false;
   m_gatewayTried = false;
 }
 
+void JiraProvider::setOAuthConfig(const QString& cloudId, const QString& siteUrl, const QString& token, const QString& jql) {
+  m_baseUrl = normalizeJiraBaseUrl(siteUrl);
+  m_email.clear();
+  m_token = token.trimmed();
+  m_jql = jql.trimmed();
+  m_oauth = true;
+  // A 3LO token is only accepted by the gateway, never by the site host, so
+  // there is nothing to discover here and no 401 fallback to run. Without a
+  // cloudId there is no API base at all — stay unconfigured rather than send
+  // every call to a truncated /ex/jira/ path.
+  const QString id = cloudId.trimmed();
+  m_usingGateway = !id.isEmpty();
+  m_apiBase = m_usingGateway ? m_gatewayRoot + QStringLiteral("/ex/jira/") + id : QString();
+  m_gatewayTried = true;
+}
+
 bool JiraProvider::isConfigured() const {
-  return !m_baseUrl.isEmpty() && !m_email.isEmpty() && !m_token.isEmpty();
+  if(m_token.isEmpty()) {
+    return false;
+  }
+  // OAuth needs no email, and no site URL either — browse links degrade to the
+  // issue key, but the API base is already the gateway.
+  return m_oauth ? m_usingGateway : (!m_baseUrl.isEmpty() && !m_email.isEmpty());
 }
 
 void JiraProvider::sendOnce(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done) {
   QNetworkRequest req{QUrl(m_apiBase + QStringLiteral("/rest/api/3") + path)};
   req.setRawHeader("Accept", "application/json");
   req.setRawHeader("User-Agent", "heap-sync");
-  // Basic base64(email:token) — the same pair works for the site host and for
-  // the api.atlassian.com gateway.
-  const QByteArray basic = (m_email + QChar(':') + m_token).toUtf8().toBase64();
-  req.setRawHeader("Authorization", QByteArrayLiteral("Basic ") + basic);
+  if(m_oauth) {
+    // A 3LO access token is a Bearer credential; there is no email to pair it
+    // with. Only the gateway accepts it.
+    req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + m_token.toUtf8());
+  } else {
+    // Basic base64(email:token) — the same pair works for the site host and for
+    // the api.atlassian.com gateway.
+    const QByteArray basic = (m_email + QChar(':') + m_token).toUtf8().toBase64();
+    req.setRawHeader("Authorization", QByteArrayLiteral("Basic ") + basic);
+  }
   if(!body.isEmpty()) {
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
   }
@@ -233,7 +281,9 @@ void JiraProvider::send(const QByteArray& method, const QString& path, const QBy
 
 void JiraProvider::testConnection() {
   if(!isConfigured()) {
-    emit connectionTested(false, QStringLiteral("Jira URL/email/token not configured"));
+    emit connectionTested(false,
+                          m_oauth ? QStringLiteral("Jira browser sign-in is incomplete — sign in again")
+                                  : QStringLiteral("Jira URL/email/token not configured"));
     return;
   }
   send("GET", QStringLiteral("/myself"), {}, [this](const ApiResult& r) {

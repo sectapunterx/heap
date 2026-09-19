@@ -244,3 +244,91 @@ TEST_F(JiraNetwork, ReportsAFailedPullInsteadOfAnEmptyList) {
   EXPECT_EQ(status, 400);
   EXPECT_EQ(error, QString::fromUtf8("HTTP 400 — Unbounded JQL queries are not allowed here."));
 }
+
+// ── Browser sign-in (OAuth 2.0 3LO) ─────────────────────────────────────────
+// A 3LO access token is a Bearer credential that the site host never accepts:
+// every call has to go through api.atlassian.com/ex/jira/{cloudId}, and the
+// cloudId is only knowable by asking accessible-resources at sign-in time.
+
+TEST(JiraSitePick, PrefersTheSiteTheCardAlreadyNames) {
+  const QByteArray json = R"([
+    {"id":"cid-a","url":"https://a.atlassian.net","name":"A"},
+    {"id":"cid-b","url":"https://b.atlassian.net","name":"B"}])";
+  const auto picked = heap::integrations::pickJiraSite(json, QStringLiteral("https://b.atlassian.net"));
+  EXPECT_EQ(picked.cloudId, QStringLiteral("cid-b")) << "switching sites would repoint every synced issue";
+  EXPECT_EQ(picked.url, QStringLiteral("https://b.atlassian.net"));
+
+  // The preference is matched after normalisation, so a pasted browser URL works.
+  EXPECT_EQ(heap::integrations::pickJiraSite(json, QStringLiteral("b.atlassian.net/jira/software/projects/X/boards/1")).cloudId,
+            QStringLiteral("cid-b"));
+}
+
+TEST(JiraSitePick, FallsBackToTheFirstSite) {
+  const QByteArray json = R"([{"id":"cid-a","url":"https://a.atlassian.net","name":"A"}])";
+  EXPECT_EQ(heap::integrations::pickJiraSite(json, QString()).cloudId, QStringLiteral("cid-a"));
+  // A site the token was not granted is not honoured.
+  EXPECT_EQ(heap::integrations::pickJiraSite(json, QStringLiteral("https://nope.atlassian.net")).cloudId, QStringLiteral("cid-a"));
+}
+
+TEST(JiraSitePick, NoGrantedSiteIsEmpty) {
+  EXPECT_TRUE(heap::integrations::pickJiraSite("[]", QString()).cloudId.isEmpty());
+  EXPECT_TRUE(heap::integrations::pickJiraSite("not json", QString()).cloudId.isEmpty());
+  EXPECT_TRUE(heap::integrations::pickJiraSite({}, QStringLiteral("https://a.atlassian.net")).cloudId.isEmpty());
+}
+
+TEST_F(JiraNetwork, OAuthModeSendsABearerThroughTheGateway) {
+  FakeJira server;
+  server.route("GET /ex/jira/cid-123/rest/api/3/myself", {200, R"({"accountId":"a1"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setGatewayRoot(server.base());
+  p.setOAuthConfig(QStringLiteral("cid-123"), QStringLiteral("https://acme.atlassian.net"), QStringLiteral("at-3lo"), QString());
+  ASSERT_TRUE(p.isConfigured()) << "OAuth needs no email and no base URL";
+
+  bool done = false;
+  bool ok = false;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool o, const QString&) {
+    ok = o;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_TRUE(ok);
+
+  const auto req = server.lastRequest("GET /ex/jira/cid-123/rest/api/3/myself");
+  EXPECT_EQ(req.headers.value("authorization"), QByteArray("Bearer at-3lo")) << "a 3LO token is not a Basic credential";
+  // Never the site host: it answers 401 for a 3LO token, and there is no
+  // fallback left to run.
+  EXPECT_FALSE(server.seen().contains("GET /rest/api/3/myself"));
+  EXPECT_FALSE(server.seen().contains("GET /_edge/tenant_info"));
+}
+
+TEST_F(JiraNetwork, OAuthModeWithoutACloudIdIsNotConfigured) {
+  // The sign-in landed but accessible-resources granted nothing, so there is no
+  // API base. Better to stay unconfigured than to send every call to /ex/jira/.
+  heap::integrations::JiraProvider p;
+  p.setOAuthConfig(QString(), QStringLiteral("https://acme.atlassian.net"), QStringLiteral("at"), QString());
+  EXPECT_FALSE(p.isConfigured());
+}
+
+TEST_F(JiraNetwork, SwitchingBackToBasicAuthForgetsTheGateway) {
+  FakeJira server;
+  server.route("GET /rest/api/3/myself", {200, R"({"accountId":"a1"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setGatewayRoot(server.base());
+  p.setOAuthConfig(QStringLiteral("cid-123"), server.base(), QStringLiteral("at-3lo"), QString());
+  // Signing out and pasting an API token instead.
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+
+  bool done = false;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString&) {
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+
+  const auto req = server.lastRequest("GET /rest/api/3/myself");
+  EXPECT_TRUE(req.headers.value("authorization").startsWith("Basic ")) << "a stale Bearer would 401 forever";
+  EXPECT_FALSE(server.seen().contains("GET /ex/jira/cid-123/rest/api/3/myself"));
+}

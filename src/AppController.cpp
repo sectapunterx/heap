@@ -8,6 +8,7 @@
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "integrations/JiraProvider.h"
 #include "integrations/OAuthManager.h"
 #include "integrations/OAuthRefresh.h"
 #include "integrations/ProviderDescriptor.h"
@@ -2655,6 +2656,51 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
       });
 }
 
+void AppController::resolveJiraSite(const QString& accessToken, const QString& label) {
+  // An Atlassian 3LO token is not bound to a site. Every API call goes to
+  // api.atlassian.com/ex/jira/{cloudId}, and the only way to learn the cloudId
+  // is to ask which sites this token was granted.
+  static const QString kProviderId = QStringLiteral("jira");
+  if(m_oauthNam == nullptr) {
+    m_oauthNam = new QNetworkAccessManager(this);
+  }
+  QNetworkRequest req{QUrl(QStringLiteral("https://api.atlassian.com/oauth/token/accessible-resources"))};
+  req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + accessToken.toUtf8());
+  req.setRawHeader("Accept", "application/json");
+  req.setRawHeader("User-Agent", "heap-sync");
+
+  QNetworkReply* reply = m_oauthNam->get(req);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, label]() {
+    reply->deleteLater();
+    const QByteArray body = reply->readAll();
+    if(reply->error() != QNetworkReply::NoError) {
+      emit toast(
+          tr("%1 sign-in failed: %2")
+              .arg(label, heap::integrations::describeHttpError(heap::integrations::replyHttpStatus(reply), body, reply->errorString())));
+      return;
+    }
+    // Keep whatever site the card already names: silently switching sites would
+    // repoint every issue already synced from the old one.
+    const QVariantMap cfg = integrationConfig(kProviderId);
+    QString preferred = cfg.value(QStringLiteral("siteUrl")).toString();
+    if(preferred.isEmpty()) {
+      preferred = cfg.value(QStringLiteral("baseUrl")).toString();
+    }
+    const heap::integrations::JiraSite site = heap::integrations::pickJiraSite(body, preferred);
+    if(site.cloudId.isEmpty()) {
+      emit toast(tr("%1 sign-in succeeded but granted no site — check the app's permissions").arg(label));
+      return;
+    }
+    setIntegrationFields(kProviderId,
+                         {
+                             {QStringLiteral("cloudId"), site.cloudId},
+                             {QStringLiteral("siteUrl"), site.url},
+                             {QStringLiteral("connected"), true},
+                         });
+    emit toast(tr("%1 connected via browser — %2").arg(label, site.url));
+  });
+}
+
 void AppController::connectOAuth(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d || !d->oauth.supported) {
@@ -2757,6 +2803,12 @@ void AppController::connectOAuth(const QString& providerId) {
                              {QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString()},
                              {QStringLiteral("connected"), true},
                          });
+    // Atlassian's token is not bound to a site: the API base is
+    // api.atlassian.com/ex/jira/{cloudId}, and the cloudId has to be asked for.
+    if(providerId == QStringLiteral("jira")) {
+      resolveJiraSite(r.accessToken, label);
+      return;
+    }
     // Signing in says who you are, not what to sync. Asana still needs a
     // workspace, ClickUp a list, Sentry an org and project, Bitbucket a repo —
     // and those live under Advanced, so the card used to read "connected" and

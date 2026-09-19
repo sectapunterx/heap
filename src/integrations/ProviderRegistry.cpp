@@ -413,8 +413,22 @@ ProviderDescriptor jira() {
                 // The placeholder is the default the provider actually applies
                 // when the field is left blank (see defaultJiraJql).
                 plain(QStringLiteral("jql"), QStringLiteral("JQL"), defaultJiraJql(), true)};
-  d.requiredKeys = {QStringLiteral("baseUrl"), QStringLiteral("email"), QStringLiteral("token")};
-  d.secretKeys = {QStringLiteral("token")};
+  d.uiFields += oauthAppFields();
+  // Browser sign-in supplies the token and the site, so only the token is
+  // always required; the Basic-auth pair is checked by JiraProvider itself.
+  d.requiredKeys = {QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
+  // Atlassian OAuth 2.0 (3LO). It has no PKCE-only mode, so one-click needs a
+  // client secret. `audience` picks the Jira API and `prompt=consent` is what
+  // makes Atlassian hand out a refresh token alongside the 1h access token.
+  d.oauth = confidentialOAuth(HEAP_OAUTH_JIRA_CLIENT_ID,
+                              HEAP_OAUTH_JIRA_CLIENT_SECRET,
+                              QStringLiteral("https://auth.atlassian.com/authorize"),
+                              QStringLiteral("https://auth.atlassian.com/oauth/token"),
+                              QStringLiteral("read:jira-work write:jira-work read:jira-user offline_access"),
+                              TokenStyle::JsonBody);
+  d.oauth.extraAuthParams = {{QStringLiteral("audience"), QStringLiteral("api.atlassian.com")},
+                             {QStringLiteral("prompt"), QStringLiteral("consent")}};
   return d;
 }
 
@@ -431,6 +445,24 @@ ProviderDescriptor trello() {
                 plain(QStringLiteral("board"), QStringLiteral("Board ID (optional)"), QStringLiteral("5f...  — blank = all cards"), true)};
   d.requiredKeys = {QStringLiteral("key"), QStringLiteral("token")};
   d.secretKeys = {QStringLiteral("key"), QStringLiteral("token")};
+  // Trello has no authorization-code grant: /1/authorize returns the token in
+  // the URL fragment, which the loopback listener only sees because the page it
+  // serves posts it back. The app key is public (it is in every authorize URL),
+  // so no secret is involved — but the key's allowed origins must include
+  // http://127.0.0.1:51789. Sync is pull-only, hence the read-only scope.
+  d.oauth.supported = true;
+  d.oauth.flow = OAuthFlow::ImplicitFragment;
+  d.oauth.authUrl = QStringLiteral("https://trello.com/1/authorize");
+  d.oauth.scope = QStringLiteral("read");
+  d.oauth.scopeSeparator = QStringLiteral(",");
+  d.oauth.usePkce = false;
+  d.oauth.clientId = QString::fromLatin1(HEAP_OAUTH_TRELLO_CLIENT_ID);
+  d.oauth.clientIdParam = QStringLiteral("key");
+  d.oauth.redirectParam = QStringLiteral("return_url");
+  d.oauth.extraAuthParams = {{QStringLiteral("expiration"), QStringLiteral("never")},
+                             {QStringLiteral("name"), QStringLiteral("heap")},
+                             {QStringLiteral("response_type"), QStringLiteral("token")},
+                             {QStringLiteral("callback_method"), QStringLiteral("fragment")}};
   return d;
 }
 
@@ -474,19 +506,33 @@ const ProviderDescriptor* findDescriptor(const QString& id) {
 }
 
 std::unique_ptr<IntegrationProvider> makeBespokeProvider(const QString& id, const QVariantMap& cfg, QObject* parent) {
+  const bool oauth = cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth");
   if(id == QStringLiteral("jira")) {
     auto p = std::make_unique<JiraProvider>(parent);
-    p->setConfig(cfg.value(QStringLiteral("baseUrl")).toString(),
-                 cfg.value(QStringLiteral("email")).toString(),
-                 cfg.value(QStringLiteral("token")).toString(),
-                 cfg.value(QStringLiteral("jql")).toString());
+    if(oauth) {
+      // cloudId was resolved from accessible-resources when the browser flow
+      // finished; without it there is no API base to talk to.
+      p->setOAuthConfig(cfg.value(QStringLiteral("cloudId")).toString(),
+                        cfg.value(QStringLiteral("siteUrl")).toString(),
+                        cfg.value(QStringLiteral("token")).toString(),
+                        cfg.value(QStringLiteral("jql")).toString());
+    } else {
+      p->setConfig(cfg.value(QStringLiteral("baseUrl")).toString(),
+                   cfg.value(QStringLiteral("email")).toString(),
+                   cfg.value(QStringLiteral("token")).toString(),
+                   cfg.value(QStringLiteral("jql")).toString());
+    }
     return p->isConfigured() ? std::move(p) : nullptr;
   }
   if(id == QStringLiteral("trello")) {
     auto p = std::make_unique<TrelloProvider>(parent);
-    p->setConfig(cfg.value(QStringLiteral("key")).toString(),
-                 cfg.value(QStringLiteral("token")).toString(),
-                 cfg.value(QStringLiteral("board")).toString());
+    // A browser sign-in only hands back the token; the key is the app's own,
+    // which the user never sees.
+    QString key = cfg.value(QStringLiteral("key")).toString();
+    if(oauth && key.isEmpty()) {
+      key = QString::fromLatin1(HEAP_OAUTH_TRELLO_CLIENT_ID);
+    }
+    p->setConfig(key, cfg.value(QStringLiteral("token")).toString(), cfg.value(QStringLiteral("board")).toString());
     return p->isConfigured() ? std::move(p) : nullptr;
   }
   return nullptr;

@@ -207,6 +207,47 @@ TEST(RegistryCatalog, ConfidentialProvidersAskForASecret) {
   EXPECT_EQ(findDescriptor(QStringLiteral("todoist"))->oauth.scopeSeparator, QStringLiteral(","));
 }
 
+TEST(RegistryCatalog, JiraAndTrelloUseTheirOwnFlows) {
+  // Atlassian has no PKCE-only mode, so Jira needs a secret; `audience` picks
+  // the Jira API and `prompt=consent` is what makes it issue a refresh token.
+  const ProviderDescriptor* jira = findDescriptor(QStringLiteral("jira"));
+  ASSERT_NE(jira, nullptr);
+  EXPECT_TRUE(jira->oauth.supported);
+  EXPECT_TRUE(jira->oauth.needsSecret);
+  EXPECT_EQ(jira->oauth.tokenStyle, TokenStyle::JsonBody);
+  EXPECT_TRUE(jira->oauth.scope.contains(QStringLiteral("offline_access")));
+  bool hasAudience = false;
+  bool hasPrompt = false;
+  for(const auto& kv : jira->oauth.extraAuthParams) {
+    hasAudience = hasAudience || (kv.first == QStringLiteral("audience") && kv.second == QStringLiteral("api.atlassian.com"));
+    hasPrompt = hasPrompt || (kv.first == QStringLiteral("prompt") && kv.second == QStringLiteral("consent"));
+  }
+  EXPECT_TRUE(hasAudience);
+  EXPECT_TRUE(hasPrompt);
+  // Only the token is always required now — browser sign-in supplies the site,
+  // and JiraProvider checks the Basic-auth pair itself.
+  EXPECT_FALSE(jira->requiredKeys.contains(QStringLiteral("email")));
+  EXPECT_TRUE(jira->requiredKeys.contains(QStringLiteral("token")));
+
+  // Trello answers with the token in the URL fragment: no code, no exchange,
+  // no secret — only the public app key, under its own query name.
+  const ProviderDescriptor* trello = findDescriptor(QStringLiteral("trello"));
+  ASSERT_NE(trello, nullptr);
+  EXPECT_TRUE(trello->oauth.supported);
+  EXPECT_EQ(trello->oauth.effectiveFlow(), OAuthFlow::ImplicitFragment);
+  EXPECT_FALSE(trello->oauth.needsSecret);
+  EXPECT_TRUE(trello->oauth.tokenUrl.isEmpty());
+  EXPECT_FALSE(trello->oauth.usePkce);
+  EXPECT_EQ(trello->oauth.clientIdParam, QStringLiteral("key"));
+  EXPECT_EQ(trello->oauth.redirectParam, QStringLiteral("return_url"));
+  EXPECT_EQ(trello->oauth.scope, QStringLiteral("read")) << "sync is pull-only";
+  bool asksForAFragment = false;
+  for(const auto& kv : trello->oauth.extraAuthParams) {
+    asksForAFragment = asksForAFragment || (kv.first == QStringLiteral("callback_method") && kv.second == QStringLiteral("fragment"));
+  }
+  EXPECT_TRUE(asksForAFragment);
+}
+
 TEST(RegistryCatalog, EveryOAuthProviderCarriesEnoughToRunTheFlow) {
   for(const ProviderDescriptor& d : providerCatalog()) {
     if(!d.oauth.supported) {
