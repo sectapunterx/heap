@@ -179,6 +179,43 @@ with no help from you. It is hidden when any of these is true:
 In every case the personal-access-token path under **Advanced** is fully
 supported — it is not a degraded mode.
 
+## Mattermost — people, not issues
+
+The one integration that imports **contacts** instead of tasks. Its descriptor
+is a `Directory` kind: no issues to pull, no status to map to a column, nothing
+to push back.
+
+**Signing in.** Most corporate servers switch personal access tokens off and
+leave the OAuth provider disabled (both are System Console settings), so the
+primary path is the same credentials you use in the Mattermost app. The password
+is sent once to `POST /api/v4/users/login` and never stored — only the session
+token it returns, which lives in the keychain like any other. heap refuses to
+send it at all unless the server URL is `https` (or loopback). A personal access
+token works too, where your admin allows them.
+
+**What is imported.** Everyone you have a direct-message conversation with, plus
+the members of your group DMs, plus the members of any channels you name in
+**Also import members of**. Ordinary channels are opt-in on purpose: one
+company-wide channel would otherwise import the entire company. Bots,
+deactivated accounts and you are skipped, and a channel is read at most 1000
+members deep.
+
+**Where they land.** Docs → Contacts, with the person's name, job title (or the
+role their permissions imply), handle and where you met them. People you have
+DM'd also get an entry in the People rail with the state `idle` — so
+`@their.handle` autocompletes, and the rail's pending badge keeps meaning
+"people you owe an answer to".
+
+**Your edits win.** Each imported contact remembers what the server last said.
+A field still matching that follows the server; a field you changed is yours and
+stays. Deleting an imported contact is remembered, so the next sync does not
+bring it back — undo reverses that too. Nothing is ever deleted by a sync: a
+colleague who leaves simply stops being updated.
+
+**One workspace.** The card binds to the profile it was first synced in, so a
+background sync cannot pour your colleagues into an unrelated workspace. A
+manual **Sync now** rebinds it to wherever you are.
+
 ## How auth is applied
 
 `RestIssueProvider::buildRequest` sends the token per the descriptor's `AuthRecipe`

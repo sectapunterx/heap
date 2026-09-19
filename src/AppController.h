@@ -349,6 +349,13 @@ class AppController : public QObject {
   // Public so the sync merge can be exercised without a live tracker.
   void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);
 
+  // Fold fetched contacts into the active profile's Docs contact list and, for
+  // the people actually talked to, the People rail. Returns how many contacts
+  // were added or changed — zero means nothing is written, so an idempotent
+  // re-sync does not churn docsState. Public for the same reason as
+  // mergeExternalTasks: the rules are worth testing without a live server.
+  int mergeExternalContacts(const QString& providerId, const QVector<heap::integrations::ExternalContact>& contacts);
+
   // ---- Durability audit (HEAP-156) ----
   // Every quarantine / backup recovery / failed write, oldest first. Local file,
   // never uploaded.
@@ -390,6 +397,11 @@ class AppController : public QObject {
   // `credentials` holds the descriptor's loginFields; the password is used for
   // the one request and never persisted — only the session token it returns is.
   Q_INVOKABLE void connectWithCredentials(const QString& providerId, const QVariantMap& credentials);
+  // Remember that the user deleted an imported contact, so the next sync does
+  // not re-add it. Called by DocsView when a contact carrying an external id is
+  // deleted, and undone by restoreExternalContact.
+  Q_INVOKABLE void dismissExternalContact(const QString& providerId, const QString& externalId);
+  Q_INVOKABLE void restoreExternalContact(const QString& providerId, const QString& externalId);
   // The full integration catalogue (id, name, colour, fields, …) for the
   // Settings → Integrations cards. Data-driven from the provider registry.
   Q_INVOKABLE QVariantList integrationCatalog() const;
@@ -789,6 +801,14 @@ class AppController : public QObject {
   // abandon a request already in flight.
   heap::integrations::MattermostClient* directoryClient(const QString& providerId);
   void fetchDirectory(const QString& providerId);
+  // Contacts the user deleted, per profile, so a later sync does not bring
+  // them back. They cannot live in the docs blob: DocsView rewrites it whole
+  // and would drop any key it does not know.
+  QStringList dismissedContacts(const QString& providerId) const;
+  // Create the Person behind an imported contact, or return the id of the one
+  // already there. Never edits an existing Person: those are the user's notes
+  // about someone, not a mirror of the directory.
+  QString upsertImportedPerson(const heap::integrations::ExternalContact& ext);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
   // Renew an expiring OAuth access token, then run `then`. Providers that use a

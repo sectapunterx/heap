@@ -22,8 +22,9 @@ Popup {
         "#d97a6c", "#c87fc7", "#6cc4b8", "#7da8d9",
         "#dcc06a", "#7cc492", "#e69854", "#a4a4d6"
     ]
-    readonly property var states: ["todo", "pinged", "replied"]
+    readonly property var states: ["idle", "todo", "pinged", "replied"]
     readonly property var stateLabels: ({
+        idle: I18n.t("editor.person.state.idle"),
         todo: I18n.t("editor.person.state.todo"),
         pinged: I18n.t("editor.person.state.pinged"),
         replied: I18n.t("editor.person.state.replied")

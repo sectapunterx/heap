@@ -243,10 +243,11 @@ Rectangle {
                             anchors.centerIn: parent
                             text: prow.state === "todo" ? I18n.t("people.state.todo.tag")
                                 : prow.state === "pinged" ? I18n.t("people.state.pinged.tag")
-                                    : I18n.t("people.state.replied.tag")
+                                    : prow.state === "replied" ? I18n.t("people.state.replied.tag")
+                                        : I18n.t("people.state.idle.tag")
                             color: prow.state === "pinged" ? Theme.p1
                                  : prow.state === "replied" ? Theme.stDone
-                                 : Theme.textMuted
+                                 : Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: 10
                             font.letterSpacing: 1

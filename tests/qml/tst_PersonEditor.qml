@@ -31,10 +31,13 @@ TestCase {
         const pe = make('import TodoCpp; PersonEditor { }');
         compare(pe.isNew, false);
         compare(pe._idAutoDerived, true);
-        compare(pe.states.length, 3);
-        compare(pe.states[0], "todo");
-        compare(pe.states[1], "pinged");
-        compare(pe.states[2], "replied");
+        // "idle" leads: it is the neutral state an imported contact lands in,
+        // and the one that keeps the rail's pending count honest.
+        compare(pe.states.length, 4);
+        compare(pe.states[0], "idle");
+        compare(pe.states[1], "todo");
+        compare(pe.states[2], "pinged");
+        compare(pe.states[3], "replied");
         compare(pe.palette.length, 8);
         compare(pe.palette[0], "#d97a6c");
     }

@@ -19,6 +19,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
@@ -852,6 +853,189 @@ TEST_F(AppControllerTest, CatalogFlagsWhichProvidersCanDoOneClick) {
     EXPECT_TRUE(m.value(QStringLiteral("oauth")).toBool()) << m.value(QStringLiteral("id")).toString().toStdString();
   }
   EXPECT_GE(checked, 5) << "todoist, asana, clickup, sentry and bitbucket all need a secret";
+}
+
+// ─── Mattermost contact merge ─────────────────────────────────────────
+// Imported people land in the Docs contact list, and the ones actually talked
+// to also in the People rail. The rules that matter: never clobber an edit of
+// the user's, never resurrect something they deleted, and never churn the docs
+// blob when nothing changed.
+
+namespace {
+
+heap::integrations::ExternalContact mkContact(
+    const QString& id, const QString& username, const QString& name, const QString& role, const QString& where) {
+  heap::integrations::ExternalContact c;
+  c.providerId = QStringLiteral("mattermost");
+  c.externalId = id;
+  c.username = username;
+  c.displayName = name;
+  c.role = role;
+  c.channelLabel = where;
+  return c;
+}
+
+const QString kDm = QStringLiteral("direct message");
+
+}  // namespace
+
+class ContactMergeTest : public AppControllerTest {
+ protected:
+  void SetUp() override {
+    AppControllerTest::SetUp();
+    app_->setDocsState(QString());
+    writeIntegrationConfig(QStringLiteral("mattermost"), QJsonObject{});
+  }
+
+  QJsonArray contacts() const {
+    return QJsonDocument::fromJson(app_->docsState().toUtf8()).object().value(QStringLiteral("contacts")).toArray();
+  }
+
+  QJsonObject contactNamed(const QString& name) const {
+    const QJsonArray list = contacts();
+    for(const auto& v : list) {
+      if(v.toObject().value(QStringLiteral("name")).toString() == name) {
+        return v.toObject();
+      }
+    }
+    return {};
+  }
+
+  int merge(const QVector<heap::integrations::ExternalContact>& c) {
+    return app_->mergeExternalContacts(QStringLiteral("mattermost"), c);
+  }
+};
+
+TEST_F(ContactMergeTest, ImportsAContactAndLinksAPersonForDirectMessages) {
+  const int changed =
+      merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova"), QStringLiteral("Tech Lead"), kDm)});
+  EXPECT_EQ(changed, 1);
+
+  const QJsonObject c = contactNamed(QStringLiteral("Olga Titova"));
+  EXPECT_EQ(c.value(QStringLiteral("role")).toString(), QStringLiteral("Tech Lead"));
+  EXPECT_EQ(c.value(QStringLiteral("mattermost")).toString(), QStringLiteral("@olga.t"));
+  EXPECT_EQ(c.value(QStringLiteral("mmId")).toString(), QStringLiteral("u1"));
+  EXPECT_EQ(c.value(QStringLiteral("source")).toString(), QStringLiteral("mattermost"));
+  EXPECT_FALSE(c.value(QStringLiteral("color")).toString().isEmpty());
+
+  // The id is the handle itself, so "@olga.t" in heap matches Mattermost —
+  // slugifyPersonName would have produced "olgat".
+  EXPECT_EQ(c.value(QStringLiteral("personId")).toString(), QStringLiteral("olga.t"));
+  const int row = app_->people()->indexOfId(QStringLiteral("olga.t"));
+  ASSERT_GE(row, 0);
+  const Person& p = app_->people()->items().at(row);
+  EXPECT_EQ(p.name, QStringLiteral("Olga Titova"));
+  EXPECT_EQ(p.role, QStringLiteral("Tech Lead"));
+  EXPECT_EQ(p.state, QStringLiteral("idle")) << "an import is not a list of people you owe an answer to";
+}
+
+TEST_F(ContactMergeTest, AChannelRosterStaysOutOfTheRail) {
+  const int before = app_->people()->rowCount();
+  merge({mkContact(
+      QStringLiteral("u2"), QStringLiteral("pavel"), QStringLiteral("Pavel K"), QStringLiteral("Member"), QStringLiteral("#backend"))});
+  EXPECT_FALSE(contactNamed(QStringLiteral("Pavel K")).isEmpty()) << "still a contact";
+  EXPECT_EQ(app_->people()->rowCount(), before) << "but not someone you have talked to";
+  EXPECT_EQ(contactNamed(QStringLiteral("Pavel K")).value(QStringLiteral("channel")).toString(), QStringLiteral("#backend"));
+}
+
+TEST_F(ContactMergeTest, ReSyncingUnchangedDataWritesNothing) {
+  const QVector<heap::integrations::ExternalContact> same = {
+      mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova"), QStringLiteral("Tech Lead"), kDm)};
+  ASSERT_EQ(merge(same), 1);
+  const QString after = app_->docsState();
+
+  QSignalSpy spy(app_.get(), &AppController::docsStateChanged);
+  EXPECT_EQ(merge(same), 0);
+  EXPECT_EQ(spy.count(), 0) << "an idempotent sync must not churn the docs blob";
+  EXPECT_EQ(app_->docsState(), after);
+}
+
+TEST_F(ContactMergeTest, AnEditOfYourOwnSurvivesButUpstreamChangesStillArrive) {
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova"), QStringLiteral("Tech Lead"), kDm)});
+
+  // The user renames the role by hand.
+  QJsonObject docs = QJsonDocument::fromJson(app_->docsState().toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  QJsonObject c = list.at(0).toObject();
+  c.insert(QStringLiteral("role"), QStringLiteral("my tech lead"));
+  list.replace(0, c);
+  docs.insert(QStringLiteral("contacts"), list);
+  app_->setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
+
+  // Upstream, both the title and the name change.
+  merge({mkContact(
+      QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova-Smirnova"), QStringLiteral("Engineering Manager"), kDm)});
+
+  const QJsonObject after = contacts().at(0).toObject();
+  EXPECT_EQ(after.value(QStringLiteral("role")).toString(), QStringLiteral("my tech lead")) << "the user's own words win";
+  EXPECT_EQ(after.value(QStringLiteral("name")).toString(), QStringLiteral("Olga Titova-Smirnova"))
+      << "a field the user never touched still follows the server";
+}
+
+TEST_F(ContactMergeTest, ADeletedContactDoesNotComeBack) {
+  const QVector<heap::integrations::ExternalContact> one = {
+      mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova"), QStringLiteral("Tech Lead"), kDm)};
+  ASSERT_EQ(merge(one), 1);
+
+  app_->dismissExternalContact(QStringLiteral("mattermost"), QStringLiteral("u1"));
+  app_->setDocsState(QStringLiteral(R"({"contacts":[]})"));
+
+  EXPECT_EQ(merge(one), 0);
+  EXPECT_TRUE(contacts().isEmpty());
+
+  // Undoing the deletion puts it back in scope.
+  app_->restoreExternalContact(QStringLiteral("mattermost"), QStringLiteral("u1"));
+  EXPECT_EQ(merge(one), 1);
+  EXPECT_EQ(contacts().size(), 1);
+}
+
+TEST_F(ContactMergeTest, ADeletedPersonIsNotRecreated) {
+  const QVector<heap::integrations::ExternalContact> one = {
+      mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova"), QStringLiteral("Tech Lead"), kDm)};
+  ASSERT_EQ(merge(one), 1);
+  ASSERT_GE(app_->people()->indexOfId(QStringLiteral("olga.t")), 0);
+
+  app_->deletePerson(QStringLiteral("olga.t"));
+  ASSERT_LT(app_->people()->indexOfId(QStringLiteral("olga.t")), 0);
+
+  merge(one);
+  EXPECT_LT(app_->people()->indexOfId(QStringLiteral("olga.t")), 0)
+      << "the contact keeps its personId, so the rail entry is not rebuilt behind the user's back";
+}
+
+TEST_F(ContactMergeTest, AContactTypedByHandIsAdoptedRatherThanDuplicated) {
+  // Someone who filled in the Mattermost handle before the integration existed.
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Olga","role":"","channel":"","mattermost":"@Olga.T"}]})"));
+
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga Titova"), QStringLiteral("Tech Lead"), kDm)});
+
+  ASSERT_EQ(contacts().size(), 1) << "matched on the handle, case-insensitively";
+  const QJsonObject c = contacts().at(0).toObject();
+  EXPECT_EQ(c.value(QStringLiteral("mmId")).toString(), QStringLiteral("u1"));
+  EXPECT_EQ(c.value(QStringLiteral("name")).toString(), QStringLiteral("Olga")) << "their own name for the person is kept";
+  EXPECT_EQ(c.value(QStringLiteral("role")).toString(), QStringLiteral("Tech Lead")) << "an empty field is filled in";
+}
+
+TEST_F(ContactMergeTest, AutoSyncIntoAnUnboundProfileIsANoop) {
+  // The first sync binds the card to the profile it ran in.
+  ASSERT_EQ(merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga"), QString(), kDm)}), 1);
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("mattermost")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
+
+  // A timer firing while another workspace is open must not pour colleagues into it.
+  QJsonObject cfg = readIntegrationConfig(QStringLiteral("mattermost"));
+  cfg.insert(QStringLiteral("profileId"), QStringLiteral("some-other-profile"));
+  writeIntegrationConfig(QStringLiteral("mattermost"), cfg);
+
+  EXPECT_EQ(merge({mkContact(QStringLiteral("u2"), QStringLiteral("pavel"), QStringLiteral("Pavel"), QString(), kDm)}), 0);
+  EXPECT_TRUE(contactNamed(QStringLiteral("Pavel")).isEmpty());
+}
+
+TEST_F(ContactMergeTest, ImportingDoesNotInflateThePendingCount) {
+  const int before = app_->pendingPeopleCount();
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga"), QString(), kDm),
+         mkContact(QStringLiteral("u2"), QStringLiteral("pavel"), QStringLiteral("Pavel"), QString(), kDm)});
+  ASSERT_GE(app_->people()->indexOfId(QStringLiteral("olga.t")), 0);
+  EXPECT_EQ(app_->pendingPeopleCount(), before) << "the rail badge counts people you owe an answer to";
 }
 
 int main(int argc, char** argv) {
