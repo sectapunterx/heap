@@ -36,9 +36,9 @@ it watches your working copy and matches the current branch to the task you're o
   leaves the machine.
 - **Git-aware.** The active branch is matched to a task by id, the matching card is decorated with its branch, and a
   focused-repo banner surfaces branch + PR state — no manual linking.
-- **Connected, not locked-in.** Sync issues from GitHub, GitLab, Jira, Trello and nine more trackers — one-click OAuth
-  or a token, credentials kept in the OS keychain, status written back when you move a card. Your data still lives in
-  one local file.
+- **Connected, not locked-in.** Sync issues from GitHub, GitLab, Jira, Trello and nine more trackers, and pull the
+  people you work with out of Mattermost — sign in through the browser or paste a token, credentials kept in the OS
+  keychain, status written back when you move a card. Your data still lives in one local file.
 - **Keyboard-first.** A `Ctrl+K` command palette with full-text search, global quick-capture from anywhere, and a fully
   rebindable shortcut map.
 - **One window, every surface.** Board, timeline, week, month, docs, notes, calendar, people — one process, one
@@ -58,8 +58,9 @@ markdown editor: headings, task lists, tables, fenced code with syntax highlight
 with `@people` / `#ticket` autocomplete, a live rendered view, and search by section).
 
 **Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and nine more (Gitea, Forgejo, Redmine, Todoist,
-Asana, ClickUp, Sentry, Bitbucket) — one-click OAuth or a token, issues mirrored as cards, status written back on
-column move (GitHub / GitLab / Gitea / Forgejo), tokens in the OS keychain, optional timed auto-sync. See
+Asana, ClickUp, Sentry, Bitbucket) — browser sign-in or a token, issues mirrored as cards, status written back on
+column move (GitHub / GitLab / Gitea / Forgejo), tokens in the OS keychain, optional timed auto-sync. Mattermost
+imports the people you talk to as contacts and `@handles` instead. See
 [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md).
 
 **Flow** — Git-aware board · Quick-capture task / note via a global hotkey · `Ctrl+K` command palette (full-text search
@@ -254,7 +255,7 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 │  ├─ query/               ← Notes query-language parser
 │  ├─ notify/              ← cross-platform notifications (tray / D-Bus)
 │  ├─ platform/            ← global hotkey backend (Win32 RegisterHotKey)
-│  ├─ integrations/        ← tracker sync: 13 providers, OAuth, keychain, status map
+│  ├─ integrations/        ← tracker sync: 13 providers + Mattermost contacts, OAuth, keychain
 │  ├─ sync/                ← BYOS serializer + 3-way JSON merge (internal)
 │  └─ update/              ← GitHub-releases update check
 ├─ qml/                    ← all views + singletons (Theme, Brand, I18n) — see below
