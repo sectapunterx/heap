@@ -75,6 +75,72 @@ TestCase {
         compare(sv.activeSection, "integrations");
     }
 
+    // Find the TextField inside a TextRow (children[0] is the label).
+    function findTextField(row) {
+        for (let i = 0; i < row.children.length; ++i) {
+            if (row.children[i].echoMode !== undefined) return row.children[i];
+        }
+        return null;
+    }
+
+    // A pending edit must be flushable without Enter or focus loss: every action
+    // on the Integrations card is a MouseArea, which never takes focus from the
+    // field, so a freshly pasted token would otherwise still be unsaved when
+    // Connect / Test connection / Sync now fires.
+    function test_settings_textrow_commit_pending() {
+        const row = createTemporaryQmlObject('import TodoCpp; SettingsView.TextRow { value: "old" }', host);
+        verify(row !== null, "failed to instantiate SettingsView.TextRow");
+        let committed = "";
+        row.committed.connect(function(t) { committed = t; });
+
+        const field = findTextField(row);
+        verify(field !== null, "TextRow must contain a TextField");
+        field.text = "pasted-token";
+        compare(committed, "", "typing alone must not write settings");
+        row.commitPending();
+        compare(committed, "pasted-token");
+
+        // Idempotent: value catches up, so a second flush is a no-op.
+        row.value = "pasted-token";
+        committed = "";
+        row.commitPending();
+        compare(committed, "");
+
+        // Secret rows stay masked while unfocused.
+        row.secret = true;
+        compare(field.echoMode, TextInput.Password);
+    }
+
+    // Secrets are read through a Q_INVOKABLE rather than a property, so a field
+    // binding cannot notice the keychain changing on its own — it pins itself to
+    // a revision counter bumped by integrationSecretsChanged. Before that the
+    // token field rendered empty for a connected provider, because the keychain
+    // load finishes after the panel is built.
+    function test_integration_secret_binding_refreshes() {
+        // A provider id no descriptor uses: SecretStore writes to the real OS
+        // keychain, so a test must never touch a slot a user could have a live
+        // token in.
+        const id = "qmltest-not-a-provider";
+        const o = createTemporaryQmlObject(
+            'import QtQuick; import TodoCpp; QtObject {' +
+            '  property int rev: 0;' +
+            '  property string shown: (rev, AppController.integrationSecret("' + id + '", "token"));' +
+            '  property var conn: Connections {' +
+            '    target: AppController;' +
+            '    function onIntegrationSecretsChanged() { rev++ }' +
+            '  }' +
+            '}', host);
+        verify(o !== null);
+        compare(o.shown, "");
+
+        AppController.setIntegrationSecret(id, "token", "tok-from-test");
+        compare(o.shown, "tok-from-test", "the field must follow the keychain");
+
+        // Setting empty removes the entry — leave nothing behind.
+        AppController.setIntegrationSecret(id, "token", "");
+        compare(o.shown, "");
+    }
+
     // SideRail integration: focusStatusColumn drives AppController view state
     // (the wiring the ⊘/⎇ buttons use). Exercises the live singleton the rail
     // component binds to.

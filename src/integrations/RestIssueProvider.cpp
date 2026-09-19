@@ -1,3 +1,4 @@
+#include "integrations/ReplyError.h"
 #include "integrations/RestIssueProvider.h"
 
 #include <QJsonArray>
@@ -242,13 +243,14 @@ void RestIssueProvider::testConnection() {
   QNetworkReply* reply = m_nam->get(buildRequest(url));
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
-    emit connectionTested(reply->error() == QNetworkReply::NoError, reply->errorString());
+    const bool ok = reply->error() == QNetworkReply::NoError;
+    emit connectionTested(ok, ok ? QString() : describeReplyError(reply));
   });
 }
 
 void RestIssueProvider::pullTasks() {
   if(!isConfigured()) {
-    emit tasksFetched({});
+    emit pullFailed(0, m_desc.displayName + QStringLiteral(" is not fully configured"));
     return;
   }
   const QString base = resolvedBaseUrl();
@@ -257,7 +259,7 @@ void RestIssueProvider::pullTasks() {
   connect(reply, &QNetworkReply::finished, this, [this, reply, base]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {
-      emit tasksFetched({});
+      emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
       return;
     }
     const QByteArray body = reply->readAll();
@@ -297,7 +299,8 @@ void RestIssueProvider::pushStatusChange(const QString& externalId, const QStrin
   QNetworkReply* reply = m_nam->sendCustomRequest(req, m_desc.pushMethod.toUtf8(), body);
   connect(reply, &QNetworkReply::finished, this, [this, reply, externalId]() {
     reply->deleteLater();
-    emit taskPushed(externalId, reply->error() == QNetworkReply::NoError, reply->errorString());
+    const bool ok = reply->error() == QNetworkReply::NoError;
+    emit taskPushed(externalId, ok, ok ? QString() : describeReplyError(reply));
   });
 }
 

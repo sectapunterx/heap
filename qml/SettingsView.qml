@@ -694,8 +694,21 @@ Item {
         property string hint: ""
         property string placeholder: ""
         property bool mono: false
+        property bool secret: false
         property string value: ""
         signal committed(string text)
+        // The edit that has not been written yet, or null when the field is in
+        // sync with the stored value.
+        function pendingText() {
+            return textRowField.text !== textRow.value ? textRowField.text : null;
+        }
+        // Flush a pending edit without waiting for focus loss. Buttons here are
+        // MouseAreas, which never take focus, so clicking "Test connection"
+        // straight after pasting a token would otherwise act on the old value.
+        function commitPending() {
+            const t = pendingText();
+            if (t !== null) textRow.committed(t);
+        }
         spacing: 4
         Layout.fillWidth: true
         FieldLabel { label: textRow.label; hint: textRow.hint }
@@ -706,6 +719,9 @@ Item {
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.family: textRow.mono ? Theme.fontMono : Theme.fontUi
+            // Secrets stay masked until focused, so a shoulder-surfer (or a
+            // screenshot) never catches a token sitting in the panel.
+            echoMode: (textRow.secret && !activeFocus) ? TextInput.Password : TextInput.Normal
             background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
@@ -713,11 +729,9 @@ Item {
             // settings write).
             text: textRow.value
             onActiveFocusChanged: {
-                if (!activeFocus && text !== textRow.value) textRow.committed(text);
+                if (!activeFocus) textRow.commitPending();
             }
-            onAccepted: {
-                if (text !== textRow.value) textRow.committed(text);
-            }
+            onAccepted: textRow.commitPending()
         }
     }
 
@@ -1507,12 +1521,19 @@ Item {
             property string dcProvider: ""
             property string dcCode: ""
             property string dcUri: ""
+            // Bumped on every keychain change. Secrets are read through a
+            // Q_INVOKABLE (not a property), so the field bindings reference this
+            // counter to re-read after the async keychain load and after writes.
+            property int secretsRev: 0
             Connections {
                 target: AppController
                 function onOauthDeviceCode(provider, code, uri) {
                     intSection.dcProvider = provider
                     intSection.dcCode = code
                     intSection.dcUri = uri
+                }
+                function onIntegrationSecretsChanged() {
+                    intSection.secretsRev++
                 }
             }
 
@@ -1579,6 +1600,28 @@ Item {
                         // to `open`/`advanced` on click breaks the initial binding.
                         property bool open: intCard.isConn
                         property bool advanced: false
+
+                        // Flush every field that is still mid-edit. Every action
+                        // below is a MouseArea, which never steals focus from the
+                        // TextField, so without this a pasted token is still
+                        // unsaved when "Connect"/"Test"/"Sync" fires.
+                        function commitFields() {
+                            // Read every pending edit before writing any of them.
+                            // A write rebuilds the provider and re-evaluates the
+                            // other fields' bindings, so reading field N's text
+                            // after committing field 0 is reading it after
+                            // something else may have moved it.
+                            const pending = []
+                            for (let i = 0; i < fieldsRep.count; ++i) {
+                                const row = fieldsRep.itemAt(i)
+                                if (!row || !row.pendingText) continue
+                                const text = row.pendingText()
+                                if (text !== null) pending.push({ row: row, text: text })
+                            }
+                            for (let i = 0; i < pending.length; ++i) {
+                                pending[i].row.committed(pending[i].text)
+                            }
+                        }
 
                         // ── Header — click anywhere to expand / collapse ──
                         Item {
@@ -1669,7 +1712,10 @@ Item {
                                 border.color: Theme.accent; border.width: 1
                                 implicitHeight: 34
                                 Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: "#06121a"; font.pixelSize: 12; font.weight: Font.DemiBold }
-                                MouseArea { id: oauthMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.connectOAuth(intCard.intKey) }
+                                MouseArea {
+                                    id: oauthMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                    onClicked: { intCard.commitFields(); AppController.connectOAuth(intCard.intKey) }
+                                }
                             }
                             Text {
                                 visible: intCard.canOneClick && !intCard.isConn
@@ -1708,14 +1754,16 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: 6
                                 Repeater {
+                                    id: fieldsRep
                                     model: modelData.fields
                                     delegate: TextRow {
                                         required property var modelData
                                         label: modelData.label
                                         placeholder: modelData.placeholder
                                         mono: !!modelData.mono
+                                        secret: !!modelData.secret
                                         value: modelData.secret
-                                               ? AppController.integrationSecret(intCard.intKey, modelData.key)
+                                               ? (intSection.secretsRev, AppController.integrationSecret(intCard.intKey, modelData.key))
                                                : ((intCard.conf && intCard.conf[modelData.key]) || "")
                                         onCommitted: (txt) => modelData.secret
                                             ? AppController.setIntegrationSecret(intCard.intKey, modelData.key, txt)
@@ -1735,7 +1783,10 @@ Item {
                                     border.color: Theme.accent; border.width: 1
                                     implicitWidth: connTxt.implicitWidth + 24; implicitHeight: 28
                                     Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: "#06121a"; font.pixelSize: 11; font.weight: Font.Medium }
-                                    MouseArea { id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setNested("integrations", intCard.intKey, "connected", true) }
+                                    MouseArea {
+                                        id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: { intCard.commitFields(); root.setNested("integrations", intCard.intKey, "connected", true) }
+                                    }
                                 }
                                 Rectangle {
                                     visible: intCard.advanced || intCard.isConn || !intCard.canOneClick
@@ -1744,7 +1795,10 @@ Item {
                                     border.color: Theme.border; border.width: 1
                                     implicitWidth: testTxt.implicitWidth + 24; implicitHeight: 28
                                     Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: 11 }
-                                    MouseArea { id: testMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.testIntegration(intCard.intKey) }
+                                    MouseArea {
+                                        id: testMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: { intCard.commitFields(); AppController.testIntegration(intCard.intKey) }
+                                    }
                                 }
                                 Rectangle {
                                     visible: intCard.isConn
@@ -1753,7 +1807,10 @@ Item {
                                     border.color: Theme.border; border.width: 1
                                     implicitWidth: syncTxt.implicitWidth + 24; implicitHeight: 28
                                     Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 11 }
-                                    MouseArea { id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.syncProvider(intCard.intKey) }
+                                    MouseArea {
+                                        id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: { intCard.commitFields(); AppController.syncProvider(intCard.intKey) }
+                                    }
                                 }
                                 Item { Layout.fillWidth: true }
                                 Rectangle {
