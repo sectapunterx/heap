@@ -34,6 +34,10 @@ namespace heap::md {
 struct MdParseOptions {
   // Recognise a leading --- … --- block as frontmatter rather than markdown.
   bool frontmatter = true;
+  // Hold "[^id]: …" definitions out of the parse. To CommonMark they are link
+  // reference definitions, so leaving them in turns every "[^id]" into a link
+  // and there are no footnotes at all.
+  bool footnotes = true;
 };
 
 // Parse `src`. Never throws and never fails: malformed input yields whatever

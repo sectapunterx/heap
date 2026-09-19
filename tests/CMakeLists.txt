@@ -59,7 +59,7 @@ add_test(NAME heap_md4c_smoke_tests COMMAND heap_md4c_smoke_tests)
 
 # Markdown engine — source map and parser. Links heap_markdown rather than
 # re-compiling sources, so adding a case costs nothing in build time.
-add_executable(heap_md_tests test_md_parser.cpp test_md_outline.cpp)
+add_executable(heap_md_tests test_md_parser.cpp test_md_outline.cpp test_md_render.cpp)
 target_link_libraries(heap_md_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
 add_test(NAME heap_md_tests COMMAND heap_md_tests)
 

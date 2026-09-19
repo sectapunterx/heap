@@ -76,6 +76,8 @@ qt_add_library(heap_markdown STATIC
     src/markdown/MdSourceMap.cpp
     src/markdown/MdParser.cpp
     src/markdown/MdOutline.cpp
+    src/markdown/MdExtensions.cpp
+    src/markdown/MdHtml.cpp
     src/notes/NoteLinks.cpp
 )
 target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
