@@ -10,6 +10,8 @@
 #include <QStringList>
 #include <QVector>
 
+#include <cstdint>
+
 namespace heap::integrations {
 
 // How the access token is presented to the remote API. Only the two styles the
@@ -57,6 +59,15 @@ struct FieldSpec {
   QString placeholder;
   bool mono = false;
   bool secret = false;  // stored in the OS keychain, never in state.json
+};
+
+// What a provider contributes. Trackers mirror issues as tasks; a directory
+// imports people. They share the card and the credential plumbing and nothing
+// else: a directory has no issues to pull, no status to map to a column and
+// nothing to push back.
+enum class ProviderKind : std::uint8_t {
+  Tracker,
+  Directory,
 };
 
 using ParseFn = QVector<ExternalTask> (*)(const QByteArray& body, const QString& baseUrl);
@@ -121,6 +132,10 @@ struct ProviderDescriptor {
   QStringList secretKeys;    // subset of fields kept in the keychain
 
   bool bespoke = false;
+  ProviderKind kind = ProviderKind::Tracker;
+  // Inputs for signing in with a password, rendered apart from uiFields and
+  // never persisted anywhere — see AppController::connectWithCredentials.
+  QVector<FieldSpec> loginFields;
 
   // ── Generic REST recipe (ignored when bespoke) ──
   QString baseUrlTemplate;  // "https://api.github.com" | "{host}"

@@ -695,8 +695,14 @@ Item {
         property string placeholder: ""
         property bool mono: false
         property bool secret: false
+        // A password is masked even while focused — unlike a token, there is no
+        // "check what I pasted" case that justifies revealing it.
+        property bool alwaysMasked: false
         property string value: ""
         signal committed(string text)
+        // What is typed right now, for fields that are never stored anywhere.
+        function currentText() { return textRowField.text; }
+        function clear() { textRowField.text = ""; }
         // The edit that has not been written yet, or null when the field is in
         // sync with the stored value.
         function pendingText() {
@@ -721,7 +727,7 @@ Item {
             font.family: textRow.mono ? Theme.fontMono : Theme.fontUi
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
-            echoMode: (textRow.secret && !activeFocus) ? TextInput.Password : TextInput.Normal
+            echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
             background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
@@ -1528,6 +1534,9 @@ Item {
             // A sign-in that landed but still needs a scope field: provider id
             // → the card labels that are empty. Cleared once they are filled.
             property var pendingFields: ({})
+            // Bumped after every credential sign-in; the login fields bind to
+            // it so a finished attempt never leaves a password on screen.
+            property int loginRev: 0
             Connections {
                 target: AppController
                 function onOauthDeviceCode(provider, code, uri) {
@@ -1537,6 +1546,9 @@ Item {
                 }
                 function onIntegrationSecretsChanged() {
                     intSection.secretsRev++
+                }
+                function onIntegrationLoginFinished(provider, ok) {
+                    intSection.loginRev++   // wipes whatever is in the password field
                 }
                 function onIntegrationNeedsFields(provider, labels) {
                     const next = Object.assign({}, intSection.pendingFields)
@@ -1823,6 +1835,63 @@ Item {
                                         onCommitted: (txt) => modelData.secret
                                             ? AppController.setIntegrationSecret(intCard.intKey, modelData.key, txt)
                                             : root.setNested("integrations", intCard.intKey, modelData.key, txt)
+                                    }
+                                }
+                            }
+
+                            // Password sign-in (Mattermost). Deliberately a
+                            // separate Repeater from the credential fields
+                            // below: those commit through setIntegrationSecret,
+                            // and a password must never reach the keychain.
+                            ColumnLayout {
+                                id: loginBlock
+                                visible: (modelData.loginFields || []).length > 0 && !intCard.isConn
+                                Layout.fillWidth: true
+                                spacing: 6
+                                function credentials() {
+                                    const out = ({})
+                                    for (let i = 0; i < loginRep.count; ++i) {
+                                        const row = loginRep.itemAt(i)
+                                        if (row && row.fieldKey) out[row.fieldKey] = row.currentText()
+                                    }
+                                    return out
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    text: I18n.t("settings.integrations.passwordSignInHint")
+                                    color: Theme.textDim; font.pixelSize: 10
+                                }
+                                Repeater {
+                                    id: loginRep
+                                    model: modelData.loginFields
+                                    delegate: TextRow {
+                                        required property var modelData
+                                        readonly property string fieldKey: modelData.key
+                                        label: modelData.label
+                                        placeholder: modelData.placeholder
+                                        mono: !!modelData.mono
+                                        secret: !!modelData.secret
+                                        alwaysMasked: !!modelData.secret
+                                        // Never bound to a stored value — these
+                                        // are not persisted anywhere. The rev
+                                        // counter empties them after a sign-in.
+                                        value: (intSection.loginRev, "")
+                                    }
+                                }
+                                Rectangle {
+                                    Layout.fillWidth: true
+                                    radius: 6
+                                    color: signInMA.containsMouse ? Theme.accentStrong : Theme.accent
+                                    border.color: Theme.accent; border.width: 1
+                                    implicitHeight: 30
+                                    Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: "#06121a"; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                    MouseArea {
+                                        id: signInMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            intCard.commitFields()   // the host URL, not the password
+                                            AppController.connectWithCredentials(intCard.intKey, loginBlock.credentials())
+                                        }
                                     }
                                 }
                             }

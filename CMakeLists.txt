@@ -178,6 +178,7 @@ qt_add_library(heap_core STATIC
     src/integrations/TrelloProvider.cpp
     src/integrations/SecretStore.cpp
     src/integrations/OAuthManager.cpp
+    src/integrations/MattermostClient.cpp
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
     src/update/Updater.cpp
@@ -275,6 +276,7 @@ qt_add_qml_module(heap_core
         src/integrations/OAuthRefresh.h
         src/integrations/OAuthTypes.h
         src/integrations/OAuthClients.h
+        src/integrations/MattermostClient.h
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h
         src/update/Updater.h

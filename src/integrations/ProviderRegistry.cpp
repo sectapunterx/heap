@@ -466,6 +466,31 @@ ProviderDescriptor trello() {
   return d;
 }
 
+ProviderDescriptor mattermost() {
+  ProviderDescriptor d;
+  d.id = QStringLiteral("mattermost");
+  d.displayName = QStringLiteral("Mattermost");
+  d.color = QStringLiteral("#4a7ec4");
+  d.icon = QStringLiteral("◆");
+  d.descKey = QStringLiteral("settings.int.mattermost.desc");
+  d.kind = ProviderKind::Directory;
+  d.bespoke = true;  // not a RestIssueProvider: there are no issues here
+  d.uiFields = {plain(QStringLiteral("host"), QStringLiteral("Server URL"), QStringLiteral("https://mm.acme.com")),
+                secret(QStringLiteral("token"), QStringLiteral("Personal access token")),
+                plain(QStringLiteral("channels"),
+                      QStringLiteral("Also import members of"),
+                      QStringLiteral("backend, qa — blank = only people you have talked to"))};
+  // Most corporate servers have personal access tokens switched off, so signing
+  // in with the same credentials as the Mattermost app is the primary path.
+  // These are never stored: the session token they return is.
+  d.loginFields = {plain(QStringLiteral("loginId"), QStringLiteral("Username or email"), QStringLiteral("you@company.com")),
+                   secret(QStringLiteral("password"), QStringLiteral("Password"), QString()),
+                   plain(QStringLiteral("mfaToken"), QStringLiteral("MFA code (if enabled)"), QStringLiteral("123456"), true)};
+  d.requiredKeys = {QStringLiteral("host"), QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token")};
+  return d;
+}
+
 }  // namespace
 
 const QVector<ProviderDescriptor>& providerCatalog() {
@@ -492,6 +517,8 @@ const QVector<ProviderDescriptor>& providerCatalog() {
       clickup(),
       sentry(),
       bitbucket(),
+      // Appended: the catalog order is load-bearing (a test pins github at 0).
+      mattermost(),
   };
   return kCatalog;
 }

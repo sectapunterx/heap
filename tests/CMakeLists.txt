@@ -193,6 +193,8 @@ set(HEAP_INTEGRATION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/MattermostClient.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/MattermostClient.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
 )
 
@@ -1158,6 +1160,28 @@ target_link_libraries(heap_oauth_tests PRIVATE
         GTest::gtest_main
 )
 add_test(NAME heap_oauth_tests COMMAND heap_oauth_tests)
+
+# ─── Mattermost directory tests ───
+# The pure parsers over canned JSON, plus the request choreography against the
+# local FakeHttpServer — who gets skipped, and the two ways of signing in.
+add_executable(heap_mattermost_tests
+        test_mattermost.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/MattermostClient.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/MattermostClient.h
+)
+set_target_properties(heap_mattermost_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_mattermost_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+target_link_libraries(heap_mattermost_tests PRIVATE
+        Qt6::Core
+        Qt6::Network
+        Qt6::Test
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 
 # ─── AppController (shortcuts / scheduling / date + wrapper logic) tests ───
 # Same headless boot + source set as the other AppController suites (offscreen
