@@ -34,6 +34,9 @@ enum class BlockType : quint8 {
   TableCell,
   // Produced by heap rather than md4c:
   Frontmatter,  // a leading --- … --- block, held out of the parse
+  Callout,      // a quote opening with "[!NOTE]" and friends
+  MathBlock,    // a paragraph that is nothing but $$ … $$
+  FootnoteDef,  // a paragraph opening with "[^id]:"
   Opaque,       // source that produced no block of its own, e.g. a link
                 // reference definition. Carried so the partition stays total.
 };
@@ -48,6 +51,12 @@ enum class InlineType : quint8 {
   Link,
   Image,
   WikiLink,
+  // Produced by heap's inline decorations rather than by md4c:
+  Highlight,    // ==text==
+  Mention,      // @someone
+  TicketRef,    // #HEAP-123
+  Tag,          // #topic
+  FootnoteRef,  // [^id]
   LatexMath,
   LatexMathDisplay,
   HtmlInline,
@@ -113,6 +122,16 @@ struct MdBlock {
   int taskMarkByte = -1;                     // ListItem: its byte offset in the source
   ColumnAlign align = ColumnAlign::Default;  // table cells
   int columnCount = 0;                       // Table
+
+  // Callout: the kind as written, lower-cased ("note", "warning", "tip", …),
+  // the title for its header, and whether the source asked for it to start
+  // folded ("[!NOTE]-") or expanded ("[!NOTE]+").
+  QString calloutKind;
+  QString calloutTitle;
+  bool foldable = false;
+  bool startsFolded = false;
+
+  QString footnoteId;  // FootnoteDef: the id between "[^" and "]:"
 
   // Source range. Every block gets one, and the ranges of the document's
   // top-level blocks tile it completely — see MdParser for the guarantee.

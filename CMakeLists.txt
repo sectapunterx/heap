@@ -75,6 +75,10 @@ add_subdirectory(third_party/md4c)
 qt_add_library(heap_markdown STATIC
     src/markdown/MdSourceMap.cpp
     src/markdown/MdParser.cpp
+    src/markdown/MdOutline.cpp
+    src/markdown/MdExtensions.cpp
+    src/markdown/MdHtml.cpp
+    src/notes/NoteLinks.cpp
 )
 target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core)
@@ -102,7 +106,6 @@ qt_add_library(heap_core STATIC
     src/git/GitWatcher.cpp
     src/text/TaskTextUtils.cpp
     src/query/QueryParser.cpp
-    src/notes/NoteLinks.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp

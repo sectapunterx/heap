@@ -43,6 +43,7 @@ target_include_directories(heap_chrono_tests PRIVATE
 
 target_link_libraries(heap_chrono_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -58,7 +59,7 @@ add_test(NAME heap_md4c_smoke_tests COMMAND heap_md4c_smoke_tests)
 
 # Markdown engine — source map and parser. Links heap_markdown rather than
 # re-compiling sources, so adding a case costs nothing in build time.
-add_executable(heap_md_tests test_md_parser.cpp)
+add_executable(heap_md_tests test_md_parser.cpp test_md_outline.cpp test_md_render.cpp)
 target_link_libraries(heap_md_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
 add_test(NAME heap_md_tests COMMAND heap_md_tests)
 
@@ -87,6 +88,7 @@ target_include_directories(heap_paths_tests PRIVATE
 
 target_link_libraries(heap_paths_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -111,6 +113,7 @@ target_include_directories(heap_git_tests PRIVATE
 
 target_link_libraries(heap_git_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -128,6 +131,7 @@ target_include_directories(heap_text_tests PRIVATE
 
 target_link_libraries(heap_text_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -156,6 +160,7 @@ target_include_directories(heap_notify_tests PRIVATE
 target_link_libraries(heap_notify_tests PRIVATE
     Qt6::Core
     Qt6::Test
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -215,7 +220,6 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -249,6 +253,7 @@ target_link_libraries(heap_selection_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -311,7 +316,6 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -345,6 +349,7 @@ target_link_libraries(heap_notes_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -387,6 +392,7 @@ target_include_directories(heap_platform_tests PRIVATE
 target_link_libraries(heap_platform_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -445,7 +451,6 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -479,6 +484,7 @@ target_link_libraries(heap_persistence_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -539,7 +545,6 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -573,6 +578,7 @@ target_link_libraries(heap_export_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -632,7 +638,6 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -666,6 +671,7 @@ target_link_libraries(heap_profile_io_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -724,7 +730,6 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -758,6 +763,7 @@ target_link_libraries(heap_onboarding_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -783,6 +789,7 @@ target_link_libraries(heap_sampledata_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Qml   # Models.h includes <qqmlregistration.h>
+        heap_markdown
         GTest::gtest
 )
 add_test(NAME heap_sampledata_tests COMMAND heap_sampledata_tests)
@@ -835,7 +842,6 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -869,6 +875,7 @@ target_link_libraries(heap_undo_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -929,7 +936,6 @@ set(HEAP_VIEW_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -963,6 +969,7 @@ target_link_libraries(heap_view_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -1043,6 +1050,7 @@ add_executable(heap_integrations_tests
 target_include_directories(heap_integrations_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_integrations_tests PRIVATE
         Qt6::Core
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1063,6 +1071,7 @@ target_link_libraries(heap_update_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1084,6 +1093,7 @@ target_link_libraries(heap_github_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1104,6 +1114,7 @@ target_link_libraries(heap_jira_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1122,6 +1133,7 @@ target_link_libraries(heap_gitlab_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1156,6 +1168,7 @@ target_link_libraries(heap_rest_providers_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1180,6 +1193,7 @@ target_link_libraries(heap_sync_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Qml
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1196,6 +1210,7 @@ add_executable(heap_query_tests
 target_include_directories(heap_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_query_tests PRIVATE
         Qt6::Core
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1211,6 +1226,7 @@ add_executable(heap_json_merger_tests
 target_include_directories(heap_json_merger_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_json_merger_tests PRIVATE
         Qt6::Core
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1231,6 +1247,7 @@ target_link_libraries(heap_models_tests PRIVATE
         Qt6::Gui
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1283,7 +1300,6 @@ set(HEAP_APPCTRL_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -1317,6 +1333,7 @@ target_link_libraries(heap_appcontroller_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -1343,6 +1360,7 @@ target_link_libraries(heap_roundtrip_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Qml
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1367,6 +1385,7 @@ foreach (_suite migration fault_injection save_bench)
             Qt6::Widgets
             Qt6::Qml
             Qt6::Test
+            heap_markdown
             GTest::gtest
     )
     if (UNIX AND NOT APPLE)

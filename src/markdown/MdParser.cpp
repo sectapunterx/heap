@@ -1,6 +1,10 @@
 #include "md4c.h"
 
+#include "markdown/MdExtensions.h"
 #include "markdown/MdParser.h"
+
+#include <QHash>
+#include <QRegularExpression>
 
 #include <algorithm>
 
@@ -18,6 +22,7 @@ struct Reserved {
   BlockType type = BlockType::Opaque;
   int firstLine = -1;
   int lastLine = -1;
+  QString id;  // FootnoteDef: the id between "[^" and "]:"
 };
 
 // Number of leading spaces/tabs on a line.
@@ -47,6 +52,50 @@ bool detectFrontmatter(const MdSourceMap& src, Reserved* out) {
     }
   }
   return false;
+}
+
+// "[^id]: the note text", plus any lines that continue it.
+//
+// These have to be held out of the parse rather than recognised afterwards.
+// To CommonMark, "[^id]: text" is a perfectly good link reference definition
+// with the label "^id" — so md4c consumes it, and then turns every "[^id]" in
+// the document into a link pointing at it. Blanking the definition leaves the
+// references as plain text, which is what lets them be numbered as footnotes.
+const QRegularExpression& footnoteDefRx() {
+  static const QRegularExpression rx(QStringLiteral("^ {0,3}\\[\\^([^\\]\\s]+)\\]:"));
+  return rx;
+}
+
+void detectFootnoteDefinitions(const MdSourceMap& src, QVector<Reserved>* out) {
+  for(int line = 0; line < src.lineCount(); ++line) {
+    const auto match = footnoteDefRx().match(src.lineText(line));
+    if(!match.hasMatch()) {
+      continue;
+    }
+    Reserved reserved;
+    reserved.type = BlockType::FootnoteDef;
+    reserved.id = match.captured(1);
+    reserved.firstLine = line;
+    reserved.lastLine = line;
+    // A definition runs on over following non-blank lines, and over indented
+    // lines after a blank one — the usual lazy continuation.
+    int next = line + 1;
+    while(next < src.lineCount()) {
+      if(!src.isBlankLine(next)) {
+        reserved.lastLine = next;
+        ++next;
+        continue;
+      }
+      if(next + 1 < src.lineCount() && !src.isBlankLine(next + 1) && indentOf(src, next + 1) >= 4) {
+        reserved.lastLine = next + 1;
+        next += 2;
+        continue;
+      }
+      break;
+    }
+    out->append(reserved);
+    line = reserved.lastLine;
+  }
 }
 
 // ── md4c glue ───────────────────────────────────────────────────────
@@ -170,6 +219,14 @@ class Builder {
   void anchor(int byteStart, int byteEnd);
   void anchorPointer(const MD_CHAR* text, MD_SIZE size);
   void anchorAttribute(const MD_ATTRIBUTE& attr);
+
+  // Parse the body of each footnote definition and hang it on its block. The
+  // definitions were blanked before the main parse, so this is where their
+  // content comes back.
+  void fillFootnoteBodies();
+  // Deep-copy one inline subtree from another AST, shifting its byte offsets
+  // by `byteShift` so the spans still address this document.
+  int copyInline(const MdAst& from, int index, int parent, int byteShift);
 
   // Turn anchors into line ranges, then make the top level a total,
   // contiguous, ordered partition of the document.
@@ -394,6 +451,16 @@ int Builder::onEnterSpan(MD_SPANTYPE type, void* detail) {
         auto* wiki = static_cast<MD_SPAN_WIKILINK_DETAIL*>(detail);
         node.href = attributeText(wiki->target);
         anchorAttribute(wiki->target);
+        // The target is real source text, unlike a reference link's, so the
+        // node can say where it is. The backlinks pane needs that to report
+        // the line a link was written on.
+        const int offset = offsetOf(wiki->target.text);
+        if(offset >= 0) {
+          const int end = std::min(offset + static_cast<int>(wiki->target.size), m_src.byteCount());
+          node.span = spanForLines(m_src.lineOfByte(offset), m_src.lineOfByte(std::max(end - 1, offset)));
+          node.span.byteStart = offset;
+          node.span.byteEnd = end;
+        }
       }
       break;
     default:
@@ -475,19 +542,18 @@ void Builder::partitionTopLevel() {
   }
   const int lines = m_src.lineCount();
 
-  // Reserved regions (frontmatter) are blocks in their own right and sit
-  // before anything md4c produced.
   QVector<int> order;
   order.reserve(m_ast.blocks.at(m_ast.root).children.size() + m_reserved.size());
+  int cursor = 0;
+
+  // Reserved regions were blanked before parsing, so md4c produced no block
+  // for them and they always turn up as gaps. Indexing them by their first
+  // line lets the gap filler place them wherever they are, which matters:
+  // frontmatter is at the top, but a footnote definition can be anywhere.
+  QHash<int, Reserved> reservedByLine;
   for(const Reserved& reserved : m_reserved) {
-    MdBlock block;
-    block.type = reserved.type;
-    block.parent = m_ast.root;
-    block.span = spanForLines(reserved.firstLine, reserved.lastLine);
-    m_ast.blocks.append(block);
-    order.append(static_cast<int>(m_ast.blocks.size()) - 1);
+    reservedByLine.insert(reserved.firstLine, reserved);
   }
-  int cursor = m_reserved.isEmpty() ? 0 : m_reserved.last().lastLine + 1;
 
   const QVector<int> parsed = m_ast.blocks.at(m_ast.root).children;
 
@@ -509,18 +575,27 @@ void Builder::partitionTopLevel() {
   auto emitOpaque = [&](int from, int to) {
     int line = from;
     while(line <= to) {
-      if(m_src.isBlankLine(line)) {
+      if(m_src.isBlankLine(line) && !reservedByLine.contains(line)) {
         ++line;
         continue;
       }
-      const int start = line;
-      while(line <= to && !m_src.isBlankLine(line)) {
-        ++line;
-      }
       MdBlock block;
-      block.type = BlockType::Opaque;
       block.parent = m_ast.root;
-      block.span = spanForLines(start, line - 1);
+
+      if(reservedByLine.contains(line)) {
+        const Reserved& reserved = reservedByLine.value(line);
+        block.type = reserved.type;
+        block.footnoteId = reserved.id;
+        block.span = spanForLines(reserved.firstLine, std::min(reserved.lastLine, to));
+        line = block.span.lastLine + 1;
+      } else {
+        const int start = line;
+        while(line <= to && !m_src.isBlankLine(line) && !reservedByLine.contains(line)) {
+          ++line;
+        }
+        block.type = BlockType::Opaque;
+        block.span = spanForLines(start, line - 1);
+      }
       m_ast.blocks.append(block);
       order.append(static_cast<int>(m_ast.blocks.size()) - 1);
     }
@@ -658,12 +733,20 @@ MdAst Builder::run() {
     Reserved reserved;
     if(detectFrontmatter(m_src, &reserved)) {
       m_reserved.append(reserved);
-      const int from = m_src.lineStartByte(reserved.firstLine);
-      const int to = m_src.lineEndByte(reserved.lastLine);
-      for(int i = from; i < to; ++i) {
-        if(buffer.at(i) != '\n') {
-          buffer[i] = ' ';
-        }
+    }
+  }
+  if(m_options.footnotes) {
+    detectFootnoteDefinitions(m_src, &m_reserved);
+  }
+
+  // Blank every reserved region: same length, same line structure, so byte
+  // offsets still mean the same position in the original source.
+  for(const Reserved& reserved : m_reserved) {
+    const int from = m_src.lineStartByte(reserved.firstLine);
+    const int to = m_src.lineEndByte(reserved.lastLine);
+    for(int i = from; i < to; ++i) {
+      if(buffer.at(i) != '\n' && buffer.at(i) != '\r') {
+        buffer[i] = ' ';
       }
     }
   }
@@ -703,7 +786,77 @@ MdAst Builder::run() {
     m_ast.root = addBlock(BlockType::Document);
   }
   assignSpans();
+  fillFootnoteBodies();
+  // Callouts and display maths are recognised after the ranges exist: they
+  // only re-label blocks, so the partition is unaffected.
+  applyExtensions(m_src, &m_ast);
   return m_ast;
+}
+
+int Builder::copyInline(const MdAst& from, int index, int parent, int byteShift) {
+  if(index < 0 || index >= from.inlines.size()) {
+    return -1;
+  }
+  MdInline node = from.inlines.at(index);
+  const QVector<int> children = node.children;
+  node.children.clear();
+  node.parent = parent;
+  if(node.span.isValid()) {
+    node.span.byteStart += byteShift;
+    node.span.byteEnd += byteShift;
+    node.span.firstLine = m_src.lineOfByte(node.span.byteStart);
+    node.span.lastLine = m_src.lineOfByte(std::max(node.span.byteEnd - 1, node.span.byteStart));
+  }
+
+  m_ast.inlines.append(node);
+  const int copied = static_cast<int>(m_ast.inlines.size()) - 1;
+  for(const int child : children) {
+    const int childCopy = copyInline(from, child, copied, byteShift);
+    if(childCopy >= 0) {
+      m_ast.inlines[copied].children.append(childCopy);
+    }
+  }
+  return copied;
+}
+
+void Builder::fillFootnoteBodies() {
+  for(auto& block : m_ast.blocks) {
+    if(block.type != BlockType::FootnoteDef) {
+      continue;
+    }
+    const MdSpan span = block.span;
+    if(!span.isValid()) {
+      continue;
+    }
+
+    // Re-read the definition from the original source and blank only its
+    // "[^id]:" marker. Same length, so every offset the sub-parse reports can
+    // be shifted straight back into this document's coordinates.
+    const int startByte = m_src.lineStartByte(span.firstLine);
+    QString body = m_src.textForBytes(startByte, m_src.lineEndByte(span.lastLine));
+    const int markerEnd = body.indexOf(QLatin1Char(':'));
+    if(markerEnd < 0) {
+      continue;
+    }
+    for(int i = 0; i <= markerEnd; ++i) {
+      body[i] = QLatin1Char(' ');
+    }
+
+    const MdSourceMap sub(body);
+    MdParseOptions options;
+    options.frontmatter = false;
+    options.footnotes = false;
+    const MdAst subAst = parse(sub, options);
+
+    for(const int subBlock : subAst.topLevel()) {
+      for(const int subInline : subAst.blocks.at(subBlock).inlines) {
+        const int copied = copyInline(subAst, subInline, -1, startByte);
+        if(copied >= 0) {
+          block.inlines.append(copied);
+        }
+      }
+    }
+  }
 }
 
 }  // namespace
