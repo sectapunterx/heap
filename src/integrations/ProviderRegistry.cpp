@@ -345,7 +345,9 @@ ProviderDescriptor jira() {
   d.uiFields = {plain(QStringLiteral("baseUrl"), QStringLiteral("Base URL"), QStringLiteral("https://acme.atlassian.net")),
                 plain(QStringLiteral("email"), QStringLiteral("Email"), QStringLiteral("you@company.com")),
                 secret(QStringLiteral("token"), QStringLiteral("API token")),
-                plain(QStringLiteral("jql"), QStringLiteral("JQL"), QStringLiteral("project = LTE ORDER BY updated DESC"), true)};
+                // The placeholder is the default the provider actually applies
+                // when the field is left blank (see defaultJiraJql).
+                plain(QStringLiteral("jql"), QStringLiteral("JQL"), defaultJiraJql(), true)};
   d.requiredKeys = {QStringLiteral("baseUrl"), QStringLiteral("email"), QStringLiteral("token")};
   d.secretKeys = {QStringLiteral("token")};
   return d;
