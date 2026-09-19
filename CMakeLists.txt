@@ -104,7 +104,6 @@ qt_add_library(heap_core STATIC
     src/SampleData.cpp
     src/StateSerializer.cpp
     src/CodeHighlighter.cpp
-    src/NotesHighlighter.cpp
     src/chrono/ChronoTokenizer.cpp
     src/chrono/ChronoLocale_en.cpp
     src/chrono/ChronoLocale_ru.cpp
@@ -119,6 +118,7 @@ qt_add_library(heap_core STATIC
     src/platform/Paths.cpp
     src/markdown/MdDocument.cpp
     src/markdown/MarkdownEditorController.cpp
+    src/markdown/MdHighlighter.cpp
     src/integrations/StatusMap.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
@@ -194,7 +194,6 @@ qt_add_qml_module(heap_core
         src/Models.h
         src/SampleData.h
         src/CodeHighlighter.h
-        src/NotesHighlighter.h
         src/chrono/ChronoTypes.h
         src/chrono/ChronoTokenizer.h
         src/chrono/ChronoLocale.h
@@ -207,6 +206,7 @@ qt_add_qml_module(heap_core
         src/notes/NoteLinks.h
         src/markdown/MdDocument.h
         src/markdown/MarkdownEditorController.h
+        src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/integrations/IntegrationTypes.h
