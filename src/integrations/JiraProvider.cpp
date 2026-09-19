@@ -211,7 +211,7 @@ void JiraProvider::resolveCloudId(std::function<void(bool)> done) {
   });
 }
 
-void JiraProvider::send(const QByteArray& method, const QString& path, const QByteArray& body, ApiCallback done) {
+void JiraProvider::send(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done) {
   sendOnce(method, path, body, [this, method, path, body, done](const ApiResult& first) {
     // Atlassian's scoped API tokens (the default for new tokens) are rejected
     // by the site host and only accepted through the API gateway. A 401 on the

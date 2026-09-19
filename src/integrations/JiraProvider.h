@@ -84,7 +84,7 @@ class JiraProvider : public IntegrationProvider {
 
   // Send to <api base>/rest/api/3<path>, retrying once through the Atlassian
   // API gateway if the site host answers 401 (see m_apiBase).
-  void send(const QByteArray& method, const QString& path, const QByteArray& body, ApiCallback done);
+  void send(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done);
   void sendOnce(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done);
   // GET {site}/_edge/tenant_info — unauthenticated, returns the site's cloudId.
   void resolveCloudId(std::function<void(bool)> done);
