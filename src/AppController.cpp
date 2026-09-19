@@ -2348,6 +2348,30 @@ void AppController::applyIntegrationSettings() {
   }
 }
 
+QStringList AppController::missingRequiredFields(const QString& providerId) const {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(d == nullptr) {
+    return {};
+  }
+  const QVariantMap cfg = integrationConfig(providerId);
+  QStringList missing;
+  for(const QString& key : d->requiredKeys) {
+    if(!cfg.value(key).toString().trimmed().isEmpty()) {
+      continue;
+    }
+    // Report the card's own label ("Workspace GID"), not the config key.
+    QString label = key;
+    for(const heap::integrations::FieldSpec& f : d->uiFields) {
+      if(f.key == key) {
+        label = f.label;
+        break;
+      }
+    }
+    missing.append(label);
+  }
+  return missing;
+}
+
 QVariantMap AppController::integrationConfig(const QString& providerId) const {
   QVariantMap cfg = settingsMap().value("integrations").toMap().value(providerId).toMap();
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
@@ -2483,15 +2507,56 @@ void AppController::setIntegrationSecret(const QString& providerId, const QStrin
   if(m_secretStore) {
     m_secretStore->setValue(providerId, field, value);
   }
+  // Pasting a personal access token over a browser session ends that session.
+  // Leaving authMode=oauth behind would send the new token as a Bearer, which
+  // GitLab (PRIVATE-TOKEN) and ClickUp (raw Authorization) both reject.
+  if(field == QStringLiteral("token") &&
+     integrationConfig(providerId).value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth")) {
+    if(m_secretStore) {
+      m_secretStore->remove(providerId, QStringLiteral("refreshToken"));
+    }
+    setIntegrationFields(providerId, {{QStringLiteral("authMode"), QString()}, {QStringLiteral("tokenExpiresAt"), QString()}});
+  }
   applyIntegrationSettings();
   emit integrationSecretsChanged();
 }
 
+void AppController::disconnectIntegration(const QString& providerId) {
+  const QVariantMap cfg = integrationConfig(providerId);
+  const QString authMode = cfg.value(QStringLiteral("authMode")).toString();
+  QVariantMap fields{{QStringLiteral("connected"), false}};
+  // A PAT is the user's own credential and is left where it is, so "disconnect,
+  // reconnect" doesn't mean "paste the token again". Tokens this app obtained
+  // are ours to drop.
+  if(!authMode.isEmpty()) {
+    if(m_secretStore) {
+      m_secretStore->remove(providerId, QStringLiteral("token"));
+      m_secretStore->remove(providerId, QStringLiteral("refreshToken"));
+    }
+    fields.insert(QStringLiteral("authMode"), QString());
+    fields.insert(QStringLiteral("tokenExpiresAt"), QString());
+  }
+  setIntegrationFields(providerId, fields);
+  emit integrationSecretsChanged();
+}
+
 void AppController::setIntegrationField(const QString& providerId, const QString& field, const QVariant& value) {
+  setIntegrationFields(providerId, {{field, value}});
+}
+
+void AppController::setIntegrationFields(const QString& providerId, const QVariantMap& fields) {
   QVariantMap settings = settingsMap();
   QVariantMap integrations = settings.value(QStringLiteral("integrations")).toMap();
   QVariantMap cfg = integrations.value(providerId).toMap();
-  cfg.insert(field, value);
+  for(auto it = fields.constBegin(); it != fields.constEnd(); ++it) {
+    // An empty string means "drop this key", so a cleared authMode doesn't stay
+    // in state.json as "".
+    if(it.value().typeId() == QMetaType::QString && it.value().toString().isEmpty()) {
+      cfg.remove(it.key());
+    } else {
+      cfg.insert(it.key(), it.value());
+    }
+  }
   integrations.insert(providerId, cfg);
   settings.insert(QStringLiteral("integrations"), integrations);
   m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
@@ -2681,13 +2746,28 @@ void AppController::connectOAuth(const QString& providerId) {
       }
       m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
     }
-    setIntegrationField(providerId, QStringLiteral("authMode"), QStringLiteral("oauth"));
-    // When the token expires. Without it the access token was used until the
-    // provider started refusing it, which read as an empty sync.
-    setIntegrationField(
-        providerId, QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString());
-    setIntegrationField(providerId, QStringLiteral("connected"), true);
-    emit toast(tr("%1 connected via browser").arg(label));
+    // One write: each one rebuilds every provider, and doing that three times
+    // in a row could tear down a request already in flight.
+    setIntegrationFields(providerId,
+                         {
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             // When the token expires. Without it the access token was
+                             // used until the provider started refusing it, which read
+                             // as an empty sync.
+                             {QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString()},
+                             {QStringLiteral("connected"), true},
+                         });
+    // Signing in says who you are, not what to sync. Asana still needs a
+    // workspace, ClickUp a list, Sentry an org and project, Bitbucket a repo —
+    // and those live under Advanced, so the card used to read "connected" and
+    // then quietly sync nothing.
+    const QStringList missing = missingRequiredFields(providerId);
+    if(missing.isEmpty()) {
+      emit toast(tr("%1 connected via browser").arg(label));
+    } else {
+      emit toast(tr("%1 signed in — now fill in %2").arg(label, missing.join(QStringLiteral(", "))));
+      emit integrationNeedsFields(providerId, missing);
+    }
   });
   if(deviceFlow) {
     emit toast(tr("Starting %1 browser sign-in…").arg(label));

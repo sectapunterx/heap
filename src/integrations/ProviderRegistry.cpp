@@ -40,6 +40,31 @@ FieldSpec plain(QString key, QString label, QString placeholder, bool mono = fal
   return FieldSpec{std::move(key), std::move(label), std::move(placeholder), mono, /*secret*/ false};
 }
 
+// Fill in an OAuthConfig for a provider that needs a client secret: they all
+// refuse public/PKCE-only clients, so one-click only lights up in a build that
+// carries the CI credentials (see OAuthClients.h).
+OAuthConfig confidentialOAuth(
+    const char* clientId, const char* clientSecret, QString authUrl, QString tokenUrl, QString scope, TokenStyle style) {
+  OAuthConfig o;
+  o.supported = true;
+  o.authUrl = std::move(authUrl);
+  o.tokenUrl = std::move(tokenUrl);
+  o.scope = std::move(scope);
+  o.usePkce = false;
+  o.needsSecret = true;
+  o.tokenStyle = style;
+  o.clientId = QString::fromLatin1(clientId);
+  o.clientSecret = QString::fromLatin1(clientSecret);
+  return o;
+}
+
+// The pair of Advanced fields a provider needs when its OAuth app is
+// registered by the user rather than shipped with the build.
+QVector<FieldSpec> oauthAppFields() {
+  return {plain(QStringLiteral("clientId"), QStringLiteral("OAuth client ID"), QStringLiteral("for browser sign-in"), true),
+          secret(QStringLiteral("clientSecret"), QStringLiteral("OAuth client secret"))};
+}
+
 ProviderDescriptor github() {
   ProviderDescriptor d;
   d.id = QStringLiteral("github");
@@ -204,8 +229,9 @@ ProviderDescriptor todoist() {
   d.icon = QStringLiteral("T");
   d.descKey = QStringLiteral("settings.int.todoist.desc");
   d.uiFields = {secret(QStringLiteral("token"), QStringLiteral("API token"))};
+  d.uiFields += oauthAppFields();
   d.requiredKeys = {QStringLiteral("token")};
-  d.secretKeys = {QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
   d.baseUrlTemplate = QStringLiteral("https://api.todoist.com");
   d.auth.kind = AuthKind::HeaderToken;
   d.auth.tokenPrefix = "Bearer ";
@@ -218,6 +244,15 @@ ProviderDescriptor todoist() {
   d.fields.body = QStringLiteral("description");
   d.fields.boolStatusField = QStringLiteral("is_completed");
   d.fields.url = QStringLiteral("url");
+  // Todoist separates scopes with commas and issues a token that never expires,
+  // so there is nothing to refresh. Sync is pull-only, hence a read-only scope.
+  d.oauth = confidentialOAuth(HEAP_OAUTH_TODOIST_CLIENT_ID,
+                              HEAP_OAUTH_TODOIST_CLIENT_SECRET,
+                              QStringLiteral("https://todoist.com/oauth/authorize"),
+                              QStringLiteral("https://todoist.com/oauth/access_token"),
+                              QStringLiteral("data:read"),
+                              TokenStyle::FormBody);
+  d.oauth.scopeSeparator = QStringLiteral(",");
   return d;  // pull-only
 }
 
@@ -230,8 +265,9 @@ ProviderDescriptor asana() {
   d.descKey = QStringLiteral("settings.int.asana.desc");
   d.uiFields = {secret(QStringLiteral("token"), QStringLiteral("Access token")),
                 plain(QStringLiteral("workspace"), QStringLiteral("Workspace GID"), QStringLiteral("1200000000000000"), true)};
+  d.uiFields += oauthAppFields();
   d.requiredKeys = {QStringLiteral("token"), QStringLiteral("workspace")};
-  d.secretKeys = {QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
   d.baseUrlTemplate = QStringLiteral("https://app.asana.com");
   d.auth.kind = AuthKind::HeaderToken;
   d.auth.tokenPrefix = "Bearer ";
@@ -245,6 +281,15 @@ ProviderDescriptor asana() {
   d.fields.boolStatusField = QStringLiteral("completed");
   d.fields.url = QStringLiteral("permalink_url");
   d.fields.updatedAt = QStringLiteral("modified_at");
+  // Asana does support PKCE, but still wants the secret alongside it, and its
+  // access token lives an hour — the refresh token is what keeps the session.
+  d.oauth = confidentialOAuth(HEAP_OAUTH_ASANA_CLIENT_ID,
+                              HEAP_OAUTH_ASANA_CLIENT_SECRET,
+                              QStringLiteral("https://app.asana.com/-/oauth_authorize"),
+                              QStringLiteral("https://app.asana.com/-/oauth_token"),
+                              QStringLiteral("tasks:read workspaces:read users:read"),
+                              TokenStyle::FormBody);
+  d.oauth.usePkce = true;
   return d;  // pull-only
 }
 
@@ -257,8 +302,9 @@ ProviderDescriptor clickup() {
   d.descKey = QStringLiteral("settings.int.clickup.desc");
   d.uiFields = {secret(QStringLiteral("token"), QStringLiteral("API token")),
                 plain(QStringLiteral("listId"), QStringLiteral("List ID"), QStringLiteral("901000000000"), true)};
+  d.uiFields += oauthAppFields();
   d.requiredKeys = {QStringLiteral("token"), QStringLiteral("listId")};
-  d.secretKeys = {QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
   d.baseUrlTemplate = QStringLiteral("https://api.clickup.com");
   d.auth.kind = AuthKind::CustomHeader;  // raw token in Authorization, no prefix
   d.auth.headerName = "Authorization";
@@ -271,6 +317,14 @@ ProviderDescriptor clickup() {
   d.fields.status = QStringLiteral("status.status");
   d.fields.priority = QStringLiteral("priority.priority");
   d.fields.url = QStringLiteral("url");
+  // ClickUp scopes the grant in its own consent screen rather than on the
+  // authorize URL, and wants the exchange as JSON. Its token does not expire.
+  d.oauth = confidentialOAuth(HEAP_OAUTH_CLICKUP_CLIENT_ID,
+                              HEAP_OAUTH_CLICKUP_CLIENT_SECRET,
+                              QStringLiteral("https://app.clickup.com/api"),
+                              QStringLiteral("https://api.clickup.com/api/v2/oauth/token"),
+                              QString(),
+                              TokenStyle::JsonBody);
   return d;  // pull-only
 }
 
@@ -284,8 +338,9 @@ ProviderDescriptor sentry() {
   d.uiFields = {secret(QStringLiteral("token"), QStringLiteral("Auth token")),
                 plain(QStringLiteral("org"), QStringLiteral("Org slug"), QStringLiteral("acme")),
                 plain(QStringLiteral("project"), QStringLiteral("Project slug"), QStringLiteral("backend"))};
+  d.uiFields += oauthAppFields();
   d.requiredKeys = {QStringLiteral("token"), QStringLiteral("org"), QStringLiteral("project")};
-  d.secretKeys = {QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
   d.baseUrlTemplate = QStringLiteral("https://sentry.io");
   d.auth.kind = AuthKind::HeaderToken;
   d.auth.tokenPrefix = "Bearer ";
@@ -297,6 +352,12 @@ ProviderDescriptor sentry() {
   d.fields.status = QStringLiteral("status");
   d.fields.url = QStringLiteral("permalink");
   d.fields.updatedAt = QStringLiteral("lastSeen");
+  d.oauth = confidentialOAuth(HEAP_OAUTH_SENTRY_CLIENT_ID,
+                              HEAP_OAUTH_SENTRY_CLIENT_SECRET,
+                              QStringLiteral("https://sentry.io/oauth/authorize/"),
+                              QStringLiteral("https://sentry.io/oauth/token/"),
+                              QStringLiteral("org:read project:read event:read"),
+                              TokenStyle::FormBody);
   return d;  // pull-only
 }
 
@@ -310,8 +371,9 @@ ProviderDescriptor bitbucket() {
   d.uiFields = {secret(QStringLiteral("token"), QStringLiteral("Access token")),
                 plain(QStringLiteral("workspace"), QStringLiteral("Workspace"), QStringLiteral("acme"), true),
                 plain(QStringLiteral("repo"), QStringLiteral("Repo slug"), QStringLiteral("backend"), true)};
+  d.uiFields += oauthAppFields();
   d.requiredKeys = {QStringLiteral("token"), QStringLiteral("workspace"), QStringLiteral("repo")};
-  d.secretKeys = {QStringLiteral("token")};
+  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
   d.baseUrlTemplate = QStringLiteral("https://api.bitbucket.org");
   d.auth.kind = AuthKind::HeaderToken;
   d.auth.tokenPrefix = "Bearer ";
@@ -325,6 +387,15 @@ ProviderDescriptor bitbucket() {
   d.fields.priority = QStringLiteral("priority");
   d.fields.url = QStringLiteral("links.html.href");
   d.fields.updatedAt = QStringLiteral("updated_on");
+  // Bitbucket takes the client credentials in an HTTP Basic header and rejects
+  // them in the body. Its access token lives two hours; scopes are set on the
+  // consumer, not on the authorize URL.
+  d.oauth = confidentialOAuth(HEAP_OAUTH_BITBUCKET_CLIENT_ID,
+                              HEAP_OAUTH_BITBUCKET_CLIENT_SECRET,
+                              QStringLiteral("https://bitbucket.org/site/oauth2/authorize"),
+                              QStringLiteral("https://bitbucket.org/site/oauth2/access_token"),
+                              QString(),
+                              TokenStyle::BasicAuthForm);
   return d;  // pull-only
 }
 

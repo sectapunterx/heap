@@ -377,6 +377,11 @@ class AppController : public QObject {
   // Start the browser OAuth flow for a provider; on success stores the access
   // token in the keychain and marks the provider connected (authMode=oauth).
   Q_INVOKABLE void connectOAuth(const QString& providerId);
+  // Drop a provider back to disconnected. For a browser/session sign-in this
+  // also discards the tokens and clears authMode — otherwise a token pasted
+  // afterwards would still be sent as a Bearer, which GitLab (PRIVATE-TOKEN)
+  // and ClickUp (raw header) reject.
+  Q_INVOKABLE void disconnectIntegration(const QString& providerId);
   // The full integration catalogue (id, name, colour, fields, …) for the
   // Settings → Integrations cards. Data-driven from the provider registry.
   Q_INVOKABLE QVariantList integrationCatalog() const;
@@ -572,6 +577,10 @@ class AppController : public QObject {
   // Device-flow OAuth: prompts the Integrations card to show a "enter this code
   // in your browser" banner. An empty `code` clears the banner (flow finished).
   void oauthDeviceCode(const QString& providerId, const QString& code, const QString& verificationUri);
+  // A browser sign-in succeeded but the provider still needs a scope field
+  // (Asana workspace, ClickUp list, Sentry org/project, Bitbucket repo) before
+  // it can sync. The card opens Advanced so the user can see what is missing.
+  void integrationNeedsFields(const QString& providerId, const QStringList& labels);
   // Raised whenever the keychain contents change — on the async load at startup
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.
@@ -745,6 +754,15 @@ class AppController : public QObject {
   QVariantMap integrationConfig(const QString& providerId) const;
   // Write one non-secret integration field into the settings blob and persist.
   void setIntegrationField(const QString& providerId, const QString& field, const QVariant& value);
+  // Same, for several fields at once. Every write rebuilds the providers, so a
+  // sign-in that set three fields one by one tore down and rebuilt the sync
+  // layer three times — enough to kill a request already in flight.
+  void setIntegrationFields(const QString& providerId, const QVariantMap& fields);
+  // Card labels of the requiredKeys this provider still has empty. A browser
+  // sign-in proves who you are but not what to sync, so the scope fields
+  // (Asana workspace, ClickUp list, Sentry org/project, Bitbucket repo) can
+  // still be missing afterwards.
+  QStringList missingRequiredFields(const QString& providerId) const;
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
   // Renew an expiring OAuth access token, then run `then`. Providers that use a
