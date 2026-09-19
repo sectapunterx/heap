@@ -44,9 +44,16 @@ class GitWatcher : public QObject {
 
   void requestPrFetch(const QString& repoPath, const QString& branch);
 
-  // Create and switch to a new branch (`git checkout -b`). Synchronous —
-  // the caller drives it from a one-click UI action. Returns false and sets
-  // *errorOut (if non-null) on failure (git missing, dirty tree, name clash).
+  // Create and switch to a new branch (`git checkout -b`).
+  //
+  // Asynchronous: the result arrives as branchCreated(). It used to block on
+  // waitForFinished(15000), which meant a checkout against a cold or large
+  // repository froze the whole window — this is the only place in heap that
+  // ever waited on a process from the GUI thread.
+  //
+  // Returns false only when the request could not be started at all (no git
+  // on PATH, no repository, empty name), in which case branchCreated() is
+  // still emitted with the reason so one handler covers every outcome.
   bool createBranch(const QString& repoPath, const QString& branchName, QString* errorOut);
 
  signals:
@@ -56,6 +63,8 @@ class GitWatcher : public QObject {
   // Recent commits mentioning a task id, grouped by task:
   // { taskId → [ {sha, subject}, … ] }. Refreshed whenever HEAD moves.
   void commitsUpdated(const QString& repoPath, const QVariantMap& commitsByTask);
+  // The outcome of a createBranch() request. `error` is empty on success.
+  void branchCreated(const QString& repoPath, const QString& branchName, bool ok, const QString& error);
 
  private slots:
   void onFsPathChanged(const QString& path);

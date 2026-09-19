@@ -4495,16 +4495,40 @@ void AppController::createBranchForTask(const QString& taskId) {
     return;
   }
 
+  // The checkout runs asynchronously, so the task is only marked once git
+  // says it worked. Recording it up front would leave a branch on the card
+  // that does not exist if the checkout fails.
+  const QString pendingTaskId = t.id;
+  auto* connection = new QMetaObject::Connection;
+  *connection = connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchCreated, this,
+                        [this, connection, pendingTaskId, branch](const QString&, const QString& created,
+                                                                  bool ok, const QString& error) {
+                          if(created != branch) {
+                            return;  // a different request
+                          }
+                          disconnect(*connection);
+                          delete connection;
+
+                          if(!ok) {
+                            emit toast(tr("Branch create failed: %1").arg(error));
+                            return;
+                          }
+                          const int taskRow = m_tasks.indexOfId(pendingTaskId);
+                          if(taskRow >= 0) {
+                            Task updated = m_tasks.items().at(taskRow);
+                            updated.branch = branch;
+                            m_tasks.upsert(updated);
+                            scheduleSave();
+                          }
+                          emit toast(tr("Created branch %1").arg(branch));
+                        });
+
   QString err;
   if(!m_gitWatcher->createBranch(repo, branch, &err)) {
-    emit toast(tr("Branch create failed: %1").arg(err));
+    // createBranch() emits branchCreated() itself on a refused request, so
+    // the handler above has already reported it.
     return;
   }
-  // Record the branch on the task so the card shows it and copy-branch works.
-  t.branch = branch;
-  m_tasks.upsert(t);
-  scheduleSave();
-  emit toast(tr("Created branch %1").arg(branch));
 }
 
 void AppController::onGitCommits(const QString& repo, const QVariantMap& commitsByTask) {
