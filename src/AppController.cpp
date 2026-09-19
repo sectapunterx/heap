@@ -4500,9 +4500,10 @@ void AppController::createBranchForTask(const QString& taskId) {
   // that does not exist if the checkout fails.
   const QString pendingTaskId = t.id;
   auto* connection = new QMetaObject::Connection;
-  *connection = connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchCreated, this,
-                        [this, connection, pendingTaskId, branch](const QString&, const QString& created,
-                                                                  bool ok, const QString& error) {
+  *connection = connect(m_gitWatcher.get(),
+                        &heap::git::GitWatcher::branchCreated,
+                        this,
+                        [this, connection, pendingTaskId, branch](const QString&, const QString& created, bool ok, const QString& error) {
                           if(created != branch) {
                             return;  // a different request
                           }
