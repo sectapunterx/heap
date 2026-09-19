@@ -554,61 +554,44 @@ Item {
             }
 
             // Preview pane — visible in preview + split modes.
-            Flickable {
-                id: previewScroll
+            //
+            // Draws the parsed document row by row. It replaces a read-only
+            // TextArea with textFormat: MarkdownText, which handed the whole
+            // note to Qt and gave nothing back — no say in how an element
+            // looked, and no way to ask which lines produced it.
+            MdView {
+                id: preview
+                objectName: "notesPreview"
                 visible: root.viewMode === "preview" || root.viewMode === "split"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                contentWidth: width
-                contentHeight: previewArea.implicitHeight + 48
-                flickableDirection: Flickable.VerticalFlick
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ThinScrollBar {}
+                document: mdDocument
 
-                NumberAnimation {
-                    id: previewWheelAnim
-                    target: previewScroll
-                    property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                // Clicking a rendered block puts the caret on the line that
+                // produced it, and shows the editor if it was hidden.
+                onSourceRequested: (line) => {
+                    if (root.viewMode === "preview") root.viewMode = "split";
+                    editor.forceActiveFocus();
+                    editor.cursorPosition = mdDocument.positionForLine(line);
                 }
-                WheelHandler {
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    onWheel: (event) => {
-                        const dy = event.angleDelta.y;
-                        if (dy === 0) return;
-                        const maxY = Math.max(0, previewScroll.contentHeight - previewScroll.height);
-                        if (maxY <= 0) return;
-                        const base = previewWheelAnim.running ? previewWheelAnim.to : previewScroll.contentY;
-                        const newY = Math.max(0, Math.min(maxY, base - dy * 3));
-                        if (newY === base) return;
-                        previewWheelAnim.from = previewScroll.contentY;
-                        previewWheelAnim.to = newY;
-                        previewWheelAnim.restart();
+
+                onInternalLinkActivated: (kind, target) => {
+                    if (kind === "note") {
+                        const off = AppController.noteHeadingOffset(editor.text, target);
+                        if (off >= 0) root._jumpToOffset(off);
                     }
+                    // Tickets, people, tags and footnote jumps are wired up
+                    // with the editor work; ignoring them here is better than
+                    // opening a heap:// URL in a browser.
                 }
 
-                // Renders the same text Qt's QTextDocument::setMarkdown sees.
-                // Headings get larger fonts, `code` becomes monospace, lists
-                // indent, [text](url) becomes an underlined link.
-                TextArea {
-                    id: previewArea
-                    x: 24; y: 16
-                    width: previewScroll.width - 48
-                    height: Math.max(previewScroll.height - 32, implicitHeight + 16)
-                    readOnly: true
-                    selectByMouse: true
-                    wrapMode: TextArea.Wrap
-                    text: editor.text
-                    textFormat: TextEdit.MarkdownText
-                    color: Theme.text
-                    placeholderText: I18n.t("notes.preview.empty")
-                    placeholderTextColor: Theme.textDim
+                Text {
+                    anchors.centerIn: parent
+                    visible: preview.count === 0
+                    text: I18n.t("notes.preview.empty")
+                    color: Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: 13
-                    background: Item {}
-                    onLinkActivated: (link) => Qt.openUrlExternally(link)
                 }
             }
 
@@ -886,6 +869,26 @@ Item {
         editor.text = AppController.notesState || "";
         _reloading = false;
     }
+    // Parses once per change and serves every question about the document:
+    // the rendered rows, the outline, and which row a line belongs to.
+    MdDocument {
+        id: mdDocument
+        text: editor.text
+        allowRemoteImages: false
+        palette: ({
+            "text": Theme.text,
+            "dim": Theme.textDim,
+            "link": Theme.accent,
+            "code": Theme.text,
+            "codeBackground": Theme.panel2,
+            "highlightBackground": Theme.accentSoft,
+            "mention": Theme.stProg,
+            "ticket": Theme.accent,
+            "tag": Theme.stReview,
+            "math": Theme.p2
+        })
+    }
+
     Component.onCompleted: {
         highlighter.target = editor.textDocument;
         viewMode = _readViewMode();

@@ -16,20 +16,38 @@ const QRegularExpression& calloutRx() {
 // Remove `count` characters from the start of a block's inline text, walking
 // across nodes: md4c splits a run like "[!NOTE] title" into several text
 // chunks, so the marker rarely lives in a single one.
-void stripLeadingCharacters(MdAst* ast, const MdBlock& block, int count) {
+void stripLeadingCharacters(MdAst* ast, int blockIndex, int count) {
+  MdBlock& block = (*ast).blocks[blockIndex];
+  int consumed = 0;
   for(const int index : block.inlines) {
     if(count <= 0) {
-      return;
+      break;
     }
     MdInline& node = (*ast).inlines[index];
     if(node.type != InlineType::Text) {
       // Anything other than plain text means the marker is already past.
-      return;
+      break;
     }
     const int take = std::min(count, static_cast<int>(node.text.size()));
     node.text.remove(0, take);
     count -= take;
+    if(node.text.isEmpty()) {
+      ++consumed;
+    }
   }
+
+  // Drop the nodes the marker used up entirely, and the line break that
+  // followed it. Left in place they render as a blank first line, which is
+  // how a callout body ends up starting with a stray space.
+  while(consumed < block.inlines.size()) {
+    const InlineType type = ast->inlines.at(block.inlines.at(consumed)).type;
+    if(type != InlineType::SoftBreak && type != InlineType::HardBreak) {
+      break;
+    }
+    ++consumed;
+    break;
+  }
+  block.inlines.remove(0, consumed);
 }
 
 // The first descendant paragraph of a block, or -1. A callout's title lives in
@@ -77,8 +95,13 @@ void detectCallout(const MdSourceMap& src, MdAst* ast, int blockIndex) {
   // and is dropped from the body too.
   const int paragraph = firstParagraph(*ast, blockIndex);
   if(paragraph >= 0) {
-    const int markerLength = match.capturedEnd(2) - match.capturedStart(1) + 2;  // "[!" … "]" + fold
-    stripLeadingCharacters(ast, ast->blocks.at(paragraph), markerLength + title.size());
+    // Everything from "[!" to the end of that line: the marker, its fold
+    // sign, the spaces after it, and the title. Measuring it against the line
+    // rather than summing the pieces is what keeps the whitespace counted.
+    // The inline text starts where the quote markers end, which is exactly
+    // where the marker begins, so the count transfers directly.
+    const int markerStart = match.capturedStart(1) - 2;  // back over "[!"
+    stripLeadingCharacters(ast, paragraph, match.capturedEnd(0) - markerStart);
   }
 }
 
