@@ -4475,7 +4475,7 @@ void AppController::createBranchForTask(const QString& taskId) {
   if(row < 0) {
     return;
   }
-  Task t = m_tasks.items().at(row);  // copy — mutated below on success
+  const Task t = m_tasks.items().at(row);  // copy — mutated below on success
 
   // Prefer the currently focused repo; otherwise the first watched repo.
   QString repo = m_focusedRepo;
