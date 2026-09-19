@@ -49,6 +49,13 @@ target_link_libraries(heap_chrono_tests PRIVATE
 
 add_test(NAME heap_chrono_tests COMMAND heap_chrono_tests)
 
+# Vendored md4c — proves the static library builds and links everywhere, that
+# the GFM extension flags heap relies on are really enabled, and that text
+# callbacks hand back slices of the caller's buffer. No Qt needed.
+add_executable(heap_md4c_smoke_tests test_md4c_smoke.cpp)
+target_link_libraries(heap_md4c_smoke_tests PRIVATE heap_md4c GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md4c_smoke_tests COMMAND heap_md4c_smoke_tests)
+
 # Data directory resolution — pure path logic, no QApplication needed.
 add_executable(heap_paths_tests
     test_paths.cpp
