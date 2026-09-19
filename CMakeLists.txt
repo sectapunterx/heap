@@ -43,6 +43,8 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network NetworkAuth)
+# Test is used by the unit suites (QAbstractItemModelTester, QSignalSpy).
+find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Test)
 # DBus is only needed for the Linux native notifications backend.
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.2 REQUIRED COMPONENTS DBus)
@@ -78,11 +80,13 @@ qt_add_library(heap_markdown STATIC
     src/markdown/MdOutline.cpp
     src/markdown/MdExtensions.cpp
     src/markdown/MdHtml.cpp
+    src/markdown/MdBlockModel.cpp
     src/notes/NoteLinks.cpp
 )
 target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core)
-set_target_properties(heap_markdown PROPERTIES AUTOMOC OFF)
+# MdBlockModel is a QAbstractListModel, so this one does need moc.
+set_target_properties(heap_markdown PROPERTIES AUTOMOC ON)
 
 # ── Core library: all app logic + the TodoCpp QML module ──────────
 # Extracted from the heap executable so the Qt Quick Test harness (tests/) can
@@ -110,6 +114,7 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
+    src/markdown/MdDocument.cpp
     src/integrations/StatusMap.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
@@ -168,6 +173,7 @@ qt_add_qml_module(heap_core
         qml/CommandPalette.qml
         qml/HotkeysPanel.qml
         qml/NotesView.qml
+        qml/MdView.qml
         qml/SettingsView.qml
         qml/HelpContent.qml
         qml/ThinScrollBar.qml
@@ -195,6 +201,7 @@ qt_add_qml_module(heap_core
         src/text/TaskTextUtils.h
         src/query/QueryParser.h
         src/notes/NoteLinks.h
+        src/markdown/MdDocument.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/integrations/IntegrationTypes.h
@@ -216,7 +223,9 @@ qt_add_qml_module(heap_core
         src/update/Updater.h
 )
 
-target_include_directories(heap_core PUBLIC src)
+# src/markdown too: qt_add_qml_module's generated registration file includes
+# each QML-exposed header by its bare name.
+target_include_directories(heap_core PUBLIC src src/markdown)
 target_link_libraries(heap_core PUBLIC
     heap_markdown
     Qt6::Core

@@ -188,6 +188,39 @@ QString attributeText(const MD_ATTRIBUTE& attr) {
   return QString::fromUtf8(attr.text, static_cast<int>(attr.size));
 }
 
+// Blocks that can own inline content directly. A list item is on the list
+// because md4c emits no paragraph inside a tight one — "- a\n- b" gives item,
+// text, item, text — so text arrives with only the item open.
+bool holdsInlines(MD_BLOCKTYPE type) {
+  switch(type) {
+    case MD_BLOCK_H:
+    case MD_BLOCK_CODE:
+    case MD_BLOCK_HTML:
+    case MD_BLOCK_P:
+    case MD_BLOCK_TH:
+    case MD_BLOCK_TD:
+    case MD_BLOCK_LI:
+      return true;
+    default:
+      return false;
+  }
+}
+
+bool holdsInlines(BlockType type) {
+  switch(type) {
+    case BlockType::Heading:
+    case BlockType::CodeBlock:
+    case BlockType::HtmlBlock:
+    case BlockType::Paragraph:
+    case BlockType::TableHeaderCell:
+    case BlockType::TableCell:
+    case BlockType::ListItem:
+      return true;
+    default:
+      return false;
+  }
+}
+
 // One block while it is open: where its children go, and the extent of every
 // source offset seen inside it.
 struct OpenBlock {
@@ -240,6 +273,9 @@ class Builder {
   // copy — it is the same length as the original, which is why they still mean
   // the same position in it.
   int offsetOf(const MD_CHAR* text) const;
+
+  // Innermost still-open block that can hold inline content, or -1.
+  int innermostOpenLeaf() const;
 
   const MdSourceMap& m_src;
   MdParseOptions m_options;
@@ -294,6 +330,16 @@ void Builder::anchor(int byteStart, int byteEnd) {
     open.minByte = (open.minByte < 0) ? byteStart : std::min(open.minByte, byteStart);
     open.maxByte = std::max(open.maxByte, end);
   }
+}
+
+int Builder::innermostOpenLeaf() const {
+  for(int i = static_cast<int>(m_blockStack.size()) - 1; i >= 0; --i) {
+    const int index = m_blockStack.at(i).index;
+    if(index >= 0 && index < m_ast.blocks.size() && holdsInlines(m_ast.blocks.at(index).type)) {
+      return index;
+    }
+  }
+  return -1;
 }
 
 int Builder::offsetOf(const MD_CHAR* text) const {
@@ -387,19 +433,9 @@ int Builder::onEnterBlock(MD_BLOCKTYPE type, void* detail) {
       break;
   }
 
-  // Leaf blocks collect inline content; containers never do.
-  switch(type) {
-    case MD_BLOCK_H:
-    case MD_BLOCK_CODE:
-    case MD_BLOCK_HTML:
-    case MD_BLOCK_P:
-    case MD_BLOCK_TH:
-    case MD_BLOCK_TD:
-      m_currentLeaf = index;
-      m_spanStack.clear();
-      break;
-    default:
-      break;
+  if(holdsInlines(type)) {
+    m_currentLeaf = index;
+    m_spanStack.clear();
   }
   return 0;
 }
@@ -413,19 +449,14 @@ int Builder::onLeaveBlock(MD_BLOCKTYPE type, void* /*detail*/) {
   block.span.byteStart = closed.minByte;
   block.span.byteEnd = closed.maxByte;
 
-  switch(type) {
-    case MD_BLOCK_H:
-    case MD_BLOCK_CODE:
-    case MD_BLOCK_HTML:
-    case MD_BLOCK_P:
-    case MD_BLOCK_TH:
-    case MD_BLOCK_TD:
-      m_currentLeaf = -1;
-      m_spanStack.clear();
-      break;
-    default:
-      break;
+  if(holdsInlines(type)) {
+    m_spanStack.clear();
   }
+  // Whatever is still open and can hold inlines becomes the target again. A
+  // tight list item is the case that matters: md4c emits no paragraph inside
+  // one, so its text arrives with the item itself open and would be dropped
+  // if this only ever cleared.
+  m_currentLeaf = innermostOpenLeaf();
   return 0;
 }
 
