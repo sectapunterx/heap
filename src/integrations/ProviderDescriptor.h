@@ -108,6 +108,12 @@ struct OAuthConfig {
   // and `return_url`.
   QString clientIdParam = QStringLiteral("client_id");
   QString redirectParam = QStringLiteral("redirect_uri");
+  // The loopback literal this provider is willing to allowlist. "localhost" and
+  // "127.0.0.1" are NOT interchangeable to a redirect-URI allowlist even though
+  // they reach the same socket — Todoist documents localhost, Atlassian wants
+  // the IP. The listener binds 127.0.0.1 and accepts either Host header, so
+  // this only changes what is advertised.
+  QString redirectHost = QStringLiteral("127.0.0.1");
 
   // The grant this descriptor actually runs. Until every provider is migrated
   // off the `deviceFlow` bool, that bool wins when it is set.

@@ -106,6 +106,8 @@ class OAuthManager : public QObject {
     // Loopback port. 0 = any free port, for tests only: a real provider only
     // redirects to the URI its OAuth app registered, i.e. kRedirectPort.
     quint16 redirectPort = kRedirectPort;
+    // Which loopback literal to advertise — see OAuthConfig::redirectHost.
+    QString redirectHost = QStringLiteral("127.0.0.1");
   };
 
   // Fixed loopback port for the OAuth redirect. Users must register
@@ -113,7 +115,7 @@ class OAuthManager : public QObject {
   // an ephemeral port would never match a registered redirect URI.
   static constexpr quint16 kRedirectPort = 51789;
   static QString redirectUri();
-  static QString redirectUriFor(quint16 port);
+  static QString redirectUriFor(quint16 port, const QString& host = QStringLiteral("127.0.0.1"));
 
   // True when this build can run the device grant (needs Qt ≥ 6.9).
   static bool deviceFlowAvailable();
