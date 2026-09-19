@@ -7,6 +7,7 @@
 #include <QJsonValue>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QRegularExpression>
 #include <QString>
 #include <QStringList>
 
@@ -105,6 +106,15 @@ inline QString messageFromBody(const QByteArray& body) {
   return text;
 }
 
+// Qt's errorString() quotes the full request URL ("Error transferring
+// https://api.trello.com/1/members/me?key=…&token=… - server replied: …"), and
+// some providers carry credentials in the query string. Anything after the path
+// is dropped before the text can reach a toast or the log file.
+inline QString redactUrlQueries(QString text) {
+  static const QRegularExpression kUrlWithQuery(QStringLiteral(R"((https?://[^\s?#"'<>]+)[?#][^\s"'<>]*)"));
+  return text.replace(kUrlWithQuery, QStringLiteral("\\1?…"));
+}
+
 // What the status code alone tells the user, when the body says nothing.
 inline QString hintForStatus(int status) {
   switch(status) {
@@ -128,7 +138,8 @@ inline QString hintForStatus(int status) {
 // "HTTP 401 — Bad credentials". `status` 0 means the request never got a
 // response (DNS, TLS, offline), in which case `fallback` (Qt's errorString) is
 // all there is.
-inline QString describeHttpError(int status, const QByteArray& body, const QString& fallback) {
+inline QString describeHttpError(int status, const QByteArray& body, const QString& rawFallback) {
+  const QString fallback = detail::redactUrlQueries(rawFallback);
   QString message = detail::messageFromBody(body);
   if(message.isEmpty()) {
     message = detail::hintForStatus(status);

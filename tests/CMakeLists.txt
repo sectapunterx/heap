@@ -169,23 +169,11 @@ target_link_libraries(heap_notify_tests PRIVATE
 
 add_test(NAME heap_notify_tests COMMAND heap_notify_tests)
 
-# ─── Selection (AppController multi-select) tests ───
-# Cover the multi-select state machine and bulk ops on AppController:
-# toggle/set/clear/selectAll, bulk delete with undo restoration, bulk
-# move/archive, and clearSelection on view/profile change.
-#
-# Links the same sources as the main `heap` target *minus* QML registration
-# (no Qt6::Quick) — AppController's own implementation only needs Core/Gui/
-# Widgets/Qml + Test. Uses offscreen QGuiApplication + AppDataLocation test
-# mode so it runs headless and never touches the user's real state file.
-set(HEAP_SELECTION_SOURCES
-        test_selection.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
+# ─── Integration sources shared by every AppController-linking suite ───
+# AppController pulls in the whole tracker-sync layer, so each suite below
+# compiles it. One list: a new src/integrations/*.cpp is a one-line change
+# here instead of an edit in every target.
+set(HEAP_INTEGRATION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
@@ -206,6 +194,26 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+)
+
+# ─── Selection (AppController multi-select) tests ───
+# Cover the multi-select state machine and bulk ops on AppController:
+# toggle/set/clear/selectAll, bulk delete with undo restoration, bulk
+# move/archive, and clearSelection on view/profile change.
+#
+# Links the same sources as the main `heap` target *minus* QML registration
+# (no Qt6::Quick) — AppController's own implementation only needs Core/Gui/
+# Widgets/Qml + Test. Uses offscreen QGuiApplication + AppDataLocation test
+# mode so it runs headless and never touches the user's real state file.
+set(HEAP_SELECTION_SOURCES
+        test_selection.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -282,26 +290,7 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -417,26 +406,7 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -511,26 +481,7 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -604,26 +555,7 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -696,26 +628,7 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -808,26 +721,7 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -902,26 +796,7 @@ set(HEAP_VIEW_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
@@ -1266,26 +1141,7 @@ set(HEAP_APPCTRL_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
+        ${HEAP_INTEGRATION_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h

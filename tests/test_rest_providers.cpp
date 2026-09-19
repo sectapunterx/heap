@@ -285,6 +285,57 @@ TEST(ReplyError, LongMessagesAreClamped) {
   EXPECT_LT(out.size(), 230);
 }
 
+TEST(ReplyError, CredentialsInTheRequestUrlNeverReachTheMessage) {
+  // Qt's errorString() quotes the whole URL, and Trello carries key + token in
+  // the query string. The message ends up in a toast and in the log file.
+  const QString qtError =
+      QStringLiteral("Error transferring https://api.trello.com/1/members/me?key=APPKEY123&token=SECRET456 - server replied: Unauthorized");
+  // Both routes to the fallback text: no response at all (0), and a status with
+  // neither a usable body nor a built-in hint (418 + an HTML page).
+  for(const int status : {0, 418}) {
+    const QString out = describeHttpError(status, "<html>teapot</html>", qtError);
+    EXPECT_FALSE(out.contains(QStringLiteral("SECRET456"))) << out.toStdString();
+    EXPECT_FALSE(out.contains(QStringLiteral("APPKEY123"))) << out.toStdString();
+    EXPECT_TRUE(out.contains(QStringLiteral("https://api.trello.com/1/members/me"))) << out.toStdString();
+    EXPECT_TRUE(out.contains(QStringLiteral("server replied: Unauthorized"))) << out.toStdString();
+  }
+  // A URL without a query is left alone.
+  EXPECT_EQ(describeHttpError(0, {}, QStringLiteral("Error transferring https://gitlab.com/api/v4/issues - timeout")),
+            QStringLiteral("Error transferring https://gitlab.com/api/v4/issues - timeout"));
+}
+
+// ── Keychain blob limit (SecretStore::chunkValue) ───────────────────────────
+// Windows Credential Manager caps a blob at 2560 bytes; an Atlassian access
+// token is a JWT that can be longer, so big values are stored in parts.
+
+TEST(SecretStoreChunks, ShortValuesStayWhole) {
+  EXPECT_EQ(SecretStore::chunkValue(QStringLiteral("ghp_short"), 2000), QStringList{QStringLiteral("ghp_short")});
+  EXPECT_EQ(SecretStore::chunkValue(QString(2000, QLatin1Char('a')), 2000).size(), 1);
+}
+
+TEST(SecretStoreChunks, LongValuesSplitAndRejoinLosslessly) {
+  QString jwt;
+  for(int i = 0; i < 5000; ++i) {
+    jwt.append(QChar(QLatin1Char(static_cast<char>('a' + (i % 26)))));
+  }
+  const QStringList parts = SecretStore::chunkValue(jwt, 2000);
+  EXPECT_EQ(parts.size(), 3);
+  for(const QString& part : parts) {
+    EXPECT_LE(part.toUtf8().size(), 2000);
+  }
+  EXPECT_EQ(parts.join(QString()), jwt);
+}
+
+TEST(SecretStoreChunks, NonAsciiPartsStillFitTheByteLimit) {
+  const QString value(1500, QChar(0x044F));  // "я": 2 bytes each in UTF-8
+  const QStringList parts = SecretStore::chunkValue(value, 2000);
+  EXPECT_GT(parts.size(), 1);
+  for(const QString& part : parts) {
+    EXPECT_LE(part.toUtf8().size(), 2000);
+  }
+  EXPECT_EQ(parts.join(QString()), value);
+}
+
 // ── OAuth token refresh (OAuthManager) ──────────────────────────────────────
 // A browser sign-in hands out a token that expires (GitLab: two hours). It was
 // never refreshed, so syncing went quiet a couple of hours after connecting.
