@@ -820,11 +820,11 @@ int Builder::copyInline(const MdAst& from, int index, int parent, int byteShift)
 }
 
 void Builder::fillFootnoteBodies() {
-  for(int blockIndex = 0; blockIndex < m_ast.blocks.size(); ++blockIndex) {
-    if(m_ast.blocks.at(blockIndex).type != BlockType::FootnoteDef) {
+  for(auto& block : m_ast.blocks) {
+    if(block.type != BlockType::FootnoteDef) {
       continue;
     }
-    const MdSpan span = m_ast.blocks.at(blockIndex).span;
+    const MdSpan span = block.span;
     if(!span.isValid()) {
       continue;
     }
@@ -852,7 +852,7 @@ void Builder::fillFootnoteBodies() {
       for(const int subInline : subAst.blocks.at(subBlock).inlines) {
         const int copied = copyInline(subAst, subInline, -1, startByte);
         if(copied >= 0) {
-          m_ast.blocks[blockIndex].inlines.append(copied);
+          block.inlines.append(copied);
         }
       }
     }
