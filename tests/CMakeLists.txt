@@ -56,6 +56,25 @@ add_executable(heap_md4c_smoke_tests test_md4c_smoke.cpp)
 target_link_libraries(heap_md4c_smoke_tests PRIVATE heap_md4c GTest::gtest GTest::gtest_main)
 add_test(NAME heap_md4c_smoke_tests COMMAND heap_md4c_smoke_tests)
 
+# Markdown engine — source map and parser. Links heap_markdown rather than
+# re-compiling sources, so adding a case costs nothing in build time.
+add_executable(heap_md_tests test_md_parser.cpp)
+target_link_libraries(heap_md_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_tests COMMAND heap_md_tests)
+
+# Structured fuzzing over the same invariant. Cheap in a normal build; its real
+# value is under the sanitizer job, where a bad offset surfaces as an
+# out-of-bounds read instead of a wrong answer.
+add_executable(heap_md_fuzz_tests test_md_fuzz.cpp)
+target_link_libraries(heap_md_fuzz_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_fuzz_tests COMMAND heap_md_fuzz_tests)
+
+# Parse-time budget. Prints the numbers; asserts only against a categorical
+# regression, in the spirit of heap_save_bench_tests.
+add_executable(heap_md_bench_tests test_md_bench.cpp)
+target_link_libraries(heap_md_bench_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_bench_tests COMMAND heap_md_bench_tests)
+
 # Data directory resolution — pure path logic, no QApplication needed.
 add_executable(heap_paths_tests
     test_paths.cpp
