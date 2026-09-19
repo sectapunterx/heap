@@ -99,6 +99,11 @@ class JiraProvider : public IntegrationProvider {
 
   using ApiCallback = std::function<void(const ApiResult&)>;
 
+  // Replace an unauthorized result's message with one naming what to change.
+  // Qt renders every 401 as "Host requires authentication" and Jira's own body
+  // is no more actionable, so neither tells the user what is wrong.
+  ApiResult explainAuthFailure(const ApiResult& result, bool cloudIdResolved) const;
+
   // Send to <api base>/rest/api/3<path>, retrying once through the Atlassian
   // API gateway if the site host answers 401 (see m_apiBase).
   void send(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done);

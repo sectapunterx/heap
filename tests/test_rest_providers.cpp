@@ -10,6 +10,7 @@
 #include "integrations/SecretStore.h"
 #include "integrations/TrelloProvider.h"
 
+#include <QNetworkReply>
 #include <QTimeZone>
 
 #include <gtest/gtest.h>
@@ -395,6 +396,44 @@ TEST(ReplyError, CredentialsInTheRequestUrlNeverReachTheMessage) {
   // A URL without a query is left alone.
   EXPECT_EQ(describeHttpError(0, {}, QStringLiteral("Error transferring https://gitlab.com/api/v4/issues - timeout")),
             QStringLiteral("Error transferring https://gitlab.com/api/v4/issues - timeout"));
+}
+
+// ── A 401 Qt reports as an authentication error ─────────────────────────────
+// Qt turns every 401 into AuthenticationRequiredError, whose errorString is
+// "Host requires authentication" — and when it gives up before recording the
+// status attribute, the status reads 0. That is the only signal two retries
+// key on (Jira's scoped-token gateway fallback, the OAuth refresh-on-401), and
+// it left the user staring at Qt's words with nothing to change.
+
+TEST(ReplyStatus, QtAuthErrorsAreAStatusInTheirOwnRight) {
+  using heap::integrations::detail::httpStatusFor;
+  // No status recorded: the error is all there is to go on.
+  EXPECT_EQ(httpStatusFor(0, QNetworkReply::AuthenticationRequiredError), 401);
+  EXPECT_EQ(httpStatusFor(0, QNetworkReply::ProxyAuthenticationRequiredError), 407);
+  // A recorded status always wins — Qt raises the auth error alongside a real
+  // 401 too, and inventing one for, say, a 403 would be a lie.
+  EXPECT_EQ(httpStatusFor(403, QNetworkReply::AuthenticationRequiredError), 403);
+  EXPECT_EQ(httpStatusFor(200, QNetworkReply::NoError), 200);
+  // Anything else with no status stays "never reached the server".
+  EXPECT_EQ(httpStatusFor(0, QNetworkReply::HostNotFoundError), 0);
+  EXPECT_EQ(httpStatusFor(0, QNetworkReply::NoError), 0);
+}
+
+TEST(ReplyError, AnUnauthorizedRequestNeverShowsQtsWords) {
+  // What the user actually saw: "Jira connection failed: Host requires
+  // authentication" — Qt's jargon, naming neither the tracker nor the fix.
+  const QString qtAuthError = QStringLiteral("Host requires authentication");
+  const int status = detail::httpStatusFor(0, QNetworkReply::AuthenticationRequiredError);
+  const QString out = describeHttpError(status, {}, qtAuthError);
+  EXPECT_EQ(out, QStringLiteral("HTTP 401 — unauthorized — check the token"));
+  EXPECT_FALSE(out.contains(QStringLiteral("Host requires authentication")));
+}
+
+TEST(ReplyError, AProxyRejectionSaysSo) {
+  EXPECT_EQ(
+      describeHttpError(
+          detail::httpStatusFor(0, QNetworkReply::ProxyAuthenticationRequiredError), {}, QStringLiteral("Proxy requires authentication")),
+      QStringLiteral("HTTP 407 — the network proxy rejected the request"));
 }
 
 // ── Keychain blob limit (SecretStore::chunkValue) ───────────────────────────

@@ -109,29 +109,62 @@ QString normalizeJiraBaseUrl(const QString& raw) {
     return url;
   }
   // A bare host is the most common paste ("acme.atlassian.net"). Anything
-  // without a scheme becomes https — Jira Cloud is https-only anyway, and a
-  // scheme-less URL makes QUrl treat the host as a relative path.
+  // without a scheme becomes https — a scheme-less URL makes QUrl treat the
+  // host as a relative path.
   if(!url.contains(QStringLiteral("://"))) {
     url.prepend(QStringLiteral("https://"));
   }
   const QUrl parsed(url);
-  // For a Jira Cloud site the path is never part of the API root, and people
-  // paste whatever their browser showed — a board, a project, an issue. Keep
-  // scheme + host (+ port) and drop the rest. A self-hosted host may well be
-  // served under a path prefix, so there only the trailing slashes go.
-  if(parsed.isValid() && parsed.host().endsWith(QStringLiteral(".atlassian.net"), Qt::CaseInsensitive)) {
-    QUrl root;
-    root.setScheme(parsed.scheme());
-    root.setHost(parsed.host().toLower());
-    if(parsed.port() != -1) {
-      root.setPort(parsed.port());
+  if(!parsed.isValid() || parsed.host().isEmpty()) {
+    while(url.endsWith('/')) {
+      url.chop(1);
     }
+    return url;
+  }
+
+  QUrl root;
+  root.setScheme(parsed.scheme());
+  root.setHost(parsed.host().toLower());
+  if(parsed.port() != -1) {
+    root.setPort(parsed.port());
+  }
+
+  // On Jira Cloud the API root is always the bare site, so everything after the
+  // host goes.
+  if(parsed.host().endsWith(QStringLiteral(".atlassian.net"), Qt::CaseInsensitive)) {
     return root.toString();
   }
-  while(url.endsWith('/')) {
-    url.chop(1);
+
+  // A self-hosted Jira may genuinely live under a prefix ("https://host/jira"),
+  // so the path cannot simply be dropped. But what people paste is the URL
+  // their browser was showing — a ticket, a board, a project — and keeping that
+  // turned every API call into "<host>/browse/TEL-1/rest/api/…", which comes
+  // back 401 or 404 with nothing pointing at the real mistake.
+  //
+  // Cut at the first segment that can only be a UI route, and keep whatever
+  // came before it as the deployment prefix. "jira" and "software" are
+  // deliberately not in this list: as a first segment they are far more often
+  // the prefix itself ("/jira/browse/X-1" means prefix "/jira").
+  static const QStringList kUiRoutes = {
+      QStringLiteral("browse"),
+      QStringLiteral("projects"),
+      QStringLiteral("issues"),
+      QStringLiteral("secure"),
+      QStringLiteral("plugins"),
+      QStringLiteral("rest"),
+  };
+  QStringList prefix;
+  const QStringList segments = parsed.path().split(QLatin1Char('/'), Qt::SkipEmptyParts);
+  for(const QString& segment : segments) {
+    if(kUiRoutes.contains(segment, Qt::CaseInsensitive)) {
+      break;
+    }
+    prefix.append(segment);
   }
-  return url;
+  if(!prefix.isEmpty()) {
+    root.setPath(QLatin1Char('/') + prefix.join(QLatin1Char('/')));
+  }
+  return root.toString();
 }
 
 QString defaultJiraJql() {
@@ -265,18 +298,48 @@ void JiraProvider::send(const QByteArray& method, const QString& path, const QBy
     // by the site host and only accepted through the API gateway. A 401 on the
     // site is the only signal we get, so take it as "try the gateway once".
     if(first.status != 401 || m_usingGateway || m_gatewayTried) {
-      done(first);
+      done(explainAuthFailure(first, /*cloudIdResolved=*/m_usingGateway));
       return;
     }
     m_gatewayTried = true;
     resolveCloudId([this, method, path, body, done, first](bool ok) {
       if(!ok) {
-        done(first);  // no cloudId: the original 401 is the real answer
+        // No cloudId either: the site is not Jira Cloud, or it is unreachable.
+        done(explainAuthFailure(first, /*cloudIdResolved=*/false));
         return;
       }
-      sendOnce(method, path, body, done);
+      sendOnce(method, path, body, [this, done](const ApiResult& viaGateway) {
+        done(explainAuthFailure(viaGateway, /*cloudIdResolved=*/true));
+      });
     });
   });
+}
+
+JiraProvider::ApiResult JiraProvider::explainAuthFailure(const ApiResult& result, bool cloudIdResolved) const {
+  if(result.ok || result.status != 401) {
+    return result;
+  }
+  ApiResult out = result;
+  if(m_oauth) {
+    out.error = QStringLiteral("HTTP 401 — the browser session is no longer valid; sign in again");
+    return out;
+  }
+
+  // Jira sometimes says exactly what is wrong ("Basic auth with password is not
+  // allowed"), and that is worth more than anything generic — keep it and add
+  // what to do. When it says nothing useful, Qt's "Host requires
+  // authentication" is what would otherwise reach the user, so the guidance is
+  // all there is.
+  QString advice = QStringLiteral("use an API token from id.atlassian.com, with the email of that same Atlassian account");
+  if(!cloudIdResolved) {
+    // /_edge/tenant_info is Cloud-only, so a site that refused us and has no
+    // cloudId is usually not Cloud at all — easy to miss, hard to guess.
+    advice += QStringLiteral("; if this is Jira Server or Data Center, it is not supported");
+  }
+  const QString fromJira = detail::messageFromBody(result.body);
+  out.error = fromJira.isEmpty() ? QStringLiteral("HTTP 401 — ") + advice
+                                 : QStringLiteral("HTTP 401 — %1 · %2").arg(detail::clampMessage(fromJira), advice);
+  return out;
 }
 
 void JiraProvider::testConnection() {

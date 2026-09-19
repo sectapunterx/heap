@@ -104,6 +104,18 @@ TEST(JiraBaseUrl, NormalizesWhatPeoplePaste) {
   // trailing slashes are trimmed there.
   EXPECT_EQ(normalizeJiraBaseUrl("https://jira.corp.example.com/jira/"), QStringLiteral("https://jira.corp.example.com/jira"));
   EXPECT_EQ(normalizeJiraBaseUrl("http://127.0.0.1:8080"), QStringLiteral("http://127.0.0.1:8080"));
+
+  // Self-hosted: a pasted ticket URL is the single most likely paste, and
+  // keeping its path sent every API call to "<host>/browse/TEL-1/rest/api/…".
+  EXPECT_EQ(normalizeJiraBaseUrl("https://j.example.com/browse/TEL-123456"), QStringLiteral("https://j.example.com"));
+  EXPECT_EQ(normalizeJiraBaseUrl("j.example.com/browse/TEL-123456"), QStringLiteral("https://j.example.com"));
+  EXPECT_EQ(normalizeJiraBaseUrl("https://j.example.com/secure/RapidBoard.jspa?rapidView=7"), QStringLiteral("https://j.example.com"));
+  EXPECT_EQ(normalizeJiraBaseUrl("https://j.example.com/projects/TEL/issues"), QStringLiteral("https://j.example.com"));
+  // …but a real deployment prefix has to survive, including in front of a route.
+  EXPECT_EQ(normalizeJiraBaseUrl("https://corp.example.com/jira/browse/TEL-1"), QStringLiteral("https://corp.example.com/jira"));
+  EXPECT_EQ(normalizeJiraBaseUrl("https://corp.example.com/jira/secure/Dashboard.jspa"), QStringLiteral("https://corp.example.com/jira"));
+  // An API URL names its own root.
+  EXPECT_EQ(normalizeJiraBaseUrl("https://j.example.com/rest/api/2/myself"), QStringLiteral("https://j.example.com"));
   EXPECT_EQ(normalizeJiraBaseUrl("   "), QString());
 }
 
@@ -187,8 +199,10 @@ TEST_F(JiraNetwork, KeepsTheOriginal401WhenThereIsNoCloudId) {
   p.testConnection();
   ASSERT_TRUE(waitFor(done));
   EXPECT_FALSE(ok);
-  // The user sees Jira's own words, not "server replied: Unauthorized".
-  EXPECT_EQ(error, QString::fromUtf8("HTTP 401 — Basic auth with password is not allowed"));
+  // Jira's own words survive — they are more specific than anything generic —
+  // and the fix to make is appended rather than replacing them.
+  EXPECT_TRUE(error.startsWith(QString::fromUtf8("HTTP 401 — Basic auth with password is not allowed"))) << error.toStdString();
+  EXPECT_TRUE(error.contains(QStringLiteral("API token"))) << error.toStdString();
 }
 
 TEST_F(JiraNetwork, PullPostsTheBoundedDefaultJql) {
@@ -331,4 +345,102 @@ TEST_F(JiraNetwork, SwitchingBackToBasicAuthForgetsTheGateway) {
   const auto req = server.lastRequest("GET /rest/api/3/myself");
   EXPECT_TRUE(req.headers.value("authorization").startsWith("Basic ")) << "a stale Bearer would 401 forever";
   EXPECT_FALSE(server.seen().contains("GET /ex/jira/cid-123/rest/api/3/myself"));
+}
+
+// ── What an unauthorized Jira actually tells the user ───────────────────────
+// Qt renders every 401 as "Host requires authentication" and Jira's own body
+// ("Client must be authenticated to access this resource") is no better: both
+// leave the user with nothing to change. In practice it is one of three things
+// — the account password instead of an API token, an email that belongs to a
+// different Atlassian account, or a Server/DC site that is not supported.
+
+TEST_F(JiraNetwork, ARejectedTokenNamesWhatToChange) {
+  FakeJira server;
+  server.route("GET /rest/api/3/myself", {401, R"({"message":"Client must be authenticated to access this resource."})"});
+  // A Cloud site would answer this; a Server/DC one 404s, which is the tell.
+  server.route("GET /_edge/tenant_info", {404, R"({})"});
+
+  heap::integrations::JiraProvider p;
+  p.setGatewayRoot(server.base());
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("not-a-token"), QString());
+
+  bool done = false;
+  bool ok = true;
+  QString error;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool o, const QString& e) {
+    ok = o;
+    error = e;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_FALSE(ok);
+  EXPECT_FALSE(error.contains(QStringLiteral("Host requires authentication"))) << error.toStdString();
+  EXPECT_TRUE(error.contains(QStringLiteral("API token"))) << error.toStdString();
+  EXPECT_TRUE(error.contains(QStringLiteral("id.atlassian.com"))) << error.toStdString();
+  // The site refused us and is not Cloud, so say the thing that is easy to miss.
+  EXPECT_TRUE(error.contains(QStringLiteral("Data Center"))) << error.toStdString();
+}
+
+TEST_F(JiraNetwork, ACloudSiteThatStillRefusesDoesNotBlameTheEdition) {
+  FakeJira server;
+  server.route("GET /rest/api/3/myself", {401, R"({"message":"Client must be authenticated to access this resource."})"});
+  server.route("GET /_edge/tenant_info", {200, R"({"cloudId":"cid-123"})"});
+  // The gateway is the one that has the final say, and it refuses too.
+  server.route("GET /ex/jira/cid-123/rest/api/3/myself", {401, R"({"message":"Unauthorized"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setGatewayRoot(server.base());
+  p.setConfig(server.base(), QStringLiteral("wrong@example.com"), QStringLiteral("tok"), QString());
+
+  bool done = false;
+  QString error;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString& e) {
+    error = e;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_TRUE(error.contains(QStringLiteral("API token"))) << error.toStdString();
+  EXPECT_FALSE(error.contains(QStringLiteral("Data Center")))
+      << "the cloudId resolved, so the edition is not the problem: " << error.toStdString();
+}
+
+TEST_F(JiraNetwork, AnExpiredBrowserSessionSaysToSignInAgain) {
+  FakeJira server;
+  server.route("GET /ex/jira/cid-123/rest/api/3/myself", {401, R"({"message":"Unauthorized"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setGatewayRoot(server.base());
+  p.setOAuthConfig(QStringLiteral("cid-123"), QStringLiteral("https://acme.atlassian.net"), QStringLiteral("stale"), QString());
+
+  bool done = false;
+  QString error;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString& e) {
+    error = e;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_TRUE(error.contains(QStringLiteral("sign in again"))) << error.toStdString();
+  EXPECT_FALSE(error.contains(QStringLiteral("API token"))) << "there is no token to fix in a browser session";
+}
+
+TEST_F(JiraNetwork, ANonAuthFailureIsLeftAlone) {
+  FakeJira server;
+  server.route("POST /rest/api/3/search/jql", {400, R"({"errorMessages":["Unbounded JQL queries are not allowed here."]})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QStringLiteral("order by updated DESC"));
+
+  bool done = false;
+  QString error;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::pullFailed, &p, [&](int, const QString& e) {
+    error = e;
+    done = true;
+  });
+  p.pullTasks();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_EQ(error, QString::fromUtf8("HTTP 400 — Unbounded JQL queries are not allowed here."))
+      << "only 401 is rewritten; everything else keeps the tracker's own words";
 }
