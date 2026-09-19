@@ -18,6 +18,7 @@
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
+#include "platform/Paths.h"
 #include "recur/RecurrenceEngine.h"
 #include "text/TaskTextUtils.h"
 #include "update/Updater.h"
@@ -41,7 +42,6 @@
 #include <QNetworkAccessManager>
 #include <QPair>
 #include <QSaveFile>
-#include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
 #include <QTime>
@@ -2090,19 +2090,19 @@ void AppController::undoLastDeletion() {
 // ─────────────────────────────────────────────────── Persistence ──
 
 QString AppController::stateFilePath() const {
-  const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  const QString dir = heap::paths::dataDir();
   QDir().mkpath(dir);
   return dir + "/state.json";
 }
 
 QString AppController::backupDirPath() const {
-  const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/backups";
+  const QString dir = heap::paths::dataDir() + "/backups";
   QDir().mkpath(dir);
   return dir;
 }
 
 QString AppController::dataDir() const {
-  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
+  return heap::paths::dataDir();
 }
 
 QString AppController::qtVersion() const {

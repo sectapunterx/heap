@@ -49,6 +49,24 @@ target_link_libraries(heap_chrono_tests PRIVATE
 
 add_test(NAME heap_chrono_tests COMMAND heap_chrono_tests)
 
+# Data directory resolution — pure path logic, no QApplication needed.
+add_executable(heap_paths_tests
+    test_paths.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
+)
+
+target_include_directories(heap_paths_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_paths_tests PRIVATE
+    Qt6::Core
+    GTest::gtest
+    GTest::gtest_main
+)
+
+add_test(NAME heap_paths_tests COMMAND heap_paths_tests)
+
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
 target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -131,6 +149,7 @@ set(HEAP_SELECTION_SOURCES
         test_selection.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -226,6 +245,7 @@ set(HEAP_NOTES_SOURCES
         test_notes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -359,6 +379,7 @@ set(HEAP_PERSISTENCE_SOURCES
         test_persistence.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -452,6 +473,7 @@ set(HEAP_EXPORT_SOURCES
         test_export_markdown.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -544,6 +566,7 @@ set(HEAP_PROFILE_IO_SOURCES
         test_profile_io.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -635,6 +658,7 @@ set(HEAP_ONBOARDING_SOURCES
         test_onboarding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -745,6 +769,7 @@ set(HEAP_UNDO_SOURCES
         test_undo.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -838,6 +863,7 @@ set(HEAP_VIEW_SOURCES
         test_view.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -1091,6 +1117,7 @@ add_executable(heap_rest_providers_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
@@ -1190,6 +1217,7 @@ set(HEAP_APPCTRL_SOURCES
         test_appcontroller.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
