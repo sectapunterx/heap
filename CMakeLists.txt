@@ -68,6 +68,18 @@ qt_standard_project_setup(REQUIRES 6.4)
 # new enters the Windows portable bundle. See third_party/md4c/README.heap.md.
 add_subdirectory(third_party/md4c)
 
+# ── Markdown engine ───────────────────────────────────────────────
+# Parser, source map and (later) the block model behind the notes editor.
+# Deliberately independent of Quick, QML and AppController so the tests can
+# link it on its own instead of re-compiling the application.
+qt_add_library(heap_markdown STATIC
+    src/markdown/MdSourceMap.cpp
+    src/markdown/MdParser.cpp
+)
+target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core)
+set_target_properties(heap_markdown PROPERTIES AUTOMOC OFF)
+
 # ── Core library: all app logic + the TodoCpp QML module ──────────
 # Extracted from the heap executable so the Qt Quick Test harness (tests/) can
 # link the same C++ types + QML module and instantiate real components
@@ -203,7 +215,7 @@ qt_add_qml_module(heap_core
 
 target_include_directories(heap_core PUBLIC src)
 target_link_libraries(heap_core PUBLIC
-    heap_md4c
+    heap_markdown
     Qt6::Core
     Qt6::Gui
     Qt6::Network
