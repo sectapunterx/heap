@@ -54,7 +54,8 @@ tasks) · Timeline (overdue / today / week / later buckets) · Archive for close
 drop a task to schedule a focus block, live now-line).
 
 **Know** — Docs (custom sections + fields, snippet editor with syntax highlighting, contact cards) · Notes (per-profile
-markdown with `@people` / `#ticket` autocomplete and a `status:blocked priority:P0 deadline:<7d` query language).
+markdown editor: headings, task lists, tables, fenced code with syntax highlighting, callouts, footnotes and wiki-links,
+with `@people` / `#ticket` autocomplete, a live rendered view, and search by section).
 
 **Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and nine more (Gitea, Forgejo, Redmine, Todoist,
 Asana, ClickUp, Sentry, Bitbucket) — one-click OAuth or a token, issues mirrored as cards, status written back on
@@ -96,7 +97,7 @@ Interactive first-run guide · In-app update check.
   </td>
   <td valign="top">
     <a href="docs/assets/img/screens/board-notes.png"><img src="docs/assets/img/screens/board-notes.png" alt="Notes view"></a>
-    <sub><b>Notes</b> — markdown with <code>@people</code> / <code>#ticket</code> links.</sub>
+    <sub><b>Notes</b> — a markdown editor with a live rendered view.</sub>
   </td>
 </tr>
 </table>
