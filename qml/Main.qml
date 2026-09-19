@@ -373,7 +373,13 @@ ApplicationWindow {
                 }
                 Component {
                     id: notesComp
-                    NotesView {}
+                    NotesView {
+                        // A palette hit in a note asks for the line its
+                        // section starts on; clearing it afterwards lets the
+                        // same line be requested twice.
+                        jumpToLine: notesBridge.requestedLine
+                        onJumpConsumed: notesBridge.requestedLine = -1
+                    }
                 }
                 Component {
                     id: settingsComp
@@ -567,6 +573,7 @@ ApplicationWindow {
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
         onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
         onNavigateToContacts: docsBridge.requestedAnchor = "sec-contacts"
+        onNavigateToNoteLine: (line) => notesBridge.requestedLine = line
     }
 
     // Anchor bridge — DocsView listens for changes and scrolls to the
@@ -574,6 +581,13 @@ ApplicationWindow {
     QtObject {
         id: docsBridge
         property string requestedAnchor: ""
+    }
+
+    // The same idea for notes: a search hit sets the line it wants, NotesView
+    // watches and puts the caret there.
+    QtObject {
+        id: notesBridge
+        property int requestedLine: -1
     }
 
     // ── Rebindable application shortcuts ──────────────────────────────

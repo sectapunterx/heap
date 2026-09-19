@@ -43,11 +43,59 @@ target_include_directories(heap_chrono_tests PRIVATE
 
 target_link_libraries(heap_chrono_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
 
 add_test(NAME heap_chrono_tests COMMAND heap_chrono_tests)
+
+# Vendored md4c — proves the static library builds and links everywhere, that
+# the GFM extension flags heap relies on are really enabled, and that text
+# callbacks hand back slices of the caller's buffer. No Qt needed.
+add_executable(heap_md4c_smoke_tests test_md4c_smoke.cpp)
+target_link_libraries(heap_md4c_smoke_tests PRIVATE heap_md4c GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md4c_smoke_tests COMMAND heap_md4c_smoke_tests)
+
+# Markdown engine — source map and parser. Links heap_markdown rather than
+# re-compiling sources, so adding a case costs nothing in build time.
+add_executable(heap_md_tests test_md_parser.cpp test_md_outline.cpp test_md_render.cpp test_md_model.cpp test_md_editops.cpp)
+# QAbstractItemModelTester lives in the Test module; the model itself needs no GUI.
+target_link_libraries(heap_md_tests PRIVATE Qt6::Test)
+target_link_libraries(heap_md_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_tests COMMAND heap_md_tests)
+
+# Structured fuzzing over the same invariant. Cheap in a normal build; its real
+# value is under the sanitizer job, where a bad offset surfaces as an
+# out-of-bounds read instead of a wrong answer.
+add_executable(heap_md_fuzz_tests test_md_fuzz.cpp)
+target_link_libraries(heap_md_fuzz_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_fuzz_tests COMMAND heap_md_fuzz_tests)
+
+# Parse-time budget. Prints the numbers; asserts only against a categorical
+# regression, in the spirit of heap_save_bench_tests.
+add_executable(heap_md_bench_tests test_md_bench.cpp)
+target_link_libraries(heap_md_bench_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_bench_tests COMMAND heap_md_bench_tests)
+
+# Data directory resolution — pure path logic, no QApplication needed.
+add_executable(heap_paths_tests
+    test_paths.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
+)
+
+target_include_directories(heap_paths_tests PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+
+target_link_libraries(heap_paths_tests PRIVATE
+    Qt6::Core
+    heap_markdown
+    GTest::gtest
+    GTest::gtest_main
+)
+
+add_test(NAME heap_paths_tests COMMAND heap_paths_tests)
 
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
@@ -67,6 +115,7 @@ target_include_directories(heap_git_tests PRIVATE
 
 target_link_libraries(heap_git_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -84,6 +133,7 @@ target_include_directories(heap_text_tests PRIVATE
 
 target_link_libraries(heap_text_tests PRIVATE
     Qt6::Core
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -112,6 +162,7 @@ target_include_directories(heap_notify_tests PRIVATE
 target_link_libraries(heap_notify_tests PRIVATE
     Qt6::Core
     Qt6::Test
+    heap_markdown
     GTest::gtest
     GTest::gtest_main
 )
@@ -131,6 +182,7 @@ set(HEAP_SELECTION_SOURCES
         test_selection.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -170,7 +222,6 @@ set(HEAP_SELECTION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -204,6 +255,7 @@ target_link_libraries(heap_selection_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -226,6 +278,7 @@ set(HEAP_NOTES_SOURCES
         test_notes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -265,7 +318,6 @@ set(HEAP_NOTES_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -299,6 +351,7 @@ target_link_libraries(heap_notes_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -341,6 +394,7 @@ target_include_directories(heap_platform_tests PRIVATE
 target_link_libraries(heap_platform_tests PRIVATE
         Qt6::Core
         Qt6::Gui
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -359,6 +413,7 @@ set(HEAP_PERSISTENCE_SOURCES
         test_persistence.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -398,7 +453,6 @@ set(HEAP_PERSISTENCE_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -432,6 +486,7 @@ target_link_libraries(heap_persistence_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -452,6 +507,7 @@ set(HEAP_EXPORT_SOURCES
         test_export_markdown.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -491,7 +547,6 @@ set(HEAP_EXPORT_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -525,6 +580,7 @@ target_link_libraries(heap_export_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -544,6 +600,7 @@ set(HEAP_PROFILE_IO_SOURCES
         test_profile_io.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -583,7 +640,6 @@ set(HEAP_PROFILE_IO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -617,6 +673,7 @@ target_link_libraries(heap_profile_io_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -635,6 +692,7 @@ set(HEAP_ONBOARDING_SOURCES
         test_onboarding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -674,7 +732,6 @@ set(HEAP_ONBOARDING_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -708,6 +765,7 @@ target_link_libraries(heap_onboarding_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -733,6 +791,7 @@ target_link_libraries(heap_sampledata_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Qml   # Models.h includes <qqmlregistration.h>
+        heap_markdown
         GTest::gtest
 )
 add_test(NAME heap_sampledata_tests COMMAND heap_sampledata_tests)
@@ -745,6 +804,7 @@ set(HEAP_UNDO_SOURCES
         test_undo.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -784,7 +844,6 @@ set(HEAP_UNDO_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -818,6 +877,7 @@ target_link_libraries(heap_undo_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -838,6 +898,7 @@ set(HEAP_VIEW_SOURCES
         test_view.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -877,7 +938,6 @@ set(HEAP_VIEW_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -911,6 +971,7 @@ target_link_libraries(heap_view_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -991,6 +1052,7 @@ add_executable(heap_integrations_tests
 target_include_directories(heap_integrations_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_integrations_tests PRIVATE
         Qt6::Core
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1011,6 +1073,7 @@ target_link_libraries(heap_update_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1032,6 +1095,7 @@ target_link_libraries(heap_github_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1052,6 +1116,7 @@ target_link_libraries(heap_jira_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1070,6 +1135,7 @@ target_link_libraries(heap_gitlab_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1091,6 +1157,7 @@ add_executable(heap_rest_providers_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
@@ -1103,6 +1170,7 @@ target_link_libraries(heap_rest_providers_tests PRIVATE
         Qt6::Core
         Qt6::Network
         Qt6::NetworkAuth
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1127,6 +1195,7 @@ target_link_libraries(heap_sync_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Qml
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1143,6 +1212,7 @@ add_executable(heap_query_tests
 target_include_directories(heap_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_query_tests PRIVATE
         Qt6::Core
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1158,6 +1228,7 @@ add_executable(heap_json_merger_tests
 target_include_directories(heap_json_merger_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_json_merger_tests PRIVATE
         Qt6::Core
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1178,6 +1249,7 @@ target_link_libraries(heap_models_tests PRIVATE
         Qt6::Gui
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1190,6 +1262,7 @@ set(HEAP_APPCTRL_SOURCES
         test_appcontroller.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
@@ -1229,7 +1302,6 @@ set(HEAP_APPCTRL_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notes/NoteLinks.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
 )
 if (WIN32)
@@ -1263,6 +1335,7 @@ target_link_libraries(heap_appcontroller_tests PRIVATE
         Qt6::Widgets
         Qt6::Qml
         Qt6::Test
+        heap_markdown
         GTest::gtest
 )
 if (UNIX AND NOT APPLE)
@@ -1289,6 +1362,7 @@ target_link_libraries(heap_roundtrip_tests PRIVATE
         Qt6::Core
         Qt6::Gui
         Qt6::Qml
+        heap_markdown
         GTest::gtest
         GTest::gtest_main
 )
@@ -1313,6 +1387,7 @@ foreach (_suite migration fault_injection save_bench)
             Qt6::Widgets
             Qt6::Qml
             Qt6::Test
+            heap_markdown
             GTest::gtest
     )
     if (UNIX AND NOT APPLE)

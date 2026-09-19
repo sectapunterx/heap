@@ -36,6 +36,16 @@ Item {
     }
     onViewModeChanged: if (_loadedOnce) _writeViewMode(viewMode)
 
+    // Set by the command palette when a search hit lands in this note; the
+    // caret goes to that line and the property is handed back for clearing.
+    property int jumpToLine: -1
+    signal jumpConsumed()
+    onJumpToLineChanged: {
+        if (jumpToLine < 0) return;
+        _jumpToOffset(mdDocument.positionForLine(jumpToLine));
+        jumpConsumed();
+    }
+
     // ── State for autocomplete popup ─────────────────────────────────
     property string acTrigger: ""        // "@" or "#" or ""
     property int    acTriggerPos: -1     // index of trigger char in editor.text
@@ -48,6 +58,44 @@ Item {
     // up as you type. Empty (and uncomputed) while the pane is hidden.
     property bool showBacklinks: false
     property var  _backlinks: showBacklinks ? AppController.noteBacklinks(editor.text) : []
+
+    // ── Scroll sync between the two panes ────────────────────────────
+    // Which pane last moved under the reader's hand. The follower's own
+    // movement re-enters here, so the leader is held for a moment to stop the
+    // two from chasing each other.
+    property string _syncOwner: ""
+    Timer {
+        id: syncRelease
+        interval: 150
+        onTriggered: root._syncOwner = ""
+    }
+
+    function _syncFrom(who) {
+        if (root.viewMode !== "split") return;
+        if (root._syncOwner !== "" && root._syncOwner !== who) return;
+        root._syncOwner = who;
+        syncRelease.restart();
+        Qt.callLater(root._applySync, who);
+    }
+
+    function _applySync(who) {
+        if (root.viewMode !== "split") return;
+        if (who === "editor") {
+            // Top visible line of the editor → the row that holds it.
+            const line = editor.text.substring(0, editor.positionAt(0, notesScroll.contentY))
+                               .split("\n").length - 1;
+            const row = mdDocument.rowForLine(line);
+            if (row >= 0) preview.positionViewAtIndex(row, ListView.Beginning);
+        } else {
+            const row = preview.indexAt(1, preview.contentY + 1);
+            if (row < 0) return;
+            const line = mdDocument.firstLineOfRow(row);
+            if (line < 0) return;
+            const rect = editor.positionToRectangle(mdDocument.positionForLine(line));
+            notesScroll.contentY = Math.max(0, Math.min(rect.y,
+                Math.max(0, notesScroll.contentHeight - notesScroll.height)));
+        }
+    }
 
     function _fuzzyScore(q, s) {
         if (q.length === 0) return 0;
@@ -367,6 +415,8 @@ Item {
             Flickable {
                 id: notesScroll
                 visible: root.viewMode === "edit" || root.viewMode === "split"
+                // Scroll sync: the editor leads while the reader scrolls it.
+                onContentYChanged: if (root.viewMode === "split") root._syncFrom("editor")
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
@@ -418,6 +468,30 @@ Item {
                     onTextChanged: { root._scheduleSave(); root._detectAutocomplete(); }
                     onCursorPositionChanged: root._detectAutocomplete()
                     Keys.priority: Keys.BeforeItem
+
+                    // Qt delivers shortcut events before key presses, so a
+                    // global Ctrl+K would open the command palette and this
+                    // field would never see the key. Claiming these while the
+                    // editor has focus is what makes them editor-scoped: they
+                    // still mean what they always did everywhere else.
+                    Keys.onShortcutOverride: (event) => {
+                        const mods = event.modifiers & ~Qt.KeypadModifier;
+                        if (mods === Qt.ControlModifier) {
+                            switch (event.key) {
+                            case Qt.Key_B: case Qt.Key_I: case Qt.Key_E: case Qt.Key_K:
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
+                            switch (event.key) {
+                            case Qt.Key_X: case Qt.Key_H: case Qt.Key_L:
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+                    }
+
                     Keys.onPressed: (event) => {
                         // Autocomplete navigation (when popup is open) takes
                         // priority over markdown continuation.
@@ -467,78 +541,51 @@ Item {
                             }
                         }
 
-                        // Smart Enter — continue markdown structure (list,
-                        // numbered, checklist, quote) and preserve indent
-                        // inside fenced code blocks.
+                        // Everything below is markdown editing, which lives
+                        // in C++ so it can be tested without driving the UI.
+                        // See MdEditOps: each operation is one undo step.
+                        const mods = event.modifiers & ~Qt.KeypadModifier;
+
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            const txt = editor.text;
-                            const pos = editor.cursorPosition;
-                            const before = txt.substring(0, pos);
-                            const lineStart = before.lastIndexOf("\n") + 1;
-                            const line = txt.substring(lineStart, pos);
-
-                            // Count fence boundaries before the cursor — odd
-                            // means we're inside an open ``` block.
-                            const fences = (before.match(/^```/gm) || []).length;
-                            const insideFence = fences % 2 === 1;
-
-                            let insert = null;
-                            if (insideFence) {
-                                const m = line.match(/^(\s+)/);
-                                insert = "\n" + (m ? m[1] : "");
-                            } else {
-                                const checkM = line.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.*)$/);
-                                const listM  = line.match(/^(\s*)([-*+])\s+(.*)$/);
-                                const numM   = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-                                const quoteM = line.match(/^(\s*>+)\s+(.*)$/);
-
-                                if (checkM) {
-                                    if (checkM[4].length === 0) {
-                                        // Empty checklist item → break out by
-                                        // wiping the marker; default Enter
-                                        // (event not accepted) inserts \n.
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    insert = "\n" + checkM[1] + checkM[2] + " [ ] ";
-                                } else if (listM) {
-                                    if (listM[3].length === 0) {
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    insert = "\n" + listM[1] + listM[2] + " ";
-                                } else if (numM) {
-                                    if (numM[3].length === 0) {
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    const next = parseInt(numM[2]) + 1;
-                                    insert = "\n" + numM[1] + next + ". ";
-                                } else if (quoteM) {
-                                    if (quoteM[2].length === 0) {
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    insert = "\n" + quoteM[1] + " ";
-                                }
+                            if (mods === Qt.ControlModifier) {
+                                mdEditor.toggleTask();
+                                event.accepted = true;
+                                return;
                             }
-
-                            if (insert !== null) {
-                                editor.insert(pos, insert);
+                            if (mods === Qt.NoModifier && mdEditor.handleReturn()) {
                                 event.accepted = true;
                                 return;
                             }
                         }
 
-                        // Tab — inside fenced code block insert 4 spaces so
-                        // it acts as code indent (instead of focus shift).
-                        if (event.key === Qt.Key_Tab && (event.modifiers & ~Qt.KeypadModifier) === 0) {
-                            const before = editor.text.substring(0, editor.cursorPosition);
-                            const fences = (before.match(/^```/gm) || []).length;
-                            if (fences % 2 === 1) {
-                                editor.insert(editor.cursorPosition, "    ");
-                                event.accepted = true;
-                                return;
+                        if (event.key === Qt.Key_Tab && mods === Qt.NoModifier) {
+                            mdEditor.indent();
+                            event.accepted = true;
+                            return;
+                        }
+                        if (event.key === Qt.Key_Backtab
+                            || (event.key === Qt.Key_Tab && mods === Qt.ShiftModifier)) {
+                            mdEditor.outdent();
+                            event.accepted = true;
+                            return;
+                        }
+
+                        // Formatting. These are editor-scoped: Ctrl+K is the
+                        // command palette everywhere else in the app, and it
+                        // stays that way outside this field.
+                        if (mods === Qt.ControlModifier) {
+                            switch (event.key) {
+                            case Qt.Key_B: mdEditor.toggleBold();          event.accepted = true; return;
+                            case Qt.Key_I: mdEditor.toggleItalic();        event.accepted = true; return;
+                            case Qt.Key_E: mdEditor.toggleCode();          event.accepted = true; return;
+                            case Qt.Key_K: mdEditor.insertLink("");        event.accepted = true; return;
+                            }
+                        }
+                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
+                            switch (event.key) {
+                            case Qt.Key_X: mdEditor.toggleStrikethrough(); event.accepted = true; return;
+                            case Qt.Key_H: mdEditor.toggleHighlight();     event.accepted = true; return;
+                            case Qt.Key_L: mdEditor.cycleHeading();        event.accepted = true; return;
                             }
                         }
                     }
@@ -554,62 +601,60 @@ Item {
             }
 
             // Preview pane — visible in preview + split modes.
-            Flickable {
-                id: previewScroll
+            //
+            // Draws the parsed document row by row. It replaces a read-only
+            // TextArea with textFormat: MarkdownText, which handed the whole
+            // note to Qt and gave nothing back — no say in how an element
+            // looked, and no way to ask which lines produced it.
+            MdView {
+                id: preview
+                objectName: "notesPreview"
                 visible: root.viewMode === "preview" || root.viewMode === "split"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                clip: true
-                contentWidth: width
-                contentHeight: previewArea.implicitHeight + 48
-                flickableDirection: Flickable.VerticalFlick
-                boundsBehavior: Flickable.StopAtBounds
-                ScrollBar.vertical: ThinScrollBar {}
+                document: mdDocument
+                editorDocument: editor.textDocument
 
-                NumberAnimation {
-                    id: previewWheelAnim
-                    target: previewScroll
-                    property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                // The checkbox write already went through the editor's own
+                // document; this only keeps the caret where it was.
+                onTaskToggled: {
+                    const caret = editor.cursorPosition;
+                    editor.cursorPosition = caret;
                 }
-                WheelHandler {
-                    acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
-                    onWheel: (event) => {
-                        const dy = event.angleDelta.y;
-                        if (dy === 0) return;
-                        const maxY = Math.max(0, previewScroll.contentHeight - previewScroll.height);
-                        if (maxY <= 0) return;
-                        const base = previewWheelAnim.running ? previewWheelAnim.to : previewScroll.contentY;
-                        const newY = Math.max(0, Math.min(maxY, base - dy * 3));
-                        if (newY === base) return;
-                        previewWheelAnim.from = previewScroll.contentY;
-                        previewWheelAnim.to = newY;
-                        previewWheelAnim.restart();
+
+                // Clicking a rendered block puts the caret on the line that
+                // produced it, and shows the editor if it was hidden.
+                onSourceRequested: (line) => {
+                    if (root.viewMode === "preview") root.viewMode = "split";
+                    editor.forceActiveFocus();
+                    editor.cursorPosition = mdDocument.positionForLine(line);
+                }
+
+                onInternalLinkActivated: (kind, target) => {
+                    if (kind === "note") {
+                        const off = AppController.noteHeadingOffset(editor.text, target);
+                        if (off >= 0) root._jumpToOffset(off);
                     }
+                    // Tickets, people, tags and footnote jumps are wired up
+                    // with the editor work; ignoring them here is better than
+                    // opening a heap:// URL in a browser.
                 }
 
-                // Renders the same text Qt's QTextDocument::setMarkdown sees.
-                // Headings get larger fonts, `code` becomes monospace, lists
-                // indent, [text](url) becomes an underlined link.
-                TextArea {
-                    id: previewArea
-                    x: 24; y: 16
-                    width: previewScroll.width - 48
-                    height: Math.max(previewScroll.height - 32, implicitHeight + 16)
-                    readOnly: true
-                    selectByMouse: true
-                    wrapMode: TextArea.Wrap
-                    text: editor.text
-                    textFormat: TextEdit.MarkdownText
-                    color: Theme.text
-                    placeholderText: I18n.t("notes.preview.empty")
-                    placeholderTextColor: Theme.textDim
+                Text {
+                    anchors.centerIn: parent
+                    visible: preview.count === 0
+                    text: I18n.t("notes.preview.empty")
+                    color: Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: 13
-                    background: Item {}
-                    onLinkActivated: (link) => Qt.openUrlExternally(link)
                 }
+
+                // ── Scroll sync (split mode) ──────────────────────────
+                // Both panes show the same document, so they should show the
+                // same part of it. Whichever pane the reader is scrolling
+                // leads; the other follows and its own movement is ignored
+                // for a moment, or the two would push each other.
+                onContentYChanged: if (root.viewMode === "split") root._syncFrom("preview")
             }
 
             // ── Backlinks pane (HEAP-79) ──────────────────────────────
@@ -695,9 +740,12 @@ Item {
         }
     }
 
-    // Ctrl+Shift+P — cycle edit → split → preview → edit.
+    // Ctrl+Shift+M — cycle edit → split → preview → edit.
+    //
+    // Was Ctrl+Shift+P, which is also profile.new in the global shortcut
+    // catalog: both fired, and which one won depended on where focus was.
     Shortcut {
-        sequence: "Ctrl+Shift+P"
+        sequence: "Ctrl+Shift+M"
         context: Qt.WindowShortcut
         enabled: root.visible
         onActivated: {
@@ -711,27 +759,23 @@ Item {
     // target is wired imperatively in Component.onCompleted so we hand the
     // highlighter a fully-initialised QQuickTextDocument (the declarative
     // binding sometimes fires before TextArea's textDocument is ready).
-    NotesHighlighter {
+    MdHighlighter {
         id: highlighter
+        headingScale: 1.45
         palette: ({
-            heading:      Theme.accentStrong,
-            bold:         Theme.text,
-            italic:       Theme.text,
-            code:         Theme.p2,
-            codeBg:       Theme.bg2,
-            codeBlock:    Theme.p2,
-            codeBlockBg:  Theme.bg2,
-            quote:        Theme.textMuted,
-            mention:      Theme.mStandup,
-            ticket:       Theme.p2,
-            wikilink:     Theme.mOneone,
-            link:         Theme.accent,
-            list:         Theme.accent,
-            tableRow:     Theme.accentStrong,
-            tableSep:     Theme.accent,
-            latex:        Theme.mOneone,
-            checkboxDone: Theme.stDone,
-            hr:           Theme.borderStrong
+            text:          Theme.text,
+            dim:           Theme.textMuted,
+            accent:        Theme.accent,
+            code:          Theme.p2,
+            codeBg:        Theme.bg2,
+            mention:       Theme.mStandup,
+            ticket:        Theme.p2,
+            tag:           Theme.mOneone,
+            math:          Theme.mOneone,
+            highlightBg:   Theme.accentSoft,
+            keyword:       Theme.accentStrong,
+            string:        Theme.stDone,
+            number:        Theme.p2
         })
     }
 
@@ -886,6 +930,41 @@ Item {
         editor.text = AppController.notesState || "";
         _reloading = false;
     }
+    // Markdown editing, in C++ so the rules can be tested directly rather
+    // than only by driving the UI.
+    MarkdownEditorController {
+        id: mdEditor
+        target: editor.textDocument
+        cursorPosition: editor.cursorPosition
+        selectionStart: editor.selectionStart
+        selectionEnd: editor.selectionEnd
+        // Only the editor can move its own cursor, so the controller asks.
+        onSelectionRequested: (start, end) => {
+            if (start === end) editor.cursorPosition = start;
+            else editor.select(start, end);
+        }
+    }
+
+    // Parses once per change and serves every question about the document:
+    // the rendered rows, the outline, and which row a line belongs to.
+    MdDocument {
+        id: mdDocument
+        text: editor.text
+        allowRemoteImages: false
+        palette: ({
+            "text": Theme.text,
+            "dim": Theme.textDim,
+            "link": Theme.accent,
+            "code": Theme.text,
+            "codeBackground": Theme.panel2,
+            "highlightBackground": Theme.accentSoft,
+            "mention": Theme.stProg,
+            "ticket": Theme.accent,
+            "tag": Theme.stReview,
+            "math": Theme.p2
+        })
+    }
+
     Component.onCompleted: {
         highlighter.target = editor.textDocument;
         viewMode = _readViewMode();

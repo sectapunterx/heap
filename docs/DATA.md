@@ -19,6 +19,20 @@ location (`QStandardPaths::AppDataLocation`):
 global events, and your settings blob. It is human-readable — safe to inspect,
 and easy to back up by copying.
 
+### Using a different directory
+
+`--data-dir <dir>` puts `state.json`, `backups/`, `logs/` and the keychain-less
+`secrets.json` fallback somewhere else for that run:
+
+```bash
+heap --data-dir /path/to/throwaway-profile
+```
+
+`HEAP_DATA_DIR` does the same for a whole shell; the flag wins when both are
+set. Use it to try a build against a scratch profile, reproduce a bug, or take
+screenshots without touching your real data. Run `heap --help` for the full
+option list.
+
 ## Automatic backups
 
 heap. rotates a timestamped copy of `state.json` into `<AppDataLocation>/backups/`.

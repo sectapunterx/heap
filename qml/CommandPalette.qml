@@ -22,6 +22,9 @@ Popup {
     signal navigateToContacts()
     signal openTask(string taskId)
     signal openPerson(string personId)
+    // A note hit carries the line its section starts on, so opening it lands
+    // the reader where the words were rather than at the top of the note.
+    signal navigateToNoteLine(int line)
 
     property var _entries: []           // cached full list
     property var _matches: []           // filtered + scored
@@ -129,6 +132,7 @@ Popup {
                 root.openPerson(entry.personId);
             } else if (entry.kind === "note") {
                 AppController.currentView = "notes";
+                root.navigateToNoteLine(entry.line !== undefined ? entry.line : 0);
             } else if (entry.kind === "template") {
                 AppController.currentView = "board";
                 AppController.createTaskFromTemplate(entry.templateName);

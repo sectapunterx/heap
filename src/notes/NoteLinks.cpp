@@ -1,7 +1,9 @@
+#include "markdown/MdOutline.h"
+#include "markdown/MdParser.h"
+#include "markdown/MdSourceMap.h"
 #include "notes/NoteLinks.h"
 
 #include <QHash>
-#include <QRegularExpression>
 #include <QSet>
 #include <QVariantMap>
 
@@ -9,62 +11,60 @@ namespace heap::notes {
 
 namespace {
 
-const QRegularExpression& headingRx() {
-  static const QRegularExpression rx(QStringLiteral("^#{1,6}\\s+(.+?)\\s*$"));
-  return rx;
-}
+// One parse serves whichever question was asked. These are called from QML on
+// every keystroke in the notes view, so the work is kept to a single pass over
+// the document rather than a regular expression per line.
+struct Parsed {
+  md::MdSourceMap src;
+  md::MdAst ast;
 
-const QRegularExpression& wikiRx() {
-  static const QRegularExpression rx(QStringLiteral("\\[\\[([^\\]\\n]+)\\]\\]"));
-  return rx;
-}
+  explicit Parsed(const QString& markdown) : src(markdown), ast(md::parse(src)) {
+  }
+};
 
 }  // namespace
 
 QStringList collectHeadings(const QString& markdown) {
+  const Parsed parsed(markdown);
+
   QStringList out;
   QSet<QString> seen;
-  const auto lines = markdown.split(QChar('\n'));
-  for(const QString& line : lines) {
-    const auto m = headingRx().match(line);
-    if(!m.hasMatch()) {
+  for(const md::MdHeading& heading : md::outline(parsed.src, parsed.ast)) {
+    // An empty heading ("#### " on its own) is a target nobody can link to.
+    if(heading.text.isEmpty() || seen.contains(heading.text)) {
       continue;
     }
-    const QString text = m.captured(1).trimmed();
-    if(text.isEmpty() || seen.contains(text)) {
-      continue;
-    }
-    seen.insert(text);
-    out.append(text);
+    seen.insert(heading.text);
+    out.append(heading.text);
   }
   return out;
 }
 
 QVariantList collectBacklinks(const QString& markdown) {
-  const QStringList headingList = collectHeadings(markdown);
-  const QSet<QString> headings(headingList.cbegin(), headingList.cend());
+  const Parsed parsed(markdown);
 
-  // Preserve first-seen target order, accumulate refs per target.
+  // Heading lookup is case-insensitive, matching headingOffset(): a link
+  // written [[setup]] should resolve to "# Setup" rather than dangle, and the
+  // two functions disagreeing about that was a real inconsistency.
+  QSet<QString> headings;
+  for(const md::MdHeading& heading : md::outline(parsed.src, parsed.ast)) {
+    if(!heading.text.isEmpty()) {
+      headings.insert(heading.text.toCaseFolded());
+    }
+  }
+
+  // First-seen order is kept while collecting, then sorted for display.
   QStringList order;
   QHash<QString, QVariantList> refsByTarget;
 
-  const auto lines = markdown.split(QChar('\n'));
-  for(int i = 0; i < lines.size(); ++i) {
-    const QString& line = lines.at(i);
-    auto it = wikiRx().globalMatch(line);
-    while(it.hasNext()) {
-      const QString target = it.next().captured(1).trimmed();
-      if(target.isEmpty()) {
-        continue;
-      }
-      if(!refsByTarget.contains(target)) {
-        order.append(target);
-      }
-      QVariantMap ref;
-      ref.insert(QStringLiteral("line"), i + 1);  // 1-based
-      ref.insert(QStringLiteral("text"), line.trimmed());
-      refsByTarget[target].append(ref);
+  for(const md::MdWikiRef& ref : md::wikiRefs(parsed.src, parsed.ast)) {
+    if(!refsByTarget.contains(ref.target)) {
+      order.append(ref.target);
     }
+    QVariantMap entry;
+    entry.insert(QStringLiteral("line"), ref.line + 1);  // 1-based for the UI
+    entry.insert(QStringLiteral("text"), ref.lineText);
+    refsByTarget[ref.target].append(entry);
   }
 
   QVariantList out;
@@ -72,7 +72,7 @@ QVariantList collectBacklinks(const QString& markdown) {
   for(const QString& target : order) {
     QVariantMap entry;
     entry.insert(QStringLiteral("target"), target);
-    entry.insert(QStringLiteral("resolved"), headings.contains(target));
+    entry.insert(QStringLiteral("resolved"), headings.contains(target.toCaseFolded()));
     entry.insert(QStringLiteral("refs"), refsByTarget.value(target));
     out.append(entry);
   }
@@ -84,14 +84,11 @@ int headingOffset(const QString& markdown, const QString& heading) {
   if(needle.isEmpty()) {
     return -1;
   }
-  int offset = 0;
-  const auto lines = markdown.split(QChar('\n'));
-  for(const QString& line : lines) {
-    const auto m = headingRx().match(line);
-    if(m.hasMatch() && m.captured(1).trimmed().compare(needle, Qt::CaseInsensitive) == 0) {
-      return offset;
+  const Parsed parsed(markdown);
+  for(const md::MdHeading& candidate : md::outline(parsed.src, parsed.ast)) {
+    if(candidate.text.compare(needle, Qt::CaseInsensitive) == 0) {
+      return candidate.utf16Offset;
     }
-    offset += line.size() + 1;  // +1 for the '\n' consumed by split
   }
   return -1;
 }

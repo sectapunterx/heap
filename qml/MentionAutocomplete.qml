@@ -14,7 +14,7 @@ import "Mention.js" as Mention
 // navigation through moveSelection() / accept() / dismiss().
 //
 // Inserted format always uses the canonical id ("@<id> " or "#<id> ") —
-// stable across renames and matches NotesHighlighter's mention and
+// stable across renames and matches MdHighlighter's mention and
 // ticket rules.
 Popup {
     id: ac

@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
-project(heap VERSION 0.4.7 LANGUAGES CXX)
+# C is enabled for the vendored md4c parser (third_party/md4c), the only C in
+# the tree.
+project(heap VERSION 0.4.7 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
@@ -41,6 +43,8 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
 endif()
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network NetworkAuth)
+# Test is used by the unit suites (QAbstractItemModelTester, QSignalSpy).
+find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Test)
 # DBus is only needed for the Linux native notifications backend.
 if(UNIX AND NOT APPLE)
     find_package(Qt6 6.2 REQUIRED COMPONENTS DBus)
@@ -61,6 +65,32 @@ find_package(Qt6Keychain QUIET)
 
 qt_standard_project_setup(REQUIRES 6.4)
 
+# ── Vendored third-party code ─────────────────────────────────────
+# md4c: the CommonMark parser the notes editor is built on. Static, so nothing
+# new enters the Windows portable bundle. See third_party/md4c/README.heap.md.
+add_subdirectory(third_party/md4c)
+
+# ── Markdown engine ───────────────────────────────────────────────
+# Parser, source map and (later) the block model behind the notes editor.
+# Deliberately independent of Quick, QML and AppController so the tests can
+# link it on its own instead of re-compiling the application.
+qt_add_library(heap_markdown STATIC
+    src/markdown/MdSourceMap.cpp
+    src/markdown/MdParser.cpp
+    src/markdown/MdOutline.cpp
+    src/markdown/MdExtensions.cpp
+    src/markdown/MdHtml.cpp
+    src/markdown/MdBlockModel.cpp
+    src/markdown/MdEditOps.cpp
+    src/notes/NoteLinks.cpp
+)
+target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
+# Gui, not just Core: MdEditOps works on a QTextDocument, which is the same
+# document the editor owns — that is what puts each operation on its undo stack.
+target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core Qt6::Gui)
+# MdBlockModel is a QAbstractListModel, so this one does need moc.
+set_target_properties(heap_markdown PROPERTIES AUTOMOC ON)
+
 # ── Core library: all app logic + the TodoCpp QML module ──────────
 # Extracted from the heap executable so the Qt Quick Test harness (tests/) can
 # link the same C++ types + QML module and instantiate real components
@@ -74,7 +104,6 @@ qt_add_library(heap_core STATIC
     src/SampleData.cpp
     src/StateSerializer.cpp
     src/CodeHighlighter.cpp
-    src/NotesHighlighter.cpp
     src/chrono/ChronoTokenizer.cpp
     src/chrono/ChronoLocale_en.cpp
     src/chrono/ChronoLocale_ru.cpp
@@ -83,10 +112,13 @@ qt_add_library(heap_core STATIC
     src/git/GitWatcher.cpp
     src/text/TaskTextUtils.cpp
     src/query/QueryParser.cpp
-    src/notes/NoteLinks.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
+    src/platform/Paths.cpp
+    src/markdown/MdDocument.cpp
+    src/markdown/MarkdownEditorController.cpp
+    src/markdown/MdHighlighter.cpp
     src/integrations/StatusMap.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
@@ -145,6 +177,7 @@ qt_add_qml_module(heap_core
         qml/CommandPalette.qml
         qml/HotkeysPanel.qml
         qml/NotesView.qml
+        qml/MdView.qml
         qml/SettingsView.qml
         qml/HelpContent.qml
         qml/ThinScrollBar.qml
@@ -161,7 +194,6 @@ qt_add_qml_module(heap_core
         src/Models.h
         src/SampleData.h
         src/CodeHighlighter.h
-        src/NotesHighlighter.h
         src/chrono/ChronoTypes.h
         src/chrono/ChronoTokenizer.h
         src/chrono/ChronoLocale.h
@@ -172,6 +204,9 @@ qt_add_qml_module(heap_core
         src/text/TaskTextUtils.h
         src/query/QueryParser.h
         src/notes/NoteLinks.h
+        src/markdown/MdDocument.h
+        src/markdown/MarkdownEditorController.h
+        src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/integrations/IntegrationTypes.h
@@ -193,8 +228,11 @@ qt_add_qml_module(heap_core
         src/update/Updater.h
 )
 
-target_include_directories(heap_core PUBLIC src)
+# src/markdown too: qt_add_qml_module's generated registration file includes
+# each QML-exposed header by its bare name.
+target_include_directories(heap_core PUBLIC src src/markdown)
 target_link_libraries(heap_core PUBLIC
+    heap_markdown
     Qt6::Core
     Qt6::Gui
     Qt6::Network

@@ -51,6 +51,33 @@ restores a single default; *Reset all* restores the whole catalog.
 | Clear selection | `Esc` |
 | Delete selection (undoable 5 s) | `Del` |
 
+## Notes editor
+
+These work while the cursor is in the notes editor, and only there — `Ctrl+K`
+still opens the command palette everywhere else.
+
+| Action | Shortcut |
+|---|---|
+| Bold | `Ctrl+B` |
+| Italic | `Ctrl+I` |
+| Inline code | `Ctrl+E` |
+| Link | `Ctrl+K` |
+| Strikethrough | `Ctrl+Shift+X` |
+| Highlight (`==text==`) | `Ctrl+Shift+H` |
+| Heading level — cycles none → H1 … H6 → none | `Ctrl+Shift+L` |
+| Indent / outdent list line | `Tab` / `Shift+Tab` |
+| Tick the checkbox on this line | `Ctrl+Enter` |
+| Cycle edit → split → preview | `Ctrl+Shift+M` |
+
+`Enter` continues whatever the line is: another bullet, the next number,
+another unticked checkbox, another quote marker. On an empty item it removes
+the marker instead, which is how you end a list. Inside a fenced code block
+`Enter` keeps the indentation and `Tab` inserts spaces.
+
+Pasting a URL over selected text turns it into a link.
+
+Every one of these is a single undo step.
+
 ## Notes
 
 - **Quick-capture** opens a single-field popup that parses your line as you type

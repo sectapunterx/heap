@@ -1,12 +1,13 @@
 #include "Logger.h"
 
+#include "platform/Paths.h"
+
 #include <QByteArray>
 #include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QIODevice>
 #include <QMutex>
-#include <QStandardPaths>
 #include <QtGlobal>
 
 #include <cstdio>
@@ -98,7 +99,7 @@ void messageHandler(QtMsgType type, const QMessageLogContext& ctx, const QString
 namespace heap::logging {
 
 QString logDirPath() {
-  const QString dir = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + "/logs";
+  const QString dir = heap::paths::dataDir() + "/logs";
   QDir().mkpath(dir);
   return dir;
 }

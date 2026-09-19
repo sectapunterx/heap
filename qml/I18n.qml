@@ -403,6 +403,13 @@ QtObject {
             "notes.links": "⌗ Links",
             "notes.backlinks": "Backlinks",
             "notes.backlinks.empty": "No [[wiki-links]] yet.\nType [[ to link a heading.",
+            "notes.code.copy": "Copy",
+            "notes.code.copied": "Copied",
+            "notes.code.diagram": "%1 diagram (shown as source)",
+            "notes.image.missing": "Image not found",
+            "notes.image.remote": "Remote image: %1",
+            "notes.image.open": "Open",
+            "notes.footnotes": "Footnotes",
 
             // ── PeopleList ──
             "people.title": "People to talk to",
@@ -1094,6 +1101,13 @@ QtObject {
             "notes.links": "⌗ Ссылки",
             "notes.backlinks": "Обратные ссылки",
             "notes.backlinks.empty": "Пока нет ни одной [[wiki-ссылки]].\nНабери [[, чтобы сослаться на заголовок.",
+            "notes.code.copy": "Копировать",
+            "notes.code.copied": "Скопировано",
+            "notes.code.diagram": "Диаграмма %1 (показан исходник)",
+            "notes.image.missing": "Изображение не найдено",
+            "notes.image.remote": "Внешнее изображение: %1",
+            "notes.image.open": "Открыть",
+            "notes.footnotes": "Сноски",
 
             "people.title": "С кем поговорить",
             "people.empty": "Список пока пуст",
