@@ -1038,6 +1038,55 @@ TEST_F(ContactMergeTest, ImportingDoesNotInflateThePendingCount) {
   EXPECT_EQ(app_->pendingPeopleCount(), before) << "the rail badge counts people you owe an answer to";
 }
 
+TEST_F(ContactMergeTest, AnImportNeverHijacksAPersonTheUserAlreadyHas) {
+  // Usernames are sanitised to [a-z0-9._-], so "ALEX", "al ex" and "alex!" all
+  // derive the id "alex" — which the user may already have typed by hand for
+  // somebody else entirely.
+  Person mine;
+  mine.id = QStringLiteral("alex");
+  mine.name = QStringLiteral("Alex from accounting");
+  mine.role = QStringLiteral("Finance");
+  mine.state = QStringLiteral("todo");
+  app_->people()->upsert(mine);
+
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("ALEX"), QStringLiteral("Alexandra Petrova"), QStringLiteral("Backend"), kDm)});
+
+  const int row = app_->people()->indexOfId(QStringLiteral("alex"));
+  ASSERT_GE(row, 0);
+  const Person& kept = app_->people()->items().at(row);
+  EXPECT_EQ(kept.name, QStringLiteral("Alex from accounting")) << "a stranger was welded onto an existing person";
+  EXPECT_EQ(kept.role, QStringLiteral("Finance"));
+
+  // The contact still lands, just linked to its own Person (or none at all).
+  const QJsonObject c = contactNamed(QStringLiteral("Alexandra Petrova"));
+  ASSERT_FALSE(c.isEmpty());
+  EXPECT_NE(c.value(QStringLiteral("personId")).toString(), QStringLiteral("alex"));
+}
+
+TEST_F(ContactMergeTest, TwoServerUsersSharingAHandleBothSurvive) {
+  // The handle index is the fallback for contacts typed before the
+  // integration existed. It was not updated for rows appended during the same
+  // merge, so a second user with the same handle overwrote the first.
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("bob"), QStringLiteral("Bob One"), QString(), kDm),
+         mkContact(QStringLiteral("u2"), QStringLiteral("bob"), QStringLiteral("Bob Two"), QString(), kDm)});
+
+  EXPECT_EQ(contacts().size(), 2) << "one of them overwrote the other";
+  EXPECT_FALSE(contactNamed(QStringLiteral("Bob One")).isEmpty());
+  EXPECT_FALSE(contactNamed(QStringLiteral("Bob Two")).isEmpty());
+}
+
+TEST_F(ContactMergeTest, TheSameColourComesBackAcrossRuns) {
+  // qHash(QString) is seeded per process, so it gave the same person a
+  // different colour in another profile or after a restart.
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga"), QString(), kDm)});
+  const QString first = contactNamed(QStringLiteral("Olga")).value(QStringLiteral("color")).toString();
+  ASSERT_FALSE(first.isEmpty());
+
+  app_->setDocsState(QString());
+  merge({mkContact(QStringLiteral("u1"), QStringLiteral("olga.t"), QStringLiteral("Olga"), QString(), kDm)});
+  EXPECT_EQ(contactNamed(QStringLiteral("Olga")).value(QStringLiteral("color")).toString(), first);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

@@ -5,6 +5,7 @@
 #include <QByteArray>
 #include <QHash>
 #include <QObject>
+#include <QPair>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -96,8 +97,11 @@ class MattermostClient : public QObject {
   // a single request rather than a pyramid of callbacks.
   void fetchTeams(const QString& myId);
   void fetchChannels(const QString& myId, const QStringList& teamIds, int teamIndex);
-  void fetchChannelMembers(const QString& channelId, const QString& label, const std::function<void()>& next);
+  void fetchMemberChannels(
+      const QString& myId, const QStringList& teamIds, int teamIndex, const QVector<QPair<QString, QString>>& channels, int channelIndex);
+  void fetchChannelMembers(const QString& channelId, const QString& label, int page, const std::function<void()>& next);
   void resolveUsers();
+  void resolveUserBatch(const QStringList& ids, int offset, const QVector<ExternalContact>& collected);
 
   QNetworkAccessManager* m_nam = nullptr;
   QString m_host;

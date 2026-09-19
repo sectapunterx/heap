@@ -29,6 +29,7 @@
 #include <QApplication>
 #include <QClipboard>
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDateTime>
 #include <QDebug>
 #include <QDesktopServices>
@@ -2374,19 +2375,22 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   const bool connected = cfg.value(QStringLiteral("connected"), false).toBool();
 
   if(!connected || host.isEmpty() || token.isEmpty()) {
-    delete m_directoryClients.take(providerId);
-    m_directoryConfigHash.remove(providerId);
+    retireDirectoryClient(providerId);
     return nullptr;
   }
   // applyIntegrationSettings() runs on every settings write, and a rebuild
   // would drop a fetch already in flight. Only what the client actually reads
   // is worth rebuilding for.
-  const QString hash = host + QLatin1Char('\n') + token + QLatin1Char('\n') + channels;
+  // A digest, not the values: this is kept for the lifetime of the client and
+  // there is no reason for a second plaintext copy of the token to live in it.
+  const QString hash = QString::fromLatin1(
+      QCryptographicHash::hash((host + QLatin1Char('\n') + token + QLatin1Char('\n') + channels).toUtf8(), QCryptographicHash::Sha256)
+          .toHex());
   if(m_directoryConfigHash.value(providerId) == hash) {
     return m_directoryClients.value(providerId);
   }
 
-  delete m_directoryClients.take(providerId);
+  retireDirectoryClient(providerId);
   auto* client = new heap::integrations::MattermostClient(this);
   QStringList extra;
   const QStringList raw = channels.split(QLatin1Char(','), Qt::SkipEmptyParts);
@@ -2486,7 +2490,10 @@ int AppController::mergeExternalContacts(const QString& providerId, const QVecto
     const QJsonObject c = list.at(i).toObject();
     const QString ext = c.value(QStringLiteral("mmId")).toString();
     if(!ext.isEmpty()) {
+      // Already claimed by an external id; another user's handle must not be
+      // able to take this row over.
       byExternalId.insert(ext, i);
+      continue;
     }
     QString handle = c.value(QStringLiteral("mattermost")).toString().trimmed();
     while(handle.startsWith(QLatin1Char('@'))) {
@@ -2512,8 +2519,19 @@ int AppController::mergeExternalContacts(const QString& providerId, const QVecto
     if(ext.externalId.isEmpty() || dismissed.contains(ext.externalId)) {
       continue;
     }
-    const int existing =
-        byExternalId.contains(ext.externalId) ? byExternalId.value(ext.externalId) : byHandle.value(ext.username.toLower(), -1);
+    // The handle index is a one-shot bridge for rows typed before the
+    // integration existed: take() consumes the match, so a second server user
+    // with the same handle is treated as the different person they are instead
+    // of overwriting the first one's row.
+    const QString handleKey = ext.username.toLower();
+    int existing = -1;
+    if(byExternalId.contains(ext.externalId)) {
+      existing = byExternalId.value(ext.externalId);
+    } else if(byHandle.contains(handleKey)) {
+      // take(), not value(): QHash::take on a missing key would hand back 0 and
+      // silently claim the first row.
+      existing = byHandle.take(handleKey);
+    }
     QJsonObject c = existing >= 0 ? list.at(existing).toObject() : QJsonObject{};
     const QJsonObject before = c;
 
@@ -2542,9 +2560,10 @@ int AppController::mergeExternalContacts(const QString& providerId, const QVecto
     c.insert(QStringLiteral("mmId"), ext.externalId);
     c.insert(QStringLiteral("source"), providerId);
     if(!c.contains(QStringLiteral("color"))) {
-      // Deterministic, so the same person keeps their colour across profiles
-      // and re-imports.
-      c.insert(QStringLiteral("color"), kPalette.at(qHash(ext.externalId) % kPalette.size()));
+      // Stable across runs: qHash(QString) is seeded per process, so it would
+      // give the same person a different colour in another profile.
+      const QByteArray digest = QCryptographicHash::hash(ext.externalId.toUtf8(), QCryptographicHash::Sha1);
+      c.insert(QStringLiteral("color"), kPalette.at(static_cast<uchar>(digest.at(0)) % kPalette.size()));
     }
 
     // People the user actually talks to are worth having in the rail and in
@@ -2552,7 +2571,7 @@ int AppController::mergeExternalContacts(const QString& providerId, const QVecto
     if(ext.channelLabel == QLatin1String("direct message")) {
       const QString personId = c.value(QStringLiteral("personId")).toString();
       if(personId.isEmpty() || m_people.indexOfId(personId) < 0) {
-        const QString linked = upsertImportedPerson(ext);
+        const QString linked = upsertImportedPerson(ext, personId);
         if(!linked.isEmpty()) {
           c.insert(QStringLiteral("personId"), linked);
         }
@@ -2568,6 +2587,8 @@ int AppController::mergeExternalContacts(const QString& providerId, const QVecto
     } else {
       // Append only: DocsView renders this array by index, and reordering it
       // under an open editor would retarget the row being edited.
+      // Both indexes, or a second server user with the same handle would match
+      // this new row by handle and overwrite it, losing the first one.
       byExternalId.insert(ext.externalId, static_cast<int>(list.size()));
       list.append(c);
     }
@@ -2582,7 +2603,7 @@ int AppController::mergeExternalContacts(const QString& providerId, const QVecto
   return changed;
 }
 
-QString AppController::upsertImportedPerson(const heap::integrations::ExternalContact& ext) {
+QString AppController::upsertImportedPerson(const heap::integrations::ExternalContact& ext, const QString& linkedPersonId) {
   // The id is the Mattermost username, not a slug of the display name:
   // slugifyPersonName drops dots and dashes, so "olga.t" would become "olgat"
   // and @-mentions in heap would stop matching the handle people actually use.
@@ -2592,21 +2613,32 @@ QString AppController::upsertImportedPerson(const heap::integrations::ExternalCo
   if(id.isEmpty()) {
     return {};
   }
-  if(m_people.indexOfId(id) >= 0) {
-    return id;  // already here — never touch a Person the user has been editing
-  }
-  // Person ids are unique across every profile, so a colleague imported into a
-  // second workspace needs a distinct one.
-  for(const Profile& pr : m_profiles) {
-    for(const Person& pe : pr.people) {
-      if(pe.id == id) {
-        id = suggestPersonId(ext.username);
-        break;
+  // An id already in use is NOT automatically the same human: usernames are
+  // sanitised down to [a-z0-9._-], so "ALEX", "al ex" and "alex!" all land on
+  // "alex" — and a Person the user typed by hand may already own it. Only a
+  // contact that already points at this id may reuse it; anyone else gets a
+  // fresh one, or nothing at all rather than being welded onto a stranger.
+  const bool idIsTaken = [this, &id]() {
+    if(m_people.indexOfId(id) >= 0) {
+      return true;  // present in the active profile right now, snapshot or not
+    }
+    for(const Profile& pr : m_profiles) {
+      for(const Person& pe : pr.people) {
+        if(pe.id == id) {
+          return true;
+        }
       }
     }
-  }
-  if(id.isEmpty() || m_people.indexOfId(id) >= 0) {
-    return id;
+    return false;
+  }();
+  if(idIsTaken) {
+    if(linkedPersonId == id) {
+      return id;  // this contact's own Person — leave it exactly as it is
+    }
+    id = suggestPersonId(ext.username);
+    if(id.isEmpty() || m_people.indexOfId(id) >= 0) {
+      return {};
+    }
   }
 
   Person p;
@@ -2622,7 +2654,28 @@ QString AppController::upsertImportedPerson(const heap::integrations::ExternalCo
   return id;
 }
 
-void AppController::fetchDirectory(const QString& providerId) {
+void AppController::retireDirectoryClient(const QString& providerId) {
+  m_directoryConfigHash.remove(providerId);
+  heap::integrations::MattermostClient* client = m_directoryClients.take(providerId);
+  if(client == nullptr) {
+    return;
+  }
+  // deleteLater, never delete: this runs from applyIntegrationSettings(), which
+  // a 401 reaches synchronously through failed() → disconnectIntegration() →
+  // appSettingsJsonChanged(). The client owns the QNetworkAccessManager that
+  // owns the very QNetworkReply whose finished() is still on the stack, and Qt
+  // forbids destroying it from there. It also gives a logout() queued a moment
+  // earlier the chance to actually reach the socket.
+  client->disconnect(this);
+  client->deleteLater();
+}
+
+void AppController::fetchDirectory(const QString& providerId, bool rebindProfile) {
+  if(rebindProfile) {
+    // "Sync now" means "sync this, here". Auto-sync gets no say: it fires
+    // wherever the user happens to be.
+    setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
+  }
   if(heap::integrations::MattermostClient* client = directoryClient(providerId)) {
     client->fetchContacts();
   }
@@ -2748,7 +2801,7 @@ void AppController::migrateLegacySecrets() {
 void AppController::syncProvider(const QString& providerId) {
   if(m_directoryClients.contains(providerId)) {
     emit toast(tr("Syncing…"));
-    fetchDirectory(providerId);
+    fetchDirectory(providerId, /*rebindProfile=*/true);
     return;
   }
   for(const auto& provider : m_syncProviders) {
@@ -3025,6 +3078,9 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
     m_oauthNam = new QNetworkAccessManager(this);
   }
   QNetworkRequest req{QUrl(QStringLiteral("https://api.atlassian.com/oauth/token/accessible-resources"))};
+  // Qt would follow a redirect to another host and carry the credentials
+  // with it; keep every authenticated call on the origin it was aimed at.
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + accessToken.toUtf8());
   req.setRawHeader("Accept", "application/json");
   req.setRawHeader("User-Agent", "heap-sync");

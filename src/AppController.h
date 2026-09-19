@@ -800,7 +800,10 @@ class AppController : public QObject {
   // on every settings write, and dropping the client mid-fetch would silently
   // abandon a request already in flight.
   heap::integrations::MattermostClient* directoryClient(const QString& providerId);
-  void fetchDirectory(const QString& providerId);
+  void fetchDirectory(const QString& providerId, bool rebindProfile = false);
+  // Drop a directory client safely. Never `delete`: this can run from inside
+  // the client's own reply handler.
+  void retireDirectoryClient(const QString& providerId);
   // Contacts the user deleted, per profile, so a later sync does not bring
   // them back. They cannot live in the docs blob: DocsView rewrites it whole
   // and would drop any key it does not know.
@@ -808,7 +811,9 @@ class AppController : public QObject {
   // Create the Person behind an imported contact, or return the id of the one
   // already there. Never edits an existing Person: those are the user's notes
   // about someone, not a mirror of the directory.
-  QString upsertImportedPerson(const heap::integrations::ExternalContact& ext);
+  // `linkedPersonId` is the Person this contact already points at, if any: it
+  // is the only id that may be reused when the derived one is already taken.
+  QString upsertImportedPerson(const heap::integrations::ExternalContact& ext, const QString& linkedPersonId);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
   // Renew an expiring OAuth access token, then run `then`. Providers that use a
