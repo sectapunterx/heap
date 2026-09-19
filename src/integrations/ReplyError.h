@@ -126,11 +126,35 @@ inline QString hintForStatus(int status) {
       return QStringLiteral("forbidden — the token is missing a required scope");
     case 404:
       return QStringLiteral("not found — check the URL, project or repo");
+    case 407:
+      return QStringLiteral("the network proxy rejected the request");
     case 429:
       return QStringLiteral("rate limited — try again in a few minutes");
     default:
       return {};
   }
+}
+
+// The HTTP status to report for a finished reply.
+//
+// Qt turns a 401 carrying a WWW-Authenticate header into
+// AuthenticationRequiredError, whose errorString is the unhelpful "Host
+// requires authentication" — and when it gives up before recording the status
+// attribute, the status reads 0. That lost the only signal two retries key on:
+// Jira's scoped-token gateway fallback and the OAuth refresh-on-401. Qt raises
+// these two errors for nothing but a 401/407, so they are a status in their own
+// right. Pure, so the mapping can be tested without a live reply.
+inline int httpStatusFor(int attributeStatus, QNetworkReply::NetworkError error) {
+  if(attributeStatus > 0) {
+    return attributeStatus;
+  }
+  if(error == QNetworkReply::AuthenticationRequiredError) {
+    return 401;
+  }
+  if(error == QNetworkReply::ProxyAuthenticationRequiredError) {
+    return 407;
+  }
+  return attributeStatus;
 }
 
 }  // namespace detail
@@ -159,7 +183,10 @@ inline QString describeHttpError(int status, const QByteArray& body, const QStri
 
 // The status code of a finished reply, or 0 when it never reached the server.
 inline int replyHttpStatus(QNetworkReply* reply) {
-  return reply ? reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt() : 0;
+  if(reply == nullptr) {
+    return 0;
+  }
+  return detail::httpStatusFor(reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt(), reply->error());
 }
 
 // Consumes the reply body — call once, on a reply that has finished.
