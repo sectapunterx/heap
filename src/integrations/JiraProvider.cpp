@@ -175,6 +175,28 @@ QString defaultJiraJql() {
   return QStringLiteral("assignee = currentUser() ORDER BY updated DESC");
 }
 
+JiraDeployment parseJiraDeployment(const QByteArray& serverInfoJson) {
+  const QString type = QJsonDocument::fromJson(serverInfoJson).object().value(QStringLiteral("deploymentType")).toString();
+  if(type.compare(QStringLiteral("Cloud"), Qt::CaseInsensitive) == 0) {
+    return JiraDeployment::Cloud;
+  }
+  // Atlassian reports "Server" for Data Center too — same API, same auth.
+  if(type.compare(QStringLiteral("Server"), Qt::CaseInsensitive) == 0 ||
+     type.compare(QStringLiteral("DataCenter"), Qt::CaseInsensitive) == 0) {
+    return JiraDeployment::Server;
+  }
+  return JiraDeployment::Unknown;
+}
+
+JiraDeployment guessJiraDeployment(const QString& baseUrl) {
+  const QUrl parsed(normalizeJiraBaseUrl(baseUrl));
+  if(parsed.host().isEmpty()) {
+    return JiraDeployment::Unknown;
+  }
+  // Only Atlassian runs atlassian.net; anything else self-hosted is Server/DC.
+  return parsed.host().endsWith(QStringLiteral(".atlassian.net"), Qt::CaseInsensitive) ? JiraDeployment::Cloud : JiraDeployment::Server;
+}
+
 JiraSite pickJiraSite(const QByteArray& accessibleResourcesJson, const QString& preferredUrl) {
   const QJsonArray sites = QJsonDocument::fromJson(accessibleResourcesJson).array();
   if(sites.isEmpty()) {
@@ -206,10 +228,12 @@ void JiraProvider::setConfig(const QString& baseUrl, const QString& email, const
   m_token = token.trimmed();
   m_jql = jql.trimmed();
   m_oauth = false;
-  // A new site means the previous gateway decision no longer applies.
+  // A new site means the previous gateway decision no longer applies, and it
+  // may well be the other product entirely.
   m_apiBase = m_baseUrl;
   m_usingGateway = false;
   m_gatewayTried = false;
+  m_deployment = JiraDeployment::Unknown;
 }
 
 void JiraProvider::setOAuthConfig(const QString& cloudId, const QString& siteUrl, const QString& token, const QString& jql) {
@@ -218,6 +242,7 @@ void JiraProvider::setOAuthConfig(const QString& cloudId, const QString& siteUrl
   m_token = token.trimmed();
   m_jql = jql.trimmed();
   m_oauth = true;
+  m_deployment = JiraDeployment::Cloud;  // 3LO exists only on Cloud
   // A 3LO token is only accepted by the gateway, never by the site host, so
   // there is nothing to discover here and no 401 fallback to run. Without a
   // cloudId there is no API base at all — stay unconfigured rather than send
@@ -234,19 +259,38 @@ bool JiraProvider::isConfigured() const {
   }
   // OAuth needs no email, and no site URL either — browse links degrade to the
   // issue key, but the API base is already the gateway.
-  return m_oauth ? m_usingGateway : (!m_baseUrl.isEmpty() && !m_email.isEmpty());
+  if(m_oauth) {
+    return m_usingGateway;
+  }
+  if(m_baseUrl.isEmpty()) {
+    return false;
+  }
+  // Server/DC authenticates the Personal Access Token on its own; only Cloud
+  // needs the account email to pair with an API token. Until the deployment is
+  // known, assume whichever the URL suggests so the card is not called
+  // unconfigured before the first request has had a chance to find out.
+  const JiraDeployment assumed = m_deployment == JiraDeployment::Unknown ? guessJiraDeployment(m_baseUrl) : m_deployment;
+  return assumed == JiraDeployment::Server || !m_email.isEmpty();
+}
+
+QString JiraProvider::apiRoot() const {
+  // Cloud's v3 is ADF-based and has no counterpart on Server/DC, which stayed
+  // on v2 — the paths are otherwise the same.
+  return m_deployment == JiraDeployment::Server ? QStringLiteral("/rest/api/2") : QStringLiteral("/rest/api/3");
 }
 
 void JiraProvider::sendOnce(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done) {
-  QNetworkRequest req{QUrl(m_apiBase + QStringLiteral("/rest/api/3") + path)};
+  QNetworkRequest req{QUrl(m_apiBase + apiRoot() + path)};
   // Qt would follow a redirect to another host and carry the credentials
   // with it; keep every authenticated call on the origin it was aimed at.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
   req.setRawHeader("User-Agent", "heap-sync");
-  if(m_oauth) {
-    // A 3LO access token is a Bearer credential; there is no email to pair it
-    // with. Only the gateway accepts it.
+  if(m_oauth || (m_deployment == JiraDeployment::Server && m_email.isEmpty())) {
+    // Two different bearer credentials that happen to travel the same way: a
+    // Cloud 3LO access token, and a Server/DC Personal Access Token. Neither
+    // pairs with an email. (A Server instance old enough to lack PATs still
+    // works — fill in the username and it falls through to Basic below.)
     req.setRawHeader("Authorization", QByteArrayLiteral("Bearer ") + m_token.toUtf8());
   } else {
     // Basic base64(email:token) — the same pair works for the site host and for
@@ -298,12 +342,50 @@ void JiraProvider::resolveCloudId(std::function<void(bool)> done) {
   });
 }
 
+void JiraProvider::detectDeployment(const std::function<void()>& then) {
+  // serverInfo is the one endpoint both products answer the same way, and on
+  // Server/DC it is usually readable without credentials.
+  QNetworkRequest req{QUrl(m_baseUrl + QStringLiteral("/rest/api/2/serverInfo"))};
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
+  req.setRawHeader("Accept", "application/json");
+  req.setRawHeader("User-Agent", "heap-sync");
+  QNetworkReply* reply = m_nam->get(req);
+  connect(reply, &QNetworkReply::finished, this, [this, reply, then]() {
+    reply->deleteLater();
+    m_deployment = reply->error() == QNetworkReply::NoError ? parseJiraDeployment(reply->readAll()) : JiraDeployment::Unknown;
+    if(m_deployment == JiraDeployment::Unknown) {
+      // An instance behind SSO, or one that refuses anonymous reads. The URL is
+      // the only evidence left, and it is right far more often than not.
+      m_deployment = guessJiraDeployment(m_baseUrl);
+    }
+    then();
+  });
+}
+
+void JiraProvider::ensureDeployment(const std::function<void()>& then) {
+  if(m_deployment != JiraDeployment::Unknown) {
+    then();
+    return;
+  }
+  // Which product this is decides the API version, the auth header and the
+  // search endpoint, so it has to be settled before anything is built from it.
+  detectDeployment(then);
+}
+
 void JiraProvider::send(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done) {
+  if(m_deployment == JiraDeployment::Unknown) {
+    ensureDeployment([this, method, path, body, done]() {
+      send(method, path, body, done);
+    });
+    return;
+  }
   sendOnce(method, path, body, [this, method, path, body, done](const ApiResult& first) {
     // Atlassian's scoped API tokens (the default for new tokens) are rejected
     // by the site host and only accepted through the API gateway. A 401 on the
     // site is the only signal we get, so take it as "try the gateway once".
-    if(first.status != 401 || m_usingGateway || m_gatewayTried) {
+    // The api.atlassian.com gateway is a Cloud-only thing; on Server/DC a 401
+    // means exactly what it says.
+    if(first.status != 401 || m_deployment != JiraDeployment::Cloud || m_usingGateway || m_gatewayTried) {
       done(explainAuthFailure(first, /*cloudIdResolved=*/m_usingGateway));
       return;
     }
@@ -336,11 +418,16 @@ JiraProvider::ApiResult JiraProvider::explainAuthFailure(const ApiResult& result
   // what to do. When it says nothing useful, Qt's "Host requires
   // authentication" is what would otherwise reach the user, so the guidance is
   // all there is.
-  QString advice = QStringLiteral("use an API token from id.atlassian.com, with the email of that same Atlassian account");
-  if(!cloudIdResolved) {
-    // /_edge/tenant_info is Cloud-only, so a site that refused us and has no
-    // cloudId is usually not Cloud at all — easy to miss, hard to guess.
-    advice += QStringLiteral("; if this is Jira Server or Data Center, it is not supported");
+  QString advice;
+  if(m_deployment == JiraDeployment::Server) {
+    advice = QStringLiteral(
+        "use a Personal Access Token from Jira → your avatar → Profile → Personal Access Tokens, and leave the email "
+        "field empty");
+  } else {
+    advice = QStringLiteral("use an API token from id.atlassian.com, with the email of that same Atlassian account");
+    if(!cloudIdResolved) {
+      advice += QStringLiteral("; if this is Jira Server or Data Center, clear the email field and use a Personal Access Token");
+    }
   }
   const QString fromJira = detail::messageFromBody(result.body);
   out.error = fromJira.isEmpty() ? QStringLiteral("HTTP 401 — ") + advice
@@ -365,6 +452,14 @@ void JiraProvider::pullTasks() {
     emit pullFailed(0, QStringLiteral("Jira URL/email/token not configured"));
     return;
   }
+  // Unlike every other call, this one chooses its own path from the
+  // deployment — so it cannot be built before the probe has answered.
+  if(m_deployment == JiraDeployment::Unknown) {
+    ensureDeployment([this]() {
+      pullTasks();
+    });
+    return;
+  }
   QJsonObject payload;
   payload.insert(QStringLiteral("jql"), m_jql.isEmpty() ? defaultJiraJql() : m_jql);
   payload.insert(QStringLiteral("maxResults"), 100);
@@ -382,8 +477,12 @@ void JiraProvider::pullTasks() {
   // otherwise equivalent, including how they judge an unbounded query. It
   // paginates by `nextPageToken` and no longer returns `total`; a single
   // 100-issue page is sufficient for v1.
+  // Cloud retired GET /rest/api/3/search in favour of /search/jql; Server/DC
+  // never had it and still answers POST /rest/api/2/search. Same request body,
+  // same {"issues":[…]} response.
+  const QString searchPath = m_deployment == JiraDeployment::Server ? QStringLiteral("/search") : QStringLiteral("/search/jql");
   const QString site = m_baseUrl;
-  send("POST", QStringLiteral("/search/jql"), QJsonDocument(payload).toJson(QJsonDocument::Compact), [this, site](const ApiResult& r) {
+  send("POST", searchPath, QJsonDocument(payload).toJson(QJsonDocument::Compact), [this, site](const ApiResult& r) {
     if(!r.ok) {
       emit pullFailed(r.status, r.error);
       return;

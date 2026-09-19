@@ -408,8 +408,11 @@ ProviderDescriptor jira() {
   d.descKey = QStringLiteral("settings.int.jira.desc");
   d.bespoke = true;
   d.uiFields = {plain(QStringLiteral("baseUrl"), QStringLiteral("Base URL"), QStringLiteral("https://acme.atlassian.net")),
-                plain(QStringLiteral("email"), QStringLiteral("Email"), QStringLiteral("you@company.com")),
-                secret(QStringLiteral("token"), QStringLiteral("API token")),
+                // Cloud authenticates an email + API token pair; Server/DC
+                // authenticates a Personal Access Token on its own, so there
+                // the email stays empty. Which one this is is detected, not asked.
+                plain(QStringLiteral("email"), QStringLiteral("Email (Cloud only)"), QStringLiteral("you@company.com")),
+                secret(QStringLiteral("token"), QStringLiteral("API token / PAT")),
                 // The placeholder is the default the provider actually applies
                 // when the field is left blank (see defaultJiraJql).
                 plain(QStringLiteral("jql"), QStringLiteral("JQL"), defaultJiraJql(), true)};

@@ -7,6 +7,7 @@
 #include <QString>
 #include <QVector>
 
+#include <cstdint>
 #include <functional>
 
 class QNetworkAccessManager;
@@ -35,6 +36,25 @@ QString normalizeJiraBaseUrl(const QString& raw);
 // "Unbounded JQL queries are not allowed here", which made every sync on a
 // fresh Jira card come back empty.
 QString defaultJiraJql();
+
+// Which Jira a site is. The two are different products behind the same name:
+// Cloud serves /rest/api/3 and authenticates a pair (account email + API
+// token); Server and Data Center serve /rest/api/2 and take a Personal Access
+// Token as a bearer credential. Picking wrong produces a 401 or a 404 with
+// nothing pointing at the real cause, so heap detects it rather than asking.
+enum class JiraDeployment : std::uint8_t {
+  Unknown,
+  Cloud,
+  Server,  // covers Data Center — same API, same auth
+};
+
+// Read the deploymentType out of a /rest/api/2/serverInfo response. Unknown
+// when the body says nothing useful. Pure — unit-tested.
+JiraDeployment parseJiraDeployment(const QByteArray& serverInfoJson);
+
+// The deployment to assume when the probe itself fails: only Atlassian runs
+// *.atlassian.net, and everything else self-hosted is Server/DC. Pure.
+JiraDeployment guessJiraDeployment(const QString& baseUrl);
 
 // Pick which Atlassian site to use out of an accessible-resources response
 // ([{ "id": cloudId, "url": …, "name": … }]). Prefers the one matching
@@ -69,6 +89,16 @@ class JiraProvider : public IntegrationProvider {
   // cached in the card's config; `siteUrl` only builds browse links.
   void setOAuthConfig(const QString& cloudId, const QString& siteUrl, const QString& token, const QString& jql);
   bool isConfigured() const;
+
+  // Override the auto-detection. Only the tests use this; the app lets
+  // detectDeployment() decide on the first request.
+  void setDeployment(JiraDeployment deployment) {
+    m_deployment = deployment;
+  }
+
+  JiraDeployment deployment() const {
+    return m_deployment;
+  }
 
   // Host the scoped-token fallback goes through. Only tests change it.
   void setGatewayRoot(const QString& root) {
@@ -108,6 +138,13 @@ class JiraProvider : public IntegrationProvider {
   // API gateway if the site host answers 401 (see m_apiBase).
   void send(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done);
   void sendOnce(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done);
+  // GET {site}/rest/api/2/serverInfo once, to learn Cloud from Server. Falls
+  // back to guessJiraDeployment() when the probe fails.
+  void detectDeployment(const std::function<void()>& then);
+  // Run `then` once the deployment is known, probing for it if need be.
+  void ensureDeployment(const std::function<void()>& then);
+  // "/rest/api/3" on Cloud, "/rest/api/2" on Server/DC.
+  QString apiRoot() const;
   // GET {site}/_edge/tenant_info — unauthenticated, returns the site's cloudId.
   void resolveCloudId(std::function<void(bool)> done);
 
@@ -117,6 +154,7 @@ class JiraProvider : public IntegrationProvider {
   QString m_token;
   QString m_jql;
   bool m_oauth = false;
+  JiraDeployment m_deployment = JiraDeployment::Unknown;
 
   // Where API calls actually go. Starts as the site itself, which is what a
   // classic (unscoped) API token expects. Atlassian's newer scoped tokens are
