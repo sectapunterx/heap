@@ -48,7 +48,7 @@ TestCase {
         const hc = make('import TodoCpp; HelpContent {}');
         const toc = hc.tocModel;
         verify(toc !== undefined && toc !== null, "tocModel missing");
-        compare(toc.length, 15);
+        compare(toc.length, 16);
         for (let i = 0; i < toc.length; ++i) {
             verify(typeof toc[i].anchor === "string" && toc[i].anchor.length > 0,
                    "toc[" + i + "].anchor must be a non-empty string");
