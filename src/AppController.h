@@ -3,6 +3,7 @@
 #include "Models.h"
 
 #include <QDate>
+#include <QHash>
 #include <QMap>
 #include <QObject>
 #include <qqmlregistration.h>
@@ -41,7 +42,9 @@ class Updater;
 
 namespace heap::integrations {
 class IntegrationProvider;
+class MattermostClient;
 class SecretStore;
+struct ExternalContact;
 struct ExternalTask;
 }  // namespace heap::integrations
 
@@ -382,6 +385,11 @@ class AppController : public QObject {
   // afterwards would still be sent as a Bearer, which GitLab (PRIVATE-TOKEN)
   // and ClickUp (raw header) reject.
   Q_INVOKABLE void disconnectIntegration(const QString& providerId);
+  // Sign in to a directory provider with a username and password (Mattermost,
+  // where most corporate servers have personal access tokens switched off).
+  // `credentials` holds the descriptor's loginFields; the password is used for
+  // the one request and never persisted — only the session token it returns is.
+  Q_INVOKABLE void connectWithCredentials(const QString& providerId, const QVariantMap& credentials);
   // The full integration catalogue (id, name, colour, fields, …) for the
   // Settings → Integrations cards. Data-driven from the provider registry.
   Q_INVOKABLE QVariantList integrationCatalog() const;
@@ -581,6 +589,9 @@ class AppController : public QObject {
   // (Asana workspace, ClickUp list, Sentry org/project, Bitbucket repo) before
   // it can sync. The card opens Advanced so the user can see what is missing.
   void integrationNeedsFields(const QString& providerId, const QStringList& labels);
+  // A credential sign-in finished. The card clears its password field on both
+  // outcomes, so a failed attempt never leaves one sitting in the UI.
+  void integrationLoginFinished(const QString& providerId, bool ok);
   // Raised whenever the keychain contents change — on the async load at startup
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.
@@ -744,6 +755,10 @@ class AppController : public QObject {
   // Every connected + configured provider runs concurrently; a task's
   // externalProvider routes status pushes to the matching one.
   std::vector<std::unique_ptr<heap::integrations::IntegrationProvider>> m_syncProviders;
+  // Directory providers live apart from m_syncProviders: they have none of the
+  // IntegrationProvider verbs. Keyed by provider id; only Mattermost for now.
+  QHash<QString, heap::integrations::MattermostClient*> m_directoryClients;
+  QHash<QString, QString> m_directoryConfigHash;
   // Access tokens for the trackers, kept in the OS keychain (HEAP-74/75).
   heap::integrations::SecretStore* m_secretStore = nullptr;
   // Drives optional periodic pulls (integrations.autoSyncMinutes).
@@ -767,6 +782,13 @@ class AppController : public QObject {
   // site the new token was granted and cache its cloudId. A 3LO token is not
   // bound to a site, and the gateway path needs that id.
   void resolveJiraSite(const QString& accessToken, const QString& label);
+  // Build (or rebuild) the directory client from the current config. Returns
+  // null when the provider is not connected or not configured. Rebuilds only
+  // when the effective config actually changed: applyIntegrationSettings runs
+  // on every settings write, and dropping the client mid-fetch would silently
+  // abandon a request already in flight.
+  heap::integrations::MattermostClient* directoryClient(const QString& providerId);
+  void fetchDirectory(const QString& providerId);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
   // Renew an expiring OAuth access token, then run `then`. Providers that use a

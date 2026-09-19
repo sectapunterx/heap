@@ -9,6 +9,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
 #include "integrations/JiraProvider.h"
+#include "integrations/MattermostClient.h"
 #include "integrations/OAuthManager.h"
 #include "integrations/OAuthRefresh.h"
 #include "integrations/ProviderDescriptor.h"
@@ -2183,8 +2184,18 @@ void AppController::openLatestRelease() const {
 }
 
 void AppController::syncNow() {
-  if(m_syncProviders.empty()) {
+  QStringList directories;
+  for(auto it = m_directoryClients.constBegin(); it != m_directoryClients.constEnd(); ++it) {
+    directories.append(it.key());
+  }
+  if(m_syncProviders.empty() && directories.isEmpty()) {
     emit toast(tr("Connect a tracker in Settings → Integrations first"));
+    return;
+  }
+  for(const QString& id : directories) {
+    fetchDirectory(id);
+  }
+  if(m_syncProviders.empty()) {
     return;
   }
   emit toast(tr("Syncing…"));
@@ -2319,6 +2330,12 @@ void AppController::applyIntegrationSettings() {
   // bespoke. Adding a provider is a registry entry — no change here.
   for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
     const QVariantMap cfg = integrationConfig(d.id);
+    // A directory has none of the IntegrationProvider verbs, so it is built
+    // separately — and unlike a tracker, only when its config actually changed.
+    if(d.kind == heap::integrations::ProviderKind::Directory) {
+      directoryClient(d.id);
+      continue;
+    }
     if(!cfg.value(QStringLiteral("connected"), false).toBool()) {
       continue;
     }
@@ -2347,6 +2364,122 @@ void AppController::applyIntegrationSettings() {
       m_syncTimer->stop();
     }
   }
+}
+
+heap::integrations::MattermostClient* AppController::directoryClient(const QString& providerId) {
+  const QVariantMap cfg = integrationConfig(providerId);
+  const QString host = cfg.value(QStringLiteral("host")).toString().trimmed();
+  const QString token = cfg.value(QStringLiteral("token")).toString();
+  const QString channels = cfg.value(QStringLiteral("channels")).toString();
+  const bool connected = cfg.value(QStringLiteral("connected"), false).toBool();
+
+  if(!connected || host.isEmpty() || token.isEmpty()) {
+    delete m_directoryClients.take(providerId);
+    m_directoryConfigHash.remove(providerId);
+    return nullptr;
+  }
+  // applyIntegrationSettings() runs on every settings write, and a rebuild
+  // would drop a fetch already in flight. Only what the client actually reads
+  // is worth rebuilding for.
+  const QString hash = host + QLatin1Char('\n') + token + QLatin1Char('\n') + channels;
+  if(m_directoryConfigHash.value(providerId) == hash) {
+    return m_directoryClients.value(providerId);
+  }
+
+  delete m_directoryClients.take(providerId);
+  auto* client = new heap::integrations::MattermostClient(this);
+  QStringList extra;
+  const QStringList raw = channels.split(QLatin1Char(','), Qt::SkipEmptyParts);
+  for(const QString& name : raw) {
+    // People type "#backend" as often as "backend".
+    QString trimmed = name.trimmed();
+    while(trimmed.startsWith(QLatin1Char('#'))) {
+      trimmed.remove(0, 1);
+    }
+    if(!trimmed.isEmpty()) {
+      extra.append(trimmed);
+    }
+  }
+  client->setConfig(host, token, extra);
+
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  const QString label = d ? d->displayName : providerId;
+  connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, label](bool ok, const QString& error) {
+    emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+  });
+  connect(client,
+          &heap::integrations::MattermostClient::contactsFetched,
+          this,
+          [this, label](const QVector<heap::integrations::ExternalContact>& contacts) {
+            // Merging into Docs and the People rail lands in the next change;
+            // for now the card reports what the server returned.
+            emit toast(tr("Fetched %n contact(s) from %1", "", static_cast<int>(contacts.size())).arg(label));
+          });
+  connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
+    // A session token dies after ~30 days, and a revoked one is a 401 too.
+    // Saying "expired" beats repeating the same failure on every auto-sync.
+    if(status == 401) {
+      disconnectIntegration(providerId);
+      emit toast(tr("%1 session expired — sign in again").arg(label));
+      return;
+    }
+    emit toast(tr("%1 sync failed: %2").arg(label, error));
+  });
+
+  m_directoryClients.insert(providerId, client);
+  m_directoryConfigHash.insert(providerId, hash);
+  return client;
+}
+
+void AppController::fetchDirectory(const QString& providerId) {
+  if(heap::integrations::MattermostClient* client = directoryClient(providerId)) {
+    client->fetchContacts();
+  }
+}
+
+void AppController::connectWithCredentials(const QString& providerId, const QVariantMap& credentials) {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(d == nullptr || d->loginFields.isEmpty()) {
+    emit toast(tr("Signing in with a password is not available for this integration"));
+    return;
+  }
+  const QString host = integrationConfig(providerId).value(QStringLiteral("host")).toString().trimmed();
+  if(host.isEmpty()) {
+    emit toast(tr("Enter the %1 server URL first").arg(d->displayName));
+    emit integrationLoginFinished(providerId, false);
+    return;
+  }
+
+  // A throwaway client: it has no token yet, so it cannot be the cached one.
+  auto* client = new heap::integrations::MattermostClient(this);
+  client->setConfig(host, QString(), {});
+  const QString label = d->displayName;
+  connect(client,
+          &heap::integrations::MattermostClient::loggedIn,
+          this,
+          [this, providerId, label, client](bool ok, const QString& token, const QString& error) {
+            client->deleteLater();
+            emit integrationLoginFinished(providerId, ok);
+            if(!ok) {
+              emit toast(tr("%1 sign-in failed: %2").arg(label, error));
+              return;
+            }
+            if(m_secretStore) {
+              m_secretStore->setValue(providerId, QStringLiteral("token"), token);
+            }
+            // authMode=session is what makes Disconnect end the server-side
+            // session and drop the token, the way it does for a browser one.
+            setIntegrationFields(providerId,
+                                 {
+                                     {QStringLiteral("authMode"), QStringLiteral("session")},
+                                     {QStringLiteral("connected"), true},
+                                 });
+            emit integrationSecretsChanged();
+            emit toast(tr("%1 connected").arg(label));
+          });
+  client->login(credentials.value(QStringLiteral("loginId")).toString(),
+                credentials.value(QStringLiteral("password")).toString(),
+                credentials.value(QStringLiteral("mfaToken")).toString());
 }
 
 QStringList AppController::missingRequiredFields(const QString& providerId) const {
@@ -2422,6 +2555,11 @@ void AppController::migrateLegacySecrets() {
 }
 
 void AppController::syncProvider(const QString& providerId) {
+  if(m_directoryClients.contains(providerId)) {
+    emit toast(tr("Syncing…"));
+    fetchDirectory(providerId);
+    return;
+  }
   for(const auto& provider : m_syncProviders) {
     if(provider->id() == providerId) {
       emit toast(tr("Syncing…"));
@@ -2436,6 +2574,15 @@ void AppController::testIntegration(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d) {
     emit toast(tr("Unknown integration"));
+    return;
+  }
+  if(d->kind == heap::integrations::ProviderKind::Directory) {
+    heap::integrations::MattermostClient* client = directoryClient(providerId);
+    if(client == nullptr) {
+      emit toast(tr("%1 is not fully configured").arg(d->displayName));
+      return;
+    }
+    client->testConnection();
     return;
   }
   const QVariantMap cfg = integrationConfig(providerId);
@@ -2491,6 +2638,21 @@ QVariantList AppController::integrationCatalog() const {
       fields.append(fm);
     }
     m.insert(QStringLiteral("fields"), fields);
+    // Password sign-in inputs are a separate list on purpose: the card must
+    // never route them through the same commit path as uiFields, which writes
+    // secrets to the keychain.
+    QVariantList loginFields;
+    for(const heap::integrations::FieldSpec& f : d.loginFields) {
+      QVariantMap fm;
+      fm.insert(QStringLiteral("key"), f.key);
+      fm.insert(QStringLiteral("label"), f.label);
+      fm.insert(QStringLiteral("placeholder"), f.placeholder);
+      fm.insert(QStringLiteral("mono"), f.mono);
+      fm.insert(QStringLiteral("secret"), f.secret);
+      loginFields.append(fm);
+    }
+    m.insert(QStringLiteral("loginFields"), loginFields);
+    m.insert(QStringLiteral("directory"), d.kind == heap::integrations::ProviderKind::Directory);
     out.append(m);
   }
   return out;
@@ -2525,6 +2687,13 @@ void AppController::setIntegrationSecret(const QString& providerId, const QStrin
 void AppController::disconnectIntegration(const QString& providerId) {
   const QVariantMap cfg = integrationConfig(providerId);
   const QString authMode = cfg.value(QStringLiteral("authMode")).toString();
+  // End the server-side session before dropping the token, or it stays alive
+  // for its full lifetime (30 days on a default Mattermost).
+  if(authMode == QStringLiteral("session")) {
+    if(heap::integrations::MattermostClient* client = m_directoryClients.value(providerId)) {
+      client->logout();
+    }
+  }
   QVariantMap fields{{QStringLiteral("connected"), false}};
   // A PAT is the user's own credential and is left where it is, so "disconnect,
   // reconnect" doesn't mean "paste the token again". Tokens this app obtained
