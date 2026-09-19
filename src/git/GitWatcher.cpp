@@ -361,10 +361,11 @@ void GitWatcher::fetchCommitsAsync(const QString& repoPath) {
 }
 
 bool GitWatcher::createBranch(const QString& repoPath, const QString& branchName, QString* errorOut) {
-  const auto fail = [errorOut](const QString& e) {
+  const auto fail = [&](const QString& e) {
     if(errorOut) {
       *errorOut = e;
     }
+    emit branchCreated(repoPath, branchName, false, e);
     return false;
   };
   if(m_gitPath.isEmpty()) {
@@ -377,32 +378,52 @@ bool GitWatcher::createBranch(const QString& repoPath, const QString& branchName
     return fail(QStringLiteral("empty branch name"));
   }
 
-  QProcess p;
-  p.setWorkingDirectory(repoPath);
-  p.setProgram(m_gitPath);
-  p.setArguments({QStringLiteral("checkout"), QStringLiteral("-b"), branchName});
-  p.start();
-  if(!p.waitForStarted(5000)) {
-    return fail(QStringLiteral("failed to start git"));
-  }
-  if(!p.waitForFinished(15000)) {
-    p.kill();
-    return fail(QStringLiteral("git checkout timed out"));
-  }
-  if(p.exitStatus() != QProcess::NormalExit || p.exitCode() != 0) {
-    QString err = QString::fromUtf8(p.readAllStandardError()).trimmed();
-    if(err.isEmpty()) {
-      err = QStringLiteral("git checkout -b failed");
+  // Asynchronous on purpose. `git checkout -b` is fast on a warm repository
+  // and not at all fast on a cold or very large one, and waiting for it here
+  // froze the window — this was the only blocking process call in heap.
+  auto* process = new QProcess(this);
+  process->setWorkingDirectory(repoPath);
+  process->setProgram(m_gitPath);
+  process->setArguments({QStringLiteral("checkout"), QStringLiteral("-b"), branchName});
+
+  // A checkout that never returns must not leave the user without an answer.
+  auto* timeout = new QTimer(process);
+  timeout->setSingleShot(true);
+  timeout->setInterval(30000);
+  connect(timeout, &QTimer::timeout, process, [process]() {
+    if(process->state() != QProcess::NotRunning) {
+      process->kill();
     }
-    return fail(err);
-  }
-  // Reflect the new checkout immediately (the FS watcher would catch up too,
-  // but an explicit recompute makes the banner/card update deterministic).
-  const QString abs = QDir(repoPath).absolutePath();
-  if(m_configs.contains(abs)) {
-    rewatchFiles(m_configs.value(abs));
-    recomputeForRepo(abs);
-  }
+  });
+
+  connect(process, &QProcess::finished, this, [this, process, repoPath, branchName](int exitCode, QProcess::ExitStatus status) {
+    process->deleteLater();
+    if(status != QProcess::NormalExit || exitCode != 0) {
+      QString err = QString::fromUtf8(process->readAllStandardError()).trimmed();
+      if(err.isEmpty()) {
+        err = QStringLiteral("git checkout -b failed");
+      }
+      emit branchCreated(repoPath, branchName, false, err);
+      return;
+    }
+    // Reflect the new checkout immediately (the FS watcher would catch
+    // up too, but an explicit recompute makes the banner update
+    // deterministic).
+    const QString abs = QDir(repoPath).absolutePath();
+    if(m_configs.contains(abs)) {
+      rewatchFiles(m_configs.value(abs));
+      recomputeForRepo(abs);
+    }
+    emit branchCreated(repoPath, branchName, true, QString());
+  });
+  connect(process, &QProcess::errorOccurred, this, [this, process, repoPath, branchName](QProcess::ProcessError) {
+    if(process->state() == QProcess::NotRunning) {
+      emit branchCreated(repoPath, branchName, false, QStringLiteral("failed to start git"));
+    }
+  });
+
+  process->start();
+  timeout->start();
   return true;
 }
 
