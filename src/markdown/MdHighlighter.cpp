@@ -12,7 +12,7 @@ QColor colorAt(const QVariantMap& palette, const char* key, const QColor& fallba
   if(!value.isValid()) {
     return fallback;
   }
-  const QColor color = value.value<QColor>();
+  const auto color = value.value<QColor>();
   return color.isValid() ? color : fallback;
 }
 
