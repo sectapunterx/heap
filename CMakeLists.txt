@@ -1,5 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
-project(heap VERSION 0.4.7 LANGUAGES CXX)
+# C is enabled for the vendored md4c parser (third_party/md4c), the only C in
+# the tree.
+project(heap VERSION 0.4.7 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
@@ -60,6 +62,11 @@ find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Svg)
 find_package(Qt6Keychain QUIET)
 
 qt_standard_project_setup(REQUIRES 6.4)
+
+# ── Vendored third-party code ─────────────────────────────────────
+# md4c: the CommonMark parser the notes editor is built on. Static, so nothing
+# new enters the Windows portable bundle. See third_party/md4c/README.heap.md.
+add_subdirectory(third_party/md4c)
 
 # ── Core library: all app logic + the TodoCpp QML module ──────────
 # Extracted from the heap executable so the Qt Quick Test harness (tests/) can
@@ -196,6 +203,7 @@ qt_add_qml_module(heap_core
 
 target_include_directories(heap_core PUBLIC src)
 target_link_libraries(heap_core PUBLIC
+    heap_md4c
     Qt6::Core
     Qt6::Gui
     Qt6::Network

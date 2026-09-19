@@ -1,0 +1,7 @@
+---
+# Vendored sources are copied verbatim and not held to this project's checks.
+# CI runs clang-tidy --fix over changed files; without this, upstream code would
+# be rewritten and the next re-copy would conflict.
+Checks: '-*'
+WarningsAsErrors: ''
+HeaderFilterRegex: '$^'

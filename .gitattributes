@@ -2,3 +2,8 @@
 # msys2/bash chokes on CRLF ("bad interpreter", "set -euo pipefail\r"), which
 # would break the Windows portable-bundle deploy step in CI.
 *.sh text eol=lf
+
+# Vendored upstream sources: keep them byte-for-byte as shipped so re-copying a
+# new release is a clean diff, and keep them out of language statistics.
+third_party/** text eol=lf
+third_party/** linguist-vendored

@@ -1,0 +1,5 @@
+# Vendored sources are copied verbatim — see each directory's README.heap.md.
+# CI runs clang-format --fix over changed files and would otherwise rewrite
+# upstream code, turning every future re-copy into a conflict.
+DisableFormat: true
+SortIncludes: Never
