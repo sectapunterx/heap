@@ -697,11 +697,17 @@ Item {
         property bool secret: false
         property string value: ""
         signal committed(string text)
+        // The edit that has not been written yet, or null when the field is in
+        // sync with the stored value.
+        function pendingText() {
+            return textRowField.text !== textRow.value ? textRowField.text : null;
+        }
         // Flush a pending edit without waiting for focus loss. Buttons here are
         // MouseAreas, which never take focus, so clicking "Test connection"
         // straight after pasting a token would otherwise act on the old value.
         function commitPending() {
-            if (textRowField.text !== textRow.value) textRow.committed(textRowField.text);
+            const t = pendingText();
+            if (t !== null) textRow.committed(t);
         }
         spacing: 4
         Layout.fillWidth: true
@@ -1600,9 +1606,20 @@ Item {
                         // TextField, so without this a pasted token is still
                         // unsaved when "Connect"/"Test"/"Sync" fires.
                         function commitFields() {
+                            // Read every pending edit before writing any of them.
+                            // A write rebuilds the provider and re-evaluates the
+                            // other fields' bindings, so reading field N's text
+                            // after committing field 0 is reading it after
+                            // something else may have moved it.
+                            const pending = []
                             for (let i = 0; i < fieldsRep.count; ++i) {
                                 const row = fieldsRep.itemAt(i)
-                                if (row && row.commitPending) row.commitPending()
+                                if (!row || !row.pendingText) continue
+                                const text = row.pendingText()
+                                if (text !== null) pending.push({ row: row, text: text })
+                            }
+                            for (let i = 0; i < pending.length; ++i) {
+                                pending[i].row.committed(pending[i].text)
                             }
                         }
 
