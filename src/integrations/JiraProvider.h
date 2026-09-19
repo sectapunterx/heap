@@ -36,9 +36,21 @@ QString normalizeJiraBaseUrl(const QString& raw);
 // fresh Jira card come back empty.
 QString defaultJiraJql();
 
+// Pick which Atlassian site to use out of an accessible-resources response
+// ([{ "id": cloudId, "url": …, "name": … }]). Prefers the one matching
+// `preferredUrl`; otherwise takes the first. Returns {cloudId, siteUrl} — both
+// empty when the response grants no site. Pure — unit-tested.
+struct JiraSite {
+  QString cloudId;
+  QString url;
+};
+
+JiraSite pickJiraSite(const QByteArray& accessibleResourcesJson, const QString& preferredUrl);
+
 // Concrete IntegrationProvider backed by the Jira Cloud REST API v3 (HEAP-75).
-// Auth is HTTP Basic with an Atlassian account email + API token. Status pushes
-// go through the issue's available workflow transitions.
+// Auth is either HTTP Basic (account email + API token) or, after a browser
+// sign-in, a Bearer access token through the Atlassian API gateway. Status
+// pushes go through the issue's available workflow transitions.
 class JiraProvider : public IntegrationProvider {
   Q_OBJECT
 
@@ -51,6 +63,11 @@ class JiraProvider : public IntegrationProvider {
   // `jql` selects which issues to pull. Empty `jql` falls back to
   // defaultJiraJql().
   void setConfig(const QString& baseUrl, const QString& email, const QString& token, const QString& jql);
+  // Browser sign-in (OAuth 2.0 3LO). No email: the token identifies the user,
+  // and every call goes to the gateway, which is the only host that accepts a
+  // 3LO token. `cloudId` comes from accessible-resources at sign-in time and is
+  // cached in the card's config; `siteUrl` only builds browse links.
+  void setOAuthConfig(const QString& cloudId, const QString& siteUrl, const QString& token, const QString& jql);
   bool isConfigured() const;
 
   // Host the scoped-token fallback goes through. Only tests change it.
@@ -91,9 +108,10 @@ class JiraProvider : public IntegrationProvider {
 
   QNetworkAccessManager* m_nam = nullptr;
   QString m_baseUrl;  // "https://acme.atlassian.net" (no trailing slash)
-  QString m_email;
+  QString m_email;    // empty in OAuth mode
   QString m_token;
   QString m_jql;
+  bool m_oauth = false;
 
   // Where API calls actually go. Starts as the site itself, which is what a
   // classic (unscoped) API token expects. Atlassian's newer scoped tokens are

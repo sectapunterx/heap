@@ -16,7 +16,7 @@ There are three ways to authenticate, depending on the provider:
 
 | Method | Providers | What you do |
 |--------|-----------|-------------|
-| **One-click browser** | GitHub, GitLab, Todoist, Asana, ClickUp, Sentry, Bitbucket* | Click **Connect with browser**, authorize, done. |
+| **One-click browser** | GitHub, GitLab, Jira, Trello, Todoist, Asana, ClickUp, Sentry, Bitbucket* | Click **Connect with browser**, authorize, done. |
 | **Personal access token** | all | Open **Advanced**, paste a token. Fallback everywhere. |
 | **Device code** | GitHub | The card shows a short code — enter it on the page that opens. |
 
@@ -25,13 +25,13 @@ self-hosted GitLab only once you register a client ID on your instance. If the
 button is missing, see "No browser button?" below — the token path always works.
 
 Signing in tells the tracker who you are, not what to sync. Asana, ClickUp,
-Sentry and Bitbucket also need a scope (workspace, list, org/project, repo); the
-card says so and opens **Advanced** for you. GitHub and GitLab don't: leave the
-repo/project blank and they pull the issues assigned to you.
+Sentry and Bitbucket also need a scope — a workspace, list, org/project or repo;
+the card names what is missing and opens **Advanced** at it. GitHub, GitLab and
+Jira need nothing: leave the repo/project/JQL blank and they pull the issues
+**assigned to you**, and Jira picks your Atlassian site by itself.
 
-Once connected, **Sync now** pulls issues; **Test connection** validates the
-credentials. If you leave the repo/project field blank, GitHub and GitLab pull
-the issues **assigned to you** across all repos — no repo to configure.
+Once connected, **Sync now** pulls issues and **Test connection** validates the
+credentials.
 
 ## Enabling one-click OAuth (maintainers)
 
@@ -88,19 +88,20 @@ which is unsafe to embed. `heap.` uses the **Device Authorization Grant** instea
 
 To recreate: <https://github.com/settings/applications/new> → name `heap`,
 homepage `https://github.com/sectapunterx/heap`, callback `http://127.0.0.1:51789/`,
-tick **Enable Device Flow** → Register → copy the **Client ID** into `kGithubClientId`.
+tick **Enable Device Flow** → Register → copy the **Client ID** into
+`HEAP_OAUTH_GITHUB_CLIENT_ID` in `OAuthClients.h`.
 
 ### GitLab — done (PKCE, no secret)
 
 Registered on gitlab.com as app **heap** (owner `sectapunterx`), Confidential=No,
-scope `api`, callback `http://127.0.0.1:51789/`; the Application ID is baked into
-`kGitlabClientId`. To recreate:
+scope `api`, callback `http://127.0.0.1:51789/`; the Application ID is committed
+as `HEAP_OAUTH_GITLAB_CLIENT_ID`. To recreate:
 
 1. <https://gitlab.com/-/user_settings/applications>
 2. **Redirect URI:** `http://127.0.0.1:51789/`
 3. Uncheck **Confidential** (native/PKCE client).
 4. **Scopes:** `api`
-5. Save → copy the **Application ID** into `kGitlabClientId`.
+5. Save → copy the **Application ID** into `HEAP_OAUTH_GITLAB_CLIENT_ID`.
 
 Self-hosted GitLab: users register the same under their instance and paste the
 Application ID under **Advanced** (the host field points the flow at their server).
@@ -125,11 +126,37 @@ Register at:
 | Sentry | **Settings → Developer Settings → New Public Integration** | Scopes `org:read project:read event:read` |
 | Bitbucket | Workspace **Settings → OAuth consumers** | Client credentials go in an HTTP Basic header; tick the `issue` permission; 2h token + refresh |
 
-### Trello, Jira
+### Jira — Atlassian 3LO
 
-See the Jira and Trello sections — their flows are not the plain authorization
-code grant (Jira needs Atlassian's `audience`/`cloudId` dance, Trello answers in
-the URL fragment).
+<https://developer.atlassian.com/console/myapps/> → **Create → OAuth 2.0
+integration**, add the **Jira API** permission with scopes
+`read:jira-work write:jira-work read:jira-user offline_access`, and set the
+callback to `http://127.0.0.1:51789/`.
+
+Two Atlassian-specific details the flow handles:
+
+- The authorize URL carries `audience=api.atlassian.com` and `prompt=consent`.
+  Without `prompt=consent` Atlassian issues no refresh token, and the session
+  would die an hour later.
+- **A 3LO token is not bound to a site.** It is only accepted at
+  `https://api.atlassian.com/ex/jira/{cloudId}`, never at `acme.atlassian.net`.
+  After sign-in heap calls `/oauth/token/accessible-resources`, picks the site
+  (keeping the one the card already names, so a second site can't silently
+  repoint synced issues) and caches `cloudId` + `siteUrl` in the card's config.
+
+Atlassian has no PKCE-only mode, so this needs a client secret. **Jira Cloud
+only** — Server/Data Center has a different, per-instance OAuth story.
+
+### Trello — token in the fragment
+
+<https://trello.com/power-ups/admin> → your Power-Up → **API key**. Trello has
+no authorization-code grant at all: `/1/authorize` returns the token in the URL
+**fragment**, which a browser never puts on the wire. The loopback listener
+serves a page whose script posts the token back and then scrubs the address bar.
+
+No secret is involved — the app key is public, it appears in every authorize
+URL — but the key's **allowed origins must include `http://127.0.0.1:51789`**
+or Trello refuses the redirect. Only `HEAP_OAUTH_TRELLO_CLIENT_ID` is needed.
 
 ### Redmine — no OAuth
 
