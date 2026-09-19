@@ -772,6 +772,45 @@ TEST_F(AppControllerTest, ExpiredOAuthTokenIsRefreshedBeforeTheSync) {
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
 }
 
+// The mirror image, and the one that fails silently. Atlassian now forces
+// rotation on every new 3LO app, but Bitbucket and ClickUp answer a refresh
+// with an access token and no refresh_token at all. SecretStore::setValue
+// deletes a key when handed an empty string, so writing the parsed value
+// unconditionally would wipe the credential that keeps the grant alive — the
+// card would work until the next expiry and then be unrecoverable without a
+// fresh browser sign-in.
+TEST_F(AppControllerTest, ARefreshThatReturnsNoNewRefreshTokenKeepsTheOldOne) {
+  heap::testing::FakeHttpServer gitlab;
+  gitlab.route("POST /oauth/token", {200, R"({"access_token":"at-new","expires_in":7200})", {}});
+  gitlab.route("GET /api/v4/issues", {200, "[]", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("at-old"));
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QStringLiteral("rt-keep"));
+
+  writeIntegrationConfig(QStringLiteral("gitlab"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             {QStringLiteral("host"), gitlab.base()},
+                             {QStringLiteral("clientId"), QStringLiteral("cid")},
+                             {QStringLiteral("tokenExpiresAt"), QDateTime::currentDateTime().addSecs(-3600).toString(Qt::ISODate)},
+                         });
+
+  app_->syncProvider(QStringLiteral("gitlab"));
+  ASSERT_TRUE(heap::testing::waitUntil([&gitlab]() {
+    return gitlab.seen().contains("GET /api/v4/issues");
+  })) << "the sync never reached the issue list";
+
+  EXPECT_EQ(gitlab.lastRequest("GET /api/v4/issues").headers.value("authorization"), QByteArray("Bearer at-new"));
+  EXPECT_EQ(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("token")), QStringLiteral("at-new"));
+  EXPECT_EQ(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken")), QStringLiteral("rt-keep"))
+      << "the silent half of the grant was cleared, leaving the next expiry nothing to spend";
+
+  writeIntegrationConfig(QStringLiteral("gitlab"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
+}
+
 // ─── Disconnect / auth mode ───────────────────────────────────────────
 // authMode=oauth used to survive a disconnect, so a personal access token
 // pasted afterwards was still sent as a Bearer — which GitLab (PRIVATE-TOKEN)
