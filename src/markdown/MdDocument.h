@@ -8,6 +8,7 @@
 
 #include <QObject>
 #include <QQmlEngine>
+#include <QQuickTextDocument>
 #include <QTimer>
 #include <QVariantMap>
 
@@ -93,6 +94,22 @@ class MdDocument : public QObject {
   // lines.
   Q_INVOKABLE int lineForPosition(int position);
   Q_INVOKABLE int positionForLine(int line);
+
+  // What it takes to flip the checkbox drawn by `row`:
+  //   { "position": <utf-16>, "from": "x", "to": " " }
+  // or an empty map when the row is not a task, or when the parse no longer
+  // matches the text. Exposed mostly so tests can assert the arithmetic
+  // without a document.
+  Q_INVOKABLE QVariantMap taskToggleForRow(int row);
+
+  // Flip that checkbox in the editor's own document. Returns false when the
+  // row is not a task or the parse has fallen behind the text.
+  //
+  // The write goes through a QTextCursor inside a single edit block, so it is
+  // one undo step. Doing it as a remove followed by an insert looks the same
+  // until Ctrl+Z, which then takes back only the insert and leaves "[]" —
+  // markdown that is no longer a task at all.
+  Q_INVOKABLE bool toggleTask(QQuickTextDocument* target, int row);
 
  signals:
   void textChanged();

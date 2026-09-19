@@ -94,6 +94,51 @@ QVector<MdHeading> outline(const MdSourceMap& src, const MdAst& ast) {
   return headings;
 }
 
+QVector<MdSection> searchSections(const QString& markdown, int bodyCap) {
+  const MdSourceMap src(markdown);
+  const MdAst ast = parse(src);
+  const QVector<MdHeading> headings = outline(src, ast);
+
+  const auto capped = [bodyCap](QString text) {
+    text = text.simplified();
+    if(text.size() > bodyCap) {
+      text.truncate(bodyCap);
+    }
+    return text;
+  };
+
+  QVector<MdSection> sections;
+
+  // Anything above the first heading belongs to the note itself, not to a
+  // section — losing it would make the top of a note unsearchable.
+  const int firstHeadingLine = headings.isEmpty() ? src.lineCount() : headings.first().line;
+  if(firstHeadingLine > 0) {
+    const QString preamble = capped(src.textForLines(0, firstHeadingLine - 1));
+    if(!preamble.isEmpty()) {
+      sections.append(MdSection{QString(), preamble, 0});
+    }
+  }
+
+  // Titles carry their ancestors, so a hit reads as "Release · Windows"
+  // rather than as an isolated "Windows".
+  QVector<MdHeading> trail;
+  for(const MdHeading& heading : headings) {
+    while(!trail.isEmpty() && trail.last().level >= heading.level) {
+      trail.removeLast();
+    }
+    QStringList path;
+    for(const MdHeading& ancestor : trail) {
+      path << ancestor.text;
+    }
+    path << heading.text;
+    trail.append(heading);
+
+    sections.append(MdSection{
+        path.join(QStringLiteral(" · ")), capped(src.textForLines(heading.sectionFirstLine, heading.sectionLastLine)), heading.line});
+  }
+  return sections;
+}
+
 QVector<MdWikiRef> wikiRefs(const MdSourceMap& src, const MdAst& ast) {
   QVector<MdWikiRef> refs;
   if(!ast.isValid()) {

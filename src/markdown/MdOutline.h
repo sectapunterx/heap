@@ -47,4 +47,20 @@ QVector<MdHeading> outline(const MdSourceMap& src, const MdAst& ast);
 // inside a shell snippet is not one.
 QVector<MdWikiRef> wikiRefs(const MdSourceMap& src, const MdAst& ast);
 
+// A searchable piece of a note: one per heading, plus a leading one for
+// anything written above the first heading.
+struct MdSection {
+  QString title;  // heading path, e.g. "Release · Windows"
+  QString body;   // the section's text, markup stripped
+  int line = 0;   // 0-based line to jump to
+};
+
+// Split a document into sections for search.
+//
+// A note used to be one search entry holding the whole document, so a hit told
+// the reader only that the word was somewhere in it. Per-heading sections give
+// the palette a place to jump to and a snippet worth showing. Sections are
+// capped so rebuilding the list stays cheap on a large note.
+QVector<MdSection> searchSections(const QString& markdown, int bodyCap = 2000);
+
 }  // namespace heap::md

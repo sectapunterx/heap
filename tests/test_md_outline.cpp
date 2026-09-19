@@ -196,3 +196,65 @@ TEST(MdOutlineTest, NoteLinksHandlesEmptyAndDegenerateInput) {
   EXPECT_EQ(heap::notes::headingOffset(QStringLiteral("# A\n"), QString()), -1);
   EXPECT_TRUE(heap::notes::collectHeadings(QStringLiteral("#####\n\n```\n")).isEmpty());
 }
+
+// ── Search sections ─────────────────────────────────────────────────
+//
+// A note used to be one search entry holding the whole document: a hit could
+// only say "the word is somewhere in your notes". Sections give the palette a
+// place to land and a snippet worth showing.
+
+TEST(MdOutlineTest, SplitsANoteIntoSectionsPerHeading) {
+  const QString markdown = QStringLiteral(
+      "intro text above any heading\n"
+      "\n"
+      "# Release\n"
+      "release body\n"
+      "\n"
+      "## Windows\n"
+      "windows body\n"
+      "\n"
+      "## macOS\n"
+      "macos body\n");
+  const QVector<MdSection> sections = searchSections(markdown);
+  ASSERT_EQ(sections.size(), 4);
+
+  // Text above the first heading belongs to the note, not to a section —
+  // dropping it would make the top of a note unsearchable.
+  EXPECT_TRUE(sections.at(0).title.isEmpty());
+  EXPECT_TRUE(sections.at(0).body.contains(QStringLiteral("intro text")));
+  EXPECT_EQ(sections.at(0).line, 0);
+
+  EXPECT_EQ(sections.at(1).title, QStringLiteral("Release"));
+  EXPECT_TRUE(sections.at(1).body.contains(QStringLiteral("release body")));
+
+  // A nested heading carries its ancestors, so a hit reads as a path rather
+  // than as an isolated word.
+  EXPECT_EQ(sections.at(2).title, QStringLiteral("Release · Windows"));
+  EXPECT_TRUE(sections.at(2).body.contains(QStringLiteral("windows body")));
+  EXPECT_FALSE(sections.at(2).body.contains(QStringLiteral("macos body")));
+  EXPECT_EQ(sections.at(3).title, QStringLiteral("Release · macOS"));
+}
+
+TEST(MdOutlineTest, SectionLineJumpsToItsHeading) {
+  const QString markdown = QStringLiteral("a\n\n# One\nbody\n\n# Two\nbody\n");
+  const QVector<MdSection> sections = searchSections(markdown);
+  ASSERT_EQ(sections.size(), 3);
+  EXPECT_EQ(sections.at(1).line, 2);
+  EXPECT_EQ(sections.at(2).line, 5);
+}
+
+TEST(MdOutlineTest, SectionBodiesAreCapped) {
+  const QString markdown = QStringLiteral("# H\n") + QString(5000, QLatin1Char('x')) + QStringLiteral("\n");
+  const QVector<MdSection> sections = searchSections(markdown, 100);
+  ASSERT_EQ(sections.size(), 1);
+  EXPECT_LE(sections.at(0).body.size(), 100);
+}
+
+TEST(MdOutlineTest, SectionsHandleNotesWithoutHeadings) {
+  const QVector<MdSection> sections = searchSections(QStringLiteral("just some text\nand more\n"));
+  ASSERT_EQ(sections.size(), 1);
+  EXPECT_TRUE(sections.at(0).title.isEmpty());
+  EXPECT_TRUE(sections.at(0).body.contains(QStringLiteral("just some text")));
+
+  EXPECT_TRUE(searchSections(QString()).isEmpty());
+}

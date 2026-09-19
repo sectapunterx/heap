@@ -36,6 +36,16 @@ Item {
     }
     onViewModeChanged: if (_loadedOnce) _writeViewMode(viewMode)
 
+    // Set by the command palette when a search hit lands in this note; the
+    // caret goes to that line and the property is handed back for clearing.
+    property int jumpToLine: -1
+    signal jumpConsumed()
+    onJumpToLineChanged: {
+        if (jumpToLine < 0) return;
+        _jumpToOffset(mdDocument.positionForLine(jumpToLine));
+        jumpConsumed();
+    }
+
     // ── State for autocomplete popup ─────────────────────────────────
     property string acTrigger: ""        // "@" or "#" or ""
     property int    acTriggerPos: -1     // index of trigger char in editor.text
@@ -48,6 +58,44 @@ Item {
     // up as you type. Empty (and uncomputed) while the pane is hidden.
     property bool showBacklinks: false
     property var  _backlinks: showBacklinks ? AppController.noteBacklinks(editor.text) : []
+
+    // ── Scroll sync between the two panes ────────────────────────────
+    // Which pane last moved under the reader's hand. The follower's own
+    // movement re-enters here, so the leader is held for a moment to stop the
+    // two from chasing each other.
+    property string _syncOwner: ""
+    Timer {
+        id: syncRelease
+        interval: 150
+        onTriggered: root._syncOwner = ""
+    }
+
+    function _syncFrom(who) {
+        if (root.viewMode !== "split") return;
+        if (root._syncOwner !== "" && root._syncOwner !== who) return;
+        root._syncOwner = who;
+        syncRelease.restart();
+        Qt.callLater(root._applySync, who);
+    }
+
+    function _applySync(who) {
+        if (root.viewMode !== "split") return;
+        if (who === "editor") {
+            // Top visible line of the editor → the row that holds it.
+            const line = editor.text.substring(0, editor.positionAt(0, notesScroll.contentY))
+                               .split("\n").length - 1;
+            const row = mdDocument.rowForLine(line);
+            if (row >= 0) preview.positionViewAtIndex(row, ListView.Beginning);
+        } else {
+            const row = preview.indexAt(1, preview.contentY + 1);
+            if (row < 0) return;
+            const line = mdDocument.firstLineOfRow(row);
+            if (line < 0) return;
+            const rect = editor.positionToRectangle(mdDocument.positionForLine(line));
+            notesScroll.contentY = Math.max(0, Math.min(rect.y,
+                Math.max(0, notesScroll.contentHeight - notesScroll.height)));
+        }
+    }
 
     function _fuzzyScore(q, s) {
         if (q.length === 0) return 0;
@@ -367,6 +415,8 @@ Item {
             Flickable {
                 id: notesScroll
                 visible: root.viewMode === "edit" || root.viewMode === "split"
+                // Scroll sync: the editor leads while the reader scrolls it.
+                onContentYChanged: if (root.viewMode === "split") root._syncFrom("editor")
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 clip: true
@@ -566,6 +616,14 @@ Item {
                 Layout.fillWidth: true
                 Layout.fillHeight: true
                 document: mdDocument
+                editorDocument: editor.textDocument
+
+                // The checkbox write already went through the editor's own
+                // document; this only keeps the caret where it was.
+                onTaskToggled: {
+                    const caret = editor.cursorPosition;
+                    editor.cursorPosition = caret;
+                }
 
                 // Clicking a rendered block puts the caret on the line that
                 // produced it, and shows the editor if it was hidden.
@@ -593,6 +651,13 @@ Item {
                     font.family: Theme.fontUi
                     font.pixelSize: 13
                 }
+
+                // ── Scroll sync (split mode) ──────────────────────────
+                // Both panes show the same document, so they should show the
+                // same part of it. Whichever pane the reader is scrolling
+                // leads; the other follows and its own movement is ignored
+                // for a moment, or the two would push each other.
+                onContentYChanged: if (root.viewMode === "split") root._syncFrom("preview")
             }
 
             // ── Backlinks pane (HEAP-79) ──────────────────────────────

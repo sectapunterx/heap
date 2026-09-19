@@ -1,6 +1,8 @@
 #include "markdown/MdDocument.h"
 
 #include <QElapsedTimer>
+#include <QTextCursor>
+#include <QTextDocument>
 #include <QVariantMap>
 
 #include <algorithm>
@@ -143,6 +145,73 @@ int MdDocument::lineForPosition(int position) {
 int MdDocument::positionForLine(int line) {
   flush();
   return m_src.byteToUtf16(m_src.lineStartByte(line));
+}
+
+bool MdDocument::toggleTask(QQuickTextDocument* target, int row) {
+  if(target == nullptr || target->textDocument() == nullptr) {
+    return false;
+  }
+  const QVariantMap edit = taskToggleForRow(row);
+  if(edit.isEmpty()) {
+    return false;
+  }
+
+  const int position = edit.value(QStringLiteral("position")).toInt();
+  const QString to = edit.value(QStringLiteral("to")).toString();
+
+  QTextCursor cursor(target->textDocument());
+  cursor.setPosition(position);
+  cursor.movePosition(QTextCursor::NextCharacter, QTextCursor::KeepAnchor);
+  if(cursor.selectedText() != edit.value(QStringLiteral("from")).toString()) {
+    // The document moved under us between the parse and the click.
+    return false;
+  }
+
+  // One edit block, so Ctrl+Z takes the whole change back. As a remove
+  // followed by an insert this looked identical until undo, which reverted
+  // only the insert and left "[]" behind — no longer a task at all.
+  cursor.beginEditBlock();
+  cursor.insertText(to);
+  cursor.endEditBlock();
+  return true;
+}
+
+QVariantMap MdDocument::taskToggleForRow(int row) {
+  flush();
+  const int line = m_model.data(m_model.index(row), MdBlockModel::TaskLineRole).toInt();
+  if(line < 0) {
+    return {};
+  }
+
+  // Find the item whose own first line is this one, and take the offset md4c
+  // reported for the character between its brackets.
+  for(const MdBlock& block : m_ast.blocks) {
+    if(block.type != BlockType::ListItem || !block.isTask || block.taskMarkByte < 0) {
+      continue;
+    }
+    if(!block.span.isValid() || block.span.firstLine != line) {
+      continue;
+    }
+
+    const int position = m_src.byteToUtf16(block.taskMarkByte);
+    if(position < 0 || position >= m_text.size()) {
+      return {};
+    }
+    // The parse can be a beat behind the text. Checking the character before
+    // offering the edit is what stops a stale offset from overwriting some
+    // unrelated letter.
+    const QChar current = m_text.at(position);
+    if(current != QChar(u' ') && current.toLower() != QChar(u'x')) {
+      return {};
+    }
+
+    QVariantMap edit;
+    edit.insert(QStringLiteral("position"), position);
+    edit.insert(QStringLiteral("from"), QString(current));
+    edit.insert(QStringLiteral("to"), current == QChar(u' ') ? QStringLiteral("x") : QStringLiteral(" "));
+    return edit;
+  }
+  return {};
 }
 
 }  // namespace heap::md

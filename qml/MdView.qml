@@ -20,11 +20,18 @@ ListView {
 
     // MdDocument instance. Its model drives this view.
     required property var document
+    // The editor's QQuickTextDocument. A checkbox click writes through it, so
+    // the change joins the editor's undo stack instead of arriving from the
+    // side. Null in a preview with no editor: the boxes then do not toggle.
+    property var editorDocument: null
 
     // Emitted when a row is activated (double-click, or Alt+click), with the
     // first source line it came from — the editor uses this to put the caret
     // where the reader was looking.
     signal sourceRequested(int line)
+    // A checkbox was clicked and the source has been rewritten. The editor
+    // listens so it can keep the caret where the reader left it.
+    signal taskToggled()
     // A heap:// link, already split into kind ("note", "task", "person",
     // "tag", "fn") and target.
     signal internalLinkActivated(string kind, string target)
@@ -195,8 +202,6 @@ ListView {
 
         Component {
             id: taskBox
-            // Read-only in this milestone: the click that toggles it writes back
-            // to the source, which arrives with the editor work.
             Rectangle {
                 objectName: "mdTaskBox"
                 width: 14
@@ -212,6 +217,23 @@ ListView {
                     color: Theme.bg
                     font.pixelSize: 10
                     font.bold: true
+                }
+
+                // Ticking a box here rewrites exactly one character of the
+                // note. The edit goes through the editor's own cursor, so it
+                // lands on the undo stack and the caret stays where the reader
+                // left it.
+                MouseArea {
+                    objectName: "mdTaskClick"
+                    anchors.fill: parent
+                    anchors.margins: -6
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: {
+                        // The write goes into the editor's own document, in one
+                        // edit block, so Ctrl+Z takes the whole change back.
+                        if (view.editorDocument && view.document.toggleTask(view.editorDocument, rowItem.index))
+                            view.taskToggled();
+                    }
                 }
             }
         }
