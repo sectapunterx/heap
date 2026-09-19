@@ -394,6 +394,16 @@ int Builder::onEnterSpan(MD_SPANTYPE type, void* detail) {
         auto* wiki = static_cast<MD_SPAN_WIKILINK_DETAIL*>(detail);
         node.href = attributeText(wiki->target);
         anchorAttribute(wiki->target);
+        // The target is real source text, unlike a reference link's, so the
+        // node can say where it is. The backlinks pane needs that to report
+        // the line a link was written on.
+        const int offset = offsetOf(wiki->target.text);
+        if(offset >= 0) {
+          const int end = std::min(offset + static_cast<int>(wiki->target.size), m_src.byteCount());
+          node.span = spanForLines(m_src.lineOfByte(offset), m_src.lineOfByte(std::max(end - 1, offset)));
+          node.span.byteStart = offset;
+          node.span.byteEnd = end;
+        }
       }
       break;
     default:
