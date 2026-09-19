@@ -23,6 +23,7 @@ Item {
         {anchor: "help-hotkeys", label: "Hotkeys — rebinding and conflicts"},
         {anchor: "help-automation", label: "Automation & Notifications"},
         {anchor: "help-git", label: "Git Watcher — branch focus, PR"},
+        {anchor: "help-integrations", label: "Integrations — trackers, tokens, OAuth, JQL"},
         {anchor: "help-undo", label: "Undo & Backups"},
         {anchor: "help-data", label: "Data — JSON import/export, reset"},
         {anchor: "help-tips", label: "Tips & non-obvious things"}
@@ -801,6 +802,145 @@ Item {
             Body {
                 text: "Don't need the banner? Click '×' — it hides until the next branch switch. "
                     + "To disable it completely — untrack the repo in Settings → Git Watcher."
+            }
+        }
+
+        // ─────────────────────────────────────────── INTEGRATIONS
+        HelpCard {
+            objectName: "help-integrations"
+            H2 {
+                text: "Integrations — connecting a tracker"
+            }
+            Body {
+                text: "Settings → Integrations lists every tracker heap. can pull issues from. Each card is "
+                    + "collapsed; click it to expand. Issues arrive as cards in the active profile, and moving "
+                    + "one between columns writes the status back where the tracker allows it."
+            }
+
+            H3 {
+                text: "Three ways to sign in"
+            }
+            Body {
+                text: "Connect with browser — opens your browser, you authorize, nothing to fill in. "
+                    + "Device code (GitHub) — the card shows a short code you type on the page that opens. "
+                    + "Access token — open Advanced and paste one. The token path works for every provider "
+                    + "and is never a degraded mode: it is exactly what the browser flow ends up storing."
+            }
+
+            H3 {
+                text: "No 'Connect with browser' button?"
+            }
+            Body {
+                text: "The button only appears when this build can run the flow with no help from you. If you "
+                    + "built heap. yourself, that is expected for most providers. Paste a token under Advanced "
+                    + "and everything works."
+            }
+            Body {
+                text: "Why it is missing, in order of likelihood:\n"
+                    + "1.  You built heap. yourself. Jira, Todoist, ClickUp, Bitbucket and Sentry all refuse an "
+                    + "app that has no client secret, and the official builds get theirs from CI. A source "
+                    + "build has none, so those buttons stay hidden.\n"
+                    + "2.  Your provider is self-hosted — Gitea, Forgejo, a GitLab of your own. There is no "
+                    + "single app anyone could ship for every instance, so you register one on your server and "
+                    + "paste its client ID under Advanced.\n"
+                    + "3.  The provider has no OAuth at all. Redmine is the only one here: its API only takes "
+                    + "an API key. That is not a gap in heap. and will not change until Redmine changes.\n"
+                    + "4.  GitHub on a Qt older than 6.9 (some Linux packages). The device grant needs that "
+                    + "version; the token path is unaffected."
+            }
+            Hint {
+                text: "Want one-click in your own build? Register an OAuth app with the provider, set the "
+                    + "redirect URI to http://127.0.0.1:51789/ and pass HEAP_OAUTH_<PROVIDER>_CLIENT_ID and "
+                    + "_CLIENT_SECRET in the environment when you run cmake. docs/INTEGRATIONS.md has the "
+                    + "per-provider registration steps."
+            }
+
+            H3 {
+                text: "Where to get a token"
+            }
+            Body {
+                text: "GitHub — Settings → Developer settings → Personal access tokens. A classic token needs "
+                    + "the 'repo' scope; a fine-grained one needs read/write on Issues for the repos you care "
+                    + "about.\n"
+                    + "GitLab — User settings → Access tokens, scope 'api'. Self-hosted: the same page on your "
+                    + "instance, and fill in Host.\n"
+                    + "Jira — id.atlassian.com → Security → Create and manage API tokens. You also need the "
+                    + "Email of the same Atlassian account: Jira authenticates the pair, not the token alone.\n"
+                    + "Gitea / Forgejo — Settings → Applications → Generate token.\n"
+                    + "Redmine — My account → API access key (an admin has to enable the REST API first).\n"
+                    + "Todoist — Settings → Integrations → Developer → API token.\n"
+                    + "Asana — My settings → Apps → Manage developer apps → Personal access token.\n"
+                    + "ClickUp — Settings → Apps → API token.\n"
+                    + "Sentry — Settings → Account → API → Auth tokens, scopes org:read, project:read, event:read.\n"
+                    + "Bitbucket — Personal settings → App passwords, with the Issues: Read permission.\n"
+                    + "Trello — trello.com/power-ups/admin → your Power-Up → API key, then the 'Token' link "
+                    + "next to it to generate the token."
+            }
+            Hint {
+                text: "Tokens go straight into the OS keychain — never into state.json, its backups or a "
+                    + "profile export. A build without a keychain keeps them in a private secrets.json instead."
+            }
+
+            H3 {
+                text: "Signing in is not the same as choosing what to sync"
+            }
+            Body {
+                text: "GitHub, GitLab and Jira need nothing else: leave Repo / Project / JQL empty and they "
+                    + "pull the issues assigned to you. Asana, ClickUp, Sentry and Bitbucket cannot — they have "
+                    + "no 'my issues' endpoint — so they need a workspace, a list, an org and project, or a "
+                    + "repo. The card names what is missing and opens Advanced at it."
+            }
+            Hint {
+                text: "In that 'my issues' mode there is no single repo to write to, so moving a card between "
+                    + "columns does not push the status back."
+            }
+
+            H3 {
+                text: "Jira — writing a JQL that works"
+            }
+            Body {
+                text: "Leave the JQL field empty and heap. uses 'assignee = currentUser() ORDER BY updated "
+                    + "DESC'. If you write your own, it has to narrow the search somehow — a bare 'ORDER BY "
+                    + "updated DESC' is rejected with 'Unbounded JQL queries are not allowed here', which "
+                    + "looks exactly like a sync that found nothing."
+            }
+            Body {
+                text: "Useful starting points:\n"
+                    + "assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC\n"
+                    + "project = LTE AND status IN (\"In Progress\", \"In Review\") ORDER BY updated DESC\n"
+                    + "assignee = currentUser() AND sprint IN openSprints() ORDER BY rank\n"
+                    + "reporter = currentUser() AND created >= -14d ORDER BY created DESC\n"
+                    + "project = LTE AND labels = backend AND updated >= -7d ORDER BY updated DESC"
+            }
+            Hint {
+                text: "Try a query in Jira's own issue search first — heap. sends it verbatim, so anything "
+                    + "Jira accepts there works here. Jira Cloud only: Server and Data Center have a different "
+                    + "API and are not supported."
+            }
+
+            H3 {
+                text: "Sessions expire, tokens mostly don't"
+            }
+            Body {
+                text: "A browser sign-in hands out a short-lived token — two hours on GitLab and Bitbucket, one "
+                    + "on Jira and Asana — and heap. renews it in the background, so you stay signed in. The "
+                    + "card shows when the current session runs out. If the tracker revokes the grant, the card "
+                    + "drops back to disconnected and asks you to sign in again rather than failing silently."
+            }
+            Body {
+                text: "Disconnecting a browser session discards its tokens. A token you pasted yourself is left "
+                    + "alone — it is your credential, not one heap. obtained — so reconnecting does not mean "
+                    + "finding it again. Pasting a token over a live browser session ends that session."
+            }
+
+            H3 {
+                text: "Auto-sync"
+            }
+            Body {
+                text: "Off by default. The chips at the top of the section run every connected tracker every "
+                    + "15, 30 or 60 minutes; 'Sync now' on a card pulls just that one. Nothing is deleted by a "
+                    + "sync — an issue that disappears upstream stays as a card, and labels you added locally "
+                    + "survive."
             }
         }
 
