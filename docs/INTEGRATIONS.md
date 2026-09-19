@@ -16,12 +16,18 @@ There are three ways to authenticate, depending on the provider:
 
 | Method | Providers | What you do |
 |--------|-----------|-------------|
-| **One-click browser** | GitHub, GitLab* | Click **Connect with browser**, authorize, done. No fields. |
+| **One-click browser** | GitHub, GitLab, Todoist, Asana, ClickUp, Sentry, Bitbucket* | Click **Connect with browser**, authorize, done. |
 | **Personal access token** | all | Open **Advanced**, paste a token. Fallback everywhere. |
 | **Device code** | GitHub | The card shows a short code — enter it on the page that opens. |
 
-\* GitLab/Gitea/Forgejo one-click only lights up once a client ID is registered
-(see below); until then use a token under **Advanced**.
+\* Only in a build that carries the OAuth app credentials, and Gitea/Forgejo/
+self-hosted GitLab only once you register a client ID on your instance. If the
+button is missing, see "No browser button?" below — the token path always works.
+
+Signing in tells the tracker who you are, not what to sync. Asana, ClickUp,
+Sentry and Bitbucket also need a scope (workspace, list, org/project, repo); the
+card says so and opens **Advanced** for you. GitHub and GitLab don't: leave the
+repo/project blank and they pull the issues assigned to you.
 
 Once connected, **Sync now** pulls issues; **Test connection** validates the
 credentials. If you leave the repo/project field blank, GitHub and GitLab pull
@@ -104,6 +110,32 @@ Application ID under **Advanced** (the host field points the flow at their serve
 These are self-hosted, so there is no single client ID to ship. Users create an
 OAuth2 application under **Settings → Applications** on their instance
 (redirect `http://127.0.0.1:51789/`) and paste the client ID under **Advanced**.
+
+### The confidential five
+
+Todoist, Asana, ClickUp, Sentry and Bitbucket all refuse a public client, so each
+needs both halves in `HEAP_OAUTH_<PROVIDER>_CLIENT_ID` / `_CLIENT_SECRET`.
+Register at:
+
+| Provider | Where | Notes |
+|---|---|---|
+| Todoist | <https://developer.todoist.com/appconsole.html> | Scope `data:read`; the token never expires |
+| Asana | <https://app.asana.com/0/my-apps> | PKCE *and* a secret; 1h token + refresh |
+| ClickUp | Workspace **Settings → Apps** | Scopes are picked on ClickUp's consent screen, not in the URL; token exchange is JSON |
+| Sentry | **Settings → Developer Settings → New Public Integration** | Scopes `org:read project:read event:read` |
+| Bitbucket | Workspace **Settings → OAuth consumers** | Client credentials go in an HTTP Basic header; tick the `issue` permission; 2h token + refresh |
+
+### Trello, Jira
+
+See the Jira and Trello sections — their flows are not the plain authorization
+code grant (Jira needs Atlassian's `audience`/`cloudId` dance, Trello answers in
+the URL fragment).
+
+### Redmine — no OAuth
+
+Redmine ships no OAuth 2.0 provider at all. The REST API only takes an API key
+(**My account → API access key**), sent as `X-Redmine-API-Key`. This is not a
+gap in heap and will not change until Redmine itself changes.
 
 ## No browser button?
 

@@ -1525,6 +1525,9 @@ Item {
             // Q_INVOKABLE (not a property), so the field bindings reference this
             // counter to re-read after the async keychain load and after writes.
             property int secretsRev: 0
+            // A sign-in that landed but still needs a scope field: provider id
+            // → the card labels that are empty. Cleared once they are filled.
+            property var pendingFields: ({})
             Connections {
                 target: AppController
                 function onOauthDeviceCode(provider, code, uri) {
@@ -1534,6 +1537,11 @@ Item {
                 }
                 function onIntegrationSecretsChanged() {
                     intSection.secretsRev++
+                }
+                function onIntegrationNeedsFields(provider, labels) {
+                    const next = Object.assign({}, intSection.pendingFields)
+                    next[provider] = labels
+                    intSection.pendingFields = next
                 }
             }
 
@@ -1600,6 +1608,12 @@ Item {
                         // to `open`/`advanced` on click breaks the initial binding.
                         property bool open: intCard.isConn
                         property bool advanced: false
+                        // Card labels the sign-in left empty (Asana workspace,
+                        // Sentry org/project…), surfaced by AppController.
+                        readonly property var missingFields: intSection.pendingFields[intCard.intKey] || []
+                        // A card that needs a field is no use collapsed with the
+                        // field hidden behind the Advanced disclosure.
+                        onMissingFieldsChanged: if (intCard.missingFields.length > 0) { intCard.open = true; intCard.advanced = true }
 
                         // Flush every field that is still mid-edit. Every action
                         // below is a MouseArea, which never steals focus from the
@@ -1667,6 +1681,47 @@ Item {
                             Layout.fillWidth: true
                             Layout.leftMargin: 44
                             spacing: 8
+
+                            // How this card is signed in. A browser session
+                            // expires, so say when — otherwise a card that had
+                            // gone quiet looked identical to a working one.
+                            Text {
+                                visible: intCard.isConn && intCard.conf.authMode === "oauth"
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: Theme.textDim
+                                font.pixelSize: 10
+                                text: {
+                                    const raw = intCard.conf.tokenExpiresAt || "";
+                                    if (raw.length === 0)
+                                        return I18n.t("settings.integrations.signedInBrowser");
+                                    const at = new Date(raw);
+                                    if (isNaN(at.getTime()))
+                                        return I18n.t("settings.integrations.signedInBrowser");
+                                    return I18n.t("settings.integrations.signedInBrowserUntil")
+                                        .replace("%1", AppController.humanDate(at) + " " + AppController.eventHourLabel(at.getHours()));
+                                }
+                            }
+
+                            // A sign-in that still needs a scope field before it
+                            // can sync anything.
+                            Rectangle {
+                                visible: intCard.missingFields.length > 0
+                                Layout.fillWidth: true
+                                radius: 6
+                                color: Theme.panel2
+                                border.color: Theme.p1; border.width: 1
+                                implicitHeight: missTxt.implicitHeight + 16
+                                Text {
+                                    id: missTxt
+                                    anchors.left: parent.left; anchors.right: parent.right
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    anchors.margins: 10
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.text; font.pixelSize: 11
+                                    text: I18n.t("settings.integrations.needsFields").replace("%1", intCard.missingFields.join(", "))
+                                }
+                            }
 
                             // Device-flow banner: show the code the user must
                             // enter in the browser (GitHub). Auto-clears on finish.
@@ -1820,7 +1875,7 @@ Item {
                                     border.color: Theme.border; border.width: 1
                                     implicitWidth: discTxt.implicitWidth + 24; implicitHeight: 28
                                     Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: 11 }
-                                    MouseArea { id: discMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.setNested("integrations", intCard.intKey, "connected", false) }
+                                    MouseArea { id: discMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.disconnectIntegration(intCard.intKey) }
                                 }
                             }
                         }

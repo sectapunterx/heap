@@ -167,8 +167,60 @@ TEST(RegistryCatalog, OAuthConfiguredForGitForges) {
   EXPECT_FALSE(findDescriptor(QStringLiteral("github"))->oauth.usePkce);
   // Self-hosted forges keep the {host} placeholder for their endpoints.
   EXPECT_TRUE(findDescriptor(QStringLiteral("gitlab"))->oauth.authUrl.contains(QStringLiteral("{host}")));
-  // Non-forge providers stay PAT-only for v1.
-  EXPECT_FALSE(findDescriptor(QStringLiteral("todoist"))->oauth.supported);
+  // Redmine has no OAuth at all — its API key is the only way in.
+  EXPECT_FALSE(findDescriptor(QStringLiteral("redmine"))->oauth.supported);
+}
+
+TEST(RegistryCatalog, ConfidentialProvidersAskForASecret) {
+  // These refuse a public client, so one-click only lights up in a build that
+  // carries the CI credentials. Each also has its own token-request dialect.
+  const struct {
+    const char* id;
+    TokenStyle style;
+  } kCases[] = {
+      {"todoist", TokenStyle::FormBody},
+      {"asana", TokenStyle::FormBody},
+      {"clickup", TokenStyle::JsonBody},
+      {"sentry", TokenStyle::FormBody},
+      {"bitbucket", TokenStyle::BasicAuthForm},
+  };
+
+  for(const auto& c : kCases) {
+    const ProviderDescriptor* d = findDescriptor(QString::fromLatin1(c.id));
+    ASSERT_NE(d, nullptr) << c.id;
+    EXPECT_TRUE(d->oauth.supported) << c.id;
+    EXPECT_TRUE(d->oauth.needsSecret) << c.id;
+    EXPECT_EQ(d->oauth.tokenStyle, c.style) << c.id;
+    EXPECT_FALSE(d->oauth.authUrl.isEmpty()) << c.id;
+    EXPECT_FALSE(d->oauth.tokenUrl.isEmpty()) << c.id;
+    EXPECT_EQ(d->oauth.effectiveFlow(), OAuthFlow::AuthCode) << c.id;
+    // The client secret goes to the keychain like any other secret, and the
+    // Advanced fields let a self-built binary supply its own OAuth app.
+    EXPECT_TRUE(d->secretKeys.contains(QStringLiteral("clientSecret"))) << c.id;
+    bool hasClientIdField = false;
+    for(const FieldSpec& f : d->uiFields) {
+      hasClientIdField = hasClientIdField || f.key == QStringLiteral("clientId");
+    }
+    EXPECT_TRUE(hasClientIdField) << c.id;
+  }
+  // Todoist's scopes are comma-separated, unlike everyone else's.
+  EXPECT_EQ(findDescriptor(QStringLiteral("todoist"))->oauth.scopeSeparator, QStringLiteral(","));
+}
+
+TEST(RegistryCatalog, EveryOAuthProviderCarriesEnoughToRunTheFlow) {
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    if(!d.oauth.supported) {
+      continue;
+    }
+    const bool device = d.oauth.effectiveFlow() == OAuthFlow::Device;
+    const bool fragment = d.oauth.effectiveFlow() == OAuthFlow::ImplicitFragment;
+    EXPECT_FALSE(device ? d.oauth.deviceAuthUrl.isEmpty() : d.oauth.authUrl.isEmpty()) << d.id.toStdString();
+    // Only the fragment flow skips the token endpoint — it is handed the token.
+    EXPECT_EQ(d.oauth.tokenUrl.isEmpty(), fragment) << d.id.toStdString();
+    EXPECT_FALSE(d.oauth.clientIdParam.isEmpty()) << d.id.toStdString();
+    EXPECT_FALSE(d.oauth.redirectParam.isEmpty()) << d.id.toStdString();
+    EXPECT_FALSE(d.oauth.scopeSeparator.isEmpty()) << d.id.toStdString();
+  }
 }
 
 TEST(RegistryCatalog, SelfEndpointMakesScopeOptional) {

@@ -57,6 +57,25 @@ class AppControllerTest : public ::testing::Test {
     app_.reset();
   }
 
+  // Integration config lives inside the appSettingsJson blob; these keep the
+  // tests to the setting they care about.
+  void writeIntegrationConfig(const QString& providerId, const QJsonObject& cfg) {
+    QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
+    QJsonObject integrations = settings.value(QStringLiteral("integrations")).toObject();
+    integrations.insert(providerId, cfg);
+    settings.insert(QStringLiteral("integrations"), integrations);
+    app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  }
+
+  QJsonObject readIntegrationConfig(const QString& providerId) const {
+    return QJsonDocument::fromJson(app_->appSettingsJson().toUtf8())
+        .object()
+        .value(QStringLiteral("integrations"))
+        .toObject()
+        .value(providerId)
+        .toObject();
+  }
+
   std::unique_ptr<AppController> app_;
 };
 
@@ -722,20 +741,14 @@ TEST_F(AppControllerTest, ExpiredOAuthTokenIsRefreshedBeforeTheSync) {
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("at-old"));
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QStringLiteral("rt-old"));
 
-  const auto writeGitlabConfig = [this](const QJsonObject& cfg) {
-    QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
-    QJsonObject integrations = settings.value(QStringLiteral("integrations")).toObject();
-    integrations.insert(QStringLiteral("gitlab"), cfg);
-    settings.insert(QStringLiteral("integrations"), integrations);
-    app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
-  };
-  writeGitlabConfig(QJsonObject{
-      {QStringLiteral("connected"), true},
-      {QStringLiteral("authMode"), QStringLiteral("oauth")},
-      {QStringLiteral("host"), gitlab.base()},
-      {QStringLiteral("clientId"), QStringLiteral("cid")},
-      {QStringLiteral("tokenExpiresAt"), QDateTime::currentDateTime().addSecs(-3600).toString(Qt::ISODate)},
-  });
+  writeIntegrationConfig(QStringLiteral("gitlab"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             {QStringLiteral("host"), gitlab.base()},
+                             {QStringLiteral("clientId"), QStringLiteral("cid")},
+                             {QStringLiteral("tokenExpiresAt"), QDateTime::currentDateTime().addSecs(-3600).toString(Qt::ISODate)},
+                         });
 
   app_->syncProvider(QStringLiteral("gitlab"));
   ASSERT_TRUE(heap::testing::waitUntil([&gitlab]() {
@@ -753,9 +766,92 @@ TEST_F(AppControllerTest, ExpiredOAuthTokenIsRefreshedBeforeTheSync) {
   EXPECT_EQ(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken")), QStringLiteral("rt-new"));
 
   // Leave nothing behind for the suites sharing this test-mode profile.
-  writeGitlabConfig(QJsonObject{});
+  writeIntegrationConfig(QStringLiteral("gitlab"), QJsonObject{});
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
+}
+
+// ─── Disconnect / auth mode ───────────────────────────────────────────
+// authMode=oauth used to survive a disconnect, so a personal access token
+// pasted afterwards was still sent as a Bearer — which GitLab (PRIVATE-TOKEN)
+// and ClickUp (raw Authorization) both reject.
+
+TEST_F(AppControllerTest, DisconnectingABrowserSessionDropsItsTokens) {
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("at"));
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QStringLiteral("rt"));
+  writeIntegrationConfig(QStringLiteral("gitlab"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             {QStringLiteral("tokenExpiresAt"), QStringLiteral("2026-01-01T00:00:00")},
+                         });
+
+  app_->disconnectIntegration(QStringLiteral("gitlab"));
+
+  const QJsonObject cfg = readIntegrationConfig(QStringLiteral("gitlab"));
+  EXPECT_FALSE(cfg.value(QStringLiteral("connected")).toBool());
+  EXPECT_FALSE(cfg.contains(QStringLiteral("authMode"))) << "a stale authMode makes the next PAT go out as a Bearer";
+  EXPECT_FALSE(cfg.contains(QStringLiteral("tokenExpiresAt")));
+  EXPECT_TRUE(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("token")).isEmpty());
+  EXPECT_TRUE(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken")).isEmpty());
+
+  writeIntegrationConfig(QStringLiteral("gitlab"), QJsonObject{});
+}
+
+TEST_F(AppControllerTest, DisconnectingATokenCardKeepsTheUsersOwnToken) {
+  // A PAT is the user's credential, not one this app obtained — reconnecting
+  // must not mean pasting it again.
+  app_->setIntegrationSecret(QStringLiteral("todoist"), QStringLiteral("token"), QStringLiteral("mine"));
+  writeIntegrationConfig(QStringLiteral("todoist"), QJsonObject{{QStringLiteral("connected"), true}});
+
+  app_->disconnectIntegration(QStringLiteral("todoist"));
+
+  EXPECT_FALSE(readIntegrationConfig(QStringLiteral("todoist")).value(QStringLiteral("connected")).toBool());
+  EXPECT_EQ(app_->integrationSecret(QStringLiteral("todoist"), QStringLiteral("token")), QStringLiteral("mine"));
+
+  app_->setIntegrationSecret(QStringLiteral("todoist"), QStringLiteral("token"), QString());
+  writeIntegrationConfig(QStringLiteral("todoist"), QJsonObject{});
+}
+
+TEST_F(AppControllerTest, PastingATokenOverABrowserSessionEndsThatSession) {
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("at"));
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QStringLiteral("rt"));
+  writeIntegrationConfig(QStringLiteral("gitlab"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             {QStringLiteral("tokenExpiresAt"), QStringLiteral("2026-01-01T00:00:00")},
+                         });
+
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("glpat-mine"));
+
+  const QJsonObject cfg = readIntegrationConfig(QStringLiteral("gitlab"));
+  EXPECT_FALSE(cfg.contains(QStringLiteral("authMode")));
+  EXPECT_TRUE(cfg.value(QStringLiteral("connected")).toBool()) << "the card stays connected, just on the PAT";
+  EXPECT_TRUE(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken")).isEmpty())
+      << "the old grant's refresh token is dead weight";
+
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
+  writeIntegrationConfig(QStringLiteral("gitlab"), QJsonObject{});
+}
+
+TEST_F(AppControllerTest, CatalogFlagsWhichProvidersCanDoOneClick) {
+  // Built without the CI credentials, so every provider that refuses a public
+  // client must report itself as not one-click — otherwise the card offers a
+  // button whose token exchange is guaranteed to fail.
+  const QVariantList catalog = app_->integrationCatalog();
+  ASSERT_FALSE(catalog.isEmpty());
+  int checked = 0;
+  for(const QVariant& entry : catalog) {
+    const QVariantMap m = entry.toMap();
+    if(!m.value(QStringLiteral("oauthNeedsSecret")).toBool()) {
+      continue;
+    }
+    ++checked;
+    EXPECT_FALSE(m.value(QStringLiteral("oauthReady")).toBool()) << m.value(QStringLiteral("id")).toString().toStdString();
+    EXPECT_TRUE(m.value(QStringLiteral("oauth")).toBool()) << m.value(QStringLiteral("id")).toString().toStdString();
+  }
+  EXPECT_GE(checked, 5) << "todoist, asana, clickup, sentry and bitbucket all need a secret";
 }
 
 int main(int argc, char** argv) {
