@@ -187,6 +187,7 @@ qt_add_qml_module(heap_core
         src/integrations/TrelloProvider.h
         src/integrations/SecretStore.h
         src/integrations/OAuthManager.h
+        src/integrations/OAuthRefresh.h
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h
         src/update/Updater.h

@@ -17,6 +17,7 @@
 #include <vector>
 
 class QJsonObject;
+class QNetworkAccessManager;
 
 namespace heap::chrono {
 class ChronoParser;
@@ -746,6 +747,27 @@ class AppController : public QObject {
   void setIntegrationField(const QString& providerId, const QString& field, const QVariant& value);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
+  // Renew an expiring OAuth access token, then run `then`. Providers that use a
+  // PAT, or whose token does not expire, fall straight through. A browser
+  // sign-in hands out a token that lives ~2h (GitLab), so without this every
+  // sync after the first couple of hours came back empty.
+  void ensureFreshToken(const QString& providerId, std::function<void()> then);
+  // Refresh if needed, then pull. Looks the provider up again afterwards,
+  // because a refresh rebuilds m_syncProviders.
+  void syncProviderNow(const QString& providerId);
+  // Exchange the stored refresh token for a new access token. `done` gets true
+  // when the provider is usable again. A refusal from the provider disconnects
+  // the card so the user is prompted to sign in again.
+  void refreshOAuthToken(const QString& providerId, std::function<void(bool)> done);
+  // Used by refreshOAuthToken; providers are rebuilt whenever a secret changes,
+  // so it cannot borrow a provider's own manager.
+  QNetworkAccessManager* m_oauthNam = nullptr;
+  // Providers whose refresh is already in flight — a sync and a push firing
+  // together must not both spend the (single-use, rotated) refresh token.
+  QSet<QString> m_refreshing;
+  // Providers whose 401 already bought one refresh-and-retry, so a tracker that
+  // answers 401 no matter what cannot loop. Cleared by a successful pull.
+  QSet<QString> m_retriedAfter401;
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name

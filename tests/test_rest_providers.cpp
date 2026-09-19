@@ -3,11 +3,14 @@
 // bespoke Trello parsers, the SecretStore cache and the HTTP error formatter.
 // No network.
 
+#include "integrations/OAuthRefresh.h"
 #include "integrations/ProviderRegistry.h"
 #include "integrations/ReplyError.h"
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/TrelloProvider.h"
+
+#include <QTimeZone>
 
 #include <gtest/gtest.h>
 
@@ -280,4 +283,42 @@ TEST(ReplyError, LongMessagesAreClamped) {
   const QString out = describeHttpError(500, body, QString());
   EXPECT_TRUE(out.endsWith(QStringLiteral("…")));
   EXPECT_LT(out.size(), 230);
+}
+
+// ── OAuth token refresh (OAuthManager) ──────────────────────────────────────
+// A browser sign-in hands out a token that expires (GitLab: two hours). It was
+// never refreshed, so syncing went quiet a couple of hours after connecting.
+
+TEST(OAuthRefresh, ParsesATokenResponse) {
+  const QDateTime now = QDateTime(QDate(2026, 1, 1), QTime(12, 0), QTimeZone::UTC);
+  const QByteArray body = R"({"access_token":"at-2","refresh_token":"rt-2","expires_in":7200,"token_type":"bearer"})";
+  const OAuthResult r = parseTokenResponse(body, now);
+  EXPECT_TRUE(r.ok);
+  EXPECT_EQ(r.accessToken, QStringLiteral("at-2"));
+  // Providers rotate the refresh token; storing the new one is what keeps the
+  // session alive past the next expiry.
+  EXPECT_EQ(r.refreshToken, QStringLiteral("rt-2"));
+  EXPECT_EQ(r.expiresAt, now.addSecs(7200));
+}
+
+TEST(OAuthRefresh, ReportsTheProvidersError) {
+  const OAuthResult r = parseTokenResponse(R"({"error":"invalid_grant","error_description":"The refresh token is invalid."})");
+  EXPECT_FALSE(r.ok);
+  EXPECT_EQ(r.error, QStringLiteral("The refresh token is invalid."));
+  EXPECT_FALSE(parseTokenResponse("not json").ok);
+}
+
+TEST(OAuthRefresh, NonExpiringTokenNeedsNothing) {
+  const QDateTime now = QDateTime(QDate(2026, 1, 1), QTime(12, 0), QTimeZone::UTC);
+  // GitHub OAuth apps issue tokens with no expiry — no expires_in, nothing to
+  // refresh, and refreshing anyway would burn the grant for no reason.
+  EXPECT_FALSE(tokenNeedsRefresh(QDateTime(), now));
+  EXPECT_FALSE(parseTokenResponse(R"({"access_token":"gho_x"})", now).expiresAt.isValid());
+}
+
+TEST(OAuthRefresh, RefreshesJustBeforeExpiry) {
+  const QDateTime now = QDateTime(QDate(2026, 1, 1), QTime(12, 0), QTimeZone::UTC);
+  EXPECT_FALSE(tokenNeedsRefresh(now.addSecs(3600), now));
+  EXPECT_TRUE(tokenNeedsRefresh(now.addSecs(30), now));   // expires mid-sync
+  EXPECT_TRUE(tokenNeedsRefresh(now.addSecs(-60), now));  // already expired
 }

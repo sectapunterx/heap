@@ -9,6 +9,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
 #include "integrations/OAuthManager.h"
+#include "integrations/OAuthRefresh.h"
 #include "integrations/ProviderDescriptor.h"
 #include "integrations/ProviderRegistry.h"
 #include "integrations/RestIssueProvider.h"
@@ -37,6 +38,7 @@
 #include <QJsonObject>
 #include <QKeySequence>
 #include <QLocale>
+#include <QNetworkAccessManager>
 #include <QPair>
 #include <QSaveFile>
 #include <QStandardPaths>
@@ -388,6 +390,12 @@ AppController::AppController(QObject* parent) :
     for(const QString& f : d.secretKeys) {
       secretKeys.append({d.id, f});
     }
+    // The refresh token is written by the OAuth flow rather than by a card
+    // field, so it is not in secretKeys — but it still has to come back from
+    // the keychain, or the session ends at the first token expiry.
+    if(d.oauth.supported) {
+      secretKeys.append({d.id, QStringLiteral("refreshToken")});
+    }
   }
   // Providers that need a secret build after the async keychain read completes.
   m_secretStore->load(secretKeys, [this]() {
@@ -668,12 +676,15 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // closes the GitHub issue / transitions the Jira issue). Routed to whichever
   // provider owns the task. No-op for locally-created, unlinked tasks.
   if(!t.externalId.isEmpty() && !t.externalProvider.isEmpty()) {
-    for(const auto& provider : m_syncProviders) {
-      if(provider->id() == t.externalProvider) {
-        provider->pushStatusChange(t.externalId, newStatus);
-        break;
+    const QString externalId = t.externalId;
+    ensureFreshToken(t.externalProvider, [this, providerId = t.externalProvider, externalId, newStatus]() {
+      for(const auto& provider : m_syncProviders) {
+        if(provider->id() == providerId) {
+          provider->pushStatusChange(externalId, newStatus);
+          return;
+        }
       }
-    }
+    });
   }
 
   // Arm undo so a mis-drag to the wrong column is reversible (previously
@@ -2175,9 +2186,26 @@ void AppController::syncNow() {
     return;
   }
   emit toast(tr("Syncing…"));
+  // Collect the ids first: refreshing a token rebuilds m_syncProviders.
+  QStringList ids;
+  ids.reserve(static_cast<qsizetype>(m_syncProviders.size()));
   for(const auto& provider : m_syncProviders) {
-    provider->pullTasks();
+    ids.append(provider->id());
   }
+  for(const QString& id : ids) {
+    syncProviderNow(id);
+  }
+}
+
+void AppController::syncProviderNow(const QString& providerId) {
+  ensureFreshToken(providerId, [this, providerId]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() == providerId) {
+        provider->pullTasks();
+        return;
+      }
+    }
+  });
 }
 
 void AppController::mergeExternalTasks(const QString& providerId,
@@ -2244,14 +2272,33 @@ void AppController::applyIntegrationSettings() {
             &heap::integrations::IntegrationProvider::tasksFetched,
             this,
             [this, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
+              m_retriedAfter401.remove(providerId);
               mergeExternalTasks(providerId, idPrefix, issues);
               emit toast(tr("Synced %1 issue(s) from %2").arg(issues.size()).arg(label));
             });
     // A failed pull used to arrive as an empty task list, so a bad token read
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
-    connect(provider, &heap::integrations::IntegrationProvider::pullFailed, this, [this, label](int, const QString& error) {
-      emit toast(tr("%1 sync failed: %2").arg(label, error));
-    });
+    connect(
+        provider, &heap::integrations::IntegrationProvider::pullFailed, this, [this, providerId, label](int status, const QString& error) {
+          // A session connected before expiry tracking existed has no
+          // tokenExpiresAt, so its first warning is the 401 itself: refresh once
+          // and retry rather than making the user sign in again. Only worth it
+          // when there is actually a refresh token to spend — otherwise the
+          // failure has to reach the user.
+          const QVariantMap cfg = integrationConfig(providerId);
+          if(status == 401 && !m_retriedAfter401.contains(providerId) &&
+             cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth") &&
+             !cfg.value(QStringLiteral("refreshToken")).toString().isEmpty()) {
+            m_retriedAfter401.insert(providerId);
+            refreshOAuthToken(providerId, [this, providerId](bool ok) {
+              if(ok) {
+                syncProviderNow(providerId);
+              }
+            });
+            return;
+          }
+          emit toast(tr("%1 sync failed: %2").arg(label, error));
+        });
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
             this,
@@ -2345,7 +2392,7 @@ void AppController::syncProvider(const QString& providerId) {
   for(const auto& provider : m_syncProviders) {
     if(provider->id() == providerId) {
       emit toast(tr("Syncing…"));
-      provider->pullTasks();
+      syncProviderNow(providerId);
       return;
     }
   }
@@ -2437,6 +2484,93 @@ void AppController::setIntegrationField(const QString& providerId, const QString
   scheduleSave();
 }
 
+void AppController::ensureFreshToken(const QString& providerId, std::function<void()> then) {
+  const QVariantMap cfg = integrationConfig(providerId);
+  const bool isOAuth = cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth");
+  const QString refreshToken = cfg.value(QStringLiteral("refreshToken")).toString();
+  const QDateTime expiresAt = QDateTime::fromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString(), Qt::ISODate);
+  // PAT providers, non-expiring tokens and sessions with nothing to refresh
+  // with all go straight through.
+  if(!isOAuth || refreshToken.isEmpty() || !heap::integrations::tokenNeedsRefresh(expiresAt)) {
+    then();
+    return;
+  }
+  refreshOAuthToken(providerId, [then = std::move(then)](bool ok) {
+    if(ok) {
+      then();
+    }
+  });
+}
+
+void AppController::refreshOAuthToken(const QString& providerId, std::function<void(bool)> done) {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  const QVariantMap cfg = integrationConfig(providerId);
+  const QString refreshToken = cfg.value(QStringLiteral("refreshToken")).toString();
+  if(d == nullptr || !d->oauth.supported || refreshToken.isEmpty()) {
+    done(false);
+    return;
+  }
+  // The refresh token is single-use and rotated, so two callers must not spend
+  // the same one; the loser simply gives up and the next sync picks it up.
+  if(m_refreshing.contains(providerId)) {
+    done(false);
+    return;
+  }
+  m_refreshing.insert(providerId);
+
+  QString host = cfg.value(QStringLiteral("host")).toString().trimmed();
+  if(host.isEmpty()) {
+    host = d->baseUrlFallback;
+  }
+  while(host.endsWith(QLatin1Char('/'))) {
+    host.chop(1);
+  }
+  heap::integrations::RefreshParams p;
+  p.tokenUrl = QString(d->oauth.tokenUrl).replace(QStringLiteral("{host}"), host);
+  p.clientId = cfg.value(QStringLiteral("clientId")).toString().trimmed();
+  if(p.clientId.isEmpty()) {
+    p.clientId = d->oauth.clientId;
+  }
+  p.clientSecret = cfg.value(QStringLiteral("clientSecret")).toString();
+  if(p.clientSecret.isEmpty()) {
+    p.clientSecret = d->oauth.clientSecret;
+  }
+  p.refreshToken = refreshToken;
+  // The device flow has no redirect; the loopback flow must repeat the one it
+  // was granted with (GitLab checks).
+  if(!d->oauth.deviceFlow) {
+    p.redirectUri = heap::integrations::OAuthManager::redirectUri();
+  }
+
+  if(m_oauthNam == nullptr) {
+    m_oauthNam = new QNetworkAccessManager(this);
+  }
+  const QString label = d->displayName;
+  heap::integrations::refreshAccessToken(
+      m_oauthNam, p, [this, providerId, label, done = std::move(done)](const heap::integrations::OAuthResult& r) {
+        m_refreshing.remove(providerId);
+        if(!r.ok) {
+          // The grant is gone for good (revoked, or a rotated refresh token was
+          // reused). Drop the card back to disconnected so the Integrations
+          // panel offers the sign-in button again instead of failing forever.
+          qWarning() << providerId << "token refresh failed:" << r.error;
+          setIntegrationField(providerId, QStringLiteral("connected"), false);
+          emit toast(tr("%1 session expired — sign in again").arg(label));
+          done(false);
+          return;
+        }
+        if(m_secretStore) {
+          m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
+          if(!r.refreshToken.isEmpty()) {
+            m_secretStore->setValue(providerId, QStringLiteral("refreshToken"), r.refreshToken);
+          }
+        }
+        setIntegrationField(
+            providerId, QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString());
+        done(true);
+      });
+}
+
 void AppController::connectOAuth(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d || !d->oauth.supported) {
@@ -2511,6 +2645,10 @@ void AppController::connectOAuth(const QString& providerId) {
       }
     }
     setIntegrationField(providerId, QStringLiteral("authMode"), QStringLiteral("oauth"));
+    // When the token expires. Without it the access token was used until the
+    // provider started refusing it, which read as an empty sync.
+    setIntegrationField(
+        providerId, QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString());
     setIntegrationField(providerId, QStringLiteral("connected"), true);
     emit toast(tr("%1 connected via browser").arg(label));
   });
