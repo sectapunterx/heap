@@ -1130,6 +1130,35 @@ target_link_libraries(heap_models_tests PRIVATE
 )
 add_test(NAME heap_models_tests COMMAND heap_models_tests)
 
+# ─── Browser OAuth engine tests ───
+# PKCE, the authorize URL, the loopback receiver and the four token-request
+# dialects. The whole flow is driven locally: the listener takes an ephemeral
+# port, the "browser" is an injected functor and the token endpoint is the
+# FakeHttpServer, so nothing reaches the network. Built without the generated
+# OAuthClients.gen.h, so the baked credentials are empty here.
+add_executable(heap_oauth_tests
+        test_oauth.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthRefresh.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthTypes.h
+)
+set_target_properties(heap_oauth_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_oauth_tests PRIVATE
+        ${CMAKE_CURRENT_SOURCE_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+target_link_libraries(heap_oauth_tests PRIVATE
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Network
+        Qt6::NetworkAuth
+        Qt6::Test
+        GTest::gtest
+        GTest::gtest_main
+)
+add_test(NAME heap_oauth_tests COMMAND heap_oauth_tests)
+
 # ─── AppController (shortcuts / scheduling / date + wrapper logic) tests ───
 # Same headless boot + source set as the other AppController suites (offscreen
 # QPA + test-mode paths); links GlobalHotkey since AppController references it.

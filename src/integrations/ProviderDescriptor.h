@@ -1,6 +1,7 @@
 #pragma once
 
 #include "integrations/IntegrationTypes.h"
+#include "integrations/OAuthTypes.h"
 
 #include <QByteArray>
 #include <QList>
@@ -61,28 +62,47 @@ struct FieldSpec {
 using ParseFn = QVector<ExternalTask> (*)(const QByteArray& body, const QString& baseUrl);
 using PushMapFn = QString (*)(const QString& heapColumn);
 
-// Browser-based OAuth 2.0 (Authorization Code, loopback redirect). When
-// supported, the "Sign in with browser" button runs the flow and stores the
-// resulting access token as the provider's `token` secret with authMode=oauth
-// (so RestIssueProvider sends it as a Bearer token). URLs may contain {host}.
+// Browser-based OAuth 2.0. When supported, the "Connect with browser" button
+// runs the flow and stores the resulting access token as the provider's `token`
+// secret with authMode=oauth (so RestIssueProvider sends it as a Bearer token).
+// URLs may contain {host}.
 struct OAuthConfig {
   bool supported = false;
   QString authUrl;      // authorization endpoint (may be a {host} template)
   QString tokenUrl;     // token endpoint (may be a {host} template)
-  QString scope;        // space-separated scopes
-  bool usePkce = true;  // PKCE S256 (no client secret) vs. confidential client
+  QString scope;        // space-separated scopes, rejoined with scopeSeparator
+  bool usePkce = true;  // PKCE S256 on top of whatever client auth is used
   // App-registered credentials baked into the build. When clientId is non-empty
   // the card offers true one-click "Connect with browser" (no field to fill);
   // otherwise the user pastes a client ID under Advanced. See ProviderRegistry.cpp.
   QString clientId;
-  QString clientSecret;  // only for confidential clients (GitHub); empty for PKCE
-  // OAuth 2.0 Device Authorization Grant (RFC 8628). Used for providers whose
-  // web flow needs a client secret we can't safely embed (GitHub): the user
-  // authorizes a short code in the browser — client ID only, no secret, no
-  // loopback. When true, authUrl is ignored and deviceAuthUrl is the device
-  // authorization endpoint.
+  QString clientSecret;  // only for confidential clients; empty for public ones
+  // Deprecated spelling of `flow == OAuthFlow::Device`, kept so the existing
+  // positional initialisations keep compiling. Prefer `flow`.
   bool deviceFlow = false;
-  QString deviceAuthUrl;  // e.g. https://github.com/login/device/code
+  QString deviceAuthUrl;  // device authorization endpoint, e.g. https://github.com/login/device/code
+
+  // ── Dialect ──
+  OAuthFlow flow = OAuthFlow::AuthCode;
+  TokenStyle tokenStyle = TokenStyle::FormBody;
+  // Extra authorization-URL query items: Atlassian's audience/prompt, Trello's
+  // expiration/name/callback_method.
+  QList<QPair<QString, QString>> extraAuthParams;
+  // Todoist and Trello separate scopes with commas, everyone else with a space.
+  QString scopeSeparator = QStringLiteral(" ");
+  // True when the provider refuses a public client, so one-click needs a client
+  // secret baked in (or entered under Advanced) on top of the client ID.
+  bool needsSecret = false;
+  // Query keys for the client id and the redirect — Trello calls them `key`
+  // and `return_url`.
+  QString clientIdParam = QStringLiteral("client_id");
+  QString redirectParam = QStringLiteral("redirect_uri");
+
+  // The grant this descriptor actually runs. Until every provider is migrated
+  // off the `deviceFlow` bool, that bool wins when it is set.
+  OAuthFlow effectiveFlow() const {
+    return deviceFlow ? OAuthFlow::Device : flow;
+  }
 };
 
 // The single source of truth for one tracker integration: its UI card, its
