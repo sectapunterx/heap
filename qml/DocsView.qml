@@ -166,6 +166,12 @@ Item {
         { name: "On-call",    role: "Pager rotation",  channel: "#oncall",     mattermost: "page: oncall", color: "#e6624c" }
     ]
 
+    // Pristine copies of the starter content above, so a blob that carries only
+    // contacts (the first Mattermost sync on a fresh profile) can be told apart
+    // from one where the user really did clear their docs.
+    property var _sampleSections: []
+    property var _sampleSnippets: []
+
     readonly property var contactPalette: [
         "#d97a6c", "#dcb86b", "#dcc06a", "#7cc492",
         "#6cc4b8", "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7"
@@ -214,8 +220,12 @@ Item {
         } else {
             try {
                 const o = JSON.parse(raw);
-                sections = o.sections || [];
-                snippets = o.snippets || [];
+                // A missing key is not an empty list. A contact sync writes
+                // {contacts:[…]} into a blob that has never been saved, and
+                // reading that back as sections=[] used to wipe the starter
+                // docs. An explicitly empty array is still respected.
+                sections = o.sections !== undefined ? o.sections : root._sampleSections;
+                snippets = o.snippets !== undefined ? o.snippets : root._sampleSnippets;
                 contacts = o.contacts || [];
             } catch (e) { /* corrupt — keep current view */ }
         }
@@ -223,6 +233,11 @@ Item {
     }
 
     Component.onCompleted: {
+        // Snapshot the starter content before anything can overwrite it — a
+        // later profile switch reloads into `sections`, so reading it back then
+        // would give that profile's docs instead of the samples.
+        _sampleSections = sections;
+        _sampleSnippets = snippets;
         const initiallyEmpty = ((AppController.docsState || "").length === 0);
         // On first run with an empty profile, keep the hardcoded sample
         // sections/snippets/contacts already declared as property defaults
@@ -272,6 +287,8 @@ Item {
             const list = contacts.slice();
             list.splice(u.idx, 0, u.item);
             contacts = list;
+            if (u.item.mmId && u.item.source)
+                AppController.restoreExternalContact(u.item.source, u.item.mmId);
             showToast(I18n.t("docs.toast.restored").arg(u.item.name));
         } else if (u.kind === "section") {
             const list = sections.slice();
@@ -532,6 +549,11 @@ Item {
         const list = contacts.slice();
         list.splice(idx, 1);
         contacts = list;
+        // An imported contact would come back on the next sync, so record the
+        // deletion where the importer can see it. It cannot live in this blob:
+        // persist() rewrites the whole thing and drops keys it does not know.
+        if (captured.mmId && captured.source)
+            AppController.dismissExternalContact(captured.source, captured.mmId);
         pendingUndo = { kind: "contact", idx: idx, item: captured };
         showUndoToast(I18n.t("docs.toast.contact.deleted").arg(captured.name), function () {
             root.undoLastDeletion()
@@ -1694,7 +1716,27 @@ Item {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 0
-                Text { text: cc.c.name || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 6
+                    Text { text: cc.c.name || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                    // Says where the card came from, so an edit that a later
+                    // sync may overwrite is not a surprise.
+                    Rectangle {
+                        visible: !!cc.c.source
+                        radius: 3
+                        color: Theme.panel3
+                        implicitWidth: srcT.implicitWidth + 8
+                        implicitHeight: 14
+                        Text {
+                            id: srcT
+                            anchors.centerIn: parent
+                            text: "MM"
+                            color: Theme.textDim
+                            font.family: Theme.fontMono; font.pixelSize: 8; font.letterSpacing: 0.5
+                        }
+                    }
+                }
                 Text { text: cc.c.role || ""; color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
             }
             ColumnLayout {

@@ -2410,10 +2410,13 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   connect(client,
           &heap::integrations::MattermostClient::contactsFetched,
           this,
-          [this, label](const QVector<heap::integrations::ExternalContact>& contacts) {
-            // Merging into Docs and the People rail lands in the next change;
-            // for now the card reports what the server returned.
-            emit toast(tr("Fetched %n contact(s) from %1", "", static_cast<int>(contacts.size())).arg(label));
+          [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
+            const int changed = mergeExternalContacts(providerId, contacts);
+            if(changed == 0) {
+              emit toast(tr("%1: contacts are up to date").arg(label));
+              return;
+            }
+            emit toast(tr("%n contact(s) updated from %1", "", changed).arg(label));
           });
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
@@ -2429,6 +2432,194 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   m_directoryClients.insert(providerId, client);
   m_directoryConfigHash.insert(providerId, hash);
   return client;
+}
+
+QStringList AppController::dismissedContacts(const QString& providerId) const {
+  return integrationConfig(providerId).value(QStringLiteral("dismissed")).toMap().value(activeProfileId()).toStringList();
+}
+
+void AppController::dismissExternalContact(const QString& providerId, const QString& externalId) {
+  if(externalId.isEmpty()) {
+    return;
+  }
+  QVariantMap byProfile = integrationConfig(providerId).value(QStringLiteral("dismissed")).toMap();
+  QStringList ids = byProfile.value(activeProfileId()).toStringList();
+  if(ids.contains(externalId)) {
+    return;
+  }
+  ids.append(externalId);
+  byProfile.insert(activeProfileId(), ids);
+  setIntegrationField(providerId, QStringLiteral("dismissed"), byProfile);
+}
+
+void AppController::restoreExternalContact(const QString& providerId, const QString& externalId) {
+  QVariantMap byProfile = integrationConfig(providerId).value(QStringLiteral("dismissed")).toMap();
+  QStringList ids = byProfile.value(activeProfileId()).toStringList();
+  if(ids.removeAll(externalId) == 0) {
+    return;
+  }
+  byProfile.insert(activeProfileId(), ids);
+  setIntegrationField(providerId, QStringLiteral("dismissed"), byProfile);
+}
+
+int AppController::mergeExternalContacts(const QString& providerId, const QVector<heap::integrations::ExternalContact>& contacts) {
+  // Auto-sync fires wherever the user happens to be, so a background import
+  // must only ever touch the profile the card was connected from. A manual
+  // sync rebinds it — that is what "sync this here" means.
+  const QString boundProfile = integrationConfig(providerId).value(QStringLiteral("profileId")).toString();
+  if(boundProfile.isEmpty()) {
+    setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
+  } else if(boundProfile != activeProfileId()) {
+    return 0;
+  }
+
+  QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  const QStringList dismissed = dismissedContacts(providerId);
+
+  // Index what is already there. Match on the external id first; fall back to
+  // the Mattermost handle so contacts typed by hand before the integration
+  // existed get adopted instead of duplicated.
+  QHash<QString, int> byExternalId;
+  QHash<QString, int> byHandle;
+  for(int i = 0; i < list.size(); ++i) {
+    const QJsonObject c = list.at(i).toObject();
+    const QString ext = c.value(QStringLiteral("mmId")).toString();
+    if(!ext.isEmpty()) {
+      byExternalId.insert(ext, i);
+    }
+    QString handle = c.value(QStringLiteral("mattermost")).toString().trimmed();
+    while(handle.startsWith(QLatin1Char('@'))) {
+      handle.remove(0, 1);
+    }
+    if(!handle.isEmpty()) {
+      byHandle.insert(handle.toLower(), i);
+    }
+  }
+
+  static const QStringList kPalette = {QStringLiteral("#d97a6c"),
+                                       QStringLiteral("#dcb86b"),
+                                       QStringLiteral("#dcc06a"),
+                                       QStringLiteral("#7cc492"),
+                                       QStringLiteral("#6cc4b8"),
+                                       QStringLiteral("#5cc2dd"),
+                                       QStringLiteral("#7da8d9"),
+                                       QStringLiteral("#a4a4d6"),
+                                       QStringLiteral("#c87fc7")};
+
+  int changed = 0;
+  for(const heap::integrations::ExternalContact& ext : contacts) {
+    if(ext.externalId.isEmpty() || dismissed.contains(ext.externalId)) {
+      continue;
+    }
+    const int existing =
+        byExternalId.contains(ext.externalId) ? byExternalId.value(ext.externalId) : byHandle.value(ext.username.toLower(), -1);
+    QJsonObject c = existing >= 0 ? list.at(existing).toObject() : QJsonObject{};
+    const QJsonObject before = c;
+
+    // The shadow is what the provider last said. A visible field is only
+    // overwritten while it still matches that — so an edit of your own
+    // survives, and a title change upstream still reaches you.
+    QJsonObject shadow = c.value(QStringLiteral("mm")).toObject();
+    const auto follow = [&c, &shadow](const QString& key, const QString& value) {
+      if(value.isEmpty()) {
+        return;
+      }
+      const QString current = c.value(key).toString();
+      if(current.isEmpty() || current == shadow.value(key).toString()) {
+        c.insert(key, value);
+      }
+      shadow.insert(key, value);
+    };
+
+    const QString handle = QLatin1Char('@') + ext.username;
+    follow(QStringLiteral("name"), ext.displayName);
+    follow(QStringLiteral("role"), ext.role);
+    follow(QStringLiteral("mattermost"), handle);
+    follow(QStringLiteral("channel"), ext.channelLabel.startsWith(QLatin1Char('#')) ? ext.channelLabel : QString());
+
+    c.insert(QStringLiteral("mm"), shadow);
+    c.insert(QStringLiteral("mmId"), ext.externalId);
+    c.insert(QStringLiteral("source"), providerId);
+    if(!c.contains(QStringLiteral("color"))) {
+      // Deterministic, so the same person keeps their colour across profiles
+      // and re-imports.
+      c.insert(QStringLiteral("color"), kPalette.at(qHash(ext.externalId) % kPalette.size()));
+    }
+
+    // People the user actually talks to are worth having in the rail and in
+    // @-autocomplete; a channel roster is not.
+    if(ext.channelLabel == QLatin1String("direct message")) {
+      const QString personId = c.value(QStringLiteral("personId")).toString();
+      if(personId.isEmpty() || m_people.indexOfId(personId) < 0) {
+        const QString linked = upsertImportedPerson(ext);
+        if(!linked.isEmpty()) {
+          c.insert(QStringLiteral("personId"), linked);
+        }
+      }
+    }
+
+    if(c == before) {
+      continue;
+    }
+    ++changed;
+    if(existing >= 0) {
+      list.replace(existing, c);
+    } else {
+      // Append only: DocsView renders this array by index, and reordering it
+      // under an open editor would retarget the row being edited.
+      byExternalId.insert(ext.externalId, static_cast<int>(list.size()));
+      list.append(c);
+    }
+  }
+
+  if(changed == 0) {
+    return 0;
+  }
+  docs.insert(QStringLiteral("contacts"), list);
+  setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
+  scheduleSave();
+  return changed;
+}
+
+QString AppController::upsertImportedPerson(const heap::integrations::ExternalContact& ext) {
+  // The id is the Mattermost username, not a slug of the display name:
+  // slugifyPersonName drops dots and dashes, so "olga.t" would become "olgat"
+  // and @-mentions in heap would stop matching the handle people actually use.
+  QString id = ext.username.toLower();
+  static const QRegularExpression kUnsafe(QStringLiteral("[^a-z0-9._-]"));
+  id.replace(kUnsafe, QString());
+  if(id.isEmpty()) {
+    return {};
+  }
+  if(m_people.indexOfId(id) >= 0) {
+    return id;  // already here — never touch a Person the user has been editing
+  }
+  // Person ids are unique across every profile, so a colleague imported into a
+  // second workspace needs a distinct one.
+  for(const Profile& pr : m_profiles) {
+    for(const Person& pe : pr.people) {
+      if(pe.id == id) {
+        id = suggestPersonId(ext.username);
+        break;
+      }
+    }
+  }
+  if(id.isEmpty() || m_people.indexOfId(id) >= 0) {
+    return id;
+  }
+
+  Person p;
+  p.id = id;
+  p.name = ext.displayName.isEmpty() ? ext.username : ext.displayName;
+  p.role = ext.role;
+  // "idle", not "todo": an import is not a list of people you owe an answer to,
+  // and the rail's pending badge would otherwise jump by however many
+  // colleagues you have ever DM'd.
+  p.state = QStringLiteral("idle");
+  p.color = QColor(QStringLiteral("#7da8d9"));
+  m_people.upsert(p);
+  return id;
 }
 
 void AppController::fetchDirectory(const QString& providerId) {
