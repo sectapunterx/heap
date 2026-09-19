@@ -759,27 +759,23 @@ Item {
     // target is wired imperatively in Component.onCompleted so we hand the
     // highlighter a fully-initialised QQuickTextDocument (the declarative
     // binding sometimes fires before TextArea's textDocument is ready).
-    NotesHighlighter {
+    MdHighlighter {
         id: highlighter
+        headingScale: 1.45
         palette: ({
-            heading:      Theme.accentStrong,
-            bold:         Theme.text,
-            italic:       Theme.text,
-            code:         Theme.p2,
-            codeBg:       Theme.bg2,
-            codeBlock:    Theme.p2,
-            codeBlockBg:  Theme.bg2,
-            quote:        Theme.textMuted,
-            mention:      Theme.mStandup,
-            ticket:       Theme.p2,
-            wikilink:     Theme.mOneone,
-            link:         Theme.accent,
-            list:         Theme.accent,
-            tableRow:     Theme.accentStrong,
-            tableSep:     Theme.accent,
-            latex:        Theme.mOneone,
-            checkboxDone: Theme.stDone,
-            hr:           Theme.borderStrong
+            text:          Theme.text,
+            dim:           Theme.textMuted,
+            accent:        Theme.accent,
+            code:          Theme.p2,
+            codeBg:        Theme.bg2,
+            mention:       Theme.mStandup,
+            ticket:        Theme.p2,
+            tag:           Theme.mOneone,
+            math:          Theme.mOneone,
+            highlightBg:   Theme.accentSoft,
+            keyword:       Theme.accentStrong,
+            string:        Theme.stDone,
+            number:        Theme.p2
         })
     }
 

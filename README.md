@@ -244,7 +244,7 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 │  ├─ Models.{h,cpp}       ← TaskModel / EventModel / PersonModel (QAbstractListModel)
 │  ├─ SampleData.{h,cpp}   ← seed tasks / events / people for first run
 │  ├─ CodeHighlighter.{h,cpp}  ← QSyntaxHighlighter for the docs snippet editor
-│  ├─ NotesHighlighter.{h,cpp} ← markdown highlighter for the Notes view
+│  ├─ markdown/             ← parser, block model and editor ops for Notes
 │  ├─ chrono/              ← natural-language date parser (Quick-capture)
 │  ├─ git/                 ← GitWatcher + branch↔task matcher (git-aware board)
 │  ├─ text/                ← task-text classification / parsing helpers
