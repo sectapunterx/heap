@@ -181,6 +181,7 @@ qt_add_qml_module(heap_core
         src/integrations/GitlabProvider.h
         src/integrations/IntegrationProvider.h
         src/integrations/ProviderDescriptor.h
+        src/integrations/ReplyError.h
         src/integrations/RestIssueProvider.h
         src/integrations/ProviderRegistry.h
         src/integrations/TrelloProvider.h

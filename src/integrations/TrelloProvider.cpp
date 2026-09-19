@@ -1,3 +1,4 @@
+#include "integrations/ReplyError.h"
 #include "integrations/TrelloProvider.h"
 
 #include <QJsonArray>
@@ -97,13 +98,14 @@ void TrelloProvider::testConnection() {
   QNetworkReply* reply = m_nam->get(QNetworkRequest(trelloUrl(QStringLiteral("/members/me"), m_key, m_token)));
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
-    emit connectionTested(reply->error() == QNetworkReply::NoError, reply->errorString());
+    const bool ok = reply->error() == QNetworkReply::NoError;
+    emit connectionTested(ok, ok ? QString() : describeReplyError(reply));
   });
 }
 
 void TrelloProvider::pullTasks() {
   if(!isConfigured()) {
-    emit tasksFetched({});
+    emit pullFailed(0, QStringLiteral("Trello key/token not configured"));
     return;
   }
   // With a board id we can resolve list names (→ statuses) first; without one we
@@ -135,7 +137,7 @@ void TrelloProvider::fetchCards(const QHash<QString, QString>& listNames) {
   connect(reply, &QNetworkReply::finished, this, [this, reply, listNames]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {
-      emit tasksFetched({});
+      emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
       return;
     }
     emit tasksFetched(parseTrelloCards(reply->readAll(), listNames));

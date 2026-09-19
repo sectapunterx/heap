@@ -1,4 +1,5 @@
 #include "integrations/JiraProvider.h"
+#include "integrations/ReplyError.h"
 #include "integrations/StatusMap.h"
 
 #include <QJsonArray>
@@ -143,13 +144,14 @@ void JiraProvider::testConnection() {
   QNetworkReply* reply = m_nam->get(apiRequest(m_baseUrl, m_email, m_token, QStringLiteral("/myself")));
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
-    emit connectionTested(reply->error() == QNetworkReply::NoError, reply->errorString());
+    const bool ok = reply->error() == QNetworkReply::NoError;
+    emit connectionTested(ok, ok ? QString() : describeReplyError(reply));
   });
 }
 
 void JiraProvider::pullTasks() {
   if(!isConfigured()) {
-    emit tasksFetched({});
+    emit pullFailed(0, QStringLiteral("Jira URL/email/token not configured"));
     return;
   }
   QUrlQuery q;
@@ -167,7 +169,7 @@ void JiraProvider::pullTasks() {
   connect(reply, &QNetworkReply::finished, this, [this, reply, site]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {
-      emit tasksFetched({});
+      emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
       return;
     }
     emit tasksFetched(parseJiraIssues(reply->readAll(), site));
@@ -187,7 +189,7 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
   connect(getReply, &QNetworkReply::finished, this, [this, getReply, externalId, newStatus]() {
     getReply->deleteLater();
     if(getReply->error() != QNetworkReply::NoError) {
-      emit taskPushed(externalId, false, getReply->errorString());
+      emit taskPushed(externalId, false, describeReplyError(getReply));
       return;
     }
     const QJsonDocument doc = QJsonDocument::fromJson(getReply->readAll());
@@ -215,7 +217,8 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
     QNetworkReply* postReply = m_nam->post(req, payload);
     connect(postReply, &QNetworkReply::finished, this, [this, postReply, externalId]() {
       postReply->deleteLater();
-      emit taskPushed(externalId, postReply->error() == QNetworkReply::NoError, postReply->errorString());
+      const bool ok = postReply->error() == QNetworkReply::NoError;
+      emit taskPushed(externalId, ok, ok ? QString() : describeReplyError(postReply));
     });
   });
 }

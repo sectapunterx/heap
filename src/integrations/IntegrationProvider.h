@@ -18,7 +18,7 @@ class IntegrationProvider : public QObject {
  public:
   ~IntegrationProvider() override = default;
 
-  virtual QString id() const = 0;           // "jira" | "github" | "gitlab"
+  virtual QString id() const = 0;  // "jira" | "github" | "gitlab"
   virtual QString displayName() const = 0;
 
   // Validate credentials. Emits connectionTested.
@@ -30,7 +30,11 @@ class IntegrationProvider : public QObject {
 
  signals:
   void connectionTested(bool ok, const QString& error);
+  // Only emitted for a successful pull. A failed one used to report an empty
+  // list, which the UI could not tell apart from an empty backlog ("Synced 0
+  // issue(s)") — failures go to pullFailed with the provider's own message.
   void tasksFetched(const QVector<ExternalTask>& tasks);
+  void pullFailed(int httpStatus, const QString& error);
   void taskPushed(const QString& externalId, bool ok, const QString& error);
 
  protected:

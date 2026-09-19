@@ -2247,6 +2247,11 @@ void AppController::applyIntegrationSettings() {
               mergeExternalTasks(providerId, idPrefix, issues);
               emit toast(tr("Synced %1 issue(s) from %2").arg(issues.size()).arg(label));
             });
+    // A failed pull used to arrive as an empty task list, so a bad token read
+    // as "Synced 0 issue(s)" — say what the tracker actually answered.
+    connect(provider, &heap::integrations::IntegrationProvider::pullFailed, this, [this, label](int, const QString& error) {
+      emit toast(tr("%1 sync failed: %2").arg(label, error));
+    });
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
             this,

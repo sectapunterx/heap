@@ -1,8 +1,10 @@
 // Unit tests for the descriptor-driven tracker sync: the generic FieldMap
 // parser (RestIssueProvider), the provider registry's field mappings, the
-// bespoke Trello parsers, and the SecretStore cache. No network.
+// bespoke Trello parsers, the SecretStore cache and the HTTP error formatter.
+// No network.
 
 #include "integrations/ProviderRegistry.h"
+#include "integrations/ReplyError.h"
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/TrelloProvider.h"
@@ -221,4 +223,61 @@ TEST(SecretStoreCache, SetValueGetHasRemove) {
   store.setValue(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("x"));
   store.remove(QStringLiteral("jira"), QStringLiteral("token"));
   EXPECT_FALSE(store.has(QStringLiteral("jira"), QStringLiteral("token")));
+}
+
+// ── Error reporting (ReplyError.h) ──────────────────────────────────────────
+// A failed request must name the status and the tracker's own message; before
+// this, every failure surfaced as Qt's "server replied: Unauthorized" — or, for
+// a pull, as "Synced 0 issue(s)".
+
+TEST(ReplyError, JiraErrorMessagesArray) {
+  const QByteArray body = R"({"errorMessages":["Unbounded JQL queries are not allowed here."],"errors":{}})";
+  EXPECT_EQ(describeHttpError(400, body, QStringLiteral("ignored")),
+            QStringLiteral("HTTP 400 — Unbounded JQL queries are not allowed here."));
+}
+
+TEST(ReplyError, JiraFieldErrorsKeepTheFieldName) {
+  const QByteArray body = R"({"errorMessages":[],"errors":{"jql":"Field 'foo' does not exist."}})";
+  EXPECT_EQ(describeHttpError(400, body, QString()), QStringLiteral("HTTP 400 — jql: Field 'foo' does not exist."));
+}
+
+TEST(ReplyError, GithubAndGitlabMessageKeys) {
+  EXPECT_EQ(describeHttpError(401, R"({"message":"Bad credentials"})", QString()), QStringLiteral("HTTP 401 — Bad credentials"));
+  EXPECT_EQ(describeHttpError(401, R"({"error":"invalid_token","error_description":"Token is expired"})", QString()),
+            QStringLiteral("HTTP 401 — Token is expired"));
+}
+
+TEST(ReplyError, NestedErrorsArray) {
+  // Asana / Gitea shape.
+  EXPECT_EQ(describeHttpError(403, R"({"errors":[{"message":"Not the right scope"}]})", QString()),
+            QStringLiteral("HTTP 403 — Not the right scope"));
+}
+
+TEST(ReplyError, FallsBackToAStatusHint) {
+  // No body at all: the status code still says something actionable.
+  EXPECT_EQ(describeHttpError(401, {}, QString()), QStringLiteral("HTTP 401 — unauthorized — check the token"));
+  EXPECT_EQ(describeHttpError(404, {}, QString()), QStringLiteral("HTTP 404 — not found — check the URL, project or repo"));
+  // Unmapped status with no body → whatever Qt said.
+  EXPECT_EQ(describeHttpError(500, {}, QStringLiteral("Internal Server Error")), QStringLiteral("HTTP 500 — Internal Server Error"));
+}
+
+TEST(ReplyError, NonJsonBodies) {
+  // Trello answers in plain text.
+  EXPECT_EQ(describeHttpError(401, "invalid key", QString()), QStringLiteral("HTTP 401 — invalid key"));
+  // An HTML error page is markup, not a message — fall back to the hint.
+  EXPECT_EQ(describeHttpError(403, "<html><body>Forbidden</body></html>", QString()),
+            QStringLiteral("HTTP 403 — forbidden — the token is missing a required scope"));
+}
+
+TEST(ReplyError, NoStatusMeansTheRequestNeverLanded) {
+  // DNS failure / offline: no HTTP status to prefix.
+  EXPECT_EQ(describeHttpError(0, {}, QStringLiteral("Host acme.atlassian.net not found")),
+            QStringLiteral("Host acme.atlassian.net not found"));
+}
+
+TEST(ReplyError, LongMessagesAreClamped) {
+  const QByteArray body = QByteArray(R"({"message":")") + QByteArray(400, 'x') + R"("})";
+  const QString out = describeHttpError(500, body, QString());
+  EXPECT_TRUE(out.endsWith(QStringLiteral("…")));
+  EXPECT_LT(out.size(), 230);
 }
