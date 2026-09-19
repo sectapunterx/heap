@@ -468,6 +468,30 @@ Item {
                     onTextChanged: { root._scheduleSave(); root._detectAutocomplete(); }
                     onCursorPositionChanged: root._detectAutocomplete()
                     Keys.priority: Keys.BeforeItem
+
+                    // Qt delivers shortcut events before key presses, so a
+                    // global Ctrl+K would open the command palette and this
+                    // field would never see the key. Claiming these while the
+                    // editor has focus is what makes them editor-scoped: they
+                    // still mean what they always did everywhere else.
+                    Keys.onShortcutOverride: (event) => {
+                        const mods = event.modifiers & ~Qt.KeypadModifier;
+                        if (mods === Qt.ControlModifier) {
+                            switch (event.key) {
+                            case Qt.Key_B: case Qt.Key_I: case Qt.Key_E: case Qt.Key_K:
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
+                            switch (event.key) {
+                            case Qt.Key_X: case Qt.Key_H: case Qt.Key_L:
+                                event.accepted = true;
+                                return;
+                            }
+                        }
+                    }
+
                     Keys.onPressed: (event) => {
                         // Autocomplete navigation (when popup is open) takes
                         // priority over markdown continuation.
@@ -517,78 +541,51 @@ Item {
                             }
                         }
 
-                        // Smart Enter — continue markdown structure (list,
-                        // numbered, checklist, quote) and preserve indent
-                        // inside fenced code blocks.
+                        // Everything below is markdown editing, which lives
+                        // in C++ so it can be tested without driving the UI.
+                        // See MdEditOps: each operation is one undo step.
+                        const mods = event.modifiers & ~Qt.KeypadModifier;
+
                         if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            const txt = editor.text;
-                            const pos = editor.cursorPosition;
-                            const before = txt.substring(0, pos);
-                            const lineStart = before.lastIndexOf("\n") + 1;
-                            const line = txt.substring(lineStart, pos);
-
-                            // Count fence boundaries before the cursor — odd
-                            // means we're inside an open ``` block.
-                            const fences = (before.match(/^```/gm) || []).length;
-                            const insideFence = fences % 2 === 1;
-
-                            let insert = null;
-                            if (insideFence) {
-                                const m = line.match(/^(\s+)/);
-                                insert = "\n" + (m ? m[1] : "");
-                            } else {
-                                const checkM = line.match(/^(\s*)([-*+])\s+\[([ xX])\]\s+(.*)$/);
-                                const listM  = line.match(/^(\s*)([-*+])\s+(.*)$/);
-                                const numM   = line.match(/^(\s*)(\d+)\.\s+(.*)$/);
-                                const quoteM = line.match(/^(\s*>+)\s+(.*)$/);
-
-                                if (checkM) {
-                                    if (checkM[4].length === 0) {
-                                        // Empty checklist item → break out by
-                                        // wiping the marker; default Enter
-                                        // (event not accepted) inserts \n.
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    insert = "\n" + checkM[1] + checkM[2] + " [ ] ";
-                                } else if (listM) {
-                                    if (listM[3].length === 0) {
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    insert = "\n" + listM[1] + listM[2] + " ";
-                                } else if (numM) {
-                                    if (numM[3].length === 0) {
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    const next = parseInt(numM[2]) + 1;
-                                    insert = "\n" + numM[1] + next + ". ";
-                                } else if (quoteM) {
-                                    if (quoteM[2].length === 0) {
-                                        editor.remove(lineStart, pos);
-                                        return;
-                                    }
-                                    insert = "\n" + quoteM[1] + " ";
-                                }
+                            if (mods === Qt.ControlModifier) {
+                                mdEditor.toggleTask();
+                                event.accepted = true;
+                                return;
                             }
-
-                            if (insert !== null) {
-                                editor.insert(pos, insert);
+                            if (mods === Qt.NoModifier && mdEditor.handleReturn()) {
                                 event.accepted = true;
                                 return;
                             }
                         }
 
-                        // Tab — inside fenced code block insert 4 spaces so
-                        // it acts as code indent (instead of focus shift).
-                        if (event.key === Qt.Key_Tab && (event.modifiers & ~Qt.KeypadModifier) === 0) {
-                            const before = editor.text.substring(0, editor.cursorPosition);
-                            const fences = (before.match(/^```/gm) || []).length;
-                            if (fences % 2 === 1) {
-                                editor.insert(editor.cursorPosition, "    ");
-                                event.accepted = true;
-                                return;
+                        if (event.key === Qt.Key_Tab && mods === Qt.NoModifier) {
+                            mdEditor.indent();
+                            event.accepted = true;
+                            return;
+                        }
+                        if (event.key === Qt.Key_Backtab
+                            || (event.key === Qt.Key_Tab && mods === Qt.ShiftModifier)) {
+                            mdEditor.outdent();
+                            event.accepted = true;
+                            return;
+                        }
+
+                        // Formatting. These are editor-scoped: Ctrl+K is the
+                        // command palette everywhere else in the app, and it
+                        // stays that way outside this field.
+                        if (mods === Qt.ControlModifier) {
+                            switch (event.key) {
+                            case Qt.Key_B: mdEditor.toggleBold();          event.accepted = true; return;
+                            case Qt.Key_I: mdEditor.toggleItalic();        event.accepted = true; return;
+                            case Qt.Key_E: mdEditor.toggleCode();          event.accepted = true; return;
+                            case Qt.Key_K: mdEditor.insertLink("");        event.accepted = true; return;
+                            }
+                        }
+                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
+                            switch (event.key) {
+                            case Qt.Key_X: mdEditor.toggleStrikethrough(); event.accepted = true; return;
+                            case Qt.Key_H: mdEditor.toggleHighlight();     event.accepted = true; return;
+                            case Qt.Key_L: mdEditor.cycleHeading();        event.accepted = true; return;
                             }
                         }
                     }
@@ -743,9 +740,12 @@ Item {
         }
     }
 
-    // Ctrl+Shift+P — cycle edit → split → preview → edit.
+    // Ctrl+Shift+M — cycle edit → split → preview → edit.
+    //
+    // Was Ctrl+Shift+P, which is also profile.new in the global shortcut
+    // catalog: both fired, and which one won depended on where focus was.
     Shortcut {
-        sequence: "Ctrl+Shift+P"
+        sequence: "Ctrl+Shift+M"
         context: Qt.WindowShortcut
         enabled: root.visible
         onActivated: {
@@ -934,6 +934,21 @@ Item {
         editor.text = AppController.notesState || "";
         _reloading = false;
     }
+    // Markdown editing, in C++ so the rules can be tested directly rather
+    // than only by driving the UI.
+    MarkdownEditorController {
+        id: mdEditor
+        target: editor.textDocument
+        cursorPosition: editor.cursorPosition
+        selectionStart: editor.selectionStart
+        selectionEnd: editor.selectionEnd
+        // Only the editor can move its own cursor, so the controller asks.
+        onSelectionRequested: (start, end) => {
+            if (start === end) editor.cursorPosition = start;
+            else editor.select(start, end);
+        }
+    }
+
     // Parses once per change and serves every question about the document:
     // the rendered rows, the outline, and which row a line belongs to.
     MdDocument {
