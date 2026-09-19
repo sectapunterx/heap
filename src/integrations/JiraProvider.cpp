@@ -257,11 +257,12 @@ void JiraProvider::pullTasks() {
   }
   payload.insert(QStringLiteral("fields"), fields);
 
-  // Atlassian retired GET /rest/api/3/search (2025); /search/jql is the
-  // replacement. POST rather than GET: the GET form of the enhanced search
-  // rejects queries it considers unbounded that POST accepts, and it keeps a
-  // long JQL out of the URL. It paginates by `nextPageToken` and no longer
-  // returns `total`; a single 100-issue page is sufficient for v1.
+  // Atlassian retired GET /rest/api/3/search (it answers 410 pointing here);
+  // /search/jql is the replacement. POST rather than GET so a long JQL never
+  // has to fit in a URL and `fields` can be a real array — the two verbs are
+  // otherwise equivalent, including how they judge an unbounded query. It
+  // paginates by `nextPageToken` and no longer returns `total`; a single
+  // 100-issue page is sufficient for v1.
   const QString site = m_baseUrl;
   send("POST", QStringLiteral("/search/jql"), QJsonDocument(payload).toJson(QJsonDocument::Compact), [this, site](const ApiResult& r) {
     if(!r.ok) {

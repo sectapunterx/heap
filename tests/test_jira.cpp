@@ -327,7 +327,7 @@ TEST_F(JiraNetwork, PullPostsTheBoundedDefaultJql) {
   EXPECT_EQ(got[0].externalId, QStringLiteral("LTE-1"));
   // The browse URL is built from the site, never from the API base.
   EXPECT_EQ(got[0].url, server.base() + QStringLiteral("/browse/LTE-1"));
-  // POST, not GET: the enhanced-search GET form rejects queries POST accepts.
+  // POST, not GET: keeps a long JQL out of the URL and `fields` a real array.
   EXPECT_EQ(server.seen().value(0), QByteArray("POST /rest/api/3/search/jql"));
   EXPECT_TRUE(server.lastBody().contains("currentUser()")) << server.lastBody().toStdString();
 }
