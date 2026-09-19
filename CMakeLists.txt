@@ -81,10 +81,13 @@ qt_add_library(heap_markdown STATIC
     src/markdown/MdExtensions.cpp
     src/markdown/MdHtml.cpp
     src/markdown/MdBlockModel.cpp
+    src/markdown/MdEditOps.cpp
     src/notes/NoteLinks.cpp
 )
 target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core)
+# Gui, not just Core: MdEditOps works on a QTextDocument, which is the same
+# document the editor owns — that is what puts each operation on its undo stack.
+target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core Qt6::Gui)
 # MdBlockModel is a QAbstractListModel, so this one does need moc.
 set_target_properties(heap_markdown PROPERTIES AUTOMOC ON)
 
@@ -115,6 +118,7 @@ qt_add_library(heap_core STATIC
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
     src/markdown/MdDocument.cpp
+    src/markdown/MarkdownEditorController.cpp
     src/integrations/StatusMap.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
@@ -202,6 +206,7 @@ qt_add_qml_module(heap_core
         src/query/QueryParser.h
         src/notes/NoteLinks.h
         src/markdown/MdDocument.h
+        src/markdown/MarkdownEditorController.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/integrations/IntegrationTypes.h
