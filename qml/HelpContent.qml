@@ -864,8 +864,11 @@ Item {
                     + "about.\n"
                     + "GitLab — User settings → Access tokens, scope 'api'. Self-hosted: the same page on your "
                     + "instance, and fill in Host.\n"
-                    + "Jira — id.atlassian.com → Security → Create and manage API tokens. You also need the "
-                    + "Email of the same Atlassian account: Jira authenticates the pair, not the token alone.\n"
+                    + "Jira Cloud — id.atlassian.com → Security → Create and manage API tokens. You also need the "
+                    + "Email of the same Atlassian account: Cloud authenticates the pair, not the token alone.\n"
+                    + "Jira Server / Data Center — your avatar → Profile → Personal Access Tokens. Leave the Email "
+                    + "field empty; a PAT authenticates on its own. heap. works out which of the two you have from "
+                    + "the server itself, so there is nothing to pick.\n"
                     + "Gitea / Forgejo — Settings → Applications → Generate token.\n"
                     + "Redmine — My account → API access key (an admin has to enable the REST API first).\n"
                     + "Todoist — Settings → Integrations → Developer → API token.\n"
@@ -914,8 +917,9 @@ Item {
             }
             Hint {
                 text: "Try a query in Jira's own issue search first — heap. sends it verbatim, so anything "
-                    + "Jira accepts there works here. Jira Cloud only: Server and Data Center have a different "
-                    + "API and are not supported."
+                    + "Jira accepts there works here. Cloud and Server/Data Center are both supported; the "
+                    + "unbounded-query rule is Cloud's, so a bare ORDER BY may work on Server and is still worth "
+                    + "avoiding."
             }
 
             H3 {

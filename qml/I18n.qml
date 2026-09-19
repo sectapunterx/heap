@@ -655,7 +655,7 @@ QtObject {
             "settings.cpp.inlineAsm.hint": "Show compiler output right inside the task card.",
 
             // Integrations section
-            "settings.int.jira.desc": "Sync tasks, ID prefix, statuses",
+            "settings.int.jira.desc": "Sync tasks, ID prefix, statuses — Cloud and Server/DC",
             "settings.int.github.desc": "PR status, branch template, code-review pings",
             "settings.int.gitlab.desc": "Sync issues, statuses, close on Done",
             "settings.int.gitea.desc": "Sync repo issues, close on Done",
@@ -1349,7 +1349,7 @@ QtObject {
             "settings.cpp.inlineAsm": "Показывать ASM инлайн",
             "settings.cpp.inlineAsm.hint": "Показывать компиляторный вывод прямо в task card.",
 
-            "settings.int.jira.desc": "Sync задач, ID prefix, статусов",
+            "settings.int.jira.desc": "Синк задач, префикс ID, статусы — Cloud и Server/DC",
             "settings.int.github.desc": "PR статус, branch template, code-review pings",
             "settings.int.gitlab.desc": "Sync issues, статусов, close on Done",
             "settings.int.gitea.desc": "Синхронизация issues, close on Done",

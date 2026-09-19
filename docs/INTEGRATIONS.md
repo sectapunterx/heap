@@ -144,8 +144,28 @@ Two Atlassian-specific details the flow handles:
   (keeping the one the card already names, so a second site can't silently
   repoint synced issues) and caches `cloudId` + `siteUrl` in the card's config.
 
-Atlassian has no PKCE-only mode, so this needs a client secret. **Jira Cloud
-only** — Server/Data Center has a different, per-instance OAuth story.
+Atlassian has no PKCE-only mode, so this needs a client secret. Browser sign-in
+is **Cloud only**; Server/DC uses a Personal Access Token (below).
+
+### Jira Server / Data Center
+
+A different product behind the same name, and heap detects which one it is
+rather than asking: it reads `deploymentType` from `{site}/rest/api/2/serverInfo`
+on the first request, falling back to the URL (`*.atlassian.net` is Cloud,
+anything else self-hosted is Server/DC) when the instance refuses anonymous
+reads.
+
+| | Cloud | Server / Data Center |
+|---|---|---|
+| API | `/rest/api/3` | `/rest/api/2` |
+| Credential | account email **+** API token, sent as HTTP Basic | Personal Access Token, sent as `Bearer` |
+| Search | `POST /search/jql` | `POST /search` |
+| Description | ADF, flattened to text | already plain text |
+| Browser sign-in | yes (3LO) | no |
+
+On Server/DC, **leave the Email field empty** and paste a Personal Access Token
+from **your avatar → Profile → Personal Access Tokens**. An instance too old for
+PATs still works: fill in your username and it falls back to HTTP Basic.
 
 ### Trello — token in the fragment
 

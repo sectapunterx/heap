@@ -161,6 +161,9 @@ TEST_F(JiraNetwork, RetriesThroughTheGatewayWhenTheSiteAnswers401) {
   heap::integrations::JiraProvider p;
   p.setGatewayRoot(server.base());
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("scoped-token"), QString());
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   bool ok = false;
@@ -187,6 +190,9 @@ TEST_F(JiraNetwork, KeepsTheOriginal401WhenThereIsNoCloudId) {
   heap::integrations::JiraProvider p;
   p.setGatewayRoot(server.base());
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("bad"), QString());
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   bool ok = true;
@@ -211,6 +217,9 @@ TEST_F(JiraNetwork, PullPostsTheBoundedDefaultJql) {
 
   heap::integrations::JiraProvider p;
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   QVector<ExternalTask> got;
@@ -238,6 +247,9 @@ TEST_F(JiraNetwork, ReportsAFailedPullInsteadOfAnEmptyList) {
 
   heap::integrations::JiraProvider p;
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QStringLiteral("order by updated DESC"));
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   bool fetched = false;
@@ -334,6 +346,9 @@ TEST_F(JiraNetwork, SwitchingBackToBasicAuthForgetsTheGateway) {
   p.setOAuthConfig(QStringLiteral("cid-123"), server.base(), QStringLiteral("at-3lo"), QString());
   // Signing out and pasting an API token instead.
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString&) {
@@ -363,6 +378,9 @@ TEST_F(JiraNetwork, ARejectedTokenNamesWhatToChange) {
   heap::integrations::JiraProvider p;
   p.setGatewayRoot(server.base());
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("not-a-token"), QString());
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   bool ok = true;
@@ -392,6 +410,9 @@ TEST_F(JiraNetwork, ACloudSiteThatStillRefusesDoesNotBlameTheEdition) {
   heap::integrations::JiraProvider p;
   p.setGatewayRoot(server.base());
   p.setConfig(server.base(), QStringLiteral("wrong@example.com"), QStringLiteral("tok"), QString());
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   QString error;
@@ -432,6 +453,9 @@ TEST_F(JiraNetwork, ANonAuthFailureIsLeftAlone) {
 
   heap::integrations::JiraProvider p;
   p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QStringLiteral("order by updated DESC"));
+  // These exercise the Cloud API (/rest/api/3 + Basic); a loopback host would
+  // otherwise be detected as Server/DC, which is a different product.
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
 
   bool done = false;
   QString error;
@@ -443,4 +467,179 @@ TEST_F(JiraNetwork, ANonAuthFailureIsLeftAlone) {
   ASSERT_TRUE(waitFor(done));
   EXPECT_EQ(error, QString::fromUtf8("HTTP 400 — Unbounded JQL queries are not allowed here."))
       << "only 401 is rewritten; everything else keeps the tracker's own words";
+}
+
+// ── Jira Server / Data Center ───────────────────────────────────────────────
+// A different product behind the same name: /rest/api/2 instead of v3, a
+// Personal Access Token as a bearer credential instead of an email+token pair,
+// and POST /search instead of Cloud's /search/jql. Getting it wrong produces a
+// 401 or a 404 that points at nothing.
+
+TEST(JiraDeploymentDetect, ReadsTheDeploymentTypeFromServerInfo) {
+  using heap::integrations::JiraDeployment;
+  using heap::integrations::parseJiraDeployment;
+  EXPECT_EQ(parseJiraDeployment(R"({"deploymentType":"Cloud","version":"1001.0.0"})"), JiraDeployment::Cloud);
+  EXPECT_EQ(parseJiraDeployment(R"({"deploymentType":"Server","version":"9.12.1"})"), JiraDeployment::Server);
+  // Atlassian reports Data Center as "Server", but accept the explicit spelling.
+  EXPECT_EQ(parseJiraDeployment(R"({"deploymentType":"DataCenter"})"), JiraDeployment::Server);
+  EXPECT_EQ(parseJiraDeployment(R"({"deploymentType":"server"})"), JiraDeployment::Server);
+  // Nothing usable: the caller falls back to the URL.
+  EXPECT_EQ(parseJiraDeployment(R"({"version":"9.12.1"})"), JiraDeployment::Unknown);
+  EXPECT_EQ(parseJiraDeployment("not json"), JiraDeployment::Unknown);
+}
+
+TEST(JiraDeploymentDetect, TheUrlIsTheFallbackEvidence) {
+  using heap::integrations::guessJiraDeployment;
+  using heap::integrations::JiraDeployment;
+  EXPECT_EQ(guessJiraDeployment(QStringLiteral("https://acme.atlassian.net")), JiraDeployment::Cloud);
+  EXPECT_EQ(guessJiraDeployment(QStringLiteral("acme.atlassian.net/browse/X-1")), JiraDeployment::Cloud);
+  // Only Atlassian runs atlassian.net; a company domain is self-hosted.
+  EXPECT_EQ(guessJiraDeployment(QStringLiteral("https://j.example.com")), JiraDeployment::Server);
+  EXPECT_EQ(guessJiraDeployment(QStringLiteral("https://jira.corp.example.com/jira")), JiraDeployment::Server);
+  EXPECT_EQ(guessJiraDeployment(QString()), JiraDeployment::Unknown);
+}
+
+TEST_F(JiraNetwork, DetectsServerAndUsesV2WithABearerToken) {
+  FakeJira server;
+  server.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Server","version":"9.12.1"})"});
+  server.route("GET /rest/api/2/myself", {200, R"({"name":"alex"})"});
+
+  heap::integrations::JiraProvider p;
+  // No email: a Personal Access Token authenticates on its own.
+  p.setConfig(server.base(), QString(), QStringLiteral("pat-abc"), QString());
+  ASSERT_TRUE(p.isConfigured()) << "Server/DC needs no account email";
+
+  bool done = false;
+  bool ok = false;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool o, const QString&) {
+    ok = o;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(p.deployment(), heap::integrations::JiraDeployment::Server);
+
+  EXPECT_EQ(server.lastRequest("GET /rest/api/2/myself").headers.value("authorization"), QByteArray("Bearer pat-abc"));
+  // v3 is Cloud-only and would 404 here.
+  EXPECT_FALSE(server.seen().contains("GET /rest/api/3/myself"));
+}
+
+TEST_F(JiraNetwork, ServerPullsThroughTheV2SearchEndpoint) {
+  FakeJira server;
+  server.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Server"})"});
+  // Server/DC never had /search/jql, and its description is plain text rather
+  // than the ADF document Cloud returns.
+  server.route("POST /rest/api/2/search", {200, R"({"issues":[
+      {"key":"TEL-123","fields":{"summary":"Handover fails","description":"plain text body",
+       "status":{"name":"In Progress"},"priority":{"name":"High"},"labels":["ran"],
+       "updated":"2026-01-02T03:04:05.000+0300"}}]})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QString(), QStringLiteral("pat"), QString());
+
+  bool done = false;
+  QVector<ExternalTask> got;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::tasksFetched, &p, [&](const QVector<ExternalTask>& t) {
+    got = t;
+    done = true;
+  });
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::pullFailed, &p, [&](int, const QString&) {
+    done = true;
+  });
+  p.pullTasks();
+  ASSERT_TRUE(waitFor(done));
+
+  ASSERT_EQ(got.size(), 1);
+  EXPECT_EQ(got[0].externalId, QStringLiteral("TEL-123"));
+  EXPECT_EQ(got[0].body, QStringLiteral("plain text body")) << "a v2 description is a string, not ADF";
+  EXPECT_EQ(got[0].url, server.base() + QStringLiteral("/browse/TEL-123"));
+  EXPECT_FALSE(server.seen().contains("POST /rest/api/3/search/jql"));
+}
+
+TEST_F(JiraNetwork, ServerNeverTriesTheCloudGateway) {
+  FakeJira server;
+  server.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Server"})"});
+  server.route("GET /rest/api/2/myself", {401, R"({"message":"Unauthorized"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setGatewayRoot(server.base());
+  p.setConfig(server.base(), QString(), QStringLiteral("bad-pat"), QString());
+
+  bool done = false;
+  QString error;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString& e) {
+    error = e;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+
+  // api.atlassian.com is a Cloud-only thing; chasing it here wastes a request
+  // and hides the real answer.
+  EXPECT_FALSE(server.seen().contains("GET /_edge/tenant_info"));
+  EXPECT_TRUE(error.contains(QStringLiteral("Personal Access Token"))) << error.toStdString();
+  EXPECT_FALSE(error.contains(QStringLiteral("id.atlassian.com"))) << "that is the Cloud advice: " << error.toStdString();
+}
+
+TEST_F(JiraNetwork, AServerInstanceThatHidesServerInfoIsStillDetectedFromItsUrl) {
+  FakeJira server;
+  // Behind SSO, anonymous reads refused — the URL is the only evidence left.
+  server.route("GET /rest/api/2/serverInfo", {401, R"({})"});
+  server.route("GET /rest/api/2/myself", {200, R"({"name":"alex"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QString(), QStringLiteral("pat"), QString());
+
+  bool done = false;
+  bool ok = false;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool o, const QString&) {
+    ok = o;
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(p.deployment(), heap::integrations::JiraDeployment::Server) << "a loopback host is not atlassian.net";
+}
+
+TEST_F(JiraNetwork, AnOldServerWithoutPatsStillWorksOnBasicAuth) {
+  FakeJira server;
+  server.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Server"})"});
+  server.route("GET /rest/api/2/myself", {200, R"({"name":"alex"})"});
+
+  heap::integrations::JiraProvider p;
+  // Filling in the username opts back into Basic, for a Jira too old for PATs.
+  p.setConfig(server.base(), QStringLiteral("alex"), QStringLiteral("password"), QString());
+
+  bool done = false;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString&) {
+    done = true;
+  });
+  p.testConnection();
+  ASSERT_TRUE(waitFor(done));
+  EXPECT_TRUE(server.lastRequest("GET /rest/api/2/myself").headers.value("authorization").startsWith("Basic "));
+}
+
+TEST_F(JiraNetwork, TheDeploymentIsProbedOnceNotPerRequest) {
+  FakeJira server;
+  server.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Server"})"});
+  server.route("GET /rest/api/2/myself", {200, R"({"name":"alex"})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QString(), QStringLiteral("pat"), QString());
+
+  for(int i = 0; i < 3; ++i) {
+    bool done = false;
+    QObject::connect(&p, &heap::integrations::IntegrationProvider::connectionTested, &p, [&](bool, const QString&) {
+      done = true;
+    });
+    p.testConnection();
+    ASSERT_TRUE(waitFor(done));
+  }
+  int probes = 0;
+  for(const QByteArray& seen : server.seen()) {
+    probes += seen == "GET /rest/api/2/serverInfo" ? 1 : 0;
+  }
+  EXPECT_EQ(probes, 1) << "the answer does not change between requests";
 }
