@@ -15,6 +15,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "markdown/MdOutline.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
@@ -3431,15 +3432,21 @@ QVariantList AppController::commandPaletteEntries() const {
   };
 
   for(const Profile& p : m_profiles) {
-    // Notes — the whole per-profile markdown blob is one searchable entry.
-    if(!p.notesState.trimmed().isEmpty()) {
+    // Notes — one entry per heading rather than one for the whole blob. A
+    // single entry could only say "it is somewhere in your notes"; a section
+    // gives the reader a place to land and a snippet worth showing.
+    for(const heap::md::MdSection& section : heap::md::searchSections(p.notesState)) {
+      if(section.body.trimmed().isEmpty() && section.title.trimmed().isEmpty()) {
+        continue;
+      }
       QVariantMap m;
       m["kind"] = "note";
-      m["label"] = QString("%1 · Notes").arg(p.name);
+      m["label"] = section.title.isEmpty() ? QString("%1 · Notes").arg(p.name) : QString("%1 · Notes › %2").arg(p.name, section.title);
       m["sub"] = p.name;
-      m["body"] = cap(p.notesState);
+      m["body"] = cap(section.body);
       m["profileId"] = p.id;
       m["color"] = p.color;
+      m["line"] = section.line;
       out.append(m);
     }
     // Tasks

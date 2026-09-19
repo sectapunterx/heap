@@ -129,6 +129,49 @@ TestCase {
         compare(doc.positionForLine(2), 7);
     }
 
+    // ── Checkbox write-back ─────────────────────────────────────────
+    // Ticking a box rewrites exactly one character of the note. Anything
+    // wider than that would be an edit the reader did not ask for.
+    function test_checkbox_toggle_changes_one_character() {
+        showMarkdown("- [ ] open
+- [x] done
+");
+
+        const open = doc.taskToggleForRow(0);
+        compare(open.from, " ");
+        compare(open.to, "x");
+        compare(doc.text.charAt(open.position), " ");
+
+        const done = doc.taskToggleForRow(1);
+        compare(done.from, "x");
+        compare(done.to, " ");
+        compare(doc.text.charAt(done.position), "x");
+        verify(done.position !== open.position);
+    }
+
+    function test_checkbox_toggle_is_refused_for_non_tasks() {
+        showMarkdown("- a plain item
+
+and a paragraph
+");
+        const edit = doc.taskToggleForRow(0);
+        verify(edit.position === undefined, "a plain list item offered a toggle");
+        verify(doc.taskToggleForRow(1).position === undefined);
+        verify(doc.taskToggleForRow(99).position === undefined);
+    }
+
+    function test_checkbox_toggle_survives_multi_byte_text() {
+        // Byte offsets and cursor positions diverge as soon as the note holds
+        // non-ASCII; a task under such a line is where that goes wrong.
+        showMarkdown("# Заголовок 🙂
+
+- [ ] задача
+");
+        const edit = doc.taskToggleForRow(1);
+        compare(doc.text.charAt(edit.position), " ");
+        compare(edit.to, "x");
+    }
+
     // An empty note draws nothing a reader can see. The model still covers the
     // document — one blank row for the one empty line — so that every line maps
     // to something; that row has no delegate content of its own.
