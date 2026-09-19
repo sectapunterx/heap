@@ -88,10 +88,28 @@ OAuth2 application under **Settings → Applications** on their instance
 sent as `Authorization: Bearer` regardless — the config carries `authMode=oauth`,
 set when a browser sign-in succeeds. PAT and OAuth therefore coexist on one card.
 
+## Token refresh
+
+Short-lived OAuth tokens (GitLab ~2 h) are renewed automatically. Before a sync
+or a status write-back, `AppController::ensureFreshToken` checks the stored
+`tokenExpiresAt`; within a minute of expiry it spends the refresh token
+(`OAuthRefresh.h`, a plain form POST that also works on Qt 6.4). A session with
+no recorded expiry gets one refresh-and-retry on its first `401`. Providers
+rotate the refresh token, so the new one is stored **before** the new access
+token. If the grant is gone (revoked, or a rotated token was reused) the card
+drops back to disconnected and asks you to sign in again. GitHub device-flow
+tokens don't expire, so there is nothing to refresh.
+
+## Where secrets live
+
+The OS keychain, service `heap.integrations`, key `<provider>/<field>`
+(`github/token`, `gitlab/refreshToken`). Values over ~2 KB (Windows Credential
+Manager caps a blob at 2560 bytes) are split across `<key>#0`, `<key>#1`, … .
+A run that must not touch your real data — `--data-dir` / `HEAP_DATA_DIR`, or
+the test suites — never opens the keychain: it keeps a `secrets.json` next to its
+own `state.json` instead. Builds without QtKeychain always use that file.
+
 ## Limitations (v1)
 
-- **No token refresh.** Short-lived OAuth tokens (GitLab ~2 h) require signing in
-  again; the refresh token is stored for a future auto-refresh. GitHub tokens
-  from device flow don't expire.
 - **Push in self-scope.** When repo/project is blank (my-issues mode), status
   write-back is skipped — there's no single repo to write to.

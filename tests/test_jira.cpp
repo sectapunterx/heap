@@ -1,3 +1,5 @@
+#include "FakeHttpServer.h"
+
 #include "integrations/JiraProvider.h"
 
 #include <QCoreApplication>
@@ -120,124 +122,8 @@ TEST(JiraJql, DefaultIsBounded) {
 // once through the gateway. Driven against a local fake server.
 
 namespace {
-
-// Minimal HTTP/1.1 server answering a fixed "METHOD /path" route table — just
-// enough for QNetworkAccessManager.
-class FakeJira {
- public:
-  struct Response {
-    int status = 200;
-    QByteArray body = "{}";
-  };
-
-  FakeJira() {
-    m_server.listen(QHostAddress::LocalHost, 0);
-    QObject::connect(&m_server, &QTcpServer::newConnection, &m_server, [this]() {
-      acceptOne();
-    });
-  }
-
-  QString base() const {
-    return QStringLiteral("http://127.0.0.1:%1").arg(m_server.serverPort());
-  }
-
-  void route(const QByteArray& key, const Response& r) {
-    m_routes.insert(key, r);
-  }
-
-  const QList<QByteArray>& seen() const {
-    return m_seen;
-  }
-
-  QByteArray lastBody() const {
-    return m_lastBody;
-  }
-
- private:
-  static int contentLength(const QByteArray& headers) {
-    const QList<QByteArray> lines = headers.split('\n');
-    for(const QByteArray& line : lines) {
-      const QByteArray trimmed = line.trimmed();
-      if(trimmed.toLower().startsWith("content-length:")) {
-        return trimmed.mid(trimmed.indexOf(':') + 1).trimmed().toInt();
-      }
-    }
-    return 0;
-  }
-
-  static QByteArray reason(int status) {
-    switch(status) {
-      case 200:
-        return "OK";
-      case 400:
-        return "Bad Request";
-      case 401:
-        return "Unauthorized";
-      default:
-        return "Not Found";
-    }
-  }
-
-  void acceptOne() {
-    QTcpSocket* sock = m_server.nextPendingConnection();
-    QObject::connect(sock, &QTcpSocket::readyRead, sock, [this, sock]() {
-      m_buffers[sock] += sock->readAll();
-      const QByteArray buf = m_buffers.value(sock);
-      const int headerEnd = buf.indexOf("\r\n\r\n");
-      if(headerEnd < 0) {
-        return;
-      }
-      if(buf.size() < headerEnd + 4 + contentLength(buf.left(headerEnd))) {
-        return;  // body still arriving
-      }
-      m_buffers.remove(sock);
-      respond(sock, buf, headerEnd + 4);
-    });
-    QObject::connect(sock, &QTcpSocket::disconnected, sock, [this, sock]() {
-      m_buffers.remove(sock);
-      sock->deleteLater();
-    });
-  }
-
-  void respond(QTcpSocket* sock, const QByteArray& request, int bodyStart) {
-    const QList<QByteArray> parts = request.left(request.indexOf('\r')).split(' ');
-    QByteArray path = parts.value(1);
-    const int q = path.indexOf('?');
-    if(q >= 0) {
-      path = path.left(q);
-    }
-    const QByteArray key = parts.value(0) + " " + path;
-    m_seen.append(key);
-    m_lastBody = request.mid(bodyStart);
-
-    const Response r = m_routes.value(key, Response{404, "{}"});
-    QByteArray out = "HTTP/1.1 " + QByteArray::number(r.status) + " " + reason(r.status) + "\r\n";
-    out += "Content-Type: application/json\r\n";
-    out += "Content-Length: " + QByteArray::number(r.body.size()) + "\r\n";
-    out += "Connection: close\r\n\r\n";
-    out += r.body;
-    sock->write(out);
-    sock->flush();
-    sock->disconnectFromHost();
-  }
-
-  QTcpServer m_server;
-  QHash<QByteArray, Response> m_routes;
-  QHash<QTcpSocket*, QByteArray> m_buffers;
-  QList<QByteArray> m_seen;
-  QByteArray m_lastBody;
-};
-
-// The provider answers from the event loop, so the test has to run one.
-bool waitFor(const bool& done, int ms = 5000) {
-  QElapsedTimer t;
-  t.start();
-  while(!done && t.elapsed() < ms) {
-    QCoreApplication::processEvents(QEventLoop::AllEvents, 20);
-  }
-  return done;
-}
-
+using FakeJira = heap::testing::FakeHttpServer;
+using heap::testing::waitFor;
 }  // namespace
 
 class JiraNetwork : public ::testing::Test {

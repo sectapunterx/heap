@@ -2355,6 +2355,13 @@ QVariantMap AppController::integrationConfig(const QString& providerId) const {
     for(const QString& field : d->secretKeys) {
       cfg.insert(field, m_secretStore->value(providerId, field));
     }
+    // The refresh token is a secret no card ever shows, so it is not one of the
+    // descriptor's secretKeys — and without this it never reached the config,
+    // leaving ensureFreshToken / refreshOAuthToken / the 401 retry with nothing
+    // to spend: an OAuth session went quiet as soon as its access token expired.
+    if(d->oauth.supported) {
+      cfg.insert(QStringLiteral("refreshToken"), m_secretStore->value(providerId, QStringLiteral("refreshToken")));
+    }
   }
   return cfg;
 }
@@ -2561,10 +2568,13 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
           return;
         }
         if(m_secretStore) {
-          m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
+          // Refresh token first: providers rotate it, so the old one is already
+          // dead. Dying between the two writes must not leave a live access
+          // token paired with a refresh token that can never be spent.
           if(!r.refreshToken.isEmpty()) {
             m_secretStore->setValue(providerId, QStringLiteral("refreshToken"), r.refreshToken);
           }
+          m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
         }
         setIntegrationField(
             providerId, QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString());
@@ -2640,10 +2650,11 @@ void AppController::connectOAuth(const QString& providerId) {
       return;
     }
     if(m_secretStore) {
-      m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
+      // Same order as refreshOAuthToken: the refresh token goes in first.
       if(!r.refreshToken.isEmpty()) {
         m_secretStore->setValue(providerId, QStringLiteral("refreshToken"), r.refreshToken);
       }
+      m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
     }
     setIntegrationField(providerId, QStringLiteral("authMode"), QStringLiteral("oauth"));
     // When the token expires. Without it the access token was used until the

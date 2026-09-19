@@ -6,6 +6,7 @@
 // the real state.json.
 
 #include "AppController.h"
+#include "FakeHttpServer.h"
 #include "Models.h"
 
 #include "integrations/IntegrationTypes.h"
@@ -707,6 +708,56 @@ TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
   EXPECT_TRUE(exported.contains(QStringLiteral("2026-07-10T15:00:00"))) << exported.left(400).toStdString();
 }
 
+// ─── OAuth token refresh ──────────────────────────────────────────────
+// The refresh token lives in the secret store but is not one of the card's
+// secretKeys, so integrationConfig() never handed it to the refresh path: a
+// browser-connected tracker went quiet at its first token expiry. Driven end to
+// end against a local fake GitLab — the sync must spend the refresh token first
+// and only then list issues, with the new access token.
+TEST_F(AppControllerTest, ExpiredOAuthTokenIsRefreshedBeforeTheSync) {
+  heap::testing::FakeHttpServer gitlab;
+  gitlab.route("POST /oauth/token", {200, R"({"access_token":"at-new","refresh_token":"rt-new","expires_in":7200})", {}});
+  gitlab.route("GET /api/v4/issues", {200, "[]", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("at-old"));
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QStringLiteral("rt-old"));
+
+  const auto writeGitlabConfig = [this](const QJsonObject& cfg) {
+    QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
+    QJsonObject integrations = settings.value(QStringLiteral("integrations")).toObject();
+    integrations.insert(QStringLiteral("gitlab"), cfg);
+    settings.insert(QStringLiteral("integrations"), integrations);
+    app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  };
+  writeGitlabConfig(QJsonObject{
+      {QStringLiteral("connected"), true},
+      {QStringLiteral("authMode"), QStringLiteral("oauth")},
+      {QStringLiteral("host"), gitlab.base()},
+      {QStringLiteral("clientId"), QStringLiteral("cid")},
+      {QStringLiteral("tokenExpiresAt"), QDateTime::currentDateTime().addSecs(-3600).toString(Qt::ISODate)},
+  });
+
+  app_->syncProvider(QStringLiteral("gitlab"));
+  ASSERT_TRUE(heap::testing::waitUntil([&gitlab]() {
+    return gitlab.seen().contains("GET /api/v4/issues");
+  })) << "the sync never reached the issue list";
+
+  ASSERT_EQ(gitlab.seen().value(0), QByteArray("POST /oauth/token")) << "the expired token was used without a refresh";
+  const QByteArray form = gitlab.lastRequest("POST /oauth/token").body;
+  EXPECT_TRUE(form.contains("grant_type=refresh_token")) << form.toStdString();
+  EXPECT_TRUE(form.contains("refresh_token=rt-old")) << form.toStdString();
+  EXPECT_EQ(gitlab.lastRequest("GET /api/v4/issues").headers.value("authorization"), QByteArray("Bearer at-new"));
+
+  // Rotated: both halves of the new grant are what the next run will load.
+  EXPECT_EQ(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("token")), QStringLiteral("at-new"));
+  EXPECT_EQ(app_->integrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken")), QStringLiteral("rt-new"));
+
+  // Leave nothing behind for the suites sharing this test-mode profile.
+  writeGitlabConfig(QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);
@@ -720,6 +771,9 @@ int main(int argc, char** argv) {
   const QString appData = QStandardPaths::writableLocation(QStandardPaths::AppDataLocation);
   if(!appData.isEmpty()) {
     QFile::remove(appData + QStringLiteral("/state.json"));
+    // Test mode keeps integration secrets in this file instead of the OS
+    // keychain; a token left by an earlier run must not leak into this one.
+    QFile::remove(appData + QStringLiteral("/secrets.json"));
     QDir(appData + QStringLiteral("/backups")).removeRecursively();
   }
 
