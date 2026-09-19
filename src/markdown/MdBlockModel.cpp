@@ -274,7 +274,7 @@ void MdBlockModel::setDocument(const MdSourceMap& src, const MdAst& ast, const M
       }
 
       case BlockType::ListItem: {
-        Context inner = context;
+        const Context& const inner = context;
         bool first = true;
         // A tight list item owns its text directly: md4c emits no paragraph
         // inside one, so without this the item would draw nothing at all.
