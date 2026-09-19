@@ -1,4 +1,5 @@
 #include "integrations/SecretStore.h"
+#include "platform/Paths.h"
 
 #include <QDir>
 #include <QFile>
@@ -6,7 +7,6 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSaveFile>
-#include <QStandardPaths>
 #include <QTimer>
 
 #include <memory>
@@ -112,7 +112,7 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
 }
 
 QString SecretStore::fallbackPath() const {
-  return QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/secrets.json");
+  return heap::paths::dataDir() + QStringLiteral("/secrets.json");
 }
 
 void SecretStore::loadFallbackFile() {

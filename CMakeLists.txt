@@ -87,6 +87,7 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
+    src/platform/Paths.cpp
     src/integrations/StatusMap.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
