@@ -571,6 +571,10 @@ class AppController : public QObject {
   // Device-flow OAuth: prompts the Integrations card to show a "enter this code
   // in your browser" banner. An empty `code` clears the banner (flow finished).
   void oauthDeviceCode(const QString& providerId, const QString& code, const QString& verificationUri);
+  // Raised whenever the keychain contents change — on the async load at startup
+  // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
+  // are not properties), so QML re-reads it by binding to this signal.
+  void integrationSecretsChanged();
   void updateStatusChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);

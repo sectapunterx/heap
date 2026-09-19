@@ -392,6 +392,7 @@ AppController::AppController(QObject* parent) :
   // Providers that need a secret build after the async keychain read completes.
   m_secretStore->load(secretKeys, [this]() {
     applyIntegrationSettings();
+    emit integrationSecretsChanged();  // the Settings fields were rendered empty
   });
   applyIntegrationSettings();
   connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
@@ -2416,6 +2417,7 @@ void AppController::setIntegrationSecret(const QString& providerId, const QStrin
     m_secretStore->setValue(providerId, field, value);
   }
   applyIntegrationSettings();
+  emit integrationSecretsChanged();
 }
 
 void AppController::setIntegrationField(const QString& providerId, const QString& field, const QVariant& value) {

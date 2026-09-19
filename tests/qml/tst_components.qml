@@ -75,6 +75,42 @@ TestCase {
         compare(sv.activeSection, "integrations");
     }
 
+    // Find the TextField inside a TextRow (children[0] is the label).
+    function findTextField(row) {
+        for (let i = 0; i < row.children.length; ++i) {
+            if (row.children[i].echoMode !== undefined) return row.children[i];
+        }
+        return null;
+    }
+
+    // A pending edit must be flushable without Enter or focus loss: every action
+    // on the Integrations card is a MouseArea, which never takes focus from the
+    // field, so a freshly pasted token would otherwise still be unsaved when
+    // Connect / Test connection / Sync now fires.
+    function test_settings_textrow_commit_pending() {
+        const row = createTemporaryQmlObject('import TodoCpp; SettingsView.TextRow { value: "old" }', host);
+        verify(row !== null, "failed to instantiate SettingsView.TextRow");
+        let committed = "";
+        row.committed.connect(function(t) { committed = t; });
+
+        const field = findTextField(row);
+        verify(field !== null, "TextRow must contain a TextField");
+        field.text = "pasted-token";
+        compare(committed, "", "typing alone must not write settings");
+        row.commitPending();
+        compare(committed, "pasted-token");
+
+        // Idempotent: value catches up, so a second flush is a no-op.
+        row.value = "pasted-token";
+        committed = "";
+        row.commitPending();
+        compare(committed, "");
+
+        // Secret rows stay masked while unfocused.
+        row.secret = true;
+        compare(field.echoMode, TextInput.Password);
+    }
+
     // SideRail integration: focusStatusColumn drives AppController view state
     // (the wiring the ⊘/⎇ buttons use). Exercises the live singleton the rail
     // component binds to.
