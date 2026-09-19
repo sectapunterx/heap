@@ -642,7 +642,7 @@ void Builder::partitionTopLevel() {
         } else if(line < limit) {
           line = start + 1;
         }
-        MdSpan groupSpan = spanForLines(start, stop);
+        const MdSpan groupSpan = spanForLines(start, stop);
         m_ast.blocks[parsed.at(k)].span = groupSpan;
         order.append(parsed.at(k));
         cursor = groupSpan.lastLine + 1;
