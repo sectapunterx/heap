@@ -13,6 +13,10 @@ CMakeFiles/
 .DS_Store
 /design/*
 !design/brand-export/
-cmake*
+# CLion's build directories. Deliberately not the bare "cmake*": git matches
+# ignore patterns case-insensitively on Windows and macOS, so that pattern also
+# swallowed CMakeLists.txt — a new one in a subdirectory was silently untracked
+# and the build only broke on CI, where the file did not exist.
+cmake-build-*/
 # Local SignPath setup notes / artifact configs (do not commit)
 /signpath-setup/
