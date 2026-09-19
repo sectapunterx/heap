@@ -150,6 +150,11 @@ bool MattermostClient::isConfigured() const {
 
 void MattermostClient::send(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done) {
   QNetworkRequest req{QUrl(m_host + QStringLiteral("/api/v4") + path)};
+  // Qt's default redirect policy allows a redirect to another host, and a 307
+  // keeps the method and body — so a server could bounce POST /users/login,
+  // password and all, to somewhere else, or collect the Bearer token from any
+  // other call. hostIsAcceptable() only ever saw the first URL.
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
   req.setRawHeader("User-Agent", "heap-sync");
   if(!m_token.isEmpty()) {
@@ -195,7 +200,7 @@ void MattermostClient::login(const QString& loginId, const QString& password, co
   if(!mfaToken.trimmed().isEmpty()) {
     payload.insert(QStringLiteral("token"), mfaToken.trimmed());
   }
-  QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
+  const QByteArray body = QJsonDocument(payload).toJson(QJsonDocument::Compact);
 
   send("POST", QStringLiteral("/users/login"), body, [this](const ApiResult& r) {
     if(!r.ok) {
@@ -210,8 +215,13 @@ void MattermostClient::login(const QString& loginId, const QString& password, co
     }
     emit loggedIn(true, token, QString());
   });
-  // The password only ever needed to exist for the length of that call.
-  body.fill('\0');
+  // No wiping here, deliberately. QByteArray is implicitly shared, so
+  // fill('\0') would detach and zero a fresh copy while the one Qt is still
+  // uploading stays intact — and the password also exists in the QString
+  // argument, in `payload`, and inside Qt's own HTTP buffers, none of which are
+  // reachable from here. A wipe would only look reassuring. The guarantees
+  // worth making are the ones that hold: it is never persisted and never
+  // logged, and it only ever leaves over https (see hostIsAcceptable).
 }
 
 void MattermostClient::logout() {
@@ -310,60 +320,57 @@ void MattermostClient::fetchChannels(const QString& myId, const QStringList& tea
       }
     }
 
-    // Walk them one at a time, then move on to the next team.
-    auto index = std::make_shared<int>(0);
-    auto step = std::make_shared<std::function<void()>>();
-    *step = [this, myId, teamIds, teamIndex, memberChannels, index, step]() {
-      if(*index >= memberChannels.size()) {
-        fetchChannels(myId, teamIds, teamIndex + 1);
-        return;
-      }
-      const auto& entry = memberChannels.at((*index)++);
-      fetchChannelMembers(entry.first, entry.second, [step]() {
-        (*step)();
-      });
-    };
-    (*step)();
+    // Walk them one at a time, then move on to the next team. Explicit indices
+    // rather than a self-referential std::function: that idiom makes the
+    // functor own itself, so the closure and everything it captured leak on
+    // every sync.
+    fetchMemberChannels(myId, teamIds, teamIndex, memberChannels, 0);
   });
 }
 
-void MattermostClient::fetchChannelMembers(const QString& channelId, const QString& label, const std::function<void()>& next) {
-  auto page = std::make_shared<int>(0);
-  auto step = std::make_shared<std::function<void()>>();
-  *step = [this, channelId, label, next, page, step]() {
-    if(*page >= kMaxPages) {
+void MattermostClient::fetchMemberChannels(
+    const QString& myId, const QStringList& teamIds, int teamIndex, const QVector<QPair<QString, QString>>& channels, int channelIndex) {
+  if(channelIndex >= channels.size()) {
+    fetchChannels(myId, teamIds, teamIndex + 1);
+    return;
+  }
+  const auto& entry = channels.at(channelIndex);
+  fetchChannelMembers(entry.first, entry.second, 0, [this, myId, teamIds, teamIndex, channels, channelIndex]() {
+    fetchMemberChannels(myId, teamIds, teamIndex, channels, channelIndex + 1);
+  });
+}
+
+void MattermostClient::fetchChannelMembers(const QString& channelId, const QString& label, int page, const std::function<void()>& next) {
+  if(page >= kMaxPages) {
+    next();
+    return;
+  }
+  const QString path = QStringLiteral("/channels/%1/members?page=%2&per_page=%3").arg(channelId).arg(page).arg(kPageSize);
+  send("GET", path, {}, [this, channelId, label, page, next](const ApiResult& r) {
+    if(!r.ok) {
+      // One unreadable channel is not worth abandoning the whole import.
       next();
       return;
     }
-    const QString path = QStringLiteral("/channels/%1/members?page=%2&per_page=%3").arg(channelId).arg(*page).arg(kPageSize);
-    (*page)++;
-    send("GET", path, {}, [this, label, next, page, step](const ApiResult& r) {
-      if(!r.ok) {
-        // One unreadable channel is not worth abandoning the whole import.
-        next();
-        return;
+    const QJsonArray members = QJsonDocument::fromJson(r.body).array();
+    for(const auto& v : members) {
+      const QJsonObject m = v.toObject();
+      const QString userId = m.value(QStringLiteral("user_id")).toString();
+      if(userId.isEmpty() || userId == m_myId) {
+        continue;
       }
-      const QJsonArray members = QJsonDocument::fromJson(r.body).array();
-      for(const auto& v : members) {
-        const QJsonObject m = v.toObject();
-        const QString userId = m.value(QStringLiteral("user_id")).toString();
-        if(userId.isEmpty() || userId == m_myId) {
-          continue;
-        }
-        // A DM label is more informative than a channel one, so it wins.
-        if(!m_wanted.contains(userId)) {
-          m_wanted.insert(userId, label);
-        }
-        m_channelRole.insert(userId, m.value(QStringLiteral("roles")).toString());
+      // A DM label is more informative than a channel one, so it wins.
+      if(!m_wanted.contains(userId)) {
+        m_wanted.insert(userId, label);
       }
-      if(members.size() < kPageSize) {
-        next();
-        return;
-      }
-      (*step)();
-    });
-  };
-  (*step)();
+      m_channelRole.insert(userId, m.value(QStringLiteral("roles")).toString());
+    }
+    if(members.size() < kPageSize) {
+      next();
+      return;
+    }
+    fetchChannelMembers(channelId, label, page + 1, next);
+  });
 }
 
 void MattermostClient::resolveUsers() {
@@ -373,49 +380,46 @@ void MattermostClient::resolveUsers() {
     emit contactsFetched({});
     return;
   }
+  resolveUserBatch(ids, 0, {});
+}
 
-  auto collected = std::make_shared<QVector<ExternalContact>>();
-  auto offset = std::make_shared<int>(0);
-  auto step = std::make_shared<std::function<void()>>();
-  *step = [this, ids, collected, offset, step]() {
-    if(*offset >= ids.size()) {
-      m_fetching = false;
-      emit contactsFetched(*collected);
-      return;
-    }
-    QJsonArray batch;
-    const int end = qMin(*offset + kUserBatch, static_cast<int>(ids.size()));
-    for(int i = *offset; i < end; ++i) {
-      batch.append(ids.at(i));
-    }
-    *offset = end;
+void MattermostClient::resolveUserBatch(const QStringList& ids, int offset, const QVector<ExternalContact>& collected) {
+  if(offset >= ids.size()) {
+    m_fetching = false;
+    emit contactsFetched(collected);
+    return;
+  }
+  QJsonArray batch;
+  const int end = qMin(offset + kUserBatch, static_cast<int>(ids.size()));
+  for(int i = offset; i < end; ++i) {
+    batch.append(ids.at(i));
+  }
 
-    send("POST",
-         QStringLiteral("/users/ids"),
-         QJsonDocument(batch).toJson(QJsonDocument::Compact),
-         [this, collected, step](const ApiResult& r) {
-           if(!r.ok) {
-             m_fetching = false;
-             emit failed(r.status, r.error);
-             return;
+  send("POST",
+       QStringLiteral("/users/ids"),
+       QJsonDocument(batch).toJson(QJsonDocument::Compact),
+       [this, ids, end, collected](const ApiResult& r) {
+         if(!r.ok) {
+           m_fetching = false;
+           emit failed(r.status, r.error);
+           return;
+         }
+         QVector<ExternalContact> all = collected;
+         const QJsonArray users = QJsonDocument::fromJson(r.body).array();
+         for(const auto& v : users) {
+           const QJsonObject user = v.toObject();
+           ExternalContact c = parseMattermostUser(QJsonDocument(user).toJson(QJsonDocument::Compact));
+           // Bots are integrations, not colleagues; deactivated accounts are
+           // people who left; and importing yourself is noise.
+           if(c.externalId.isEmpty() || c.isBot || c.deactivated || c.externalId == m_myId) {
+             continue;
            }
-           const QJsonArray users = QJsonDocument::fromJson(r.body).array();
-           for(const auto& v : users) {
-             const QJsonObject user = v.toObject();
-             ExternalContact c = parseMattermostUser(QJsonDocument(user).toJson(QJsonDocument::Compact));
-             // Bots are integrations, not colleagues; deactivated accounts are
-             // people who left; and importing yourself is noise.
-             if(c.externalId.isEmpty() || c.isBot || c.deactivated || c.externalId == m_myId) {
-               continue;
-             }
-             c.channelLabel = m_wanted.value(c.externalId);
-             c.role = contactRole(user, m_channelRole.value(c.externalId));
-             collected->append(c);
-           }
-           (*step)();
-         });
-  };
-  (*step)();
+           c.channelLabel = m_wanted.value(c.externalId);
+           c.role = contactRole(user, m_channelRole.value(c.externalId));
+           all.append(c);
+         }
+         resolveUserBatch(ids, end, all);
+       });
 }
 
 }  // namespace heap::integrations

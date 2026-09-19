@@ -40,6 +40,10 @@ namespace heap::integrations {
 namespace {
 
 constexpr int kAuthCodeTimeoutMs = 3 * 60 * 1000;
+// A redirect callback is a short GET and the fragment page posts a token —
+// neither needs more than this. Any local process can reach the port, so the
+// buffer must not grow on demand.
+constexpr qsizetype kMaxRequestBytes = 64 * 1024;
 constexpr int kDeviceTimeoutMs = 14 * 60 * 1000;  // device codes live ~15 min
 
 QByteArray base64Url(const QByteArray& raw) {
@@ -106,27 +110,40 @@ void LoopbackReceiver::acceptConnections() {
   while(m_server->hasPendingConnections()) {
     QTcpSocket* sock = m_server->nextPendingConnection();
     connect(sock, &QTcpSocket::readyRead, sock, [this, sock]() {
-      m_buffers[sock] += sock->readAll();
-      const QByteArray buf = m_buffers.value(sock);
-      const int headerEnd = static_cast<int>(buf.indexOf("\r\n\r\n"));
-      if(headerEnd < 0) {
-        if(buf.size() > 16384) {
-          sock->abort();  // a header that never ends is not a browser
-        }
+      QByteArray& buf = m_buffers[sock];
+      buf += sock->read(kMaxRequestBytes - buf.size() + 1);
+      // Nothing this listener answers has a large body, and any local process
+      // can reach the port — so one cap covers both a header that never ends
+      // and a body that never stops, rather than only the former.
+      if(buf.size() > kMaxRequestBytes) {
+        m_buffers.remove(sock);
+        sock->abort();
         return;
       }
-      int contentLength = 0;
+      const qsizetype headerEnd = buf.indexOf("\r\n\r\n");
+      if(headerEnd < 0) {
+        return;  // headers still arriving
+      }
+      // qsizetype throughout: "Content-Length: 2147483600" overflows an int
+      // sum, and a negative result reads as "the body has all arrived".
+      qsizetype contentLength = 0;
       const QList<QByteArray> lines = buf.left(headerEnd).split('\n');
       for(const QByteArray& line : lines) {
         if(line.trimmed().toLower().startsWith("content-length:")) {
-          contentLength = line.mid(line.indexOf(':') + 1).trimmed().toInt();
+          contentLength = qMax(qsizetype{0}, static_cast<qsizetype>(line.mid(line.indexOf(':') + 1).trimmed().toLongLong()));
         }
+      }
+      if(contentLength > kMaxRequestBytes) {
+        m_buffers.remove(sock);
+        sock->abort();
+        return;
       }
       if(buf.size() < headerEnd + 4 + contentLength) {
         return;  // body still arriving
       }
+      const QByteArray request = buf;
       m_buffers.remove(sock);
-      handleRequest(sock, buf, headerEnd);
+      handleRequest(sock, request, static_cast<int>(headerEnd));
     });
     connect(sock, &QTcpSocket::disconnected, sock, [this, sock]() {
       m_buffers.remove(sock);
@@ -306,9 +323,18 @@ QUrl OAuthManager::buildAuthorizeUrl(const Params& p, const QString& redirectUri
   QUrl url(p.authUrl);
   QUrlQuery query(url.query());
   query.addQueryItem(p.clientIdParam, p.clientId);
-  query.addQueryItem(p.redirectParam, redirectUri);
-  query.addQueryItem(QStringLiteral("state"), QString::fromLatin1(state));
-  if(p.flow != OAuthFlow::ImplicitFragment) {
+  if(p.flow == OAuthFlow::ImplicitFragment) {
+    // Trello has no `state` parameter and echoes nothing back, so a top-level
+    // one would never return and the loopback would reject its own callback.
+    // Carry it inside the redirect, which Trello does send the browser to.
+    QUrl redirect(redirectUri);
+    QUrlQuery redirectQuery;
+    redirectQuery.addQueryItem(QStringLiteral("state"), QString::fromLatin1(state));
+    redirect.setQuery(redirectQuery);
+    query.addQueryItem(p.redirectParam, redirect.toString());
+  } else {
+    query.addQueryItem(p.redirectParam, redirectUri);
+    query.addQueryItem(QStringLiteral("state"), QString::fromLatin1(state));
     query.addQueryItem(QStringLiteral("response_type"), QStringLiteral("code"));
   }
   if(!p.scope.isEmpty()) {

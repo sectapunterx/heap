@@ -239,6 +239,9 @@ bool JiraProvider::isConfigured() const {
 
 void JiraProvider::sendOnce(const QByteArray& method, const QString& path, const QByteArray& body, const ApiCallback& done) {
   QNetworkRequest req{QUrl(m_apiBase + QStringLiteral("/rest/api/3") + path)};
+  // Qt would follow a redirect to another host and carry the credentials
+  // with it; keep every authenticated call on the origin it was aimed at.
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
   req.setRawHeader("User-Agent", "heap-sync");
   if(m_oauth) {
@@ -272,6 +275,9 @@ void JiraProvider::sendOnce(const QByteArray& method, const QString& path, const
 void JiraProvider::resolveCloudId(std::function<void(bool)> done) {
   // Public, unauthenticated endpoint on the site itself: {"cloudId":"…"}.
   QNetworkRequest req{QUrl(m_baseUrl + QStringLiteral("/_edge/tenant_info"))};
+  // Qt would follow a redirect to another host and carry the credentials
+  // with it; keep every authenticated call on the origin it was aimed at.
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");
   req.setRawHeader("User-Agent", "heap-sync");
   QNetworkReply* reply = m_nam->get(req);

@@ -88,6 +88,14 @@ QUrl trelloUrl(const QString& path, const QString& key, const QString& token, co
   return url;
 }
 
+// Trello carries the key and token in the query string, so a redirect to
+// another host would hand them over. Qt's default policy permits that.
+QNetworkRequest trelloRequest(const QUrl& url) {
+  QNetworkRequest req{url};
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
+  return req;
+}
+
 }  // namespace
 
 void TrelloProvider::testConnection() {
@@ -95,7 +103,7 @@ void TrelloProvider::testConnection() {
     emit connectionTested(false, QStringLiteral("Trello key/token not configured"));
     return;
   }
-  QNetworkReply* reply = m_nam->get(QNetworkRequest(trelloUrl(QStringLiteral("/members/me"), m_key, m_token)));
+  QNetworkReply* reply = m_nam->get(trelloRequest(trelloUrl(QStringLiteral("/members/me"), m_key, m_token)));
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
     const bool ok = reply->error() == QNetworkReply::NoError;
@@ -114,10 +122,10 @@ void TrelloProvider::pullTasks() {
     fetchCards({});
     return;
   }
-  QNetworkReply* reply = m_nam->get(QNetworkRequest(trelloUrl(QStringLiteral("/boards/") + m_board + QStringLiteral("/lists"),
-                                                              m_key,
-                                                              m_token,
-                                                              {{QStringLiteral("fields"), QStringLiteral("name")}})));
+  QNetworkReply* reply = m_nam->get(trelloRequest(trelloUrl(QStringLiteral("/boards/") + m_board + QStringLiteral("/lists"),
+                                                            m_key,
+                                                            m_token,
+                                                            {{QStringLiteral("fields"), QStringLiteral("name")}})));
   connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
     QHash<QString, QString> listNames;
@@ -133,7 +141,7 @@ void TrelloProvider::fetchCards(const QHash<QString, QString>& listNames) {
       m_board.isEmpty() ? QStringLiteral("/members/me/cards") : QStringLiteral("/boards/") + m_board + QStringLiteral("/cards");
   const QUrl url =
       trelloUrl(path, m_key, m_token, {{QStringLiteral("fields"), QStringLiteral("name,desc,idList,url,dateLastActivity,labels")}});
-  QNetworkReply* reply = m_nam->get(QNetworkRequest(url));
+  QNetworkReply* reply = m_nam->get(trelloRequest(url));
   connect(reply, &QNetworkReply::finished, this, [this, reply, listNames]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {

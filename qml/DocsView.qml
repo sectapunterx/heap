@@ -1719,7 +1719,10 @@ Item {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 6
-                    Text { text: cc.c.name || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                    // PlainText, not the AutoText default: these strings come
+                    // from the Mattermost server, and a first_name of
+                    // "<img src=…>" would otherwise be fetched on render.
+                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
                     // Says where the card came from, so an edit that a later
                     // sync may overwrite is not a surprise.
                     Rectangle {
@@ -1737,12 +1740,12 @@ Item {
                         }
                     }
                 }
-                Text { text: cc.c.role || ""; color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
+                Text { text: cc.c.role || ""; textFormat: Text.PlainText; color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
             }
             ColumnLayout {
                 spacing: 0
-                Text { text: cc.c.channel || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
-                Text { text: cc.c.mattermost || ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 10 }
+                Text { text: cc.c.channel || ""; textFormat: Text.PlainText; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
+                Text { text: cc.c.mattermost || ""; textFormat: Text.PlainText; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 10 }
             }
             Row {
                 opacity: cc.cardHovered ? 1 : 0

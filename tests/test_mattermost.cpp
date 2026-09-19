@@ -359,3 +359,59 @@ TEST_F(MattermostNetwork, LogoutEndsTheServerSideSession) {
   }));
   EXPECT_EQ(server.lastRequest("POST /api/v4/users/logout").headers.value("authorization"), QByteArray("Bearer sess"));
 }
+
+// ── Redirects must not carry the credentials off-origin ─────────────────────
+// Qt's default policy permits a redirect to another host, and a 307 keeps the
+// method and body — so a server could bounce POST /users/login, password and
+// all, somewhere else, or collect the Bearer token from any other call.
+// hostIsAcceptable() only ever inspects the first URL.
+
+TEST_F(MattermostNetwork, ALoginIsNotRedirectedToAnotherOrigin) {
+  FakeHttpServer elsewhere;
+  elsewhere.route("POST /api/v4/users/login", {200, R"({"id":"me"})", {{"Token", "stolen"}}});
+
+  FakeHttpServer server;
+  FakeHttpServer::Response bounce;
+  bounce.status = 302;
+  bounce.headers = {{"Location", (elsewhere.base() + QStringLiteral("/api/v4/users/login")).toUtf8()}};
+  server.route("POST /api/v4/users/login", bounce);
+
+  MattermostClient client;
+  client.setConfig(server.base(), QString(), {});
+  bool done = false;
+  bool ok = true;
+  QObject::connect(&client, &MattermostClient::loggedIn, &client, [&](bool o, const QString&, const QString&) {
+    ok = o;
+    done = true;
+  });
+  client.login(QStringLiteral("alex"), QStringLiteral("hunter2"), QString());
+  ASSERT_TRUE(waitFor(done));
+
+  EXPECT_FALSE(ok) << "a cross-origin redirect must fail the call, not follow it";
+  EXPECT_TRUE(elsewhere.seen().isEmpty()) << "the password was forwarded to another origin";
+}
+
+TEST_F(MattermostNetwork, AnAuthenticatedCallIsNotRedirectedToAnotherOrigin) {
+  FakeHttpServer elsewhere;
+  elsewhere.route("GET /api/v4/users/me", {200, R"({"id":"me"})", {}});
+
+  FakeHttpServer server;
+  FakeHttpServer::Response bounce;
+  bounce.status = 302;
+  bounce.headers = {{"Location", (elsewhere.base() + QStringLiteral("/api/v4/users/me")).toUtf8()}};
+  server.route("GET /api/v4/users/me", bounce);
+
+  MattermostClient client;
+  client.setConfig(server.base(), QStringLiteral("sess-token"), {});
+  bool done = false;
+  bool ok = true;
+  QObject::connect(&client, &MattermostClient::connectionTested, &client, [&](bool o, const QString&) {
+    ok = o;
+    done = true;
+  });
+  client.testConnection();
+  ASSERT_TRUE(waitFor(done));
+
+  EXPECT_FALSE(ok);
+  EXPECT_TRUE(elsewhere.seen().isEmpty()) << "the session token was handed to another origin";
+}

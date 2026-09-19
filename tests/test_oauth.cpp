@@ -168,12 +168,19 @@ TEST(AuthorizeUrl, TrelloRenamesClientIdAndRedirectAndAsksForNoCode) {
   p.clientId = QStringLiteral("appkey");
   p.clientIdParam = QStringLiteral("key");
   p.redirectParam = QStringLiteral("return_url");
-  const QUrlQuery q{OAuthManager::buildAuthorizeUrl(p, QStringLiteral("http://127.0.0.1:51789/"), "s", {}).query()};
+  const QUrlQuery q{OAuthManager::buildAuthorizeUrl(p, QStringLiteral("http://127.0.0.1:51789/"), "st4te", {}).query()};
   EXPECT_EQ(q.queryItemValue(QStringLiteral("key")), QStringLiteral("appkey"));
-  EXPECT_EQ(q.queryItemValue(QStringLiteral("return_url")), QStringLiteral("http://127.0.0.1:51789/"));
   EXPECT_FALSE(q.hasQueryItem(QStringLiteral("client_id")));
   // The fragment flow asks for a token, not a code.
   EXPECT_FALSE(q.hasQueryItem(QStringLiteral("response_type")));
+  // Trello has no `state` parameter and echoes nothing, so a top-level one
+  // would never come back and the loopback would refuse its own callback. It
+  // has to ride inside the redirect Trello actually sends the browser to.
+  EXPECT_FALSE(q.hasQueryItem(QStringLiteral("state")));
+  const QUrl returnUrl(q.queryItemValue(QStringLiteral("return_url")));
+  EXPECT_EQ(returnUrl.host(), QStringLiteral("127.0.0.1"));
+  EXPECT_EQ(returnUrl.port(), 51789);
+  EXPECT_EQ(QUrlQuery(returnUrl.query()).queryItemValue(QStringLiteral("state")), QStringLiteral("st4te"));
 }
 
 // ── The loopback receiver ───────────────────────────────────────────────────
@@ -519,16 +526,62 @@ TEST_F(OAuthTest, FullFragmentFlowNeedsNoTokenEndpoint) {
   });
   mgr.start(p);
 
+  // Trello sends the browser to return_url verbatim and appends the token as a
+  // fragment, so the test uses exactly the URL the authorize call handed out.
   const QUrlQuery authQuery{seenAuthorizeUrl.query()};
-  const QString state = authQuery.queryItemValue(QStringLiteral("state"));
-  const quint16 port = static_cast<quint16>(QUrl(authQuery.queryItemValue(QStringLiteral("return_url"))).port());
+  const QUrl returnUrl(authQuery.queryItemValue(QStringLiteral("return_url")));
+  const quint16 port = static_cast<quint16>(returnUrl.port());
   ASSERT_GT(port, 0);
+  const QString state = QUrlQuery(returnUrl.query()).queryItemValue(QStringLiteral("state"));
+  ASSERT_FALSE(state.isEmpty());
 
-  httpGet(port, "/?state=" + state.toUtf8());  // the page the script runs in
+  QByteArray target = returnUrl.path().toUtf8();
+  if(target.isEmpty()) {
+    target = "/";
+  }
+  target += "?" + returnUrl.query().toUtf8();
+  httpGet(port, target);  // the page the script runs in
   httpPostForm(port, "/token", "token=trello-token&state=" + state.toUtf8());
 
   ASSERT_TRUE(waitFor(done));
   ASSERT_TRUE(result.ok) << result.error.toStdString();
   EXPECT_EQ(result.accessToken, QStringLiteral("trello-token"));
   EXPECT_TRUE(token.seen().isEmpty()) << "the fragment flow has nothing to exchange";
+}
+
+// ── The loopback listener's buffer is bounded ───────────────────────────────
+// Any local process can reach the port for the three minutes a sign-in is
+// open. The cap used to apply only while the headers were still arriving, so a
+// declared body grew the buffer without limit — and the "has the body all
+// arrived" arithmetic was done in int, which a large Content-Length overflows.
+
+TEST_F(OAuthTest, AnOversizedBodyIsRefusedRatherThanBuffered) {
+  LoopbackReceiver receiver(LoopbackReceiver::Mode::Fragment, "good-state");
+  ASSERT_TRUE(receiver.listen(0));
+  QSignalSpy got(&receiver, &LoopbackReceiver::received);
+
+  // Declared far beyond anything this listener answers, and never delivered.
+  QTcpSocket sock;
+  sock.connectToHost(QHostAddress::LocalHost, receiver.port());
+  ASSERT_TRUE(waitUntil([&sock]() {
+    return sock.state() == QAbstractSocket::ConnectedState;
+  }));
+  sock.write("POST /token HTTP/1.1\r\nHost: 127.0.0.1:" + QByteArray::number(receiver.port()) +
+             "\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 2147483600\r\n\r\n");
+  sock.write(QByteArray(64 * 1024, 'x'));
+  sock.flush();
+  waitUntil(
+      [&sock]() {
+        return sock.state() != QAbstractSocket::ConnectedState;
+      },
+      2000);
+  EXPECT_TRUE(got.isEmpty());
+
+  // The listener survived it and still takes the real callback.
+  EXPECT_EQ(statusOf(httpGet(receiver.port(), "/?state=good-state")), 200);
+  EXPECT_EQ(statusOf(httpPostForm(receiver.port(), "/token", "token=tok&state=good-state")), 200);
+  ASSERT_TRUE(waitUntil([&got]() {
+    return !got.isEmpty();
+  }));
+  EXPECT_EQ(got.first().first().toMap().value(QStringLiteral("token")).toString(), QStringLiteral("tok"));
 }

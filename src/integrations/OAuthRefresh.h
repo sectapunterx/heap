@@ -60,6 +60,9 @@ inline QNetworkReply* postTokenRequest(QNetworkAccessManager* nam,
                                        TokenStyle style,
                                        QList<QPair<QString, QString>> params) {
   QNetworkRequest req{QUrl(tokenUrl)};
+  // A redirect here would carry the authorization code, the refresh token and
+  // the client secret to wherever it pointed; Qt's default permits another host.
+  req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");  // GitHub answers form-encoded otherwise
   req.setRawHeader("User-Agent", "heap-sync");
 

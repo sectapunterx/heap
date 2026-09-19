@@ -97,7 +97,14 @@ foreach (key IN LISTS HEAP_OAUTH_KEYS)
         set(HEAP_OAUTH_${key} "$ENV{HEAP_OAUTH_${key}}")
     endif ()
     if (HEAP_OAUTH_${key})
-        string(APPEND HEAP_OAUTH_GENERATED "#define HEAP_OAUTH_${key} \"${HEAP_OAUTH_${key}}\"\n")
+        # Escape before substituting. An unescaped quote or trailing backslash
+        # makes the generated #define a compile error, and the compiler quotes
+        # the offending line — secret and all — into the build log.
+        set(value "${HEAP_OAUTH_${key}}")
+        string(REGEX REPLACE "[\r\n]" "" value "${value}")
+        string(REPLACE "\\" "\\\\" value "${value}")
+        string(REPLACE "\"" "\\\"" value "${value}")
+        string(APPEND HEAP_OAUTH_GENERATED "#define HEAP_OAUTH_${key} \"${value}\"\n")
         # Names only — never echo a value into the configure log.
         string(REGEX REPLACE "_CLIENT_(ID|SECRET)$" "" provider "${key}")
         string(TOLOWER "${provider}" provider)

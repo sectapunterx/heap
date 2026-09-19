@@ -136,6 +136,8 @@ jobs:
         # compile_commands.json. Unset secrets simply leave that provider on the
         # personal-access-token path, so a fork builds fine without them.
         env:
+          HEAP_OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_GITHUB_CLIENT_SECRET }}
+          HEAP_OAUTH_GITLAB_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_GITLAB_CLIENT_SECRET }}
           HEAP_OAUTH_JIRA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_ID }}
           HEAP_OAUTH_JIRA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_SECRET }}
           HEAP_OAUTH_TRELLO_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TRELLO_CLIENT_ID }}
@@ -273,6 +275,8 @@ jobs:
         # compile_commands.json. Unset secrets simply leave that provider on the
         # personal-access-token path, so a fork builds fine without them.
         env:
+          HEAP_OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_GITHUB_CLIENT_SECRET }}
+          HEAP_OAUTH_GITLAB_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_GITLAB_CLIENT_SECRET }}
           HEAP_OAUTH_JIRA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_ID }}
           HEAP_OAUTH_JIRA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_SECRET }}
           HEAP_OAUTH_TRELLO_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TRELLO_CLIENT_ID }}
@@ -418,6 +422,8 @@ jobs:
         # compile_commands.json. Unset secrets simply leave that provider on the
         # personal-access-token path, so a fork builds fine without them.
         env:
+          HEAP_OAUTH_GITHUB_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_GITHUB_CLIENT_SECRET }}
+          HEAP_OAUTH_GITLAB_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_GITLAB_CLIENT_SECRET }}
           HEAP_OAUTH_JIRA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_ID }}
           HEAP_OAUTH_JIRA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_SECRET }}
           HEAP_OAUTH_TRELLO_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TRELLO_CLIENT_ID }}
