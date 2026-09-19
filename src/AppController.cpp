@@ -2445,9 +2445,16 @@ QVariantList AppController::integrationCatalog() const {
     m.insert(QStringLiteral("icon"), d.icon);
     m.insert(QStringLiteral("descKey"), d.descKey);
     m.insert(QStringLiteral("oauth"), d.oauth.supported);
-    // oauthReady = a client ID is baked in, so "Connect with browser" is truly
-    // one-click; otherwise the user must add one under Advanced first.
-    m.insert(QStringLiteral("oauthReady"), d.oauth.supported && !d.oauth.clientId.isEmpty());
+    // oauthReady = this build can run the flow with no help from the user, so
+    // "Connect with browser" is truly one-click. That needs a baked-in client
+    // ID, a baked-in secret when the provider refuses public clients (a build
+    // made without the CI credentials has neither), and — for the device grant
+    // — a Qt new enough to run it.
+    const bool haveCredentials =
+        !d.oauth.clientId.isEmpty() && (!d.oauth.needsSecret || !d.oauth.clientSecret.isEmpty()) &&
+        (d.oauth.effectiveFlow() != heap::integrations::OAuthFlow::Device || heap::integrations::OAuthManager::deviceFlowAvailable());
+    m.insert(QStringLiteral("oauthReady"), d.oauth.supported && haveCredentials);
+    m.insert(QStringLiteral("oauthNeedsSecret"), d.oauth.needsSecret);
     QVariantList fields;
     for(const heap::integrations::FieldSpec& f : d.uiFields) {
       QVariantMap fm;
@@ -2544,9 +2551,10 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
     p.clientSecret = d->oauth.clientSecret;
   }
   p.refreshToken = refreshToken;
+  p.style = d->oauth.tokenStyle;
   // The device flow has no redirect; the loopback flow must repeat the one it
   // was granted with (GitLab checks).
-  if(!d->oauth.deviceFlow) {
+  if(d->oauth.effectiveFlow() != heap::integrations::OAuthFlow::Device) {
     p.redirectUri = heap::integrations::OAuthManager::redirectUri();
   }
 
@@ -2603,6 +2611,17 @@ void AppController::connectOAuth(const QString& providerId) {
   if(clientSecret.isEmpty()) {
     clientSecret = d->oauth.clientSecret;
   }
+  // Providers that refuse a public client need a secret alongside the ID. A
+  // release build carries one; a build made without the CI credentials does
+  // not, so say so instead of opening a browser that will refuse the exchange.
+  if(d->oauth.needsSecret && clientSecret.isEmpty()) {
+    emit toast(tr("%1 browser sign-in needs an OAuth client secret — add one under Advanced").arg(d->displayName));
+    return;
+  }
+  if(d->oauth.effectiveFlow() == heap::integrations::OAuthFlow::Device && !heap::integrations::OAuthManager::deviceFlowAvailable()) {
+    emit toast(tr("%1 browser sign-in needs Qt 6.9 or newer — use an access token").arg(d->displayName));
+    return;
+  }
   // {host} defaults to the descriptor fallback (e.g. gitlab.com) so gitlab.com
   // users never type a host; self-hosted users enter one under Advanced.
   QString host = cfg.value(QStringLiteral("host")).toString().trimmed();
@@ -2630,10 +2649,16 @@ void AppController::connectOAuth(const QString& providerId) {
   p.clientId = clientId;
   p.clientSecret = clientSecret;
   p.scope = d->oauth.scope;
+  p.scopeSeparator = d->oauth.scopeSeparator;
   p.usePkce = d->oauth.usePkce;
-  p.deviceFlow = d->oauth.deviceFlow;
+  p.flow = d->oauth.effectiveFlow();
+  p.tokenStyle = d->oauth.tokenStyle;
+  p.extraAuthParams = d->oauth.extraAuthParams;
+  p.clientIdParam = d->oauth.clientIdParam;
+  p.redirectParam = d->oauth.redirectParam;
+  const bool deviceFlow = p.flow == heap::integrations::OAuthFlow::Device;
   // Device flow: authUrl is the device authorization endpoint (no loopback).
-  p.authUrl = expandHost(p.deviceFlow ? d->oauth.deviceAuthUrl : d->oauth.authUrl);
+  p.authUrl = expandHost(deviceFlow ? d->oauth.deviceAuthUrl : d->oauth.authUrl);
 
   const QString label = d->displayName;
   // Device flow surfaces a user code the person types in the browser — relay it
@@ -2664,7 +2689,7 @@ void AppController::connectOAuth(const QString& providerId) {
     setIntegrationField(providerId, QStringLiteral("connected"), true);
     emit toast(tr("%1 connected via browser").arg(label));
   });
-  if(p.deviceFlow) {
+  if(deviceFlow) {
     emit toast(tr("Starting %1 browser sign-in…").arg(label));
   } else {
     emit toast(tr("Opening browser for %1 — OAuth redirect: %2").arg(label, heap::integrations::OAuthManager::redirectUri()));

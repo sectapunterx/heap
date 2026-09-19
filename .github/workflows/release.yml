@@ -130,6 +130,25 @@ jobs:
           done
 
       - name: Configure & build
+        # Baked-in OAuth app credentials for one-click browser sign-in. CMake reads
+        # these from the environment and writes a generated header into the build
+        # tree — never a -D, which would land in CMakeCache.txt and
+        # compile_commands.json. Unset secrets simply leave that provider on the
+        # personal-access-token path, so a fork builds fine without them.
+        env:
+          HEAP_OAUTH_JIRA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_ID }}
+          HEAP_OAUTH_JIRA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_SECRET }}
+          HEAP_OAUTH_TRELLO_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TRELLO_CLIENT_ID }}
+          HEAP_OAUTH_TODOIST_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TODOIST_CLIENT_ID }}
+          HEAP_OAUTH_TODOIST_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_TODOIST_CLIENT_SECRET }}
+          HEAP_OAUTH_ASANA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_ASANA_CLIENT_ID }}
+          HEAP_OAUTH_ASANA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_ASANA_CLIENT_SECRET }}
+          HEAP_OAUTH_CLICKUP_CLIENT_ID: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_ID }}
+          HEAP_OAUTH_CLICKUP_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_SECRET }}
+          HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
+          HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
+          HEAP_OAUTH_SENTRY_CLIENT_ID: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_ID }}
+          HEAP_OAUTH_SENTRY_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_SECRET }}
         shell: msys2 {0}
         run: |
           MSYS_ROOT=$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")
@@ -248,6 +267,25 @@ jobs:
             libgl1-mesa-dev libegl1-mesa-dev
 
       - name: Configure & build
+        # Baked-in OAuth app credentials for one-click browser sign-in. CMake reads
+        # these from the environment and writes a generated header into the build
+        # tree — never a -D, which would land in CMakeCache.txt and
+        # compile_commands.json. Unset secrets simply leave that provider on the
+        # personal-access-token path, so a fork builds fine without them.
+        env:
+          HEAP_OAUTH_JIRA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_ID }}
+          HEAP_OAUTH_JIRA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_SECRET }}
+          HEAP_OAUTH_TRELLO_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TRELLO_CLIENT_ID }}
+          HEAP_OAUTH_TODOIST_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TODOIST_CLIENT_ID }}
+          HEAP_OAUTH_TODOIST_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_TODOIST_CLIENT_SECRET }}
+          HEAP_OAUTH_ASANA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_ASANA_CLIENT_ID }}
+          HEAP_OAUTH_ASANA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_ASANA_CLIENT_SECRET }}
+          HEAP_OAUTH_CLICKUP_CLIENT_ID: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_ID }}
+          HEAP_OAUTH_CLICKUP_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_SECRET }}
+          HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
+          HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
+          HEAP_OAUTH_SENTRY_CLIENT_ID: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_ID }}
+          HEAP_OAUTH_SENTRY_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_SECRET }}
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
           cmake --build build --parallel --target heap
@@ -374,6 +412,25 @@ jobs:
       # `minos` to match Info.plist's LSMinimumSystemVersion (12.0) — otherwise it
       # is stamped from the runner SDK (14), silently blocking macOS 12/13 users.
       - name: Configure & build
+        # Baked-in OAuth app credentials for one-click browser sign-in. CMake reads
+        # these from the environment and writes a generated header into the build
+        # tree — never a -D, which would land in CMakeCache.txt and
+        # compile_commands.json. Unset secrets simply leave that provider on the
+        # personal-access-token path, so a fork builds fine without them.
+        env:
+          HEAP_OAUTH_JIRA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_ID }}
+          HEAP_OAUTH_JIRA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_JIRA_CLIENT_SECRET }}
+          HEAP_OAUTH_TRELLO_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TRELLO_CLIENT_ID }}
+          HEAP_OAUTH_TODOIST_CLIENT_ID: ${{ secrets.HEAP_OAUTH_TODOIST_CLIENT_ID }}
+          HEAP_OAUTH_TODOIST_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_TODOIST_CLIENT_SECRET }}
+          HEAP_OAUTH_ASANA_CLIENT_ID: ${{ secrets.HEAP_OAUTH_ASANA_CLIENT_ID }}
+          HEAP_OAUTH_ASANA_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_ASANA_CLIENT_SECRET }}
+          HEAP_OAUTH_CLICKUP_CLIENT_ID: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_ID }}
+          HEAP_OAUTH_CLICKUP_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_SECRET }}
+          HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
+          HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
+          HEAP_OAUTH_SENTRY_CLIENT_ID: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_ID }}
+          HEAP_OAUTH_SENTRY_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_SECRET }}
         run: |
           set -eu
           cmake -S . -B build -G Ninja \

@@ -29,20 +29,44 @@ the issues **assigned to you** across all repos — no repo to configure.
 
 ## Enabling one-click OAuth (maintainers)
 
-One-click needs an **OAuth app registered with the provider**. The app's public
-`client_id` is baked into the build; there is no way around registering it once.
-Paste the IDs into the constants at the top of
-[`ProviderRegistry.cpp`](../src/integrations/ProviderRegistry.cpp):
+One-click needs an **OAuth app registered with the provider**. Where those
+credentials come from depends on what the provider accepts.
 
-```cpp
-constexpr const char* kGithubClientId = "Ov23ctU4qrY60Ac7lRy9";              // done (Device Flow)
-constexpr const char* kGithubClientSecret = "";                              // Device Flow → none
-constexpr const char* kGitlabClientId = "70b8f336…c200fbb9c74";              // done (gitlab.com, PKCE)
+A `client_id` is **public by design** (it ships in every binary — the GitHub CLI
+does the same), so the ones for public clients are committed in
+[`OAuthClients.h`](../src/integrations/OAuthClients.h). A **client secret is
+not**, and is never committed. But several providers (Atlassian, Todoist,
+ClickUp, Bitbucket, Sentry) refuse a public client and will not do PKCE-only, so
+for those the choice is "ship a secret" or "no browser sign-in at all". Release
+builds take them from CI:
+
+```bash
+HEAP_OAUTH_JIRA_CLIENT_ID=… HEAP_OAUTH_JIRA_CLIENT_SECRET=… cmake -S . -B build
 ```
 
-A `client_id` is **public by design** (it ships in every binary — GitHub CLI does
-the same) and is safe to commit. A **client secret is not** — never commit one.
-Empty constant → the card falls back to manual client-ID entry under Advanced.
+CMake reads `HEAP_OAUTH_*` from the **environment** and generates
+`build/generated/OAuthClients.gen.h`. Deliberately not a `-D`: CI uploads the
+whole `build/` tree as an artifact, and a cache variable would leak through
+`CMakeCache.txt` and `compile_commands.json`. The configure log prints provider
+names only, never values. `release.yml` passes them from repository secrets of
+the same name.
+
+Locally, an untracked `oauth-clients.local.cmake` at the repo root works too:
+
+```cmake
+set(HEAP_OAUTH_JIRA_CLIENT_ID "…")
+set(HEAP_OAUTH_JIRA_CLIENT_SECRET "…")
+```
+
+This is **not real secrecy** — `strings heap.exe` finds an embedded secret, the
+same as for any desktop OAuth client. It means an attacker has to extract it
+rather than read it in the repo, and it lets the credential be rotated without a
+commit.
+
+**Nothing here is required.** An unset variable is an empty value: that
+provider's browser button is hidden and the card falls back to a personal access
+token. That is what a local build, a fork's CI and every test target get — see
+"No browser button?" below.
 
 The loopback redirect URI every OAuth app must register is
 **`http://127.0.0.1:51789/`** (`OAuthManager::redirectUri()`; device flow ignores it).
@@ -80,6 +104,21 @@ Application ID under **Advanced** (the host field points the flow at their serve
 These are self-hosted, so there is no single client ID to ship. Users create an
 OAuth2 application under **Settings → Applications** on their instance
 (redirect `http://127.0.0.1:51789/`) and paste the client ID under **Advanced**.
+
+## No browser button?
+
+The card offers **Connect with browser** only when this build can run the flow
+with no help from you. It is hidden when any of these is true:
+
+| Reason | What to do |
+|--------|------------|
+| You built heap yourself, and the provider needs a client secret | Register your own OAuth app and pass `HEAP_OAUTH_<PROVIDER>_CLIENT_ID/_SECRET` at configure time, or paste a client ID under **Advanced** |
+| Self-hosted provider (Gitea, Forgejo, self-managed GitLab) | There is no single app to ship — register one on your instance and paste its client ID under **Advanced** |
+| The provider has no OAuth at all (Redmine) | Use the API key; this is not going to change |
+| GitHub on a build against Qt < 6.9 | The device grant needs Qt 6.9 (`OAuthManager::deviceFlowAvailable()`); use a token |
+
+In every case the personal-access-token path under **Advanced** is fully
+supported — it is not a degraded mode.
 
 ## How auth is applied
 

@@ -1,6 +1,7 @@
 #include "integrations/GithubProvider.h"
 #include "integrations/GitlabProvider.h"
 #include "integrations/JiraProvider.h"
+#include "integrations/OAuthClients.h"
 #include "integrations/ProviderRegistry.h"
 #include "integrations/RestIssueProvider.h"
 #include "integrations/TrelloProvider.h"
@@ -11,24 +12,16 @@ namespace {
 
 // ── Baked-in OAuth app credentials ──────────────────────────────────────────
 // One-click "Connect with browser" needs an OAuth app registered with each
-// provider; only the maintainer can create those. Paste the resulting client IDs
-// here and the card drops its manual field automatically. Register the redirect
-// URI reported by OAuthManager::redirectUri() (http://127.0.0.1:51789/).
+// provider; only the maintainer can create those. Public client IDs are
+// committed in OAuthClients.h; the secrets some providers insist on come from
+// the release workflow. Register the redirect URI reported by
+// OAuthManager::redirectUri() (http://127.0.0.1:51789/). See docs/INTEGRATIONS.md.
 //
-//   GitHub : https://github.com/settings/developers  (OAuth App — also needs a
-//            client secret; embedding one in an open-source binary is not truly
-//            secret, so GitHub stays PAT-first until a proxy/GitHub-App is added)
-//   GitLab : https://gitlab.com/-/profile/applications (scope "api", PKCE, no secret)
-//   Gitea/Forgejo are per-instance, so their client ID is entered under Advanced.
-//
-// Empty = fall back to manual entry under Advanced (still works, just not 1-click).
-// GitHub OAuth App "heap" (owner: sectapunterx), Device Flow enabled. The client
-// ID is public by design for device flow — safe to ship. No client secret needed.
-constexpr const char* kGithubClientId = "Ov23ctU4qrY60Ac7lRy9";
-constexpr const char* kGithubClientSecret = "";
-// GitLab.com OAuth app "heap" (owner: sectapunterx), Confidential=No → PKCE, no
-// secret. The Application ID is public by design for PKCE clients — safe to ship.
-constexpr const char* kGitlabClientId = "70b8f336ebd850a26e629b82e1388fac9464886befaf85674b402c200fbb9c74";
+// An empty value falls back to manual entry under Advanced (still works, just
+// not one-click), which is what local builds and forks get.
+constexpr const char* kGithubClientId = HEAP_OAUTH_GITHUB_CLIENT_ID;
+constexpr const char* kGithubClientSecret = HEAP_OAUTH_GITHUB_CLIENT_SECRET;
+constexpr const char* kGitlabClientId = HEAP_OAUTH_GITLAB_CLIENT_ID;
 
 // ── ParseFn adapters: the tested GitHub/GitLab parsers ignore baseUrl ──
 QVector<ExternalTask> githubParse(const QByteArray& body, const QString&) {
@@ -80,6 +73,7 @@ ProviderDescriptor github() {
              false,
              QString::fromLatin1(kGithubClientId),
              QString::fromLatin1(kGithubClientSecret)};
+  d.oauth.flow = OAuthFlow::Device;
   d.oauth.deviceFlow = true;
   d.oauth.deviceAuthUrl = QStringLiteral("https://github.com/login/device/code");
   d.pushMethod = QStringLiteral("PATCH");

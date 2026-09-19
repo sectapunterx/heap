@@ -20,3 +20,6 @@ CMakeFiles/
 cmake-build-*/
 # Local SignPath setup notes / artifact configs (do not commit)
 /signpath-setup/
+
+# Maintainer-local OAuth app credentials (see docs/INTEGRATIONS.md). Never commit.
+oauth-clients.local.cmake
