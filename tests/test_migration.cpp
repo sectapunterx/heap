@@ -332,6 +332,149 @@ TEST_F(MigrationTest, MidMigrationFailureReopensToThePreMigrationBackup) {
       << "the damaged file must be quarantined, never deleted";
 }
 
+// ── v7 → v8: notes stop being one blob ──
+//
+// Every note a profile ever held lived in one markdown string. Turning that
+// into a list is the one migration in the ladder that must not lose anything:
+// the blob IS the user's notes, and a key that no longer parses is the whole
+// of Notes gone.
+
+namespace {
+
+QJsonObject migratedProfile(const QJsonValue& notesValue) {
+  QJsonObject profile;
+  profile["id"] = "demo";
+  profile["name"] = "demo";
+  profile["tasks"] = QJsonArray();
+  if(!notesValue.isNull()) {
+    profile["notes"] = notesValue;
+  }
+  QJsonObject root;
+  root["schemaVersion"] = 7;
+  root["profiles"] = QJsonArray{profile};
+  heap::state::migrateState(root, 7);
+  return root["profiles"].toArray().at(0).toObject();
+}
+
+}  // namespace
+
+TEST(NotesMigration, TheOldBlobBecomesOneNote) {
+  const QJsonObject p = migratedProfile(QString("# Standup notes\n\nremember the thing\n"));
+
+  ASSERT_TRUE(p["notes"].isArray());
+  const QJsonArray notes = p["notes"].toArray();
+  ASSERT_EQ(notes.size(), 1);
+  EXPECT_EQ(notes.at(0).toObject()["body"].toString(), QString("# Standup notes\n\nremember the thing\n"))
+      << "not one character of it may be lost";
+}
+
+// The heading is what the user called it; a note with no name cannot be found
+// in a list.
+TEST(NotesMigration, TheFirstHeadingBecomesTheTitle) {
+  const QJsonObject p = migratedProfile(QString("# Standup notes\n\nbody\n"));
+
+  EXPECT_EQ(p["notes"].toArray().at(0).toObject()["title"].toString(), QString("Standup notes"));
+}
+
+TEST(NotesMigration, ABlobWithNoHeadingStillGetsAName) {
+  const QJsonObject p = migratedProfile(QString("just some text with no heading\n"));
+
+  EXPECT_FALSE(p["notes"].toArray().at(0).toObject()["title"].toString().isEmpty());
+}
+
+// The migrated note has to be the one that opens, or an upgrade looks like the
+// notes are gone until the user goes looking for them.
+TEST(NotesMigration, TheMigratedNoteIsTheActiveOne) {
+  const QJsonObject p = migratedProfile(QString("# Title\n\nbody"));
+
+  EXPECT_EQ(p["activeNoteId"].toString(), p["notes"].toArray().at(0).toObject()["id"].toString());
+}
+
+TEST(NotesMigration, AnEmptyBlobBecomesNoNotesRatherThanOneEmptyOne) {
+  const QJsonObject p = migratedProfile(QString("   \n\n"));
+
+  ASSERT_TRUE(p["notes"].isArray());
+  EXPECT_EQ(p["notes"].toArray().size(), 0);
+}
+
+TEST(NotesMigration, AProfileWithNoNotesKeyIsLeftAlone) {
+  const QJsonObject p = migratedProfile(QJsonValue::Null);
+
+  EXPECT_FALSE(p.contains("notes"));
+}
+
+// Running the ladder twice must not wrap the array in another array, or turn
+// the notes into a single note whose body is JSON.
+TEST(NotesMigration, MigratingTwiceChangesNothing) {
+  QJsonObject profile;
+  profile["id"] = "demo";
+  profile["notes"] = QString("# Title\n\nbody");
+  QJsonObject root;
+  root["schemaVersion"] = 7;
+  root["profiles"] = QJsonArray{profile};
+
+  heap::state::migrateState(root, 7);
+  const QJsonArray once = root["profiles"].toArray().at(0).toObject()["notes"].toArray();
+  heap::state::migrateState(root, heap::state::kSchemaVersion);
+  const QJsonArray twice = root["profiles"].toArray().at(0).toObject()["notes"].toArray();
+
+  EXPECT_EQ(once, twice);
+}
+
+// A file already written by v8 goes through the ladder untouched.
+TEST(NotesMigration, AnArrayIsNotReMigrated) {
+  QJsonObject note;
+  note["id"] = "n-1";
+  note["title"] = "kept";
+  note["body"] = "body";
+  QJsonObject profile;
+  profile["id"] = "demo";
+  profile["notes"] = QJsonArray{note};
+  QJsonObject root;
+  root["schemaVersion"] = 7;
+  root["profiles"] = QJsonArray{profile};
+
+  heap::state::migrateState(root, 7);
+
+  const QJsonArray notes = root["profiles"].toArray().at(0).toObject()["notes"].toArray();
+  ASSERT_EQ(notes.size(), 1);
+  EXPECT_EQ(notes.at(0).toObject()["title"].toString(), QString("kept"));
+}
+
+// The reader has to cope with the old shape whether or not the ladder has run
+// over the document yet — the same tolerance `deadline` has.
+TEST(NotesMigration, TheReaderStillUnderstandsTheOldBlob) {
+  QJsonObject profile;
+  profile["id"] = "demo";
+  profile["notes"] = QString("# Legacy\n\nstill here");
+
+  const Profile p = heap::state::profileFromJson(profile, nullptr);
+
+  EXPECT_TRUE(p.notes.isEmpty());
+  EXPECT_EQ(p.notesState, QString("# Legacy\n\nstill here"));
+}
+
+TEST(NotesMigration, NotesSurviveARoundTrip) {
+  Profile p;
+  p.id = "demo";
+  Note n;
+  n.id = "n-1";
+  n.title = "Title";
+  n.folder = "meetings/2026";
+  n.body = "# Title\n\nbody";
+  n.pinned = true;
+  n.created = QDateTime(QDate(2026, 1, 2), QTime(3, 4));
+  n.updated = QDateTime(QDate(2026, 5, 6), QTime(7, 8));
+  p.notes = {n};
+  p.activeNoteId = "n-1";
+
+  const Profile back = heap::state::profileFromJson(heap::state::profileToJson(p), nullptr);
+
+  ASSERT_EQ(back.notes.size(), 1);
+  EXPECT_EQ(back.notes.at(0), n);
+  EXPECT_EQ(back.activeNoteId, QString("n-1"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

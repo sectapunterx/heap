@@ -166,6 +166,28 @@ struct Person {
 // kanban-statuses and docs. Events live globally on AppController so the
 // calendar can show meetings/focus blocks from every profile at once;
 // CalEvent.profileId records the optional feature attribution.
+// One note.
+//
+// Notes were a single markdown blob per profile: everything anybody ever wrote
+// lived in one document, and the only structure available was how far down you
+// had scrolled. A note is now a thing with a name that can be found, pinned,
+// filed and linked to.
+//
+// `folder` is a plain path ("meetings/2026"), not a tree of objects — Obsidian
+// stores folders as directories and a flat string is what maps onto a directory
+// on import and export without a second representation to keep in sync.
+struct Note {
+  QString id;
+  QString title;
+  QString folder;
+  QString body;
+  bool pinned{};
+  QDateTime created;
+  QDateTime updated;
+
+  bool operator==(const Note&) const = default;
+};
+
 struct Profile {
   QString id;     // slug, unique
   QString name;   // human-readable
@@ -175,7 +197,59 @@ struct Profile {
   QVector<Person> people;
   QVariantList statuses;  // [{ id, name, color }]
   QString docsState;      // JSON blob, same shape as AppController::docsState
-  QString notesState;     // raw markdown text for the Notes view
+  // The blob notes used to be. Kept as the body of the active note so that
+  // everything reading `notesState` keeps working; the notes themselves live
+  // in `notes`.
+  QString notesState;
+  QVector<Note> notes;
+  QString activeNoteId;
+};
+
+// Notes, without their bodies.
+//
+// A note list showing fifty notes would otherwise carry fifty documents across
+// the QML boundary on every repaint. The editor asks for one body at a time
+// through AppController::noteBody().
+class NoteModel : public QAbstractListModel {
+  Q_OBJECT
+  QML_ELEMENT
+  QML_UNCREATABLE("Provided by AppController")
+ public:
+  enum Roles {
+    IdRole = Qt::UserRole + 1,
+    TitleRole,
+    FolderRole,
+    PinnedRole,
+    CreatedRole,
+    UpdatedRole,
+    // A one-line preview, so a list can show what a note is about without
+    // holding the whole thing.
+    ExcerptRole,
+  };
+
+  explicit NoteModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
+  }
+
+  int rowCount(const QModelIndex& = {}) const override {
+    return m_items.size();
+  }
+
+  QVariant data(const QModelIndex& idx, int role) const override;
+  QHash<int, QByteArray> roleNames() const override;
+  Q_INVOKABLE int roleOf(const QString& name) const;
+
+  void reset(QVector<Note> items);
+
+  const QVector<Note>& items() const {
+    return m_items;
+  }
+
+  int indexOfId(const QString& id) const;
+  void upsert(const Note& n);
+  void removeById(const QString& id);
+
+ private:
+  QVector<Note> m_items;
 };
 
 class TaskModel : public QAbstractListModel {
