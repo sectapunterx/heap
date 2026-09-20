@@ -504,6 +504,27 @@ class AppController : public QObject {
 
   // ---- Lookups ----
   Q_INVOKABLE QVariantMap taskById(const QString& id) const;
+
+  // Compile what the user typed in the search box into something a view can
+  // filter with. The board hands the raw text to TaskFilterProxy, which does
+  // this in C++; the views that build their own JS arrays (archive, timeline,
+  // week, month) call this instead, so one search box means the same thing
+  // everywhere.
+  //
+  // Returns { isQuery, freeText, ids }: `freeText` is the loose words with the
+  // clauses removed, already lowercased for SearchTextRole; `ids` lists the
+  // tasks of the active profile that satisfy the clauses, and is meaningful
+  // only when `isQuery` is true (with no clauses every task would be in it).
+  Q_INVOKABLE QVariantMap compileSearch(const QString& text) const;
+
+  // Does this text hold at least one clause? Parsing only — it never walks the
+  // task list, so the search field can ask on every keystroke to show whether
+  // it is filtering structurally.
+  Q_INVOKABLE bool searchIsQuery(const QString& text) const;
+
+  // The clause fields the search box understands ("deadline", "status", …),
+  // sorted. For the hint under the field.
+  Q_INVOKABLE QStringList searchFields() const;
   Q_INVOKABLE QString eventHourLabel(double hour) const;
   Q_INVOKABLE QString sprintLabel() const;
   Q_INVOKABLE QString humanDate(const QDate& date) const;

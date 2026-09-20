@@ -1916,6 +1916,51 @@ TEST_F(AppControllerTest, CatalogFlagsWhichProvidersCanDoOneClick) {
       << "a public client needs no secret, so a plain build must still offer the button";
 }
 
+// ─── Search box → query ───────────────────────────────────────────────
+// The board filters in C++ (TaskFilterProxy); the archive, timeline, week and
+// month views build JS snapshots and ask compileSearch instead. Both halves
+// have to agree on what a clause is, or one search box means two things.
+
+TEST_F(AppControllerTest, CompileSearchSplitsClausesFromSearchWords) {
+  Task blocked = mkTask(QStringLiteral("T-1"), QStringLiteral("login flow"));
+  blocked.status = QStringLiteral("blocked");
+  Task todo = mkTask(QStringLiteral("T-2"), QStringLiteral("login page"));
+  Task other = mkTask(QStringLiteral("T-3"), QStringLiteral("export csv"));
+  other.status = QStringLiteral("blocked");
+  app_->tasks()->reset({blocked, todo, other});
+
+  const QVariantMap r = app_->compileSearch(QStringLiteral("status:blocked login"));
+  EXPECT_TRUE(r.value(QStringLiteral("isQuery")).toBool());
+  // The clause is consumed, so only the loose word is left to substring-match.
+  EXPECT_EQ(r.value(QStringLiteral("freeText")).toString(), QStringLiteral("login"));
+  // The ids are the clause half only — "export csv" is blocked too, and the
+  // caller is the one that drops it on the free text.
+  const QStringList ids = r.value(QStringLiteral("ids")).toStringList();
+  EXPECT_EQ(ids, QStringList({QStringLiteral("T-1"), QStringLiteral("T-3")}));
+}
+
+TEST_F(AppControllerTest, CompileSearchBuildsNoIdListForPlainText) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("login"))});
+
+  const QVariantMap r = app_->compileSearch(QStringLiteral("login"));
+  EXPECT_FALSE(r.value(QStringLiteral("isQuery")).toBool());
+  EXPECT_EQ(r.value(QStringLiteral("freeText")).toString(), QStringLiteral("login"));
+  // With no clauses every task would be in the list, which is both useless and
+  // the largest thing this call could hand back.
+  EXPECT_TRUE(r.value(QStringLiteral("ids")).toStringList().isEmpty());
+}
+
+TEST_F(AppControllerTest, SearchIsQueryOnlyParsesAndAdvertisesItsFields) {
+  EXPECT_TRUE(app_->searchIsQuery(QStringLiteral("priority:P0")));
+  EXPECT_FALSE(app_->searchIsQuery(QStringLiteral("https://example.test/x"))) << "a colon is not a clause unless the field is one we know";
+  EXPECT_FALSE(app_->searchIsQuery(QString()));
+
+  const QStringList fields = app_->searchFields();
+  for(const char* f : {"status", "priority", "deadline", "tag", "mention"}) {
+    EXPECT_TRUE(fields.contains(QLatin1String(f))) << f << " must be offered as a hint";
+  }
+}
+
 // ─── Mattermost contact merge ─────────────────────────────────────────
 // Imported people land in the Docs contact list, and the ones actually talked
 // to also in the People rail. The rules that matter: never clobber an edit of

@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "Search.js" as Search
 
 Item {
     id: root
@@ -26,12 +27,8 @@ Item {
     }
 
     function passesFilter(t) {
-        const q = (root.searchText || "").toLowerCase();
-        if (q && q.length > 0) {
-            // Built once in C++ and already lowercased — covers the ticket key,
-            // labels and assignee as well as title/id/desc.
-            if (String(t.searchText || "").indexOf(q) < 0) return false;
-        }
+        // Clauses filter structurally, leftover words stay a substring test.
+        if (!Search.accepts(AppController, root.searchText, root.modelRev, t)) return false;
         let any = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) {
             any = true;
