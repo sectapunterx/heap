@@ -268,7 +268,28 @@ A run that must not touch your real data — `--data-dir` / `HEAP_DATA_DIR`, or
 the test suites — never opens the keychain: it keeps a `secrets.json` next to its
 own `state.json` instead. Builds without QtKeychain always use that file.
 
+## What a pulled issue brings with it
+
+A mirrored issue becomes an ordinary task carrying the tracker's own view of
+it: assignee, reporter, issue type, project, milestone, comment count, due
+date, label colours, and the created/updated timestamps. The card shows a
+provider badge and the tracker's key (`#1234`, `PROJ-123`); `O` opens the
+issue in your browser; the editor lists the rest in a read-only strip.
+
+Not every provider exposes every field, and two are skipped on purpose:
+Jira's comment count (asking for it inlines every comment body of all 100
+issues in the search response) and Redmine's (it needs a per-issue request).
+Asana's tags are not requested either — `tags:read` is not among the scopes
+the card asks for, and an unscoped field fails the whole request.
+
+The tracker owns a task's due date only while you have not touched it. Edit
+or snooze the deadline and it becomes yours: later syncs leave it alone, and
+a due date removed upstream no longer clears it.
+
 ## Limitations (v1)
 
 - **Push in self-scope.** When repo/project is blank (my-issues mode), status
-  write-back is skipped — there's no single repo to write to.
+  write-back is skipped — there's no single repo to write to. The same applies
+  to an individual issue that *arrived* through my-issues mode while a repo is
+  now configured: it belongs to some other repo, so moving its card would
+  otherwise close whichever issue shares its number in the configured one.

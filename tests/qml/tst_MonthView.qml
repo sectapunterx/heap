@@ -79,14 +79,23 @@ TestCase {
     // in once at least one priority is enabled. Instance-local state only.
     function test_passes_filter_search_and_priority() {
         const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
-        const t = { id: "t-1", title: "Alpha task", desc: "", priority: "P2", status: "todo" };
+        // searchText is the haystack TaskModel builds (HEAP-117): one
+        // lowercased string covering title, id, description, ticket key,
+        // labels and assignee. buildCells() copies it onto every task.
+        const t = { id: "t-1", title: "Alpha task", desc: "", priority: "P2", status: "todo",
+                    searchText: "alpha task t-1 #1234 ada" };
 
         verify(mv.passesFilter(t), "plain todo task must pass the default filter");
-        verify(!mv.passesFilter({ id: "t-2", title: "x", desc: "", priority: "P1", status: "done" }),
+        verify(!mv.passesFilter({ id: "t-2", title: "x", desc: "", priority: "P1", status: "done",
+                                  searchText: "x t-2" }),
                "done tasks never pass");
 
         mv.searchText = "ALPHA";
         verify(mv.passesFilter(t), "search must match the title case-insensitively");
+        mv.searchText = "#1234";
+        verify(mv.passesFilter(t), "a mirrored issue must be findable by its tracker key");
+        mv.searchText = "ada";
+        verify(mv.passesFilter(t), "a ticket must be findable by its assignee");
         mv.searchText = "zzz-no-match";
         verify(!mv.passesFilter(t), "non-matching search must filter the task out");
         mv.searchText = "";
