@@ -58,6 +58,34 @@
 #include <algorithm>
 #include <cmath>
 
+namespace {
+
+// Bumped when the *meaning* of settings.shortcuts changes. 1 stored every
+// binding; 2 stores only the ones the user rebound.
+constexpr int kShortcutsSchema = 2;
+
+// True when `sequence` is exactly what `id` was bound to before the view
+// shortcuts were renumbered to follow the side rail — i.e. a stored default
+// rather than a deliberate rebind, in a settings file written by an older
+// build. Ids outside this table never had their default changed, so nothing
+// stored for them can be mistaken for one; in particular a cleared binding
+// (an empty sequence) is always a real choice.
+bool isLegacyShortcutDefault(const QString& id, const QString& sequence) {
+  static const QHash<QString, QString> kDefaults = {
+      {QStringLiteral("view.board"), QStringLiteral("Ctrl+1")},
+      {QStringLiteral("view.timeline"), QStringLiteral("Ctrl+2")},
+      {QStringLiteral("view.week"), QStringLiteral("Ctrl+3")},
+      {QStringLiteral("view.docs"), QStringLiteral("Ctrl+4")},
+      {QStringLiteral("view.notes"), QStringLiteral("Ctrl+5")},
+      {QStringLiteral("view.settings"), QStringLiteral("Ctrl+6")},
+      {QStringLiteral("view.archive"), QStringLiteral("Ctrl+7")},
+  };
+  const auto it = kDefaults.constFind(id);
+  return it != kDefaults.constEnd() && *it == sequence;
+}
+
+}  // namespace
+
 // Version is injected by CMake (PROJECT_VERSION); this fallback keeps standalone
 // test targets that compile AppController.cpp directly building without it.
 #ifndef HEAP_VERSION
@@ -155,6 +183,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.view.timeline.desc", {"Feed by deadlines.", "Лента по дедлайнам."}},
       {"shortcut.view.week.label", {"Go to Week", "Перейти в Week"}},
       {"shortcut.view.week.desc", {"Seven-day planner.", "Семидневный планировщик."}},
+      {"shortcut.view.month.label", {"Go to Month", "Перейти в Month"}},
+      {"shortcut.view.month.desc", {"Month grid of deadlines and events.", "Сетка месяца: дедлайны и события."}},
       {"shortcut.view.docs.label", {"Go to Docs", "Перейти в Docs"}},
       {"shortcut.view.docs.desc", {"Specs, links, snippets, contacts.", "Спеки, ссылки, сниппеты, контакты."}},
       {"shortcut.view.notes.label", {"Go to Notes", "Перейти в Notes"}},
@@ -4073,14 +4103,20 @@ void AppController::saveStateNow() {
   s["welcomeSeen"] = m_welcomeSeen;
   s["demoActive"] = m_demoActive;
 
-  // Keyboard shortcut overrides — store every entry (so a user-cleared
-  // binding survives a restart even if the default is non-empty).
+  // Keyboard shortcut overrides — only entries the user actually changed.
+  // Storing every entry pinned each binding to whatever the default happened
+  // to be on the day the file was written, so changing a default afterwards
+  // reached nobody who had ever launched the app. A cleared binding is still
+  // stored: an empty string differs from its default, which is the point.
   QJsonObject shortcutsObj;
   for(const QVariant& v : m_shortcuts) {
     const QVariantMap m = v.toMap();
-    shortcutsObj[m.value("id").toString()] = m.value("sequence").toString();
+    if(m.value("sequence").toString() != m.value("defaultSequence").toString()) {
+      shortcutsObj[m.value("id").toString()] = m.value("sequence").toString();
+    }
   }
   s["shortcuts"] = shortcutsObj;
+  s["shortcutsSchema"] = kShortcutsSchema;
 
   if(!m_appSettingsJson.isEmpty()) {
     const QJsonDocument d = QJsonDocument::fromJson(m_appSettingsJson.toUtf8());
@@ -4216,9 +4252,19 @@ void AppController::loadStateOnStart() {
     m_demoActive = s.contains("demoActive") ? s["demoActive"].toBool() : false;
     emit onboardingChanged();
     if(s.contains("shortcuts")) {
+      // A file written before kShortcutsSchema 2 stored every binding, not
+      // only the rebound ones, so there is no way to tell a deliberate choice
+      // from the default of the day. An entry matching the default it had back
+      // then is dropped — otherwise the view shortcuts, which have since been
+      // renumbered to follow the side rail, would stay pinned to the old
+      // layout and leave two views fighting over Ctrl+4.
+      const bool legacy = s.value("shortcutsSchema").toInt(1) < kShortcutsSchema;
       QVariantMap overrides;
       const QJsonObject shortcutsObj = s["shortcuts"].toObject();
       for(auto it = shortcutsObj.constBegin(); it != shortcutsObj.constEnd(); ++it) {
+        if(legacy && isLegacyShortcutDefault(it.key(), it.value().toString())) {
+          continue;  // it was the default, not a choice
+        }
         overrides.insert(it.key(), it.value().toString());
       }
       applyShortcutOverrides(overrides);
@@ -4897,12 +4943,18 @@ void AppController::seedShortcutCatalog() {
   m_shortcuts.clear();
   add("palette.open", "Ctrl+K");
   add("task.new", "Ctrl+N");
+  // Ctrl+1..8 follow the side rail top to bottom. They used to skip Month
+  // entirely (it had no shortcut at all) and then run docs/notes/settings out
+  // of rail order, so the number a user counted off the rail opened a
+  // different view.
   add("view.board", "Ctrl+1");
   add("view.timeline", "Ctrl+2");
   add("view.week", "Ctrl+3");
-  add("view.docs", "Ctrl+4");
-  add("view.notes", "Ctrl+5");
-  add("view.settings", "Ctrl+6");
+  add("view.month", "Ctrl+4");
+  add("view.archive", "Ctrl+5");
+  add("view.docs", "Ctrl+6");
+  add("view.notes", "Ctrl+7");
+  add("view.settings", "Ctrl+8");
   add("profile.next", "Ctrl+]");
   add("profile.prev", "Ctrl+[");
   add("profile.exportMd", "Ctrl+Shift+E");
@@ -4913,7 +4965,6 @@ void AppController::seedShortcutCatalog() {
   add("search.focus", "Ctrl+F");
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
-  add("view.archive", "Ctrl+7");
   add("theme.toggle", "Ctrl+Shift+T");
   add("person.new", "Ctrl+Shift+U");
   add("profile.new", "Ctrl+Shift+P");

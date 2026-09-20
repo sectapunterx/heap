@@ -189,11 +189,39 @@ Item {
         for (let i = 0; i < sections.length; i++) n += sections[i].items.length;
         return n;
     }
-    function passesSearch(item) {
+    function _matches(haystack) {
         const q = (root.searchText || "").toLowerCase().trim();
         if (q.length === 0) return true;
-        const hay = ((item.ref || "") + " " + (item.title || "") + " " + (item.desc || "") + " " + (item.source || "")).toLowerCase();
-        return hay.indexOf(q) >= 0;
+        return haystack.toLowerCase().indexOf(q) >= 0;
+    }
+    function passesSearch(item) {
+        return _matches((item.ref || "") + " " + (item.title || "") + " " + (item.desc || "") + " " + (item.source || ""));
+    }
+    // Snippets and contacts used to be exempt from the search box: typing a
+    // query filtered the reference sections and left both other panels showing
+    // everything, so a hit in a snippet was unfindable.
+    function snippetPassesSearch(s) {
+        return _matches((s.title || "") + " " + (s.lang || "") + " " + (s.code || "") + " " + ((s.tags || []).join(" ")));
+    }
+    function contactPassesSearch(c) {
+        return _matches((c.name || "") + " " + (c.role || "") + " " + (c.handle || "") + " " + (c.team || "") + " " + (c.note || ""));
+    }
+
+    readonly property int matchingSnippetCount: {
+        let n = 0;
+        for (let i = 0; i < snippets.length; i++) if (snippetPassesSearch(snippets[i])) n++;
+        return n;
+    }
+    readonly property int matchingContactCount: {
+        let n = 0;
+        for (let i = 0; i < contacts.length; i++) if (contactPassesSearch(contacts[i])) n++;
+        return n;
+    }
+
+    // Focused by the global search shortcut when Docs is the active view.
+    function focusSearch() {
+        docsSearch.forceActiveFocus();
+        docsSearch.selectAll();
     }
     function initials(name) {
         const parts = (name || "").split(/\s+/);
@@ -651,6 +679,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
                         TextField {
                             id: docsSearch
+                            objectName: "docsSearchField"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("docs.search.placeholder")
                             color: Theme.text
@@ -1023,7 +1052,9 @@ Item {
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
-                                    text: root.snippets.length + ""
+                                    // Reflects the filter so the header does
+                                    // not claim nine snippets above one card.
+                                    text: root.matchingSnippetCount + ""
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: 11
@@ -1036,10 +1067,16 @@ Item {
                         }
 
                         Repeater {
+                            // The full list stays the model and non-matching
+                            // cards hide themselves: `idx` is the index into
+                            // root.snippets that edit and delete act on, so a
+                            // filtered model would make them act on the wrong
+                            // snippet. A ColumnLayout skips invisible children.
                             model: root.snippets
                             delegate: SnippetCard {
                                 required property var modelData
                                 required property int index
+                                visible: root.snippetPassesSearch(modelData)
                                 snip: modelData
                                 idx: index
                                 Layout.fillWidth: true
@@ -1070,7 +1107,7 @@ Item {
                                 }
                                 Item { Layout.fillWidth: true }
                                 Text {
-                                    text: root.contacts.length + ""
+                                    text: root.matchingContactCount + ""
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: 11
@@ -1088,10 +1125,13 @@ Item {
                             columnSpacing: 10
                             rowSpacing: 8
                             Repeater {
+                                // Same as the snippets above: `idx` indexes
+                                // root.contacts, so filter by visibility.
                                 model: root.contacts
                                 delegate: ContactCard {
                                     required property var modelData
                                     required property int index
+                                    visible: root.contactPassesSearch(modelData)
                                     c: modelData
                                     idx: index
                                 }
