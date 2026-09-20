@@ -648,15 +648,7 @@ Item {
                     editor.cursorPosition = mdDocument.positionForLine(line);
                 }
 
-                onInternalLinkActivated: (kind, target) => {
-                    if (kind === "note") {
-                        const off = AppController.noteHeadingOffset(editor.text, target);
-                        if (off >= 0) root._jumpToOffset(off);
-                    }
-                    // Tickets, people, tags and footnote jumps are wired up
-                    // with the editor work; ignoring them here is better than
-                    // opening a heap:// URL in a browser.
-                }
+                onInternalLinkActivated: (kind, target) => root._followLink(kind, target)
 
                 Text {
                     anchors.centerIn: parent
@@ -943,6 +935,37 @@ Item {
         _savedAgo = "saved";
         savedAgoTimer.restart();
     }
+    // Following a [[link]] or a #TICKET from the preview.
+    //
+    // A [[target]] used to mean a heading in this document, because a profile
+    // had one document. It now means a note first and a heading second, and
+    // when it means neither it is an offer to write the note somebody clearly
+    // expected to exist.
+    signal taskRequested(string taskId)
+
+    function _followLink(kind, target) {
+        if (kind !== "note") {
+            // A ticket in a note is a task: opening it is the whole reason for
+            // writing #HEAP-12 rather than the title.
+            if (kind === "ticket") root.taskRequested(target);
+            // People, tags and footnote jumps stay where they are; ignoring
+            // them beats opening a heap:// URL in a browser.
+            return;
+        }
+        const hit = AppController.resolveNoteLink(target);
+        if (hit.kind === "note") {
+            root._flushPending();
+            AppController.activeNoteId = hit.noteId;
+            return;
+        }
+        if (hit.kind === "heading") {
+            const off = AppController.noteHeadingOffset(editor.text, hit.heading);
+            if (off >= 0) root._jumpToOffset(off);
+            return;
+        }
+        missingLinkPopup.openFor(hit.title);
+    }
+
     function _loadFromController() {
         _reloading = true;
         editor.text = AppController.notesState || "";
@@ -1010,6 +1033,56 @@ Item {
             AppController.flushSave();
         }
     }
+    // A broken link is usually a note somebody meant to write, so the offer to
+    // write it is the useful thing to do with the click.
+    Dialog {
+        id: missingLinkPopup
+        objectName: "missing-link"
+        property string wanted: ""
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: 18
+        width: 400
+        title: I18n.t("notes.link.missingTitle")
+
+        function openFor(target) {
+            missingLinkPopup.wanted = target;
+            missingLinkPopup.open();
+        }
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        contentItem: Text {
+            text: I18n.t("notes.link.missingBody").arg(missingLinkPopup.wanted)
+            color: Theme.textMuted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+
+        footer: RowLayout {
+            spacing: 8
+            Layout.margins: 14
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: missingLinkPopup.close() }
+            PillButton {
+                objectName: "missing-link-create"
+                text: I18n.t("notes.link.create")
+                primary: true
+                onClicked: {
+                    missingLinkPopup.close();
+                    root._flushPending();
+                    AppController.createNoteForLink(missingLinkPopup.wanted);
+                }
+            }
+        }
+    }
+
     Connections {
         target: AppController
         function onNotesStateChanged() {

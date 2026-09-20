@@ -260,6 +260,24 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl);
   Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl) const;
 
+  // ── Links between notes ──
+  //
+  // What `[[target]]` points at, from the note it was written in. Returns
+  // { kind: "note"|"heading"|"missing", noteId, heading, title }. The caller
+  // opens the note or scrolls to the heading; "missing" is an offer to create
+  // it, because a broken link is usually a note somebody meant to write.
+  Q_INVOKABLE QVariantMap resolveNoteLink(const QString& target) const;
+  // Which notes link to this one: [{ noteId, title, line, text }, …].
+  Q_INVOKABLE QVariantList backlinksToNote(const QString& noteId) const;
+  // Targets in the open note that nothing answers to.
+  Q_INVOKABLE QStringList unresolvedNoteLinks() const;
+  // Create the note a broken link was asking for, named after it, and open it.
+  Q_INVOKABLE QString createNoteForLink(const QString& target);
+
+  // Today's note, created on first use. A daily note that has to be made by
+  // hand is one people stop making.
+  Q_INVOKABLE QString openDailyNote();
+
   QString notesState() const {
     return m_notesState;
   }
