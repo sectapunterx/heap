@@ -729,7 +729,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // Placed after the guards so a rejected or no-op move records nothing. It
   // covers the recurrence spawn and the focus block below too, which the old
   // hand-written undo did not.
-  UndoScope scope(this, tr_("task.moveUndone").arg(taskId));
+  const UndoScope scope(this, tr_("task.moveUndone").arg(taskId));
   // Capture before any upsert can invalidate the `t` reference (HEAP-77).
   const QString recurrence = t.recurrence;
   const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
@@ -1066,7 +1066,7 @@ void AppController::deleteTask(const QString& id) {
   if(row < 0) {
     return;
   }
-  UndoScope scope(this, tr_("task.restored").arg(id));
+  const UndoScope scope(this, tr_("task.restored").arg(id));
   const ::Task removed = m_tasks.items().at(row);
   // A task owns its calendar presence: the meeting event a QuickCapture "sync"
   // spawned, plus any focus blocks dragged onto the day grid. Remove them with
@@ -1177,13 +1177,13 @@ void AppController::deleteEvent(const QString& id) {
     return;
   }
   const CalEvent removedEvent = m_events.items().at(row);
-  UndoScope scope(this, tr_("event.restored").arg(removedEvent.title));
+  const UndoScope scope(this, tr_("event.restored").arg(removedEvent.title));
   // A QuickCapture "sync" is one thing shown twice: the meeting event and the
   // task that mirrors it on the board. Deleting the meeting must take the mirror
   // task with it, else the user has to hunt it down separately (HEAP-104). Only
   // a "sync" owns its task — a "focus" block is just a scheduled slice of a task
   // that must outlive the block.
-  const CalEvent ev = removedEvent;
+  const CalEvent& ev = removedEvent;
   if(ev.type == QStringLiteral("sync") && !ev.taskId.isEmpty()) {
     if(m_tasks.indexOfId(ev.taskId) >= 0) {
       // Sweep the task's other blocks (a focus slice, say) so none is left
@@ -1408,7 +1408,7 @@ void AppController::deletePerson(const QString& id) {
     return;
   }
   const Person removedPerson = m_people.items().at(row);
-  UndoScope scope(this, tr_("person.restored").arg(removedPerson.name));
+  const UndoScope scope(this, tr_("person.restored").arg(removedPerson.name));
   m_people.removeById(id);
   emit undoableToast(tr_("person.deleted").arg(removedPerson.name), 5);
   scheduleSave();
@@ -1530,7 +1530,7 @@ void AppController::deleteStatus(const QString& id) {
     return;  // never let the board run out of columns
   }
   const QString statusName = m_statuses[i].toMap().value("name").toString();
-  UndoScope scope(this, tr_("status.restored").arg(statusName));
+  const UndoScope scope(this, tr_("status.restored").arg(statusName));
 
   // re-home any tasks with this status to the first remaining one
   QString fallback;
@@ -5212,7 +5212,7 @@ void AppController::setArchived(const QString& taskId, bool archived) {
   }
   // The scope records the change, so an accidental (un)archive is reversible
   // without this function knowing anything about undo.
-  UndoScope scope(this, tr_("task.archiveUndone").arg(taskId));
+  const UndoScope scope(this, tr_("task.archiveUndone").arg(taskId));
   m_tasks.setArchived(taskId, archived);
 
   emit undoableToast(tr_(archived ? "task.archived" : "task.unarchived").arg(taskId), 5);
@@ -5322,7 +5322,7 @@ void AppController::deleteSelectedTasks() {
     return a.first < b.first;
   });
 
-  UndoScope scope(this, tr_("selection.toast.restored").arg(snap.size()));
+  const UndoScope scope(this, tr_("selection.toast.restored").arg(snap.size()));
   QSet<QString> ids;
   for(const auto& p : snap) {
     ids.insert(p.second.id);
