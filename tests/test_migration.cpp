@@ -255,8 +255,7 @@ TEST_F(MigrationTest, ANewerSchemaDisablesSavingAndKeepsTheFile) {
 
   const QJsonObject reread = readJson(statePath());
   EXPECT_EQ(reread["schemaVersion"].toInt(), heap::state::kSchemaVersion + 1);
-  EXPECT_FALSE(reread["profiles"].toArray().at(0).toObject()["notes"].toArray().isEmpty())
-      << "the unknown field must survive";
+  EXPECT_FALSE(reread["profiles"].toArray().at(0).toObject()["notes"].toArray().isEmpty()) << "the unknown field must survive";
 
   EXPECT_EQ(QDir(backupDir()).entryList({"state-premigration-*.json"}, QDir::Files).size(), 1)
       << "a copy is retained before the app touches anything";

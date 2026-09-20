@@ -15,12 +15,12 @@
 namespace heap::recovery {
 
 // Record kinds, written verbatim into the "kind" field.
-inline constexpr auto kQuarantined = "quarantined";    // state.json was damaged and moved aside
-inline constexpr auto kRecovered = "recovered";        // a backup was promoted to live state
-inline constexpr auto kUnrecovered = "unrecovered";    // damaged, and no usable backup existed
-inline constexpr auto kWriteFailed = "write-failed";   // a save could not be committed
-inline constexpr auto kMigrated = "migrated";          // the schema ladder upgraded the file
-inline constexpr auto kPreMigration = "premigration";  // a pre-migration copy was retained
+inline constexpr auto kQuarantined = "quarantined";      // state.json was damaged and moved aside
+inline constexpr auto kRecovered = "recovered";          // a backup was promoted to live state
+inline constexpr auto kUnrecovered = "unrecovered";      // damaged, and no usable backup existed
+inline constexpr auto kWriteFailed = "write-failed";     // a save could not be committed
+inline constexpr auto kMigrated = "migrated";            // the schema ladder upgraded the file
+inline constexpr auto kPreMigration = "premigration";    // a pre-migration copy was retained
 inline constexpr auto kSchemaTooNew = "schema-too-new";  // written by a newer build; saving disabled
 
 QString recoveryLogPath();
