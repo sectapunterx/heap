@@ -250,6 +250,7 @@ qt_add_qml_module(heap_core
         qml/WelcomePopup.qml
         qml/Mention.js
         qml/Overlap.js
+        qml/Segments.js
         qml/Search.js
     SOURCES
         src/AppController.h
