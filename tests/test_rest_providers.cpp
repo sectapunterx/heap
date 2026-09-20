@@ -182,7 +182,6 @@ TEST(RegistryCatalog, ConfidentialProvidersAskForASecret) {
       {"todoist", TokenStyle::FormBody},
       {"asana", TokenStyle::FormBody},
       {"clickup", TokenStyle::JsonBody},
-      {"sentry", TokenStyle::FormBody},
       {"bitbucket", TokenStyle::BasicAuthForm},
   };
 
@@ -206,6 +205,34 @@ TEST(RegistryCatalog, ConfidentialProvidersAskForASecret) {
   }
   // Todoist's scopes are comma-separated, unlike everyone else's.
   EXPECT_EQ(findDescriptor(QStringLiteral("todoist"))->oauth.scopeSeparator, QStringLiteral(","));
+}
+
+TEST(RegistryCatalog, PublicClientsCarryNoSecretAndAskForNone) {
+  // Sentry, GitLab and the self-hosted forges accept a public client: PKCE
+  // stands in for the secret, so there is nothing confidential to ship and the
+  // client ID can be committed. The card must not offer a secret field either —
+  // the provider has no such value to give.
+  for(const char* id : {"sentry", "gitlab"}) {
+    const ProviderDescriptor* d = findDescriptor(QString::fromLatin1(id));
+    ASSERT_NE(d, nullptr) << id;
+    EXPECT_TRUE(d->oauth.supported) << id;
+    EXPECT_FALSE(d->oauth.needsSecret) << id;
+    EXPECT_TRUE(d->oauth.usePkce) << id << ": PKCE is what replaces the secret";
+    EXPECT_TRUE(d->oauth.clientSecret.isEmpty()) << id;
+    EXPECT_FALSE(d->secretKeys.contains(QStringLiteral("clientSecret"))) << id;
+    for(const FieldSpec& f : d->uiFields) {
+      EXPECT_NE(f.key, QStringLiteral("clientSecret")) << id << ": asks for a secret that does not exist";
+    }
+  }
+
+  // Sentry's ID is committed rather than injected from CI, which is what lets
+  // browser sign-in work in a build made without the release credentials —
+  // this very one.
+  const ProviderDescriptor* sentry = findDescriptor(QStringLiteral("sentry"));
+  ASSERT_NE(sentry, nullptr);
+  EXPECT_FALSE(sentry->oauth.clientId.isEmpty()) << "a committed client ID is the point of the public client";
+  EXPECT_EQ(sentry->oauth.tokenStyle, TokenStyle::FormBody);
+  EXPECT_EQ(sentry->oauth.effectiveFlow(), OAuthFlow::AuthCode);
 }
 
 TEST(RegistryCatalog, JiraAndTrelloUseTheirOwnFlows) {

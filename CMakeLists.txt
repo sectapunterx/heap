@@ -83,7 +83,6 @@ set(HEAP_OAUTH_KEYS
         ASANA_CLIENT_ID ASANA_CLIENT_SECRET
         CLICKUP_CLIENT_ID CLICKUP_CLIENT_SECRET
         BITBUCKET_CLIENT_ID BITBUCKET_CLIENT_SECRET
-        SENTRY_CLIENT_ID SENTRY_CLIENT_SECRET
 )
 # A maintainer can keep credentials in an untracked file instead of the
 # environment; see docs/INTEGRATIONS.md.

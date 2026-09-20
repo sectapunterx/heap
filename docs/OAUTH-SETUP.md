@@ -164,31 +164,37 @@ screen. Its access token does not expire. Note ClickUp's own warning that
 "non-SSL redirect URIs may not be supported in the future", so this one may need
 revisiting.
 
-### Sentry — `HEAP_OAUTH_SENTRY_CLIENT_ID` + `_CLIENT_SECRET`
+### Sentry — already done, no secret, nothing to set
+
+Sentry accepts a **public** client, so heap uses one: there is no client secret
+to ship, PKCE takes its place, and the client ID is committed in
+[`OAuthClients.h`](../src/integrations/OAuthClients.h) like GitHub's and
+GitLab's. **Sentry sign-in therefore works in every build — a local one, a
+fork's, yours — not only in a release made with the CI credentials.** There is
+no `HEAP_OAUTH_SENTRY_*` repository secret and nothing for you to do.
+
+Only if you want to point heap at your *own* Sentry application:
 
 1. **Settings → Account → API → Applications → Create New Application.**
    This is the plain *OAuth Application*, **not** a Developer-Settings
    Integration — that other thing needs a publicly reachable webhook URL and is
    the wrong tool for a desktop app.
-2. Sentry asks for a client type. Choose **Confidential**, which is what the
-   shipped descriptor is built for (client secret, form-encoded token request,
-   no PKCE). The **Public** option — PKCE, device authorization, rotating
-   refresh tokens — is the better fit for a desktop app on paper, but heap would
-   have to be changed to use it; see "What this is not" below.
-3. **Copy the Client Secret immediately.** It is shown once, right after
-   creation; on any later visit the field reads *hidden* and cannot be revealed.
-   Losing it is recoverable but not free: the page offers **Rotate client
-   secret**, which issues a new one and invalidates the old, so you must update
-   the `HEAP_OAUTH_SENTRY_CLIENT_SECRET` repository secret at the same time.
-   You do not need to delete and recreate the application.
-4. Sentry auto-fills a random two-word Name; replace it with `heap`. Authorized
+2. Choose client type **Public**. Sentry then stores no secret for the
+   application at all — the credentials panel shows a Client ID and nothing
+   else. (The type is fixed at creation: an existing Confidential application
+   cannot be converted, so this has to be a new one.)
+3. Sentry auto-fills a random two-word Name; replace it with `heap`. Authorized
    Redirect URIs: `http://127.0.0.1:51789/`. Both fields save on blur — a green
    *Changes applied* toast is the confirmation, there is no Save button.
+4. Put the Client ID in the card's **OAuth client ID** field under Advanced, or
+   override `HEAP_OAUTH_SENTRY_CLIENT_ID` at build time.
 
-heap requests `org:read project:read event:read`. Sentry's access token lives 30
-days and comes with a refresh token. The Authorization and Token URLs printed on
-that page (`https://sentry.io/oauth/authorize/`, `https://sentry.io/oauth/token/`)
-should match `ProviderRegistry.cpp` exactly, trailing slashes included.
+heap requests `org:read project:read event:read`. The access token lives 30 days.
+
+**The refresh token rotates on every use and Sentry gives no grace period** —
+spend the same one twice and the grant is revoked outright, not merely refused.
+heap serialises refreshes per provider so two syncs cannot race one
+(`TwoSyncsRacingAnExpiredTokenSpendTheRefreshTokenOnce`).
 
 ### Bitbucket Cloud — `HEAP_OAUTH_BITBUCKET_CLIENT_ID` + `_CLIENT_SECRET`
 
@@ -245,8 +251,10 @@ Name them exactly:
 | Todoist | `HEAP_OAUTH_TODOIST_CLIENT_ID`, `HEAP_OAUTH_TODOIST_CLIENT_SECRET` |
 | Asana | `HEAP_OAUTH_ASANA_CLIENT_ID`, `HEAP_OAUTH_ASANA_CLIENT_SECRET` |
 | ClickUp | `HEAP_OAUTH_CLICKUP_CLIENT_ID`, `HEAP_OAUTH_CLICKUP_CLIENT_SECRET` |
-| Sentry | `HEAP_OAUTH_SENTRY_CLIENT_ID`, `HEAP_OAUTH_SENTRY_CLIENT_SECRET` |
 | Bitbucket | `HEAP_OAUTH_BITBUCKET_CLIENT_ID`, `HEAP_OAUTH_BITBUCKET_CLIENT_SECRET` |
+
+GitHub, GitLab and **Sentry** are absent on purpose: all three are public
+clients whose IDs are committed, so they need no secret and work in every build.
 
 `release.yml` already passes every one of these to all three packaging jobs.
 **Add them one provider at a time if you like** — an unset secret is simply an
@@ -326,11 +334,23 @@ What this scheme does buy:
 Treat them as *app identity*, not as a secret that protects user data. The
 user's own token is what protects that, and it lives in their OS keychain.
 
-Two providers have since grown a public-client option that would remove their
-secret from the binary altogether: **Sentry** (Confidential vs Public — PKCE,
-device authorization, rotating refresh tokens) and **Trello** (a real OAuth 2.0
-flow beside the legacy API-key one, with its own Public client type). Both are
-the better shape for a desktop app, and both are code changes in
-`ProviderRegistry.cpp` rather than registration choices — the steps above match
-what the shipped build actually sends. Worth revisiting; not worth blocking a
-release on.
+**Sentry no longer applies:** it is registered as a public client, so there is
+no Sentry secret in the binary to find, and its committed client ID is exactly
+as public as GitHub's and GitLab's.
+
+**Trello** has since grown a real OAuth 2.0 flow beside the legacy API-key one,
+with its own Public client type. It is tempting for the same reason, but the
+arithmetic is different and it has not been taken:
+
+- Trello ships **no secret today**, so there is nothing to remove — the win is
+  only that the token would travel in an `Authorization` header instead of the
+  query string.
+- Its OAuth 2.0 lives on `auth.atlassian.com`, not `trello.com`, with different
+  scope strings (`read:board:trello`, space-separated) and Bearer auth, so every
+  request in `TrelloProvider` changes, not just the descriptor.
+- The legacy token never expires. An OAuth 2.0 one lasts an hour with a
+  single-use refresh, which trades a path that cannot break for one that can
+  break hourly.
+- Atlassian has announced **no deprecation date** for the legacy flow.
+
+So: worth doing when the refresh path has more mileage on it, not before.

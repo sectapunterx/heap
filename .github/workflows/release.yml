@@ -149,8 +149,6 @@ jobs:
           HEAP_OAUTH_CLICKUP_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_SECRET }}
           HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
           HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
-          HEAP_OAUTH_SENTRY_CLIENT_ID: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_ID }}
-          HEAP_OAUTH_SENTRY_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_SECRET }}
         shell: msys2 {0}
         run: |
           MSYS_ROOT=$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")
@@ -288,8 +286,6 @@ jobs:
           HEAP_OAUTH_CLICKUP_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_SECRET }}
           HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
           HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
-          HEAP_OAUTH_SENTRY_CLIENT_ID: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_ID }}
-          HEAP_OAUTH_SENTRY_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_SECRET }}
         run: |
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
           cmake --build build --parallel --target heap
@@ -435,8 +431,6 @@ jobs:
           HEAP_OAUTH_CLICKUP_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_CLICKUP_CLIENT_SECRET }}
           HEAP_OAUTH_BITBUCKET_CLIENT_ID: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_ID }}
           HEAP_OAUTH_BITBUCKET_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_BITBUCKET_CLIENT_SECRET }}
-          HEAP_OAUTH_SENTRY_CLIENT_ID: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_ID }}
-          HEAP_OAUTH_SENTRY_CLIENT_SECRET: ${{ secrets.HEAP_OAUTH_SENTRY_CLIENT_SECRET }}
         run: |
           set -eu
           cmake -S . -B build -G Ninja \
