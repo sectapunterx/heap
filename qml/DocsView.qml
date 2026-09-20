@@ -271,11 +271,22 @@ Item {
     onSectionsChanged: persist()
     onSnippetsChanged: persist()
     onContactsChanged: persist()
-    // A pending edit must not be lost to a profile switch or a quit.
-    Component.onDestruction: {
-        if (persistTimer.running) {
-            persistTimer.stop();
-            persistNow();
+    // A pending edit must not be lost to a view switch or a profile switch.
+    function flushPending() {
+        if (!persistTimer.running) return;
+        persistTimer.stop();
+        persistNow();
+    }
+    Component.onDestruction: flushPending()
+    // Quit is not covered by onDestruction: the engine tears down its root
+    // objects and the AppController singleton in an unspecified order, and
+    // ~AppController's own flushSave() may already have run by then. Flush
+    // here, while both are alive, and push the debounced state.json write.
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            root.flushPending();
+            AppController.flushSave();
         }
     }
 

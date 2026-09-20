@@ -451,6 +451,7 @@ Item {
 
                 TextArea {
                     id: editor
+                    objectName: "notesEditor"
                     x: 24; y: 16
                     width: notesScroll.width - 48
                     // Always fill at least the visible viewport so the user can
@@ -965,11 +966,32 @@ Item {
         })
     }
 
+    // A pending edit is only in the editor until the 250 ms debounce fires.
+    // Main.qml swaps views through a Loader, so this item is destroyed on
+    // every view switch — without a flush the last keystrokes are lost.
+    function _flushPending() {
+        if (!persistTimer.running) return;
+        persistTimer.stop();
+        _persistNow();
+    }
+
     Component.onCompleted: {
         highlighter.target = editor.textDocument;
         viewMode = _readViewMode();
         _loadFromController();
         _loadedOnce = true;
+    }
+    Component.onDestruction: _flushPending()
+    // Quit is not covered by onDestruction: the engine tears down its root
+    // objects and the AppController singleton in an unspecified order, and
+    // ~AppController's own flushSave() may already have run by then. Flush
+    // here, while both are alive, and push the debounced state.json write.
+    Connections {
+        target: Qt.application
+        function onAboutToQuit() {
+            root._flushPending();
+            AppController.flushSave();
+        }
     }
     Connections {
         target: AppController
