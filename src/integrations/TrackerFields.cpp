@@ -3,8 +3,10 @@
 #include <QJsonArray>
 #include <QRegularExpression>
 #include <QStringList>
+#include <QUrlQuery>
 
 #include <cstdlib>
+#include <limits>
 
 namespace heap::integrations {
 
@@ -166,6 +168,71 @@ QString joinObjectField(const QJsonValue& array, const QString& key) {
     }
   }
   return names.join(QStringLiteral(", "));
+}
+
+QString nextLinkFromHeader(const QByteArray& linkHeader) {
+  if(linkHeader.isEmpty()) {
+    return {};
+  }
+  // One header, several relations: `<url1>; rel="next", <url2>; rel="last"`.
+  // A URL may itself contain a comma (GitLab's keyset links do not, but a
+  // filter value could), so split on the comma that precedes the next `<`
+  // rather than on every comma.
+  static const QRegularExpression entryRx(QStringLiteral("<([^>]*)>([^,]*)"));
+  auto it = entryRx.globalMatch(QString::fromUtf8(linkHeader));
+  while(it.hasNext()) {
+    const QRegularExpressionMatch m = it.next();
+    const QString url = m.captured(1).trimmed();
+    // `rel=next`, `rel="next"` and `rel="prev next"` all count; `rel="nextish"`
+    // does not, so match the word rather than the substring.
+    static const QRegularExpression relRx(QStringLiteral("rel\\s*=\\s*\"?([^\";]*)\"?"), QRegularExpression::CaseInsensitiveOption);
+    const QRegularExpressionMatch rel = relRx.match(m.captured(2));
+    if(!rel.hasMatch()) {
+      continue;
+    }
+    const QStringList rels = rel.captured(1).split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts);
+    for(const QString& r : rels) {
+      if(r.compare(QStringLiteral("next"), Qt::CaseInsensitive) == 0) {
+        return url;
+      }
+    }
+  }
+  return {};
+}
+
+int retryAfterMs(const QByteArray& retryAfter, const QDateTime& now) {
+  const QString v = QString::fromUtf8(retryAfter).trimmed();
+  if(v.isEmpty()) {
+    return 0;
+  }
+  bool ok = false;
+  const int seconds = v.toInt(&ok);
+  if(ok) {
+    return seconds > 0 ? seconds * 1000 : 0;
+  }
+  // The HTTP-date form: "Wed, 21 Oct 2026 07:28:00 GMT", the only one a modern
+  // server sends. Qt's RFC2822 parser wants a numeric offset, and HTTP always
+  // spells that zone "GMT", so translate it.
+  QString rfc = v;
+  if(rfc.endsWith(QLatin1String(" GMT"), Qt::CaseInsensitive)) {
+    rfc.chop(4);
+    rfc += QStringLiteral(" +0000");
+  }
+  const QDateTime when = QDateTime::fromString(rfc, Qt::RFC2822Date);
+  if(!when.isValid() || !now.isValid()) {
+    return 0;
+  }
+  const qint64 delta = now.msecsTo(when);
+  return delta > 0 ? static_cast<int>(qMin<qint64>(delta, std::numeric_limits<int>::max())) : 0;
+}
+
+QUrl withQueryParam(const QUrl& url, const QString& key, const QString& value) {
+  QUrlQuery q(url);
+  q.removeAllQueryItems(key);
+  q.addQueryItem(key, value);
+  QUrl out = url;
+  out.setQuery(q);
+  return out;
 }
 
 }  // namespace heap::integrations

@@ -739,3 +739,121 @@ TEST_F(JiraNetwork, TheDeploymentIsProbedOnceNotPerRequest) {
   }
   EXPECT_EQ(probes, 1) << "the answer does not change between requests";
 }
+
+// ─── Search pagination ───────────────────────────────────────────────
+//
+// /search/jql caps at 100 issues a page and hands back an opaque
+// nextPageToken; the code used to read page one and stop, with a comment
+// saying a single page was "sufficient for v1". A JQL matching 250 issues
+// mirrored 100 of them and said nothing.
+
+TEST_F(JiraNetwork, PullWalksEveryPageOfACloudSearch) {
+  FakeJira server;
+  server.routeSequence("POST /rest/api/3/search/jql",
+                       {{200, R"({"issues":[{"key":"LTE-1","fields":{"summary":"one"}}],"nextPageToken":"TOK2","isLast":false})"},
+                        {200, R"({"issues":[{"key":"LTE-2","fields":{"summary":"two"}}],"isLast":true})"}});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
+
+  bool done = false;
+  int emitted = 0;
+  QVector<ExternalTask> got;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::tasksFetched, &p, [&](const QVector<ExternalTask>& t) {
+    got = t;
+    ++emitted;
+    done = true;
+  });
+  p.pullTasks();
+  ASSERT_TRUE(waitFor(done));
+
+  ASSERT_EQ(got.size(), 2);
+  EXPECT_EQ(got[0].externalId, QStringLiteral("LTE-1"));
+  EXPECT_EQ(got[1].externalId, QStringLiteral("LTE-2"));
+  // One signal for the whole walk: AppController toasts per tasksFetched.
+  EXPECT_EQ(emitted, 1);
+  EXPECT_EQ(server.seen().size(), 2);
+  // The token from page one has to come back in the body of page two.
+  EXPECT_TRUE(server.lastBody().contains("TOK2")) << server.lastBody().toStdString();
+}
+
+TEST_F(JiraNetwork, ALastPageWithNoTokenEndsTheWalk) {
+  FakeJira server;
+  // No nextPageToken at all — the shape a short result set comes back in.
+  server.route("POST /rest/api/3/search/jql", {200, R"({"issues":[{"key":"LTE-9","fields":{"summary":"only"}}]})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
+
+  bool done = false;
+  QVector<ExternalTask> got;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::tasksFetched, &p, [&](const QVector<ExternalTask>& t) {
+    got = t;
+    done = true;
+  });
+  p.pullTasks();
+  ASSERT_TRUE(waitFor(done));
+
+  EXPECT_EQ(got.size(), 1);
+  EXPECT_EQ(server.seen().size(), 1) << "no token means no second request";
+}
+
+TEST_F(JiraNetwork, AFailedSecondPageKeepsTheFirst) {
+  FakeJira server;
+  server.routeSequence("POST /rest/api/3/search/jql",
+                       {{200, R"({"issues":[{"key":"LTE-1","fields":{"summary":"one"}}],"nextPageToken":"TOK2","isLast":false})"},
+                        {500, R"({"errorMessages":["boom"]})"}});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
+
+  QVector<ExternalTask> got;
+  int failStatus = -1;
+  QString failError;
+  bool failed = false;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::tasksFetched, &p, [&](const QVector<ExternalTask>& t) {
+    got = t;
+  });
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::pullFailed, &p, [&](int status, const QString& error) {
+    failStatus = status;
+    failError = error;
+    failed = true;
+  });
+  p.pullTasks();
+  ASSERT_TRUE(waitFor(failed));
+
+  EXPECT_EQ(got.size(), 1) << "page one is real work and should still land";
+  // Status 0 on purpose: a mid-walk 401 must not send AppController into its
+  // refresh-and-resync path, which would re-pull page one forever.
+  EXPECT_EQ(failStatus, 0);
+  EXPECT_TRUE(failError.contains(QStringLiteral("only 1 page"))) << failError.toStdString();
+}
+
+TEST_F(JiraNetwork, AServerSearchPagesByRowOffset) {
+  FakeJira server;
+  // Server/DC has no cursor. A page shorter than maxResults is the last one,
+  // and a one-issue page is short, so this stops after the first request.
+  server.route("POST /rest/api/2/search", {200, R"({"issues":[{"key":"OPS-1","fields":{"summary":"s"}}]})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  p.setDeployment(heap::integrations::JiraDeployment::Server);
+
+  bool done = false;
+  QVector<ExternalTask> got;
+  QObject::connect(&p, &heap::integrations::IntegrationProvider::tasksFetched, &p, [&](const QVector<ExternalTask>& t) {
+    got = t;
+    done = true;
+  });
+  p.pullTasks();
+  ASSERT_TRUE(waitFor(done));
+
+  EXPECT_EQ(got.size(), 1);
+  EXPECT_EQ(server.seen().size(), 1);
+  // The first page must not carry startAt at all — some older Server versions
+  // reject startAt=0 alongside an empty JQL clause.
+  EXPECT_FALSE(server.lastBody().contains("startAt")) << server.lastBody().toStdString();
+}

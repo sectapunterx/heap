@@ -3,6 +3,8 @@
 // bespoke Trello parsers, the SecretStore cache and the HTTP error formatter.
 // No network.
 
+#include "FakeHttpServer.h"
+
 #include "integrations/OAuthRefresh.h"
 #include "integrations/ProviderRegistry.h"
 #include "integrations/ReplyError.h"
@@ -11,8 +13,10 @@
 #include "integrations/TrelloProvider.h"
 #include "platform/Paths.h"
 
+#include <QCoreApplication>
 #include <QFile>
 #include <QNetworkReply>
+#include <QRegularExpression>
 #include <QTimeZone>
 
 #include <gtest/gtest.h>
@@ -930,4 +934,387 @@ TEST(OAuthRefresh, RefreshesJustBeforeExpiry) {
   EXPECT_FALSE(tokenNeedsRefresh(now.addSecs(3600), now));
   EXPECT_TRUE(tokenNeedsRefresh(now.addSecs(30), now));   // expires mid-sync
   EXPECT_TRUE(tokenNeedsRefresh(now.addSecs(-60), now));  // already expired
+}
+
+// ─── Paging and backoff ──────────────────────────────────────────────
+//
+// Every tracker caps a list response. A pull that read only the first page
+// silently lost everything past it: a repo with 140 open issues mirrored 100
+// and said nothing. These cover the two halves — knowing where the next page
+// is, and not giving up on a 429.
+
+TEST(Paging, NextLinkIsTheOnlyRelationThatCounts) {
+  // GitHub sends all four relations in one header, in no guaranteed order.
+  const QByteArray gh = R"(<https://api.github.com/repos/o/r/issues?page=1>; rel="prev", )"
+                        R"(<https://api.github.com/repos/o/r/issues?page=3>; rel="next", )"
+                        R"(<https://api.github.com/repos/o/r/issues?page=9>; rel="last")";
+  EXPECT_EQ(nextLinkFromHeader(gh), QStringLiteral("https://api.github.com/repos/o/r/issues?page=3"));
+
+  // Unquoted, and with the relation before other parameters.
+  EXPECT_EQ(nextLinkFromHeader(R"(<https://x/2>; rel=next; type="application/json")"), QStringLiteral("https://x/2"));
+  // Several relations on one link.
+  EXPECT_EQ(nextLinkFromHeader(R"(<https://x/2>; rel="prev next")"), QStringLiteral("https://x/2"));
+  // The last page says only where it has been.
+  EXPECT_TRUE(nextLinkFromHeader(R"(<https://x/1>; rel="first", <https://x/8>; rel="prev")").isEmpty());
+  // A relation that merely starts with "next" is not next.
+  EXPECT_TRUE(nextLinkFromHeader(R"(<https://x/2>; rel="nextish")").isEmpty());
+  EXPECT_TRUE(nextLinkFromHeader({}).isEmpty());
+}
+
+TEST(Paging, RetryAfterReadsBothFormsAndIgnoresThePast) {
+  const QDateTime now = QDateTime(QDate(2026, 1, 1), QTime(12, 0), QTimeZone::UTC);
+  EXPECT_EQ(retryAfterMs("30", now), 30000);
+  // The HTTP-date form, two minutes out.
+  EXPECT_EQ(retryAfterMs("Thu, 01 Jan 2026 12:02:00 GMT", now), 120000);
+  // A date already gone by means "no wait", not a negative one.
+  EXPECT_EQ(retryAfterMs("Thu, 01 Jan 2026 11:00:00 GMT", now), 0);
+  EXPECT_EQ(retryAfterMs("0", now), 0);
+  EXPECT_EQ(retryAfterMs("-5", now), 0);
+  EXPECT_EQ(retryAfterMs("soon", now), 0);
+  EXPECT_EQ(retryAfterMs({}, now), 0);
+}
+
+TEST(Paging, QueryParamReplacesRatherThanAppends) {
+  const QUrl base(QStringLiteral("https://x/api/tasks?limit=100&state=all"));
+  const QUrl once = withQueryParam(base, QStringLiteral("cursor"), QStringLiteral("abc"));
+  EXPECT_TRUE(once.toString().contains(QStringLiteral("cursor=abc")));
+  EXPECT_TRUE(once.toString().contains(QStringLiteral("limit=100")));
+  // A second page must not stack `cursor=abc&cursor=def`.
+  const QUrl twice = withQueryParam(once, QStringLiteral("cursor"), QStringLiteral("def"));
+  EXPECT_TRUE(twice.toString().contains(QStringLiteral("cursor=def")));
+  EXPECT_FALSE(twice.toString().contains(QStringLiteral("cursor=abc")));
+}
+
+TEST(Paging, EveryDescriptorsRecipeIsUsable) {
+  // A half-filled recipe is worse than none: the walk would either stop at page
+  // one (silently, the bug this fixes) or step a parameter the server ignores
+  // and re-read page one forever. maxPages bounds the latter, but only after
+  // 20 pointless requests.
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    const std::string who = d.id.toStdString();
+    EXPECT_GT(d.paging.maxPages, 0) << who;
+    switch(d.paging.style) {
+      case PageStyle::None:
+        break;
+      case PageStyle::LinkHeader:
+        break;
+      case PageStyle::BodyNext:
+        EXPECT_FALSE(d.paging.bodyPath.isEmpty()) << who << " has nowhere to read the cursor from";
+        break;
+      case PageStyle::Offset:
+        EXPECT_FALSE(d.paging.offsetParam.isEmpty()) << who << " has nothing to step";
+        EXPECT_GT(d.paging.pageSize, 0) << who << " cannot tell a short page from a full one";
+        break;
+    }
+    if(d.paging.style != PageStyle::None) {
+      EXPECT_FALSE(d.bespoke) << who << " is bespoke; RestIssueProvider never runs its recipe";
+    }
+  }
+}
+
+TEST(Paging, AnOffsetWalkAgreesWithTheSizeItsTemplateAsks) {
+  // `pageSize` has to equal the limit baked into the list template, or a full
+  // page looks short and the walk stops one page early.
+  static const QRegularExpression limitRx(QStringLiteral("[?&](?:limit|per_page|pagelen)=(\d+)"));
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    if(d.paging.style != PageStyle::Offset) {
+      continue;
+    }
+    const QRegularExpressionMatch m = limitRx.match(d.listPathTemplate);
+    if(!m.hasMatch()) {
+      continue;  // the endpoint has a fixed page size it does not let us name
+    }
+    EXPECT_EQ(m.captured(1).toInt(), d.paging.pageSize) << d.id.toStdString() << ": template and recipe disagree";
+  }
+}
+
+TEST(Paging, TheForgesFollowTheLinkHeader) {
+  // Not an implementation detail: GitHub, GitLab and Gitea all cap at 100 and
+  // all say "there is more" the same way. If one of these loses its recipe,
+  // that provider goes back to silently truncating.
+  for(const char* id : {"github", "gitlab", "gitea", "forgejo", "sentry"}) {
+    const ProviderDescriptor* d = findDescriptor(QString::fromLatin1(id));
+    ASSERT_NE(d, nullptr) << id;
+    EXPECT_EQ(d->paging.style, PageStyle::LinkHeader) << id;
+  }
+}
+
+// ─── The walk itself, over a socket ──────────────────────────────────
+//
+// Driven with hand-built descriptors rather than real ones: what is under test
+// is the engine, and a synthetic "{host}" descriptor can point at the fake
+// server without any provider's hardcoded API host getting in the way.
+
+namespace {
+
+ProviderDescriptor pagingDesc() {
+  ProviderDescriptor d;
+  d.id = QStringLiteral("fake");
+  d.displayName = QStringLiteral("Fake");
+  d.baseUrlTemplate = QStringLiteral("{host}");
+  d.requiredKeys = {QStringLiteral("host")};
+  d.listPathTemplate = QStringLiteral("/issues?limit=2");
+  d.fields.id = QStringLiteral("id");
+  d.fields.title = QStringLiteral("title");
+  // Retries are real waits; a unit test should not spend three seconds proving
+  // that it waited.
+  d.retry.baseDelayMs = 1;
+  d.retry.maxDelayMs = 5;
+  return d;
+}
+
+// Two issues, ids derived from the page so a test can tell the pages apart.
+QByteArray pageBody(int page) {
+  const QByteArray n = QByteArray::number(page);
+  return "[{\"id\":\"" + n + "a\",\"title\":\"first\"},{\"id\":\"" + n + "b\",\"title\":\"second\"}]";
+}
+
+QByteArray nextLink(const QString& base, const QByteArray& pathAndQuery) {
+  return "<" + base.toUtf8() + pathAndQuery + ">; rel=\"next\"";
+}
+
+struct PullWatcher {
+  QVector<ExternalTask> tasks;
+  int fetched = 0;
+  int failed = 0;
+  int lastStatus = -1;
+  QString lastError;
+
+  explicit PullWatcher(IntegrationProvider* p) {
+    QObject::connect(p, &IntegrationProvider::tasksFetched, p, [this](const QVector<ExternalTask>& t) {
+      tasks = t;
+      ++fetched;
+    });
+    QObject::connect(p, &IntegrationProvider::pullFailed, p, [this](int status, const QString& error) {
+      lastStatus = status;
+      lastError = error;
+      ++failed;
+    });
+  }
+};
+
+}  // namespace
+
+// QNetworkAccessManager needs an application object, and gtest_main does not
+// make one. It outlives the suite on purpose.
+class PagingWalk : public ::testing::Test {
+ protected:
+  static void SetUpTestSuite() {
+    if(QCoreApplication::instance() == nullptr) {
+      static int argc = 1;
+      static char arg0[] = "heap_rest_providers_tests";
+      static char* argv[] = {arg0, nullptr};
+      new QCoreApplication(argc, argv);
+    }
+  }
+};
+
+TEST_F(PagingWalk, FollowsTheLinkHeaderToTheLastPage) {
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  d.paging.style = PageStyle::LinkHeader;
+
+  srv.route("GET /issues?limit=2", {200, pageBody(1), {{"Link", nextLink(srv.base(), "/issues?limit=2&page=2")}}});
+  srv.route("GET /issues?limit=2&page=2", {200, pageBody(2), {}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+
+  // One signal for the whole walk — AppController toasts per tasksFetched, and
+  // a per-page toast would be four toasts for a big repo.
+  EXPECT_EQ(w.fetched, 1);
+  EXPECT_EQ(w.failed, 0);
+  ASSERT_EQ(w.tasks.size(), 4);
+  EXPECT_EQ(w.tasks.at(0).externalId, QStringLiteral("1a"));
+  EXPECT_EQ(w.tasks.at(3).externalId, QStringLiteral("2b"));
+  EXPECT_EQ(srv.seen().size(), 2);
+}
+
+TEST_F(PagingWalk, ANextLinkToAnotherHostIsNotFollowed) {
+  // The link is server-supplied and the request carries a token. Following it
+  // off-origin is the same mistake SameOriginRedirectPolicy exists to prevent.
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  d.paging.style = PageStyle::LinkHeader;
+  srv.route("GET /issues?limit=2", {200, pageBody(1), {{"Link", "<https://evil.example/issues>; rel=\"next\""}}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+
+  EXPECT_EQ(w.tasks.size(), 2) << "the walk must end rather than leave the origin";
+  EXPECT_EQ(srv.seen().size(), 1);
+  EXPECT_EQ(w.failed, 0);
+}
+
+TEST_F(PagingWalk, StopsAtTheCapAndSaysSo) {
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  d.paging.style = PageStyle::LinkHeader;
+  d.paging.maxPages = 3;
+  // A server that always claims another page — a bug upstream, or a filter that
+  // never narrows. Without the cap this is an infinite pull.
+  srv.route("GET /issues?limit=2", {200, pageBody(1), {{"Link", nextLink(srv.base(), "/issues?limit=2")}}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+
+  EXPECT_EQ(srv.seen().size(), 3);
+  EXPECT_EQ(w.tasks.size(), 6);
+  // Bounded, but not silently: hitting the cap means issues were left behind.
+  EXPECT_EQ(w.failed, 1);
+  EXPECT_EQ(w.lastStatus, 0);
+  EXPECT_TRUE(w.lastError.contains(QStringLiteral("3-page limit"))) << w.lastError.toStdString();
+}
+
+TEST_F(PagingWalk, A429IsWaitedOutAndThePageRetried) {
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  srv.routeSequence("GET /issues?limit=2", {{429, "{}", {{"Retry-After", "0"}}}, {200, pageBody(1), {}}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+
+  EXPECT_EQ(srv.seen().size(), 2) << "the same page, asked for twice";
+  EXPECT_EQ(w.tasks.size(), 2);
+  EXPECT_EQ(w.failed, 0) << "a rate limit that clears is not an error the user needs to see";
+}
+
+TEST_F(PagingWalk, APermanentErrorIsNotRetried) {
+  // 404 and 401 will answer identically however long we wait; retrying only
+  // delays the toast that tells the user their config is wrong.
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  srv.route("GET /issues?limit=2", {404, "{\"message\":\"Not Found\"}", {}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.failed > 0;
+  }));
+
+  EXPECT_EQ(srv.seen().size(), 1);
+  EXPECT_EQ(w.fetched, 0) << "nothing was fetched, so nothing should be merged";
+  EXPECT_EQ(w.lastStatus, 404);
+}
+
+TEST_F(PagingWalk, AFailureMidWalkKeepsThePagesAlreadyRead) {
+  // Throwing away 100 real issues because page 2 timed out is a worse answer
+  // than a short one — but a short one has to say it is short.
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  d.paging.style = PageStyle::LinkHeader;
+  d.retry.maxRetries = 1;
+  srv.route("GET /issues?limit=2", {200, pageBody(1), {{"Link", nextLink(srv.base(), "/issues?limit=2&page=2")}}});
+  srv.route("GET /issues?limit=2&page=2", {503, "{}", {}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.failed > 0;
+  }));
+
+  EXPECT_EQ(w.fetched, 1);
+  EXPECT_EQ(w.tasks.size(), 2) << "page one survives";
+  // Status 0 on purpose: a mid-walk 401 must not send AppController into its
+  // refresh-and-resync path, which would re-pull page one forever.
+  EXPECT_EQ(w.lastStatus, 0);
+  EXPECT_TRUE(w.lastError.contains(QStringLiteral("only 1 page"))) << w.lastError.toStdString();
+  // 5xx is worth one retry before giving up on the page.
+  EXPECT_EQ(srv.seen().size(), 3);
+}
+
+TEST_F(PagingWalk, ABodyCursorGoesBackAsAQueryParameter) {
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  d.listPathTemplate = QStringLiteral("/tasks?limit=2");
+  d.fields.arrayPointer = QStringLiteral("results");
+  d.paging.style = PageStyle::BodyNext;
+  d.paging.bodyPath = QStringLiteral("next_cursor");
+  d.paging.cursorParam = QStringLiteral("cursor");
+
+  srv.route("GET /tasks?limit=2", {200, "{\"results\":[{\"id\":\"1\",\"title\":\"a\"}],\"next_cursor\":\"CUR2\"}", {}});
+  srv.route("GET /tasks?limit=2&cursor=CUR2", {200, "{\"results\":[{\"id\":\"2\",\"title\":\"b\"}],\"next_cursor\":null}", {}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+
+  ASSERT_EQ(w.tasks.size(), 2);
+  EXPECT_EQ(srv.lastRequest("GET /tasks").query, QByteArray("limit=2&cursor=CUR2"));
+}
+
+TEST_F(PagingWalk, AnOffsetWalkStopsOnAShortPage) {
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  d.paging.style = PageStyle::Offset;
+  d.paging.offsetParam = QStringLiteral("offset");
+  d.paging.pageSize = 2;
+
+  srv.route("GET /issues?limit=2", {200, pageBody(1), {}});                                      // full → keep going
+  srv.route("GET /issues?limit=2&offset=2", {200, "[{\"id\":\"3a\",\"title\":\"last\"}]", {}});  // short → stop
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+
+  EXPECT_EQ(w.tasks.size(), 3);
+  EXPECT_EQ(srv.seen().size(), 2) << "a short page ends the walk; an endpoint that ignores offset stops after one";
+}
+
+TEST_F(PagingWalk, ASecondPullWhileOneIsInFlightIsIgnored) {
+  // The auto-sync timer and the Sync-now button can land together. Two walks
+  // sharing one accumulator would interleave their pages and emit twice.
+  heap::testing::FakeHttpServer srv;
+  ProviderDescriptor d = pagingDesc();
+  srv.route("GET /issues?limit=2", {200, pageBody(1), {}});
+
+  RestIssueProvider p(d);
+  p.setConfig({{QStringLiteral("host"), srv.base()}});
+  PullWatcher w(&p);
+  p.pullTasks();
+  p.pullTasks();
+  ASSERT_TRUE(heap::testing::waitUntil([&] {
+    return w.fetched > 0;
+  }));
+  // Give a stray second walk a chance to show up before declaring it absent.
+  heap::testing::waitUntil(
+      [&] {
+        return w.fetched > 1;
+      },
+      300);
+
+  EXPECT_EQ(w.fetched, 1);
+  EXPECT_EQ(srv.seen().size(), 1);
 }

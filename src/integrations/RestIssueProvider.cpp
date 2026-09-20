@@ -8,6 +8,7 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimer>
 #include <QUrl>
 
 namespace heap::integrations {
@@ -275,28 +276,157 @@ void RestIssueProvider::pullTasks() {
     emit pullFailed(0, m_desc.displayName + QStringLiteral(" is not fully configured"));
     return;
   }
-  const QString base = resolvedBaseUrl();
-  const QString url = base + expand(listPath());
+  if(m_pull.active) {
+    // The auto-sync timer and the Sync-now button can both land while a walk is
+    // in flight. Starting a second one would interleave two page sequences into
+    // one accumulator and emit twice.
+    return;
+  }
+  m_pull = Pull{};
+  m_pull.active = true;
+  m_pull.base = resolvedBaseUrl();
+  m_pull.url = QUrl(m_pull.base + expand(listPath()));
   // Which endpoint this pull went to decides whether the issue numbers coming
-  // back are unique on their own. Captured now, not when the reply lands, so a
+  // back are unique on their own. Captured now, not when a reply lands, so a
   // repo configured mid-flight cannot mislabel the answer.
-  const bool crossProject = inSelfScope();
-  QNetworkReply* reply = m_nam->get(buildRequest(url));
-  connect(reply, &QNetworkReply::finished, this, [this, reply, base, crossProject]() {
+  m_pull.crossProject = inSelfScope();
+  m_pull.offset = m_desc.paging.firstOffset;
+  fetchPage();
+}
+
+void RestIssueProvider::fetchPage() {
+  QNetworkReply* reply = m_nam->get(buildRequest(m_pull.url.toString()));
+  connect(reply, &QNetworkReply::finished, this, [this, reply]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {
-      emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
+      const int status = replyHttpStatus(reply);
+      // 429 is the server asking for a pause, and 5xx is it having a bad
+      // moment. Both are worth waiting out; everything else (401, 404, a bad
+      // query) will fail again identically, so retrying only delays the toast.
+      const bool worthRetrying = status == 429 || (status >= 500 && status < 600);
+      if(worthRetrying && m_pull.attempt < m_desc.retry.maxRetries) {
+        // describeReplyError() consumes the body, so read the header first.
+        const QByteArray after = reply->rawHeader("Retry-After");
+        const int asked = retryAfterMs(after, QDateTime::currentDateTime());
+        const int backoff = m_desc.retry.baseDelayMs * (1 << m_pull.attempt);
+        const int waitMs = qBound(0, asked > 0 ? asked : backoff, m_desc.retry.maxDelayMs);
+        ++m_pull.attempt;
+        QTimer::singleShot(waitMs, this, [this]() {
+          if(m_pull.active) {
+            fetchPage();
+          }
+        });
+        return;
+      }
+      const QString error = describeReplyError(reply);
+      if(m_pull.page > 0) {
+        // Pages already in hand are real issues; throwing them away because the
+        // tail failed would be a worse answer than a short one. Report the
+        // truncation separately so it is not silent.
+        finishPull(error);
+        return;
+      }
+      m_pull.active = false;
+      emit pullFailed(status, error);
       return;
     }
-    const QByteArray body = reply->readAll();
-    QVector<ExternalTask> tasks = m_desc.parser ? m_desc.parser(body, base) : parseWithFieldMap(body, m_desc.fields, m_desc.id, base);
-    if(crossProject) {
-      for(ExternalTask& t : tasks) {
-        t.crossProject = true;
-      }
-    }
-    emit tasksFetched(tasks);
+    m_pull.attempt = 0;
+    onPage(reply->readAll(), reply->rawHeader("Link"));
   });
+}
+
+void RestIssueProvider::onPage(const QByteArray& body, const QByteArray& linkHeader) {
+  QVector<ExternalTask> tasks =
+      m_desc.parser ? m_desc.parser(body, m_pull.base) : parseWithFieldMap(body, m_desc.fields, m_desc.id, m_pull.base);
+  const int count = static_cast<int>(tasks.size());
+  if(m_pull.crossProject) {
+    for(ExternalTask& t : tasks) {
+      t.crossProject = true;
+    }
+  }
+  m_pull.tasks += tasks;
+  ++m_pull.page;
+
+  if(m_pull.page >= qMax(1, m_desc.paging.maxPages)) {
+    // The cap is not an error — it is the promise that one sync is bounded —
+    // but a walk that hits it did leave issues behind, so say so.
+    finishPull(m_pull.page > 1 || m_desc.paging.style != PageStyle::None
+                   ? QStringLiteral("stopped at the %1-page limit").arg(m_desc.paging.maxPages)
+                   : QString());
+    return;
+  }
+  const QUrl next = nextPageUrl(body, linkHeader, count);
+  if(!next.isValid() || next.isEmpty()) {
+    finishPull(QString());
+    return;
+  }
+  m_pull.url = next;
+  fetchPage();
+}
+
+QUrl RestIssueProvider::nextPageUrl(const QByteArray& body, const QByteArray& linkHeader, int lastCount) {
+  switch(m_desc.paging.style) {
+    case PageStyle::None:
+      return {};
+    case PageStyle::LinkHeader: {
+      const QString next = nextLinkFromHeader(linkHeader);
+      if(next.isEmpty()) {
+        return {};
+      }
+      const QUrl url(next);
+      // The link is server-supplied. Following it to another host would carry
+      // the token there, which is exactly what SameOriginRedirectPolicy is set
+      // to prevent on redirects.
+      if(!url.isValid() || url.host() != m_pull.url.host() || url.scheme() != m_pull.url.scheme()) {
+        return {};
+      }
+      return url;
+    }
+    case PageStyle::BodyNext: {
+      const QJsonObject root = QJsonDocument::fromJson(body).object();
+      const QString leaf = fieldStr(root, m_desc.paging.bodyPath);
+      if(leaf.isEmpty()) {
+        return {};
+      }
+      if(m_desc.paging.cursorParam.isEmpty()) {
+        const QUrl url(leaf);
+        if(!url.isValid() || url.host() != m_pull.url.host() || url.scheme() != m_pull.url.scheme()) {
+          return {};
+        }
+        return url;
+      }
+      return withQueryParam(m_pull.url, m_desc.paging.cursorParam, leaf);
+    }
+    case PageStyle::Offset: {
+      // A page shorter than the size we asked for is the last one. An endpoint
+      // that ignores the parameter therefore stops after one page rather than
+      // looping on the same content.
+      const int size = m_desc.paging.pageSize;
+      if(size <= 0 || lastCount < size || m_desc.paging.offsetParam.isEmpty()) {
+        return {};
+      }
+      const int step = m_desc.paging.offsetStep > 0 ? m_desc.paging.offsetStep : size;
+      m_pull.offset += step;
+      return withQueryParam(m_pull.url, m_desc.paging.offsetParam, QString::number(m_pull.offset));
+    }
+  }
+  return {};
+}
+
+void RestIssueProvider::finishPull(const QString& truncatedReason) {
+  const QVector<ExternalTask> tasks = m_pull.tasks;
+  const int pages = m_pull.page;
+  m_pull.active = false;
+  m_pull.tasks.clear();
+  // tasksFetched first: the issues we did get should land whatever happened to
+  // the rest, and AppController's toast for the merge is the useful one.
+  emit tasksFetched(tasks);
+  if(!truncatedReason.isEmpty()) {
+    // Status 0 deliberately: a mid-walk 401 must not send AppController into
+    // its refresh-and-resync path, which would re-pull page 1 forever. The next
+    // sync's first page will fail the same way and refresh then.
+    emit pullFailed(0, QStringLiteral("%1: only %2 page(s) — %3").arg(m_desc.displayName).arg(pages).arg(truncatedReason));
+  }
 }
 
 void RestIssueProvider::fetchComments(const QString& externalId, const QString& project) {
