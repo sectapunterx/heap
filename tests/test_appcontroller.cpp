@@ -192,6 +192,73 @@ TEST_F(AppControllerTest, ScheduledLabelInvalidDateEmpty) {
   EXPECT_EQ(app_->scheduledLabelFor(QStringLiteral("T-1"), QDate()), QString());
 }
 
+// ─── event hour clamping on the two write paths ───────────────────────
+
+// saveEvent used to fix up only "end before start"; a free-typed time went to
+// disk as-is, so an event could sit outside the day entirely.
+TEST_F(AppControllerTest, SaveEventClampsAFreeTypedRangeIntoTheDay) {
+  QVariantMap draft = app_->newEventDraft(9.0, QDate(2026, 5, 15));
+  draft["start"] = 26.0;
+  draft["end"] = 30.0;
+  app_->saveEvent(draft);
+
+  ASSERT_EQ(app_->events()->rowCount(), 1);
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_LE(e.end, 24.0);
+  EXPECT_GE(e.start, 0.0);
+  EXPECT_LT(e.start, e.end);
+}
+
+TEST_F(AppControllerTest, SaveEventSnapsToTheGrid) {
+  QVariantMap draft = app_->newEventDraft(9.0, QDate(2026, 5, 15));
+  draft["start"] = 9.1;
+  draft["end"] = 10.4;
+  app_->saveEvent(draft);
+
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_DOUBLE_EQ(e.start, 9.0);
+  EXPECT_DOUBLE_EQ(e.end, 10.5);
+}
+
+// The qBound(start + minDur, end, 24.0) regression: dragging the bottom edge
+// of a late event past midnight asserted in a debug build.
+TEST_F(AppControllerTest, UpdateEventResizedPastMidnightStaysInsideTheDay) {
+  QVariantMap draft = app_->newEventDraft(23.0, QDate(2026, 5, 15));
+  app_->saveEvent(draft);
+  const QString id = app_->events()->items().at(0).id;
+
+  app_->updateEvent(id, 23.9, 25.5, QDate());
+
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_DOUBLE_EQ(e.start, 23.75);
+  EXPECT_DOUBLE_EQ(e.end, 24.0);
+}
+
+TEST_F(AppControllerTest, UpdateEventKeepsTheEventGrabbable) {
+  QVariantMap draft = app_->newEventDraft(10.0, QDate(2026, 5, 15));
+  app_->saveEvent(draft);
+  const QString id = app_->events()->items().at(0).id;
+
+  // Dragging the bottom edge above the top one must not invert the event.
+  app_->updateEvent(id, 10.0, 9.0, QDate());
+
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_LT(e.start, e.end);
+  EXPECT_NEAR(e.end - e.start, 0.25, 1e-9);
+}
+
+TEST_F(AppControllerTest, UpdateEventMovesTheDateWhenGivenOne) {
+  QVariantMap draft = app_->newEventDraft(10.0, QDate(2026, 5, 15));
+  app_->saveEvent(draft);
+  const QString id = app_->events()->items().at(0).id;
+
+  app_->updateEvent(id, 11.0, 12.0, QDate(2026, 5, 16));
+
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_EQ(e.date, QDate(2026, 5, 16));
+  EXPECT_DOUBLE_EQ(e.start, 11.0);
+}
+
 // ─── sync task ⇄ event cascade delete (HEAP-104) ──────────────────────
 
 namespace {

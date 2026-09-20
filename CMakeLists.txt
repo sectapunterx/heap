@@ -256,6 +256,7 @@ qt_add_qml_module(heap_core
         src/TaskFilterProxy.h
         src/SampleData.h
         src/CodeHighlighter.h
+        src/cal/EventClamp.h
         src/chrono/ChronoTypes.h
         src/chrono/ChronoTokenizer.h
         src/chrono/ChronoLocale.h

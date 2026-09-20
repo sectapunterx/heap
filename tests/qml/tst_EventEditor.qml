@@ -54,6 +54,21 @@ TestCase {
         compare(ed.parseHour("garbage"), 0);
     }
 
+    // A text field accepts any number, so parseHour has to answer with an hour
+    // that exists. The saved range is clamped in C++ as well
+    // (heap::cal::clampHours), but the editor must not display 99:00 back.
+    //
+    // Only the split(":") fallback needs the guard: the chrono path reads a
+    // real QTime, so it can never hand back an hour outside 0..23 (it reads
+    // "-3:00" as 3:00, which is its business, not this clamp's).
+    function test_parse_hour_stays_inside_the_day() {
+        const ed = make('import TodoCpp; EventEditor { }');
+        compare(ed.parseHour("99:00"), 24);
+        compare(ed.parseHour("25:30"), 24);
+        compare(ed.parseHour("24:00"), 24);
+        compare(ed.parseHour("23:59"), 23 + 59 / 60);
+    }
+
     // parseHourRange: a numeric time range expands to [start, end]; a single
     // time or empty input yields null (the invalid-end guard). Numeric range
     // forms are locale-independent in the chrono parser (see

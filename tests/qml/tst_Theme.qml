@@ -201,4 +201,24 @@ TestCase {
         compare(snapMinutes, 15);
         compare(showWeekends, true);
     }
+
+    // ── minEventHours tracks the snap grid ──
+    // The calendar's drag / resize floor used to be a hardcoded 0.25, which
+    // fought a 30-minute snap: the drag allowed a length the save then rounded
+    // away. It now follows snapMinutes, and never reaches zero.
+    function test_min_event_hours_follows_snap() {
+        const saved = AppController.appSettingsJson;
+
+        AppController.appSettingsJson = JSON.stringify({ calendar: { snapMinutes: 30 } });
+        const half = Theme.minEventHours;
+        AppController.appSettingsJson = JSON.stringify({ calendar: { snapMinutes: 5 } });
+        const five = Theme.minEventHours;
+        AppController.appSettingsJson = saved;
+        const fallback = Theme.minEventHours;
+
+        compare(half, 0.5);
+        fuzzyCompare(five, 5 / 60, 1e-9);
+        compare(fallback, 0.25);
+        verify(Theme.minEventHours > 0, "a zero floor would make events un-draggable");
+    }
 }

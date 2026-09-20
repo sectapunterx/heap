@@ -795,6 +795,9 @@ class AppController : public QObject {
   QSet<QString> m_blockedStuckIds;
   QMap<QString, QDate> m_lastReminderDay;  // task/sentinel id -> last day notified
   QVariantMap settingsMap() const;
+  // The calendar snap grid in hours, from settings.calendar.snapMinutes. Every
+  // event write path clamps against the same grid (heap::cal::clampHours).
+  double snapStepHours() const;
   bool inQuietHours(const QDateTime& when) const;
   static double nextQuarterHour(const QDateTime& when);
   void scheduleFocusBlockFor(const QString& taskId);

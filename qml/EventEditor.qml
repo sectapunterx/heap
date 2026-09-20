@@ -38,6 +38,10 @@ Popup {
         open();
     }
 
+    // Free-typed time → hours since midnight, always inside the day. "99:00"
+    // and "-3" are things a text field accepts; the saved range is clamped in
+    // C++ too (heap::cal::clampHours), but an out-of-range value must not be
+    // what the editor shows back either.
     function parseHour(s) {
         if (!s) return 0;
         const r = AppController.parseDateTime(s, new Date());
@@ -47,7 +51,7 @@ Popup {
         const parts = s.split(":");
         const h = parseInt(parts[0]); const m = parseInt(parts[1] || "0");
         if (isNaN(h)) return 0;
-        return h + (isNaN(m) ? 0 : m / 60.0);
+        return Math.max(0, Math.min(24, h + (isNaN(m) ? 0 : m / 60.0)));
     }
 
     // If `s` resolves to a range expression (e.g. "14-15", "с 14 до 15"), return

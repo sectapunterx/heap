@@ -728,7 +728,7 @@ Item {
                                     if (!resizing) return;
                                     const pt = weTop.mapToItem(gridContent, mouse.x, mouse.y);
                                     const h = root.snapHour(root.yToHour(pt.y));
-                                    const clamped = Math.min(h, weEv.modelData.end - 0.25);
+                                    const clamped = Math.min(h, weEv.modelData.end - Theme.minEventHours);
                                     weEv.pendingStartH = Math.max(root.hoursStart, clamped);
                                 }
                                 onReleased: {
@@ -753,7 +753,7 @@ Item {
                                     if (!resizing) return;
                                     const pt = weBot.mapToItem(gridContent, mouse.x, mouse.y);
                                     const h = root.snapHour(root.yToHour(pt.y));
-                                    const clamped = Math.max(h, weEv.modelData.start + 0.25);
+                                    const clamped = Math.max(h, weEv.modelData.start + Theme.minEventHours);
                                     weEv.pendingEndH = Math.min(root.hoursEnd, clamped);
                                 }
                                 onReleased: {
