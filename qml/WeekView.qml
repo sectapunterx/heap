@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
 import "Overlap.js" as Overlap
+import "Segments.js" as Seg
 import "Search.js" as Search
 
 Item {
@@ -159,6 +160,33 @@ Item {
     // Theme.weekStart changes — no manual Connections needed.
     property var weekStart: startOfWeek(AppController.selectedDate)
 
+    // Every event in the model, in the shape Segments.js reads. Its own
+    // binding rather than a local inside buildDays(), because the all-day strip
+    // needs the same list and buildDays() must not write a property it is
+    // itself bound to.
+    function buildSpans() {
+        const em = AppController.events;
+        const _e = root.eventRev;
+        const out = [];
+        for (let i = 0; i < em.rowCount(); i++) {
+            const idx = em.index(i, 0);
+            out.push({
+                id:        em.data(idx, Qt.UserRole + 1),
+                title:     em.data(idx, Qt.UserRole + 2),
+                type:      em.data(idx, Qt.UserRole + 3),
+                start:     em.data(idx, Qt.UserRole + 4),
+                end:       em.data(idx, Qt.UserRole + 5),
+                attendees: em.data(idx, Qt.UserRole + 6),
+                date:      em.data(idx, Qt.UserRole + 7),
+                context:   em.data(idx, Qt.UserRole + 10) || "",
+                allDay:    Boolean(em.data(idx, Qt.UserRole + 11)),
+                endDate:   em.data(idx, Qt.UserRole + 12),
+            });
+        }
+        return out;
+    }
+    readonly property var spans: buildSpans()
+
     function buildDays() {
         const start = weekStart;
         const days = [];
@@ -195,21 +223,27 @@ Item {
                 }
             }
         }
-        const em = AppController.events;
-        for (let i = 0; i < em.rowCount(); i++) {
-            const idx = em.index(i, 0);
-            const e = {
-                id:        em.data(idx, Qt.UserRole + 1),
-                title:     em.data(idx, Qt.UserRole + 2),
-                type:      em.data(idx, Qt.UserRole + 3),
-                start:     em.data(idx, Qt.UserRole + 4),
-                end:       em.data(idx, Qt.UserRole + 5),
-                attendees: em.data(idx, Qt.UserRole + 6),
-                date:      em.data(idx, Qt.UserRole + 7),
-                context: em.data(idx, Qt.UserRole + 10) || "",
-            };
-            for (let k = 0; k < days.length; k++) {
-                if (root.isSameDay(days[k].date, e.date)) { days[k].events.push(e); break; }
+        // An event is no longer pinned to one day: it may be all-day, or run
+        // past midnight. Each day takes the piece that lands on it, so a
+        // 22:00-02:00 call draws on both days instead of only the one its
+        // `date` happens to name.
+        const spans = root.spans;
+        for (let k = 0; k < days.length; k++) {
+            for (let i = 0; i < spans.length; i++) {
+                const e = spans[i];
+                if (Seg.isStrip(e)) continue;   // all-day events live in the strip
+                const seg = Seg.segmentOn(e, days[k].date);
+                if (!seg) continue;
+                days[k].events.push({
+                    id: e.id, title: e.title, type: e.type,
+                    start: seg.start, end: seg.end,
+                    attendees: e.attendees, date: e.date, context: e.context,
+                    // Unique per piece: the same event can appear on several
+                    // days, and the overlap map is keyed by this. Keying it by
+                    // event id would let Tuesday's piece overwrite Monday's.
+                    key: e.id + "@" + k,
+                    segFirst: seg.first, segLast: seg.last
+                });
             }
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -242,13 +276,39 @@ Item {
                 out.push({
                     id: e.id, title: e.title, type: e.type,
                     start: e.start, end: e.end, attendees: e.attendees,
-                    date: e.date, dayIndex: i, context: e.context || ""
+                    date: e.date, dayIndex: i, context: e.context || "",
+                    key: e.key, segFirst: e.segFirst, segLast: e.segLast
                 });
             }
         }
         return out;
     }
     readonly property var flatEvents: buildFlatEvents()
+
+    // All-day events, packed into rows so bars stack instead of overlapping.
+    // Computed for the whole week at once: a bar's row has to be the same in
+    // every column it crosses, or a trip would jump up and down across the
+    // week.
+    function buildStrip() {
+        const dates = [];
+        for (let i = 0; i < root.days.length; i++) dates.push(root.days[i].date);
+        const laid = Seg.stripRows(root.spans, dates);
+        const bars = [];
+        for (let i = 0; i < root.spans.length; i++) {
+            const e = root.spans[i];
+            if (!Seg.isStrip(e)) continue;
+            const ext = Seg.barExtent(e, dates);
+            if (!ext) continue;
+            bars.push({
+                id: e.id, title: e.title, type: e.type,
+                from: ext.from, span: ext.span,
+                clippedStart: ext.clippedStart, clippedEnd: ext.clippedEnd,
+                row: laid.rows[e.id] || 0
+            });
+        }
+        return { bars: bars, rows: laid.count };
+    }
+    readonly property var strip: buildStrip()
 
     // Side-by-side layout for events that share a time window. Two meetings at
     // 10:00 were drawn exactly on top of each other here: the second hid the
@@ -260,7 +320,7 @@ Item {
             const list = [];
             for (let j = 0; j < days[i].events.length; j++) {
                 const e = days[i].events[j];
-                list.push({ id: e.id, start: e.start, end: e.end });
+                list.push({ id: e.key, start: e.start, end: e.end });
             }
             perDay.push(list);
         }
@@ -541,10 +601,70 @@ Item {
                 }
             }
 
+            // All-day events. No hours, so no place on the grid; a strip under
+            // the header is where every calendar puts them, and it keeps them
+            // visible however far the grid is scrolled.
+            Rectangle {
+                id: weekStrip
+                objectName: "allday-strip"
+                anchors.top: headerBand.bottom
+                anchors.left: parent.left; anchors.right: parent.right
+                height: visible ? (root.strip.rows * 24 + 8) : 0
+                visible: root.strip.rows > 0
+                color: Theme.panel
+                z: 2
+
+                Rectangle {
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: 1; color: Theme.border
+                }
+
+                Repeater {
+                    model: root.strip.bars
+                    Rectangle {
+                        id: weekBar
+                        required property var modelData
+                        objectName: "allday-" + weekBar.modelData.id
+                        x: gridHost.gutterW + weekBar.modelData.from * gridHost.dayW + 2
+                        y: 4 + weekBar.modelData.row * 24
+                        width: weekBar.modelData.span * gridHost.dayW - 4
+                        height: 22
+                        // Square off the clipped end so a bar that runs past
+                        // the week reads as continuing rather than ending here.
+                        radius: 4
+                        color: Theme.withAlpha(Theme.eventColor(weekBar.modelData.type || "sync"), 0.16)
+
+                        Rectangle {
+                            visible: !weekBar.modelData.clippedStart
+                            anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                            width: 3; radius: 1
+                            color: Theme.eventColor(weekBar.modelData.type || "sync")
+                        }
+
+                        Text {
+                            anchors.fill: parent
+                            anchors.leftMargin: weekBar.modelData.clippedStart ? 16 : 10
+                            anchors.rightMargin: 8
+                            verticalAlignment: Text.AlignVCenter
+                            // A bar continued from last week says so, so the
+                            // title is not read as starting on Monday.
+                            text: (weekBar.modelData.clippedStart ? "‹ " : "")
+                                  + (weekBar.modelData.title || "")
+                                  + (weekBar.modelData.clippedEnd ? " ›" : "")
+                            color: Theme.text
+                            font.pixelSize: 12
+                            elide: Text.ElideRight
+                        }
+
+                        TapHandler { onTapped: root.eventClicked(weekBar.modelData.id) }
+                    }
+                }
+            }
+
             // Scrollable hour grid
             ScrollView {
                 anchors.left: parent.left; anchors.right: parent.right
-                anchors.top: headerBand.bottom; anchors.bottom: parent.bottom
+                anchors.top: weekStrip.bottom; anchors.bottom: parent.bottom
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
@@ -710,7 +830,7 @@ Item {
                             // Its slot within the day's overlap cluster. A
                             // dragged event goes full width: it is following
                             // the pointer, not sitting in a cluster any more.
-                            readonly property var _slot: root.overlaps[modelData.id] || ({ col: 0, cols: 1 })
+                            readonly property var _slot: root.overlaps[modelData.key] || ({ col: 0, cols: 1 })
                             readonly property int _cols: (dragDx !== 0 || dragDy !== 0) ? 1 : Math.max(1, _slot.cols)
                             readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
                             readonly property real _slotW: (gridHost.dayW - 4) / _cols

@@ -18,6 +18,10 @@ Popup {
     property string eventId: ""
     // The day this event falls on — editable via the calendar picker below.
     property var pickedDate: AppController.selectedDate
+    // The last day it covers. Equal to pickedDate for an ordinary event, which
+    // is what saveEvent() stores as "no end date at all".
+    property var pickedEndDate: AppController.selectedDate
+    property bool allDay: false
 
     // Open on a draft that has not been saved yet — a click on an empty slot
     // in the calendar. Saving is what brings the event into existence, so
@@ -30,6 +34,8 @@ Popup {
         endField.text = AppController.eventHourLabel(draft.end);
         attField.text = draft.attendees || "";
         root.pickedDate = draft.date;
+        root.pickedEndDate = draft.endDate && draft.endDate.getFullYear ? draft.endDate : draft.date;
+        root.allDay = !!draft.allDay;
         contextField.text = draft.context || "";
         open();
         titleField.forceActiveFocus();
@@ -47,8 +53,12 @@ Popup {
                 startField.text   = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 4));
                 endField.text     = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 5));
                 attField.text     = m.data(idx, Qt.UserRole + 6);
-                root.pickedDate   = m.data(idx, Qt.UserRole + 7);
-                contextField.text = m.data(idx, Qt.UserRole + 10) || "";
+                root.pickedDate    = m.data(idx, Qt.UserRole + 7);
+                root.allDay        = Boolean(m.data(idx, Qt.UserRole + 11));
+                // EndDateRole always reports a usable date: a single-day event
+                // reports its own day.
+                root.pickedEndDate = m.data(idx, Qt.UserRole + 12);
+                contextField.text  = m.data(idx, Qt.UserRole + 10) || "";
                 break;
             }
         }
@@ -81,6 +91,15 @@ Popup {
                     r.end.getHours()   + r.end.getMinutes()   / 60.0];
         }
         return null;
+    }
+
+    // How many days the event covers beyond its first, from the two pickers.
+    function _spanDays() {
+        const a = root.pickedDate, b = root.pickedEndDate;
+        if (!a || !a.getFullYear || !b || !b.getFullYear) return 0;
+        const d = Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())
+                            - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+        return Math.max(0, d);
     }
 
     function _formatHour(h) {
@@ -116,6 +135,8 @@ Popup {
             end: root.parseHour(endField.text),
             attendees: attField.text,
             date: root.pickedDate,
+            endDate: root.pickedEndDate,
+            allDay: root.allDay,
             taskId: curTaskId,
             context: contextField.text
         };
@@ -185,15 +206,43 @@ Popup {
                 color: Theme.text
             }
 
+            // All-day: the hours below have nothing to describe, so they go
+            // away rather than sit there accepting input that is discarded.
+            Item {
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                implicitHeight: allDayRow.implicitHeight
+                RowLayout {
+                    id: allDayRow
+                    anchors.left: parent.left; anchors.right: parent.right
+                    spacing: 8
+                    Switch {
+                        id: allDaySwitch
+                        objectName: "event-allday"
+                        checked: root.allDay
+                        onToggled: root.allDay = checked
+                    }
+                    Text {
+                        text: I18n.t("editor.label.allDay")
+                        color: Theme.text
+                        font.pixelSize: 12
+                        Layout.fillWidth: true
+                    }
+                }
+            }
+
             Text {
+                visible: !root.allDay
                 text: I18n.t("editor.label.start").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Text {
+                visible: !root.allDay
                 text: I18n.t("editor.label.end").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
 
             TextField {
                 id: startField
+                visible: !root.allDay
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
                 placeholderText: I18n.t("editor.ph.timeRange")
@@ -203,6 +252,7 @@ Popup {
             }
             TextField {
                 id: endField
+                visible: !root.allDay
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
                 placeholderText: "11:00"
@@ -210,14 +260,15 @@ Popup {
                 color: Theme.text
             }
 
-            // DATE — pick the day this event/sync lands on.
+            // DATE — the day this event lands on, and the last day it covers.
             Text {
-                Layout.columnSpan: 2
                 text: I18n.t("editor.label.date").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
+            Text {
+                text: I18n.t("editor.label.endDate").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Rectangle {
                 id: dateBtn
-                Layout.columnSpan: 2
                 Layout.fillWidth: true
                 implicitHeight: 34
                 radius: 6
@@ -245,7 +296,55 @@ Popup {
                 DatePickerPopup {
                     id: eventDatePicker
                     y: parent.height + 4
-                    onPicked: (value) => root.pickedDate = value
+                    onPicked: (value) => {
+                        // Moving the start moves the whole event and keeps its
+                        // length: dragging a three-day trip forward a week
+                        // should not turn it into a ten-day one.
+                        const span = root._spanDays();
+                        root.pickedDate = value;
+                        const shifted = new Date(value.getFullYear(), value.getMonth(), value.getDate());
+                        shifted.setDate(shifted.getDate() + span);
+                        root.pickedEndDate = shifted;
+                    }
+                }
+            }
+
+            Rectangle {
+                id: endDateBtn
+                objectName: "event-enddate"
+                Layout.fillWidth: true
+                implicitHeight: 34
+                radius: 6
+                color: endDateMA.containsMouse ? Theme.panel3 : Theme.panel2
+                border.color: Theme.border; border.width: 1
+                RowLayout {
+                    anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8
+                    spacing: 6
+                    Text {
+                        Layout.fillWidth: true
+                        text: root.pickedEndDate && root.pickedEndDate.getFullYear
+                            ? root.pickedEndDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
+                            : ""
+                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 12
+                    }
+                    Rectangle {
+                        width: 15; height: 14; radius: 2; color: "transparent"
+                        border.color: Theme.textMuted; border.width: 1
+                        Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
+                    }
+                }
+                MouseArea {
+                    id: endDateMA
+                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                    onClicked: endDatePicker.openAt(root.pickedEndDate, endDateBtn)
+                }
+                DatePickerPopup {
+                    id: endDatePicker
+                    y: parent.height + 4
+                    // An end before the start is meaningless; normalizeSpan
+                    // would swap them, which reads as the picker ignoring the
+                    // click.
+                    onPicked: (value) => root.pickedEndDate = (value < root.pickedDate) ? root.pickedDate : value
                 }
             }
         }

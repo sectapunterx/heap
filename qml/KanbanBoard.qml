@@ -1040,6 +1040,11 @@ Item {
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: 18
+        // Explicit, because the contentItem is a wrapping Text: without a width
+        // of its own it sizes itself from the dialog, which is sizing itself
+        // from the text. Qt reports that as a binding loop on implicitWidth and
+        // settles on whatever it measured first.
+        width: 420
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
 
         background: Rectangle {

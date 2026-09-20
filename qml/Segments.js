@@ -53,6 +53,13 @@ function multiDay(ev) {
     return dayCount(ev) > 1;
 }
 
+// How far into the event `day` is, counting from 0. -1 when it falls outside,
+// so a caller can render "3/7" for the third day of a week-long trip.
+function dayOffset(ev, day) {
+    if (!covers(ev, day)) return -1;
+    return _days(ev.date, day);
+}
+
 // An all-day event has no hours to put on the grid, so it goes in the strip
 // above it. A timed event that crosses midnight does NOT: it has real hours on
 // each day it touches, and burying it in the strip would lose them.
