@@ -8,6 +8,7 @@
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
 #include "cal/EventSpan.h"
+#include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
@@ -5787,29 +5788,19 @@ void AppController::runAutomation() {
   // promise the app did not keep.
   if(notif.value("meetingReminders", true).toBool()) {
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
-    for(const CalEvent& e : m_events.items()) {
-      if(e.date != today) {
-        continue;
-      }
-      // A focus block is the user's own time, not an appointment to be
-      // reminded about — they put it there on purpose and are already in it.
-      if(e.type == QStringLiteral("focus")) {
-        continue;
-      }
-      const QDateTime startsAt(e.date, heap::cal::hourToTime(e.start));
-      const qint64 minsLeft = now.secsTo(startsAt) / 60;
-      if(minsLeft < 0 || minsLeft > lead) {
-        continue;
-      }
+    // Which meetings are inside the window is a pure question of the clock and
+    // the events; see src/cal/Reminders.h. Only the once-per-day bookkeeping
+    // is AppController's, because it owns the sentinel map that survives ticks.
+    for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(m_events.items(), now, lead)) {
       // Keyed by event and day: an event that recurs gets one reminder per
       // occurrence, and a restart inside the lead window does not repeat it.
-      const QString sentinel = QStringLiteral("ev:%1:%2").arg(e.id, today.toString(Qt::ISODate));
+      const QString sentinel = QStringLiteral("ev:%1:%2").arg(due.eventId, today.toString(Qt::ISODate));
       if(m_lastReminderDay.value(sentinel) == today) {
         continue;
       }
       m_lastReminderDay[sentinel] = today;
-      const QString title = minsLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(minsLeft);
-      notify(title, e.title.isEmpty() ? tr_("event.newDefault") : e.title, QStringLiteral("meeting"));
+      const QString title = due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(due.minutesLeft);
+      notify(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"));
     }
   }
 
