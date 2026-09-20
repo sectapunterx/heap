@@ -14,8 +14,8 @@
 #include "StateSerializer.h"
 
 #include <QApplication>
-#include <QStandardPaths>
 #include <QSet>
+#include <QStandardPaths>
 #include <QStringList>
 #include <QTemporaryDir>
 
@@ -247,7 +247,8 @@ TEST_F(TaskLinkTest, AnArchivedBlockerDoesNot) {
 }
 
 TEST_F(TaskLinkTest, OneOpenBlockerAmongFinishedOnesStillBlocks) {
-  app_->tasks()->reset({makeTask(QStringLiteral("A"), QStringLiteral("todo")), makeTask(QStringLiteral("B"), QStringLiteral("todo")),
+  app_->tasks()->reset({makeTask(QStringLiteral("A"), QStringLiteral("todo")),
+                        makeTask(QStringLiteral("B"), QStringLiteral("todo")),
                         makeTask(QStringLiteral("C"), QStringLiteral("todo"))});
   app_->linkTasks(QStringLiteral("A"), QStringLiteral("C"));
   app_->linkTasks(QStringLiteral("B"), QStringLiteral("C"));
