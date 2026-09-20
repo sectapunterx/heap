@@ -305,6 +305,13 @@ ApplicationWindow {
                 exportJsonDialog.open();
             }
             onImportJsonRequested: importJsonDialog.open()
+            onImportIcsRequested: importIcsDialog.open()
+            onExportIcsRequested: {
+                exportIcsDialog.currentFile = "file:///" + (
+                    (AppController.activeProfileId || "heap") + ".ics"
+                );
+                exportIcsDialog.open();
+            }
         }
 
         // Side rail
@@ -1117,6 +1124,36 @@ ApplicationWindow {
             if (err && err.length > 0)
                 toast.show(I18n.t("toast.profile.importFail") + err);
         }
+    }
+
+    // ── Calendar import / export via .ics ──────────────────────────────
+    FileDialog {
+        id: importIcsDialog
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Calendar (*.ics)", "All files (*)"]
+        title: I18n.t("dialog.importIcs.title")
+        onAccepted: {
+            const r = AppController.importIcs(selectedFile);
+            if (r.error) {
+                toast.show(r.error);
+                return;
+            }
+            // Counts, not a bare "done": a file that brought in nine events
+            // and skipped one is neither a success nor a failure.
+            toast.show(I18n.t("toast.ics.imported")
+                       .arg(r.imported).arg(r.updated).arg(r.skipped));
+            for (let i = 0; i < r.warnings.length; i++) console.warn("[ics]", r.warnings[i]);
+        }
+    }
+    FileDialog {
+        id: exportIcsDialog
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Calendar (*.ics)", "All files (*)"]
+        defaultSuffix: "ics"
+        title: I18n.t("dialog.exportIcs.title")
+        onAccepted: toast.show(AppController.exportIcsToFile(selectedFile)
+                               ? I18n.t("toast.ics.exported")
+                               : I18n.t("toast.ics.exportFail"))
     }
 
     Toast {

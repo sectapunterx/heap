@@ -522,6 +522,14 @@ class AppController : public QObject {
   // asks for when a repeating event is edited or deleted.
   Q_INVOKABLE void saveOccurrence(const QVariantMap& draft, const QString& scope);
   Q_INVOKABLE void deleteOccurrence(const QString& masterId, const QDate& occurrenceDate, const QString& scope);
+
+  // ── .ics ──
+  //
+  // Import returns a summary rather than a bool: a file that brought in nine
+  // events and skipped one is neither a success nor a failure, and the user
+  // has to be told which. Keys: imported, updated, skipped, warnings.
+  Q_INVOKABLE QVariantMap importIcs(const QUrl& fileUrl);
+  Q_INVOKABLE bool exportIcsToFile(const QUrl& fileUrl) const;
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).

@@ -8,6 +8,7 @@
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
 #include "cal/EventSpan.h"
+#include "cal/IcsCodec.h"
 #include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
@@ -119,6 +120,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
+      {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
+      {"undo.importIcs", {"Calendar imported", "Календарь импортирован"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
       {"shortcut.cal.today.desc", {"Jump the calendar back to today.", "Вернуть календарь к сегодняшнему дню."}},
       {"shortcut.cal.prev.label", {"Calendar: previous", "Календарь: назад"}},
@@ -1571,6 +1574,74 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
   }
   m_events.upsert(master);
   scheduleSave();
+}
+
+QVariantMap AppController::importIcs(const QUrl& fileUrl) {
+  QVariantMap out;
+  out["imported"] = 0;
+  out["updated"] = 0;
+  out["skipped"] = 0;
+  out["warnings"] = QStringList();
+
+  const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+  QFile f(path);
+  if(path.isEmpty() || !f.open(QIODevice::ReadOnly)) {
+    out["error"] = tr_("ics.error.open");
+    return out;
+  }
+  const heap::cal::IcsImport parsed = heap::cal::parseIcs(QString::fromUtf8(f.readAll()));
+  f.close();
+
+  int imported = 0;
+  int updated = 0;
+  {
+    // One undo step for the whole file: an import that brought in forty events
+    // is one thing the user did, and undoing it forty times is not a feature.
+    const UndoScope scope(this, tr_("undo.importIcs"));
+    for(const CalEvent& incoming : parsed.events) {
+      CalEvent e = incoming;
+      // The UID is what makes importing the same file twice an update rather
+      // than a second copy of everybody's calendar.
+      const int existing = m_events.indexOfId(e.id);
+      if(existing >= 0) {
+        // Attribution is heap's, not the file's: a re-import must not move an
+        // event out of the profile the user filed it under.
+        e.profileId = m_events.items().at(existing).profileId;
+        e.taskId = m_events.items().at(existing).taskId;
+        updated++;
+      } else {
+        e.profileId = m_activeProfileId;
+        imported++;
+      }
+      m_events.upsert(e);
+    }
+  }
+  if(imported > 0 || updated > 0) {
+    scheduleSave();
+  }
+
+  out["imported"] = imported;
+  out["updated"] = updated;
+  out["skipped"] = parsed.skipped;
+  out["warnings"] = parsed.warnings;
+  return out;
+}
+
+bool AppController::exportIcsToFile(const QUrl& fileUrl) const {
+  const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
+  if(path.isEmpty()) {
+    return false;
+  }
+  // Stored events, so a series leaves as one VEVENT with its RRULE rather than
+  // as every occurrence heap happened to have expanded.
+  const QString doc = heap::cal::toIcs(m_events.items());
+  QSaveFile f(path);
+  if(!f.open(QIODevice::WriteOnly)) {
+    qWarning("todocpp: cannot open %s for writing: %s", qUtf8Printable(path), qUtf8Printable(f.errorString()));
+    return false;
+  }
+  f.write(doc.toUtf8());
+  return f.commit();
 }
 
 QString AppController::scheduledLabelFor(const QString& taskId, const QDate& date) const {

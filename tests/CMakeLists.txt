@@ -156,6 +156,12 @@ target_include_directories(heap_occurrences_tests PRIVATE ${CMAKE_CURRENT_SOURCE
 target_link_libraries(heap_occurrences_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
 add_test(NAME heap_occurrences_tests COMMAND heap_occurrences_tests)
 
+# Reading and writing .ics. Gui and Qml for the same reason as above.
+add_executable(heap_ics_tests test_ics.cpp)
+target_include_directories(heap_ics_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_ics_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
+add_test(NAME heap_ics_tests COMMAND heap_ics_tests)
+
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
 target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
