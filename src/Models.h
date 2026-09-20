@@ -22,6 +22,28 @@ struct Label {
   bool operator==(const Label&) const = default;
 };
 
+// What a tracker says about a mirrored issue beyond the fields heap already has
+// of its own (HEAP-117). Read-only: sync writes it, nothing else does, and it
+// never travels back upstream. The three timestamps are the tracker's own
+// values as last seen — `dueAt` in particular is what lets a pull tell "the
+// user moved this deadline" from "the deadline is still the tracker's".
+struct ExternalMeta {
+  QString author;
+  QString issueType;
+  QString project;  // "owner/name", a Jira project key, a list name…
+  QString milestone;
+  int commentCount = -1;  // -1 = the provider did not say
+  QDateTime createdAt;
+  QDateTime updatedAt;
+  QDateTime dueAt;
+  // True when the issue arrived from an "assigned to me" pull, which spans
+  // projects. Such an issue's number is unique only within its own project, and
+  // it must never be pushed back through the configured-project path.
+  bool crossProject = false;
+
+  bool operator==(const ExternalMeta&) const = default;
+};
+
 struct Task {
   QString id;
   QString title;
@@ -58,6 +80,8 @@ struct Task {
   int estimateMinutes = 0;
   bool someday = false;  // parked: never surfaces in a "scheduled today" view
   QString assignee;      // tracker-supplied owner, empty for local tasks
+  // What the tracker says about this issue (HEAP-117). Default for a local task.
+  ExternalMeta externalMeta;
 
   bool operator==(const Task&) const = default;
 };
@@ -78,9 +102,16 @@ struct CalEvent {
 };
 
 // Tracker-native issue key for a task: Jira stores "PROJ-123" verbatim, the
-// issue-number trackers store a bare number that reads as "#123". Empty for
-// locally-created tasks.
+// issue-number trackers store a bare number that reads as "#123". A number
+// pulled across projects is ambiguous on its own, so it is qualified with the
+// repo it came from ("web#42"). Empty for locally-created tasks.
 QString externalKeyOf(const Task& t);
+
+// Everything the ticket UI needs about a task's tracker link, as one map:
+// provider, key, url, assignee, author, type, project, milestone, comment count
+// and the tracker's created/updated timestamps. Empty for a local task, so a
+// QML delegate can test it to decide whether to render the ticket strip at all.
+QVariantMap ticketToVariant(const Task& t);
 
 // Labels across the QML boundary: a list of { id, color } maps.
 QVariantList labelsToVariant(const QVector<Label>& labels);
@@ -151,6 +182,11 @@ class TaskModel : public QAbstractListModel {
     ExternalKeyRole,
     LabelsRole,
     AssigneeRole,
+    // HEAP-117. Twelve QML files read roles by their numeric offset from
+    // Qt::UserRole, so a new role only ever goes on the end — inserting one
+    // above silently reassigns every offset below it.
+    TicketRole,
+    SearchTextRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

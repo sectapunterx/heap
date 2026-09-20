@@ -28,6 +28,14 @@ class IntegrationProvider : public QObject {
   // Push a local status change back to the tracker. Emits taskPushed.
   virtual void pushStatusChange(const QString& externalId, const QString& newStatus) = 0;
 
+  // Read one issue's most recent comments (HEAP-117). `project` is the issue's
+  // own repo/project, which in a cross-project pull is not the configured one.
+  // Always answers commentsFetched, including with an error. The default says
+  // "unsupported" so a provider that has no comment endpoint needs no code.
+  virtual void fetchComments(const QString& externalId, const QString& /*project*/) {
+    emit commentsFetched(externalId, {}, QStringLiteral("unsupported"));
+  }
+
  signals:
   void connectionTested(bool ok, const QString& error);
   // Only emitted for a successful pull. A failed one used to report an empty
@@ -36,6 +44,8 @@ class IntegrationProvider : public QObject {
   void tasksFetched(const QVector<ExternalTask>& tasks);
   void pullFailed(int httpStatus, const QString& error);
   void taskPushed(const QString& externalId, bool ok, const QString& error);
+  // Newest first. An empty list with an empty error means the issue has none.
+  void commentsFetched(const QString& externalId, const QVector<ExternalComment>& comments, const QString& error);
 
  protected:
   using QObject::QObject;

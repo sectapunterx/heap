@@ -73,8 +73,9 @@ Item {
         if (!root.showDone && t.status === "done") return false;
         const q = (root.searchText || "").toLowerCase();
         if (q && q.length > 0) {
-            const hay = ((t.title || "") + " " + (t.id || "") + " " + (t.desc || "")).toLowerCase();
-            if (hay.indexOf(q) < 0) return false;
+            // Built once in C++, already lowercased, and covers the ticket key,
+            // labels and assignee as well as title/id/desc (HEAP-117).
+            if (String(t.searchText || "").indexOf(q) < 0) return false;
         }
         let anyPri = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { anyPri = true; break; }
@@ -115,6 +116,9 @@ Item {
                 status:   m.data(idx, Qt.UserRole + 5),
                 deadline: m.data(idx, Qt.UserRole + 6),
                 branch:   m.data(idx, Qt.UserRole + 7),
+                // The one haystack passesFilter() searches (HEAP-117).
+                searchText: m.data(idx, Qt.UserRole + 32),
+                ticket:     m.data(idx, Qt.UserRole + 31),
             };
             if (!root.passesFilter(t)) continue;
             const b = AppController.deadlineBucket(t.deadline);
@@ -400,7 +404,11 @@ Item {
                                                 }
                                             }
                                             Text {
-                                                text: tlRow.t.id
+                                                // A mirrored issue reads by its
+                                                // tracker key (HEAP-117).
+                                                text: (tlRow.t.ticket && tlRow.t.ticket.key)
+                                                      ? tlRow.t.ticket.key : tlRow.t.id
+                                                textFormat: Text.PlainText
                                                 color: Theme.accentStrong
                                                 font.family: Theme.fontMono
                                                 font.pixelSize: 11
@@ -412,6 +420,7 @@ Item {
                                                 Text {
                                                     Layout.fillWidth: true
                                                     text: tlRow.t.title
+                                                    textFormat: Text.PlainText
                                                     color: Theme.text
                                                     font.pixelSize: 13
                                                     font.weight: Font.Medium

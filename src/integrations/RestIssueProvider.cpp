@@ -12,51 +12,6 @@
 
 namespace heap::integrations {
 
-namespace {
-
-// Walk a dot-path ("status.name") through nested JSON objects and return the
-// leaf value. An empty path or a missing key yields an undefined value.
-QJsonValue valueAtPath(const QJsonObject& obj, const QString& path) {
-  if(path.isEmpty()) {
-    return {};
-  }
-  const QStringList parts = path.split('.');
-  QJsonValue cur = obj;
-  for(const QString& part : parts) {
-    if(!cur.isObject()) {
-      return {};
-    }
-    cur = cur.toObject().value(part);
-  }
-  return cur;
-}
-
-// Stringify a leaf: strings pass through, integral numbers lose the ".0", bools
-// become "true"/"false". Objects/arrays/null → empty string.
-QString leafToString(const QJsonValue& v) {
-  if(v.isString()) {
-    return v.toString();
-  }
-  if(v.isBool()) {
-    return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-  }
-  if(v.isDouble()) {
-    const double d = v.toDouble();
-    const auto asLong = static_cast<qlonglong>(d);
-    if(static_cast<double>(asLong) == d) {
-      return QString::number(asLong);
-    }
-    return QString::number(d);
-  }
-  return {};
-}
-
-QString fieldStr(const QJsonObject& obj, const QString& path) {
-  return leafToString(valueAtPath(obj, path));
-}
-
-}  // namespace
-
 QVector<ExternalTask> parseWithFieldMap(const QByteArray& json, const FieldMap& map, const QString& providerId, const QString& baseUrl) {
   QVector<ExternalTask> out;
   const QJsonDocument doc = QJsonDocument::fromJson(json);
@@ -108,25 +63,89 @@ QVector<ExternalTask> parseWithFieldMap(const QByteArray& json, const FieldMap& 
       t.url = fieldStr(o, map.url);
     }
 
-    if(!map.updatedAt.isEmpty()) {
-      t.updatedAt = QDateTime::fromString(fieldStr(o, map.updatedAt), Qt::ISODate);
+    t.updatedAt = parseTrackerTimestamp(valueAtPath(o, map.updatedAt));
+    t.createdAt = parseTrackerTimestamp(valueAtPath(o, map.createdAt));
+    t.dueAt = parseTrackerTimestamp(valueAtPath(o, map.dueAt), &t.dueHasTime);
+    // A provider that answers the question separately (ClickUp's due_date_time)
+    // overrules what the value's own shape suggested.
+    if(!map.dueHasTimeField.isEmpty() && t.dueAt.isValid()) {
+      t.dueHasTime = valueAtPath(o, map.dueHasTimeField).toBool();
+    }
+    t.assignee = fieldStr(o, map.assignee);
+    t.author = fieldStr(o, map.author);
+    t.issueType = fieldStr(o, map.issueType);
+    t.project = sanitizeProject(fieldStr(o, map.project));
+    t.milestone = fieldStr(o, map.milestone);
+    if(!map.commentCount.isEmpty()) {
+      const QJsonValue n = valueAtPath(o, map.commentCount);
+      if(n.isDouble()) {
+        t.commentCount = n.toInt(-1);
+      }
     }
 
     if(!map.labels.isEmpty()) {
       const QJsonArray labels = valueAtPath(o, map.labels).toArray();
       for(const auto& lv : labels) {
         QString name;
+        QString color;
         if(map.labelNameKey.isEmpty()) {
           name = lv.toString();
         } else if(lv.isObject()) {
-          name = lv.toObject().value(map.labelNameKey).toString();
+          const QJsonObject lo = lv.toObject();
+          name = lo.value(map.labelNameKey).toString();
+          if(!map.labelColorKey.isEmpty()) {
+            color = normalizeHexColor(lo.value(map.labelColorKey).toString());
+          }
         }
         if(!name.isEmpty()) {
           t.labels.append(name);
+          if(!color.isEmpty()) {
+            t.labelColors.insert(name, color);
+          }
         }
       }
     }
     out.append(t);
+  }
+  return out;
+}
+
+QVector<ExternalComment> parseCommentsWithMap(const QByteArray& json, const CommentMap& map) {
+  QVector<ExternalComment> out;
+  const QJsonDocument doc = QJsonDocument::fromJson(json);
+
+  QJsonArray arr;
+  if(map.arrayPointer.isEmpty()) {
+    if(!doc.isArray()) {
+      return out;
+    }
+    arr = doc.array();
+  } else {
+    if(!doc.isObject()) {
+      return out;
+    }
+    arr = valueAtPath(doc.object(), map.arrayPointer).toArray();
+  }
+
+  out.reserve(arr.size());
+  for(const auto& v : arr) {
+    if(!v.isObject()) {
+      continue;
+    }
+    const QJsonObject o = v.toObject();
+    // GitLab returns "changed the description" alongside real comments.
+    if(!map.skipIfTrue.isEmpty() && valueAtPath(o, map.skipIfTrue).toBool()) {
+      continue;
+    }
+    ExternalComment c;
+    c.author = fieldStr(o, map.author);
+    c.body = fieldStr(o, map.body);
+    c.createdAt = parseTrackerTimestamp(valueAtPath(o, map.createdAt));
+    c.url = fieldStr(o, map.url);
+    if(c.body.isEmpty()) {
+      continue;
+    }
+    out.append(c);
   }
   return out;
 }
@@ -258,19 +277,59 @@ void RestIssueProvider::pullTasks() {
   }
   const QString base = resolvedBaseUrl();
   const QString url = base + expand(listPath());
+  // Which endpoint this pull went to decides whether the issue numbers coming
+  // back are unique on their own. Captured now, not when the reply lands, so a
+  // repo configured mid-flight cannot mislabel the answer.
+  const bool crossProject = inSelfScope();
   QNetworkReply* reply = m_nam->get(buildRequest(url));
-  connect(reply, &QNetworkReply::finished, this, [this, reply, base]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, base, crossProject]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {
       emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
       return;
     }
     const QByteArray body = reply->readAll();
-    if(m_desc.parser) {
-      emit tasksFetched(m_desc.parser(body, base));
-    } else {
-      emit tasksFetched(parseWithFieldMap(body, m_desc.fields, m_desc.id, base));
+    QVector<ExternalTask> tasks = m_desc.parser ? m_desc.parser(body, base) : parseWithFieldMap(body, m_desc.fields, m_desc.id, base);
+    if(crossProject) {
+      for(ExternalTask& t : tasks) {
+        t.crossProject = true;
+      }
     }
+    emit tasksFetched(tasks);
+  });
+}
+
+void RestIssueProvider::fetchComments(const QString& externalId, const QString& project) {
+  if(m_desc.commentsPathTemplate.isEmpty()) {
+    emit commentsFetched(externalId, {}, QStringLiteral("unsupported"));
+    return;
+  }
+  if(!isConfigured() || externalId.isEmpty()) {
+    emit commentsFetched(externalId, {}, QStringLiteral("not configured"));
+    return;
+  }
+  QVariantMap extra;
+  extra.insert(QStringLiteral("externalId"), externalId);
+  // The issue's own repo, which in a cross-project pull is not the configured
+  // one. expand() prefers `extra` over the config, so this simply wins.
+  if(!project.isEmpty() && !m_desc.scopeKey.isEmpty()) {
+    extra.insert(m_desc.scopeKey, project);
+  }
+  const QString url = resolvedBaseUrl() + expand(m_desc.commentsPathTemplate, extra);
+
+  QNetworkReply* reply = m_nam->get(buildRequest(url));
+  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId]() {
+    reply->deleteLater();
+    if(reply->error() != QNetworkReply::NoError) {
+      emit commentsFetched(externalId, {}, describeReplyError(reply));
+      return;
+    }
+    QVector<ExternalComment> comments = parseCommentsWithMap(reply->readAll(), m_desc.comments);
+    // GitHub and Gitea have no sort parameter and answer oldest-first.
+    if(m_desc.comments.newestLast) {
+      std::reverse(comments.begin(), comments.end());
+    }
+    emit commentsFetched(externalId, comments, QString());
   });
 }
 

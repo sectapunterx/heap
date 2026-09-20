@@ -3,6 +3,9 @@
 #include "integrations/IntegrationProvider.h"
 #include "integrations/IntegrationTypes.h"
 #include "integrations/ProviderDescriptor.h"
+// valueAtPath / fieldStr / parseTrackerTimestamp and friends live in their own
+// header so a bespoke parser can use them without linking the REST engine.
+#include "integrations/TrackerFields.h"
 
 #include <QString>
 #include <QVariantMap>
@@ -41,6 +44,7 @@ class RestIssueProvider : public IntegrationProvider {
   void testConnection() override;
   void pullTasks() override;
   void pushStatusChange(const QString& externalId, const QString& newStatus) override;
+  void fetchComments(const QString& externalId, const QString& project) override;
 
  private:
   // Expand "{key}" / "{key:enc}" placeholders from the config (plus any `extra`
@@ -65,5 +69,9 @@ class RestIssueProvider : public IntegrationProvider {
 // Pure, unit-tested extraction of a list response into ExternalTasks using a
 // declarative FieldMap. `baseUrl` feeds FieldMap::urlTemplate. No network.
 QVector<ExternalTask> parseWithFieldMap(const QByteArray& json, const FieldMap& map, const QString& providerId, const QString& baseUrl);
+
+// The same, for a comment list. Entries whose `skipIfTrue` leaf is true are
+// dropped. No network.
+QVector<ExternalComment> parseCommentsWithMap(const QByteArray& json, const CommentMap& map);
 
 }  // namespace heap::integrations
