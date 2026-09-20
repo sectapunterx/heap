@@ -7,6 +7,7 @@
 
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
+#include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
@@ -167,6 +168,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
+      {"notify.meetingSoon", {"In %1 min", "Через %1 мин"}},
+      {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
        {"Your data file was unreadable — recovered from backup %1", "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
@@ -5751,7 +5754,31 @@ void AppController::runAutomation() {
     }
   }
 
-  // 4. Standup reminder.
+  // 4. Meeting reminders — one per event per day.
+  //
+  // heap had a "minutes before a meeting" setting and exactly one meeting it
+  // applied to: the standup, at a fixed time from settings. Every real event
+  // in the calendar went unannounced, which made the setting read like a
+  // promise the app did not keep.
+  if(notif.value("meetingReminders", true).toBool()) {
+    const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
+    // Which meetings are inside the window is a pure question of the clock and
+    // the events; see src/cal/Reminders.h. Only the once-per-day bookkeeping
+    // is AppController's, because it owns the sentinel map that survives ticks.
+    for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(m_events.items(), now, lead)) {
+      // Keyed by event and day: an event that recurs gets one reminder per
+      // occurrence, and a restart inside the lead window does not repeat it.
+      const QString sentinel = QStringLiteral("ev:%1:%2").arg(due.eventId, today.toString(Qt::ISODate));
+      if(m_lastReminderDay.value(sentinel) == today) {
+        continue;
+      }
+      m_lastReminderDay[sentinel] = today;
+      const QString title = due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(due.minutesLeft);
+      notify(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"));
+    }
+  }
+
+  // 5. Standup reminder.
   if(notif.value("standupReminder", true).toBool()) {
     const QVariantMap cal = s.value("calendar").toMap();
     const QTime standup = QTime::fromString(cal.value("standupTime", "10:00").toString(), "HH:mm");

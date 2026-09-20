@@ -148,7 +148,7 @@ Item {
         },
         notifications: {
             deadlineReminders: true, deadlineLeadHours: 24,
-            standupReminder: true, meetingLead: 5,
+            standupReminder: true, meetingLead: 5, meetingReminders: true,
             mmPingsOnReview: true, blockedDailyDigest: false,
             soundOnPing: false, desktopNotif: true,
             quietHours: true, quietFrom: "19:00", quietTo: "09:00"
@@ -1120,6 +1120,12 @@ Item {
                         unit: "h"; min: 1; max: 72; step: 1
                         value: _num(root.settings.notifications && root.settings.notifications.deadlineLeadHours, 24)
                         onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
+                    }
+                    SwitchRow {
+                        label: I18n.t("settings.notif.meetingReminders")
+                        hint: I18n.t("settings.notif.meetingReminders.hint")
+                        checked: !!(root.settings.notifications && root.settings.notifications.meetingReminders)
+                        onToggled: (checked) => root.set("notifications", "meetingReminders", checked)
                     }
                     SwitchRow {
                         label: I18n.t("settings.notif.standupReminder")
