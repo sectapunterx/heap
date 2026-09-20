@@ -97,9 +97,12 @@ Popup {
             Layout.fillWidth: true
             locale: pop._gridLocale
             delegate: Text {
-                required property var model
                 horizontalAlignment: Text.AlignHCenter
-                // model.day is the JS day-of-week index the column stands for.
+                // model.day is the JS day-of-week index this column stands for.
+                // Read as a context property rather than a `required property`:
+                // declaring one in this inline delegate makes qmlcachegen 6.9.1
+                // — the version CI builds with — segfault while AOT-compiling
+                // every file that instantiates this popup.
                 text: I18n.dayName(model.day)
                 color: Theme.textDim; font.pixelSize: 9; font.weight: Font.DemiBold
             }
