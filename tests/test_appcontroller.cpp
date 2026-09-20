@@ -1011,6 +1011,92 @@ TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
 }
 
 // ─── OAuth token refresh ──────────────────────────────────────────────
+// ─── Open in tracker (HEAP-117) ───
+// The URL is tracker-supplied, and a Jira session that never learned its site
+// yields a bare "/browse/KEY". Only a web address may reach the browser.
+// openTaskExternal itself is never called from a test — it would open one.
+TEST_F(AppControllerTest, ExternalUrlForAcceptsOnlyHttpUrls) {
+  Task https;
+  https.id = QStringLiteral("gh-1");
+  https.externalUrl = QStringLiteral("https://github.com/acme/web/issues/1");
+
+  Task relative;  // Jira with no site configured
+  relative.id = QStringLiteral("jira-1");
+  relative.externalUrl = QStringLiteral("/browse/PROJ-1");
+
+  Task scripted;
+  scripted.id = QStringLiteral("evil-1");
+  scripted.externalUrl = QStringLiteral("javascript:alert(1)");
+
+  Task file;
+  file.id = QStringLiteral("evil-2");
+  file.externalUrl = QStringLiteral("file:///c:/windows/system32/calc.exe");
+
+  Task local;
+  local.id = QStringLiteral("LTE-1");
+
+  app_->tasks()->reset({https, relative, scripted, file, local});
+  EXPECT_EQ(app_->externalUrlFor(QStringLiteral("gh-1")).toString(), https.externalUrl);
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("jira-1")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("evil-1")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("evil-2")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("LTE-1")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("no-such-task")).isEmpty());
+}
+
+TEST_F(AppControllerTest, TheOpenTicketShortcutIsInTheCatalogAndRebindable) {
+  bool found = false;
+  for(const QVariant& v : app_->shortcuts()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() != QStringLiteral("task.openExternal")) {
+      continue;
+    }
+    found = true;
+    EXPECT_EQ(m.value(QStringLiteral("defaultSequence")).toString(), QStringLiteral("O"));
+    EXPECT_FALSE(m.value(QStringLiteral("label")).toString().isEmpty()) << "the shortcut has no translated label";
+    EXPECT_FALSE(m.value(QStringLiteral("description")).toString().isEmpty());
+  }
+  EXPECT_TRUE(found) << "task.openExternal is missing from the shortcut catalog";
+
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.openExternal"), QStringLiteral("Ctrl+Shift+O")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("Ctrl+Shift+O"));
+  app_->resetShortcut(QStringLiteral("task.openExternal"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("O"));
+}
+
+TEST_F(AppControllerTest, ProviderBadgesCoverEveryProviderInTheCatalog) {
+  const QVariantMap badges = app_->providerBadges();
+  for(const QVariant& v : app_->integrationCatalog()) {
+    const QString id = v.toMap().value(QStringLiteral("id")).toString();
+    ASSERT_TRUE(badges.contains(id)) << "no badge for " << id.toStdString();
+    const QVariantMap badge = badges.value(id).toMap();
+    EXPECT_FALSE(badge.value(QStringLiteral("name")).toString().isEmpty());
+    EXPECT_FALSE(badge.value(QStringLiteral("icon")).toString().isEmpty());
+    EXPECT_FALSE(badge.value(QStringLiteral("color")).toString().isEmpty());
+  }
+}
+
+TEST_F(AppControllerTest, ThePaletteFindsAMirroredIssueByItsTrackerKey) {
+  auto issue = ghIssue(QStringLiteral("1234"), QStringLiteral("https://github.com/acme/web/issues/1234"));
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  // The palette searches the persisted profiles, not the live model.
+  app_->flushSave();
+
+  bool found = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("taskId")).toString() != QStringLiteral("github-1234")) {
+      continue;
+    }
+    found = true;
+    const QString haystack = m.value(QStringLiteral("label")).toString() + m.value(QStringLiteral("sub")).toString();
+    EXPECT_TRUE(haystack.contains(QStringLiteral("#1234"))) << haystack.toStdString();
+    EXPECT_TRUE(haystack.contains(QStringLiteral("GitHub"))) << haystack.toStdString();
+  }
+  EXPECT_TRUE(found) << "the pulled issue never reached the palette";
+}
+
 // Moving a card writes the new state back to the tracker. An issue pulled from
 // an "assigned to me" endpoint belongs to some other repo, but the push URL is
 // built from the configured one — the PATCH would close a different issue that

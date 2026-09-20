@@ -82,6 +82,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.moved", {"%1 → %2", "%1 → %2"}},
       {"sync.summary", {"%1: %2 new · %3 updated", "%1: %2 новых · %3 обновлено"}},
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
+      {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
+      {"shortcut.task.openExternal.label", {"Open ticket in browser", "Открыть тикет в браузере"}},
+      {"shortcut.task.openExternal.desc",
+       {"Opens the selected (or hovered) mirrored issue in its tracker.",
+        "Открывает выбранный (или под курсором) синхронизированный тикет в трекере."}},
       {"task.moveUndone", {"Move undone: %1", "Перемещение отменено: %1"}},
       {"task.archived", {"Archived: %1", "В архиве: %1"}},
       {"task.unarchived", {"Unarchived: %1", "Из архива: %1"}},
@@ -2980,6 +2985,48 @@ void AppController::testIntegration(const QString& providerId) {
   provider->testConnection();
 }
 
+QString AppController::providerDisplayName(const QString& providerId) const {
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(d.id == providerId) {
+      return d.displayName;
+    }
+  }
+  return providerId;
+}
+
+QVariantMap AppController::providerBadges() const {
+  QVariantMap out;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    out.insert(d.id,
+               QVariantMap{{QStringLiteral("name"), d.displayName}, {QStringLiteral("icon"), d.icon}, {QStringLiteral("color"), d.color}});
+  }
+  return out;
+}
+
+QUrl AppController::externalUrlFor(const QString& taskId) const {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return {};
+  }
+  const QUrl url(m_tasks.items().at(row).externalUrl);
+  // The URL came from a tracker, and a Jira session that never learned its site
+  // yields a bare "/browse/KEY". Only ever hand the browser a web address.
+  if(!url.isValid() || (url.scheme() != QStringLiteral("https") && url.scheme() != QStringLiteral("http"))) {
+    return {};
+  }
+  return url;
+}
+
+bool AppController::openTaskExternal(const QString& taskId) {
+  const QUrl url = externalUrlFor(taskId);
+  if(url.isEmpty()) {
+    emit toast(tr_("ticket.noLink"));
+    return false;
+  }
+  QDesktopServices::openUrl(url);
+  return true;
+}
+
 QVariantList AppController::integrationCatalog() const {
   QVariantList out;
   for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
@@ -4169,6 +4216,11 @@ QVariantList AppController::commandPaletteEntries() const {
       m["kind"] = "task";
       m["label"] = QString("%1 · %2").arg(t.id, t.title);
       m["sub"] = QString("%1 · %2").arg(p.name, statusName(p.statuses, t.status).toUpper());
+      // A mirrored ticket is looked for by its tracker key ("PROJ-123", "#42"),
+      // which is not its heap id. The palette scores label + sub.
+      if(!t.externalProvider.isEmpty()) {
+        m["sub"] = QString("%1 · %2 %3").arg(m["sub"].toString(), providerDisplayName(t.externalProvider), externalKeyOf(t));
+      }
       m["body"] = cap(t.desc);
       m["profileId"] = p.id;
       m["taskId"] = t.id;
@@ -4442,6 +4494,11 @@ void AppController::seedShortcutCatalog() {
   add("selection.selectAll", "Ctrl+A");
   add("selection.clearSel", "Esc");
   add("selection.deleteSel", "Del");
+  // The first bare letter in the catalog (HEAP-117). Qt gives a focused text
+  // field the ShortcutOverride for an unmodified key, so typing an "o" still
+  // types it; the QML side additionally holds this back while any overlay is
+  // open. Rebindable like everything else here.
+  add("task.openExternal", "O");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;

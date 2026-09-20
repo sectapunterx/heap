@@ -58,6 +58,10 @@ class AppController : public QObject {
   Q_PROPERTY(PersonModel* people READ people CONSTANT)
   Q_PROPERTY(QVariantList statuses READ statuses NOTIFY statusesChanged)
   Q_PROPERTY(QDate today READ today CONSTANT)
+  // provider id → { name, icon, color } for the badge on a mirrored ticket
+  // (HEAP-117). Constant and cheap: a board delegate reads this per card, and
+  // integrationCatalog() rebuilds every provider's field list on each call.
+  Q_PROPERTY(QVariantMap providerBadges READ providerBadges CONSTANT)
 
   Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
   Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
@@ -386,6 +390,19 @@ class AppController : public QObject {
   Q_INVOKABLE void openLatestRelease() const;
 
   // ---- Tracker sync (HEAP-74/75) ----
+  QVariantMap providerBadges() const;
+  // "GitHub" for "github". The id itself when nothing in the catalog matches.
+  QString providerDisplayName(const QString& providerId) const;
+  // The issue URL for a task, or an empty URL when it has none or the tracker
+  // handed over something that is not a web address. Split out from
+  // openTaskExternal so the scheme check is testable without a browser: the
+  // value is tracker-supplied, and a Jira session with no site yields a bare
+  // "/browse/KEY".
+  QUrl externalUrlFor(const QString& taskId) const;
+  // Open a mirrored task's issue in the default browser. False (with a toast)
+  // when the task has no usable issue URL.
+  Q_INVOKABLE bool openTaskExternal(const QString& taskId);
+
   // Pull issues from every connected tracker and mirror them as tasks in the
   // active profile. No-op (with a toast) when no provider is configured.
   Q_INVOKABLE void syncNow();
