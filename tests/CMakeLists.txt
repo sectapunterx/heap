@@ -80,6 +80,21 @@ target_link_libraries(heap_md_tests PRIVATE Qt6::Test)
 target_link_libraries(heap_md_tests PRIVATE heap_markdown GTest::gtest GTest::gtest_main)
 add_test(NAME heap_md_tests COMMAND heap_md_tests)
 
+# Markdown syntax highlighter. Unlike the rest of the markdown engine it is a
+# QML type living in heap_core, so this suite compiles the single TU rather than
+# linking the whole application. Brings its own main() (offscreen QGuiApplication
+# — QTextDocument's layout needs a GUI application object).
+add_executable(heap_md_highlighter_tests
+        test_md_highlighter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/markdown/MdHighlighter.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/markdown/MdHighlighter.h
+)
+set_target_properties(heap_md_highlighter_tests PROPERTIES AUTOMOC ON)
+target_include_directories(heap_md_highlighter_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_md_highlighter_tests PRIVATE
+        Qt6::Core Qt6::Gui Qt6::Qml Qt6::Quick heap_markdown GTest::gtest)
+add_test(NAME heap_md_highlighter_tests COMMAND heap_md_highlighter_tests)
+
 # Structured fuzzing over the same invariant. Cheap in a normal build; its real
 # value is under the sanitizer job, where a bad offset surfaces as an
 # out-of-bounds read instead of a wrong answer.
