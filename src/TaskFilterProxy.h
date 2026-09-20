@@ -39,6 +39,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   Q_PROPERTY(QStringList priorities READ priorities WRITE setPriorities NOTIFY filterChanged)
   // Row count after filtering — what the column header badge shows.
   Q_PROPERTY(int count READ count NOTIFY countChanged)
+  // How the column is ordered. "manual" is the board's own rank, which is what
+  // a drag writes; the others are read-only views over the same cards, so
+  // switching back to manual restores the order the user arranged rather than
+  // whatever the last sort left behind.
+  //   manual | priority | due | updated | title
+  Q_PROPERTY(QString sortMode READ sortMode WRITE setSortMode NOTIFY sortModeChanged)
 
  public:
   explicit TaskFilterProxy(QObject* parent = nullptr);
@@ -71,6 +77,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
 
   void setPriorities(const QStringList& v);
 
+  QString sortMode() const {
+    return m_sortMode;
+  }
+
+  void setSortMode(const QString& v);
+
   int count() const {
     return rowCount();
   }
@@ -78,6 +90,7 @@ class TaskFilterProxy : public QSortFilterProxyModel {
  signals:
   void filterChanged();
   void countChanged();
+  void sortModeChanged();
 
  protected:
   bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
@@ -93,4 +106,5 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   QString m_searchText;            // the free-text remainder, lowercased
   heap::query::TaskQuery m_query;  // compiled once per keystroke
   QStringList m_priorities;
+  QString m_sortMode = QStringLiteral("manual");
 };

@@ -15,10 +15,15 @@ Rectangle {
     property int reviewCount: 0
     property bool showArchived: false
     property string viewLabel: "Board"
+    // Only the board orders its columns; the other views carry their own
+    // ordering, so the control hides rather than lying about what it does.
+    property bool showSort: false
+    property string sortMode: "manual"
 
     signal togglePriority(string p)
     signal clearPriorities()
     signal toggleArchived()
+    signal sortModeRequested(string mode)
 
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -106,6 +111,49 @@ Rectangle {
         }
 
         Item { Layout.fillWidth: true }
+
+        // Sort. Manual is the board's own order — the one a drag writes — so
+        // it is first and is what the board starts on.
+        Text {
+            visible: root.showSort
+            text: I18n.t("filter.sortBy")
+            color: Theme.textDim
+            font.pixelSize: 11
+        }
+        Repeater {
+            model: root.showSort
+                ? [ ({ id: "manual", label: I18n.t("filter.sort.manual") }),
+                    ({ id: "priority", label: I18n.t("filter.sort.priority") }),
+                    ({ id: "due", label: I18n.t("filter.sort.due") }),
+                    ({ id: "updated", label: I18n.t("filter.sort.updated") }),
+                    ({ id: "title", label: I18n.t("filter.sort.title") }) ]
+                : []
+            delegate: Rectangle {
+                required property var modelData
+                objectName: "sort-" + modelData.id
+                readonly property bool active: root.sortMode === modelData.id
+                radius: 999
+                color: active ? Theme.accentSoft : (sortMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                border.color: active ? Theme.accent : (sortMA.containsMouse ? Theme.borderStrong : Theme.border)
+                border.width: 1
+                implicitWidth: sortT.implicitWidth + 16
+                implicitHeight: 24
+                Text {
+                    id: sortT
+                    anchors.centerIn: parent
+                    text: modelData.label
+                    color: parent.active ? Theme.accentStrong : Theme.textMuted
+                    font.pixelSize: 12
+                }
+                MouseArea {
+                    id: sortMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: root.sortModeRequested(modelData.id)
+                }
+            }
+        }
 
         Rectangle {
             objectName: "archived-toggle"

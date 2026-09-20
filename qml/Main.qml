@@ -115,6 +115,10 @@ ApplicationWindow {
     property var prioritiesFilter: ({})
     property bool showDoneTimeline: false
     property bool showArchived: false
+    // Board column order. Lives on the window so it survives the board being
+    // hidden, and so the filter bar and the board agree without either owning
+    // the other.
+    property string boardSortMode: "manual"
 
     // Reactive task / status counts. statusCounts is one pass over the model,
     // recomputed when the model changes; these used to be four separate full
@@ -371,6 +375,9 @@ ApplicationWindow {
                     blockedCount: win._blockedCount
                     reviewCount: win._reviewCount
                     showArchived: win.showArchived
+                    showSort: AppController.currentView === "board"
+                    sortMode: win.boardSortMode
+                    onSortModeRequested: (mode) => win.boardSortMode = mode
                     onTogglePriority: (p) => {
                         const next = Object.assign({}, win.prioritiesFilter);
                         next[p] = !next[p];
@@ -453,6 +460,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
                         showArchived: win.showArchived
+                        sortMode: win.boardSortMode
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
                     }

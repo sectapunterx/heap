@@ -8,6 +8,11 @@ import TodoCpp
 Item {
     id: root
     property string searchText: ""
+    // How every column is ordered. "manual" is the board's own rank, which is
+    // what a drag writes; the others are read-only views over the same cards,
+    // so switching back to manual restores the order the user arranged rather
+    // than whatever the last sort left behind.
+    property string sortMode: "manual"
     property var prioritiesFilter: ({})
     property var scheduleMap: ({})
     property bool showArchived: false
@@ -695,11 +700,15 @@ Item {
                                     col.dragOver = false;
                                     const src = drop.source;
                                     if (!src || !src.taskId) return;
+                                    // Under a sort, a drop still changes the
+                                    // column — it just cannot choose where in
+                                    // it the card lands.
+                                    const target = root.sortMode === "manual" ? colDrop.beforeId : "";
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
-                                        AppController.moveSelectedTasksTo(col.statusId, colDrop.beforeId);
+                                        AppController.moveSelectedTasksTo(col.statusId, target);
                                     } else {
-                                        AppController.moveTaskTo(src.taskId, col.statusId, colDrop.beforeId);
+                                        AppController.moveTaskTo(src.taskId, col.statusId, target);
                                     }
                                     drop.accept(Qt.MoveAction);
                                 }
@@ -710,7 +719,9 @@ Item {
                             // shift them while the pointer moves.
                             Rectangle {
                                 objectName: "drop-indicator"
-                                visible: col.dragOver
+                                // A drop cannot choose a position while a sort
+                                // is deciding it, so the line would be a lie.
+                                visible: col.dragOver && root.sortMode === "manual"
                                 x: 10
                                 width: parent.width - 20
                                 height: 2
@@ -745,6 +756,7 @@ Item {
                         showArchived: root.showArchived
                         searchText: root.searchText
                         priorities: root.activePriorities
+                        sortMode: root.sortMode
                     }
                 }
             }
