@@ -857,8 +857,12 @@ class AppController : public QObject {
     ::Task coDeletedTask;
     int coDeletedTaskRow = -1;
     bool hadCoDeletedTask = false;
-    // when a status is deleted, tasks get re-homed — record what to restore
+    // when a status is deleted, tasks get re-homed — record what to restore.
+    // The timestamp goes with it: statusChangedAt drives the "stuck in this
+    // column" badge, so restoring a task with a fresh stamp would quietly
+    // reset how long it has been sitting there.
     QVector<QPair<QString, QString>> reHomedTasks;  // (taskId, originalStatusId)
+    QVector<QDateTime> reHomedStamps;               // statusChangedAt, parallel to reHomedTasks
   };
 
   PendingUndo m_pendingUndo;

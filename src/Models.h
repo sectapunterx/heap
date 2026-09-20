@@ -223,7 +223,11 @@ class TaskModel : public QAbstractListModel {
   }
 
   int indexOfId(const QString& id) const;
-  void setStatus(const QString& id, const QString& status);
+  // Moves a task to `status`. statusChangedAt is stamped with the current time
+  // unless `changedAt` is given — undo passes the original back so restoring a
+  // task does not look like a fresh move (the "stuck in this column" badge is
+  // computed from that timestamp).
+  void setStatus(const QString& id, const QString& status, const QDateTime& changedAt = {});
   void upsert(const Task& t);
   void insertAt(int row, const Task& t);
   void removeById(const QString& id);

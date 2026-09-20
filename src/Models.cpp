@@ -264,13 +264,13 @@ int TaskModel::indexOfId(const QString& id) const {
   return m_index.value(id, -1);
 }
 
-void TaskModel::setStatus(const QString& id, const QString& status) {
+void TaskModel::setStatus(const QString& id, const QString& status, const QDateTime& changedAt) {
   const int row = indexOfId(id);
   if(row < 0 || m_items[row].status == status) {
     return;
   }
   m_items[row].status = status;
-  m_items[row].statusChangedAt = QDateTime::currentDateTime();
+  m_items[row].statusChangedAt = changedAt.isValid() ? changedAt : QDateTime::currentDateTime();
   const QModelIndex mi = index(row, 0);
   emit dataChanged(mi, mi, {StatusRole, StatusChangedAtRole});
 }
