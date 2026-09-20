@@ -615,13 +615,17 @@ Item {
         // Dimmed backdrop so the board stays visible behind the dialog.
         Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
 
-        readonly property var palette: [
+        // Not `palette`: that is QQuickPopup's own property, which every
+        // Control inside the popup resolves its colours through. Shadowing it
+        // with an array of hex strings hands those controls an array where
+        // they expect a palette.
+        readonly property var swatches: [
             "#5cc2dd", "#8a8e98", "#9aa3b4", "#5aa9e6", "#dcb86b",
             "#e6624c", "#c07acf", "#6ec18a", "#6cc4b8", "#7da8d9"
         ]
-        property color picked: palette[0]
+        property color picked: swatches[0]
 
-        function reset() { nameField.text = ""; picked = palette[0] }
+        function reset() { nameField.text = ""; picked = swatches[0] }
         onOpened: { reset(); nameField.forceActiveFocus() }
 
         contentItem: ColumnLayout {
@@ -649,7 +653,7 @@ Item {
                 Layout.leftMargin: 18; Layout.rightMargin: 18
                 spacing: 6
                 Repeater {
-                    model: addColumnPopup.palette
+                    model: addColumnPopup.swatches
                     delegate: Rectangle {
                         required property string modelData
                         width: 24; height: 24; radius: 12
@@ -695,7 +699,7 @@ Item {
         background: Rectangle { radius: 10; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
         property string forStatusId: ""
 
-        readonly property var palette: addColumnPopup.palette
+        readonly property var swatches: addColumnPopup.swatches
 
         function openFor(id, currentColor, anchorItem) {
             const sameSwatch = colorPopup.opened && colorPopup.forStatusId === id;
@@ -717,7 +721,7 @@ Item {
             columns: 5
             spacing: 6
             Repeater {
-                model: colorPopup.palette
+                model: colorPopup.swatches
                 delegate: Rectangle {
                     required property string modelData
                     width: 22; height: 22; radius: 11

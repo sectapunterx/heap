@@ -26,7 +26,7 @@ TestCase {
     }
 
     // Smoke: the popup instantiates standalone against the live module, with
-    // the documented defaults and the fixed state/palette catalogues.
+    // the documented defaults and the fixed state/swatch catalogues.
     function test_smoke_load() {
         const pe = make('import TodoCpp; PersonEditor { }');
         compare(pe.isNew, false);
@@ -38,8 +38,19 @@ TestCase {
         compare(pe.states[1], "todo");
         compare(pe.states[2], "pinged");
         compare(pe.states[3], "replied");
-        compare(pe.palette.length, 8);
-        compare(pe.palette[0], "#d97a6c");
+        compare(pe.swatches.length, 8);
+        compare(pe.swatches[0], "#d97a6c");
+    }
+
+    // The swatch list used to be called `palette`, which is QQuickPopup's own
+    // property — the one every Control inside the dialog resolves its colours
+    // through. Shadowing it handed those controls an array of hex strings where
+    // they expect a palette, so `palette.text` came back undefined.
+    function test_palette_belongs_to_the_control_not_to_the_swatches() {
+        const pe = make('import TodoCpp; PersonEditor { }');
+        verify(pe.swatches.length > 0, "the swatches must still be reachable");
+        compare(pe.palette.length, undefined, "palette must not be an array");
+        verify(pe.palette.text !== undefined, "and must still be a usable palette");
     }
 
     // showFor(new draft): flags isNew, keeps the id auto-derived from the name

@@ -16,7 +16,11 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
 
-    readonly property var palette: [
+    // Not `palette`: that is QQuickPopup's own property, which every
+    // Control inside this dialog resolves its colours through. Shadowing
+    // it with an array of hex strings hands those controls an array where
+    // they expect a palette.
+    readonly property var swatches: [
         "#5cc2dd", "#6cc4b8", "#7cc492", "#dcb86b",
         "#e6984c", "#c07acf", "#7da8d9", "#e6624c"
     ]
@@ -37,10 +41,10 @@ Popup {
     function showRename(id, name, color) {
         mode = "rename"; profileId = id;
         nameField.text = name;
-        const cur = String(color || palette[0]).toLowerCase();
+        const cur = String(color || swatches[0]).toLowerCase();
         let i = 0;
-        for (let k = 0; k < palette.length; k++)
-            if (palette[k].toLowerCase() === cur) { i = k; break; }
+        for (let k = 0; k < swatches.length; k++)
+            if (swatches[k].toLowerCase() === cur) { i = k; break; }
         colorSwatch.selectedIndex = i;
         open();
         Qt.callLater(function () { nameField.forceActiveFocus(); nameField.selectAll() });
@@ -49,10 +53,10 @@ Popup {
     function showDuplicate(id, sourceName, sourceColor) {
         mode = "duplicate"; profileId = id;
         nameField.text = sourceName + " copy";
-        const cur = String(sourceColor || palette[0]).toLowerCase();
+        const cur = String(sourceColor || swatches[0]).toLowerCase();
         let i = 0;
-        for (let k = 0; k < palette.length; k++)
-            if (palette[k].toLowerCase() === cur) { i = k; break; }
+        for (let k = 0; k < swatches.length; k++)
+            if (swatches[k].toLowerCase() === cur) { i = k; break; }
         colorSwatch.selectedIndex = i;
         open();
         Qt.callLater(function () { nameField.forceActiveFocus(); nameField.selectAll() });
@@ -106,7 +110,7 @@ Popup {
             property int selectedIndex: 0
             spacing: 6
             Repeater {
-                model: root.palette
+                model: root.swatches
                 delegate: Rectangle {
                     required property string modelData
                     required property int index
@@ -137,7 +141,7 @@ Popup {
                 function activate() {
                     const name = nameField.text.trim();
                     if (name.length === 0) return;
-                    const color = root.palette[colorSwatch.selectedIndex];
+                    const color = root.swatches[colorSwatch.selectedIndex];
                     if (root.mode === "create") {
                         AppController.createProfile(name, color);
                     } else if (root.mode === "rename") {
