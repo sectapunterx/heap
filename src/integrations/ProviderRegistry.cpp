@@ -58,11 +58,36 @@ OAuthConfig confidentialOAuth(
   return o;
 }
 
+// A provider that accepts a public client: PKCE stands in for the secret, so
+// there is nothing confidential to ship. The client ID is public by design —
+// it travels in every authorize URL the user's browser sends — so it is
+// committed in OAuthClients.h rather than injected from CI, and browser
+// sign-in therefore works in a local build and in a fork, not only in a
+// release made with the CI credentials.
+OAuthConfig publicOAuth(const char* clientId, QString authUrl, QString tokenUrl, QString scope, TokenStyle style) {
+  OAuthConfig o;
+  o.supported = true;
+  o.authUrl = std::move(authUrl);
+  o.tokenUrl = std::move(tokenUrl);
+  o.scope = std::move(scope);
+  o.usePkce = true;
+  o.needsSecret = false;
+  o.tokenStyle = style;
+  o.clientId = QString::fromLatin1(clientId);
+  return o;
+}
+
 // The pair of Advanced fields a provider needs when its OAuth app is
 // registered by the user rather than shipped with the build.
 QVector<FieldSpec> oauthAppFields() {
   return {plain(QStringLiteral("clientId"), QStringLiteral("OAuth client ID"), QStringLiteral("for browser sign-in"), true),
           secret(QStringLiteral("clientSecret"), QStringLiteral("OAuth client secret"))};
+}
+
+// The same, for a public client: offering a secret field there would ask for
+// something the provider does not have and will not accept.
+QVector<FieldSpec> publicOAuthAppFields() {
+  return {plain(QStringLiteral("clientId"), QStringLiteral("OAuth client ID"), QStringLiteral("for browser sign-in"), true)};
 }
 
 ProviderDescriptor github() {
@@ -340,9 +365,9 @@ ProviderDescriptor sentry() {
   d.uiFields = {secret(QStringLiteral("token"), QStringLiteral("Auth token")),
                 plain(QStringLiteral("org"), QStringLiteral("Org slug"), QStringLiteral("acme")),
                 plain(QStringLiteral("project"), QStringLiteral("Project slug"), QStringLiteral("backend"))};
-  d.uiFields += oauthAppFields();
+  d.uiFields += publicOAuthAppFields();
   d.requiredKeys = {QStringLiteral("token"), QStringLiteral("org"), QStringLiteral("project")};
-  d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
+  d.secretKeys = {QStringLiteral("token")};
   d.baseUrlTemplate = QStringLiteral("https://sentry.io");
   d.auth.kind = AuthKind::HeaderToken;
   d.auth.tokenPrefix = "Bearer ";
@@ -354,12 +379,15 @@ ProviderDescriptor sentry() {
   d.fields.status = QStringLiteral("status");
   d.fields.url = QStringLiteral("permalink");
   d.fields.updatedAt = QStringLiteral("lastSeen");
-  d.oauth = confidentialOAuth(HEAP_OAUTH_SENTRY_CLIENT_ID,
-                              HEAP_OAUTH_SENTRY_CLIENT_SECRET,
-                              QStringLiteral("https://sentry.io/oauth/authorize/"),
-                              QStringLiteral("https://sentry.io/oauth/token/"),
-                              QStringLiteral("org:read project:read event:read"),
-                              TokenStyle::FormBody);
+  // Sentry accepts a public client: no secret, PKCE instead. Its access token
+  // lives 30 days and the refresh token rotates on every use with no grace
+  // period — spend the same one twice and the grant is gone — so refreshes are
+  // serialised per provider (AppController::m_refreshing).
+  d.oauth = publicOAuth(HEAP_OAUTH_SENTRY_CLIENT_ID,
+                        QStringLiteral("https://sentry.io/oauth/authorize/"),
+                        QStringLiteral("https://sentry.io/oauth/token/"),
+                        QStringLiteral("org:read project:read event:read"),
+                        TokenStyle::FormBody);
   return d;  // pull-only
 }
 
