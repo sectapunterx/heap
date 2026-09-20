@@ -501,6 +501,123 @@ QVariant EventModel::data(const QModelIndex& idx, int role) const {
   return {};
 }
 
+// ───────────────── DocPageModel ─────────────────
+
+QHash<int, QByteArray> DocPageModel::roleNames() const {
+  return {
+      {IdRole, "id"},
+      {ParentIdRole, "parentId"},
+      {TitleRole, "title"},
+      {RankRole, "rank"},
+      {CreatedRole, "created"},
+      {UpdatedRole, "updated"},
+      {ExcerptRole, "excerpt"},
+  };
+}
+
+int DocPageModel::roleOf(const QString& name) const {
+  const QByteArray needle = name.toUtf8();
+  const QHash<int, QByteArray> names = roleNames();
+  for(auto it = names.constBegin(); it != names.constEnd(); ++it) {
+    if(it.value() == needle) {
+      return it.key();
+    }
+  }
+  return -1;
+}
+
+namespace {
+
+// The first line that is not the page's own title and not markdown
+// punctuation, so a tree row says something the heading does not.
+QString pageExcerpt(const DocPage& p) {
+  for(const QString& raw : p.body.split(QLatin1Char('\n'))) {
+    QString line = raw.trimmed();
+    if(line.isEmpty()) {
+      continue;
+    }
+    while(line.startsWith(QLatin1Char('#')) || line.startsWith(QLatin1Char('>'))) {
+      line = line.mid(1).trimmed();
+    }
+    if(line.isEmpty() || line == p.title) {
+      continue;
+    }
+    return line.left(120);
+  }
+  return {};
+}
+
+}  // namespace
+
+QVariant DocPageModel::data(const QModelIndex& idx, int role) const {
+  if(!idx.isValid() || idx.row() < 0 || idx.row() >= m_items.size()) {
+    return {};
+  }
+  const DocPage& p = m_items[idx.row()];
+  switch(role) {
+    case IdRole:
+      return p.id;
+    case ParentIdRole:
+      return p.parentId;
+    case TitleRole:
+      return p.title;
+    case RankRole:
+      return p.rank;
+    case CreatedRole:
+      return p.created;
+    case UpdatedRole:
+      return p.updated;
+    case ExcerptRole:
+      return pageExcerpt(p);
+  }
+  return {};
+}
+
+void DocPageModel::reset(QVector<DocPage> items) {
+  beginResetModel();
+  m_items = std::move(items);
+  endResetModel();
+}
+
+int DocPageModel::indexOfId(const QString& id) const {
+  for(int i = 0; i < m_items.size(); ++i) {
+    if(m_items[i].id == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void DocPageModel::upsert(const DocPage& p) {
+  const int row = indexOfId(p.id);
+  if(row >= 0) {
+    m_items[row] = p;
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi);
+  } else {
+    beginInsertRows({}, m_items.size(), m_items.size());
+    m_items.push_back(p);
+    endInsertRows();
+  }
+}
+
+void DocPageModel::insertAt(int row, const DocPage& p) {
+  row = qBound(0, row, static_cast<int>(m_items.size()));
+  beginInsertRows({}, row, row);
+  m_items.insert(row, p);
+  endInsertRows();
+}
+
+void DocPageModel::removeById(const QString& id) {
+  const int row = indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  beginRemoveRows({}, row, row);
+  m_items.removeAt(row);
+  endRemoveRows();
+}
+
 // ───────────────── NoteModel ─────────────────
 
 QHash<int, QByteArray> NoteModel::roleNames() const {

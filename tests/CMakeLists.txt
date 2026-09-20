@@ -379,6 +379,9 @@ heap_add_appcontroller_test(heap_meeting_reminders_tests test_meeting_reminders.
 # ─── Editing and deleting a repeating event ───
 heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 
+# ─── Docs as a tree of pages ───
+heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
+
 # ─── Notes (Quick-capture appendNoteEntry) tests ───
 # Cover AppController::appendNoteEntry — the C++ side of the Ctrl+Shift+N
 # popup: empty-input guard, first-entry vs subsequent-entry formatting,

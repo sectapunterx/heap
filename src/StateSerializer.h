@@ -19,7 +19,7 @@ namespace heap::state {
 //   v3  events hoisted to the top level
 //   v4  Task.deadline (QDate) split into scheduledAt/dueAt (QDateTime) + hasTime
 //   v5  Task.rank — manual order within a status column
-inline constexpr int kSchemaVersion = 8;
+inline constexpr int kSchemaVersion = 9;
 
 // Gap between consecutive ranks handed out by the v4→v5 migration and by
 // "add to the end". Large enough that a long run of midpoint inserts between
@@ -40,6 +40,11 @@ QJsonObject noteToJson(const Note& n);
 Note noteFromJson(const QJsonObject& o);
 QJsonArray notesToJson(const QVector<Note>& xs);
 QVector<Note> notesFromJson(const QJsonArray& a);
+
+QJsonObject docPageToJson(const DocPage& p);
+DocPage docPageFromJson(const QJsonObject& o);
+QJsonArray docPagesToJson(const QVector<DocPage>& xs);
+QVector<DocPage> docPagesFromJson(const QJsonArray& a);
 
 QJsonArray peopleToJson(const QVector<Person>& xs);
 QVector<Person> peopleFromJson(const QJsonArray& a);
