@@ -2,6 +2,8 @@
 
 #include "Models.h"
 
+#include "undo/UndoStack.h"
+
 #include <QDate>
 #include <QHash>
 #include <QMap>
@@ -83,6 +85,7 @@ class AppController : public QObject {
   Q_PROPERTY(QString notesState READ notesState WRITE setNotesState NOTIFY notesStateChanged)
   Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
   Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
+  Q_PROPERTY(bool canRedo READ canRedo NOTIFY pendingUndoChanged)
 
   // ---- Onboarding (first run) ----
   // welcomeSeen: the welcome dialog has been shown/dismissed at least once.
@@ -245,8 +248,14 @@ class AppController : public QObject {
 
   void setAppSettingsJson(const QString& v);
 
+  // Kept under the old name because QML and the toast bind to it; it now means
+  // "the undo stack is not empty" rather than "a five-second slot is armed".
   bool hasPendingUndo() const {
-    return m_pendingUndo.kind != PendingUndo::None;
+    return m_undo.canUndo();
+  }
+
+  bool canRedo() const {
+    return m_undo.canRedo();
   }
 
   // ---- Onboarding ----
@@ -625,8 +634,21 @@ class AppController : public QObject {
   Q_INVOKABLE void resetAllShortcuts();
 
   // ---- Undo ----
-  Q_INVOKABLE void undoLastDeletion();
+  // Undo/redo the last recorded operation. undoLastDeletion() is the old name,
+  // kept because QML and several tests call it.
+  Q_INVOKABLE void undo();
+  Q_INVOKABLE void redo();
+
+  Q_INVOKABLE void undoLastDeletion() {
+    undo();
+  }
+
   Q_INVOKABLE void clearPendingUndo();
+
+  // How many operations are currently undoable. Exposed for tests.
+  Q_INVOKABLE int undoDepth() const {
+    return m_undo.depth();
+  }
 
   // ---- Git focus / watcher ----
   QString focusedTaskId() const {
@@ -833,46 +855,53 @@ class AppController : public QObject {
   bool m_saveBlocked = false;
   int statusIndexOf(const QString& id) const;
 
-  // Undo machinery
-  struct PendingUndo {
-    enum Kind { None, Task, BulkTasks, Event, Person, Status, Profile, TaskMove, TaskArchive } kind = None;
+  // ---- Undo/redo ----
+  // The stack records what an operation changed (see src/undo/UndoStack.h)
+  // rather than each mutator describing itself, which is why bulk move and
+  // bulk archive are undoable now without either of them knowing about undo.
+  heap::undo::UndoStack m_undo;
 
-    // payload — only the field matching `kind` is populated
-    ::Task task;
-    ::CalEvent event;
-    ::Person person;
-    QVariantMap status;
-    ::Profile profile;
-    int row = -1;
-    // TaskMove / TaskArchive — the single task and the value to restore.
-    QString taskId;
-    QString prevStatus;
-    bool prevArchived = false;
-    // Bulk-task delete — every task and its original row index. Ordered
-    // by ascending row so re-insertion in the same order is safe.
-    QVector<::Task> tasks;
-    QVector<int> rows;
-    // when a task (or bulk selection) is deleted, its linked calendar events
-    // are removed with it — record (originalRow, event) in ascending row order
-    // so undo re-inserts each block where it was.
-    QVector<QPair<int, ::CalEvent>> removedEvents;
-    // when a "sync" event is deleted, the task it mirrors is removed too —
-    // record it so undo brings both halves back.
-    ::Task coDeletedTask;
-    int coDeletedTaskRow = -1;
-    bool hadCoDeletedTask = false;
-    // when a status is deleted, tasks get re-homed — record what to restore.
-    // The timestamp goes with it: statusChangedAt drives the "stuck in this
-    // column" badge, so restoring a task with a fresh stamp would quietly
-    // reset how long it has been sitting there.
-    QVector<QPair<QString, QString>> reHomedTasks;  // (taskId, originalStatusId)
-    QVector<QDateTime> reHomedStamps;               // statusChangedAt, parallel to reHomedTasks
+  // Snapshots the collections on construction and pushes the diff on
+  // destruction. Declaring one at the top of a mutator is the whole contract:
+  //
+  //   UndoScope scope(this, tr_("task.deleted").arg(id));
+  //
+  // An operation that changes nothing pushes nothing, so a no-op move or a
+  // guard that returns early leaves the stack alone.
+  class UndoScope {
+   public:
+    UndoScope(AppController* owner, QString label);
+    ~UndoScope();
+    UndoScope(const UndoScope&) = delete;
+    UndoScope& operator=(const UndoScope&) = delete;
+    UndoScope(UndoScope&&) = delete;
+    UndoScope& operator=(UndoScope&&) = delete;
+
+    // Abandon the recording — used where the operation replaces the whole
+    // workspace and a per-element diff would be meaningless.
+    void abandon() {
+      m_armed = false;
+    }
+
+    // Several mutators only know what to call the operation part-way through
+    // (the column a card landed in, how many tasks a bulk action touched).
+    void setLabel(QString label) {
+      m_label = std::move(label);
+    }
+
+   private:
+    AppController* m_owner;
+    QString m_label;
+    bool m_armed = true;
+    QVector<::Task> m_tasks;
+    QVector<::CalEvent> m_events;
+    QVector<::Person> m_people;
+    QVariantList m_statuses;
   };
 
-  PendingUndo m_pendingUndo;
-  QTimer* m_undoTimer = nullptr;
-  void armUndo(int seconds);
-  void cancelUndo();
+  // Applies one recorded entry in either direction and refreshes what the UI
+  // derives from the models.
+  void applyUndoEntry(const heap::undo::Entry& entry, bool backward);
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

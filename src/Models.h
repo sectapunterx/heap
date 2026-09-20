@@ -142,6 +142,8 @@ struct Person {
   QString question;
   QString state;  // todo/pinged/replied
   QColor color;
+
+  bool operator==(const Person&) const = default;
 };
 
 // One profile = one feature workspace: its own tasks, people,
