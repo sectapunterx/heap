@@ -411,6 +411,23 @@ Item {
             Layout.fillHeight: true
             spacing: 0
 
+            // Which notes there are, and which one is open. Folds away on a
+            // narrow window, where the editor needs the width more.
+            NotesListPane {
+                id: notesList
+                objectName: "notes-list-pane"
+                visible: root.width > 820
+                Layout.preferredWidth: visible ? 240 : 0
+                Layout.fillHeight: true
+                onNoteActivated: (id) => {
+                    // Flush first: the editor debounces its saves, so the last
+                    // keystrokes are still only in the text field here and
+                    // switching would drop them.
+                    root._flushPending();
+                    AppController.activeNoteId = id;
+                }
+            }
+
             // Editor pane — visible in edit + split modes.
             Flickable {
                 id: notesScroll
