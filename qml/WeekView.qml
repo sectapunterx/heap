@@ -15,6 +15,8 @@ Item {
     signal taskClicked(string id)
     signal eventClicked(string id)
     signal dayClicked(date d)
+    // An empty slot was clicked: the shell opens the event editor there.
+    signal createRequested(real hour, date day)
 
     // Shift-click anchor + day for range select. Shift across days falls back
     // to single-toggle since the visible-chip order isn't a single flat list.
@@ -78,8 +80,16 @@ Item {
         AppController.setSelectedTaskIds(merged);
     }
 
-    readonly property int hoursStart: AppController.workdayStart
-    readonly property int hoursEnd:   AppController.workdayEnd
+    // The whole day, like the day grid. Clipping to workdayStart..workdayEnd
+    // did not merely de-emphasise the rest — an 07:00 standup or a 21:00 call
+    // was laid out off-grid and could not be reached at all.
+    readonly property int hoursStart: 0
+    readonly property int hoursEnd:   24
+    readonly property int workStart:  AppController.workdayStart
+    readonly property int workEnd:    AppController.workdayEnd
+
+    property date now: new Date()
+    Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
     readonly property int hourH: 38
     // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
     // date regardless of which day the week starts on. Names come from the app
@@ -590,6 +600,20 @@ Item {
                                 Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.border }
                             }
 
+                            // Outside the working day. Dimmed, not missing.
+                            Repeater {
+                                model: root.hoursEnd - root.hoursStart
+                                Rectangle {
+                                    required property int index
+                                    visible: index < root.workStart || index >= root.workEnd
+                                    anchors.left: parent.left; anchors.right: parent.right
+                                    y: index * root.hourH
+                                    height: root.hourH
+                                    color: Theme.bg2
+                                    opacity: 0.55
+                                }
+                            }
+
                             // Hour separators
                             Repeater {
                                 model: root.hoursEnd - root.hoursStart
@@ -603,6 +627,62 @@ Item {
                                 }
                             }
 
+                            // Drop a card from the board onto an hour to
+                            // time-block it. The day grid had this; the week
+                            // is where a week's worth of planning happens.
+                            DropArea {
+                                objectName: "week-drop-" + dayCol.index
+                                anchors.fill: parent
+                                property real hoverY: -1
+                                onPositionChanged: (drag) => hoverY = drag.y
+                                onExited: hoverY = -1
+                                onDropped: (drop) => {
+                                    hoverY = -1;
+                                    const src = drop.source;
+                                    if (!src || !src.taskId) return;
+                                    AppController.scheduleTask(String(src.taskId),
+                                                               root.clampHour(root.snapHour(root.yToHour(drop.y))),
+                                                               dayCol.modelData.date);
+                                    drop.accept(Qt.MoveAction);
+                                }
+                                Rectangle {
+                                    visible: parent.hoverY >= 0
+                                    x: 2; width: parent.width - 4
+                                    y: parent.hoverY - 1
+                                    height: 2
+                                    radius: 1
+                                    color: Theme.accent
+                                }
+                            }
+
+                            // Click an empty slot to add something there. It
+                            // opens the editor rather than saving an untitled
+                            // event, so the user names it before it exists.
+                            MouseArea {
+                                anchors.fill: parent
+                                z: -1
+                                acceptedButtons: Qt.LeftButton
+                                onClicked: (mouse) => {
+                                    const h = root.clampHour(root.snapHour(root.yToHour(mouse.y)));
+                                    root.createRequested(h, dayCol.modelData.date);
+                                }
+                            }
+
+                            // Where the day is now. Only on today, and only
+                            // the column it belongs to.
+                            Rectangle {
+                                visible: dayCol.isToday
+                                anchors.left: parent.left; anchors.right: parent.right
+                                y: (root.now.getHours() + root.now.getMinutes() / 60 - root.hoursStart) * root.hourH
+                                height: 2
+                                color: Theme.p0
+                                z: 9
+                                Rectangle {
+                                    x: -3; y: -2
+                                    width: 6; height: 6; radius: 3
+                                    color: Theme.p0
+                                }
+                            }
                         }
                     }
 

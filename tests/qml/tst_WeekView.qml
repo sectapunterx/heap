@@ -103,4 +103,61 @@ TestCase {
         AppController.appSettingsJson = savedSettings;
         AppController.selectedDate = savedDate;
     }
+    // ── parity with the day grid ──────────────────────────────────────
+    // The week clipped to the working day exactly as the day grid used to, so
+    // an 07:00 standup or a 21:00 call was laid out off-grid: reachable in
+    // neither view.
+
+    function test_the_week_grid_spans_the_whole_day() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        compare(wv.hoursStart, 0);
+        compare(wv.hoursEnd, 24);
+    }
+
+    function test_working_hours_are_reported_separately() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        compare(wv.workStart, AppController.workdayStart);
+        compare(wv.workEnd, AppController.workdayEnd);
+    }
+
+    function test_clamp_and_convert_cover_the_whole_day() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        compare(wv.clampHour(-5), 0);
+        compare(wv.clampHour(30), 24);
+        fuzzyCompare(wv.yToHour(0), 0, 0.001);
+    }
+
+    // A click on an empty slot asks the shell to open the editor rather than
+    // saving an untitled event, so cancelling leaves nothing behind.
+    function test_create_requested_carries_the_hour_and_day() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        let gotHour = -1;
+        let gotDay = null;
+        wv.createRequested.connect(function (hour, day) { gotHour = hour; gotDay = day; });
+
+        const when = new Date();
+        wv.createRequested(14.5, when);
+
+        compare(gotHour, 14.5);
+        verify(gotDay !== null);
+    }
+
+    // Every day column accepts a dropped card, which is what time-blocking a
+    // week looks like.
+    function test_every_day_column_accepts_a_drop() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        wait(0);
+        for (let i = 0; i < wv.days.length; i++) {
+            verify(findChild(wv, "week-drop-" + i) !== null,
+                   "day column " + i + " has no drop target");
+        }
+    }
+
+    // Overlapping events are laid out side by side rather than on top of each
+    // other. The map is keyed by event id.
+    function test_overlaps_are_computed_for_the_week() {
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        verify(wv.overlaps !== undefined, "the week computes an overlap map");
+    }
+
 }

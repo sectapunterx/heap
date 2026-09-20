@@ -485,6 +485,13 @@ ApplicationWindow {
                         showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onEventClicked: (id) => eventEditor.showForId(id)
+                        // A click on an empty slot opens the editor on a draft
+                        // rather than saving an untitled event: the user names
+                        // it before it exists.
+                        onCreateRequested: (hour, day) => {
+                            const draft = AppController.newEventDraft(hour, day);
+                            eventEditor.showForDraft(draft);
+                        }
                     }
                 }
                 Component {
