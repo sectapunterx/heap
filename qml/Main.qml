@@ -976,6 +976,39 @@ ApplicationWindow {
     //
     // The catalog holds the vim letter so it can be rebound; the arrow key is
     // a fixed alias alongside it, the way Ctrl+P aliases the palette.
+    // A calendar view is week or month; the day panel follows the same selected
+    // date, so moving it moves everything that is on screen.
+    component CalKey: Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+            && (AppController.currentView === "week" || AppController.currentView === "month")
+    }
+
+    CalKey {
+        sequences: [_kbd("cal.today")]
+        onActivated: AppController.selectedDate = AppController.today
+    }
+    CalKey {
+        sequences: [_kbd("cal.prev")]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(-1); }
+    }
+    CalKey {
+        sequences: [_kbd("cal.next")]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
+    }
+    CalKey {
+        sequences: [_kbd("cal.goToDate")]
+        onActivated: goToDatePopup.openAt(AppController.selectedDate, win.contentItem)
+    }
+
+    // Jump straight to a day rather than paging to it. Anchored to the window
+    // rather than to a view, because the view under it is swapped out.
+    DatePickerPopup {
+        id: goToDatePopup
+        objectName: "go-to-date"
+        onPicked: (value) => AppController.selectedDate = value
+    }
+
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen

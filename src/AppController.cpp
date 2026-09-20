@@ -119,6 +119,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
+      {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
+      {"shortcut.cal.today.desc", {"Jump the calendar back to today.", "Вернуть календарь к сегодняшнему дню."}},
+      {"shortcut.cal.prev.label", {"Calendar: previous", "Календарь: назад"}},
+      {"shortcut.cal.prev.desc", {"Step back one week or month.", "Шаг назад на неделю или месяц."}},
+      {"shortcut.cal.next.label", {"Calendar: next", "Календарь: вперёд"}},
+      {"shortcut.cal.next.desc", {"Step forward one week or month.", "Шаг вперёд на неделю или месяц."}},
+      {"shortcut.cal.goToDate.label", {"Calendar: go to date", "Календарь: перейти к дате"}},
+      {"shortcut.cal.goToDate.desc", {"Open a date picker and jump straight there.", "Открыть выбор даты и перейти сразу к ней."}},
       {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
       {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
       {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
@@ -5183,6 +5191,53 @@ QVariantList AppController::commandPaletteEntries() const {
     }
   }
 
+  // Events. The calendar was the one surface Ctrl+K could not reach: a meeting
+  // the user knew the name of could only be found by paging to the week it was
+  // in. Events are global with a profile attribution rather than owned by a
+  // profile, so this is one pass, not one per profile.
+  //
+  // Stored events only. Expanding every series over every horizon would make
+  // the palette's cost depend on how far ahead people plan, and a master's
+  // entry lands the reader on the series anyway.
+  for(const CalEvent& e : m_events.items()) {
+    if(e.title.trimmed().isEmpty()) {
+      continue;
+    }
+    QString profileName;
+    QString profileColor;
+    for(const Profile& p : m_profiles) {
+      if(p.id == e.profileId) {
+        profileName = p.name;
+        profileColor = p.color;
+        break;
+      }
+    }
+    QVariantMap m;
+    m["kind"] = "event";
+    m["label"] = e.title;
+    const QString when =
+        e.date.isValid() ? (e.allDay ? e.date.toString(QStringLiteral("d MMM yyyy"))
+                                     : QStringLiteral("%1 %2").arg(e.date.toString(QStringLiteral("d MMM yyyy")), eventHourLabel(e.start)))
+                         : QString();
+    QStringList sub;
+    if(!profileName.isEmpty()) {
+      sub << profileName;
+    }
+    if(!when.isEmpty()) {
+      sub << when;
+    }
+    if(!e.rrule.isEmpty()) {
+      sub << QStringLiteral("repeats");
+    }
+    m["sub"] = sub.join(QStringLiteral(" · "));
+    m["body"] = cap(e.attendees + QLatin1Char(' ') + e.context);
+    m["profileId"] = e.profileId;
+    m["eventId"] = e.id;
+    m["eventDate"] = e.date;
+    m["color"] = profileColor.isEmpty() ? QStringLiteral("#6aa9e9") : profileColor;
+    out.append(m);
+  }
+
   return out;
 }
 
@@ -5402,6 +5457,12 @@ void AppController::seedShortcutCatalog() {
   add("board.moveUp", "Shift+K");
   add("board.moveLeft", "Shift+H");
   add("board.moveRight", "Shift+L");
+  // Calendar date navigation. Only live on a calendar view, where the board's
+  // own bare letters are not, so the two sets cannot collide.
+  add("cal.today", "T");
+  add("cal.prev", "Left");
+  add("cal.next", "Right");
+  add("cal.goToDate", "G");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;

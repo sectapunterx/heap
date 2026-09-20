@@ -167,6 +167,14 @@ Item {
     // binding rather than a local inside buildDays(), because the all-day strip
     // needs the same list and buildDays() must not write a property it is
     // itself bound to.
+    // One week in either direction. Named to match MonthView.step(), so the
+    // keyboard can move the date without knowing which calendar is on screen.
+    function step(dir) {
+        const w = root.weekStart;
+        if (!w || !w.getFullYear) return;
+        AppController.selectedDate = new Date(w.getFullYear(), w.getMonth(), w.getDate() + (7 * dir));
+    }
+
     function buildSpans() {
         const _e = root.eventRev;
         const start = root.weekStart;
@@ -360,7 +368,7 @@ Item {
 
                 PillButton {
                     text: "←"
-                    onClicked: AppController.selectedDate = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() - 7)
+                    onClicked: root.step(-1)
                 }
                 ColumnLayout {
                     spacing: 1
@@ -395,7 +403,7 @@ Item {
                 }
                 PillButton {
                     text: "→"
-                    onClicked: AppController.selectedDate = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7)
+                    onClicked: root.step(1)
                 }
             }
         }
