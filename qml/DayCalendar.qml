@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
+import "Overlap.js" as Overlap
 
 Item {
     id: root
@@ -65,48 +66,7 @@ Item {
                 end:   Number(m.data(idx, Qt.UserRole + 5))
             });
         }
-        // Sort by start, then end — required for the sweep below.
-        evs.sort((a, b) => (a.start - b.start) || (a.end - b.end));
-
-        const map = {};
-        // Assign columns within one overlap cluster, then commit the cluster's
-        // total column count to every member so their widths match.
-        function flush(cluster) {
-            const colEnds = [];  // last end-time occupying each column
-            for (let k = 0; k < cluster.length; k++) {
-                const e = cluster[k];
-                let placed = false;
-                for (let c = 0; c < colEnds.length; c++) {
-                    if (e.start >= colEnds[c] - 1e-9) {  // column is free again
-                        colEnds[c] = e.end;
-                        e._col = c;
-                        placed = true;
-                        break;
-                    }
-                }
-                if (!placed) { e._col = colEnds.length; colEnds.push(e.end); }
-            }
-            const total = Math.max(1, colEnds.length);
-            for (let k = 0; k < cluster.length; k++)
-                map[cluster[k].id] = { col: cluster[k]._col, cols: total };
-        }
-
-        let cluster = [];
-        let clusterEnd = -1;
-        for (let i = 0; i < evs.length; i++) {
-            const e = evs[i];
-            if (cluster.length === 0) { cluster = [e]; clusterEnd = e.end; continue; }
-            if (e.start < clusterEnd - 1e-9) {   // overlaps the running cluster
-                cluster.push(e);
-                clusterEnd = Math.max(clusterEnd, e.end);
-            } else {
-                flush(cluster);
-                cluster = [e];
-                clusterEnd = e.end;
-            }
-        }
-        if (cluster.length > 0) flush(cluster);
-        _overlap = map;
+        _overlap = Overlap.compute(evs);
     }
 
     // ── Task blocks vs. their meeting events ──────────────────────────

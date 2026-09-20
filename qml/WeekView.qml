@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
+import "Overlap.js" as Overlap
 import "Search.js" as Search
 
 Item {
@@ -238,6 +239,24 @@ Item {
         return out;
     }
     readonly property var flatEvents: buildFlatEvents()
+
+    // Side-by-side layout for events that share a time window. Two meetings at
+    // 10:00 were drawn exactly on top of each other here: the second hid the
+    // first, and only the top one could be clicked. The day grid had solved
+    // this; this one had never been taught. Both call the same module now.
+    function buildOverlaps() {
+        const perDay = [];
+        for (let i = 0; i < days.length; i++) {
+            const list = [];
+            for (let j = 0; j < days[i].events.length; j++) {
+                const e = days[i].events[j];
+                list.push({ id: e.id, start: e.start, end: e.end });
+            }
+            perDay.push(list);
+        }
+        return Overlap.computeByDay(perDay);
+    }
+    readonly property var overlaps: buildOverlaps()
 
     function totalTasks() {
         let n = 0;
@@ -608,9 +627,17 @@ Item {
                             readonly property real effStart: !isNaN(pendingStartH) ? pendingStartH : modelData.start
                             readonly property real effEnd:   !isNaN(pendingEndH)   ? pendingEndH   : modelData.end
 
-                            x: gridHost.gutterW + effDayIndex * gridHost.dayW + 2
+                            // Its slot within the day's overlap cluster. A
+                            // dragged event goes full width: it is following
+                            // the pointer, not sitting in a cluster any more.
+                            readonly property var _slot: root.overlaps[modelData.id] || ({ col: 0, cols: 1 })
+                            readonly property int _cols: (dragDx !== 0 || dragDy !== 0) ? 1 : Math.max(1, _slot.cols)
+                            readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
+                            readonly property real _slotW: (gridHost.dayW - 4) / _cols
+
+                            x: gridHost.gutterW + effDayIndex * gridHost.dayW + 2 + _col * _slotW
                             y: (effStart - root.hoursStart) * root.hourH + dragDy
-                            width: gridHost.dayW - 4
+                            width: _slotW - (_cols > 1 ? 2 : 0)
                             height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
                             radius: 4
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
