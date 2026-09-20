@@ -249,6 +249,7 @@ qt_add_qml_module(heap_core
         qml/MentionAutocomplete.qml
         qml/WelcomePopup.qml
         qml/Mention.js
+        qml/NotesListPane.qml
         qml/UnscheduledRail.qml
         qml/Overlap.js
         qml/Segments.js
