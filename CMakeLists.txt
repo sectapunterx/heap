@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 # C is enabled for the vendored md4c parser (third_party/md4c), the only C in
 # the tree.
-project(heap VERSION 0.4.8 LANGUAGES C CXX)
+project(heap VERSION 0.4.9 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
