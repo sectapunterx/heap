@@ -72,6 +72,16 @@ class StatusTest : public ::testing::Test {
     return {};
   }
 
+  int wipOf(const QString& id) const {
+    for(const QVariant& v : app_->statuses()) {
+      const QVariantMap m = v.toMap();
+      if(m.value(QStringLiteral("id")).toString() == id) {
+        return m.value(QStringLiteral("wip")).toInt();
+      }
+    }
+    return -1;
+  }
+
   const Task* taskById(const QString& id) const {
     for(const Task& t : app_->tasks()->items()) {
       if(t.id == id) {
@@ -237,6 +247,68 @@ TEST_F(StatusTest, UndoRestoresTheOriginalStatusChangedAt) {
 
   app_->undoLastDeletion();
   EXPECT_EQ(taskById(QStringLiteral("T-1"))->statusChangedAt, original);
+}
+
+// ─── WIP limit ────────────────────────────────────────────────────────
+// Advisory on purpose: the column reports that it is over, and nothing is
+// blocked. A hard cap would make a drag silently do nothing, which reads as a
+// bug rather than as a rule.
+
+TEST_F(StatusTest, WipLimitIsStoredOnTheColumn) {
+  const QString id = statusIds().at(0);
+  app_->setStatusWipLimit(id, 5);
+  EXPECT_EQ(wipOf(id), 5);
+}
+
+TEST_F(StatusTest, WipLimitZeroMeansNoLimit) {
+  const QString id = statusIds().at(0);
+  app_->setStatusWipLimit(id, 5);
+  app_->setStatusWipLimit(id, 0);
+  EXPECT_EQ(wipOf(id), 0);
+}
+
+TEST_F(StatusTest, WipLimitIsClamped) {
+  const QString id = statusIds().at(0);
+  app_->setStatusWipLimit(id, -3);
+  EXPECT_EQ(wipOf(id), 0);
+  app_->setStatusWipLimit(id, 100000);
+  EXPECT_LE(wipOf(id), 999);
+}
+
+TEST_F(StatusTest, WipLimitIgnoresAnUnknownColumn) {
+  QSignalSpy spy(app_.get(), &AppController::statusesChanged);
+  app_->setStatusWipLimit(QStringLiteral("ghost"), 5);
+  EXPECT_EQ(spy.count(), 0);
+}
+
+// Exceeding the limit must not stop a card arriving — the badge is the whole
+// feature.
+TEST_F(StatusTest, BeingOverTheWipLimitDoesNotBlockAMove) {
+  const QStringList ids = statusIds();
+  ASSERT_GE(ids.size(), 2);
+  app_->setStatusWipLimit(ids.at(1), 1);
+  app_->tasks()->reset({makeTask(QStringLiteral("T-1"), ids.at(0)), makeTask(QStringLiteral("T-2"), ids.at(0))});
+
+  app_->moveTask(QStringLiteral("T-1"), ids.at(1));
+  app_->moveTask(QStringLiteral("T-2"), ids.at(1));
+
+  EXPECT_EQ(taskById(QStringLiteral("T-2"))->status, ids.at(1)) << "a WIP limit is advisory, not a gate";
+}
+
+TEST_F(StatusTest, WipLimitSurvivesASaveAndReload) {
+  const QString id = statusIds().at(0);
+  app_->setStatusWipLimit(id, 7);
+  app_->flushSave();
+
+  AppController reopened;
+  int found = -1;
+  for(const QVariant& v : reopened.statuses()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == id) {
+      found = m.value(QStringLiteral("wip")).toInt();
+    }
+  }
+  EXPECT_EQ(found, 7);
 }
 
 TEST_F(StatusTest, DeleteStatusEmitsStatusesChanged) {
