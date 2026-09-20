@@ -1,8 +1,7 @@
 #include "TaskFilterProxy.h"
 
-#include <QDateTime>
-
 #include <QDate>
+#include <QDateTime>
 
 TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
   // Board order. The task model is in insertion order, so without this a card
@@ -78,7 +77,8 @@ namespace {
 // priority that maps to 0 is P0, and the falsy-zero form would send it to the
 // bottom — the same bug that once demoted every P0 in four views.
 int priorityRank(const QString& p) {
-  static const QHash<QString, int> kRanks = {{QStringLiteral("P0"), 0}, {QStringLiteral("P1"), 1}, {QStringLiteral("P2"), 2}, {QStringLiteral("P3"), 3}};
+  static const QHash<QString, int> kRanks = {
+      {QStringLiteral("P0"), 0}, {QStringLiteral("P1"), 1}, {QStringLiteral("P2"), 2}, {QStringLiteral("P3"), 3}};
   const auto it = kRanks.constFind(p);
   return it == kRanks.constEnd() ? 4 : *it;
 }
