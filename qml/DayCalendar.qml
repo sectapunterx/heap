@@ -5,8 +5,17 @@ import TodoCpp
 
 Item {
     id: root
-    readonly property int hoursStart: AppController.workdayStart
-    readonly property int hoursEnd:   AppController.workdayEnd
+    // The grid covers the whole day. It used to run from workdayStart to
+    // workdayEnd — 9 to 19 by default — and anything outside that was laid out
+    // off-grid: an 07:00 standup or a 21:00 call was counted in the "N events"
+    // header and drawn nowhere the user could reach it.
+    //
+    // Working hours are still marked; they just tint the background now
+    // instead of deciding what exists.
+    readonly property int hoursStart: 0
+    readonly property int hoursEnd:   24
+    readonly property int workStart:  AppController.workdayStart
+    readonly property int workEnd:    AppController.workdayEnd
     readonly property real pxPerMin: Theme.hourH / 60.0
 
     signal eventClicked(string id)
@@ -208,6 +217,32 @@ Item {
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
+                // Open on the part of the day the user is in. A grid that now
+                // starts at midnight would otherwise open on eight empty
+                // hours, which is worse than the clipping it replaced.
+                //
+                // Today scrolls to an hour before now; another day to the
+                // start of the working day.
+                function scrollToRelevantHour() {
+                    const today = AppController.selectedDate
+                        && AppController.selectedDate.getFullYear
+                        && AppController.selectedDate.getFullYear() === root.now.getFullYear()
+                        && AppController.selectedDate.getMonth() === root.now.getMonth()
+                        && AppController.selectedDate.getDate() === root.now.getDate();
+                    const hour = today
+                        ? Math.max(0, root.now.getHours() - 1)
+                        : root.workStart;
+                    const maxY = Math.max(0, grid.implicitHeight - scroll.availableHeight);
+                    ScrollBar.vertical.position = maxY > 0
+                        ? Math.min(1, (hour * Theme.hourH) / grid.implicitHeight)
+                        : 0;
+                }
+                Component.onCompleted: Qt.callLater(scrollToRelevantHour)
+                Connections {
+                    target: AppController
+                    function onSelectedDateChanged() { Qt.callLater(scroll.scrollToRelevantHour); }
+                }
+
                 Item {
                     id: grid
                     width: scroll.availableWidth
@@ -225,6 +260,14 @@ Item {
                             width: grid.width - grid.marginX * 2
                             height: Theme.hourH
 
+                            // Outside the working day. Dimmed, not hidden:
+                            // the hour is still there to drop a meeting on.
+                            Rectangle {
+                                anchors.fill: parent
+                                visible: parent.index < root.workStart || parent.index >= root.workEnd
+                                color: Theme.bg2
+                                opacity: 0.55
+                            }
                             Rectangle {
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                                 height: 1; color: Theme.border
@@ -344,7 +387,7 @@ Item {
                                     AppController.saveEvent(draft);
                                 } else {
                                     const draft = AppController.newEventDraft(startH, AppController.selectedDate);
-                                    draft.end = Math.min(endH, root.hoursEnd);
+                                    draft.end = Math.min(endH, 24);
                                     AppController.saveEvent(draft);
                                 }
                                 pressY = -1; currentY = -1; dragging = false;
@@ -382,6 +425,7 @@ Item {
                             model: AppController.events
                             Rectangle {
                                 id: evRect
+                                objectName: "event-" + evRect.id
                                 required property string id
                                 required property string title
                                 required property string type
