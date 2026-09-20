@@ -71,6 +71,12 @@ Task makeFullTask() {
   t.someday = true;
   t.assignee = QStringLiteral("sectapunterx");
   t.externalMeta = makeFullMeta();
+  // Schema v5. A fractional rank on purpose: the midpoint of two neighbours is
+  // what a drop between cards produces, and it has to survive the round trip
+  // exactly or the card moves on the next launch.
+  t.rank = 1536.5;
+  t.links = {TaskLink{QStringLiteral("blocks"), QStringLiteral("HEAP-105")},
+             TaskLink{QStringLiteral("blocks"), QStringLiteral("HEAP-106")}};
   return t;
 }
 
@@ -172,6 +178,13 @@ class Gen {
       t.externalMeta.dueAt = dateTime();
       t.externalMeta.crossProject = boolean();
     }
+    // Ranks are fractional in practice — a drop between two cards is their
+    // midpoint — so halves are generated, not whole numbers.
+    t.rank = pick(0, 100000) / 2.0;
+    const int linkCount = pick(0, 3);
+    for(int i = 0; i < linkCount; ++i) {
+      t.links.append(TaskLink{QStringLiteral("blocks"), QStringLiteral("T-") + QString::number(pick(1, 10000))});
+    }
     return t;
   }
 
@@ -202,7 +215,7 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 22u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 24u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 10u);
 }
 

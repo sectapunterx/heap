@@ -122,6 +122,8 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {AssigneeRole, "assignee"},
       {TicketRole, "ticket"},
       {SearchTextRole, "searchText"},
+      {RankRole, "rank"},
+      {BlocksRole, "blocks"},
   };
 }
 
@@ -197,6 +199,17 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return ticketToVariant(t);
     case SearchTextRole:
       return searchTextOf(t);
+    case RankRole:
+      return t.rank;
+    case BlocksRole: {
+      QStringList ids;
+      for(const TaskLink& l : t.links) {
+        if(l.type == QStringLiteral("blocks")) {
+          ids << l.targetId;
+        }
+      }
+      return ids;
+    }
   }
   return {};
 }

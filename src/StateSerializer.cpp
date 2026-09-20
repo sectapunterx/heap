@@ -16,7 +16,11 @@ namespace {
 // counts below are the guard: add a field and this build fails until the
 // serializers here, the ones in sync/SyncSerializer.cpp, and the round-trip
 // fixture in tests/test_roundtrip.cpp all learn about it.
-static_assert(heap::meta::fieldCount<Task>() == 22,
+static_assert(heap::meta::fieldCount<TaskLink>() == 2,
+              "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
+              "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<Task>() == 24,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -57,6 +61,27 @@ QVector<Label> labelsFromJson(const QJsonArray& a) {
   for(const auto& it : a) {
     const QJsonObject o = it.toObject();
     out.append(Label{o["id"].toString(), o["color"].toString()});
+  }
+  return out;
+}
+
+QJsonArray linksToJson(const QVector<TaskLink>& links) {
+  QJsonArray a;
+  for(const TaskLink& l : links) {
+    QJsonObject o;
+    o["type"] = l.type;
+    o["targetId"] = l.targetId;
+    a.append(o);
+  }
+  return a;
+}
+
+QVector<TaskLink> linksFromJson(const QJsonArray& a) {
+  QVector<TaskLink> out;
+  out.reserve(a.size());
+  for(const auto& it : a) {
+    const QJsonObject o = it.toObject();
+    out.append(TaskLink{o["type"].toString(), o["targetId"].toString()});
   }
   return out;
 }
@@ -180,6 +205,14 @@ QJsonObject taskToJson(const Task& t) {
   if(!meta.isEmpty()) {
     o["externalMeta"] = meta;
   }
+  // Board ordering + dependencies (schema v5). Omitted at their defaults so a
+  // task that has never been reordered or linked keeps the JSON it had before.
+  if(t.rank != 0.0) {
+    o["rank"] = t.rank;
+  }
+  if(!t.links.isEmpty()) {
+    o["links"] = linksToJson(t.links);
+  }
   return o;
 }
 
@@ -221,6 +254,8 @@ Task taskFromJson(const QJsonObject& o) {
   t.someday = o["someday"].toBool(false);
   t.assignee = o["assignee"].toString();
   t.externalMeta = externalMetaFromJson(o["externalMeta"].toObject());
+  t.rank = o["rank"].toDouble(0.0);
+  t.links = linksFromJson(o["links"].toArray());
   return t;
 }
 
@@ -419,6 +454,16 @@ void migrateTaskV3ToV4(QJsonObject& task) {
   }
 }
 
+// v4→v5: every task gains a rank. The board had no per-task order at all, so
+// the order it *showed* was the array order — which is exactly what this
+// preserves. Ranks are spread by kRankStep so a later drop between two cards
+// has room to take a midpoint.
+void migrateTaskV4ToV5(QJsonObject& task, int index) {
+  if(!task.contains("rank")) {
+    task["rank"] = (index + 1) * kRankStep;
+  }
+}
+
 // Rebuilds the array rather than writing back through an index: QJsonArray's
 // subscript hands out a reference proxy, and in-place index mutation is exactly
 // the shape a well-meaning "modernize to a range-for" rewrite would break.
@@ -427,6 +472,17 @@ QJsonArray migratedTaskArrayV3ToV4(const QJsonArray& tasks) {
   for(const QJsonValue& v : tasks) {
     QJsonObject t = v.toObject();
     migrateTaskV3ToV4(t);
+    out.append(t);
+  }
+  return out;
+}
+
+QJsonArray migratedTaskArrayV4ToV5(const QJsonArray& tasks) {
+  QJsonArray out;
+  int index = 0;
+  for(const QJsonValue& v : tasks) {
+    QJsonObject t = v.toObject();
+    migrateTaskV4ToV5(t, index++);
     out.append(t);
   }
   return out;
@@ -461,6 +517,9 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   // one — harmless only for as long as each step happens to be idempotent.
   if(fromVersion < 4) {
     forEachTaskArray(root, migratedTaskArrayV3ToV4);
+  }
+  if(fromVersion < 5) {
+    forEachTaskArray(root, migratedTaskArrayV4ToV5);
   }
 
   root["schemaVersion"] = kSchemaVersion;

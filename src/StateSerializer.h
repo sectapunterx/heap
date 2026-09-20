@@ -18,7 +18,13 @@ namespace heap::state {
 //   v2  profiles array, events nested per profile
 //   v3  events hoisted to the top level
 //   v4  Task.deadline (QDate) split into scheduledAt/dueAt (QDateTime) + hasTime
-inline constexpr int kSchemaVersion = 4;
+//   v5  Task.rank — manual order within a status column
+inline constexpr int kSchemaVersion = 5;
+
+// Gap between consecutive ranks handed out by the v4→v5 migration and by
+// "add to the end". Large enough that a long run of midpoint inserts between
+// the same two neighbours never needs a rebalance in practice.
+inline constexpr double kRankStep = 1024.0;
 
 QJsonObject taskToJson(const Task& t);
 Task taskFromJson(const QJsonObject& o);
