@@ -2,6 +2,7 @@
 
 #include "Models.h"
 
+#include "board/Rank.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -285,6 +286,14 @@ class AppController : public QObject {
 
   // ---- Task ops ----
   Q_INVOKABLE void moveTask(const QString& id, const QString& newStatus);
+  // Manual order: place `id` in `statusId` immediately above `beforeTaskId`,
+  // or at the end of the column when that is empty. This is what a drop
+  // between two cards calls; moveTask() is the "somewhere in that column"
+  // form and leaves the position alone.
+  Q_INVOKABLE void moveTaskTo(const QString& id, const QString& statusId, const QString& beforeTaskId);
+  // Same, for every selected task, preserving their order relative to one
+  // another.
+  Q_INVOKABLE void moveSelectedTasksTo(const QString& statusId, const QString& beforeTaskId);
   Q_INVOKABLE QVariantMap newTaskDraft(const QString& statusId) const;
   // Like newTaskDraft, but the id is a placeholder ("TODO-N") instead of
   // the project prefix — used by QuickCapture so the user is reminded to
@@ -854,12 +863,18 @@ class AppController : public QObject {
   // did not parse, so writing would drop them.
   bool m_saveBlocked = false;
   int statusIndexOf(const QString& id) const;
+  // One column's tasks in board order (rank, then id so the order is total).
+  QVector<::Task> columnTasks(const QString& statusId, const QString& excludeId) const;
+  // Spread a column's ranks back out when a gap has shrunk too far to take
+  // another midpoint. See src/board/Rank.h.
+  void rebalanceColumn(const QString& statusId);
 
   // ---- Undo/redo ----
   // The stack records what an operation changed (see src/undo/UndoStack.h)
   // rather than each mutator describing itself, which is why bulk move and
   // bulk archive are undoable now without either of them knowing about undo.
   heap::undo::UndoStack m_undo;
+  int m_undoScopeDepth = 0;
 
   // Snapshots the collections on construction and pushes the diff on
   // destruction. Declaring one at the top of a mutator is the whole contract:
@@ -893,6 +908,9 @@ class AppController : public QObject {
     AppController* m_owner;
     QString m_label;
     bool m_armed = true;
+    // Scopes nest: an operation built out of other operations records one
+    // entry, not one per part. Only the outermost scope snapshots and pushes.
+    bool m_outermost = true;
     QVector<::Task> m_tasks;
     QVector<::CalEvent> m_events;
     QVector<::Person> m_people;

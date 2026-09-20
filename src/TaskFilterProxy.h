@@ -81,6 +81,10 @@ class TaskFilterProxy : public QSortFilterProxyModel {
 
  protected:
   bool filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const override;
+  // Rank, then id. Two cards that somehow share a rank must not swap places
+  // between launches, and the default comparison would leave that to the
+  // order the source model happens to be in.
+  bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
 
  private:
   QString m_status;

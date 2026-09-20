@@ -5,6 +5,7 @@
 #include "StateSerializer.h"
 #include "TaskDefer.h"
 
+#include "board/Rank.h"
 #include "cal/EventClamp.h"
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
@@ -816,6 +817,114 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   scheduleSave();
 }
 
+// Tasks of one column, in the order the board shows them. Ties on rank fall
+// back to id so the order is total — two tasks that somehow share a rank must
+// not swap places between launches.
+QVector<::Task> AppController::columnTasks(const QString& statusId, const QString& excludeId) const {
+  QVector<::Task> out;
+  for(const ::Task& t : m_tasks.items()) {
+    if(t.status == statusId && t.id != excludeId) {
+      out.append(t);
+    }
+  }
+  std::sort(out.begin(), out.end(), [](const ::Task& a, const ::Task& b) {
+    return a.rank != b.rank ? a.rank < b.rank : a.id < b.id;
+  });
+  return out;
+}
+
+// Spread one column's ranks back out. Only ever called when a gap has shrunk
+// past the point where a midpoint is still distinct, which takes about fifty
+// consecutive drops into the same gap.
+void AppController::rebalanceColumn(const QString& statusId) {
+  const QVector<::Task> ordered = columnTasks(statusId, QString());
+  for(int i = 0; i < ordered.size(); ++i) {
+    ::Task t = ordered.at(i);
+    t.rank = (i + 1) * heap::state::kRankStep;
+    m_tasks.upsert(t);
+  }
+}
+
+void AppController::moveTaskTo(const QString& id, const QString& statusId, const QString& beforeTaskId) {
+  const int row = m_tasks.indexOfId(id);
+  if(row < 0 || statusId.isEmpty() || statusIndexOf(statusId) < 0) {
+    return;
+  }
+  const QString fromStatus = m_tasks.items().at(row).status;
+  if(fromStatus != statusId && !canTransitionStatus(id, statusId)) {
+    return;  // the column rejected it; do not move it half-way
+  }
+
+  UndoScope scope(this, tr_("task.moveUndone").arg(id));
+
+  // The status change carries the recurrence spawn, the focus block and the
+  // tracker push with it, so it goes through moveTask rather than being
+  // duplicated here. The nested scope records nothing of its own.
+  if(fromStatus != statusId) {
+    moveTask(id, statusId);
+    if(m_tasks.items().at(m_tasks.indexOfId(id)).status != statusId) {
+      return;  // moveTask declined after all
+    }
+  }
+
+  // Neighbours are taken from the destination column with the moved card
+  // removed, so dropping a card one place down means what it looks like.
+  const QVector<::Task> ordered = columnTasks(statusId, id);
+  int at = ordered.size();  // empty target id = the end of the column
+  if(!beforeTaskId.isEmpty()) {
+    for(int i = 0; i < ordered.size(); ++i) {
+      if(ordered.at(i).id == beforeTaskId) {
+        at = i;
+        break;
+      }
+    }
+  }
+
+  const bool hasBefore = at > 0;
+  const bool hasAfter = at < ordered.size();
+  const double beforeRank = hasBefore ? ordered.at(at - 1).rank : 0.0;
+  const double afterRank = hasAfter ? ordered.at(at).rank : 0.0;
+
+  if(hasBefore && hasAfter && heap::board::needsRebalance(beforeRank, afterRank)) {
+    rebalanceColumn(statusId);
+    const QVector<::Task> spread = columnTasks(statusId, id);
+    const double lo = at > 0 ? spread.at(at - 1).rank : 0.0;
+    const double hi = at < spread.size() ? spread.at(at).rank : 0.0;
+    ::Task t = m_tasks.items().at(m_tasks.indexOfId(id));
+    t.rank = heap::board::between(lo, hi, at > 0, at < spread.size());
+    m_tasks.upsert(t);
+  } else {
+    ::Task t = m_tasks.items().at(m_tasks.indexOfId(id));
+    t.rank = heap::board::between(beforeRank, afterRank, hasBefore, hasAfter);
+    m_tasks.upsert(t);
+  }
+  scheduleSave();
+}
+
+void AppController::moveSelectedTasksTo(const QString& statusId, const QString& beforeTaskId) {
+  if(m_selectedTaskIdsList.isEmpty()) {
+    return;
+  }
+  UndoScope scope(this, tr_("selection.toast.moved").arg(m_selectedTaskIdsList.size()));
+  // Move them in board order and keep inserting before the same card, so the
+  // block lands in the order it had rather than reversed.
+  QVector<::Task> picked;
+  for(const QString& taskId : m_selectedTaskIdsList) {
+    const int r = m_tasks.indexOfId(taskId);
+    if(r >= 0) {
+      picked.append(m_tasks.items().at(r));
+    }
+  }
+  std::sort(picked.begin(), picked.end(), [](const ::Task& a, const ::Task& b) {
+    return a.rank != b.rank ? a.rank < b.rank : a.id < b.id;
+  });
+  // The anchor stays the same for every task: inserting A before X and then B
+  // before X puts B between A and X, which keeps the block in its own order.
+  for(const ::Task& t : picked) {
+    moveTaskTo(t.id, statusId, beforeTaskId);
+  }
+}
+
 QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
   const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("LTE")).toString().trimmed();
@@ -1052,6 +1161,14 @@ void AppController::saveTask(const QVariantMap& draft) {
         break;
       }
     }
+  }
+
+  // A new card goes to the top of its column: it is the thing the user just
+  // thought of, and a card appended below everything else in a long column is
+  // a card they have to go looking for.
+  if(isNew) {
+    const QVector<::Task> ordered = columnTasks(t.status, t.id);
+    t.rank = heap::board::beforeFirst(ordered.isEmpty() ? 0.0 : ordered.first().rank, !ordered.isEmpty());
   }
 
   m_tasks.upsert(t);
@@ -2142,16 +2259,21 @@ QVariantMap AppController::extractTaskMeta(const QString& text) const {
 AppController::UndoScope::UndoScope(AppController* owner, QString label) :
     m_owner(owner),
     m_label(std::move(label)),
+    m_outermost(owner->m_undoScopeDepth == 0),
     // Implicitly shared: these are refcount bumps, not copies. The buffers
     // only diverge if the operation actually writes.
-    m_tasks(owner->m_tasks.items()),
-    m_events(owner->m_events.items()),
-    m_people(owner->m_people.items()),
-    m_statuses(owner->m_statuses) {
+    m_tasks(m_outermost ? owner->m_tasks.items() : QVector<::Task>{}),
+    m_events(m_outermost ? owner->m_events.items() : QVector<::CalEvent>{}),
+    m_people(m_outermost ? owner->m_people.items() : QVector<::Person>{}),
+    m_statuses(m_outermost ? owner->m_statuses : QVariantList{}) {
+  ++owner->m_undoScopeDepth;
 }
 
 AppController::UndoScope::~UndoScope() {
-  if(!m_armed) {
+  --m_owner->m_undoScopeDepth;
+  // An inner scope is part of a bigger operation; the outer one is recording
+  // the whole thing.
+  if(!m_armed || !m_outermost) {
     return;
   }
   heap::undo::Entry entry;

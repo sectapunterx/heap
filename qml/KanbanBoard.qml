@@ -523,8 +523,43 @@ Item {
                             }
 
                             DropArea {
+                                id: colDrop
                                 anchors.fill: parent
-                                onEntered: col.dragOver = true
+
+                                // The card the dragged one would land above,
+                                // or "" for the end of the column. Recomputed
+                                // as the pointer moves so the indicator and
+                                // the drop agree.
+                                property string beforeId: ""
+                                property real indicatorY: 0
+
+                                // Which card sits under `y` (in bodyCol's
+                                // coordinates): the first whose midpoint the
+                                // pointer is above. The dragged card is
+                                // skipped — it is still in the column it came
+                                // from, and counting it would make a one-place
+                                // move look like no move at all.
+                                function _slotAt(y, draggedId) {
+                                    for (let i = 0; i < colRep.count; i++) {
+                                        const item = colRep.itemAt(i);
+                                        if (!item || !item.visible || item.taskId === draggedId) continue;
+                                        if (y < item.y + item.height / 2) {
+                                            return { id: item.taskId, y: item.y };
+                                        }
+                                    }
+                                    return { id: "", y: bodyCol.height };
+                                }
+
+                                function _update(drag) {
+                                    const src = drag.source;
+                                    const p = bodyCol.mapFromItem(colDrop, drag.x, drag.y);
+                                    const slot = _slotAt(p.y, src && src.taskId ? src.taskId : "");
+                                    colDrop.beforeId = slot.id;
+                                    colDrop.indicatorY = slot.y;
+                                }
+
+                                onEntered: (drag) => { col.dragOver = true; _update(drag); }
+                                onPositionChanged: (drag) => _update(drag)
                                 onExited: col.dragOver = false
                                 onDropped: (drop) => {
                                     col.dragOver = false;
@@ -532,12 +567,27 @@ Item {
                                     if (!src || !src.taskId) return;
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
-                                        AppController.moveSelectedTasksToStatus(col.statusId);
+                                        AppController.moveSelectedTasksTo(col.statusId, colDrop.beforeId);
                                     } else {
-                                        AppController.moveTask(src.taskId, col.statusId);
+                                        AppController.moveTaskTo(src.taskId, col.statusId, colDrop.beforeId);
                                     }
                                     drop.accept(Qt.MoveAction);
                                 }
+                            }
+
+                            // Where the card would land. Drawn over the body
+                            // rather than between the cards so it does not
+                            // shift them while the pointer moves.
+                            Rectangle {
+                                objectName: "drop-indicator"
+                                visible: col.dragOver
+                                x: 10
+                                width: parent.width - 20
+                                height: 2
+                                radius: 1
+                                color: Theme.accent
+                                y: bodyFlick.y - bodyFlick.contentY + colDrop.indicatorY - 5
+                                z: 20
                             }
 
                             // Right-click on empty body → Add task

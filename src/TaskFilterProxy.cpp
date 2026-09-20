@@ -3,6 +3,13 @@
 #include <QDate>
 
 TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
+  // Board order. The task model is in insertion order, so without this a card
+  // dropped between two others would show up wherever it happened to sit in
+  // the underlying list. Dynamic so a rank change re-sorts on its own.
+  setSortRole(TaskModel::RankRole);
+  setDynamicSortFilter(true);
+  sort(0, Qt::AscendingOrder);
+
   // The header badge and the "nothing here" placeholder both read count().
   connect(this, &QAbstractItemModel::rowsInserted, this, &TaskFilterProxy::countChanged);
   connect(this, &QAbstractItemModel::rowsRemoved, this, &TaskFilterProxy::countChanged);
@@ -51,6 +58,15 @@ void TaskFilterProxy::setPriorities(const QStringList& v) {
   invalidateFilter();
   emit filterChanged();
   emit countChanged();
+}
+
+bool TaskFilterProxy::lessThan(const QModelIndex& left, const QModelIndex& right) const {
+  const double lr = sourceModel()->data(left, TaskModel::RankRole).toDouble();
+  const double rr = sourceModel()->data(right, TaskModel::RankRole).toDouble();
+  if(lr != rr) {
+    return lr < rr;
+  }
+  return sourceModel()->data(left, TaskModel::IdRole).toString() < sourceModel()->data(right, TaskModel::IdRole).toString();
 }
 
 bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {
