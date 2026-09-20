@@ -14,9 +14,13 @@ namespace {
 // counts below are the guard: add a field and this build fails until the
 // serializers here, the ones in sync/SyncSerializer.cpp, and the round-trip
 // fixture in tests/test_roundtrip.cpp all learn about it.
-static_assert(heap::meta::fieldCount<Task>() == 21,
+static_assert(heap::meta::fieldCount<Task>() == 22,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
+              "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
+              "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
 static_assert(heap::meta::fieldCount<CalEvent>() == 10,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
@@ -58,6 +62,62 @@ QVector<Label> labelsFromJson(const QJsonArray& a) {
 }  // namespace
 
 // ───────────────── Task ─────────────────
+
+namespace {
+
+// The tracker's own view of a mirrored issue (HEAP-117). Nested rather than
+// flat, and the timestamps are deliberately NOT called `updatedAt`/`createdAt`:
+// JsonMerger treats a task's top-level keys by those names as heap's own
+// last-write clock, and a device that merely re-pulled would then outrank one
+// that actually edited. Default sub-keys are omitted, and the whole object is
+// omitted when nothing in it is set, so a local task's JSON is unchanged.
+QJsonObject externalMetaToJson(const ExternalMeta& m) {
+  QJsonObject o;
+  if(!m.author.isEmpty()) {
+    o["author"] = m.author;
+  }
+  if(!m.issueType.isEmpty()) {
+    o["issueType"] = m.issueType;
+  }
+  if(!m.project.isEmpty()) {
+    o["project"] = m.project;
+  }
+  if(!m.milestone.isEmpty()) {
+    o["milestone"] = m.milestone;
+  }
+  if(m.commentCount >= 0) {
+    o["commentCount"] = m.commentCount;
+  }
+  if(m.createdAt.isValid()) {
+    o["remoteCreatedAt"] = dtToStr(m.createdAt);
+  }
+  if(m.updatedAt.isValid()) {
+    o["remoteUpdatedAt"] = dtToStr(m.updatedAt);
+  }
+  if(m.dueAt.isValid()) {
+    o["remoteDueAt"] = dtToStr(m.dueAt);
+  }
+  if(m.crossProject) {
+    o["crossProject"] = true;
+  }
+  return o;
+}
+
+ExternalMeta externalMetaFromJson(const QJsonObject& o) {
+  ExternalMeta m;
+  m.author = o["author"].toString();
+  m.issueType = o["issueType"].toString();
+  m.project = o["project"].toString();
+  m.milestone = o["milestone"].toString();
+  m.commentCount = o["commentCount"].toInt(-1);
+  m.createdAt = dtFromStr(o["remoteCreatedAt"].toString());
+  m.updatedAt = dtFromStr(o["remoteUpdatedAt"].toString());
+  m.dueAt = dtFromStr(o["remoteDueAt"].toString());
+  m.crossProject = o["crossProject"].toBool(false);
+  return m;
+}
+
+}  // namespace
 
 QJsonObject taskToJson(const Task& t) {
   QJsonObject o;
@@ -112,6 +172,12 @@ QJsonObject taskToJson(const Task& t) {
   if(!t.assignee.isEmpty()) {
     o["assignee"] = t.assignee;
   }
+  // Tracker metadata (HEAP-117) — omitted entirely for a local task, so its
+  // JSON stays byte-identical to before.
+  const QJsonObject meta = externalMetaToJson(t.externalMeta);
+  if(!meta.isEmpty()) {
+    o["externalMeta"] = meta;
+  }
   return o;
 }
 
@@ -152,6 +218,7 @@ Task taskFromJson(const QJsonObject& o) {
   t.estimateMinutes = o["estimateMinutes"].toInt(0);
   t.someday = o["someday"].toBool(false);
   t.assignee = o["assignee"].toString();
+  t.externalMeta = externalMetaFromJson(o["externalMeta"].toObject());
   return t;
 }
 

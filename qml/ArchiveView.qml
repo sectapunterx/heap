@@ -10,6 +10,8 @@ Item {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+    // The card under the cursor, for the single-key ticket action (HEAP-117).
+    property string hoveredTaskId: ""
 
     signal taskClicked(string id)
 
@@ -26,8 +28,9 @@ Item {
     function passesFilter(t) {
         const q = (root.searchText || "").toLowerCase();
         if (q && q.length > 0) {
-            const hay = ((t.title || "") + " " + (t.id || "") + " " + (t.desc || "")).toLowerCase();
-            if (hay.indexOf(q) < 0) return false;
+            // Built once in C++ and already lowercased — covers the ticket key,
+            // labels and assignee as well as title/id/desc.
+            if (String(t.searchText || "").indexOf(q) < 0) return false;
         }
         let any = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) {
@@ -98,6 +101,9 @@ Item {
                 dueAt: m.data(idx, Qt.UserRole + 21),
                 hasTime: m.data(idx, Qt.UserRole + 22),
                 labels: m.data(idx, Qt.UserRole + 29),
+                // Archived tickets keep their badge and key (HEAP-117).
+                ticket: m.data(idx, Qt.UserRole + 31),
+                searchText: m.data(idx, Qt.UserRole + 32),
             };
             if (!root.passesFilter(t)) continue;
             out.push(t);
@@ -268,10 +274,15 @@ Item {
                             }
 
                             TaskCard {
+                                id: archCard
                                 Layout.fillWidth: true
                                 task: row.modelData
                                 onClicked: root.taskClicked(row.modelData.id)
                                 onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
+                                onHoveredChanged: {
+                                    if (hovered) root.hoveredTaskId = row.modelData.id;
+                                    else if (root.hoveredTaskId === row.modelData.id) root.hoveredTaskId = "";
+                                }
                             }
                         }
                     }

@@ -26,7 +26,58 @@ Popup {
     // row instead of inserting a duplicate.
     property string _originalId: ""
 
+    // ── Mirrored tracker issue (HEAP-117) ──
+    // Empty for a locally-created task, which is what the strip keys off.
+    readonly property var _ticket: (root.draft && root.draft.ticket) ? root.draft.ticket : ({})
+    readonly property bool _isTicket: !!(root._ticket.provider)
+    readonly property var _badge: root._isTicket
+        ? (AppController.providerBadges[root._ticket.provider] || ({}))
+        : ({})
+    // Only the fields the tracker actually filled in, as label/value pairs.
+    readonly property var _ticketFacts: {
+        if (!root._isTicket) return [];
+        const t = root._ticket;
+        const out = [];
+        const add = (key, value) => {
+            if (value !== undefined && value !== null && String(value).length > 0) {
+                out.push({ label: I18n.t(key), value: String(value) });
+            }
+        };
+        add("ticket.assignee", t.assignee);
+        add("ticket.author", t.author);
+        add("ticket.type", t.issueType);
+        add("ticket.milestone", t.milestone);
+        // -1 means the provider never said, which is not the same as none.
+        if ((t.commentCount || -1) >= 0) {
+            out.push({ label: I18n.t("ticket.comments"), value: String(t.commentCount) });
+        }
+        const when = (d) => (d && d.getTime && !isNaN(d.getTime())) ? AppController.shortDate(d) : "";
+        add("ticket.created", when(t.createdAt));
+        add("ticket.updated", when(t.updatedAt));
+        return out;
+    }
+
+    // Comments, held only while this dialog is open (HEAP-117).
+    property var _comments: []
+    property string _commentsError: ""
+    property bool _commentsRequested: false
+
+    Connections {
+        target: AppController
+
+        function onTicketCommentsLoaded(taskId, comments, error) {
+            // A reply for a ticket the user has since navigated away from.
+            if (taskId !== (root._originalId || (root.draft.id || ""))) return;
+            root._comments = comments;
+            root._commentsError = error || "";
+        }
+    }
+
     function showFor(initialDraft) {
+        // Never carry one ticket's comments over to the next.
+        _comments = [];
+        _commentsError = "";
+        _commentsRequested = false;
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
@@ -293,7 +344,10 @@ Popup {
             }
             Text {
                 visible: !root.isNew
-                text: idField.text
+                // A mirrored issue is known by its tracker key, not the id the
+                // merge invented for it (HEAP-117).
+                text: root._isTicket ? (root._ticket.key || "") : idField.text
+                textFormat: Text.PlainText
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: 12
@@ -301,6 +355,153 @@ Popup {
             }
             Item {
                 Layout.fillWidth: true
+            }
+        }
+
+        // ── Mirrored tracker issue: read-only context (HEAP-117) ──
+        // Everything here is the tracker's, not heap's: it cannot be edited
+        // from this dialog, and the next sync overwrites the fields that are.
+        Rectangle {
+            objectName: "te-ticket-strip"
+            visible: root._isTicket
+            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 10
+            Layout.fillWidth: true
+            implicitHeight: ticketCol.implicitHeight + 20
+            radius: 8
+            color: Theme.withAlpha(Theme.panel2, 0.6)
+            border.color: Theme.border
+            border.width: 1
+
+            ColumnLayout {
+                id: ticketCol
+                anchors.fill: parent
+                anchors.margins: 10
+                spacing: 6
+
+                RowLayout {
+                    spacing: 6
+                    Rectangle {
+                        radius: 4
+                        color: Theme.withAlpha(root._badge.color || Theme.textMuted, 0.18)
+                        border.color: root._badge.color || Theme.border
+                        border.width: 1
+                        implicitWidth: teBadgeT.implicitWidth + 8
+                        implicitHeight: teBadgeT.implicitHeight + 2
+                        Text {
+                            id: teBadgeT
+                            anchors.centerIn: parent
+                            text: root._badge.icon || "◍"
+                            textFormat: Text.PlainText
+                            color: root._badge.color || Theme.textMuted
+                            font.pixelSize: 10
+                            font.weight: Font.DemiBold
+                        }
+                    }
+                    Text {
+                        text: (root._badge.name || root._ticket.provider || "")
+                              + (root._ticket.project ? " · " + root._ticket.project : "")
+                        textFormat: Text.PlainText
+                        color: Theme.textMuted
+                        font.pixelSize: 11
+                        elide: Text.ElideRight
+                        Layout.fillWidth: true
+                    }
+                    Button {
+                        objectName: "te-ticket-open"
+                        visible: String(root._ticket.url || "").length > 0
+                        text: "↗ " + I18n.t("ticket.open")
+                        font.pixelSize: 10
+                        onClicked: AppController.openTaskExternal(root._originalId || (root.draft.id || ""))
+                    }
+                }
+
+                // One "label: value" row per field the tracker actually gave.
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 14
+                    Repeater {
+                        model: root._ticketFacts
+                        delegate: Row {
+                            required property var modelData
+                            spacing: 5
+                            Text {
+                                text: modelData.label
+                                textFormat: Text.PlainText
+                                color: Theme.textDim
+                                font.pixelSize: 10
+                                font.letterSpacing: 0.4
+                            }
+                            Text {
+                                text: modelData.value
+                                textFormat: Text.PlainText
+                                color: Theme.text
+                                font.pixelSize: 10
+                                font.weight: Font.Medium
+                            }
+                        }
+                    }
+                }
+
+                Text {
+                    Layout.fillWidth: true
+                    text: "⚠ " + I18n.t("ticket.overwriteHint")
+                    textFormat: Text.PlainText
+                    color: Theme.textDim
+                    font.pixelSize: 10
+                    wrapMode: Text.WordWrap
+                }
+
+                // Comments are read on demand and kept only while this dialog
+                // is open — heap stores none of them.
+                Button {
+                    objectName: "te-ticket-load-comments"
+                    visible: !root._commentsRequested
+                    text: "💬 " + I18n.t("ticket.loadComments")
+                    font.pixelSize: 10
+                    onClicked: {
+                        root._commentsRequested = true;
+                        AppController.fetchTicketComments(root._originalId || (root.draft.id || ""));
+                    }
+                }
+                Text {
+                    objectName: "te-ticket-comments-status"
+                    visible: root._commentsRequested
+                             && (root._commentsError.length > 0 || root._comments.length === 0)
+                    text: root._commentsError.length > 0 ? root._commentsError : I18n.t("ticket.noComments")
+                    textFormat: Text.PlainText
+                    color: Theme.textDim
+                    font.pixelSize: 10
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Repeater {
+                    model: root._comments
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Text {
+                            text: "@" + String(modelData.author || "")
+                                  + (modelData.createdAt && modelData.createdAt.getTime
+                                     && !isNaN(modelData.createdAt.getTime())
+                                     ? " · " + AppController.shortDate(modelData.createdAt) : "")
+                            textFormat: Text.PlainText
+                            color: Theme.textDim
+                            font.pixelSize: 9
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: String(modelData.body || "")
+                            // Written by whoever commented upstream.
+                            textFormat: Text.PlainText
+                            color: Theme.text
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 4
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
             }
         }
 
@@ -321,8 +522,14 @@ Popup {
             }
             color: Theme.text
             placeholderTextColor: Theme.textDim
-            // Auto-uppercase so the id stays canonical (matches newTaskDraft).
+            // Auto-uppercase so a hand-typed id stays canonical (matches
+            // newTaskDraft) — but only while composing a NEW one. A synced
+            // ticket's id is lowercase by construction ("github-1234", from the
+            // provider id), and uppercasing it on open made a plain Save look
+            // like a rename to saveTask: the row was silently re-keyed to
+            // GITHUB-1234, and if that id was taken, the other task was lost.
             onTextChanged: {
+                if (!root.isNew) return;
                 const up = text.toUpperCase();
                 if (up !== text) text = up;
             }

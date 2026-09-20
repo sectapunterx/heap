@@ -367,9 +367,22 @@ TEST(TaskModelExternalRoles, RoleNamesExposeTheTrackerLink) {
   const TaskModel m;
   const QHash<int, QByteArray> names = m.roleNames();
   const QList<QByteArray> values = names.values();
-  for(const char* expected : {"externalProvider", "externalUrl", "externalKey", "labels", "assignee"}) {
+  for(const char* expected : {"externalProvider", "externalUrl", "externalKey", "labels", "assignee", "ticket", "searchText"}) {
     EXPECT_TRUE(values.contains(QByteArray(expected))) << "missing role: " << expected;
   }
+}
+
+// Twelve QML files read roles as literal `Qt.UserRole + N` offsets. Inserting a
+// role anywhere but the end silently reassigns every offset after it, and
+// nothing in the build would notice (HEAP-117).
+TEST(TaskModelExternalRoles, NewRolesAreAppendedAfterTheExistingOnes) {
+  EXPECT_EQ(TaskModel::ExternalProviderRole, Qt::UserRole + 26);
+  EXPECT_EQ(TaskModel::ExternalUrlRole, Qt::UserRole + 27);
+  EXPECT_EQ(TaskModel::ExternalKeyRole, Qt::UserRole + 28);
+  EXPECT_EQ(TaskModel::LabelsRole, Qt::UserRole + 29);
+  EXPECT_EQ(TaskModel::AssigneeRole, Qt::UserRole + 30);
+  EXPECT_EQ(TaskModel::TicketRole, Qt::UserRole + 31);
+  EXPECT_EQ(TaskModel::SearchTextRole, Qt::UserRole + 32);
 }
 
 TEST(TaskModelExternalRoles, PulledJiraIssueExposesItsKeyAndLabels) {
@@ -417,6 +430,95 @@ TEST(TaskModelExternalRoles, IssueNumberBecomesAHashKeyAndLocalCardsAreEmpty) {
   EXPECT_TRUE(m.data(li, TaskModel::ExternalUrlRole).toString().isEmpty());
   EXPECT_TRUE(m.data(li, TaskModel::LabelsRole).toList().isEmpty());
   EXPECT_TRUE(m.data(li, TaskModel::AssigneeRole).toString().isEmpty());
+}
+
+// ─── Ticket identity (HEAP-117) ───
+
+// "#42" says nothing about which repo, once a pull spans them.
+TEST(TaskModelTicketRole, CrossProjectNumberIsQualifiedByItsRepo) {
+  Task t;
+  t.id = QStringLiteral("github-web-42");
+  t.externalId = QStringLiteral("42");
+  t.externalProvider = QStringLiteral("github");
+  t.externalMeta.project = QStringLiteral("acme/web");
+  t.externalMeta.crossProject = true;
+  EXPECT_EQ(externalKeyOf(t), QStringLiteral("web#42"));
+
+  // A scoped pull is unambiguous already: HEAP-117 asks for a plain "#1234".
+  t.externalMeta.crossProject = false;
+  EXPECT_EQ(externalKeyOf(t), QStringLiteral("#42"));
+
+  // A key that is already human-readable is never decorated.
+  Task jira;
+  jira.externalId = QStringLiteral("PROJ-7");
+  jira.externalProvider = QStringLiteral("jira");
+  jira.externalMeta.project = QStringLiteral("PROJ");
+  jira.externalMeta.crossProject = true;
+  EXPECT_EQ(externalKeyOf(jira), QStringLiteral("PROJ-7"));
+}
+
+TEST(TaskModelTicketRole, LocalTaskHasAnEmptyTicketMap) {
+  Task local;
+  local.id = QStringLiteral("LTE-1");
+  local.title = QStringLiteral("write the thing");
+  EXPECT_TRUE(ticketToVariant(local).isEmpty());
+
+  TaskModel m;
+  m.reset({local});
+  EXPECT_TRUE(m.data(m.index(0, 0), TaskModel::TicketRole).toMap().isEmpty());
+}
+
+TEST(TaskModelTicketRole, LinkedTaskExposesEveryMetadataField) {
+  Task t;
+  t.id = QStringLiteral("github-42");
+  t.externalId = QStringLiteral("42");
+  t.externalUrl = QStringLiteral("https://github.com/acme/web/issues/42");
+  t.externalProvider = QStringLiteral("github");
+  t.assignee = QStringLiteral("ada");
+  t.externalMeta.author = QStringLiteral("grace");
+  t.externalMeta.issueType = QStringLiteral("Bug");
+  t.externalMeta.project = QStringLiteral("acme/web");
+  t.externalMeta.milestone = QStringLiteral("v2");
+  t.externalMeta.commentCount = 4;
+  t.externalMeta.updatedAt = QDateTime(QDate(2026, 7, 1), QTime(12, 0));
+
+  TaskModel m;
+  m.reset({t});
+  const QVariantMap ticket = m.data(m.index(0, 0), TaskModel::TicketRole).toMap();
+  EXPECT_EQ(ticket.value(QStringLiteral("provider")).toString(), QStringLiteral("github"));
+  EXPECT_EQ(ticket.value(QStringLiteral("key")).toString(), QStringLiteral("#42"));
+  EXPECT_EQ(ticket.value(QStringLiteral("url")).toString(), t.externalUrl);
+  EXPECT_EQ(ticket.value(QStringLiteral("assignee")).toString(), QStringLiteral("ada"));
+  EXPECT_EQ(ticket.value(QStringLiteral("author")).toString(), QStringLiteral("grace"));
+  EXPECT_EQ(ticket.value(QStringLiteral("issueType")).toString(), QStringLiteral("Bug"));
+  EXPECT_EQ(ticket.value(QStringLiteral("project")).toString(), QStringLiteral("acme/web"));
+  EXPECT_EQ(ticket.value(QStringLiteral("milestone")).toString(), QStringLiteral("v2"));
+  EXPECT_EQ(ticket.value(QStringLiteral("commentCount")).toInt(), 4);
+  EXPECT_TRUE(ticket.value(QStringLiteral("updatedAt")).toDateTime().isValid());
+}
+
+// One haystack per task, so the five filtering views stop each concatenating
+// their own — and so a ticket is findable by key, label and owner.
+TEST(TaskModelSearchRole, CoversKeyLabelsAssigneeAndProject) {
+  Task t;
+  t.id = QStringLiteral("github-42");
+  t.title = QStringLiteral("Fix Login");
+  t.desc = QStringLiteral("Steps To Repro");
+  t.externalId = QStringLiteral("42");
+  t.externalProvider = QStringLiteral("github");
+  t.assignee = QStringLiteral("Ada");
+  t.labels = {Label{QStringLiteral("Backend"), QString()}};
+  t.externalMeta.project = QStringLiteral("acme/web");
+  t.externalMeta.milestone = QStringLiteral("v2.0");
+
+  TaskModel m;
+  m.reset({t});
+  const QString hay = m.data(m.index(0, 0), TaskModel::SearchTextRole).toString();
+  for(const char* needle : {"fix login", "github-42", "steps to repro", "#42", "ada", "backend", "acme/web", "v2.0"}) {
+    EXPECT_TRUE(hay.contains(QLatin1String(needle))) << needle << " missing from: " << hay.toStdString();
+  }
+  // Lowercased once here so each view can compare against a lowercased query.
+  EXPECT_EQ(hay, hay.toLower());
 }
 
 // ─── Defer state (HEAP-124) ───

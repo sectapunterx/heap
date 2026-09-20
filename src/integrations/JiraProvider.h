@@ -25,6 +25,10 @@ QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& bas
 // text by concatenating every "text" leaf. Exposed for unit testing.
 QString jiraAdfToPlainText(const QByteArray& adfJson);
 
+// Parse a /issue/{key}/comment response (HEAP-117). Bodies arrive as ADF on
+// Cloud and as plain strings on Server/DC; both flatten to text. No network.
+QVector<ExternalComment> parseJiraComments(const QByteArray& json);
+
 // Make whatever the user pasted into a site root. People paste the URL from
 // their browser ("acme.atlassian.net/jira/software/projects/LTE/boards/1"), and
 // every one of those forms has to end up as "https://acme.atlassian.net".
@@ -116,6 +120,7 @@ class JiraProvider : public IntegrationProvider {
   void testConnection() override;
   void pullTasks() override;
   void pushStatusChange(const QString& externalId, const QString& newStatus) override;
+  void fetchComments(const QString& externalId, const QString& project) override;
 
  private:
   // One finished request, already drained — the reply itself is gone by the

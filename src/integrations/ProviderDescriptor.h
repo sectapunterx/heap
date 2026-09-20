@@ -30,9 +30,11 @@ struct AuthRecipe {
 };
 
 // Declarative extraction of one ExternalTask from one JSON issue object. Every
-// field is a dot-path into the object ("status.name", "links.html.href"); an
-// empty string means "not present". Used by parseWithFieldMap when a descriptor
-// has no bespoke ParseFn.
+// field is a dot-path into the object ("status.name", "links.html.href"); a
+// numeric segment indexes an array ("assignees.0.login"), a "a|b" path takes
+// the first of the two that resolves to something non-empty, and an empty
+// string means "not present". Used by parseWithFieldMap when a descriptor has
+// no bespoke ParseFn.
 struct FieldMap {
   QString arrayPointer;  // "" = root array, else a key holding the array ("issues","data","values")
   QString id;
@@ -42,14 +44,42 @@ struct FieldMap {
   QString priority;      // dot-path to a provider-native priority name
   QString url;           // dot-path to a web URL (skipped when urlTemplate is set)
   QString urlTemplate;   // "{baseUrl}/issues/{id}" — built when the object carries no URL
-  QString updatedAt;     // dot-path to an ISO-8601 timestamp
+  QString updatedAt;     // dot-path to a timestamp (ISO-8601 or epoch milliseconds)
   QString labels;        // dot-path to a labels array
   QString labelNameKey;  // if labels are objects, the key holding the name; empty = array of strings
+  // Ticket identity and context (HEAP-117). All optional.
+  QString labelColorKey;    // if labels are objects, the key holding a colour
+  QString assignee;         // dot-path to the owner's display name / handle
+  QString author;           // dot-path to the reporter's display name / handle
+  QString createdAt;        // dot-path to a timestamp
+  QString dueAt;            // dot-path to a timestamp
+  QString dueHasTimeField;  // dot-path to a bool saying the due value carries a clock time
+  QString commentCount;     // dot-path to a number
+  QString issueType;        // dot-path to an issue type / kind / level
+  QString project;          // dot-path to the owning project or repo
+  QString milestone;        // dot-path to a milestone / fix version name
   // Boolean-completion providers (Asana `completed`, Todoist `is_completed`)
   // have no status string — derive one from a bool leaf instead.
   QString boolStatusField;
   QString boolTrueStatus = QStringLiteral("closed");
   QString boolFalseStatus = QStringLiteral("open");
+};
+
+// Declarative extraction of one comment (HEAP-117). Same dot-path rules as
+// FieldMap. An empty `path` on the descriptor means the provider has no
+// comment endpoint heap knows about.
+struct CommentMap {
+  QString arrayPointer;  // "" = root array
+  QString author;
+  QString body;
+  QString createdAt;
+  QString url;
+  // A leaf that, when true, marks an entry as machine-generated noise —
+  // GitLab's "changed the description" notes come back with system=true.
+  QString skipIfTrue;
+  // True when the endpoint has no sort parameter and answers oldest-first, so
+  // the list has to be reversed to put the newest comment on top.
+  bool newestLast = false;
 };
 
 // A credential/config input rendered by the Settings → Integrations card.
@@ -158,6 +188,13 @@ struct ProviderDescriptor {
   QString baseUrlFallback;   // default base URL when {host} resolves empty (e.g. gitlab.com)
   FieldMap fields;           // used when parser == nullptr
   ParseFn parser = nullptr;  // bespoke parser (reused GitHub/GitLab parsers)
+
+  // Read-only comments (HEAP-117). Empty path = the provider has none heap
+  // knows about, and fetchComments answers "unsupported" without a request.
+  // {externalId} and the scope key ({repo}/{projectId}) expand as usual, the
+  // latter from the issue's own project rather than the configured one.
+  QString commentsPathTemplate;
+  CommentMap comments;
 
   // Write-back (empty pushPathTemplate = pull-only for v1).
   QString pushMethod = QStringLiteral("PATCH");
