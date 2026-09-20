@@ -67,7 +67,13 @@ Item {
     }
 
     function buildItems() {
+        // Dependencies of the `items` binding below, read unconditionally.
+        // passesFilter() reads the last two, but only for rows that reach
+        // it: with nothing archived it never runs, and a property that was
+        // never read is not a dependency, so the list would go stale.
         const _rev = root.modelRev;
+        const _q = root.searchText;
+        const _pri = root.prioritiesFilter;
         const m = AppController.tasks;
         const out = [];
         for (let i = 0; i < m.rowCount(); i++) {
@@ -110,9 +116,14 @@ Item {
         return out;
     }
 
+    // A real binding, so it re-evaluates when anything buildItems() reads
+    // moves. It used to be helped along by `onSearchTextChanged: modelRev++`
+    // and the same for prioritiesFilter — which was both redundant and a
+    // binding loop: `prioritiesFilter`'s own default binding is evaluated on
+    // its first read, which happens inside this binding, and the resulting
+    // change signal bumped modelRev while `items` was still being computed.
+    // Qt then reported a loop and abandoned that evaluation.
     readonly property var items: buildItems()
-    onSearchTextChanged: modelRev++   // re-evaluate buildItems via binding
-    onPrioritiesFilterChanged: modelRev++
 
     function _flatVisibleIds() {
         const ids = [];
@@ -199,13 +210,20 @@ Item {
 
         // Body
         ScrollView {
+            id: archScroll
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
             ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            // Pin the content width instead of letting the ScrollView derive it
+            // from the content: the content is a Layout whose own width came
+            // from the view, so each rearrange fed the next one and Qt gave up
+            // after two iterations ("recursive rearrange"), leaving the cards
+            // laid out against a stale width.
+            contentWidth: availableWidth
 
             ColumnLayout {
-                width: root.width
+                width: archScroll.availableWidth
                 spacing: 0
 
                 Item {
@@ -246,17 +264,26 @@ Item {
 
                     Repeater {
                         model: root.items
-                        delegate: RowLayout {
+                        // Anchors, not a RowLayout. TaskCard's height comes from
+                        // wrapping text, so it is a height-for-width item: inside a
+                        // Layout that has to know implicit sizes before it hands out
+                        // widths, each pass changed the answer to the previous one
+                        // and Qt aborted the rearrange after two iterations. Anchors
+                        // settle the width first and let the height follow.
+                        delegate: Item {
                             id: row
                             required property var modelData
                             readonly property var st: root.statusInfo(modelData.status)
                             Layout.fillWidth: true
-                            spacing: 10
+                            implicitHeight: archCard.implicitHeight
 
                             // Status pill — gives context for "from which column".
                             Rectangle {
-                                Layout.preferredWidth: 86
-                                Layout.preferredHeight: 24
+                                id: statusPill
+                                width: 86
+                                height: 24
+                                y: (archCard.implicitHeight - height) / 2
+                                anchors.left: parent.left
                                 radius: 999
                                 color: "transparent"
                                 border.color: Theme.withAlpha(row.st.color, 0.45)
@@ -272,7 +299,10 @@ Item {
 
                             TaskCard {
                                 id: archCard
-                                Layout.fillWidth: true
+                                anchors.left: statusPill.right
+                                anchors.leftMargin: 10
+                                anchors.right: parent.right
+                                anchors.top: parent.top
                                 task: row.modelData
                                 onClicked: root.taskClicked(row.modelData.id)
                                 onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)

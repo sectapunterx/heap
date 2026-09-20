@@ -57,4 +57,49 @@ TestCase {
         AppController.deleteTask(p0.id);
         AppController.deleteTask(p1.id);
     }
+
+    // `items` is a binding over buildItems(), and buildItems() reads searchText
+    // and prioritiesFilter through passesFilter(). Two handlers used to bump
+    // modelRev on those properties to "re-evaluate buildItems via binding",
+    // which was both redundant and a loop: prioritiesFilter's own default
+    // binding is evaluated on its first read — inside this very binding — and
+    // the change signal it emits bumped modelRev while items was still being
+    // computed. Qt reported a binding loop and abandoned the evaluation.
+    //
+    // This pins both halves: no warning, and the list still tracks the filters.
+    function test_items_track_the_filters_without_a_binding_loop() {
+        // Armed before anything is built: failOnWarning only catches what is
+        // emitted after the call, and the loop fires during construction.
+        failOnWarning(/Binding loop detected/);
+        failOnWarning(/recursive rearrange/);
+
+        const t = AppController.newTaskDraft("todo");
+        t.title = "arch loop probe zulu"; t.priority = "P1";
+        AppController.saveTask(t);
+        AppController.setArchived(t.id, true);
+
+        const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
+
+        function has(id) {
+            for (let i = 0; i < av.items.length; i++) if (av.items[i].id === id) return true;
+            return false;
+        }
+
+        verify(has(t.id), "an archived task must be listed");
+
+        // Read through the binding, not buildItems(): the point is that the
+        // binding re-evaluates on its own.
+        av.searchText = "zulu";
+        verify(has(t.id), "the binding must re-run when searchText moves");
+        av.searchText = "nothingmatchesthis";
+        verify(!has(t.id), "and must narrow, not stay stale");
+        av.searchText = "";
+
+        av.prioritiesFilter = ({ P0: true });
+        verify(!has(t.id), "the binding must re-run when prioritiesFilter moves");
+        av.prioritiesFilter = ({ P1: true });
+        verify(has(t.id));
+
+        AppController.deleteTask(t.id);
+    }
 }
