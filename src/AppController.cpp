@@ -855,7 +855,7 @@ void AppController::moveTaskTo(const QString& id, const QString& statusId, const
     return;  // the column rejected it; do not move it half-way
   }
 
-  UndoScope scope(this, tr_("task.moveUndone").arg(id));
+  const UndoScope scope(this, tr_("task.moveUndone").arg(id));
 
   // The status change carries the recurrence spawn, the focus block and the
   // tracker push with it, so it goes through moveTask rather than being
@@ -905,7 +905,7 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
   if(m_selectedTaskIdsList.isEmpty()) {
     return;
   }
-  UndoScope scope(this, tr_("selection.toast.moved").arg(m_selectedTaskIdsList.size()));
+  const UndoScope scope(this, tr_("selection.toast.moved").arg(m_selectedTaskIdsList.size()));
   // Move them in board order and keep inserting before the same card, so the
   // block lands in the order it had rather than reversed.
   QVector<::Task> picked;
