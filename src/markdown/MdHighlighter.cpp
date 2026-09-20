@@ -158,7 +158,9 @@ namespace {
 // recent full pass, not the one this line is actually inside.
 class FenceLanguage : public QTextBlockUserData {
  public:
-  explicit FenceLanguage(QString lang) : language(std::move(lang)) {}
+  explicit FenceLanguage(QString lang) : language(std::move(lang)) {
+  }
+
   QString language;
 };
 
@@ -181,42 +183,71 @@ const QRegularExpression& commentRxFor(const QString& language) {
   static const QRegularExpression neverRx(QStringLiteral("(?!)"));
 
   static const QHash<QString, const QRegularExpression*> kByLanguage = {
-      {QStringLiteral("python"), &hashRx},     {QStringLiteral("py"), &hashRx},
-      {QStringLiteral("ruby"), &hashRx},       {QStringLiteral("rb"), &hashRx},
-      {QStringLiteral("sh"), &hashRx},         {QStringLiteral("bash"), &hashRx},
-      {QStringLiteral("zsh"), &hashRx},        {QStringLiteral("shell"), &hashRx},
-      {QStringLiteral("yaml"), &hashRx},       {QStringLiteral("yml"), &hashRx},
-      {QStringLiteral("toml"), &hashRx},       {QStringLiteral("ini"), &hashRx},
-      {QStringLiteral("conf"), &hashRx},       {QStringLiteral("cmake"), &hashRx},
-      {QStringLiteral("make"), &hashRx},       {QStringLiteral("makefile"), &hashRx},
-      {QStringLiteral("dockerfile"), &hashRx}, {QStringLiteral("perl"), &hashRx},
-      {QStringLiteral("r"), &hashRx},          {QStringLiteral("nix"), &hashRx},
+      {QStringLiteral("python"), &hashRx},
+      {QStringLiteral("py"), &hashRx},
+      {QStringLiteral("ruby"), &hashRx},
+      {QStringLiteral("rb"), &hashRx},
+      {QStringLiteral("sh"), &hashRx},
+      {QStringLiteral("bash"), &hashRx},
+      {QStringLiteral("zsh"), &hashRx},
+      {QStringLiteral("shell"), &hashRx},
+      {QStringLiteral("yaml"), &hashRx},
+      {QStringLiteral("yml"), &hashRx},
+      {QStringLiteral("toml"), &hashRx},
+      {QStringLiteral("ini"), &hashRx},
+      {QStringLiteral("conf"), &hashRx},
+      {QStringLiteral("cmake"), &hashRx},
+      {QStringLiteral("make"), &hashRx},
+      {QStringLiteral("makefile"), &hashRx},
+      {QStringLiteral("dockerfile"), &hashRx},
+      {QStringLiteral("perl"), &hashRx},
+      {QStringLiteral("r"), &hashRx},
+      {QStringLiteral("nix"), &hashRx},
 
-      {QStringLiteral("c"), &slashRx},         {QStringLiteral("cpp"), &slashRx},
-      {QStringLiteral("c++"), &slashRx},       {QStringLiteral("cxx"), &slashRx},
-      {QStringLiteral("h"), &slashRx},         {QStringLiteral("hpp"), &slashRx},
-      {QStringLiteral("java"), &slashRx},      {QStringLiteral("js"), &slashRx},
-      {QStringLiteral("javascript"), &slashRx}, {QStringLiteral("ts"), &slashRx},
-      {QStringLiteral("typescript"), &slashRx}, {QStringLiteral("jsx"), &slashRx},
-      {QStringLiteral("tsx"), &slashRx},       {QStringLiteral("go"), &slashRx},
-      {QStringLiteral("rust"), &slashRx},      {QStringLiteral("rs"), &slashRx},
-      {QStringLiteral("kotlin"), &slashRx},    {QStringLiteral("kt"), &slashRx},
-      {QStringLiteral("swift"), &slashRx},     {QStringLiteral("cs"), &slashRx},
-      {QStringLiteral("csharp"), &slashRx},    {QStringLiteral("scala"), &slashRx},
-      {QStringLiteral("dart"), &slashRx},      {QStringLiteral("qml"), &slashRx},
-      {QStringLiteral("glsl"), &slashRx},      {QStringLiteral("groovy"), &slashRx},
+      {QStringLiteral("c"), &slashRx},
+      {QStringLiteral("cpp"), &slashRx},
+      {QStringLiteral("c++"), &slashRx},
+      {QStringLiteral("cxx"), &slashRx},
+      {QStringLiteral("h"), &slashRx},
+      {QStringLiteral("hpp"), &slashRx},
+      {QStringLiteral("java"), &slashRx},
+      {QStringLiteral("js"), &slashRx},
+      {QStringLiteral("javascript"), &slashRx},
+      {QStringLiteral("ts"), &slashRx},
+      {QStringLiteral("typescript"), &slashRx},
+      {QStringLiteral("jsx"), &slashRx},
+      {QStringLiteral("tsx"), &slashRx},
+      {QStringLiteral("go"), &slashRx},
+      {QStringLiteral("rust"), &slashRx},
+      {QStringLiteral("rs"), &slashRx},
+      {QStringLiteral("kotlin"), &slashRx},
+      {QStringLiteral("kt"), &slashRx},
+      {QStringLiteral("swift"), &slashRx},
+      {QStringLiteral("cs"), &slashRx},
+      {QStringLiteral("csharp"), &slashRx},
+      {QStringLiteral("scala"), &slashRx},
+      {QStringLiteral("dart"), &slashRx},
+      {QStringLiteral("qml"), &slashRx},
+      {QStringLiteral("glsl"), &slashRx},
+      {QStringLiteral("groovy"), &slashRx},
 
       {QStringLiteral("php"), &slashHashRx},
 
-      {QStringLiteral("sql"), &dashRx},        {QStringLiteral("lua"), &dashRx},
-      {QStringLiteral("haskell"), &dashRx},    {QStringLiteral("hs"), &dashRx},
+      {QStringLiteral("sql"), &dashRx},
+      {QStringLiteral("lua"), &dashRx},
+      {QStringLiteral("haskell"), &dashRx},
+      {QStringLiteral("hs"), &dashRx},
       {QStringLiteral("ada"), &dashRx},
 
       // No line comment at all — greying out a `#` in JSON is pure noise.
-      {QStringLiteral("json"), &neverRx},      {QStringLiteral("csv"), &neverRx},
-      {QStringLiteral("html"), &neverRx},      {QStringLiteral("xml"), &neverRx},
-      {QStringLiteral("css"), &neverRx},       {QStringLiteral("text"), &neverRx},
-      {QStringLiteral("plain"), &neverRx},     {QStringLiteral("txt"), &neverRx},
+      {QStringLiteral("json"), &neverRx},
+      {QStringLiteral("csv"), &neverRx},
+      {QStringLiteral("html"), &neverRx},
+      {QStringLiteral("xml"), &neverRx},
+      {QStringLiteral("css"), &neverRx},
+      {QStringLiteral("text"), &neverRx},
+      {QStringLiteral("plain"), &neverRx},
+      {QStringLiteral("txt"), &neverRx},
       {QStringLiteral("diff"), &neverRx},
   };
 

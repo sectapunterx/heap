@@ -143,8 +143,7 @@ TEST(MdHighlighter, ReHighlightingOneLineInTheSecondFenceUsesItsLanguage) {
 // inside it.
 TEST(MdHighlighter, ProseAfterAFenceIsNotTreatedAsCode) {
   Highlighted h(QStringLiteral("```python\ny = 2\n```\nplain # text\n"));
-  EXPECT_FALSE(h.colorAt(3, 0).isValid() && looksLikeComment(h, 3, 6))
-      << "a line outside the fence is prose, not python";
+  EXPECT_FALSE(h.colorAt(3, 0).isValid() && looksLikeComment(h, 3, 6)) << "a line outside the fence is prose, not python";
 }
 
 int main(int argc, char** argv) {
