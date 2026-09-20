@@ -209,18 +209,61 @@ TEST_F(MigrationTest, LadderSkipsRungsBelowTheEntryVersion) {
   })")
                          .object();
 
-  // Entering at v4 with kSchemaVersion == 4 is the version gate.
-  EXPECT_FALSE(heap::state::migrateState(root, 4));
+  // A v4 document is below the current version, so the ladder does run — but
+  // only the rungs at or above 4. The v3→v4 rung consumes `deadline` and
+  // rewrites scheduledAt/dueAt/hasTime; it must not touch this document.
+  EXPECT_TRUE(heap::state::migrateState(root, 4));
 
-  // The rung guard is what this case is really about: it must hold even when
-  // the document is below the current version for some *other* reason. Raising
-  // kSchemaVersion must not make the v3→v4 rung run again on a v4 document.
-  QJsonObject fromFour = root;
-  heap::state::migrateState(fromFour, 4);
-  const QJsonObject task = fromFour["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(0).toObject();
+  const QJsonObject task = root["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(0).toObject();
   EXPECT_EQ(task["scheduledAt"].toString(), QStringLiteral("2026-07-08T14:30:00"))
       << "a rung below the entry version must not rewrite scheduledAt";
   EXPECT_TRUE(task["hasTime"].toBool()) << "a rung below the entry version must not clear hasTime";
+  EXPECT_TRUE(task.contains(QStringLiteral("deadline")))
+      << "the v3->v4 rung consumes `deadline`; entering at v4 it must be left alone";
+  // The v4→v5 rung, on the other hand, is at the entry version and does run.
+  EXPECT_TRUE(task.contains(QStringLiteral("rank")));
+}
+
+// v4→v5: the board had no per-task order, so the order it showed was the array
+// order. The migration has to freeze exactly that, spaced so a later drop
+// between two cards has a midpoint to take.
+TEST_F(MigrationTest, V4ToV5GivesEveryTaskARankInArrayOrder) {
+  QJsonObject root = QJsonDocument::fromJson(R"({
+    "schemaVersion": 4,
+    "profiles": [{"id": "default", "tasks": [
+      {"id": "T-1"}, {"id": "T-2"}, {"id": "T-3"}
+    ]}]
+  })")
+                         .object();
+
+  ASSERT_TRUE(heap::state::migrateState(root, 4));
+
+  const QJsonArray tasks = root["profiles"].toArray().at(0).toObject()["tasks"].toArray();
+  ASSERT_EQ(tasks.size(), 3);
+  double previous = -1.0;
+  for(const QJsonValue& v : tasks) {
+    const double rank = v.toObject()["rank"].toDouble(-1.0);
+    EXPECT_GT(rank, previous) << "ranks must ascend with the array order";
+    previous = rank;
+  }
+  // Spaced, not 1/2/3: a midpoint insert must not immediately need a rebalance.
+  EXPECT_GE(tasks.at(1).toObject()["rank"].toDouble() - tasks.at(0).toObject()["rank"].toDouble(), 2.0);
+}
+
+// A task that already carries a rank keeps it — the rung must not renumber a
+// column that a newer build already ordered.
+TEST_F(MigrationTest, V4ToV5KeepsAnExistingRank) {
+  QJsonObject root = QJsonDocument::fromJson(R"({
+    "schemaVersion": 4,
+    "profiles": [{"id": "default", "tasks": [{"id": "T-1", "rank": 7.5}, {"id": "T-2"}]}]
+  })")
+                         .object();
+
+  ASSERT_TRUE(heap::state::migrateState(root, 4));
+
+  const QJsonArray tasks = root["profiles"].toArray().at(0).toObject()["tasks"].toArray();
+  EXPECT_DOUBLE_EQ(tasks.at(0).toObject()["rank"].toDouble(), 7.5);
+  EXPECT_GT(tasks.at(1).toObject()["rank"].toDouble(), 0.0);
 }
 
 // state.json written by a newer build: this one cannot represent the fields it

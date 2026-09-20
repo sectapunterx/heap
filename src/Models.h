@@ -44,6 +44,16 @@ struct ExternalMeta {
   bool operator==(const ExternalMeta&) const = default;
 };
 
+// A dependency between two tasks. Only the "blocks" direction is ever stored:
+// "blocked by" is a reverse lookup over everyone's links, so the two halves of
+// a relationship cannot drift apart.
+struct TaskLink {
+  QString type;  // "blocks"
+  QString targetId;
+
+  bool operator==(const TaskLink&) const = default;
+};
+
 struct Task {
   QString id;
   QString title;
@@ -82,6 +92,14 @@ struct Task {
   QString assignee;      // tracker-supplied owner, empty for local tasks
   // What the tracker says about this issue (HEAP-117). Default for a local task.
   ExternalMeta externalMeta;
+  // Manual position within a status column. Fractional on purpose: dropping a
+  // card between two others takes the midpoint of their ranks, so one task is
+  // rewritten per move instead of renumbering the column. That matters for
+  // sync — JsonMerger resolves conflicts per element, so a renumber would turn
+  // one reorder into a conflict on every card in the column.
+  double rank = 0.0;
+  // Dependencies this task blocks. See TaskLink.
+  QVector<TaskLink> links;
 
   bool operator==(const Task&) const = default;
 };
@@ -187,6 +205,9 @@ class TaskModel : public QAbstractListModel {
     // above silently reassigns every offset below it.
     TicketRole,
     SearchTextRole,
+    // Manual order within a column, and the dependency links.
+    RankRole,
+    BlocksRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

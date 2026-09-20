@@ -14,7 +14,11 @@ namespace {
 
 // Kept in lockstep with src/StateSerializer.cpp: a field that only one of the
 // two serializers knows about is a field the sync transport will drop (HEAP-131).
-static_assert(heap::meta::fieldCount<Task>() == 22,
+static_assert(heap::meta::fieldCount<TaskLink>() == 2,
+              "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
+              "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<Task>() == 24,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -67,6 +71,27 @@ QVector<Label> labelsFromJson(const QJsonArray& a) {
   return out;
 }
 
+QJsonArray linksToJson(const QVector<TaskLink>& links) {
+  QJsonArray a;
+  for(const TaskLink& l : links) {
+    QJsonObject o;
+    o[QStringLiteral("type")] = l.type;
+    o[QStringLiteral("targetId")] = l.targetId;
+    a.append(o);
+  }
+  return a;
+}
+
+QVector<TaskLink> linksFromJson(const QJsonArray& a) {
+  QVector<TaskLink> out;
+  out.reserve(a.size());
+  for(const QJsonValue& v : a) {
+    const QJsonObject o = v.toObject();
+    out.append(TaskLink{o.value(QStringLiteral("type")).toString(), o.value(QStringLiteral("targetId")).toString()});
+  }
+  return out;
+}
+
 }  // namespace
 
 QJsonArray SyncSerializer::sortedById(const QJsonArray& arr) {
@@ -112,6 +137,8 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   o[QStringLiteral("estimateMinutes")] = t.estimateMinutes;
   o[QStringLiteral("someday")] = t.someday;
   o[QStringLiteral("assignee")] = t.assignee;
+  o[QStringLiteral("rank")] = t.rank;
+  o[QStringLiteral("links")] = linksToJson(t.links);
   // Tracker metadata (HEAP-117). Nested, and its timestamps are deliberately
   // not named `updatedAt`/`createdAt`: JsonMerger reads those names at a task's
   // top level as heap's own last-write clock, and it applies "earlier wins" to
@@ -171,6 +198,8 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.externalMeta.updatedAt = dateTimeFromStr(meta.value(QStringLiteral("remoteUpdatedAt")).toString());
   t.externalMeta.dueAt = dateTimeFromStr(meta.value(QStringLiteral("remoteDueAt")).toString());
   t.externalMeta.crossProject = meta.value(QStringLiteral("crossProject")).toBool();
+  t.rank = o.value(QStringLiteral("rank")).toDouble();
+  t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   return t;
 }
 
