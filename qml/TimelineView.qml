@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
+import "Search.js" as Search
 
 Item {
     id: root
@@ -71,12 +72,10 @@ Item {
 
     function passesFilter(t) {
         if (!root.showDone && t.status === "done") return false;
-        const q = (root.searchText || "").toLowerCase();
-        if (q && q.length > 0) {
-            // Built once in C++, already lowercased, and covers the ticket key,
-            // labels and assignee as well as title/id/desc (HEAP-117).
-            if (String(t.searchText || "").indexOf(q) < 0) return false;
-        }
+        // Clauses (`status:blocked`) filter structurally, the leftover words
+        // stay a substring test. Compiled once per (text, modelRev), not once
+        // per row.
+        if (!Search.accepts(AppController, root.searchText, root.modelRev, t)) return false;
         let anyPri = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { anyPri = true; break; }
         if (anyPri && !root.prioritiesFilter[t.priority]) return false;

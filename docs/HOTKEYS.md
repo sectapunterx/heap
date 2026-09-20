@@ -17,6 +17,10 @@ restores a single default; *Reset all* restores the whole catalog.
 | Focus the header search | `Ctrl+F` |
 | Undo last deletion | `Ctrl+Z` |
 
+The header search also takes `field:value` clauses — `status:`, `priority:`,
+`deadline:`, `tag:`, `mention:` — mixed freely with ordinary search words. See
+[TUTORIAL.md](TUTORIAL.md#7-the-search-box-is-a-query-box).
+
 ## Views
 
 | Action | Default |

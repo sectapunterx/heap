@@ -1,5 +1,7 @@
 #include "TaskFilterProxy.h"
 
+#include <QDate>
+
 TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
   // The header badge and the "nothing here" placeholder both read count().
   connect(this, &QAbstractItemModel::rowsInserted, this, &TaskFilterProxy::countChanged);
@@ -28,11 +30,14 @@ void TaskFilterProxy::setShowArchived(bool v) {
 }
 
 void TaskFilterProxy::setSearchText(const QString& v) {
-  const QString lowered = v.toLower();
-  if(m_searchText == lowered) {
+  if(m_rawSearch == v) {
     return;
   }
-  m_searchText = lowered;
+  m_rawSearch = v;
+  // Compiled once per keystroke, not once per row: resolving `deadline:<friday`
+  // runs the date parser, which has no business being in a per-row predicate.
+  m_query = heap::query::TaskQuery::compile(v, QDate::currentDate());
+  m_searchText = m_query.freeText();
   invalidateFilter();
   emit filterChanged();
   emit countChanged();
@@ -75,6 +80,15 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   // would quietly narrow what the board can find.
   if(!m_searchText.isEmpty() && !src->data(idx, TaskModel::SearchTextRole).toString().contains(m_searchText)) {
     return false;
+  }
+  // Structured clauses, if the box held any. The evaluator works on the real
+  // Task rather than a role-by-role reconstruction of it, so a clause can ask
+  // about fields the model exposes no role for.
+  if(m_query.isQuery()) {
+    const auto* tasks = qobject_cast<const TaskModel*>(src);
+    if(tasks == nullptr || sourceRow >= tasks->items().size() || !m_query.matches(tasks->items().at(sourceRow))) {
+      return false;
+    }
   }
   return true;
 }

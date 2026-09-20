@@ -10,6 +10,9 @@ Rectangle {
     height: 48
 
     property alias searchText: searchField.text
+    // Parse-only, so this costs nothing per keystroke — it never touches the
+    // task list, unlike the filtering itself.
+    readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
     signal newTaskRequested()
     signal newProfileRequested()
     signal renameProfileRequested()
@@ -347,7 +350,15 @@ Rectangle {
                 anchors.fill: parent
                 anchors.leftMargin: 10; anchors.rightMargin: 6
                 spacing: 4
-                Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
+                // Lights up when the text holds a clause, so it is obvious that
+                // `status:blocked` narrowed the board structurally rather than
+                // failing to find the literal string anywhere.
+                Text {
+                    text: "⌕"
+                    color: root.searchIsQuery ? Theme.accent : Theme.textDim
+                    font.pixelSize: 11
+                    Behavior on color { ColorAnimation { duration: Theme.scaledMs(120) } }
+                }
                 TextField {
                     id: searchField
                     Layout.fillWidth: true
@@ -358,6 +369,27 @@ Rectangle {
                     font.pixelSize: 12
                     background: Item {}
                     selectByMouse: true
+                    // The syntax is only discoverable if something says it out
+                    // loud; the field itself is the only place the user looks.
+                    QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0
+                    QQC.ToolTip.delay: 600
+                    QQC.ToolTip.text: I18n.t("topbar.searchQueryHint").arg(AppController.searchFields().join(": · ") + ":")
+                }
+                // Clause count is not worth showing; that it *is* a query is.
+                Rectangle {
+                    visible: root.searchIsQuery
+                    radius: 4
+                    color: Theme.accentSoft
+                    border.color: Theme.accent
+                    border.width: 1
+                    width: qLbl.implicitWidth + 10; height: 16
+                    Text {
+                        id: qLbl
+                        anchors.centerIn: parent
+                        text: I18n.t("topbar.searchQueryBadge")
+                        color: Theme.accent
+                        font.family: Theme.fontMono; font.pixelSize: 9
+                    }
                 }
                 // Shortcut hint. It used to read "⌘K" — a macOS glyph on every
                 // platform, and the wrong binding besides: Ctrl+K opens the

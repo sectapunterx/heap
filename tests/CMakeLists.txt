@@ -29,6 +29,21 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# The query language resolves `deadline:<friday` through the app's own date
+# parser, so every target that compiles TaskQuery.cpp drags the whole chrono
+# chain (both locales included) behind it. Named once so the two suites that
+# need it cannot drift apart.
+set(HEAP_QUERY_SOURCES
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/QueryParser.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/QueryParser.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/TaskQuery.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/TaskQuery.h
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
+)
+
 add_executable(heap_chrono_tests
     test_chrono_parser.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
@@ -212,6 +227,7 @@ set(HEAP_INTEGRATION_SOURCES
 set(HEAP_SELECTION_SOURCES
         test_selection.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -289,6 +305,7 @@ add_test(NAME heap_selection_tests COMMAND heap_selection_tests)
 set(HEAP_NOTES_SOURCES
         test_notes.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -405,6 +422,7 @@ add_test(NAME heap_platform_tests COMMAND heap_platform_tests)
 set(HEAP_PERSISTENCE_SOURCES
         test_persistence.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -480,6 +498,7 @@ add_test(NAME heap_persistence_tests COMMAND heap_persistence_tests)
 set(HEAP_EXPORT_SOURCES
         test_export_markdown.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -554,6 +573,7 @@ add_test(NAME heap_export_tests COMMAND heap_export_tests)
 set(HEAP_PROFILE_IO_SOURCES
         test_profile_io.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -627,6 +647,7 @@ add_test(NAME heap_profile_io_tests COMMAND heap_profile_io_tests)
 set(HEAP_ONBOARDING_SOURCES
         test_onboarding.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -720,6 +741,7 @@ add_test(NAME heap_sampledata_tests COMMAND heap_sampledata_tests)
 set(HEAP_UNDO_SOURCES
         test_undo.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -795,6 +817,7 @@ add_test(NAME heap_undo_tests COMMAND heap_undo_tests)
 set(HEAP_VIEW_SOURCES
         test_view.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
@@ -1093,12 +1116,16 @@ add_test(NAME heap_sync_tests COMMAND heap_sync_tests)
 # Pure tokenizer/parser for the embedded Notes query language. Qt6::Core only.
 add_executable(heap_query_tests
         test_query_parser.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/QueryParser.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/query/QueryParser.h
+        test_task_query.cpp
+        ${HEAP_QUERY_SOURCES}
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
 )
+set_target_properties(heap_query_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_query_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_query_tests PRIVATE
         Qt6::Core
+        Qt6::Gui
+        Qt6::Qml
         heap_markdown
         GTest::gtest
         GTest::gtest_main
@@ -1130,6 +1157,7 @@ add_executable(heap_models_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/TaskFilterProxy.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/TaskFilterProxy.h
+        ${HEAP_QUERY_SOURCES}
 )
 set_target_properties(heap_models_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -1201,6 +1229,7 @@ add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 set(HEAP_APPCTRL_SOURCES
         test_appcontroller.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
+        ${HEAP_QUERY_SOURCES}
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp

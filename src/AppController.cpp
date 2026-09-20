@@ -22,6 +22,7 @@
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
+#include "query/TaskQuery.h"
 #include "recur/RecurrenceEngine.h"
 #include "text/TaskTextUtils.h"
 #include "update/Updater.h"
@@ -1527,6 +1528,34 @@ QVariantMap AppController::taskById(const QString& id) const {
   // Everything the editor's read-only ticket strip shows (HEAP-117).
   m["ticket"] = ticketToVariant(t);
   return m;
+}
+
+QVariantMap AppController::compileSearch(const QString& text) const {
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today);
+  QVariantMap out;
+  out["isQuery"] = q.isQuery();
+  out["freeText"] = q.freeText();
+  // The id list is what the JS views filter on. Built only for a real query:
+  // with no clauses it would be every task, which is both useless and the
+  // largest thing this call could return.
+  QStringList ids;
+  if(q.isQuery()) {
+    for(const Task& t : m_tasks.items()) {
+      if(q.matches(t)) {
+        ids << t.id;
+      }
+    }
+  }
+  out["ids"] = ids;
+  return out;
+}
+
+bool AppController::searchIsQuery(const QString& text) const {
+  return heap::query::TaskQuery::compile(text, m_today).isQuery();
+}
+
+QStringList AppController::searchFields() const {
+  return heap::query::queryFields();
 }
 
 QString AppController::eventHourLabel(double hour) const {
