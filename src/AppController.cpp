@@ -1448,7 +1448,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       }
     }
 
-    UndoScope undo(this, tr_("undo.splitSeries"));
+    const UndoScope undo(this, tr_("undo.splitSeries"));
     // The old master is truncated first: if the split lands on its very first
     // occurrence there is nothing left of it, and it goes rather than lingering
     // as an empty series.
@@ -1498,7 +1498,7 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
   }
 
   if(scope == QStringLiteral("all")) {
-    UndoScope undo(this, tr_("undo.deleteSeries"));
+    const UndoScope undo(this, tr_("undo.deleteSeries"));
     // The overrides go with it: an override without its master is a ghost.
     QStringList doomed;
     for(const CalEvent& e : m_events.items()) {
@@ -1522,7 +1522,7 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
 
   if(scope == QStringLiteral("following")) {
     heap::cal::RRule rule = heap::cal::parseRRule(master.rrule);
-    UndoScope undo(this, tr_("undo.deleteFollowing"));
+    const UndoScope undo(this, tr_("undo.deleteFollowing"));
     QStringList doomed;
     for(const CalEvent& e : m_events.items()) {
       if(e.masterId == masterId && e.originalDate.isValid() && e.originalDate >= occurrenceDate) {
@@ -1547,7 +1547,7 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
   }
 
   // "this": remember the hole rather than rewriting the series.
-  UndoScope undo(this, tr_("undo.deleteOccurrence"));
+  const UndoScope undo(this, tr_("undo.deleteOccurrence"));
   QStringList doomed;
   for(const CalEvent& e : m_events.items()) {
     if(e.masterId == masterId && e.originalDate == occurrenceDate) {

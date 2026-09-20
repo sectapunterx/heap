@@ -151,7 +151,7 @@ inline QString toRRuleText(const RRule& rule) {
                                               {6, QStringLiteral("SA")},
                                               {7, QStringLiteral("SU")}};
     QStringList days;
-    for(int d : rule.byDay) {
+    for(const int d : rule.byDay) {
       days << kDays.value(d);
     }
     parts << QStringLiteral("BYDAY=") + days.join(QChar(','));
@@ -219,7 +219,7 @@ inline QVector<QDate> expand(const RRule& rule, const QDate& start, const QDate&
       if(week > hardEnd && week > from) {
         break;
       }
-      for(int day : days) {
+      for(const int day : days) {
         const QDate d = week.addDays(day - 1);
         if(d > hardEnd && d > from) {
           continue;
@@ -268,7 +268,7 @@ inline QDate nextAfter(const RRule& rule, const QDate& start, const QDate& after
   }
   // A year is enough for every frequency in this subset except a long
   // INTERVAL on YEARLY, which is handled by widening once.
-  for(int years : {1, 4, 25}) {
+  for(const int years : {1, 4, 25}) {
     const QVector<QDate> dates = expand(rule, start, after.addDays(1), after.addYears(years));
     if(!dates.isEmpty()) {
       return dates.first();
