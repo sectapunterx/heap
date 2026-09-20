@@ -127,6 +127,14 @@ target_link_libraries(heap_paths_tests PRIVATE
 
 add_test(NAME heap_paths_tests COMMAND heap_paths_tests)
 
+# Board ranking — header-only, so only the test TU compiles.
+add_executable(heap_rank_tests test_rank.cpp)
+target_include_directories(heap_rank_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+# Gui, not just Core: Rank.h reaches StateSerializer.h, which reaches Models.h
+# and its QColor.
+target_link_libraries(heap_rank_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
+add_test(NAME heap_rank_tests COMMAND heap_rank_tests)
+
 # Calendar hour clamping — header-only, so only the test TU compiles.
 add_executable(heap_cal_tests test_event_clamp.cpp)
 target_include_directories(heap_cal_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -805,6 +813,9 @@ add_test(NAME heap_roundtrip_tests COMMAND heap_roundtrip_tests)
 # ─── Schema migration (HEAP-146) and fault injection (HEAP-156) ───
 # Both boot a real AppController headless, so they reuse the AppController source
 # set above (each brings its own main()).
+# ─── Manual card order on the board ───
+heap_add_appcontroller_test(heap_board_order_tests test_board_order.cpp)
+
 # ─── Column (status) CRUD ───
 # addStatus / renameStatus / moveStatus / deleteStatus, including the task
 # re-homing a column delete performs and the undo that reverses it.

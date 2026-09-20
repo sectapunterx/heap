@@ -198,7 +198,8 @@ Item {
             }
             Body {
                 text: "Columns are statuses (To Do, In Progress, Review, Done, and any of your own). Cards "
-                    + "are dragged between columns. A card shows: ID, priority "
+                    + "are dragged between columns and reordered within them — a line shows where the card "
+                    + "will land. A card shows: ID, priority "
                     + "(P0–P3), title, git branch (if set), and a time badge if the task is placed on the "
                     + "calendar. The mouse wheel scrolls the board horizontally."
             }
