@@ -11,6 +11,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "Segments.js" as Seg
 import "Search.js" as Search
 
 Item {
@@ -21,7 +22,10 @@ Item {
     property var prioritiesFilter: ({})
     property bool showArchived: false
     signal taskClicked(string id)
-    signal eventClicked(string id)
+    // The occurrence, not just its id: a repeating event is stored once, so
+    // every occurrence of a series carries the master's id and only the
+    // occurrence map says which date was clicked.
+    signal eventClicked(string id, var occurrence)
 
     // View state.
     property string mode: "month"   // "month" | "weeks"
@@ -108,17 +112,15 @@ Item {
             for (let k = 0; k < cells.length; k++)
                 if (root.isSameDay(cells[k].date, t.deadline)) { cells[k].tasks.push(t); break; }
         }
-        const em = AppController.events;
-        for (let i = 0; i < em.rowCount(); i++) {
-            const idx = em.index(i, 0);
-            const e = {
-                id:    em.data(idx, Qt.UserRole + 1),
-                title: em.data(idx, Qt.UserRole + 2),
-                type:  em.data(idx, Qt.UserRole + 3),
-                date:  em.data(idx, Qt.UserRole + 7),
-            };
+        // The expansion, not the rows: a repeating event is stored once, and
+        // a month is the view most likely to be showing a whole series at
+        // once. A multi-day event is listed on every day it covers, which is
+        // what a month grid is for.
+        const occ = AppController.eventOccurrences(cells[0].date, cells[cells.length - 1].date);
+        for (let i = 0; i < occ.length; i++) {
+            const e = occ[i];
             for (let k = 0; k < cells.length; k++)
-                if (root.isSameDay(cells[k].date, e.date)) { cells[k].events.push(e); break; }
+                if (Seg.covers(e, cells[k].date)) cells[k].events.push(e);
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
         for (let k = 0; k < cells.length; k++)
@@ -330,7 +332,7 @@ Item {
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: Theme.accent }
                                     Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.events[index].title; color: Theme.text; font.pixelSize: 9 }
                                 }
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.eventClicked(cell.events[index].id) }
+                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.eventClicked(cell.events[index].id, cell.events[index]) }
                             }
                         }
                         // The overflow count was dead text — the only way to

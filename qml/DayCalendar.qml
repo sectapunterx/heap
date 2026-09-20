@@ -20,7 +20,10 @@ Item {
     readonly property int workEnd:    AppController.workdayEnd
     readonly property real pxPerMin: Theme.hourH / 60.0
 
-    signal eventClicked(string id)
+    // The occurrence, not just its id: a repeating event is stored once, so
+    // every occurrence of a series carries the master's id and only the
+    // occurrence map says which date was clicked.
+    signal eventClicked(string id, var occurrence)
     signal taskClicked(string id)
 
     function snapHour(h)  {
@@ -33,28 +36,20 @@ Item {
     property date now: new Date()
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
 
-    // Every event in the model, in the shape Segments.js reads. An event is no
-    // longer one block on one day — it may be all-day, or run past midnight —
-    // so "is this event on this day" is a span question, not a date comparison.
-    function _rowSpan(m, i) {
-        const idx = m.index(i, 0);
-        return {
-            id:      String(m.data(idx, Qt.UserRole + 1)),
-            title:   String(m.data(idx, Qt.UserRole + 2) || ""),
-            type:    String(m.data(idx, Qt.UserRole + 3) || ""),
-            start:   Number(m.data(idx, Qt.UserRole + 4)),
-            end:     Number(m.data(idx, Qt.UserRole + 5)),
-            date:    m.data(idx, Qt.UserRole + 7),
-            allDay:  Boolean(m.data(idx, Qt.UserRole + 11)),
-            endDate: m.data(idx, Qt.UserRole + 12)
-        };
+    // The events this day can show, which is not the same as the rows in the
+    // model: a repeating event is stored once and expanded here, and an
+    // occurrence someone moved is an override standing in for it. Asking for a
+    // day either side too, because a timed event that crosses midnight reaches
+    // in from the day before.
+    property var _spans: []
+    function _recomputeSpans() {
+        const d = AppController.selectedDate;
+        if (!d || !d.getFullYear) { _spans = []; return; }
+        const from = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        const to = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+        _spans = AppController.eventOccurrences(from, to);
     }
-    function _allSpans() {
-        const m = AppController.events;
-        const out = [];
-        for (let i = 0; i < m.rowCount(); i++) out.push(root._rowSpan(m, i));
-        return out;
-    }
+    function _allSpans() { return root._spans; }
 
     // Reactive event count for the selected day; refreshed on every
     // events-model mutation so the "N events" header stays in sync.
@@ -97,17 +92,17 @@ Item {
     property var _linkedTaskIds: ({})
     function _recomputeLinkedTasks() {
         const d = AppController.selectedDate;
-        const m = AppController.events;
+        const all = root._allSpans();
         const map = {};
-        for (let i = 0; i < m.rowCount(); i++) {
-            const idx = m.index(i, 0);
-            if (!Seg.covers(root._rowSpan(m, i), d)) continue;
-            const tid = String(m.data(idx, Qt.UserRole + 8) || "");  // TaskIdRole
+        for (let i = 0; i < all.length; i++) {
+            if (!Seg.covers(all[i], d)) continue;
+            const tid = String(all[i].taskId || "");
             if (tid.length > 0) map[tid] = true;
         }
         _linkedTaskIds = map;
     }
     function _recomputeDay() {
+        _recomputeSpans();
         _recountEventsToday();
         _recomputeOverlaps();
         _recomputeStrip();
@@ -257,7 +252,7 @@ Item {
                                 }
                             }
 
-                            TapHandler { onTapped: root.eventClicked(bar.modelData.id) }
+                            TapHandler { onTapped: root.eventClicked(bar.modelData.id, bar.modelData) }
                         }
                     }
                 }
@@ -475,22 +470,33 @@ Item {
 
                         // Layer 3: event rectangles (declared after createArea → on top).
                         Repeater {
-                            model: AppController.events
+                            // The expansion, not the model: a repeating event
+                            // is one row and many blocks.
+                            model: root._spans
                             Rectangle {
                                 id: evRect
+                                required property var modelData
                                 objectName: "event-" + evRect.id
-                                required property string id
-                                required property string title
-                                required property string type
-                                required property real start
-                                required property real end
-                                required property string attendees
-                                required property var date
-                                required property string taskId
-                                required property string profileId
-                                required property string context
-                                required property bool allDay
-                                required property var endDate
+                                // Named individually so the rest of the
+                                // delegate reads the same as when this was
+                                // bound to model roles.
+                                readonly property string id: evRect.modelData.id
+                                readonly property string title: evRect.modelData.title || ""
+                                readonly property string type: evRect.modelData.type || ""
+                                readonly property real start: evRect.modelData.start
+                                readonly property real end: evRect.modelData.end
+                                readonly property string attendees: evRect.modelData.attendees || ""
+                                readonly property var date: evRect.modelData.date
+                                readonly property string taskId: evRect.modelData.taskId || ""
+                                readonly property string profileId: evRect.modelData.profileId || ""
+                                readonly property string context: evRect.modelData.context || ""
+                                readonly property bool allDay: !!evRect.modelData.allDay
+                                readonly property var endDate: evRect.modelData.endDate
+                                // Set on anything the expansion generated, so
+                                // an edit can ask "this one, or all of them?"
+                                readonly property string masterId: evRect.modelData.masterId || ""
+                                readonly property var occurrenceDate: evRect.modelData.occurrenceDate
+                                readonly property bool repeating: evRect.masterId.length > 0
 
                                 // The piece of this event that lands on the
                                 // selected day. An event may now run past
@@ -651,7 +657,7 @@ Item {
                                             AppController.updateEvent(evRect.id, ns, ns + dur, AppController.selectedDate);
                                             evRect.dragDy = 0;
                                         } else {
-                                            root.eventClicked(evRect.id);
+                                            root.eventClicked(evRect.id, evRect.modelData);
                                         }
                                         didDrag = false;
                                     }

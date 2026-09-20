@@ -484,7 +484,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onEventClicked: (id) => eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                         // A click on an empty slot opens the editor on a draft
                         // rather than saving an untitled event: the user names
                         // it before it exists.
@@ -501,7 +501,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onEventClicked: (id) => eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                     }
                 }
                 Component {
@@ -591,7 +591,7 @@ ApplicationWindow {
                     DayCalendar {
                         SplitView.fillHeight: true
                         SplitView.minimumHeight: 120
-                        onEventClicked: (id) => eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                     }
                     PeopleList {

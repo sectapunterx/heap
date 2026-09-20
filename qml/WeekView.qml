@@ -14,7 +14,10 @@ Item {
     property bool showArchived: false
 
     signal taskClicked(string id)
-    signal eventClicked(string id)
+    // The occurrence, not just its id: a repeating event is stored once, so
+    // every occurrence of a series carries the master's id and only the
+    // occurrence map says which date was clicked.
+    signal eventClicked(string id, var occurrence)
     signal dayClicked(date d)
     // An empty slot was clicked: the shell opens the event editor there.
     signal createRequested(real hour, date day)
@@ -165,25 +168,14 @@ Item {
     // needs the same list and buildDays() must not write a property it is
     // itself bound to.
     function buildSpans() {
-        const em = AppController.events;
         const _e = root.eventRev;
-        const out = [];
-        for (let i = 0; i < em.rowCount(); i++) {
-            const idx = em.index(i, 0);
-            out.push({
-                id:        em.data(idx, Qt.UserRole + 1),
-                title:     em.data(idx, Qt.UserRole + 2),
-                type:      em.data(idx, Qt.UserRole + 3),
-                start:     em.data(idx, Qt.UserRole + 4),
-                end:       em.data(idx, Qt.UserRole + 5),
-                attendees: em.data(idx, Qt.UserRole + 6),
-                date:      em.data(idx, Qt.UserRole + 7),
-                context:   em.data(idx, Qt.UserRole + 10) || "",
-                allDay:    Boolean(em.data(idx, Qt.UserRole + 11)),
-                endDate:   em.data(idx, Qt.UserRole + 12),
-            });
-        }
-        return out;
+        const start = root.weekStart;
+        if (!start || !start.getFullYear) return [];
+        // A day either side of the week: a timed event that crosses midnight
+        // reaches in from the Sunday before, and out into the Monday after.
+        const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+        const to = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+        return AppController.eventOccurrences(from, to);
     }
     readonly property var spans: buildSpans()
 
@@ -238,6 +230,8 @@ Item {
                     id: e.id, title: e.title, type: e.type,
                     start: seg.start, end: seg.end,
                     attendees: e.attendees, date: e.date, context: e.context,
+                    masterId: e.masterId || "", occurrenceDate: e.occurrenceDate,
+                    occ: e,
                     // Unique per piece: the same event can appear on several
                     // days, and the overlap map is keyed by this. Keying it by
                     // event id would let Tuesday's piece overwrite Monday's.
@@ -277,7 +271,12 @@ Item {
                     id: e.id, title: e.title, type: e.type,
                     start: e.start, end: e.end, attendees: e.attendees,
                     date: e.date, dayIndex: i, context: e.context || "",
-                    key: e.key, segFirst: e.segFirst, segLast: e.segLast
+                    key: e.key, segFirst: e.segFirst, segLast: e.segLast,
+                    masterId: e.masterId || "", occurrenceDate: e.occurrenceDate,
+                    // The occurrence as it came from the expansion: a click
+                    // opens the editor on this, not on a copy missing half
+                    // its fields.
+                    occ: e.occ
                 });
             }
         }
@@ -303,7 +302,8 @@ Item {
                 id: e.id, title: e.title, type: e.type,
                 from: ext.from, span: ext.span,
                 clippedStart: ext.clippedStart, clippedEnd: ext.clippedEnd,
-                row: laid.rows[e.id] || 0
+                row: laid.rows[e.id] || 0,
+                occ: e
             });
         }
         return { bars: bars, rows: laid.count };
@@ -656,7 +656,7 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        TapHandler { onTapped: root.eventClicked(weekBar.modelData.id) }
+                        TapHandler { onTapped: root.eventClicked(weekBar.modelData.id, weekBar.modelData.occ) }
                     }
                 }
             }
@@ -935,7 +935,7 @@ Item {
                                         const newDate = root.days[weEv.effDayIndex].date;
                                         AppController.updateEvent(weEv.modelData.id, ns, ns + dur, newDate);
                                     } else {
-                                        root.eventClicked(weEv.modelData.id);
+                                        root.eventClicked(weEv.modelData.id, weEv.modelData.occ);
                                     }
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                     didDrag = false;

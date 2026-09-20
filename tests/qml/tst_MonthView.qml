@@ -43,13 +43,21 @@ TestCase {
         compare(got, "HEAP-mv-task");
     }
 
-    // Signal contract: eventClicked carries the event id.
+    // Signal contract: eventClicked carries the occurrence as well as the id.
+    // A repeating event is stored once, so every occurrence of a series shares
+    // the master's id and the id alone cannot say which date was clicked.
     function test_eventclicked_signal_contract() {
         const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
         let got = "";
-        mv.eventClicked.connect(function(id) { got = id; });
-        mv.eventClicked("ev-mv-probe");
+        let gotDate = null;
+        mv.eventClicked.connect(function(id, occurrence) {
+            got = id;
+            gotDate = occurrence ? occurrence.occurrenceDate : null;
+        });
+        const when = new Date(2031, 4, 20);
+        mv.eventClicked("ev-mv-probe", { id: "ev-mv-probe", occurrenceDate: when });
         compare(got, "ev-mv-probe");
+        compare(gotDate.getDate(), when.getDate());
     }
 
     // isSameDay compares calendar days, ignoring the clock, and rejects junk.
