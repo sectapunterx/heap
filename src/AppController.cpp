@@ -2732,9 +2732,22 @@ QStringList AppController::missingRequiredFields(const QString& providerId) cons
     return {};
   }
   const QVariantMap cfg = integrationConfig(providerId);
+  // A browser sign-in fills some required fields from the app's own identity
+  // rather than from anything the user can type. Trello is the case in point:
+  // its "API key" *is* the baked client ID (makeBespokeProvider substitutes it),
+  // so asking for it after a successful sign-in demands something the user has
+  // no way to obtain and makes a working card look broken.
+  // The flow cannot have run without a client ID, so if authMode says it did,
+  // that field is answered however the ID was obtained.
+  const bool signedInViaBrowser = cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth");
+  const QString browserSuppliedField = signedInViaBrowser ? d->oauth.clientIdParam : QString();
+
   QStringList missing;
   for(const QString& key : d->requiredKeys) {
     if(!cfg.value(key).toString().trimmed().isEmpty()) {
+      continue;
+    }
+    if(!browserSuppliedField.isEmpty() && key == browserSuppliedField) {
       continue;
     }
     // Report the card's own label ("Workspace GID"), not the config key.

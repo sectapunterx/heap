@@ -789,7 +789,12 @@ class AppController : public QObject {
   // sign-in proves who you are but not what to sync, so the scope fields
   // (Asana workspace, ClickUp list, Sentry org/project, Bitbucket repo) can
   // still be missing afterwards.
-  QStringList missingRequiredFields(const QString& providerId) const;
+  // Public so the card can recompute the notice as fields are edited, rather
+  // than only seeing it once in the toast that follows a sign-in.
+ public:
+  Q_INVOKABLE QStringList missingRequiredFields(const QString& providerId) const;
+
+ private:
   // Finish a Jira browser sign-in: ask accessible-resources which Atlassian
   // site the new token was granted and cache its cloudId. A 3LO token is not
   // bound to a site, and the gateway path needs that id.

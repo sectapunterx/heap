@@ -811,6 +811,49 @@ TEST_F(AppControllerTest, ARefreshThatReturnsNoNewRefreshTokenKeepsTheOldOne) {
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
 }
 
+// ─── Required fields after a browser sign-in ──────────────────────────
+// Signing in proves who you are, not what to sync, so the scope fields stay
+// empty and the card says so. But Trello's "API key" is not a scope field at
+// all: it is the app's own client ID, which makeBespokeProvider substitutes
+// from the baked credential. Listing it as missing sent the user hunting for a
+// value they cannot obtain, on a card that already syncs.
+
+TEST_F(AppControllerTest, ABrowserSignInStillAsksForTheFieldsThatSayWhatToSync) {
+  app_->setIntegrationSecret(QStringLiteral("sentry"), QStringLiteral("token"), QStringLiteral("at"));
+  writeIntegrationConfig(QStringLiteral("sentry"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                         });
+
+  const QStringList missing = app_->missingRequiredFields(QStringLiteral("sentry"));
+  EXPECT_TRUE(missing.contains(QStringLiteral("Org slug"))) << missing.join(QStringLiteral(", ")).toStdString();
+  EXPECT_TRUE(missing.contains(QStringLiteral("Project slug"))) << missing.join(QStringLiteral(", ")).toStdString();
+
+  writeIntegrationConfig(QStringLiteral("sentry"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("sentry"), QStringLiteral("token"), QString());
+}
+
+TEST_F(AppControllerTest, TrelloDoesNotAskForAnApiKeyTheBrowserSignInAlreadySupplied) {
+  app_->setIntegrationSecret(QStringLiteral("trello"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("trello"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                         });
+
+  EXPECT_FALSE(app_->missingRequiredFields(QStringLiteral("trello")).contains(QStringLiteral("API key")))
+      << "the app key is the build's own, not something the user can type";
+
+  // Pasting a personal token instead is the other path, and there the key is
+  // genuinely the user's to provide.
+  writeIntegrationConfig(QStringLiteral("trello"), QJsonObject{{QStringLiteral("connected"), true}});
+  EXPECT_TRUE(app_->missingRequiredFields(QStringLiteral("trello")).contains(QStringLiteral("API key")));
+
+  writeIntegrationConfig(QStringLiteral("trello"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("trello"), QStringLiteral("token"), QString());
+}
+
 // ─── Disconnect / auth mode ───────────────────────────────────────────
 // authMode=oauth used to survive a disconnect, so a personal access token
 // pasted afterwards was still sent as a Bearer — which GitLab (PRIVATE-TOKEN)
