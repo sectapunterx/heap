@@ -3983,6 +3983,13 @@ bool AppController::restoreFromBackup(const QString& fileName) {
 // ───────────────────────────────────────────── Command palette source ──
 
 QVariantList AppController::commandPaletteEntries() const {
+  // The palette searches the persisted profiles, not the live models, and the
+  // live models only reach a profile when a save runs. That save is debounced
+  // by 300 ms, so a task created or edited a moment ago was simply missing
+  // from Ctrl+K. Push the active profile's rows across first — it is the same
+  // snapshot a save would take, and it costs nothing when nothing changed.
+  const_cast<AppController*>(this)->snapshotActiveProfile();
+
   QVariantList out;
 
   // Task templates (HEAP-77) — "New from template: …" actions.
