@@ -110,6 +110,46 @@ QVector<ExternalTask> parseWithFieldMap(const QByteArray& json, const FieldMap& 
   return out;
 }
 
+QVector<ExternalComment> parseCommentsWithMap(const QByteArray& json, const CommentMap& map) {
+  QVector<ExternalComment> out;
+  const QJsonDocument doc = QJsonDocument::fromJson(json);
+
+  QJsonArray arr;
+  if(map.arrayPointer.isEmpty()) {
+    if(!doc.isArray()) {
+      return out;
+    }
+    arr = doc.array();
+  } else {
+    if(!doc.isObject()) {
+      return out;
+    }
+    arr = valueAtPath(doc.object(), map.arrayPointer).toArray();
+  }
+
+  out.reserve(arr.size());
+  for(const auto& v : arr) {
+    if(!v.isObject()) {
+      continue;
+    }
+    const QJsonObject o = v.toObject();
+    // GitLab returns "changed the description" alongside real comments.
+    if(!map.skipIfTrue.isEmpty() && valueAtPath(o, map.skipIfTrue).toBool()) {
+      continue;
+    }
+    ExternalComment c;
+    c.author = fieldStr(o, map.author);
+    c.body = fieldStr(o, map.body);
+    c.createdAt = parseTrackerTimestamp(valueAtPath(o, map.createdAt));
+    c.url = fieldStr(o, map.url);
+    if(c.body.isEmpty()) {
+      continue;
+    }
+    out.append(c);
+  }
+  return out;
+}
+
 RestIssueProvider::RestIssueProvider(ProviderDescriptor desc, QObject* parent) :
     IntegrationProvider(parent), m_desc(std::move(desc)), m_nam(new QNetworkAccessManager(this)) {
 }
@@ -256,6 +296,40 @@ void RestIssueProvider::pullTasks() {
       }
     }
     emit tasksFetched(tasks);
+  });
+}
+
+void RestIssueProvider::fetchComments(const QString& externalId, const QString& project) {
+  if(m_desc.commentsPathTemplate.isEmpty()) {
+    emit commentsFetched(externalId, {}, QStringLiteral("unsupported"));
+    return;
+  }
+  if(!isConfigured() || externalId.isEmpty()) {
+    emit commentsFetched(externalId, {}, QStringLiteral("not configured"));
+    return;
+  }
+  QVariantMap extra;
+  extra.insert(QStringLiteral("externalId"), externalId);
+  // The issue's own repo, which in a cross-project pull is not the configured
+  // one. expand() prefers `extra` over the config, so this simply wins.
+  if(!project.isEmpty() && !m_desc.scopeKey.isEmpty()) {
+    extra.insert(m_desc.scopeKey, project);
+  }
+  const QString url = resolvedBaseUrl() + expand(m_desc.commentsPathTemplate, extra);
+
+  QNetworkReply* reply = m_nam->get(buildRequest(url));
+  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId]() {
+    reply->deleteLater();
+    if(reply->error() != QNetworkReply::NoError) {
+      emit commentsFetched(externalId, {}, describeReplyError(reply));
+      return;
+    }
+    QVector<ExternalComment> comments = parseCommentsWithMap(reply->readAll(), m_desc.comments);
+    // GitHub and Gitea have no sort parameter and answer oldest-first.
+    if(m_desc.comments.newestLast) {
+      std::reverse(comments.begin(), comments.end());
+    }
+    emit commentsFetched(externalId, comments, QString());
   });
 }
 

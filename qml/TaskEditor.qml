@@ -57,7 +57,27 @@ Popup {
         return out;
     }
 
+    // Comments, held only while this dialog is open (HEAP-117).
+    property var _comments: []
+    property string _commentsError: ""
+    property bool _commentsRequested: false
+
+    Connections {
+        target: AppController
+
+        function onTicketCommentsLoaded(taskId, comments, error) {
+            // A reply for a ticket the user has since navigated away from.
+            if (taskId !== (root._originalId || (root.draft.id || ""))) return;
+            root._comments = comments;
+            root._commentsError = error || "";
+        }
+    }
+
     function showFor(initialDraft) {
+        // Never carry one ticket's comments over to the next.
+        _comments = [];
+        _commentsError = "";
+        _commentsRequested = false;
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
@@ -429,6 +449,58 @@ Popup {
                     color: Theme.textDim
                     font.pixelSize: 10
                     wrapMode: Text.WordWrap
+                }
+
+                // Comments are read on demand and kept only while this dialog
+                // is open — heap stores none of them.
+                Button {
+                    objectName: "te-ticket-load-comments"
+                    visible: !root._commentsRequested
+                    text: "💬 " + I18n.t("ticket.loadComments")
+                    font.pixelSize: 10
+                    onClicked: {
+                        root._commentsRequested = true;
+                        AppController.fetchTicketComments(root._originalId || (root.draft.id || ""));
+                    }
+                }
+                Text {
+                    objectName: "te-ticket-comments-status"
+                    visible: root._commentsRequested
+                             && (root._commentsError.length > 0 || root._comments.length === 0)
+                    text: root._commentsError.length > 0 ? root._commentsError : I18n.t("ticket.noComments")
+                    textFormat: Text.PlainText
+                    color: Theme.textDim
+                    font.pixelSize: 10
+                    wrapMode: Text.WordWrap
+                    Layout.fillWidth: true
+                }
+                Repeater {
+                    model: root._comments
+                    delegate: ColumnLayout {
+                        required property var modelData
+                        Layout.fillWidth: true
+                        spacing: 1
+                        Text {
+                            text: "@" + String(modelData.author || "")
+                                  + (modelData.createdAt && modelData.createdAt.getTime
+                                     && !isNaN(modelData.createdAt.getTime())
+                                     ? " · " + AppController.shortDate(modelData.createdAt) : "")
+                            textFormat: Text.PlainText
+                            color: Theme.textDim
+                            font.pixelSize: 9
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: String(modelData.body || "")
+                            // Written by whoever commented upstream.
+                            textFormat: Text.PlainText
+                            color: Theme.text
+                            font.pixelSize: 10
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 4
+                            elide: Text.ElideRight
+                        }
+                    }
                 }
             }
         }

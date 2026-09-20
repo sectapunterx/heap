@@ -402,6 +402,10 @@ class AppController : public QObject {
   // Open a mirrored task's issue in the default browser. False (with a toast)
   // when the task has no usable issue URL.
   Q_INVOKABLE bool openTaskExternal(const QString& taskId);
+  // Read a mirrored task's most recent comments (HEAP-117). On demand, never
+  // stored: the answer arrives on ticketCommentsLoaded and lives only as long
+  // as whatever is showing it. A GET, so it cannot change the issue.
+  Q_INVOKABLE void fetchTicketComments(const QString& taskId);
 
   // Pull issues from every connected tracker and mirror them as tasks in the
   // active profile. No-op (with a toast) when no provider is configured.
@@ -634,6 +638,10 @@ class AppController : public QObject {
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.
   void integrationSecretsChanged();
+  // The answer to one fetchTicketComments (HEAP-117). Carries the task id so a
+  // reply for a ticket the user has since navigated away from can be dropped.
+  // `error` is empty on success; an empty list with no error means no comments.
+  void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
   void updateStatusChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);

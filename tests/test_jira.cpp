@@ -132,6 +132,36 @@ TEST(JiraParse, MissingOptionalFieldsStayDefault) {
   EXPECT_FALSE(tasks[0].dueAt.isValid());
 }
 
+TEST(JiraComments, FlattensAdfAndPlainStringBodies) {
+  // Cloud sends ADF; Server/DC sends a plain string. Both have to read.
+  const QByteArray json = R"({
+    "comments": [
+      {
+        "author": { "displayName": "Ada Lovelace" },
+        "created": "2026-07-02T12:34:56.000+0000",
+        "body": { "type": "doc", "content": [
+          { "type": "paragraph", "content": [ { "type": "text", "text": "Reproduced on trunk." } ] } ] }
+      },
+      { "author": { "displayName": "Grace Hopper" }, "created": "2026-07-01T09:00:00.000+0000",
+        "body": "plain server comment" },
+      { "author": { "displayName": "nobody" }, "created": "2026-07-01T09:00:00.000+0000", "body": "" }
+    ]
+  })";
+  const QVector<heap::integrations::ExternalComment> comments = heap::integrations::parseJiraComments(json);
+  ASSERT_EQ(comments.size(), 2) << "an empty body was kept";
+  EXPECT_EQ(comments[0].author, QString("Ada Lovelace"));
+  EXPECT_TRUE(comments[0].body.contains("Reproduced on trunk."));
+  EXPECT_TRUE(comments[0].createdAt.isValid()) << "the colon-less offset did not parse";
+  EXPECT_EQ(comments[1].body, QString("plain server comment"));
+}
+
+TEST(JiraComments, HandlesGarbage) {
+  EXPECT_TRUE(heap::integrations::parseJiraComments(QByteArray()).isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraComments("[]").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraComments("garbage").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraComments(R"({"comments":[]})").isEmpty());
+}
+
 TEST(JiraAdf, FlattensNestedContent) {
   const QByteArray adf = R"({
     "type": "doc",

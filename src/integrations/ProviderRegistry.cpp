@@ -101,6 +101,13 @@ ProviderDescriptor github() {
   d.oauth.flow = OAuthFlow::Device;
   d.oauth.deviceFlow = true;
   d.oauth.deviceAuthUrl = QStringLiteral("https://github.com/login/device/code");
+  // Read-only comments (HEAP-117). No sort parameter, so oldest-first.
+  d.commentsPathTemplate = QStringLiteral("/repos/{repo}/issues/{externalId}/comments?per_page=30");
+  d.comments.author = QStringLiteral("user.login");
+  d.comments.body = QStringLiteral("body");
+  d.comments.createdAt = QStringLiteral("created_at");
+  d.comments.url = QStringLiteral("html_url");
+  d.comments.newestLast = true;
   d.pushMethod = QStringLiteral("PATCH");
   d.pushPathTemplate = QStringLiteral("/repos/{repo}/issues/{externalId}");
   d.pushBodyTemplate = R"({"state":"{state}"})";
@@ -141,6 +148,14 @@ ProviderDescriptor gitlab() {
              true,
              QString::fromLatin1(kGitlabClientId),
              QString()};
+  // Read-only comments (HEAP-117). GitLab calls them notes and mixes in
+  // machine-generated ones ("changed the description"), flagged system=true.
+  d.commentsPathTemplate =
+      QStringLiteral("/api/v4/projects/{projectId:enc}/issues/{externalId}/notes?sort=desc&order_by=created_at&per_page=30");
+  d.comments.author = QStringLiteral("author.username");
+  d.comments.body = QStringLiteral("body");
+  d.comments.createdAt = QStringLiteral("created_at");
+  d.comments.skipIfTrue = QStringLiteral("system");
   d.pushMethod = QStringLiteral("PUT");
   d.pushPathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues/{externalId}?state_event={state}");
   d.pushMap = gitlabStateEventForColumn;
@@ -197,6 +212,13 @@ ProviderDescriptor giteaLike(const QString& id,
   d.fields.commentCount = QStringLiteral("comments");
   d.fields.project = QStringLiteral("repository.full_name");
   d.fields.milestone = QStringLiteral("milestone.title");
+  // Read-only comments (HEAP-117), same shape as GitHub's.
+  d.commentsPathTemplate = QStringLiteral("/api/v1/repos/{repo}/issues/{externalId}/comments?limit=30");
+  d.comments.author = QStringLiteral("user.login");
+  d.comments.body = QStringLiteral("body");
+  d.comments.createdAt = QStringLiteral("created_at");
+  d.comments.url = QStringLiteral("html_url");
+  d.comments.newestLast = true;
   d.pushMethod = QStringLiteral("PATCH");
   d.pushPathTemplate = QStringLiteral("/api/v1/repos/{repo}/issues/{externalId}");
   d.pushBodyTemplate = R"({"state":"{state}"})";

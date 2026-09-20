@@ -83,6 +83,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"sync.summary", {"%1: %2 new · %3 updated", "%1: %2 новых · %3 обновлено"}},
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
+      {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"shortcut.task.openExternal.label", {"Open ticket in browser", "Открыть тикет в браузере"}},
       {"shortcut.task.openExternal.desc",
        {"Opens the selected (or hovered) mirrored issue in its tracker.",
@@ -3025,6 +3026,57 @@ bool AppController::openTaskExternal(const QString& taskId) {
   }
   QDesktopServices::openUrl(url);
   return true;
+}
+
+void AppController::fetchTicketComments(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    emit ticketCommentsLoaded(taskId, {}, QStringLiteral("unknown task"));
+    return;
+  }
+  const Task& t = m_tasks.items().at(row);
+  if(t.externalProvider.isEmpty() || t.externalId.isEmpty()) {
+    emit ticketCommentsLoaded(taskId, {}, QStringLiteral("not a ticket"));
+    return;
+  }
+  const QString providerId = t.externalProvider;
+  const QString externalId = t.externalId;
+  // The issue's own repo, which after a cross-project pull is not the one in
+  // the settings card.
+  const QString project = t.externalMeta.project;
+
+  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() != providerId) {
+        continue;
+      }
+      // One connection per fetch, dropped as soon as it answers: the reply
+      // belongs to this request and nothing keeps the comments afterwards.
+      auto* guard = new QObject(this);
+      connect(provider.get(),
+              &heap::integrations::IntegrationProvider::commentsFetched,
+              guard,
+              [this, guard, taskId, externalId](
+                  const QString& id, const QVector<heap::integrations::ExternalComment>& comments, const QString& error) {
+                if(id != externalId) {
+                  return;  // another ticket's reply on the same provider
+                }
+                guard->deleteLater();
+                QVariantList out;
+                out.reserve(comments.size());
+                for(const heap::integrations::ExternalComment& c : comments) {
+                  out.append(QVariantMap{{QStringLiteral("author"), c.author},
+                                         {QStringLiteral("body"), c.body},
+                                         {QStringLiteral("createdAt"), c.createdAt},
+                                         {QStringLiteral("url"), c.url}});
+                }
+                emit ticketCommentsLoaded(taskId, out, error);
+              });
+      provider->fetchComments(externalId, project);
+      return;
+    }
+    emit ticketCommentsLoaded(taskId, {}, tr_("ticket.notConnected"));
+  });
 }
 
 QVariantList AppController::integrationCatalog() const {

@@ -241,6 +241,8 @@ QtObject {
             "ticket.updated": "Updated",
             "ticket.open": "Open in tracker",
             "ticket.overwriteHint": "Title, description, status and labels are overwritten on the next sync.",
+            "ticket.loadComments": "Load comments",
+            "ticket.noComments": "No comments on this issue.",
 
             // ── TaskEditor / EventEditor / PersonEditor / ProfileEditor ──
             "editor.new.task": "New task",
@@ -967,6 +969,8 @@ QtObject {
             "ticket.updated": "Обновлён",
             "ticket.open": "Открыть в трекере",
             "ticket.overwriteHint": "Заголовок, описание, статус и метки перезаписываются при следующей синхронизации.",
+            "ticket.loadComments": "Загрузить комментарии",
+            "ticket.noComments": "У тикета нет комментариев.",
 
             "editor.new.task": "Новая задача",
             "editor.edit.task": "Редактировать задачу",

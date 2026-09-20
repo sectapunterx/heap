@@ -582,6 +582,72 @@ TEST(FieldMapParse, GitlabListRequestsLabelDetails) {
   EXPECT_TRUE(d->selfListPathTemplate.contains(QStringLiteral("with_labels_details=true")));
 }
 
+// ── HEAP-117: read-only comments ──
+
+TEST(CommentParse, GithubShapeIsExtractedAndEmptyBodiesDropped) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("github"));
+  ASSERT_NE(d, nullptr);
+  const QByteArray json = R"([
+    {"user":{"login":"ada"},"body":"first","created_at":"2026-01-02T03:04:05Z",
+     "html_url":"https://github.com/acme/web/issues/1#issuecomment-1"},
+    {"user":{"login":"grace"},"body":"","created_at":"2026-01-03T00:00:00Z"},
+    {"user":{"login":"grace"},"body":"second","created_at":"2026-01-04T00:00:00Z"}])";
+  const QVector<ExternalComment> comments = parseCommentsWithMap(json, d->comments);
+  ASSERT_EQ(comments.size(), 2) << "an empty body was kept";
+  EXPECT_EQ(comments[0].author, QStringLiteral("ada"));
+  EXPECT_EQ(comments[0].body, QStringLiteral("first"));
+  EXPECT_TRUE(comments[0].createdAt.isValid());
+  EXPECT_FALSE(comments[0].url.isEmpty());
+  // The endpoint has no sort parameter, so the provider reverses afterwards.
+  EXPECT_TRUE(d->comments.newestLast);
+}
+
+TEST(CommentParse, GitlabSystemNotesAreSkipped) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("gitlab"));
+  ASSERT_NE(d, nullptr);
+  const QByteArray json = R"([
+    {"author":{"username":"ada"},"body":"a real comment","created_at":"2026-01-04T00:00:00Z","system":false},
+    {"author":{"username":"ada"},"body":"changed the description","created_at":"2026-01-03T00:00:00Z","system":true}])";
+  const QVector<ExternalComment> comments = parseCommentsWithMap(json, d->comments);
+  ASSERT_EQ(comments.size(), 1) << "a system note was shown as a comment";
+  EXPECT_EQ(comments[0].body, QStringLiteral("a real comment"));
+  // GitLab sorts server-side, so nothing is reversed.
+  EXPECT_FALSE(d->comments.newestLast);
+}
+
+TEST(CommentParse, HandlesGarbageAndAnEmptyList) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("github"));
+  ASSERT_NE(d, nullptr);
+  EXPECT_TRUE(parseCommentsWithMap(QByteArray(), d->comments).isEmpty());
+  EXPECT_TRUE(parseCommentsWithMap("not json", d->comments).isEmpty());
+  EXPECT_TRUE(parseCommentsWithMap("[]", d->comments).isEmpty());
+  EXPECT_TRUE(parseCommentsWithMap("{}", d->comments).isEmpty());
+}
+
+TEST(CommentParse, OnlyProvidersWithAKnownEndpointDeclareOne) {
+  // A descriptor with a path must also say how to read the response, and one
+  // without a path answers "unsupported" rather than issuing a request.
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    if(d.commentsPathTemplate.isEmpty()) {
+      continue;
+    }
+    EXPECT_FALSE(d.comments.body.isEmpty()) << d.id.toStdString() << " has a comments path but no body mapping";
+    EXPECT_FALSE(d.comments.author.isEmpty()) << d.id.toStdString();
+    EXPECT_TRUE(d.commentsPathTemplate.contains(QStringLiteral("{externalId}"))) << d.id.toStdString();
+  }
+  // Jira handles its own; the pull-only providers have none.
+  for(const char* id : {"github", "gitlab", "gitea", "forgejo"}) {
+    const ProviderDescriptor* d = findDescriptor(QLatin1String(id));
+    ASSERT_NE(d, nullptr);
+    EXPECT_FALSE(d->commentsPathTemplate.isEmpty()) << id << " lost its comments endpoint";
+  }
+  for(const char* id : {"todoist", "asana", "clickup", "sentry", "bitbucket", "redmine"}) {
+    const ProviderDescriptor* d = findDescriptor(QLatin1String(id));
+    ASSERT_NE(d, nullptr);
+    EXPECT_TRUE(d->commentsPathTemplate.isEmpty()) << id << " declares comments heap cannot read";
+  }
+}
+
 TEST(FieldMapParse, AsanaRequestsTheFieldsItParsesAndNoUnscopedOnes) {
   const ProviderDescriptor* d = findDescriptor(QStringLiteral("asana"));
   ASSERT_NE(d, nullptr);

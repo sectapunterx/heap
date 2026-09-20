@@ -58,6 +58,15 @@ struct ExternalContact {
   bool deactivated = false;
 };
 
+// One comment on a mirrored issue (HEAP-117). Fetched on demand and never
+// stored: nothing in heap owns it, and it goes stale the moment it arrives.
+struct ExternalComment {
+  QString author;
+  QString body;
+  QDateTime createdAt;
+  QString url;
+};
+
 // Outcome of one sync cycle for a provider.
 struct SyncResult {
   int pulled = 0;

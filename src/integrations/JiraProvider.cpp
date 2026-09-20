@@ -117,6 +117,29 @@ QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& bas
   return out;
 }
 
+QVector<ExternalComment> parseJiraComments(const QByteArray& json) {
+  QVector<ExternalComment> out;
+  const QJsonDocument doc = QJsonDocument::fromJson(json);
+  if(!doc.isObject()) {
+    return out;
+  }
+  const QJsonArray comments = doc.object().value(QStringLiteral("comments")).toArray();
+  out.reserve(comments.size());
+  for(const auto& v : comments) {
+    const QJsonObject o = v.toObject();
+    ExternalComment c;
+    c.author = o.value(QStringLiteral("author")).toObject().value(QStringLiteral("displayName")).toString();
+    // ADF on Cloud, a plain string on Server/DC — adfValueToText takes both.
+    c.body = adfValueToText(o.value(QStringLiteral("body")));
+    c.createdAt = parseTrackerTimestamp(o.value(QStringLiteral("created")));
+    if(c.body.isEmpty()) {
+      continue;
+    }
+    out.append(c);
+  }
+  return out;
+}
+
 QString normalizeJiraBaseUrl(const QString& raw) {
   QString url = raw.trimmed();
   if(url.isEmpty()) {
@@ -515,6 +538,22 @@ void JiraProvider::pullTasks() {
       return;
     }
     emit tasksFetched(parseJiraIssues(r.body, site));
+  });
+}
+
+void JiraProvider::fetchComments(const QString& externalId, const QString& /*project*/) {
+  // A Jira key already names its project, so the site is all that is needed.
+  if(!isConfigured() || externalId.isEmpty()) {
+    emit commentsFetched(externalId, {}, QStringLiteral("not configured"));
+    return;
+  }
+  const QString path = QStringLiteral("/issue/") + externalId + QStringLiteral("/comment?orderBy=-created&maxResults=30");
+  send("GET", path, {}, [this, externalId](const ApiResult& r) {
+    if(!r.ok) {
+      emit commentsFetched(externalId, {}, r.error);
+      return;
+    }
+    emit commentsFetched(externalId, parseJiraComments(r.body), QString());
   });
 }
 

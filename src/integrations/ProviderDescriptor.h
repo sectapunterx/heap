@@ -65,6 +65,23 @@ struct FieldMap {
   QString boolFalseStatus = QStringLiteral("open");
 };
 
+// Declarative extraction of one comment (HEAP-117). Same dot-path rules as
+// FieldMap. An empty `path` on the descriptor means the provider has no
+// comment endpoint heap knows about.
+struct CommentMap {
+  QString arrayPointer;  // "" = root array
+  QString author;
+  QString body;
+  QString createdAt;
+  QString url;
+  // A leaf that, when true, marks an entry as machine-generated noise —
+  // GitLab's "changed the description" notes come back with system=true.
+  QString skipIfTrue;
+  // True when the endpoint has no sort parameter and answers oldest-first, so
+  // the list has to be reversed to put the newest comment on top.
+  bool newestLast = false;
+};
+
 // A credential/config input rendered by the Settings → Integrations card.
 struct FieldSpec {
   QString key;
@@ -171,6 +188,13 @@ struct ProviderDescriptor {
   QString baseUrlFallback;   // default base URL when {host} resolves empty (e.g. gitlab.com)
   FieldMap fields;           // used when parser == nullptr
   ParseFn parser = nullptr;  // bespoke parser (reused GitHub/GitLab parsers)
+
+  // Read-only comments (HEAP-117). Empty path = the provider has none heap
+  // knows about, and fetchComments answers "unsupported" without a request.
+  // {externalId} and the scope key ({repo}/{projectId}) expand as usual, the
+  // latter from the issue's own project rather than the configured one.
+  QString commentsPathTemplate;
+  CommentMap comments;
 
   // Write-back (empty pushPathTemplate = pull-only for v1).
   QString pushMethod = QStringLiteral("PATCH");

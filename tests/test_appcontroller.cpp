@@ -1184,6 +1184,84 @@ TEST_F(AppControllerTest, AQuietResyncReportsNoChangeAndWritesNothing) {
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
 }
 
+// Comments are read on demand and stored nowhere. Against a local fake Gitea,
+// because its base URL is configurable — github's is hard-coded.
+TEST_F(AppControllerTest, TicketCommentsAreFetchedForTheIssuesOwnRepoAndNotStored) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/api/issues/5/comments",
+              {200, R"([{"user":{"login":"ada"},"body":"first","created_at":"2026-01-02T03:04:05Z"}])", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), gitea.base()},
+                             // The configured repo is NOT the issue's own.
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                         });
+
+  Task t;
+  t.id = QStringLiteral("gitea-api-5");
+  t.externalId = QStringLiteral("5");
+  t.externalProvider = QStringLiteral("gitea");
+  t.externalUrl = QStringLiteral("https://gitea.example.com/acme/api/issues/5");
+  t.externalMeta.project = QStringLiteral("acme/api");
+  t.externalMeta.crossProject = true;
+  app_->tasks()->reset({t});
+  const Task before = app_->tasks()->items().at(0);
+
+  QVariantList got;
+  QString error;
+  bool done = false;
+  QObject::connect(app_.get(),
+                   &AppController::ticketCommentsLoaded,
+                   app_.get(),
+                   [&](const QString& taskId, const QVariantList& comments, const QString& err) {
+                     EXPECT_EQ(taskId, QStringLiteral("gitea-api-5"));
+                     got = comments;
+                     error = err;
+                     done = true;
+                   });
+
+  app_->fetchTicketComments(QStringLiteral("gitea-api-5"));
+  ASSERT_TRUE(heap::testing::waitUntil([&done]() {
+    return done;
+  }));
+  EXPECT_TRUE(error.isEmpty()) << error.toStdString();
+  ASSERT_EQ(got.size(), 1);
+  EXPECT_EQ(got.at(0).toMap().value(QStringLiteral("author")).toString(), QStringLiteral("ada"));
+  EXPECT_EQ(got.at(0).toMap().value(QStringLiteral("body")).toString(), QStringLiteral("first"));
+  // The request went to the issue's repo, not the configured one.
+  EXPECT_TRUE(gitea.seen().contains("GET /api/v1/repos/acme/api/issues/5/comments")) << "asked the wrong repo for comments";
+  // Read-only in every sense: the task is untouched and nothing is pending.
+  EXPECT_EQ(app_->tasks()->items().at(0), before);
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+TEST_F(AppControllerTest, FetchingCommentsForALocalTaskAnswersWithoutARequest) {
+  Task local;
+  local.id = QStringLiteral("LTE-1");
+  app_->tasks()->reset({local});
+
+  QString error;
+  bool done = false;
+  QObject::connect(
+      app_.get(), &AppController::ticketCommentsLoaded, app_.get(), [&](const QString&, const QVariantList& c, const QString& err) {
+        EXPECT_TRUE(c.isEmpty());
+        error = err;
+        done = true;
+      });
+  app_->fetchTicketComments(QStringLiteral("LTE-1"));
+  ASSERT_TRUE(done) << "a local task should be answered synchronously";
+  EXPECT_FALSE(error.isEmpty());
+
+  done = false;
+  app_->fetchTicketComments(QStringLiteral("no-such-task"));
+  EXPECT_TRUE(done);
+}
+
 // The refresh token lives in the secret store but is not one of the card's
 // secretKeys, so integrationConfig() never handed it to the refresh path: a
 // browser-connected tracker went quiet at its first token expiry. Driven end to
