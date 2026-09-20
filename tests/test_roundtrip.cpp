@@ -30,6 +30,22 @@
 
 namespace {
 
+// Every declared field of ExternalMeta, set to something that is not its
+// default — including a comment count, whose default is -1 rather than 0.
+ExternalMeta makeFullMeta() {
+  ExternalMeta m;
+  m.author = QStringLiteral("grace");
+  m.issueType = QStringLiteral("Bug");
+  m.project = QStringLiteral("sectapunterx/heap");
+  m.milestone = QStringLiteral("v0.5.0");
+  m.commentCount = 7;
+  m.createdAt = QDateTime(QDate(2026, 6, 1), QTime(8, 15, 30, 500));
+  m.updatedAt = QDateTime(QDate(2026, 7, 8), QTime(11, 45, 10, 125));
+  m.dueAt = QDateTime(QDate(2026, 7, 11), QTime(16, 0, 0, 750));
+  m.crossProject = true;
+  return m;
+}
+
 // Every declared field of Task, set to something that is not its default.
 Task makeFullTask() {
   Task t;
@@ -54,6 +70,7 @@ Task makeFullTask() {
   t.estimateMinutes = 480;
   t.someday = true;
   t.assignee = QStringLiteral("sectapunterx");
+  t.externalMeta = makeFullMeta();
   return t;
 }
 
@@ -141,6 +158,20 @@ class Gen {
     t.estimateMinutes = pick(0, 5000);
     t.someday = boolean();
     t.assignee = text();
+    // Half the cases carry tracker metadata, half leave it default, so both the
+    // "omit the whole object" and the "write it out" paths get exercised.
+    if(boolean()) {
+      t.externalMeta.author = text();
+      t.externalMeta.issueType = text();
+      t.externalMeta.project = text();
+      t.externalMeta.milestone = text();
+      // -1 is the default and means "unknown"; it has to survive as itself.
+      t.externalMeta.commentCount = pick(-1, 50);
+      t.externalMeta.createdAt = dateTime();
+      t.externalMeta.updatedAt = dateTime();
+      t.externalMeta.dueAt = dateTime();
+      t.externalMeta.crossProject = boolean();
+    }
     return t;
   }
 
@@ -171,8 +202,14 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 21u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 22u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 10u);
+}
+
+// ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole
+// object — this is what stops a field added in there from being dropped.
+TEST(FieldCountGuard, ExternalMetaArityIsPinned) {
+  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 9u);
 }
 
 // ── The runtime half: one emitted key per declared field ──
@@ -239,6 +276,82 @@ TEST(RoundTrip, RunningTimerRecurrenceAndExternalIdAllSurvive) {
 
   const Task synced = heap::sync::SyncSerializer::taskFromJson(heap::sync::SyncSerializer::taskToJson(t));
   EXPECT_EQ(synced, t);
+}
+
+// ── Tracker metadata (HEAP-117) ──
+
+TEST(RoundTrip, LiveSerializerOmitsDefaultMetaEntirely) {
+  // A locally-created task must serialize exactly as it did before HEAP-117.
+  Task t;
+  t.id = QStringLiteral("LOCAL-1");
+  t.statusChangedAt = QDateTime(QDate(2026, 1, 1), QTime(1, 2, 3));
+  const QJsonObject o = heap::state::taskToJson(t);
+  EXPECT_FALSE(o.contains(QStringLiteral("externalMeta")));
+  EXPECT_EQ(heap::state::taskFromJson(o), t);
+}
+
+TEST(RoundTrip, LiveSerializerOmitsDefaultSubKeysOfMeta) {
+  Task t;
+  t.id = QStringLiteral("GH-1");
+  t.statusChangedAt = QDateTime(QDate(2026, 1, 1), QTime(1, 2, 3));
+  t.externalMeta.author = QStringLiteral("grace");
+  const QJsonObject meta = heap::state::taskToJson(t).value(QStringLiteral("externalMeta")).toObject();
+  EXPECT_EQ(meta.keys(), QStringList{QStringLiteral("author")});
+  EXPECT_EQ(heap::state::taskFromJson(heap::state::taskToJson(t)), t);
+}
+
+TEST(RoundTrip, SyncSerializerAlwaysEmitsEveryMetaKey) {
+  // The merge transport reads a missing key as a deletion, so this serializer
+  // may not skip defaults the way the live one does.
+  Task t;
+  t.id = QStringLiteral("LOCAL-1");
+  const QJsonObject meta = heap::sync::SyncSerializer::taskToJson(t).value(QStringLiteral("externalMeta")).toObject();
+  EXPECT_EQ(static_cast<std::size_t>(meta.keys().size()), heap::meta::fieldCount<ExternalMeta>())
+      << "keys: " << meta.keys().join(QStringLiteral(",")).toStdString();
+}
+
+TEST(RoundTrip, MetaTimestampsAreNotNamedLikeHeapsOwnClock) {
+  // JsonMerger reads a task's top-level `updatedAt` as heap's last-write clock
+  // and applies "earlier wins" to any `createdAt` at any depth. A tracker
+  // timestamp under either name would let a device that merely re-pulled
+  // outrank one that actually edited.
+  const QJsonObject o = heap::sync::SyncSerializer::taskToJson(makeFullTask());
+  EXPECT_FALSE(o.contains(QStringLiteral("updatedAt")));
+  EXPECT_FALSE(o.contains(QStringLiteral("createdAt")));
+  const QJsonObject meta = o.value(QStringLiteral("externalMeta")).toObject();
+  EXPECT_FALSE(meta.contains(QStringLiteral("updatedAt")));
+  EXPECT_FALSE(meta.contains(QStringLiteral("createdAt")));
+  EXPECT_TRUE(meta.contains(QStringLiteral("remoteUpdatedAt")));
+  EXPECT_TRUE(meta.contains(QStringLiteral("remoteCreatedAt")));
+}
+
+TEST(RoundTrip, UnknownCommentCountSurvivesAsUnknown) {
+  // -1 means "the provider did not say", which is not the same as zero
+  // comments; a naive toInt() would read a missing key back as 0.
+  Task t;
+  t.id = QStringLiteral("GH-1");
+  t.statusChangedAt = QDateTime(QDate(2026, 1, 1), QTime(1, 2, 3));
+  t.externalMeta.project = QStringLiteral("acme/web");
+  ASSERT_EQ(t.externalMeta.commentCount, -1);
+  EXPECT_EQ(heap::state::taskFromJson(heap::state::taskToJson(t)).externalMeta.commentCount, -1);
+  EXPECT_EQ(heap::sync::SyncSerializer::taskFromJson(heap::sync::SyncSerializer::taskToJson(t)).externalMeta.commentCount, -1);
+
+  t.externalMeta.commentCount = 0;
+  EXPECT_EQ(heap::state::taskFromJson(heap::state::taskToJson(t)).externalMeta.commentCount, 0);
+  EXPECT_EQ(heap::sync::SyncSerializer::taskFromJson(heap::sync::SyncSerializer::taskToJson(t)).externalMeta.commentCount, 0);
+}
+
+TEST(RoundTrip, AV4FileWithoutMetaLoadsWithDefaults) {
+  // Every state.json written before HEAP-117 has no externalMeta key at all.
+  QJsonObject o;
+  o["id"] = "GH-5";
+  o["statusChangedAt"] = "2026-07-01T10:00:00";
+  o["externalId"] = "5";
+  o["externalProvider"] = "github";
+  const Task t = heap::state::taskFromJson(o);
+  EXPECT_EQ(t.externalMeta, ExternalMeta{});
+  EXPECT_EQ(t.externalMeta.commentCount, -1);
+  EXPECT_FALSE(t.externalMeta.crossProject);
 }
 
 // ── Property test ──

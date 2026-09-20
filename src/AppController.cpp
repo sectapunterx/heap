@@ -77,9 +77,18 @@ struct I18nEntry {
 const QHash<QString, I18nEntry>& i18nTable() {
   static const QHash<QString, I18nEntry> table = {
       {"task.created", {"Created: %1", "Создано: %1"}},
+      {"task.idTaken", {"%1 already exists — pick another id", "%1 уже занят — выберите другой id"}},
       {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
       {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
       {"task.moved", {"%1 → %2", "%1 → %2"}},
+      {"sync.summary", {"%1: %2 new · %3 updated", "%1: %2 новых · %3 обновлено"}},
+      {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
+      {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
+      {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
+      {"shortcut.task.openExternal.label", {"Open ticket in browser", "Открыть тикет в браузере"}},
+      {"shortcut.task.openExternal.desc",
+       {"Opens the selected (or hovered) mirrored issue in its tracker.",
+        "Открывает выбранный (или под курсором) синхронизированный тикет в трекере."}},
       {"task.moveUndone", {"Move undone: %1", "Перемещение отменено: %1"}},
       {"task.archived", {"Archived: %1", "В архиве: %1"}},
       {"task.unarchived", {"Unarchived: %1", "Из архива: %1"}},
@@ -679,7 +688,11 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
   // closes the GitHub issue / transitions the Jira issue). Routed to whichever
   // provider owns the task. No-op for locally-created, unlinked tasks.
-  if(!t.externalId.isEmpty() && !t.externalProvider.isEmpty()) {
+  // An issue pulled from an "assigned to me" endpoint belongs to some other
+  // repo, but the push path is built from the configured one — the PATCH would
+  // land on a different issue that happens to share the number. Its own repo is
+  // known, but writing back through it is HEAP-155's problem; skip it here.
+  if(!t.externalId.isEmpty() && !t.externalProvider.isEmpty() && !t.externalMeta.crossProject) {
     const QString externalId = t.externalId;
     ensureFreshToken(t.externalProvider, [this, providerId = t.externalProvider, externalId, newStatus]() {
       for(const auto& provider : m_syncProviders) {
@@ -751,6 +764,8 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       copy.externalId.clear();       // a new local occurrence, not the synced issue
       copy.externalUrl.clear();
       copy.externalProvider.clear();
+      copy.assignee.clear();
+      copy.externalMeta = {};
       m_tasks.upsert(copy);
       emit toast(tr("Recurs: %1 due %2").arg(newId, next.toString(Qt::ISODate)));
     }
@@ -766,10 +781,32 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
-  const int nextNum = 2700 + m_tasks.rowCount();
+  // The row count is not a high-water mark: it drops when a task is deleted
+  // and it counts archived rows, so "2700 + rowCount()" walks back over ids
+  // that are still in use. saveTask upserts, and upsert on a taken id replaces
+  // that row outright — proposing a colliding id is proposing to destroy a
+  // task. Start past the highest number already minted under this prefix, then
+  // probe, the way newQuickTaskDraft and the recurrence clone already do.
+  const QString stem = prefix.isEmpty() ? QStringLiteral("TASK") : prefix;
+  int nextNum = 2700;
+  const QString head = stem + QChar('-');
+  for(const Task& t : m_tasks.items()) {
+    if(!t.id.startsWith(head)) {
+      continue;
+    }
+    bool numeric = false;
+    const int n = t.id.mid(head.size()).toInt(&numeric);
+    if(numeric && n >= nextNum) {
+      nextNum = n + 1;
+    }
+  }
   QVariantMap m;
   m["_isNew"] = true;
-  m["id"] = QString("%1-%2").arg(prefix.isEmpty() ? QStringLiteral("TASK") : prefix).arg(nextNum);
+  QString candidate;
+  do {
+    candidate = QString("%1-%2").arg(stem).arg(nextNum++);
+  } while(m_tasks.indexOfId(candidate) >= 0);
+  m["id"] = candidate;
   m["title"] = QString();
   m["desc"] = QString();
   m["priority"] = priorityDefault.isEmpty() ? QStringLiteral("P2") : priorityDefault;
@@ -896,6 +933,18 @@ void AppController::saveTask(const QVariantMap& draft) {
     return;
   }
 
+  // An id that another task already holds is a destroyed task: the save ends in
+  // upsert(), and upsert on a taken id replaces that row whole — no undo is
+  // armed, and on the rename path the victim also inherits the renamed task's
+  // calendar events. Refuse instead, and say which task is in the way so the
+  // editor stays open on the unsaved draft.
+  const QString claimedBy = draft.value("_originalId").toString().trimmed();
+  const QString heldId = (!isNew && !claimedBy.isEmpty()) ? claimedBy : (isNew ? QString() : t.id);
+  if(t.id != heldId && m_tasks.indexOfId(t.id) >= 0) {
+    emit toast(tr_("task.idTaken").arg(t.id));
+    return;
+  }
+
   // Preserve fields the editor doesn't expose. Without this, opening an
   // archived ticket and hitting Save silently unarchives it (struct
   // defaults to archived=false), and any edit wipes statusChangedAt,
@@ -917,9 +966,10 @@ void AppController::saveTask(const QVariantMap& draft) {
       t.externalId = prev.externalId;
       t.externalUrl = prev.externalUrl;
       t.externalProvider = prev.externalProvider;
-      // The editor never shows the tracker-supplied assignee, and the planning
-      // fields are honoured only when the draft actually carries them.
+      // The editor never shows the tracker-supplied assignee or metadata, and
+      // the planning fields are honoured only when the draft carries them.
       t.assignee = prev.assignee;
+      t.externalMeta = prev.externalMeta;
       if(!draft.contains("labels")) {
         t.labels = prev.labels;
       }
@@ -1454,6 +1504,8 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["externalKey"] = externalKeyOf(t);
   m["externalUrl"] = t.externalUrl;
   m["externalProvider"] = t.externalProvider;
+  // Everything the editor's read-only ticket strip shows (HEAP-117).
+  m["ticket"] = ticketToVariant(t);
   return m;
 }
 
@@ -2230,10 +2282,27 @@ void AppController::syncProviderNow(const QString& providerId) {
   });
 }
 
-void AppController::mergeExternalTasks(const QString& providerId,
-                                       const QString& idPrefix,
-                                       const QVector<heap::integrations::ExternalTask>& issues) {
+QString AppController::uniqueTaskId(const QString& base) const {
+  if(m_tasks.indexOfId(base) < 0) {
+    return base;
+  }
+  // Two issues can legitimately want the same id — "#5" from two repos in an
+  // assigned-to-me pull. Without this, the second upsert would overwrite the
+  // first task outright. Same "-N" shape the recurrence clone uses.
+  int n = 2;
+  QString candidate;
+  do {
+    candidate = base + QChar('-') + QString::number(n++);
+  } while(m_tasks.indexOfId(candidate) >= 0);
+  return candidate;
+}
+
+AppController::MergeStats AppController::mergeExternalTasks(const QString& providerId,
+                                                            const QString& idPrefix,
+                                                            const QVector<heap::integrations::ExternalTask>& issues) {
   using heap::integrations::StatusMap;
+  MergeStats stats;
+
   // Auto-sync fires wherever the user happens to be, and the integration
   // config is global — so without this, a timer tick while another profile is
   // open imports every ticket into that profile. Same bind-on-first-use rule
@@ -2243,34 +2312,80 @@ void AppController::mergeExternalTasks(const QString& providerId,
   if(boundProfile.isEmpty()) {
     setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
   } else if(boundProfile != activeProfileId()) {
-    return;
+    return stats;
   }
 
   // Issues the user deleted here. Deleting one is how they say "not mine";
   // re-adding it on the next pull would make the deletion meaningless.
   const QStringList dismissed = dismissedTasks(providerId);
 
-  int merged = 0;
+  // An issue's URL is unique across a whole provider; its number is not, once a
+  // pull spans projects. Claim by URL first so "#5 of repo A" cannot be matched
+  // to the task that "#5 of repo B" is about to claim. Collected up front
+  // because the decision for one issue depends on the whole batch.
+  QSet<QString> claimedByUrl;
   for(const heap::integrations::ExternalTask& ext : issues) {
+    if(ext.url.isEmpty()) {
+      continue;
+    }
+    for(const Task& cur : m_tasks.items()) {
+      if(cur.externalProvider == providerId && cur.externalUrl == ext.url) {
+        claimedByUrl.insert(cur.id);
+        break;
+      }
+    }
+  }
+
+  for(const heap::integrations::ExternalTask& ext : issues) {
+    // An issue the user deleted here stays deleted.
     if(ext.externalId.isEmpty() || dismissed.contains(ext.externalId)) {
       continue;
     }
-    // Match an existing task by its stored external id; else create one.
+    // Identity is provider + project + issue id, with the URL bridging rows
+    // stored before the project was ever recorded.
     QString existingId;
-    for(const Task& cur : m_tasks.items()) {
-      if(cur.externalProvider == providerId && cur.externalId == ext.externalId) {
+    if(!ext.url.isEmpty()) {
+      for(const Task& cur : m_tasks.items()) {
+        if(cur.externalProvider == providerId && cur.externalUrl == ext.url) {
+          existingId = cur.id;
+          break;
+        }
+      }
+    }
+    if(existingId.isEmpty()) {
+      for(const Task& cur : m_tasks.items()) {
+        if(cur.externalProvider != providerId || cur.externalId != ext.externalId) {
+          continue;
+        }
+        // Another issue in this batch owns that row by URL; leave it alone.
+        if(claimedByUrl.contains(cur.id)) {
+          continue;
+        }
+        // Projects have to be compatible: either side may not know its own yet.
+        const QString& mine = cur.externalMeta.project;
+        if(!mine.isEmpty() && !ext.project.isEmpty() && mine.compare(ext.project, Qt::CaseInsensitive) != 0) {
+          continue;
+        }
         existingId = cur.id;
         break;
       }
     }
+
     const int row = existingId.isEmpty() ? -1 : m_tasks.indexOfId(existingId);
     Task t;
     if(row >= 0) {
       t = m_tasks.items().at(row);
     } else {
-      t.id = idPrefix + ext.externalId;
+      // A cross-project number needs its repo in the id to stay distinguishable.
+      QString base = idPrefix;
+      if(ext.crossProject && !ext.project.isEmpty()) {
+        base += ext.project.section(QChar('/'), -1) + QChar('-');
+      }
+      t.id = uniqueTaskId(base + ext.externalId);
       t.statusChangedAt = QDateTime::currentDateTime();
     }
+    const Task before = t;
+
     t.title = ext.title;
     t.desc = ext.body;
     t.status = StatusMap::column(ext.status, {}, QStringLiteral("todo"));
@@ -2282,26 +2397,61 @@ void AppController::mergeExternalTasks(const QString& providerId,
     t.externalId = ext.externalId;
     t.externalUrl = ext.url;
     t.externalProvider = providerId;
-    // Pulled labels used to be parsed and thrown away (HEAP-124). Trackers hand
-    // us names only (chip colour stays empty). Merge rather than clobber: a
-    // label the user added locally and the tracker doesn't know must survive the
-    // pull, and an existing chip keeps whatever colour it already had.
-    QSet<QString> present;
-    for(const Label& l : t.labels) {
-      present.insert(l.id);
-    }
-    for(const QString& name : ext.labels) {
-      if(!present.contains(name)) {
-        t.labels.append(Label{name, {}});
-        present.insert(name);
+    t.assignee = ext.assignee;
+
+    // The tracker owns this deadline only while the user has not touched it.
+    // Comparing against the value the tracker last sent is what tells the two
+    // apart — a local edit, or a snooze, makes them differ and then wins.
+    const bool syncOwnedDue = !t.dueAt.isValid() || t.dueAt == t.externalMeta.dueAt;
+    if(syncOwnedDue) {
+      t.dueAt = ext.dueAt;  // an invalid value clears a deadline dropped upstream
+      if(!t.scheduledAt.isValid()) {
+        t.hasTime = ext.dueAt.isValid() && ext.dueHasTime;
       }
     }
+
+    // Pulled labels used to be parsed and thrown away (HEAP-124). Merge rather
+    // than clobber: a label the user added locally and the tracker doesn't know
+    // must survive the pull. A chip that has no colour yet takes the tracker's
+    // (the editor drops colours when it rewrites labels from text).
+    QHash<QString, int> presentAt;
+    for(int i = 0; i < t.labels.size(); ++i) {
+      presentAt.insert(t.labels[i].id, i);
+    }
+    for(const QString& name : ext.labels) {
+      const QString color = ext.labelColors.value(name);
+      const auto at = presentAt.constFind(name);
+      if(at == presentAt.constEnd()) {
+        presentAt.insert(name, static_cast<int>(t.labels.size()));
+        t.labels.append(Label{name, color});
+      } else if(t.labels[*at].color.isEmpty() && !color.isEmpty()) {
+        t.labels[*at].color = color;
+      }
+    }
+
+    t.externalMeta.author = ext.author;
+    t.externalMeta.issueType = ext.issueType;
+    t.externalMeta.project = ext.project;
+    t.externalMeta.milestone = ext.milestone;
+    t.externalMeta.commentCount = ext.commentCount;
+    t.externalMeta.createdAt = ext.createdAt;
+    t.externalMeta.updatedAt = ext.updatedAt;
+    t.externalMeta.dueAt = ext.dueAt;
+    t.externalMeta.crossProject = ext.crossProject;
+
+    // An unchanged issue must not mark the state dirty: auto-sync runs on a
+    // timer, and rewriting the whole state.json every cycle for nothing is what
+    // the contact merge already avoids.
+    if(row >= 0 && t == before) {
+      continue;
+    }
     m_tasks.upsert(t);
-    ++merged;
+    (row >= 0 ? stats.updated : stats.added)++;
   }
-  if(merged > 0) {
+  if(stats.added > 0 || stats.updated > 0) {
     scheduleSave();
   }
+  return stats;
 }
 
 void AppController::applyIntegrationSettings() {
@@ -2316,8 +2466,14 @@ void AppController::applyIntegrationSettings() {
             this,
             [this, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
               m_retriedAfter401.remove(providerId);
-              mergeExternalTasks(providerId, idPrefix, issues);
-              emit toast(tr("Synced %1 issue(s) from %2").arg(issues.size()).arg(label));
+              const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues);
+              // "Synced 12 issues" every quarter of an hour says nothing about
+              // whether anything happened. Report what actually changed.
+              if(stats.added == 0 && stats.updated == 0) {
+                emit toast(tr_("sync.upToDate").arg(label));
+              } else {
+                emit toast(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
+              }
             });
     // A failed pull used to arrive as an empty task list, so a bad token read
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
@@ -2925,6 +3081,99 @@ void AppController::testIntegration(const QString& providerId) {
         provider->deleteLater();
       });
   provider->testConnection();
+}
+
+QString AppController::providerDisplayName(const QString& providerId) const {
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    if(d.id == providerId) {
+      return d.displayName;
+    }
+  }
+  return providerId;
+}
+
+QVariantMap AppController::providerBadges() const {
+  QVariantMap out;
+  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+    out.insert(d.id,
+               QVariantMap{{QStringLiteral("name"), d.displayName}, {QStringLiteral("icon"), d.icon}, {QStringLiteral("color"), d.color}});
+  }
+  return out;
+}
+
+QUrl AppController::externalUrlFor(const QString& taskId) const {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return {};
+  }
+  const QUrl url(m_tasks.items().at(row).externalUrl);
+  // The URL came from a tracker, and a Jira session that never learned its site
+  // yields a bare "/browse/KEY". Only ever hand the browser a web address.
+  if(!url.isValid() || (url.scheme() != QStringLiteral("https") && url.scheme() != QStringLiteral("http"))) {
+    return {};
+  }
+  return url;
+}
+
+bool AppController::openTaskExternal(const QString& taskId) {
+  const QUrl url = externalUrlFor(taskId);
+  if(url.isEmpty()) {
+    emit toast(tr_("ticket.noLink"));
+    return false;
+  }
+  QDesktopServices::openUrl(url);
+  return true;
+}
+
+void AppController::fetchTicketComments(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    emit ticketCommentsLoaded(taskId, {}, QStringLiteral("unknown task"));
+    return;
+  }
+  const Task& t = m_tasks.items().at(row);
+  if(t.externalProvider.isEmpty() || t.externalId.isEmpty()) {
+    emit ticketCommentsLoaded(taskId, {}, QStringLiteral("not a ticket"));
+    return;
+  }
+  const QString providerId = t.externalProvider;
+  const QString externalId = t.externalId;
+  // The issue's own repo, which after a cross-project pull is not the one in
+  // the settings card.
+  const QString project = t.externalMeta.project;
+
+  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() != providerId) {
+        continue;
+      }
+      // One connection per fetch, dropped as soon as it answers: the reply
+      // belongs to this request and nothing keeps the comments afterwards.
+      auto* guard = new QObject(this);
+      connect(provider.get(),
+              &heap::integrations::IntegrationProvider::commentsFetched,
+              guard,
+              [this, guard, taskId, externalId](
+                  const QString& id, const QVector<heap::integrations::ExternalComment>& comments, const QString& error) {
+                if(id != externalId) {
+                  return;  // another ticket's reply on the same provider
+                }
+                guard->deleteLater();
+                QVariantList out;
+                out.reserve(comments.size());
+                for(const heap::integrations::ExternalComment& c : comments) {
+                  out.append(QVariantMap{{QStringLiteral("author"), c.author},
+                                         {QStringLiteral("body"), c.body},
+                                         {QStringLiteral("createdAt"), c.createdAt},
+                                         {QStringLiteral("url"), c.url}});
+                }
+                emit ticketCommentsLoaded(taskId, out, error);
+              });
+      provider->fetchComments(externalId, project);
+      return;
+    }
+    emit ticketCommentsLoaded(taskId, {}, tr_("ticket.notConnected"));
+  });
 }
 
 QVariantList AppController::integrationCatalog() const {
@@ -4116,6 +4365,11 @@ QVariantList AppController::commandPaletteEntries() const {
       m["kind"] = "task";
       m["label"] = QString("%1 · %2").arg(t.id, t.title);
       m["sub"] = QString("%1 · %2").arg(p.name, statusName(p.statuses, t.status).toUpper());
+      // A mirrored ticket is looked for by its tracker key ("PROJ-123", "#42"),
+      // which is not its heap id. The palette scores label + sub.
+      if(!t.externalProvider.isEmpty()) {
+        m["sub"] = QString("%1 · %2 %3").arg(m["sub"].toString(), providerDisplayName(t.externalProvider), externalKeyOf(t));
+      }
       m["body"] = cap(t.desc);
       m["profileId"] = p.id;
       m["taskId"] = t.id;
@@ -4389,6 +4643,11 @@ void AppController::seedShortcutCatalog() {
   add("selection.selectAll", "Ctrl+A");
   add("selection.clearSel", "Esc");
   add("selection.deleteSel", "Del");
+  // The first bare letter in the catalog (HEAP-117). Qt gives a focused text
+  // field the ShortcutOverride for an unmodified key, so typing an "o" still
+  // types it; the QML side additionally holds this back while any overlay is
+  // open. Rebindable like everything else here.
+  add("task.openExternal", "O");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;

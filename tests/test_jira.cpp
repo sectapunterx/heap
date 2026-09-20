@@ -73,6 +73,95 @@ TEST(JiraParse, PlainStringDescriptionAndEmpty) {
   EXPECT_TRUE(parseJiraIssues("garbage", "https://x").isEmpty());
 }
 
+// ── HEAP-117: the identity and context a card needs ──
+
+TEST(JiraParse, ParsesAssigneeReporterDueTypeProjectAndFixVersion) {
+  const QByteArray json = R"({
+    "issues": [
+      {
+        "key": "LTE-77",
+        "fields": {
+          "summary": "s",
+          "status": { "name": "To Do" },
+          "created": "2026-06-01T09:00:00.000+0000",
+          "updated": "2026-07-02T12:34:56.000+0000",
+          "duedate": "2026-08-15",
+          "assignee": { "displayName": "Ada Lovelace" },
+          "reporter": { "displayName": "Grace Hopper" },
+          "issuetype": { "name": "Bug" },
+          "project": { "key": "LTE" },
+          "fixVersions": [ { "name": "24.10" }, { "name": "24.11" } ]
+        }
+      }
+    ]
+  })";
+  const QVector<ExternalTask> tasks = parseJiraIssues(json, "https://acme.atlassian.net");
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_EQ(t.assignee, QString("Ada Lovelace"));
+  EXPECT_EQ(t.author, QString("Grace Hopper"));
+  EXPECT_EQ(t.issueType, QString("Bug"));
+  EXPECT_EQ(t.project, QString("LTE"));
+  EXPECT_EQ(t.milestone, QString("24.10"));  // the first fix version
+  EXPECT_TRUE(t.createdAt.isValid());
+  ASSERT_TRUE(t.dueAt.isValid());
+  EXPECT_EQ(t.dueAt.date(), QDate(2026, 8, 15));
+  EXPECT_FALSE(t.dueHasTime);
+  // Comments are not requested, so the count stays "unknown".
+  EXPECT_EQ(t.commentCount, -1);
+}
+
+TEST(JiraParse, TimestampWithColonlessOffsetIsValid) {
+  // Jira sends "+0000" without the colon Qt::ISODate expects; the shared
+  // timestamp parser has to accept it or every Jira date silently vanishes.
+  const QByteArray json = R"({"issues":[{"key":"A-1","fields":{"summary":"s","updated":"2026-07-02T12:34:56.000+0000"}}]})";
+  const QVector<ExternalTask> tasks = parseJiraIssues(json, "https://x");
+  ASSERT_EQ(tasks.size(), 1);
+  ASSERT_TRUE(tasks[0].updatedAt.isValid());
+  EXPECT_EQ(tasks[0].updatedAt.toUTC().date(), QDate(2026, 7, 2));
+  EXPECT_EQ(tasks[0].updatedAt.toUTC().time(), QTime(12, 34, 56));
+}
+
+TEST(JiraParse, MissingOptionalFieldsStayDefault) {
+  const QByteArray json = R"({"issues":[{"key":"A-1","fields":{"summary":"s"}}]})";
+  const QVector<ExternalTask> tasks = parseJiraIssues(json, "https://x");
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_TRUE(tasks[0].assignee.isEmpty());
+  EXPECT_TRUE(tasks[0].author.isEmpty());
+  EXPECT_TRUE(tasks[0].milestone.isEmpty());
+  EXPECT_FALSE(tasks[0].dueAt.isValid());
+}
+
+TEST(JiraComments, FlattensAdfAndPlainStringBodies) {
+  // Cloud sends ADF; Server/DC sends a plain string. Both have to read.
+  const QByteArray json = R"({
+    "comments": [
+      {
+        "author": { "displayName": "Ada Lovelace" },
+        "created": "2026-07-02T12:34:56.000+0000",
+        "body": { "type": "doc", "content": [
+          { "type": "paragraph", "content": [ { "type": "text", "text": "Reproduced on trunk." } ] } ] }
+      },
+      { "author": { "displayName": "Grace Hopper" }, "created": "2026-07-01T09:00:00.000+0000",
+        "body": "plain server comment" },
+      { "author": { "displayName": "nobody" }, "created": "2026-07-01T09:00:00.000+0000", "body": "" }
+    ]
+  })";
+  const QVector<heap::integrations::ExternalComment> comments = heap::integrations::parseJiraComments(json);
+  ASSERT_EQ(comments.size(), 2) << "an empty body was kept";
+  EXPECT_EQ(comments[0].author, QString("Ada Lovelace"));
+  EXPECT_TRUE(comments[0].body.contains("Reproduced on trunk."));
+  EXPECT_TRUE(comments[0].createdAt.isValid()) << "the colon-less offset did not parse";
+  EXPECT_EQ(comments[1].body, QString("plain server comment"));
+}
+
+TEST(JiraComments, HandlesGarbage) {
+  EXPECT_TRUE(heap::integrations::parseJiraComments(QByteArray()).isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraComments("[]").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraComments("garbage").isEmpty());
+  EXPECT_TRUE(heap::integrations::parseJiraComments(R"({"comments":[]})").isEmpty());
+}
+
 TEST(JiraAdf, FlattensNestedContent) {
   const QByteArray adf = R"({
     "type": "doc",
@@ -239,6 +328,13 @@ TEST_F(JiraNetwork, PullPostsTheBoundedDefaultJql) {
   // POST, not GET: keeps a long JQL out of the URL and `fields` a real array.
   EXPECT_EQ(server.seen().value(0), QByteArray("POST /rest/api/3/search/jql"));
   EXPECT_TRUE(server.lastBody().contains("currentUser()")) << server.lastBody().toStdString();
+  // The endpoint returns only the fields asked for, so the identity fields the
+  // card renders (HEAP-117) have to be in the request or they never arrive.
+  for(const char* field : {"assignee", "reporter", "duedate", "created", "issuetype", "project", "fixVersions"}) {
+    EXPECT_TRUE(server.lastBody().contains(field)) << field << " missing from " << server.lastBody().toStdString();
+  }
+  // Asking for `comment` would inline every comment body of all 100 issues.
+  EXPECT_FALSE(server.lastBody().contains("\"comment\"")) << server.lastBody().toStdString();
 }
 
 TEST_F(JiraNetwork, ReportsAFailedPullInsteadOfAnEmptyList) {
