@@ -24,6 +24,25 @@ ApplicationWindow {
     // keys across, so this survives a trip through the settings screen.
     property bool _geometryRestored: false
 
+    // Builds the current view's loader on its first visit. Board, Notes and
+    // Docs are never unloaded again.
+    function activateCurrentView() {
+        const v = AppController.currentView;
+        if (v === "board") boardLoader.active = true;
+        else if (v === "notes") notesLoader.active = true;
+        else if (v === "docs") docsLoader.active = true;
+    }
+
+    // Whichever view is on screen. Four loaders now hold them — three kept
+    // alive, one shared — so nothing outside should have to know which.
+    function activeViewItem() {
+        const v = AppController.currentView;
+        if (v === "board") return boardLoader.item;
+        if (v === "notes") return notesLoader.item;
+        if (v === "docs") return docsLoader.item;
+        return viewLoader.item;
+    }
+
     function _settingsObject() {
         const raw = AppController.appSettingsJson || "";
         if (!raw.length) return ({});
@@ -96,6 +115,10 @@ ApplicationWindow {
     property var prioritiesFilter: ({})
     property bool showDoneTimeline: false
     property bool showArchived: false
+    // Board column order. Lives on the window so it survives the board being
+    // hidden, and so the filter bar and the board agree without either owning
+    // the other.
+    property string boardSortMode: "manual"
 
     // Reactive task / status counts. statusCounts is one pass over the model,
     // recomputed when the model changes; these used to be four separate full
@@ -352,6 +375,9 @@ ApplicationWindow {
                     blockedCount: win._blockedCount
                     reviewCount: win._reviewCount
                     showArchived: win.showArchived
+                    showSort: AppController.currentView === "board"
+                    sortMode: win.boardSortMode
+                    onSortModeRequested: (mode) => win.boardSortMode = mode
                     onTogglePriority: (p) => {
                         const next = Object.assign({}, win.prioritiesFilter);
                         next[p] = !next[p];
@@ -363,20 +389,63 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // Board, Notes and Docs are kept alive once visited.
+                    // Swapping a Loader's sourceComponent destroys the item,
+                    // and these three hold state the user notices losing: the
+                    // board's scroll position and column focus, the note's
+                    // caret, scroll and editor undo history, the docs
+                    // section the user had scrolled to. Everything else is
+                    // cheap to rebuild and stays on the shared loader below.
+                    //
+                    // They load lazily — `active` is flipped on first visit —
+                    // so starting on the board does not build the notes
+                    // editor and the docs catalogue too.
+                    Loader {
+                        id: boardLoader
+                        anchors.fill: parent
+                        visible: AppController.currentView === "board"
+                        active: false
+                        sourceComponent: boardComp
+                    }
+                    Loader {
+                        id: notesLoader
+                        anchors.fill: parent
+                        visible: AppController.currentView === "notes"
+                        active: false
+                        sourceComponent: notesComp
+                    }
+                    Loader {
+                        id: docsLoader
+                        anchors.fill: parent
+                        visible: AppController.currentView === "docs"
+                        active: false
+                        sourceComponent: docsComp
+                    }
+
                     Loader {
                         id: viewLoader
                         anchors.fill: parent
+                        visible: !boardLoader.visible && !notesLoader.visible && !docsLoader.visible
                         sourceComponent: {
                             if (AppController.currentView === "timeline") return timelineComp;
                             if (AppController.currentView === "week") return weekComp;
                             if (AppController.currentView === "month") return monthComp;
                             if (AppController.currentView === "archive") return archiveComp;
-                            if (AppController.currentView === "docs") return docsComp;
-                            if (AppController.currentView === "notes") return notesComp;
                             if (AppController.currentView === "settings") return settingsComp;
-                            return boardComp;
+                            return null;
                         }
                     }
+
+                    // First visit to one of the kept-alive views builds it.
+                    // The function lives on `win` because a Connections handler
+                    // does not resolve names from the scope its parent item
+                    // declares them in — calling it unqualified from there is a
+                    // ReferenceError, and the two views would never activate.
+                    Connections {
+                        target: AppController
+                        function onCurrentViewChanged() { win.activateCurrentView(); }
+                    }
+                    Component.onCompleted: win.activateCurrentView()
                     SelectionBar {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
@@ -391,6 +460,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         scheduleMap: win._scheduleMap
                         showArchived: win.showArchived
+                        sortMode: win.boardSortMode
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                         onCreateInStatus: (s) => taskEditor.showFor(AppController.newTaskDraft(s))
                     }
@@ -547,7 +617,7 @@ ApplicationWindow {
         onOpenHelp: (anchor) => {
             AppController.currentView = "settings";
             Qt.callLater(() => {
-                const v = viewLoader.item;
+                const v = win.activeViewItem();
                 if (v && v.openHelp)
                     v.openHelp(anchor);
             });
@@ -852,7 +922,7 @@ ApplicationWindow {
         // task box anyway, where typing did nothing to what was on screen.
         // Duck-typed so a view picks this up by declaring focusSearch().
         onActivated: {
-            const view = viewLoader.item;
+            const view = win.activeViewItem();
             if (view && typeof view.focusSearch === "function") {
                 view.focusSearch();
                 return;
@@ -869,7 +939,7 @@ ApplicationWindow {
                 || AppController.currentView === "timeline"
                 || AppController.currentView === "week")
         onActivated: {
-            const v = viewLoader.item;
+            const v = win.activeViewItem();
             if (v && v.selectAllVisible) v.selectAllVisible();
         }
     }
@@ -892,6 +962,60 @@ ApplicationWindow {
     // field the ShortcutOverride for an unmodified key, so typing "o" still
     // types it — but a read-only Text or a ComboBox's type-ahead would lose,
     // so the shortcut also stands down while any overlay is open.
+    // ── Board keyboard cursor ─────────────────────────────────────────
+    // The board was mouse-only: no way to move between cards, open one or
+    // move one without dragging. Each of these stands down while an overlay
+    // is open and off the board, exactly like task.openExternal below.
+    //
+    // The catalog holds the vim letter so it can be rebound; the arrow key is
+    // a fixed alias alongside it, the way Ctrl+P aliases the palette.
+    component BoardKey: Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+            && AppController.currentView === "board"
+    }
+
+    BoardKey {
+        sequences: [_kbd("board.cursorDown"), "Down"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(0, 1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.cursorUp"), "Up"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(0, -1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.cursorLeft"), "Left"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(-1, 0); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.cursorRight"), "Right"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(1, 0); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.open"), "Enter"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.openCursor) b.openCursor(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.toggleSelect")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorSelection) b.toggleCursorSelection(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveDown"), "Shift+Down"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, 1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveUp"), "Shift+Up"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, -1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveLeft"), "Shift+Left"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(-1, 0); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveRight"), "Shift+Right"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(1, 0); }
+    }
+
     Shortcut {
         sequence: _kbd("task.openExternal")
         context: Qt.ApplicationShortcut
@@ -908,7 +1032,7 @@ ApplicationWindow {
             if (AppController.selectionCount === 1) {
                 id = AppController.selectedTaskIds[0];
             } else if (AppController.selectionCount === 0) {
-                const v = viewLoader.item;
+                const v = win.activeViewItem();
                 if (v && v.hoveredTaskId) id = v.hoveredTaskId;
             }
             if (id) AppController.openTaskExternal(id);

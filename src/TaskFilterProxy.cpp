@@ -1,6 +1,7 @@
 #include "TaskFilterProxy.h"
 
 #include <QDate>
+#include <QDateTime>
 
 TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
   // Board order. The task model is in insertion order, so without this a card
@@ -60,13 +61,73 @@ void TaskFilterProxy::setPriorities(const QStringList& v) {
   emit countChanged();
 }
 
+void TaskFilterProxy::setSortMode(const QString& v) {
+  const QString mode = v.isEmpty() ? QStringLiteral("manual") : v;
+  if(m_sortMode == mode) {
+    return;
+  }
+  m_sortMode = mode;
+  invalidate();
+  emit sortModeChanged();
+}
+
+namespace {
+
+// P0 is the most urgent, so it sorts first. `?? 4` rather than `|| 4`: a
+// priority that maps to 0 is P0, and the falsy-zero form would send it to the
+// bottom — the same bug that once demoted every P0 in four views.
+int priorityRank(const QString& p) {
+  static const QHash<QString, int> kRanks = {
+      {QStringLiteral("P0"), 0}, {QStringLiteral("P1"), 1}, {QStringLiteral("P2"), 2}, {QStringLiteral("P3"), 3}};
+  const auto it = kRanks.constFind(p);
+  return it == kRanks.constEnd() ? 4 : *it;
+}
+
+}  // namespace
+
 bool TaskFilterProxy::lessThan(const QModelIndex& left, const QModelIndex& right) const {
-  const double lr = sourceModel()->data(left, TaskModel::RankRole).toDouble();
-  const double rr = sourceModel()->data(right, TaskModel::RankRole).toDouble();
+  const QAbstractItemModel* src = sourceModel();
+
+  if(m_sortMode == QStringLiteral("priority")) {
+    const int lp = priorityRank(src->data(left, TaskModel::PriorityRole).toString());
+    const int rp = priorityRank(src->data(right, TaskModel::PriorityRole).toString());
+    if(lp != rp) {
+      return lp < rp;
+    }
+  } else if(m_sortMode == QStringLiteral("due")) {
+    const QDateTime ld = src->data(left, TaskModel::DueAtRole).toDateTime();
+    const QDateTime rd = src->data(right, TaskModel::DueAtRole).toDateTime();
+    // A task with no due date is not "due at the epoch" — it sorts last,
+    // behind everything that actually has a date.
+    if(ld.isValid() != rd.isValid()) {
+      return ld.isValid();
+    }
+    if(ld.isValid() && ld != rd) {
+      return ld < rd;
+    }
+  } else if(m_sortMode == QStringLiteral("updated")) {
+    const QDateTime lu = src->data(left, TaskModel::StatusChangedAtRole).toDateTime();
+    const QDateTime ru = src->data(right, TaskModel::StatusChangedAtRole).toDateTime();
+    if(lu != ru) {
+      return lu > ru;  // most recently touched first
+    }
+  } else if(m_sortMode == QStringLiteral("title")) {
+    const QString lt = src->data(left, TaskModel::TitleRole).toString();
+    const QString rt = src->data(right, TaskModel::TitleRole).toString();
+    const int cmp = QString::compare(lt, rt, Qt::CaseInsensitive);
+    if(cmp != 0) {
+      return cmp < 0;
+    }
+  }
+
+  // Manual order, and the tie-break for every other mode: two cards that
+  // compare equal must not swap places between launches.
+  const double lr = src->data(left, TaskModel::RankRole).toDouble();
+  const double rr = src->data(right, TaskModel::RankRole).toDouble();
   if(lr != rr) {
     return lr < rr;
   }
-  return sourceModel()->data(left, TaskModel::IdRole).toString() < sourceModel()->data(right, TaskModel::IdRole).toString();
+  return src->data(left, TaskModel::IdRole).toString() < src->data(right, TaskModel::IdRole).toString();
 }
 
 bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceParent) const {

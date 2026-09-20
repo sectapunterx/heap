@@ -8,6 +8,11 @@ import TodoCpp
 Item {
     id: root
     property string searchText: ""
+    // How every column is ordered. "manual" is the board's own rank, which is
+    // what a drag writes; the others are read-only views over the same cards,
+    // so switching back to manual restores the order the user arranged rather
+    // than whatever the last sort left behind.
+    property string sortMode: "manual"
     property var prioritiesFilter: ({})
     property var scheduleMap: ({})
     property bool showArchived: false
@@ -73,6 +78,116 @@ Item {
     // to AppController as the new selection set.
     function selectAllVisible() {
         AppController.setSelectedTaskIds(_flatVisibleIds());
+    }
+
+    // ── Keyboard cursor ───────────────────────────────────────────────
+    // The board is the app's main surface and was mouse-only: there was no way
+    // to move between cards, open one, or move one, without dragging.
+    //
+    // The cursor is a task id rather than a (column, row) pair, so it survives
+    // a filter change, a drag, or the card moving column — all of which
+    // renumber the rows underneath it.
+    property string cursorTaskId: ""
+
+    // Visible ids per column, in board order. The same walk _flatVisibleIds()
+    // does, but keeping the column structure that left/right needs.
+    function _visibleByColumn() {
+        const cols = [];
+        for (let c = 0; c < colRepeater.count; c++) {
+            const col = colRepeater.itemAt(c);
+            if (!col || !col.taskRepeater) { cols.push({ statusId: "", ids: [] }); continue; }
+            const ids = [];
+            const rep = col.taskRepeater;
+            for (let i = 0; i < rep.count; i++) {
+                const it = rep.itemAt(i);
+                if (it && it.visible && it.taskId) ids.push(it.taskId);
+            }
+            cols.push({ statusId: col.statusId, ids: ids });
+        }
+        return cols;
+    }
+
+    // Where the cursor currently sits, or null when it points at nothing on
+    // screen (a filter may have hidden it).
+    function _cursorPos(cols) {
+        for (let c = 0; c < cols.length; c++) {
+            const r = cols[c].ids.indexOf(root.cursorTaskId);
+            if (r >= 0) return { col: c, row: r };
+        }
+        return null;
+    }
+
+    // First visible card, used when a key arrives with no cursor yet.
+    function _firstVisible(cols) {
+        for (let c = 0; c < cols.length; c++)
+            if (cols[c].ids.length > 0) return cols[c].ids[0];
+        return "";
+    }
+
+    function moveCursor(dx, dy) {
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) {
+            root.cursorTaskId = _firstVisible(cols);
+            return;
+        }
+        let c = pos.col;
+        let r = pos.row;
+        if (dy !== 0) {
+            r = Math.max(0, Math.min(cols[c].ids.length - 1, r + dy));
+        }
+        if (dx !== 0) {
+            // Skip empty columns rather than stopping at one — a gap in the
+            // middle of the board should not swallow the cursor.
+            let next = c;
+            for (let step = c + dx; step >= 0 && step < cols.length; step += dx) {
+                if (cols[step].ids.length > 0) { next = step; break; }
+            }
+            c = next;
+            r = Math.max(0, Math.min(cols[c].ids.length - 1, r));
+        }
+        if (cols[c].ids.length === 0) return;
+        root.cursorTaskId = cols[c].ids[r];
+    }
+
+    function openCursor() {
+        const cols = _visibleByColumn();
+        if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
+        if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
+    }
+
+    function toggleCursorSelection() {
+        const cols = _visibleByColumn();
+        if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
+        if (root.cursorTaskId) AppController.toggleTaskSelection(root.cursorTaskId);
+    }
+
+    // Move the card under the cursor. Vertically it swaps with its neighbour;
+    // horizontally it changes column, landing at the same depth.
+    function moveCursorCard(dx, dy) {
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
+        const id = root.cursorTaskId;
+
+        if (dy !== 0) {
+            const ids = cols[pos.col].ids;
+            const target = pos.row + dy;
+            if (target < 0 || target >= ids.length) return;
+            // Moving down means landing after the card currently below, which
+            // is "before the one after that".
+            const beforeId = dy > 0
+                ? (target + 1 < ids.length ? ids[target + 1] : "")
+                : ids[target];
+            AppController.moveTaskTo(id, cols[pos.col].statusId, beforeId);
+            return;
+        }
+
+        let c = pos.col + dx;
+        if (c < 0 || c >= cols.length) return;
+        const destIds = cols[c].ids;
+        const beforeId = pos.row < destIds.length ? destIds[pos.row] : "";
+        AppController.moveTaskTo(id, cols[c].statusId, beforeId);
     }
 
     // Flat ordered list of visible task ids across the entire board, column
@@ -193,6 +308,12 @@ Item {
                     readonly property alias taskRepeater: colRep
                     property bool dragOver: false
                     readonly property int visibleCount: colFilter.count
+                    // Advisory work-in-progress limit. 0 = none. Over the
+                    // limit the badge turns, and that is all it does: a hard
+                    // cap would make a drag silently do nothing, which reads
+                    // as a bug rather than as a rule.
+                    readonly property int wipLimit: modelData.wip || 0
+                    readonly property bool overWip: col.wipLimit > 0 && col.visibleCount > col.wipLimit
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
                     readonly property bool isLast:  index === AppController.statuses.length - 1
@@ -311,16 +432,24 @@ Item {
                                 }
                                 Rectangle {
                                     radius: 999
-                                    color: Theme.panel3
+                                    color: col.overWip ? Theme.withAlpha(Theme.p0, 0.18) : Theme.panel3
+                                    border.color: col.overWip ? Theme.p0 : "transparent"
+                                    border.width: 1
                                     implicitWidth: cntT.implicitWidth + 14
                                     implicitHeight: 18
                                     Text {
                                         id: cntT; anchors.centerIn: parent
-                                        text: col.visibleCount
-                                        color: Theme.textDim
+                                        text: col.wipLimit > 0
+                                            ? col.visibleCount + "/" + col.wipLimit
+                                            : col.visibleCount
+                                        color: col.overWip ? Theme.p0 : Theme.textDim
                                         font.family: Theme.fontMono
                                         font.pixelSize: 11
+                                        font.weight: col.overWip ? Font.DemiBold : Font.Normal
                                     }
+                                    QQC.ToolTip.visible: col.overWip && wipHover.hovered
+                                    QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
+                                    HoverHandler { id: wipHover }
                                 }
 
                                 // Move-left / Move-right / Delete. `visible` only
@@ -345,7 +474,7 @@ Item {
                                     danger: true
                                     visible: AppController.statuses.length > 1
                                     revealed: col.headerHovered
-                                    onActivated: AppController.deleteStatus(col.statusId)
+                                    onActivated: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount)
                                 }
 
                                 Rectangle {
@@ -379,11 +508,12 @@ Item {
                                 QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
                                 QQC.MenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
                                 QQC.MenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
+                                QQC.MenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
                                 QQC.MenuSeparator {}
                                 QQC.MenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
                                 QQC.MenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 QQC.MenuSeparator {}
-                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount) }
                             }
                         }
 
@@ -503,8 +633,13 @@ Item {
                                                 else if (root.hoveredTaskId === tc.id) root.hoveredTaskId = "";
                                             }
                                             task: taskData
+                                            cursored: root.cursorTaskId === tc.id
                                             scheduled: root.scheduleMap[tc.id] || ""
-                                            onClicked: root.taskClicked(tc.id)
+                                            // Clicking a card also puts the
+                                            // keyboard cursor on it, so mouse
+                                            // and keyboard never disagree about
+                                            // where "here" is.
+                                            onClicked: { root.cursorTaskId = tc.id; root.taskClicked(tc.id); }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                                         }
                                     }
@@ -565,11 +700,15 @@ Item {
                                     col.dragOver = false;
                                     const src = drop.source;
                                     if (!src || !src.taskId) return;
+                                    // Under a sort, a drop still changes the
+                                    // column — it just cannot choose where in
+                                    // it the card lands.
+                                    const target = root.sortMode === "manual" ? colDrop.beforeId : "";
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
-                                        AppController.moveSelectedTasksTo(col.statusId, colDrop.beforeId);
+                                        AppController.moveSelectedTasksTo(col.statusId, target);
                                     } else {
-                                        AppController.moveTaskTo(src.taskId, col.statusId, colDrop.beforeId);
+                                        AppController.moveTaskTo(src.taskId, col.statusId, target);
                                     }
                                     drop.accept(Qt.MoveAction);
                                 }
@@ -580,7 +719,9 @@ Item {
                             // shift them while the pointer moves.
                             Rectangle {
                                 objectName: "drop-indicator"
-                                visible: col.dragOver
+                                // A drop cannot choose a position while a sort
+                                // is deciding it, so the line would be a lie.
+                                visible: col.dragOver && root.sortMode === "manual"
                                 x: 10
                                 width: parent.width - 20
                                 height: 2
@@ -615,6 +756,7 @@ Item {
                         showArchived: root.showArchived
                         searchText: root.searchText
                         priorities: root.activePriorities
+                        sortMode: root.sortMode
                     }
                 }
             }
@@ -869,4 +1011,134 @@ Item {
             font.pixelSize: 12
         }
     }
+    // ── Column delete: confirm when it is not empty ───────────────────
+    // Deleting a column re-homes every card in it. That is undoable, but a
+    // five-second toast is a poor place to discover that thirty cards just
+    // moved — so a non-empty column asks first. An empty one does not: there
+    // is nothing to lose and a dialog would only be in the way.
+    function requestDeleteColumn(statusId, statusName, count) {
+        if (count <= 0) {
+            AppController.deleteStatus(statusId);
+            return;
+        }
+        confirmDelete.statusId = statusId;
+        confirmDelete.statusName = statusName;
+        confirmDelete.cardCount = count;
+        confirmDelete.open();
+    }
+
+    QQC.Dialog {
+        id: confirmDelete
+        objectName: "confirm-delete-column"
+        property string statusId: ""
+        property string statusName: ""
+        property int cardCount: 0
+
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: 18
+        title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        contentItem: Text {
+            text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
+            color: Theme.textMuted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton {
+                text: I18n.t("common.cancel")
+                onClicked: confirmDelete.close()
+            }
+            PillButton {
+                objectName: "confirm-delete-ok"
+                text: I18n.t("kanban.confirmDelete.ok")
+                danger: true
+                onClicked: {
+                    AppController.deleteStatus(confirmDelete.statusId);
+                    confirmDelete.close();
+                }
+            }
+            Item { Layout.preferredWidth: 10 }
+        }
+    }
+
+    // ── Work-in-progress limit ────────────────────────────────────────
+    QQC.Dialog {
+        id: wipPopup
+        objectName: "wip-popup"
+        property string statusId: ""
+        property string statusName: ""
+
+        function openFor(id, name, current, anchorItem) {
+            wipPopup.statusId = id;
+            wipPopup.statusName = name;
+            wipField.text = current > 0 ? String(current) : "";
+            wipPopup.open();
+            wipField.forceActiveFocus();
+            wipField.selectAll();
+        }
+
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: 18
+        title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        function commit() {
+            AppController.setStatusWipLimit(wipPopup.statusId, parseInt(wipField.text || "0") || 0);
+            wipPopup.close();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 8
+            TextField {
+                id: wipField
+                objectName: "wip-field"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 220
+                inputMethodHints: Qt.ImhDigitsOnly
+                validator: IntValidator { bottom: 0; top: 999 }
+                placeholderText: "0"
+                color: Theme.text
+                font.family: Theme.fontMono
+                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                onAccepted: wipPopup.commit()
+            }
+            Text {
+                Layout.preferredWidth: 220
+                text: I18n.t("kanban.wip.hint")
+                color: Theme.textDim
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+            }
+        }
+
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: wipPopup.close() }
+            PillButton { text: I18n.t("common.save"); onClicked: wipPopup.commit() }
+            Item { Layout.preferredWidth: 10 }
+        }
+    }
+
 }

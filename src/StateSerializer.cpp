@@ -368,6 +368,12 @@ QJsonArray statusesToJson(const QVariantList& xs) {
     o["name"] = m.value("name").toString();
     const QVariant col = m.value("color");
     o["color"] = col.canConvert<QColor>() ? col.value<QColor>().name() : col.toString();
+    // WIP limit. Omitted when unset so a column that has never had one keeps
+    // the JSON it had before.
+    const int wip = m.value("wip").toInt();
+    if(wip > 0) {
+      o["wip"] = wip;
+    }
     a.append(o);
   }
   return a;
@@ -381,6 +387,7 @@ QVariantList statusesFromJson(const QJsonArray& a) {
     m["id"] = o["id"].toString();
     m["name"] = o["name"].toString();
     m["color"] = QColor(o["color"].toString());
+    m["wip"] = o["wip"].toInt(0);
     v.append(m);
   }
   return v;
