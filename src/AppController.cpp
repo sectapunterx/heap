@@ -116,6 +116,26 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
+      {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
+      {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
+      {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
+      {"shortcut.board.cursorUp.desc", {"Move the keyboard cursor up a column.", "Сдвинуть курсор вверх по колонке."}},
+      {"shortcut.board.cursorLeft.label", {"Board: column left", "Доска: колонка левее"}},
+      {"shortcut.board.cursorLeft.desc", {"Move the keyboard cursor to the previous column.", "Перевести курсор в предыдущую колонку."}},
+      {"shortcut.board.cursorRight.label", {"Board: column right", "Доска: колонка правее"}},
+      {"shortcut.board.cursorRight.desc", {"Move the keyboard cursor to the next column.", "Перевести курсор в следующую колонку."}},
+      {"shortcut.board.open.label", {"Board: open card", "Доска: открыть карточку"}},
+      {"shortcut.board.open.desc", {"Open the card under the cursor.", "Открыть карточку под курсором."}},
+      {"shortcut.board.toggleSelect.label", {"Board: select card", "Доска: выделить карточку"}},
+      {"shortcut.board.toggleSelect.desc", {"Add or remove the card under the cursor from the selection.", "Добавить карточку под курсором в выделение или убрать из него."}},
+      {"shortcut.board.moveDown.label", {"Board: move card down", "Доска: карточку вниз"}},
+      {"shortcut.board.moveDown.desc", {"Swap the card under the cursor with the one below.", "Поменять карточку под курсором местами с нижней."}},
+      {"shortcut.board.moveUp.label", {"Board: move card up", "Доска: карточку вверх"}},
+      {"shortcut.board.moveUp.desc", {"Swap the card under the cursor with the one above.", "Поменять карточку под курсором местами с верхней."}},
+      {"shortcut.board.moveLeft.label", {"Board: move card left", "Доска: карточку левее"}},
+      {"shortcut.board.moveLeft.desc", {"Move the card under the cursor to the previous column.", "Перенести карточку под курсором в предыдущую колонку."}},
+      {"shortcut.board.moveRight.label", {"Board: move card right", "Доска: карточку правее"}},
+      {"shortcut.board.moveRight.desc", {"Move the card under the cursor to the next column.", "Перенести карточку под курсором в следующую колонку."}},
       {"shortcut.task.openExternal.label", {"Open ticket in browser", "Открыть тикет в браузере"}},
       {"shortcut.task.openExternal.desc",
        {"Opens the selected (or hovered) mirrored issue in its tracker.",
@@ -5073,6 +5093,20 @@ void AppController::seedShortcutCatalog() {
   // types it; the QML side additionally holds this back while any overlay is
   // open. Rebindable like everything else here.
   add("task.openExternal", "O");
+  // Board keyboard cursor. Bare letters, like task.openExternal above: a
+  // focused text field gets the ShortcutOverride for an unmodified key, so
+  // typing a "j" still types it, and QML holds them back while an overlay
+  // is open. Arrow keys are wired alongside these in Main.qml.
+  add("board.cursorDown", "J");
+  add("board.cursorUp", "K");
+  add("board.cursorLeft", "H");
+  add("board.cursorRight", "L");
+  add("board.open", "Return");
+  add("board.toggleSelect", "Space");
+  add("board.moveDown", "Shift+J");
+  add("board.moveUp", "Shift+K");
+  add("board.moveLeft", "Shift+H");
+  add("board.moveRight", "Shift+L");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;
