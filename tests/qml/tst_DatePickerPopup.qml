@@ -122,4 +122,22 @@ TestCase {
         verify(!dp._sameDay(null, day), "null lhs → falsy");
         verify(!dp._sameDay(day, null), "null rhs → falsy");
     }
+
+    // MonthGrid orders its columns by the locale's firstDayOfWeek. The popup
+    // used to leave that at the host locale, so the same week could start on a
+    // different day in this picker than in the view it was opened from — every
+    // other calendar surface honours Theme.weekStart.
+    function test_grid_locale_follows_week_start() {
+        const saved = AppController.appSettingsJson;
+        const dp = make('import TodoCpp; DatePickerPopup { }');
+
+        AppController.appSettingsJson = JSON.stringify({ calendar: { weekStart: "sun" } });
+        const sunFirst = dp._gridLocale.firstDayOfWeek;
+        AppController.appSettingsJson = JSON.stringify({ calendar: { weekStart: "mon" } });
+        const monFirst = dp._gridLocale.firstDayOfWeek;
+        AppController.appSettingsJson = saved;
+
+        compare(sunFirst, Locale.Sunday);
+        compare(monFirst, Locale.Monday);
+    }
 }

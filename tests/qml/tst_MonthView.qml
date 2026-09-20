@@ -121,14 +121,63 @@ TestCase {
         compare(mv.rangeTitle(), Qt.formatDate(day, "MMMM yyyy"));
 
         mv.step(1);
-        const fwd = new Date(day.getFullYear(), day.getMonth() + 1, Math.min(day.getDate(), 28));
+        const fwd = shiftMonth(day, 1);
         verify(mv.isSameDay(AppController.selectedDate, fwd),
-               "step(1) must advance the selected date one month (day clamped to 28)");
+               "step(1) must advance the selected date one month");
 
         mv.step(-1);
-        const back = new Date(fwd.getFullYear(), fwd.getMonth() - 1, Math.min(fwd.getDate(), 28));
+        const back = shiftMonth(fwd, -1);
         verify(mv.isSameDay(AppController.selectedDate, back),
                "step(-1) must go back one month");
+
+        AppController.selectedDate = prev;
+    }
+
+    // Same rule as MonthView._sameDayNextMonth, spelled out independently.
+    function shiftMonth(d, dir) {
+        const y = d.getFullYear();
+        const m = d.getMonth() + dir;
+        const last = new Date(y, m + 1, 0).getDate();
+        return new Date(y, m, Math.min(d.getDate(), last));
+    }
+
+    // step() used to clamp the day of month to 28 outright. That is safe
+    // against JS Date overflow but lossy in one direction: stepping off the
+    // 31st landed on the 28th and stayed there, so a month of paging left the
+    // selection three days adrift. The day must survive where the target month
+    // is long enough to hold it.
+    function test_month_step_keeps_the_day_of_month() {
+        const prev = AppController.selectedDate;
+        const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
+
+        // 31 → 30: the case the flat clamp got wrong (it gave April 28).
+        AppController.selectedDate = new Date(2027, 2, 31);   // 31 Mar 2027
+        mv.step(1);
+        const april = AppController.selectedDate;
+        compare(april.getMonth(), 3);
+        compare(april.getDate(), 30);
+
+        // 31 → February: clamped to the month's real length, not to 28+.
+        AppController.selectedDate = new Date(2027, 0, 31);   // 31 Jan 2027
+        mv.step(1);
+        const feb = AppController.selectedDate;
+        compare(feb.getMonth(), 1);
+        compare(feb.getDate(), 28);
+
+        // A leap February keeps its 29th.
+        AppController.selectedDate = new Date(2028, 0, 31);   // 31 Jan 2028
+        mv.step(1);
+        const leap = AppController.selectedDate;
+        compare(leap.getMonth(), 1);
+        compare(leap.getDate(), 29);
+
+        // Stepping back over a year boundary still works.
+        AppController.selectedDate = new Date(2027, 0, 15);
+        mv.step(-1);
+        const dec = AppController.selectedDate;
+        compare(dec.getFullYear(), 2026);
+        compare(dec.getMonth(), 11);
+        compare(dec.getDate(), 15);
 
         AppController.selectedDate = prev;
     }

@@ -25,7 +25,11 @@ QtObject {
     // Convenience reads — all view'ы / делегаты могут идти через Theme.
     readonly property string weekStart:    _calendar.weekStart    || "mon"
     readonly property string timeFormat:   _calendar.timeFormat   || "24h"
-    readonly property int    snapMinutes:  _calendar.snapMinutes  || 15
+    // An explicit undefined check, not `??`: qmlcachegen 6.9.1 (what CI
+    // builds with) segfaults AOT-compiling Main.qml when a singleton
+    // property it resolves uses the nullish operator. Same shape as
+    // showWeekends below, and it still keeps a stored 0 meaning 0.
+    readonly property int    snapMinutes:  _calendar.snapMinutes === undefined ? 15 : _calendar.snapMinutes
     readonly property bool   showWeekends: _calendar.showWeekends === undefined ? true : !!_calendar.showWeekends
     // Shortest event the calendar lets you drag or resize into existence — one
     // snap step, matching heap::cal::clampHours on the save side. A hardcoded

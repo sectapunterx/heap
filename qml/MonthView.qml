@@ -127,10 +127,22 @@ Item {
     }
     readonly property var cells: buildCells()
 
+    // Day-of-month held across a month step, clamped to the target month's own
+    // length. A flat clamp to 28 was safe against JS Date overflow (Feb 31
+    // rolls into March) but lossy in one direction only: stepping off the 31st
+    // landed on the 28th and every step after that stayed there, so a month of
+    // paging left the selection three days adrift.
+    function _sameDayNextMonth(d, dir) {
+        const y = d.getFullYear();
+        const m = d.getMonth() + dir;
+        const lastDay = new Date(y, m + 1, 0).getDate();   // day 0 = last of month m
+        return new Date(y, m, Math.min(d.getDate(), lastDay));
+    }
+
     function step(dir) {
         const d = AppController.selectedDate;
         if (mode === "month")
-            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth() + dir, Math.min(d.getDate(), 28));
+            AppController.selectedDate = _sameDayNextMonth(d, dir);
         else
             AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dir * rows * 7);
     }
@@ -321,11 +333,23 @@ Item {
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.eventClicked(cell.events[index].id) }
                             }
                         }
+                        // The overflow count was dead text — the only way to
+                        // reach what a cell hid was to guess. It selects the
+                        // day, same as WeekView's.
                         Text {
                             readonly property int _extra: Math.max(0, cell.tasks.length - 3) + Math.max(0, cell.events.length - 2)
                             visible: _extra > 0
                             text: "+" + _extra
-                            color: Theme.textDim; font.pixelSize: 9
+                            color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                            font.pixelSize: 9
+                            MouseArea {
+                                id: moreMA
+                                anchors.fill: parent
+                                anchors.margins: -4
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: AppController.selectedDate = cell.date
+                            }
                         }
                         Item { Layout.fillHeight: true }
                     }
