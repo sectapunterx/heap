@@ -31,7 +31,9 @@ struct DueReminder {
 // Events on `now`'s date that start within `leadMinutes` of it.
 //
 // A focus block is excluded: it is the user's own time, put there on purpose,
-// and they are already in it.
+// and they are already in it. An all-day event is excluded too — it has no
+// start to count down to, and announcing it "in 0 minutes" at midnight is
+// noise rather than a reminder.
 inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& events, const QDateTime& now, int leadMinutes) {
   QVector<DueReminder> out;
   if(!now.isValid()) {
@@ -41,6 +43,9 @@ inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& events,
   const QDate today = now.date();
   for(const CalEvent& e : events) {
     if(e.date != today) {
+      continue;
+    }
+    if(e.allDay) {
       continue;
     }
     if(e.type == QStringLiteral("focus")) {

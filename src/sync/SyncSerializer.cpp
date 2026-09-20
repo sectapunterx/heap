@@ -26,7 +26,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 10,
+static_assert(heap::meta::fieldCount<CalEvent>() == 12,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -240,6 +240,8 @@ QJsonObject SyncSerializer::eventToJson(const CalEvent& e) {
   o[QStringLiteral("taskId")] = e.taskId;
   o[QStringLiteral("profileId")] = e.profileId;
   o[QStringLiteral("context")] = e.context;
+  o[QStringLiteral("allDay")] = e.allDay;
+  o[QStringLiteral("endDate")] = dateToStr(e.endDate);
   return o;
 }
 
@@ -255,6 +257,8 @@ CalEvent SyncSerializer::eventFromJson(const QJsonObject& o) {
   e.taskId = o.value(QStringLiteral("taskId")).toString();
   e.profileId = o.value(QStringLiteral("profileId")).toString();
   e.context = o.value(QStringLiteral("context")).toString();
+  e.allDay = o.value(QStringLiteral("allDay")).toBool();
+  e.endDate = dateFromStr(o.value(QStringLiteral("endDate")).toString());
   return e;
 }
 

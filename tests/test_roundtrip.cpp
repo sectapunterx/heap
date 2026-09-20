@@ -92,6 +92,8 @@ CalEvent makeFullEvent() {
   e.taskId = QStringLiteral("HEAP-104");
   e.profileId = QStringLiteral("default");
   e.context = QStringLiteral("heap");
+  e.allDay = true;
+  e.endDate = QDate(2026, 7, 12);
   return e;
 }
 
@@ -200,6 +202,10 @@ class Gen {
     e.taskId = text();
     e.profileId = text();
     e.context = text();
+    e.allDay = boolean();
+    // Half the cases carry an end date, so both the single-day and the
+    // multi-day shape go through every serializer.
+    e.endDate = boolean() ? e.date.addDays(pick(1, 5)) : QDate();
     return e;
   }
 
@@ -216,7 +222,7 @@ constexpr int kCases = 1000;
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
   EXPECT_EQ(heap::meta::fieldCount<Task>(), 24u);
-  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 10u);
+  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 12u);
 }
 
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole

@@ -135,8 +135,9 @@ target_include_directories(heap_rank_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_link_libraries(heap_rank_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
 add_test(NAME heap_rank_tests COMMAND heap_rank_tests)
 
-# Calendar hour clamping — header-only, so only the test TU compiles.
-add_executable(heap_cal_tests test_event_clamp.cpp)
+# Calendar hour clamping and multi-day spans — header-only, so only the test
+# TUs compile.
+add_executable(heap_cal_tests test_event_clamp.cpp test_event_span.cpp)
 target_include_directories(heap_cal_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_cal_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_cal_tests COMMAND heap_cal_tests)

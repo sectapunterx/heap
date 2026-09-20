@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
 import "Overlap.js" as Overlap
+import "Segments.js" as Seg
 
 Item {
     id: root
@@ -32,17 +33,38 @@ Item {
     property date now: new Date()
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
 
+    // Every event in the model, in the shape Segments.js reads. An event is no
+    // longer one block on one day — it may be all-day, or run past midnight —
+    // so "is this event on this day" is a span question, not a date comparison.
+    function _rowSpan(m, i) {
+        const idx = m.index(i, 0);
+        return {
+            id:      String(m.data(idx, Qt.UserRole + 1)),
+            title:   String(m.data(idx, Qt.UserRole + 2) || ""),
+            type:    String(m.data(idx, Qt.UserRole + 3) || ""),
+            start:   Number(m.data(idx, Qt.UserRole + 4)),
+            end:     Number(m.data(idx, Qt.UserRole + 5)),
+            date:    m.data(idx, Qt.UserRole + 7),
+            allDay:  Boolean(m.data(idx, Qt.UserRole + 11)),
+            endDate: m.data(idx, Qt.UserRole + 12)
+        };
+    }
+    function _allSpans() {
+        const m = AppController.events;
+        const out = [];
+        for (let i = 0; i < m.rowCount(); i++) out.push(root._rowSpan(m, i));
+        return out;
+    }
+
     // Reactive event count for the selected day; refreshed on every
     // events-model mutation so the "N events" header stays in sync.
     property int _eventsToday: 0
     function _recountEventsToday() {
         const d = AppController.selectedDate;
         if (!d || !d.getFullYear) { _eventsToday = 0; return; }
+        const all = root._allSpans();
         let n = 0;
-        for (let i = 0; i < AppController.events.rowCount(); i++) {
-            const ed = AppController.events.data(AppController.events.index(i,0), Qt.UserRole + 7);
-            if (root.isSameDay(ed, d)) n++;
-        }
+        for (let i = 0; i < all.length; i++) if (Seg.covers(all[i], d)) n++;
         _eventsToday = n;
     }
     // ── Overlap layout ────────────────────────────────────────────────
@@ -53,20 +75,16 @@ Item {
     // mutation and day change.
     property var _overlap: ({})
     function _recomputeOverlaps() {
-        const d = AppController.selectedDate;
-        const m = AppController.events;
-        const evs = [];
-        for (let i = 0; i < m.rowCount(); i++) {
-            const idx = m.index(i, 0);
-            const ed = m.data(idx, Qt.UserRole + 7);
-            if (!root.isSameDay(ed, d)) continue;
-            evs.push({
-                id:    String(m.data(idx, Qt.UserRole + 1)),
-                start: Number(m.data(idx, Qt.UserRole + 4)),
-                end:   Number(m.data(idx, Qt.UserRole + 5))
-            });
-        }
-        _overlap = Overlap.compute(evs);
+        // Timed pieces only: an all-day event has no hours to pack and would
+        // squeeze every real meeting on the day into a sliver.
+        _overlap = Overlap.compute(Seg.timedOn(root._allSpans(), AppController.selectedDate));
+    }
+
+    // All-day events covering the selected day, longest first. Bound from a
+    // handler, never from a binding on a property this function also writes.
+    property var _stripEvents: []
+    function _recomputeStrip() {
+        _stripEvents = Seg.stripOn(root._allSpans(), AppController.selectedDate);
     }
 
     // ── Task blocks vs. their meeting events ──────────────────────────
@@ -83,14 +101,18 @@ Item {
         const map = {};
         for (let i = 0; i < m.rowCount(); i++) {
             const idx = m.index(i, 0);
-            const ed = m.data(idx, Qt.UserRole + 7);   // DateRole
-            if (!root.isSameDay(ed, d)) continue;
+            if (!Seg.covers(root._rowSpan(m, i), d)) continue;
             const tid = String(m.data(idx, Qt.UserRole + 8) || "");  // TaskIdRole
             if (tid.length > 0) map[tid] = true;
         }
         _linkedTaskIds = map;
     }
-    function _recomputeDay() { _recountEventsToday(); _recomputeOverlaps(); _recomputeLinkedTasks(); }
+    function _recomputeDay() {
+        _recountEventsToday();
+        _recomputeOverlaps();
+        _recomputeStrip();
+        _recomputeLinkedTasks();
+    }
 
     Connections {
         target: AppController.events
@@ -166,6 +188,77 @@ Item {
                         ToolTip.visible: hintHover.hovered && truncated
                         ToolTip.delay: 400
                         ToolTip.text: I18n.t("day.dragHint")
+                    }
+                }
+            }
+
+            // All-day events. They have no hours, so they cannot go on the
+            // grid; a strip under the header is where every calendar puts
+            // them, and it keeps them visible however far the grid is
+            // scrolled.
+            Rectangle {
+                id: allDayStrip
+                objectName: "allday-strip"
+                Layout.fillWidth: true
+                Layout.preferredHeight: visible ? (root._stripEvents.length * 26 + 10) : 0
+                visible: root._stripEvents.length > 0
+                color: Theme.panel
+
+                Rectangle {
+                    anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                    height: 1; color: Theme.border
+                }
+
+                Column {
+                    anchors.fill: parent
+                    anchors.leftMargin: 14 + 44   // clear of the hour labels, so bars line up with the grid
+                    anchors.rightMargin: 14
+                    anchors.topMargin: 5
+                    spacing: 2
+
+                    Repeater {
+                        model: root._stripEvents
+                        Rectangle {
+                            id: bar
+                            required property var modelData
+                            objectName: "allday-" + bar.modelData.id
+                            width: parent.width
+                            height: 24
+                            radius: 4
+                            color: Theme.withAlpha(Theme.eventColor(bar.modelData.type || "sync"), 0.16)
+
+                            Rectangle {
+                                anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                                width: 3; radius: 1
+                                color: Theme.eventColor(bar.modelData.type || "sync")
+                            }
+
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: 10; anchors.rightMargin: 8
+                                spacing: 6
+                                Text {
+                                    text: bar.modelData.title || ""
+                                    color: Theme.text
+                                    font.pixelSize: 12
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                // Which day of the run this is, so a week-long
+                                // trip reads as progress rather than as the
+                                // same bar repeated.
+                                Text {
+                                    visible: Seg.multiDay(bar.modelData)
+                                    text: (Seg.dayOffset(bar.modelData, AppController.selectedDate) + 1)
+                                          + "/" + Seg.dayCount(bar.modelData)
+                                    color: Theme.textDim
+                                    font.family: Theme.fontMono
+                                    font.pixelSize: 11
+                                }
+                            }
+
+                            TapHandler { onTapped: root.eventClicked(bar.modelData.id) }
+                        }
                     }
                 }
             }
@@ -396,14 +489,29 @@ Item {
                                 required property string taskId
                                 required property string profileId
                                 required property string context
+                                required property bool allDay
+                                required property var endDate
+
+                                // The piece of this event that lands on the
+                                // selected day. An event may now run past
+                                // midnight, so the block draws its segment
+                                // rather than the event's own hours — 22:00 to
+                                // 02:00 is one event and two blocks.
+                                readonly property var seg: Seg.segmentOn(
+                                    { id: evRect.id, date: evRect.date, endDate: evRect.endDate,
+                                      start: evRect.start, end: evRect.end, allDay: evRect.allDay },
+                                    AppController.selectedDate)
+                                // A piece that carries neither the event's
+                                // start nor its end has no edge to drag.
+                                readonly property bool wholeEvent: evRect.seg !== null && evRect.seg.first && evRect.seg.last
 
                                 // Transient drag/resize state.
                                 property real dragDy: 0           // pixels while move-dragging
                                 property real pendingStartH: NaN  // hour while top-resizing
                                 property real pendingEndH:   NaN  // hour while bottom-resizing
 
-                                readonly property real effStart: !isNaN(pendingStartH) ? pendingStartH : start
-                                readonly property real effEnd:   !isNaN(pendingEndH)   ? pendingEndH   : end
+                                readonly property real effStart: !isNaN(pendingStartH) ? pendingStartH : (evRect.seg ? evRect.seg.start : evRect.start)
+                                readonly property real effEnd:   !isNaN(pendingEndH)   ? pendingEndH   : (evRect.seg ? evRect.seg.end   : evRect.end)
 
                                 // Resolve once per event change so the dot reflects rename / recolor.
                                 readonly property var profileInfo: profileId.length > 0
@@ -415,7 +523,9 @@ Item {
                                 readonly property real colGap: 3
                                 readonly property real colW: parent.width / Math.max(1, slot.cols)
 
-                                visible: root.isSameDay(date, AppController.selectedDate)
+                                // All-day events live in the strip above; the
+                                // grid draws only what has hours.
+                                visible: evRect.seg !== null && !evRect.allDay
                                 x: slot.col * colW
                                 y: (effStart - root.hoursStart) * Theme.hourH + dragDy
                                 width: Math.max(20, colW - colGap)
@@ -548,9 +658,14 @@ Item {
                                     onCanceled: { evRect.dragDy = 0; didDrag = false; }
                                 }
 
-                                // Top resize handle.
+                                // Top resize handle. Hidden on a piece of a
+                                // spanning event: its edge is on another day,
+                                // and dragging it here would describe an hour
+                                // range the event does not have.
                                 MouseArea {
                                     id: topHandle
+                                    enabled: evRect.wholeEvent
+                                    visible: enabled
                                     anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                                     height: 6
                                     cursorShape: Qt.SizeVerCursor
@@ -574,9 +689,12 @@ Item {
                                     onCanceled: { resizing = false; evRect.pendingStartH = NaN; }
                                 }
 
-                                // Bottom resize handle.
+                                // Bottom resize handle. Hidden for the same
+                                // reason as the top one.
                                 MouseArea {
                                     id: bottomHandle
+                                    enabled: evRect.wholeEvent
+                                    visible: enabled
                                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                     height: 6
                                     cursorShape: Qt.SizeVerCursor

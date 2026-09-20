@@ -131,6 +131,15 @@ TEST(MeetingWindow, TheWindowDoesNotReachAcrossMidnight) {
   EXPECT_TRUE(dueMeetingReminders({e}, QDateTime(kDay, QTime(23, 50)), 60).isEmpty());
 }
 
+// An all-day event has no start to count down to. Announcing "your holiday
+// begins in 0 minutes" at midnight is noise, not a reminder.
+TEST(MeetingWindow, AnAllDayEventIsNotAnnounced) {
+  CalEvent e = at(QStringLiteral("a"), 10.0 + 5.0 / 60.0);
+  e.allDay = true;
+
+  EXPECT_TRUE(dueMeetingReminders({e}, kNow, 10).isEmpty());
+}
+
 TEST(MeetingWindow, AnInvalidClockAnnouncesNothing) {
   EXPECT_TRUE(dueMeetingReminders({at(QStringLiteral("a"), 10.0)}, QDateTime(), 10).isEmpty());
 }

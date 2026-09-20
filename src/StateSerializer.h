@@ -19,7 +19,7 @@ namespace heap::state {
 //   v3  events hoisted to the top level
 //   v4  Task.deadline (QDate) split into scheduledAt/dueAt (QDateTime) + hasTime
 //   v5  Task.rank — manual order within a status column
-inline constexpr int kSchemaVersion = 5;
+inline constexpr int kSchemaVersion = 6;
 
 // Gap between consecutive ranks handed out by the v4→v5 migration and by
 // "add to the end". Large enough that a long run of midpoint inserts between

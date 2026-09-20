@@ -115,6 +115,13 @@ struct CalEvent {
   QString taskId;     // optional link to task in same profile
   QString profileId;  // optional attribution to a feature profile (empty = global)
   QString context;    // free-form context label rendered before the title in calendar views
+  // An all-day event has no hours: start/end are forced to 0/24 and carry no
+  // meaning. `endDate` is the last day the event covers — invalid or equal to
+  // `date` for the ordinary single-day case, later for a multi-day event or a
+  // timed one that crosses midnight. See src/cal/EventSpan.h for the
+  // invariants every write path puts these through.
+  bool allDay{};
+  QDate endDate;
 
   bool operator==(const CalEvent&) const = default;
 };
@@ -293,6 +300,11 @@ class EventModel : public QAbstractListModel {
     TaskIdRole,
     ProfileIdRole,
     ContextRole,
+    // Appended, never inserted: the calendar QML reads these by numeric offset
+    // from Qt::UserRole, so renumbering an existing role silently repoints
+    // every view at the wrong field.
+    AllDayRole,
+    EndDateRole,
   };
 
   explicit EventModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
