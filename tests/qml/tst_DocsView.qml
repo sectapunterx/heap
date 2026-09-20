@@ -118,11 +118,19 @@ TestCase {
         compare(dv.matchingContactCount, 0);
     }
 
-    // Ctrl+F in Docs calls this instead of focusing the task search box.
-    function test_focus_search_is_callable() {
+    // Ctrl+F in Docs calls this instead of focusing the task search box, so it
+    // has to actually land focus on the field — not merely exist.
+    function test_focus_search_focuses_the_field() {
         const dv = make();
         verify(typeof dv.focusSearch === "function",
                "Main.qml duck-types on this to route the search shortcut");
+
+        const field = findChild(dv, "docsSearchField");
+        verify(field !== null, "docsSearchField not found — objectName renamed?");
+        verify(!field.activeFocus, "precondition: the field does not start focused");
+
         dv.focusSearch();
+        tryVerify(function () { return field.activeFocus; }, 2000,
+                  "focusSearch() must put the caret in the search field");
     }
 }

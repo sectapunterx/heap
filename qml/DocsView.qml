@@ -679,6 +679,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
                         TextField {
                             id: docsSearch
+                            objectName: "docsSearchField"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("docs.search.placeholder")
                             color: Theme.text
