@@ -122,6 +122,15 @@ struct CalEvent {
   // invariants every write path puts these through.
   bool allDay{};
   QDate endDate;
+  // Recurrence. A master carries `rrule` (an RRULE body — see src/cal/RRule.h)
+  // and the dates of the occurrences the user deleted one by one. An override
+  // is a separate event that names the master it replaces and the occurrence
+  // date it stands in for, which is how "edit only this one" is stored without
+  // materialising the whole series.
+  QString rrule;
+  QVector<QDate> exdates;
+  QString masterId;
+  QDate originalDate;
 
   bool operator==(const CalEvent&) const = default;
 };
@@ -305,6 +314,11 @@ class EventModel : public QAbstractListModel {
     // every view at the wrong field.
     AllDayRole,
     EndDateRole,
+    RRuleRole,
+    MasterIdRole,
+    // The date of the occurrence being shown. Equal to DateRole for a
+    // stored event; the expansion sets it per occurrence.
+    OccurrenceDateRole,
   };
 
   explicit EventModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

@@ -8,6 +8,7 @@
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
 #include "cal/EventSpan.h"
+#include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
@@ -1236,9 +1237,13 @@ void AppController::deleteTask(const QString& id) {
   scheduleSave();
 }
 
+QString AppController::mintEventId() {
+  return QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+}
+
 QVariantMap AppController::newEventDraft(double startHour, const QDate& date) const {
   QVariantMap m;
-  m["id"] = QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  m["id"] = mintEventId();
   m["title"] = tr_("event.newDefault");
   m["type"] = "sync";
   m["start"] = startHour;
@@ -1250,6 +1255,7 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
   m["context"] = QString();
   m["allDay"] = false;
   m["endDate"] = QVariant();  // absent = a single day, which is the common case
+  m["rrule"] = QString();     // absent = this event does not repeat
   m["_isNew"] = true;
   return m;
 }
@@ -1276,6 +1282,19 @@ void AppController::saveEvent(const QVariantMap& draft) {
   e.context = draft.value("context").toString();
   e.allDay = draft.value("allDay").toBool();
   e.endDate = draft.value("endDate").toDate();
+  // Recurrence keys are preserved when the draft omits them: the event editor
+  // does not carry a rule around, and an ordinary edit must not silently turn
+  // a weekly meeting into a single one.
+  const int prevRow = m_events.indexOfId(e.id);
+  const CalEvent* prev = prevRow >= 0 ? &m_events.items().at(prevRow) : nullptr;
+  e.rrule = draft.contains("rrule") ? draft.value("rrule").toString() : (prev ? prev->rrule : QString());
+  e.masterId = draft.contains("masterId") ? draft.value("masterId").toString() : (prev ? prev->masterId : QString());
+  e.originalDate = draft.contains("originalDate") ? draft.value("originalDate").toDate() : (prev ? prev->originalDate : QDate());
+  // The deleted-occurrence list is never in a draft — nothing in the editor
+  // edits it — so it is always the stored one.
+  if(prev) {
+    e.exdates = prev->exdates;
+  }
   // The editor parses free-typed times and a multi-day event may legally end
   // before it starts by the clock, so the whole span is normalized in one
   // place rather than clamped edge by edge.
@@ -1320,6 +1339,229 @@ void AppController::updateEvent(const QString& id, double start, double end, con
     e.date = date;
   }
   m_events.upsert(e);
+  scheduleSave();
+}
+
+namespace {
+
+// An occurrence as the QML views read it. The same keys newEventDraft() uses,
+// so an editor can be opened on either without knowing which it has.
+QVariantMap occurrenceToVariant(const CalEvent& e) {
+  QVariantMap m;
+  m["id"] = e.id;
+  m["title"] = e.title;
+  m["type"] = e.type;
+  m["start"] = e.start;
+  m["end"] = e.end;
+  m["attendees"] = e.attendees;
+  m["date"] = e.date;
+  m["taskId"] = e.taskId;
+  m["profileId"] = e.profileId;
+  m["context"] = e.context;
+  m["allDay"] = e.allDay;
+  m["endDate"] = e.endDate.isValid() ? QVariant(e.endDate) : QVariant();
+  m["rrule"] = e.rrule;
+  m["masterId"] = e.masterId;
+  m["originalDate"] = e.originalDate.isValid() ? QVariant(e.originalDate) : QVariant();
+  return m;
+}
+
+}  // namespace
+
+QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to) const {
+  QVariantList out;
+  for(const heap::cal::Occurrence& o : heap::cal::expandEvents(m_events.items(), from, to)) {
+    QVariantMap m = occurrenceToVariant(o.event);
+    m["occurrenceDate"] = o.occurrenceDate;
+    m["generated"] = o.generated;
+    out.append(m);
+  }
+  return out;
+}
+
+QVariantMap AppController::eventSeriesMaster(const QString& masterId) const {
+  const int row = m_events.indexOfId(masterId);
+  return row >= 0 ? occurrenceToVariant(m_events.items().at(row)) : QVariantMap();
+}
+
+void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
+  const QString masterId = draft.value("masterId").toString();
+  const QDate original = draft.value("originalDate").toDate();
+
+  // Not part of a series, or the whole series is being rewritten: an ordinary
+  // save on the stored event.
+  if(masterId.isEmpty() || !original.isValid() || scope == QStringLiteral("all")) {
+    QVariantMap d = draft;
+    if(!masterId.isEmpty() && scope == QStringLiteral("all")) {
+      // Write through to the master, keeping its rule — the occurrence's id is
+      // the master's only when it came from the expansion.
+      const int row = m_events.indexOfId(masterId);
+      if(row >= 0) {
+        const CalEvent& m = m_events.items().at(row);
+        d["id"] = m.id;
+        d["rrule"] = m.rrule.isEmpty() ? draft.value("rrule") : m.rrule;
+        // Moving the whole series moves its anchor by the same number of days,
+        // so every other occurrence shifts with it rather than staying put.
+        const QDate newDate = draft.value("date").toDate();
+        if(newDate.isValid() && original.isValid() && m.date.isValid()) {
+          d["date"] = m.date.addDays(original.daysTo(newDate));
+        }
+        d["masterId"] = QString();
+        d["originalDate"] = QVariant();
+      }
+    }
+    saveEvent(d);
+    return;
+  }
+
+  const int masterRow = m_events.indexOfId(masterId);
+  if(masterRow < 0) {
+    return;
+  }
+
+  if(scope == QStringLiteral("following")) {
+    // Split the series: the old master stops the day before this occurrence,
+    // and a new one starts here carrying the edit. Every occurrence already
+    // moved or deleted before the split keeps pointing at the old master, so
+    // history is preserved rather than rewritten.
+    CalEvent master = m_events.items().at(masterRow);
+    heap::cal::RRule rule = heap::cal::parseRRule(master.rrule);
+    if(rule.isValid()) {
+      rule.until = original.addDays(-1);
+      rule.count = 0;  // an UNTIL and a COUNT together would fight
+      master.rrule = heap::cal::toRRuleText(rule);
+    }
+
+    QVariantMap d = draft;
+    const QString newId = mintEventId();
+    d["id"] = newId;
+    d["rrule"] = m_events.items().at(masterRow).rrule;
+    d["masterId"] = QString();
+    d["originalDate"] = QVariant();
+    // Occurrences the user had already deleted after the split point belong to
+    // the new half. Without this they come back, which is the one thing a
+    // deletion must never do.
+    QVector<QDate> carried;
+    for(const QDate& d0 : m_events.items().at(masterRow).exdates) {
+      if(d0 >= original) {
+        carried.append(d0);
+      }
+    }
+
+    UndoScope undo(this, tr_("undo.splitSeries"));
+    // The old master is truncated first: if the split lands on its very first
+    // occurrence there is nothing left of it, and it goes rather than lingering
+    // as an empty series.
+    if(rule.isValid() && master.date.isValid() && rule.until < master.date) {
+      m_events.removeById(master.id);
+    } else {
+      // The old half keeps only the deletions that fall before the split.
+      QVector<QDate> kept;
+      for(const QDate& d0 : master.exdates) {
+        if(d0 < original) {
+          kept.append(d0);
+        }
+      }
+      master.exdates = kept;
+      m_events.upsert(master);
+    }
+    saveEvent(d);
+    if(!carried.isEmpty()) {
+      const int row = m_events.indexOfId(newId);
+      if(row >= 0) {
+        CalEvent fresh = m_events.items().at(row);
+        fresh.exdates = carried;
+        m_events.upsert(fresh);
+      }
+    }
+    return;
+  }
+
+  // "this": one occurrence, stored as an override that names the date it
+  // replaces. The master is untouched, so the rest of the series does not move.
+  QVariantMap d = draft;
+  const int existing = m_events.indexOfId(draft.value("id").toString());
+  const bool isStoredOverride = existing >= 0 && !m_events.items().at(existing).masterId.isEmpty();
+  if(!isStoredOverride) {
+    d["id"] = mintEventId();
+  }
+  d["rrule"] = QString();
+  d["masterId"] = masterId;
+  d["originalDate"] = original;
+  saveEvent(d);
+}
+
+void AppController::deleteOccurrence(const QString& masterId, const QDate& occurrenceDate, const QString& scope) {
+  const int masterRow = m_events.indexOfId(masterId);
+  if(masterRow < 0) {
+    return;
+  }
+
+  if(scope == QStringLiteral("all")) {
+    UndoScope undo(this, tr_("undo.deleteSeries"));
+    // The overrides go with it: an override without its master is a ghost.
+    QStringList doomed;
+    for(const CalEvent& e : m_events.items()) {
+      if(e.masterId == masterId) {
+        doomed << e.id;
+      }
+    }
+    for(const QString& id : doomed) {
+      m_events.removeById(id);
+    }
+    m_events.removeById(masterId);
+    scheduleSave();
+    return;
+  }
+
+  if(!occurrenceDate.isValid()) {
+    return;
+  }
+
+  CalEvent master = m_events.items().at(masterRow);
+
+  if(scope == QStringLiteral("following")) {
+    heap::cal::RRule rule = heap::cal::parseRRule(master.rrule);
+    UndoScope undo(this, tr_("undo.deleteFollowing"));
+    QStringList doomed;
+    for(const CalEvent& e : m_events.items()) {
+      if(e.masterId == masterId && e.originalDate.isValid() && e.originalDate >= occurrenceDate) {
+        doomed << e.id;
+      }
+    }
+    for(const QString& id : doomed) {
+      m_events.removeById(id);
+    }
+    if(rule.isValid()) {
+      rule.until = occurrenceDate.addDays(-1);
+      rule.count = 0;
+      master.rrule = heap::cal::toRRuleText(rule);
+    }
+    if(rule.isValid() && master.date.isValid() && rule.until < master.date) {
+      m_events.removeById(master.id);
+    } else {
+      m_events.upsert(master);
+    }
+    scheduleSave();
+    return;
+  }
+
+  // "this": remember the hole rather than rewriting the series.
+  UndoScope undo(this, tr_("undo.deleteOccurrence"));
+  QStringList doomed;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.masterId == masterId && e.originalDate == occurrenceDate) {
+      doomed << e.id;
+    }
+  }
+  for(const QString& id : doomed) {
+    m_events.removeById(id);
+  }
+  if(!master.exdates.contains(occurrenceDate)) {
+    master.exdates.append(occurrenceDate);
+    std::sort(master.exdates.begin(), master.exdates.end());
+  }
+  m_events.upsert(master);
   scheduleSave();
 }
 

@@ -26,7 +26,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 12,
+static_assert(heap::meta::fieldCount<CalEvent>() == 16,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -242,6 +242,16 @@ QJsonObject SyncSerializer::eventToJson(const CalEvent& e) {
   o[QStringLiteral("context")] = e.context;
   o[QStringLiteral("allDay")] = e.allDay;
   o[QStringLiteral("endDate")] = dateToStr(e.endDate);
+  o[QStringLiteral("rrule")] = e.rrule;
+  QJsonArray ex;
+  for(const QDate& d : e.exdates) {
+    if(d.isValid()) {
+      ex.append(dateToStr(d));
+    }
+  }
+  o[QStringLiteral("exdates")] = ex;
+  o[QStringLiteral("masterId")] = e.masterId;
+  o[QStringLiteral("originalDate")] = dateToStr(e.originalDate);
   return o;
 }
 
@@ -259,6 +269,15 @@ CalEvent SyncSerializer::eventFromJson(const QJsonObject& o) {
   e.context = o.value(QStringLiteral("context")).toString();
   e.allDay = o.value(QStringLiteral("allDay")).toBool();
   e.endDate = dateFromStr(o.value(QStringLiteral("endDate")).toString());
+  e.rrule = o.value(QStringLiteral("rrule")).toString();
+  for(const auto& it : o.value(QStringLiteral("exdates")).toArray()) {
+    const QDate d = dateFromStr(it.toString());
+    if(d.isValid()) {
+      e.exdates.append(d);
+    }
+  }
+  e.masterId = o.value(QStringLiteral("masterId")).toString();
+  e.originalDate = dateFromStr(o.value(QStringLiteral("originalDate")).toString());
   return e;
 }
 

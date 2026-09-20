@@ -28,7 +28,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 12,
+static_assert(heap::meta::fieldCount<CalEvent>() == 16,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -278,6 +278,31 @@ QVector<Task> tasksFromJson(const QJsonArray& a) {
 
 // ───────────────── CalEvent ─────────────────
 
+// The dates a recurring event has had deleted out of it. Stored as a plain
+// array of ISO strings; anything unparseable is dropped rather than kept as an
+// invalid date that would never match an occurrence.
+QJsonArray datesToJson(const QVector<QDate>& xs) {
+  QJsonArray a;
+  for(const QDate& d : xs) {
+    if(d.isValid()) {
+      a.append(d.toString(Qt::ISODate));
+    }
+  }
+  return a;
+}
+
+QVector<QDate> datesFromJson(const QJsonArray& a) {
+  QVector<QDate> v;
+  v.reserve(a.size());
+  for(const auto& it : a) {
+    const QDate d = QDate::fromString(it.toString(), Qt::ISODate);
+    if(d.isValid()) {
+      v.append(d);
+    }
+  }
+  return v;
+}
+
 QJsonObject eventToJson(const CalEvent& e) {
   QJsonObject o;
   o["id"] = e.id;
@@ -294,6 +319,10 @@ QJsonObject eventToJson(const CalEvent& e) {
   // Written even when absent so the key set matches the field count; an empty
   // string reads back as an invalid date, which means "single day".
   o["endDate"] = e.endDate.isValid() ? e.endDate.toString(Qt::ISODate) : QString();
+  o["rrule"] = e.rrule;
+  o["exdates"] = datesToJson(e.exdates);
+  o["masterId"] = e.masterId;
+  o["originalDate"] = e.originalDate.isValid() ? e.originalDate.toString(Qt::ISODate) : QString();
   return o;
 }
 
@@ -311,6 +340,10 @@ CalEvent eventFromJson(const QJsonObject& o, const QString& fallbackProfileId) {
   e.context = o["context"].toString();
   e.allDay = o["allDay"].toBool();
   e.endDate = QDate::fromString(o["endDate"].toString(), Qt::ISODate);
+  e.rrule = o["rrule"].toString();
+  e.exdates = datesFromJson(o["exdates"].toArray());
+  e.masterId = o["masterId"].toString();
+  e.originalDate = QDate::fromString(o["originalDate"].toString(), Qt::ISODate);
   return e;
 }
 
@@ -539,6 +572,9 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   // mean when they are absent (false, and an invalid date). The bump exists so
   // that a v5 build meets the newer-schema guard instead of quietly writing
   // every all-day and multi-day event back out as an ordinary one.
+  //
+  // v6 → v7 added the recurrence fields, and has no rung for the same reason:
+  // absent means "this event does not repeat", which is what every v6 event is.
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

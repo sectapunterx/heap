@@ -440,6 +440,9 @@ QHash<int, QByteArray> EventModel::roleNames() const {
       {ContextRole, "context"},
       {AllDayRole, "allDay"},
       {EndDateRole, "endDate"},
+      {RRuleRole, "rrule"},
+      {MasterIdRole, "masterId"},
+      {OccurrenceDateRole, "occurrenceDate"},
   };
 }
 
@@ -475,6 +478,14 @@ QVariant EventModel::data(const QModelIndex& idx, int role) const {
       // Always a usable date, so a delegate can subtract without a validity
       // check: a single-day event reports its own day.
       return e.endDate.isValid() ? e.endDate : e.date;
+    case RRuleRole:
+      return e.rrule;
+    case MasterIdRole:
+      return e.masterId;
+    case OccurrenceDateRole:
+      // The stored model holds masters and overrides, never expanded
+      // occurrences, so this is the event's own date.
+      return e.date;
   }
   return {};
 }

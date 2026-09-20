@@ -148,6 +148,14 @@ target_include_directories(heap_rrule_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(heap_rrule_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_rrule_tests COMMAND heap_rrule_tests)
 
+# Expanding a recurring event into the occurrences a calendar shows.
+# Gui and Qml, not just Core: Occurrences.h reaches Models.h, which needs
+# QColor and qqmlregistration.h.
+add_executable(heap_occurrences_tests test_occurrences.cpp)
+target_include_directories(heap_occurrences_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_occurrences_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
+add_test(NAME heap_occurrences_tests COMMAND heap_occurrences_tests)
+
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
 target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
@@ -349,6 +357,9 @@ heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
 
 # ─── Meeting reminders ───
 heap_add_appcontroller_test(heap_meeting_reminders_tests test_meeting_reminders.cpp)
+
+# ─── Editing and deleting a repeating event ───
+heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 
 # ─── Notes (Quick-capture appendNoteEntry) tests ───
 # Cover AppController::appendNoteEntry — the C++ side of the Ctrl+Shift+N
