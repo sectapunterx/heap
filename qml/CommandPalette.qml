@@ -20,6 +20,7 @@ Popup {
     signal navigateToDoc(string sectionId)
     signal navigateToSnippets()
     signal navigateToContacts()
+    signal newTaskRequested()
     signal openTask(string taskId)
     signal openPerson(string personId)
     // A note hit carries the line its section starts on, so opening it lands

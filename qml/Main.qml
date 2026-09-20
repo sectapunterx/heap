@@ -719,6 +719,10 @@ ApplicationWindow {
 
     CommandPalette {
         id: cmdPalette
+        onNewTaskRequested: {
+            AppController.currentView = "board";
+            taskEditor.showFor(AppController.newTaskDraft(AppController.focusedStatus));
+        }
         onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
