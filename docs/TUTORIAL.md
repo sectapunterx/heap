@@ -98,7 +98,32 @@ docs and notes. Create one from the profile pill in the top bar, cycle with
 `Ctrl+Shift+E`. Full JSON import/export lives in **Settings → Data** — see
 [DATA.md](DATA.md).
 
-## 7. Command palette & tweaks
+## 7. The search box is a query box
+
+`Ctrl+F` focuses the header search. Typing words searches the obvious things —
+title, id, description, branch, and for a mirrored issue also its tracker key,
+labels, assignee, project and milestone. Typing `field:value` filters instead:
+
+| Clause | Means |
+| --- | --- |
+| `status:blocked` | one status, or `status:todo,prog` for several |
+| `priority:P0,P1` | any of these priorities |
+| `deadline:<friday` | before a date. `<` `<=` `>` `>=` and a bare date all work |
+| `deadline:7d` | offsets too: `3d`, `2w`, `1m` — and `deadline:none` for unscheduled |
+| `tag:infra` | any of the task's labels |
+| `mention:@ada` | the assignee, or an `@name` in the title or description |
+
+Clauses combine with AND, and mix freely with ordinary words:
+`status:blocked priority:P0 login` is the blocked P0 tasks whose text mentions
+login. Dates understand what the task editor understands, so `deadline:<friday`
+and `deadline:<2026-09-24` are both fine. A typo in a date drops that clause
+rather than emptying the board. The magnifier turns accent-coloured when what
+you typed is being read as a query.
+
+This works the same on the board, the timeline, the week and month calendars
+and the archive.
+
+## 8. Command palette & tweaks
 
 - **`Ctrl+K`** (or `Ctrl+P`) — fuzzy search across tasks, docs, snippets,
   contacts, people and profiles. Enter jumps straight to the item.
@@ -107,7 +132,7 @@ docs and notes. Create one from the profile pill in the top bar, cycle with
 
 ![Hotkeys & tweaks](assets/img/screens/hotkeys-tweaks.png)
 
-## 8. It nudges you
+## 9. It nudges you
 
 A background tick (every 60 s) auto-archives long-done tasks, flags tasks that
 have been *blocked* too long, and fires **deadline** and **standup** reminders

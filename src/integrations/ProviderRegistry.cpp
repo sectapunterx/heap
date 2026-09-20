@@ -111,6 +111,8 @@ ProviderDescriptor github() {
   d.auth.extraHeaders = {{"Accept", "application/vnd.github+json"}, {"X-GitHub-Api-Version", "2022-11-28"}};
   d.listPathTemplate = QStringLiteral("/repos/{repo}/issues?state=all&per_page=100");
   d.selfListPathTemplate = QStringLiteral("/issues?filter=assigned&state=all&per_page=100");
+  // 100 per page is the API maximum, so a repo past that needs the walk.
+  d.paging.style = PageStyle::LinkHeader;
   d.scopeKey = QStringLiteral("repo");
   d.parser = githubParse;
   // GitHub OAuth Apps can't do PKCE and would need a client secret for the web
@@ -163,6 +165,7 @@ ProviderDescriptor gitlab() {
   // pulled chip keeps the colour the project gave it.
   d.listPathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues?per_page=100&scope=all&with_labels_details=true");
   d.selfListPathTemplate = QStringLiteral("/api/v4/issues?scope=assigned_to_me&per_page=100&with_labels_details=true");
+  d.paging.style = PageStyle::LinkHeader;
   d.scopeKey = QStringLiteral("projectId");
   d.parser = gitlabParse;
   // GitLab supports OAuth 2.0 with PKCE (no secret needed).
@@ -214,6 +217,7 @@ ProviderDescriptor giteaLike(const QString& id,
   d.auth.extraHeaders = {{"Accept", "application/json"}};
   d.listPathTemplate = QStringLiteral("/api/v1/repos/{repo}/issues?state=all&type=issues&limit=50");
   d.selfListPathTemplate = QStringLiteral("/api/v1/repos/issues/search?state=all&type=issues&limit=50");
+  d.paging.style = PageStyle::LinkHeader;
   d.scopeKey = QStringLiteral("repo");
   // Gitea/Forgejo support OAuth 2.0 with PKCE.
   d.oauth = {true,
@@ -267,6 +271,11 @@ ProviderDescriptor redmine() {
   d.auth.headerName = "X-Redmine-API-Key";
   d.auth.extraHeaders = {{"Accept", "application/json"}};
   d.listPathTemplate = QStringLiteral("/issues.json?assigned_to_id=me&status_id=open&limit=100");
+  // No Link header and no cursor: step `offset` and stop on a short page.
+  // pageSize must stay equal to the `limit` above.
+  d.paging.style = PageStyle::Offset;
+  d.paging.offsetParam = QStringLiteral("offset");
+  d.paging.pageSize = 100;
   d.fields.arrayPointer = QStringLiteral("issues");
   d.fields.id = QStringLiteral("id");
   d.fields.title = QStringLiteral("subject");
@@ -303,6 +312,10 @@ ProviderDescriptor todoist() {
   d.auth.extraHeaders = {{"Accept", "application/json"}};
   // Unified v1 API (REST v2 was retired). Active tasks come back under "results".
   d.listPathTemplate = QStringLiteral("/api/v1/tasks");
+  // v1 pages with an opaque cursor handed back as `cursor`.
+  d.paging.style = PageStyle::BodyNext;
+  d.paging.bodyPath = QStringLiteral("next_cursor");
+  d.paging.cursorParam = QStringLiteral("cursor");
   d.fields.arrayPointer = QStringLiteral("results");
   d.fields.id = QStringLiteral("id");
   d.fields.title = QStringLiteral("content");
@@ -356,6 +369,11 @@ ProviderDescriptor asana() {
   d.listPathTemplate = QStringLiteral(
       "/api/1.0/tasks?assignee=me&workspace={workspace}&opt_fields=name,completed,permalink_url,notes,modified_at,created_at,"
       "due_on,due_at,assignee.name,created_by.name,projects.name,resource_subtype&limit=100");
+  // Asana hands back an opaque token under next_page.offset, which goes
+  // straight back as `offset` — it is a cursor, not an index.
+  d.paging.style = PageStyle::BodyNext;
+  d.paging.bodyPath = QStringLiteral("next_page.offset");
+  d.paging.cursorParam = QStringLiteral("offset");
   d.fields.arrayPointer = QStringLiteral("data");
   d.fields.id = QStringLiteral("gid");
   d.fields.title = QStringLiteral("name");
@@ -399,6 +417,12 @@ ProviderDescriptor clickup() {
   d.auth.headerName = "Authorization";
   d.auth.extraHeaders = {{"Accept", "application/json"}};
   d.listPathTemplate = QStringLiteral("/api/v2/list/{listId}/task");
+  // ClickUp pages by number from 0, 100 tasks to a page, with no way to ask
+  // for more — so a short page is the last one.
+  d.paging.style = PageStyle::Offset;
+  d.paging.offsetParam = QStringLiteral("page");
+  d.paging.offsetStep = 1;  // a page number, not a row offset
+  d.paging.pageSize = 100;
   d.fields.arrayPointer = QStringLiteral("tasks");
   d.fields.id = QStringLiteral("id");
   d.fields.title = QStringLiteral("name");
@@ -446,6 +470,8 @@ ProviderDescriptor sentry() {
   d.auth.tokenPrefix = "Bearer ";
   d.auth.extraHeaders = {{"Accept", "application/json"}};
   d.listPathTemplate = QStringLiteral("/api/0/projects/{org}/{project}/issues/?query=is:unresolved&limit=50");
+  // Sentry's cursor lives in a Link header, same shape as the forges'.
+  d.paging.style = PageStyle::LinkHeader;
   d.fields.id = QStringLiteral("id");
   d.fields.title = QStringLiteral("title");
   d.fields.body = QStringLiteral("culprit");
@@ -488,6 +514,9 @@ ProviderDescriptor bitbucket() {
   d.auth.tokenPrefix = "Bearer ";
   d.auth.extraHeaders = {{"Accept", "application/json"}};
   d.listPathTemplate = QStringLiteral("/2.0/repositories/{workspace}/{repo}/issues?pagelen=50");
+  // Bitbucket puts the whole next URL in the body rather than a header.
+  d.paging.style = PageStyle::BodyNext;
+  d.paging.bodyPath = QStringLiteral("next");
   d.fields.arrayPointer = QStringLiteral("values");
   d.fields.id = QStringLiteral("id");
   d.fields.title = QStringLiteral("title");

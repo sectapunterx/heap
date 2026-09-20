@@ -153,6 +153,11 @@ class JiraProvider : public IntegrationProvider {
   // GET {site}/_edge/tenant_info — unauthenticated, returns the site's cloudId.
   void resolveCloudId(std::function<void(bool)> done);
 
+  // One page of a search, accumulating into m_pulled. `cursor` is the Cloud
+  // nextPageToken, `startAt` the Server row offset; the deployment decides
+  // which one is in play.
+  void pullPage(const QString& cursor, int startAt);
+
   QNetworkAccessManager* m_nam = nullptr;
   QString m_baseUrl;  // "https://acme.atlassian.net" (no trailing slash)
   QString m_email;    // empty in OAuth mode
@@ -168,6 +173,12 @@ class JiraProvider : public IntegrationProvider {
   // over for the rest of this provider's life.
   QString m_apiBase;
   QString m_gatewayRoot = QStringLiteral("https://api.atlassian.com");
+
+  // A pull is a walk over search pages: one tasksFetched at the end, whatever
+  // it took to get there.
+  QVector<ExternalTask> m_pulled;
+  int m_pullPage = 0;
+  bool m_pulling = false;
   bool m_usingGateway = false;
   bool m_gatewayTried = false;
 };

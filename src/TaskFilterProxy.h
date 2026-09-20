@@ -2,6 +2,8 @@
 
 #include "Models.h"
 
+#include "query/TaskQuery.h"
+
 #include <QQmlEngine>
 #include <QSortFilterProxyModel>
 #include <QString>
@@ -24,8 +26,14 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // The column this proxy belongs to. Empty shows every status.
   Q_PROPERTY(QString status READ status WRITE setStatus NOTIFY filterChanged)
   Q_PROPERTY(bool showArchived READ showArchived WRITE setShowArchived NOTIFY filterChanged)
-  // Matched against the model's prebuilt lowercase haystack.
+  // What the user typed in the search box. Clauses it recognises
+  // (`status:blocked priority:P0 deadline:<friday tag:infra mention:@ada`) are
+  // applied as filters; whatever is left over is matched against the model's
+  // prebuilt lowercase haystack, so a query and a search compose.
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY filterChanged)
+  // True when the text contained at least one clause — the search field uses
+  // it to show that it is filtering structurally, not just by substring.
+  Q_PROPERTY(bool isQuery READ isQuery NOTIFY filterChanged)
   // The priorities the filter bar has switched on ("P0", "P1", …). Empty means
   // no priority filter, which is not the same as "none pass".
   Q_PROPERTY(QStringList priorities READ priorities WRITE setPriorities NOTIFY filterChanged)
@@ -48,10 +56,14 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   void setShowArchived(bool v);
 
   QString searchText() const {
-    return m_searchText;
+    return m_rawSearch;
   }
 
   void setSearchText(const QString& v);
+
+  bool isQuery() const {
+    return m_query.isQuery();
+  }
 
   QStringList priorities() const {
     return m_priorities;
@@ -73,6 +85,8 @@ class TaskFilterProxy : public QSortFilterProxyModel {
  private:
   QString m_status;
   bool m_showArchived = false;
-  QString m_searchText;  // kept lowercased
+  QString m_rawSearch;             // exactly what the user typed
+  QString m_searchText;            // the free-text remainder, lowercased
+  heap::query::TaskQuery m_query;  // compiled once per keystroke
   QStringList m_priorities;
 };

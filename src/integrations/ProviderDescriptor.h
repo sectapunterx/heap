@@ -152,6 +152,55 @@ struct OAuthConfig {
   }
 };
 
+// How a provider says "there is more". Every tracker caps a list response, and
+// a pull that reads only the first page silently loses everything past it — a
+// repo with 140 open issues mirrored 100 of them and never said so.
+enum class PageStyle : quint8 {
+  // No walk: one request is the whole answer.
+  None,
+  // RFC 5988 `Link: <url>; rel="next"` response header, absolute URL.
+  // GitHub, GitLab, Gitea/Forgejo, Sentry.
+  LinkHeader,
+  // A leaf in the response body. With `cursorParam` empty the leaf holds a
+  // whole URL (Bitbucket's "next"); otherwise it holds a token to hand back as
+  // that query parameter (Todoist's "next_cursor", Asana's "next_page.offset").
+  BodyNext,
+  // No continuation of any kind: step a numeric parameter and stop when a page
+  // comes back shorter than `pageSize`. Redmine.
+  Offset,
+};
+
+struct PageRecipe {
+  PageStyle style = PageStyle::None;
+  // BodyNext: dot-path to the leaf, same grammar as FieldMap.
+  QString bodyPath;
+  // BodyNext: the query parameter the leaf's value goes into. Empty means the
+  // leaf is already a URL.
+  QString cursorParam;
+  // Offset: the parameter to step, and by how much. `pageSize` must match what
+  // the list template asks for, or the walk stops one page early (a "short"
+  // page that was actually full) or runs one too long.
+  QString offsetParam;
+  int firstOffset = 0;
+  // How much the parameter grows per page. 0 means "by pageSize", which is what
+  // a row offset wants; a page *number* steps by 1 instead.
+  int offsetStep = 0;
+  int pageSize = 0;
+  // Hard stop, whatever the server says. A tracker that keeps handing back a
+  // next link would otherwise pull forever; this bounds one sync to
+  // maxPages × pageSize issues.
+  int maxPages = 20;
+};
+
+// What to do about a refusal that is not the caller's fault. 429 and 5xx are
+// "come back later", and the only wrong answer is to give up on the first one —
+// but also to hammer, which is how a rate limit becomes a ban.
+struct RetryRecipe {
+  int maxRetries = 3;
+  int baseDelayMs = 1000;  // doubled per attempt
+  int maxDelayMs = 30000;  // and capped, including a server's own Retry-After
+};
+
 // The single source of truth for one tracker integration: its UI card, its
 // config schema, and (for generic providers) the REST recipe RestIssueProvider
 // executes. Bespoke providers (Jira, Trello) set `bespoke = true` and leave the
@@ -188,6 +237,10 @@ struct ProviderDescriptor {
   QString baseUrlFallback;   // default base URL when {host} resolves empty (e.g. gitlab.com)
   FieldMap fields;           // used when parser == nullptr
   ParseFn parser = nullptr;  // bespoke parser (reused GitHub/GitLab parsers)
+  // How to walk past the first page, and what to do when the server says
+  // "later". Both default to doing nothing surprising: no walk, three retries.
+  PageRecipe paging;
+  RetryRecipe retry;
 
   // Read-only comments (HEAP-117). Empty path = the provider has none heap
   // knows about, and fetchComments answers "unsupported" without a request.

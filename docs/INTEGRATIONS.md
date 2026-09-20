@@ -293,3 +293,38 @@ a due date removed upstream no longer clears it.
   to an individual issue that *arrived* through my-issues mode while a repo is
   now configured: it belongs to some other repo, so moving its card would
   otherwise close whichever issue shares its number in the configured one.
+
+## How much a sync pulls
+
+Every tracker caps a list response — 100 issues for GitHub and GitLab, 50 for
+Gitea and Sentry, 100 for Jira. heap follows the continuation the API offers
+until the tracker says there is no more, or until it has read **20 pages**,
+whichever comes first. One sync therefore mirrors at most a couple of thousand
+issues and always terminates, even against a server that keeps claiming another
+page.
+
+| Tracker | How it says "there is more" |
+| --- | --- |
+| GitHub, GitLab, Gitea, Forgejo, Sentry | `Link: <…>; rel="next"` header |
+| Bitbucket | `next` URL in the body |
+| Todoist, Asana | a cursor in the body, handed back as a query parameter |
+| Redmine, ClickUp | neither — the offset is stepped until a page comes back short |
+| Jira Cloud | `nextPageToken` |
+| Jira Server/DC | `startAt` row offset |
+| Trello | one request returns everything |
+
+A next link is followed only when it points at the same host and scheme as the
+request that produced it. The link is server-supplied and the request carries
+your token; following it off-origin would hand the token to whoever wrote it.
+
+If a page fails part-way through a walk, the pages already read are still
+merged and a second toast says how far it got — losing 100 real issues because
+page 3 timed out would be the worse answer. Hitting the 20-page cap reports the
+same way, so a truncated sync is never silent.
+
+**Rate limits.** A `429` or a `5xx` is retried up to three times, waiting as
+long as the server's `Retry-After` header asks (in either the seconds or the
+HTTP-date form) and otherwise backing off 1s, 2s, 4s, capped at 30s. A rate
+limit that clears this way is not reported — nothing went wrong. A `401`,
+`403` or `404` is not retried: it will answer the same however long you wait,
+and retrying only delays the message telling you what to fix.

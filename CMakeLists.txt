@@ -169,6 +169,7 @@ qt_add_library(heap_core STATIC
     src/git/GitWatcher.cpp
     src/text/TaskTextUtils.cpp
     src/query/QueryParser.cpp
+    src/query/TaskQuery.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
@@ -248,6 +249,7 @@ qt_add_qml_module(heap_core
         qml/MentionAutocomplete.qml
         qml/WelcomePopup.qml
         qml/Mention.js
+        qml/Search.js
     SOURCES
         src/AppController.h
         src/Models.h
@@ -263,6 +265,7 @@ qt_add_qml_module(heap_core
         src/git/GitWatcher.h
         src/text/TaskTextUtils.h
         src/query/QueryParser.h
+        src/query/TaskQuery.h
         src/notes/NoteLinks.h
         src/markdown/MdDocument.h
         src/markdown/MarkdownEditorController.h

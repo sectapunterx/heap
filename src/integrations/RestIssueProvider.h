@@ -61,9 +61,33 @@ class RestIssueProvider : public IntegrationProvider {
   // True when the descriptor has a self endpoint and the scoping field is blank.
   bool inSelfScope() const;
 
+  // One pull in progress. A pull is a walk over pages, and every page may be
+  // retried, so the state that used to live in a single lambda's capture now
+  // outlives it.
+  struct Pull {
+    QString base;  // resolved base URL, for FieldMap::urlTemplate
+    bool crossProject = false;
+    QUrl url;         // the page currently being fetched
+    int page = 0;     // pages already accepted
+    int offset = 0;   // PageStyle::Offset only
+    int attempt = 0;  // retries of the current page
+    QVector<ExternalTask> tasks;
+    bool active = false;
+  };
+
+  // Fetch m_pull.url, retrying it on 429/5xx, and hand the body to onPage().
+  void fetchPage();
+  // Accept one page's tasks and either queue the next page or finish.
+  void onPage(const QByteArray& body, const QByteArray& linkHeader);
+  // Work out where the next page lives. Empty URL = the walk is over.
+  QUrl nextPageUrl(const QByteArray& body, const QByteArray& linkHeader, int lastCount);
+  // Emit what the walk gathered, plus an error when it stopped early.
+  void finishPull(const QString& truncatedReason);
+
   ProviderDescriptor m_desc;
   QVariantMap m_cfg;
   QNetworkAccessManager* m_nam = nullptr;
+  Pull m_pull;
 };
 
 // Pure, unit-tested extraction of a list response into ExternalTasks using a
