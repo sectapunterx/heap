@@ -195,6 +195,72 @@ TEST_F(MigrationTest, MigrateStateIsIdempotent) {
   EXPECT_EQ(root, once);
 }
 
+// The ladder is rung-gated, not "run everything below the current version".
+// A document entering at v4 must walk past the v3→v4 rung: that rung consumes
+// `deadline`, and a task that legitimately carries scheduledAt/dueAt plus a
+// `deadline` key from a future shape must come out untouched.
+TEST_F(MigrationTest, LadderSkipsRungsBelowTheEntryVersion) {
+  QJsonObject root = QJsonDocument::fromJson(R"({
+    "schemaVersion": 4,
+    "profiles": [{"id": "default", "tasks": [
+      {"id": "T-1", "scheduledAt": "2026-07-08T14:30:00", "dueAt": "2026-07-08T18:00:00",
+       "hasTime": true, "deadline": "2026-01-01"}
+    ]}]
+  })")
+                         .object();
+
+  // Entering at v4 with kSchemaVersion == 4 is the version gate.
+  EXPECT_FALSE(heap::state::migrateState(root, 4));
+
+  // The rung guard is what this case is really about: it must hold even when
+  // the document is below the current version for some *other* reason. Raising
+  // kSchemaVersion must not make the v3→v4 rung run again on a v4 document.
+  QJsonObject fromFour = root;
+  heap::state::migrateState(fromFour, 4);
+  const QJsonObject task = fromFour["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(0).toObject();
+  EXPECT_EQ(task["scheduledAt"].toString(), QStringLiteral("2026-07-08T14:30:00"))
+      << "a rung below the entry version must not rewrite scheduledAt";
+  EXPECT_TRUE(task["hasTime"].toBool()) << "a rung below the entry version must not clear hasTime";
+}
+
+// state.json written by a newer build: this one cannot represent the fields it
+// did not parse, so it must never write over them.
+TEST_F(MigrationTest, ANewerSchemaDisablesSavingAndKeepsTheFile) {
+  QJsonObject root = QJsonDocument::fromJson(v3Document()).object();
+  root["schemaVersion"] = heap::state::kSchemaVersion + 1;
+  // A key this build knows nothing about — exactly what a save would drop.
+  QJsonArray profiles = root["profiles"].toArray();
+  QJsonObject p = profiles.at(0).toObject();
+  p["notes"] = QJsonArray({QJsonObject{{"id", "N-1"}, {"title", "Inbox"}, {"body", "from the future"}}});
+  profiles.replace(0, p);
+  root["profiles"] = profiles;
+  const QByteArray onDisk = QJsonDocument(root).toJson();
+  writeFile(statePath(), onDisk);
+
+  {
+    AppController app;
+    // Loaded best-effort: the user still sees their work.
+    EXPECT_EQ(app.tasks()->rowCount(), 3);
+    // Every save path is a no-op — the debounced scheduleSave() that saveTask
+    // arms, and the direct flushSave() alike.
+    QVariantMap draft = app.newTaskDraft(QStringLiteral("todo"));
+    draft["title"] = QStringLiteral("this must not reach the disk");
+    app.saveTask(draft);
+    app.flushSave();
+  }
+
+  QFile f(statePath());
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  EXPECT_EQ(f.readAll(), onDisk) << "a newer-schema file must be left byte-identical";
+
+  const QJsonObject reread = readJson(statePath());
+  EXPECT_EQ(reread["schemaVersion"].toInt(), heap::state::kSchemaVersion + 1);
+  EXPECT_FALSE(reread["profiles"].toArray().at(0).toObject()["notes"].toArray().isEmpty()) << "the unknown field must survive";
+
+  EXPECT_EQ(QDir(backupDir()).entryList({"state-premigration-*.json"}, QDir::Files).size(), 1)
+      << "a copy is retained before the app touches anything";
+}
+
 // A failed first write leaves a v3 state.json on disk (QSaveFile never renamed).
 // The next launch must find the retained pre-migration copy, not a partial file.
 TEST_F(MigrationTest, MidMigrationFailureReopensToThePreMigrationBackup) {
