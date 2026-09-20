@@ -337,7 +337,7 @@ Item {
                                 const hi = Math.max(pressY, currentY);
                                 const startH = root.snapHour(root.yToHour(lo));
                                 const endH   = root.snapHour(root.yToHour(hi));
-                                if (!dragging || (endH - startH) < 0.25) {
+                                if (!dragging || (endH - startH) < Theme.minEventHours) {
                                     // Legacy single-click → 1-hour event at clicked hour.
                                     const h = Math.floor(root.yToHour(pressY));
                                     const draft = AppController.newEventDraft(h, AppController.selectedDate);
@@ -557,7 +557,7 @@ Item {
                                         if (!resizing) return;
                                         const pt = topHandle.mapToItem(eventsLayer, mouse.x, mouse.y);
                                         const h = root.snapHour(root.yToHour(pt.y));
-                                        const clamped = Math.min(h, evRect.end - 0.25);
+                                        const clamped = Math.min(h, evRect.end - Theme.minEventHours);
                                         evRect.pendingStartH = Math.max(root.hoursStart, clamped);
                                     }
                                     onReleased: {
@@ -583,7 +583,7 @@ Item {
                                         if (!resizing) return;
                                         const pt = bottomHandle.mapToItem(eventsLayer, mouse.x, mouse.y);
                                         const h = root.snapHour(root.yToHour(pt.y));
-                                        const clamped = Math.max(h, evRect.start + 0.25);
+                                        const clamped = Math.max(h, evRect.start + Theme.minEventHours);
                                         evRect.pendingEndH = Math.min(root.hoursEnd, clamped);
                                     }
                                     onReleased: {

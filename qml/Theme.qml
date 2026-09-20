@@ -27,6 +27,11 @@ QtObject {
     readonly property string timeFormat:   _calendar.timeFormat   || "24h"
     readonly property int    snapMinutes:  _calendar.snapMinutes  || 15
     readonly property bool   showWeekends: _calendar.showWeekends === undefined ? true : !!_calendar.showWeekends
+    // Shortest event the calendar lets you drag or resize into existence — one
+    // snap step, matching heap::cal::clampHours on the save side. A hardcoded
+    // 15 minutes here fought a 30-minute snap: the drag allowed a length the
+    // save then rounded away.
+    readonly property real   minEventHours: Math.max(1, snapMinutes) / 60
 
     // ── Surfaces ──────────────────────────────────────────────────────
     readonly property color bg:           dark ? Brand.bg      : Brand.lightBg

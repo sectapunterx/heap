@@ -5,6 +5,7 @@
 #include "StateSerializer.h"
 #include "TaskDefer.h"
 
+#include "cal/EventClamp.h"
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
@@ -1101,9 +1102,12 @@ void AppController::saveEvent(const QVariantMap& draft) {
     e.profileId = (prev >= 0) ? m_events.items().at(prev).profileId : QString();
   }
   e.context = draft.value("context").toString();
-  if(e.end <= e.start) {
-    e.end = e.start + 0.25;
-  }
+  // The editor parses free-typed times, so start/end arrive unvalidated: the
+  // range has to be forced back into the day here, not only fixed up when the
+  // end precedes the start.
+  const heap::cal::HourRange hours = heap::cal::clampHours(e.start, e.end, snapStepHours());
+  e.start = hours.start;
+  e.end = hours.end;
   m_events.upsert(e);
   scheduleSave();
 }
@@ -1113,18 +1117,10 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   if(row < 0) {
     return;
   }
-  const int snapMin = qMax(1, settingsMap().value("calendar").toMap().value("snapMinutes", 15).toInt());
-  const double step = snapMin / 60.0;
-  const double minDur = step;
-  auto snap = [step](double h) {
-    return std::round(h / step) * step;
-  };
   CalEvent e = m_events.items().at(row);
-  e.start = snap(qBound(0.0, start, 24.0));
-  e.end = snap(qBound(e.start + minDur, end, 24.0));
-  if(e.end < e.start + minDur) {
-    e.end = e.start + minDur;
-  }
+  const heap::cal::HourRange hours = heap::cal::clampHours(start, end, snapStepHours());
+  e.start = hours.start;
+  e.end = hours.end;
   if(date.isValid()) {
     e.date = date;
   }
@@ -5055,6 +5051,10 @@ void AppController::resetAllShortcuts() {
 }
 
 // ── Notifications, transitions, automation ─────────────────────────────
+
+double AppController::snapStepHours() const {
+  return heap::cal::stepHours(settingsMap().value("calendar").toMap().value("snapMinutes", 15).toInt());
+}
 
 QVariantMap AppController::settingsMap() const {
   // Parsed on demand and cached against the string it came from. Twenty-odd

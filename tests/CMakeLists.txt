@@ -112,6 +112,12 @@ target_link_libraries(heap_paths_tests PRIVATE
 
 add_test(NAME heap_paths_tests COMMAND heap_paths_tests)
 
+# Calendar hour clamping — header-only, so only the test TU compiles.
+add_executable(heap_cal_tests test_event_clamp.cpp)
+target_include_directories(heap_cal_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_cal_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_cal_tests COMMAND heap_cal_tests)
+
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
 target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
