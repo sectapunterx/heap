@@ -247,7 +247,22 @@ Item {
         if (initiallyEmpty && (sections.length > 0 || snippets.length > 0 || contacts.length > 0))
             persist();
     }
+    // Debounced, the way NotesView already does it. persist() stringifies the
+    // entire docs blob — every section, snippet and contact — and each write
+    // schedules a whole-state save; there are 21 assignment sites to the three
+    // properties below, so an edit that touches several in a row used to
+    // serialise the lot once per assignment.
+    Timer {
+        id: persistTimer
+        interval: 250
+        repeat: false
+        onTriggered: root.persistNow()
+    }
     function persist() {
+        if (!_loadedOnce || _reloading) return;
+        persistTimer.restart();
+    }
+    function persistNow() {
         if (!_loadedOnce || _reloading) return;
         _persisting = true;
         AppController.docsState = JSON.stringify({ sections: sections, snippets: snippets, contacts: contacts });
@@ -256,6 +271,13 @@ Item {
     onSectionsChanged: persist()
     onSnippetsChanged: persist()
     onContactsChanged: persist()
+    // A pending edit must not be lost to a profile switch or a quit.
+    Component.onDestruction: {
+        if (persistTimer.running) {
+            persistTimer.stop();
+            persistNow();
+        }
+    }
 
     // External docsState change → reload (e.g. profile switch).
     Connections {

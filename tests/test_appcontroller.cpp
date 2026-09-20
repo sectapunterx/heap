@@ -634,6 +634,68 @@ TEST_F(AppControllerTest, SyncPreservesUserAddedLocalLabels) {
   EXPECT_TRUE(ids.contains(QStringLiteral("bug")));
 }
 
+// ─── Cached hot paths ───
+// Both of these are caches, so what needs pinning is not the speed but that
+// they still answer correctly after the thing they cache has changed.
+
+TEST_F(AppControllerTest, StatusCountsAreOnePassAndFollowTheModel) {
+  Task a;
+  a.id = QStringLiteral("A");
+  a.status = QStringLiteral("todo");
+  Task b;
+  b.id = QStringLiteral("B");
+  b.status = QStringLiteral("todo");
+  Task c;
+  c.id = QStringLiteral("C");
+  c.status = QStringLiteral("prog");
+  app_->tasks()->reset({a, b, c});
+
+  QVariantMap counts = app_->statusCounts();
+  EXPECT_EQ(counts.value(QStringLiteral("todo")).toInt(), 2);
+  EXPECT_EQ(counts.value(QStringLiteral("prog")).toInt(), 1);
+  // A status nobody holds is absent, and reads as zero.
+  EXPECT_EQ(counts.value(QStringLiteral("done")).toInt(), 0);
+  // countByStatus is now a lookup into the same map.
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("todo")), 2);
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("done")), 0);
+
+  // Moving a task must be reflected, not served from the cache.
+  app_->tasks()->setStatus(QStringLiteral("A"), QStringLiteral("prog"));
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("todo")), 1);
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("prog")), 2);
+
+  // …as must adding, removing and replacing the whole model.
+  Task d;
+  d.id = QStringLiteral("D");
+  d.status = QStringLiteral("todo");
+  app_->tasks()->upsert(d);
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("todo")), 2);
+  app_->tasks()->removeById(QStringLiteral("B"));
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("todo")), 1);
+  app_->tasks()->reset({});
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("todo")), 0);
+  EXPECT_TRUE(app_->statusCounts().isEmpty());
+}
+
+TEST_F(AppControllerTest, SettingsMapIsCachedButNeverStale) {
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"AAA"}})"));
+  EXPECT_EQ(app_->settingsMapForTest().value(QStringLiteral("tasks")).toMap().value(QStringLiteral("idPrefix")).toString(),
+            QStringLiteral("AAA"));
+  // Same string twice — the second read comes from the cache and must match.
+  EXPECT_EQ(app_->settingsMapForTest(), app_->settingsMapForTest());
+
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"BBB"}})"));
+  EXPECT_EQ(app_->settingsMapForTest().value(QStringLiteral("tasks")).toMap().value(QStringLiteral("idPrefix")).toString(),
+            QStringLiteral("BBB"))
+      << "the cache outlived the settings it was built from";
+
+  // Malformed and empty both answer an empty map rather than the last good one.
+  app_->setAppSettingsJson(QStringLiteral("{not json"));
+  EXPECT_TRUE(app_->settingsMapForTest().isEmpty());
+  app_->setAppSettingsJson(QString());
+  EXPECT_TRUE(app_->settingsMapForTest().isEmpty());
+}
+
 TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
   QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
   draft["_isNew"] = true;

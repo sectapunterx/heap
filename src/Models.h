@@ -205,6 +205,10 @@ class TaskModel : public QAbstractListModel {
   QVector<Task> m_items;
   QSet<QString> m_blockedStuck;
   QHash<QString, GitInfo> m_git;  // not persisted; runtime only
+  // indexOfId's id→row map, rebuilt lazily whenever rows are added, removed or
+  // replaced wholesale. Mutable so the lookup can stay const.
+  mutable QHash<QString, int> m_index;
+  mutable bool m_indexDirty = true;
 };
 
 class EventModel : public QAbstractListModel {

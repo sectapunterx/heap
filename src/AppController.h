@@ -57,6 +57,9 @@ class AppController : public QObject {
   Q_PROPERTY(EventModel* events READ events CONSTANT)
   Q_PROPERTY(PersonModel* people READ people CONSTANT)
   Q_PROPERTY(QVariantList statuses READ statuses NOTIFY statusesChanged)
+  // status id → task count, in one pass. The rail and the top bar read this
+  // instead of calling countByStatus once per badge.
+  Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
   Q_PROPERTY(QDate today READ today CONSTANT)
 
   Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
@@ -450,6 +453,18 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteStatus(const QString& id);
 
   // ---- Status counts ----
+  // Every status' task count, built in one pass and cached until the model
+  // changes. Prefer this over repeated countByStatus calls: the rail and the
+  // top bar used to ask for six separate counts per task edit, each a full
+  // scan. countByStatus is a lookup into this.
+  QVariantMap statusCounts() const;
+
+  // settingsMap() is private and also cached; this exists so a test can prove
+  // the cache does not outlive the settings it was built from.
+  QVariantMap settingsMapForTest() const {
+    return settingsMap();
+  }
+
   Q_INVOKABLE int countByStatus(const QString& statusId) const;
 
   // ---- Lookups ----
@@ -592,6 +607,7 @@ class AppController : public QObject {
   void activeProfileChanged();
   void shortcutsChanged();
   void blockedStuckChanged();
+  void statusCountsChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
   void toast(const QString& message);
   // Device-flow OAuth: prompts the Integrations card to show a "enter this code
@@ -645,6 +661,14 @@ class AppController : public QObject {
   QString m_docsState;
   QString m_notesState;
   QString m_appSettingsJson;
+  // settingsMap()'s parse cache, keyed on the string above so that no writer
+  // of it has to remember to invalidate anything.
+  mutable QString m_settingsCacheSource;
+  mutable QVariantMap m_settingsCache;
+  // statusCounts()' cache; invalidated from the task model's own signals so
+  // every mutation path is covered without each one remembering to.
+  mutable QVariantMap m_statusCounts;
+  mutable bool m_statusCountsDirty = true;
   bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
   bool m_demoActive = false;   // onboarding: profile still holds seeded demo
 

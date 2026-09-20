@@ -156,6 +156,7 @@ void TaskModel::reset(QVector<Task> items) {
   beginResetModel();
   m_items = std::move(items);
   m_git.clear();
+  m_indexDirty = true;
   endResetModel();
 }
 
@@ -198,12 +199,20 @@ void TaskModel::clearAllGitInfo() {
 }
 
 int TaskModel::indexOfId(const QString& id) const {
-  for(int i = 0; i < m_items.size(); ++i) {
-    if(m_items[i].id == id) {
-      return i;
+  // Called on essentially every mutation, and by AppController from ~30 more
+  // places — mergeExternalTasks alone walks the model three times per pulled
+  // issue. Lazily indexed: any structural change flips the dirty flag and the
+  // next lookup rebuilds, which keeps the row-shifting cases (insertAt,
+  // removeById) correct without each one maintaining the map by hand.
+  if(m_indexDirty) {
+    m_index.clear();
+    m_index.reserve(m_items.size());
+    for(int i = 0; i < m_items.size(); ++i) {
+      m_index.insert(m_items[i].id, i);
     }
+    m_indexDirty = false;
   }
-  return -1;
+  return m_index.value(id, -1);
 }
 
 void TaskModel::setStatus(const QString& id, const QString& status) {
@@ -300,6 +309,7 @@ void TaskModel::upsert(const Task& t) {
   } else {
     beginInsertRows({}, m_items.size(), m_items.size());
     m_items.push_back(t);
+    m_indexDirty = true;
     endInsertRows();
   }
 }
@@ -308,6 +318,7 @@ void TaskModel::insertAt(int row, const Task& t) {
   row = qBound(0, row, m_items.size());
   beginInsertRows({}, row, row);
   m_items.insert(row, t);
+  m_indexDirty = true;  // every row at or after this one shifted
   endInsertRows();
 }
 
@@ -318,6 +329,7 @@ void TaskModel::removeById(const QString& id) {
   }
   beginRemoveRows({}, row, row);
   m_items.removeAt(row);
+  m_indexDirty = true;  // every row after this one shifted
   endRemoveRows();
 }
 
