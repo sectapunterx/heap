@@ -7,6 +7,7 @@
 
 #include "Models.h"
 #include "TaskDefer.h"
+#include "TaskFilterProxy.h"
 
 #include <QColor>
 #include <QDate>
@@ -474,4 +475,140 @@ TEST(TaskModelScheduling, DeadlineRoleIsTheDueDateWithoutItsClockTime) {
   Task undated;
   m.reset({undated});
   EXPECT_FALSE(m.data(m.index(0, 0), TaskModel::DeadlineRole).toDate().isValid());
+}
+
+// ─── TaskFilterProxy: one board column's view of the model ───
+// The board used to hand the whole task model to every status column and let
+// each card hide itself, so a profile with N tasks and C columns built N×C
+// delegates and ran the filter in JS once per card. These are the rules that
+// moved into C++.
+
+namespace {
+
+Task mk(const QString& id, const QString& status, const QString& priority = QStringLiteral("P2")) {
+  Task t;
+  t.id = id;
+  t.title = QStringLiteral("title of ") + id;
+  t.status = status;
+  t.priority = priority;
+  return t;
+}
+
+}  // namespace
+
+TEST(TaskFilterProxy, ShowsOnlyItsOwnColumn) {
+  TaskModel src;
+  src.reset({mk(QStringLiteral("A-1"), QStringLiteral("todo")),
+             mk(QStringLiteral("A-2"), QStringLiteral("prog")),
+             mk(QStringLiteral("A-3"), QStringLiteral("todo"))});
+
+  TaskFilterProxy proxy;
+  proxy.setSourceModel(&src);
+  proxy.setStatus(QStringLiteral("todo"));
+  EXPECT_EQ(proxy.count(), 2);
+  EXPECT_EQ(proxy.data(proxy.index(0, 0), TaskModel::IdRole).toString(), QStringLiteral("A-1"));
+  EXPECT_EQ(proxy.data(proxy.index(1, 0), TaskModel::IdRole).toString(), QStringLiteral("A-3"));
+
+  // An empty status is "every column" — used by anything that wants the whole
+  // filtered set rather than one lane.
+  proxy.setStatus(QString());
+  EXPECT_EQ(proxy.count(), 3);
+}
+
+TEST(TaskFilterProxy, HidesArchivedUnlessAsked) {
+  Task live = mk(QStringLiteral("A-1"), QStringLiteral("todo"));
+  Task gone = mk(QStringLiteral("A-2"), QStringLiteral("todo"));
+  gone.archived = true;
+  TaskModel src;
+  src.reset({live, gone});
+
+  TaskFilterProxy proxy;
+  proxy.setSourceModel(&src);
+  proxy.setStatus(QStringLiteral("todo"));
+  EXPECT_EQ(proxy.count(), 1);
+
+  proxy.setShowArchived(true);
+  EXPECT_EQ(proxy.count(), 2);
+}
+
+// An all-chips-off filter bar means "no priority filter", not "nothing
+// passes" — the board would go blank on load otherwise.
+TEST(TaskFilterProxy, AnEmptyPrioritySetIsNoFilterAtAll) {
+  TaskModel src;
+  src.reset({mk(QStringLiteral("A-1"), QStringLiteral("todo"), QStringLiteral("P0")),
+             mk(QStringLiteral("A-2"), QStringLiteral("todo"), QStringLiteral("P2"))});
+
+  TaskFilterProxy proxy;
+  proxy.setSourceModel(&src);
+  proxy.setStatus(QStringLiteral("todo"));
+  EXPECT_EQ(proxy.count(), 2);
+
+  proxy.setPriorities({QStringLiteral("P0")});
+  ASSERT_EQ(proxy.count(), 1);
+  EXPECT_EQ(proxy.data(proxy.index(0, 0), TaskModel::IdRole).toString(), QStringLiteral("A-1"));
+
+  proxy.setPriorities({});
+  EXPECT_EQ(proxy.count(), 2);
+}
+
+TEST(TaskFilterProxy, SearchesTitleIdAndDescriptionCaseInsensitively) {
+  Task a = mk(QStringLiteral("LTE-2700"), QStringLiteral("todo"));
+  a.title = QStringLiteral("Fix the Handover");
+  a.desc = QStringLiteral("only here: zebra");
+  Task b = mk(QStringLiteral("LTE-2701"), QStringLiteral("todo"));
+  b.title = QStringLiteral("Something else");
+  TaskModel src;
+  src.reset({a, b});
+
+  TaskFilterProxy proxy;
+  proxy.setSourceModel(&src);
+  proxy.setStatus(QStringLiteral("todo"));
+
+  proxy.setSearchText(QStringLiteral("HANDOVER"));
+  EXPECT_EQ(proxy.count(), 1);
+  proxy.setSearchText(QStringLiteral("zebra"));  // description only
+  EXPECT_EQ(proxy.count(), 1);
+  proxy.setSearchText(QStringLiteral("2701"));  // id only
+  ASSERT_EQ(proxy.count(), 1);
+  EXPECT_EQ(proxy.data(proxy.index(0, 0), TaskModel::IdRole).toString(), QStringLiteral("LTE-2701"));
+  proxy.setSearchText(QStringLiteral("nothing matches this"));
+  EXPECT_EQ(proxy.count(), 0);
+  proxy.setSearchText(QString());
+  EXPECT_EQ(proxy.count(), 2);
+}
+
+// The cards have to follow the model, not a snapshot of it: moving a task to
+// another column must remove it from this one and the count must say so.
+TEST(TaskFilterProxy, FollowsTheModelWhenATaskMovesColumn) {
+  TaskModel src;
+  src.reset({mk(QStringLiteral("A-1"), QStringLiteral("todo"))});
+
+  TaskFilterProxy todo;
+  todo.setSourceModel(&src);
+  todo.setStatus(QStringLiteral("todo"));
+  TaskFilterProxy prog;
+  prog.setSourceModel(&src);
+  prog.setStatus(QStringLiteral("prog"));
+  ASSERT_EQ(todo.count(), 1);
+  ASSERT_EQ(prog.count(), 0);
+
+  src.setStatus(QStringLiteral("A-1"), QStringLiteral("prog"));
+  EXPECT_EQ(todo.count(), 0);
+  EXPECT_EQ(prog.count(), 1);
+}
+
+TEST(TaskFilterProxy, RolesPassThroughUnchanged) {
+  // The board delegate binds named required properties, which only works if
+  // the proxy forwards the source's role names verbatim.
+  TaskModel src;
+  TaskFilterProxy proxy;
+  proxy.setSourceModel(&src);
+  EXPECT_EQ(proxy.roleNames(), src.roleNames());
+}
+
+TEST(TaskFilterProxy, WithNoSourceItIsSimplyEmpty) {
+  TaskFilterProxy proxy;
+  EXPECT_EQ(proxy.count(), 0);
+  proxy.setStatus(QStringLiteral("todo"));
+  EXPECT_EQ(proxy.count(), 0);
 }

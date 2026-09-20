@@ -156,6 +156,7 @@ qt_add_library(heap_core STATIC
     src/AppController.cpp
     src/Logger.cpp
     src/Models.cpp
+    src/TaskFilterProxy.cpp
     src/RecoveryLog.cpp
     src/SampleData.cpp
     src/StateSerializer.cpp
@@ -249,6 +250,7 @@ qt_add_qml_module(heap_core
     SOURCES
         src/AppController.h
         src/Models.h
+        src/TaskFilterProxy.h
         src/SampleData.h
         src/CodeHighlighter.h
         src/chrono/ChronoTypes.h
