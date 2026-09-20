@@ -1,6 +1,7 @@
 #include "markdown/MdHighlighter.h"
 
 #include <QRegularExpression>
+#include <QTextBlock>
 #include <QTextDocument>
 
 namespace heap::md {
@@ -149,7 +150,83 @@ void MdHighlighter::rebuildFormats() {
   m_codeNumber.setForeground(colorAt(m_palette, "number", QColor(0xD8, 0xC2, 0x77)));
 }
 
-void MdHighlighter::highlightCodeLine(const QString& text) {
+namespace {
+
+// Carries the open fence's language down every line inside it. It cannot be a
+// member of the highlighter: highlightBlock() runs for one changed line at a
+// time, so a member holds whichever fence was opened last during the most
+// recent full pass, not the one this line is actually inside.
+class FenceLanguage : public QTextBlockUserData {
+ public:
+  explicit FenceLanguage(QString lang) : language(std::move(lang)) {}
+  QString language;
+};
+
+QString fenceLanguageOf(const QTextBlock& block) {
+  if(const auto* data = dynamic_cast<const FenceLanguage*>(block.userData())) {
+    return data->language;
+  }
+  return {};
+}
+
+// Which line-comment marker a fence's language actually uses. An unknown or
+// absent language keeps the permissive union of all three, which is what every
+// fence used to get.
+const QRegularExpression& commentRxFor(const QString& language) {
+  static const QRegularExpression anyRx(QStringLiteral("(//|#|--)[^\\n]*$"));
+  static const QRegularExpression hashRx(QStringLiteral("#[^\\n]*$"));
+  static const QRegularExpression slashRx(QStringLiteral("//[^\\n]*$"));
+  static const QRegularExpression slashHashRx(QStringLiteral("(//|#)[^\\n]*$"));
+  static const QRegularExpression dashRx(QStringLiteral("--[^\\n]*$"));
+  static const QRegularExpression neverRx(QStringLiteral("(?!)"));
+
+  static const QHash<QString, const QRegularExpression*> kByLanguage = {
+      {QStringLiteral("python"), &hashRx},     {QStringLiteral("py"), &hashRx},
+      {QStringLiteral("ruby"), &hashRx},       {QStringLiteral("rb"), &hashRx},
+      {QStringLiteral("sh"), &hashRx},         {QStringLiteral("bash"), &hashRx},
+      {QStringLiteral("zsh"), &hashRx},        {QStringLiteral("shell"), &hashRx},
+      {QStringLiteral("yaml"), &hashRx},       {QStringLiteral("yml"), &hashRx},
+      {QStringLiteral("toml"), &hashRx},       {QStringLiteral("ini"), &hashRx},
+      {QStringLiteral("conf"), &hashRx},       {QStringLiteral("cmake"), &hashRx},
+      {QStringLiteral("make"), &hashRx},       {QStringLiteral("makefile"), &hashRx},
+      {QStringLiteral("dockerfile"), &hashRx}, {QStringLiteral("perl"), &hashRx},
+      {QStringLiteral("r"), &hashRx},          {QStringLiteral("nix"), &hashRx},
+
+      {QStringLiteral("c"), &slashRx},         {QStringLiteral("cpp"), &slashRx},
+      {QStringLiteral("c++"), &slashRx},       {QStringLiteral("cxx"), &slashRx},
+      {QStringLiteral("h"), &slashRx},         {QStringLiteral("hpp"), &slashRx},
+      {QStringLiteral("java"), &slashRx},      {QStringLiteral("js"), &slashRx},
+      {QStringLiteral("javascript"), &slashRx}, {QStringLiteral("ts"), &slashRx},
+      {QStringLiteral("typescript"), &slashRx}, {QStringLiteral("jsx"), &slashRx},
+      {QStringLiteral("tsx"), &slashRx},       {QStringLiteral("go"), &slashRx},
+      {QStringLiteral("rust"), &slashRx},      {QStringLiteral("rs"), &slashRx},
+      {QStringLiteral("kotlin"), &slashRx},    {QStringLiteral("kt"), &slashRx},
+      {QStringLiteral("swift"), &slashRx},     {QStringLiteral("cs"), &slashRx},
+      {QStringLiteral("csharp"), &slashRx},    {QStringLiteral("scala"), &slashRx},
+      {QStringLiteral("dart"), &slashRx},      {QStringLiteral("qml"), &slashRx},
+      {QStringLiteral("glsl"), &slashRx},      {QStringLiteral("groovy"), &slashRx},
+
+      {QStringLiteral("php"), &slashHashRx},
+
+      {QStringLiteral("sql"), &dashRx},        {QStringLiteral("lua"), &dashRx},
+      {QStringLiteral("haskell"), &dashRx},    {QStringLiteral("hs"), &dashRx},
+      {QStringLiteral("ada"), &dashRx},
+
+      // No line comment at all — greying out a `#` in JSON is pure noise.
+      {QStringLiteral("json"), &neverRx},      {QStringLiteral("csv"), &neverRx},
+      {QStringLiteral("html"), &neverRx},      {QStringLiteral("xml"), &neverRx},
+      {QStringLiteral("css"), &neverRx},       {QStringLiteral("text"), &neverRx},
+      {QStringLiteral("plain"), &neverRx},     {QStringLiteral("txt"), &neverRx},
+      {QStringLiteral("diff"), &neverRx},
+  };
+
+  const auto it = kByLanguage.constFind(language.trimmed().toLower());
+  return it == kByLanguage.constEnd() ? anyRx : **it;
+}
+
+}  // namespace
+
+void MdHighlighter::highlightCodeLine(const QString& text, const QString& language) {
   setFormat(0, static_cast<int>(text.size()), m_code);
   if(text.isEmpty()) {
     return;
@@ -160,7 +237,11 @@ void MdHighlighter::highlightCodeLine(const QString& text) {
   // and a per-keystroke highlighter cannot afford a real lexer per language.
   static const QRegularExpression stringRx(QStringLiteral("\"(?:[^\"\\\\\\n]|\\\\.)*\"|'(?:[^'\\\\\\n]|\\\\.)*'|`(?:[^`\\\\\\n]|\\\\.)*`"));
   static const QRegularExpression numberRx(QStringLiteral("\\b\\d+(?:\\.\\d+)?\\b"));
-  static const QRegularExpression commentRx(QStringLiteral("(//|#|--)[^\\n]*$"));
+  // Comment syntax is the one thing the union gets visibly wrong: with a
+  // single (//|#|--) rule, a `#include` line greys out in a ```cpp fence and
+  // the `//` of a URL does the same in ```python. The fence's language narrows
+  // it; an unknown or absent language keeps the permissive union.
+  const QRegularExpression& commentRx = commentRxFor(language);
   static const QRegularExpression keywordRx(
       QStringLiteral("\\b(?:if|else|for|while|return|class|struct|def|function|fn|let|const|var|import|from|"
                      "include|namespace|public|private|protected|static|void|int|bool|true|false|null|nullptr|"
@@ -253,13 +334,19 @@ void MdHighlighter::highlightBlock(const QString& text) {
   }
 
   if(previous == InFence) {
+    // The language was captured on the opening fence and relayed line by line;
+    // reading it from the previous block is what lets a re-highlight of a
+    // single line in the middle of a fence still know what it is inside.
+    const QString language = fenceLanguageOf(currentBlock().previous());
     const auto fence = fenceRx().match(text);
     if(fence.hasMatch() && fence.captured(2).isEmpty()) {
       setFormat(0, length, m_codeFence);
+      setCurrentBlockUserData(nullptr);
       setCurrentBlockState(Normal);
       return;
     }
-    highlightCodeLine(text);
+    setCurrentBlockUserData(new FenceLanguage(language));
+    highlightCodeLine(text, language);
     setCurrentBlockState(InFence);
     return;
   }
@@ -273,16 +360,22 @@ void MdHighlighter::highlightBlock(const QString& text) {
   const auto fence = fenceRx().match(text);
   if(fence.hasMatch()) {
     setFormat(0, length, m_codeFence);
-    m_fenceLanguage = fence.captured(2);
+    // The opening fence carries the language for every line that follows.
+    setCurrentBlockUserData(new FenceLanguage(fence.captured(2)));
     setCurrentBlockState(InFence);
     return;
   }
   if(text.trimmed() == QStringLiteral("$$")) {
     setFormat(0, length, m_math);
+    setCurrentBlockUserData(nullptr);
     setCurrentBlockState(InMathBlock);
     return;
   }
 
+  // A line that is no longer inside a fence must not keep the language it had
+  // when it was, or deleting a fence would leave the stale value behind for
+  // whatever re-highlight reads this block next.
+  setCurrentBlockUserData(nullptr);
   setCurrentBlockState(Normal);
 
   // ── Line-level structure ────────────────────────────────────────

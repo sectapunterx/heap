@@ -77,7 +77,7 @@ class MdHighlighter : public QSyntaxHighlighter {
 
   void rebuildFormats();
   void highlightInline(const QString& text);
-  void highlightCodeLine(const QString& text);
+  void highlightCodeLine(const QString& text, const QString& language);
 
   QQuickTextDocument* m_target = nullptr;
   QVariantMap m_palette;
@@ -103,8 +103,10 @@ class MdHighlighter : public QSyntaxHighlighter {
   QTextCharFormat m_rule;
   QTextCharFormat m_table;
 
-  // Language rules for whatever fence is currently open.
-  QString m_fenceLanguage;
+  // Language rules for whatever fence is currently open. The language itself
+  // is not a member: it travels per block (see kCommentStyleFor in the .cpp),
+  // because highlightBlock is called for one changed line at a time and a
+  // member would hold whichever fence was opened last, not this line's.
   QTextCharFormat m_codeKeyword;
   QTextCharFormat m_codeString;
   QTextCharFormat m_codeComment;
