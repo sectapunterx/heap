@@ -303,6 +303,12 @@ Item {
                     readonly property alias taskRepeater: colRep
                     property bool dragOver: false
                     readonly property int visibleCount: colFilter.count
+                    // Advisory work-in-progress limit. 0 = none. Over the
+                    // limit the badge turns, and that is all it does: a hard
+                    // cap would make a drag silently do nothing, which reads
+                    // as a bug rather than as a rule.
+                    readonly property int wipLimit: modelData.wip || 0
+                    readonly property bool overWip: col.wipLimit > 0 && col.visibleCount > col.wipLimit
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
                     readonly property bool isLast:  index === AppController.statuses.length - 1
@@ -421,16 +427,24 @@ Item {
                                 }
                                 Rectangle {
                                     radius: 999
-                                    color: Theme.panel3
+                                    color: col.overWip ? Theme.withAlpha(Theme.p0, 0.18) : Theme.panel3
+                                    border.color: col.overWip ? Theme.p0 : "transparent"
+                                    border.width: 1
                                     implicitWidth: cntT.implicitWidth + 14
                                     implicitHeight: 18
                                     Text {
                                         id: cntT; anchors.centerIn: parent
-                                        text: col.visibleCount
-                                        color: Theme.textDim
+                                        text: col.wipLimit > 0
+                                            ? col.visibleCount + "/" + col.wipLimit
+                                            : col.visibleCount
+                                        color: col.overWip ? Theme.p0 : Theme.textDim
                                         font.family: Theme.fontMono
                                         font.pixelSize: 11
+                                        font.weight: col.overWip ? Font.DemiBold : Font.Normal
                                     }
+                                    QQC.ToolTip.visible: col.overWip && wipHover.hovered
+                                    QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
+                                    HoverHandler { id: wipHover }
                                 }
 
                                 // Move-left / Move-right / Delete. `visible` only
@@ -455,7 +469,7 @@ Item {
                                     danger: true
                                     visible: AppController.statuses.length > 1
                                     revealed: col.headerHovered
-                                    onActivated: AppController.deleteStatus(col.statusId)
+                                    onActivated: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount)
                                 }
 
                                 Rectangle {
@@ -489,11 +503,12 @@ Item {
                                 QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
                                 QQC.MenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
                                 QQC.MenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
+                                QQC.MenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
                                 QQC.MenuSeparator {}
                                 QQC.MenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
                                 QQC.MenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 QQC.MenuSeparator {}
-                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: AppController.deleteStatus(col.statusId) }
+                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount) }
                             }
                         }
 
@@ -984,4 +999,134 @@ Item {
             font.pixelSize: 12
         }
     }
+    // ── Column delete: confirm when it is not empty ───────────────────
+    // Deleting a column re-homes every card in it. That is undoable, but a
+    // five-second toast is a poor place to discover that thirty cards just
+    // moved — so a non-empty column asks first. An empty one does not: there
+    // is nothing to lose and a dialog would only be in the way.
+    function requestDeleteColumn(statusId, statusName, count) {
+        if (count <= 0) {
+            AppController.deleteStatus(statusId);
+            return;
+        }
+        confirmDelete.statusId = statusId;
+        confirmDelete.statusName = statusName;
+        confirmDelete.cardCount = count;
+        confirmDelete.open();
+    }
+
+    QQC.Dialog {
+        id: confirmDelete
+        objectName: "confirm-delete-column"
+        property string statusId: ""
+        property string statusName: ""
+        property int cardCount: 0
+
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: 18
+        title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        contentItem: Text {
+            text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
+            color: Theme.textMuted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton {
+                text: I18n.t("common.cancel")
+                onClicked: confirmDelete.close()
+            }
+            PillButton {
+                objectName: "confirm-delete-ok"
+                text: I18n.t("kanban.confirmDelete.ok")
+                danger: true
+                onClicked: {
+                    AppController.deleteStatus(confirmDelete.statusId);
+                    confirmDelete.close();
+                }
+            }
+            Item { Layout.preferredWidth: 10 }
+        }
+    }
+
+    // ── Work-in-progress limit ────────────────────────────────────────
+    QQC.Dialog {
+        id: wipPopup
+        objectName: "wip-popup"
+        property string statusId: ""
+        property string statusName: ""
+
+        function openFor(id, name, current, anchorItem) {
+            wipPopup.statusId = id;
+            wipPopup.statusName = name;
+            wipField.text = current > 0 ? String(current) : "";
+            wipPopup.open();
+            wipField.forceActiveFocus();
+            wipField.selectAll();
+        }
+
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: 18
+        title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        function commit() {
+            AppController.setStatusWipLimit(wipPopup.statusId, parseInt(wipField.text || "0") || 0);
+            wipPopup.close();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: 8
+            TextField {
+                id: wipField
+                objectName: "wip-field"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 220
+                inputMethodHints: Qt.ImhDigitsOnly
+                validator: IntValidator { bottom: 0; top: 999 }
+                placeholderText: "0"
+                color: Theme.text
+                font.family: Theme.fontMono
+                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                onAccepted: wipPopup.commit()
+            }
+            Text {
+                Layout.preferredWidth: 220
+                text: I18n.t("kanban.wip.hint")
+                color: Theme.textDim
+                font.pixelSize: 11
+                wrapMode: Text.Wrap
+            }
+        }
+
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: wipPopup.close() }
+            PillButton { text: I18n.t("common.save"); onClicked: wipPopup.commit() }
+            Item { Layout.preferredWidth: 10 }
+        }
+    }
+
 }
