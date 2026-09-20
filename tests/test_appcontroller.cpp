@@ -325,6 +325,47 @@ TEST_F(AppControllerTest, ExtractTaskMetaShape) {
 
 // ─── Full-text command-palette entries (HEAP-80) ──────────────────────
 
+// The palette searches the persisted profiles, and the live models only reach
+// a profile when a save runs — which is debounced by 300 ms. So a task created
+// a moment ago was simply missing from Ctrl+K. Note the deliberate absence of
+// flushSave() here: that is the whole point.
+TEST_F(AppControllerTest, ATaskIsFindableInThePaletteBeforeTheSaveDebounceFires) {
+  QVariantMap draft;
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("LTE-9100");
+  draft["title"] = QStringLiteral("unflushed quokka");
+  draft["priority"] = QStringLiteral("P2");
+  draft["status"] = QStringLiteral("todo");
+  app_->saveTask(draft);
+
+  bool found = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    if(v.toMap().value(QStringLiteral("taskId")).toString() == QStringLiteral("LTE-9100")) {
+      found = true;
+    }
+  }
+  EXPECT_TRUE(found) << "a just-created task was missing from the palette";
+
+  // …and an edit is visible just as promptly.
+  QVariantMap edit = app_->taskById(QStringLiteral("LTE-9100"));
+  edit["_isNew"] = false;
+  edit["_originalId"] = QStringLiteral("LTE-9100");
+  edit["title"] = QStringLiteral("renamed wombat");
+  app_->saveTask(edit);
+
+  bool renamed = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("taskId")).toString() == QStringLiteral("LTE-9100")) {
+      renamed = m.value(QStringLiteral("label")).toString().contains(QStringLiteral("wombat"));
+    }
+  }
+  EXPECT_TRUE(renamed) << "the palette showed a stale title";
+
+  app_->deleteTask(QStringLiteral("LTE-9100"));
+  app_->clearPendingUndo();
+}
+
 TEST_F(AppControllerTest, CommandPaletteEntriesCarryBodyText) {
   // Seed a task whose search term lives only in the description, and a note
   // whose term lives only in the body; flush so the active profile picks both

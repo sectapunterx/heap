@@ -652,7 +652,6 @@ QtObject {
             "settings.tasks.blockedHi.hint": "Tasks stuck in Blocked longer are marked red.",
             "settings.tasks.branchOnReview": "Require branch before Code Review",
             "settings.tasks.branchOnReview.hint": "Block moving a task to Review without a branch name.",
-            "settings.tasks.showSubtasks": "Show subtasks",
 
             // Shortcuts section
             "settings.shortcuts.sub": "Keyboard shortcuts",
@@ -1365,7 +1364,6 @@ QtObject {
             "settings.tasks.blockedHi.hint": "Задача в Blocked дольше — отмечается красным.",
             "settings.tasks.branchOnReview": "Требовать branch перед Code Review",
             "settings.tasks.branchOnReview.hint": "Запрещать перевод задачи в Review без branch name.",
-            "settings.tasks.showSubtasks": "Показывать subtasks",
 
             "settings.shortcuts.sub": "Горячие клавиши",
             "settings.shortcuts.open": "Открыть панель Hotkeys ↗",

@@ -9,7 +9,9 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/TrelloProvider.h"
+#include "platform/Paths.h"
 
+#include <QFile>
 #include <QNetworkReply>
 #include <QTimeZone>
 
@@ -332,6 +334,50 @@ TEST(TrelloParse, ListsResolveCardStatus) {
 TEST(TrelloParse, HandlesGarbage) {
   EXPECT_TRUE(parseTrelloLists("{}").isEmpty());
   EXPECT_TRUE(parseTrelloCards("not json", {}).isEmpty());
+}
+
+// The fallback file holds access tokens and OAuth refresh tokens in plain
+// text. It is what a build without QtKeychain uses, and what every --data-dir
+// run uses regardless. QSaveFile renames a temp file into place, so without an
+// explicit call the result inherits the default mask or the parent's ACL.
+TEST(SecretStoreCache, TheFallbackFileIsReadableOnlyByItsOwner) {
+  const QString path = heap::paths::dataDir() + QStringLiteral("/secrets.json");
+  QFile::remove(path);
+
+  SecretStore store;
+  store.setValue(QStringLiteral("github"), QStringLiteral("token"), QStringLiteral("ghp_secret"));
+  ASSERT_TRUE(QFile::exists(path)) << "the fallback file was not written to " << path.toStdString();
+
+  const QFileDevice::Permissions perms = QFile::permissions(path);
+  EXPECT_TRUE(perms.testFlag(QFileDevice::ReadOwner));
+  EXPECT_TRUE(perms.testFlag(QFileDevice::WriteOwner)) << "the app locked itself out of its own secrets";
+
+#ifndef Q_OS_WIN
+  // Only asserted off Windows: there QFile::permissions() reports a guess
+  // rather than the ACL unless NTFS permission lookup is switched on, so the
+  // group/other bits it returns say nothing about who can actually read the
+  // file. The exposure this guards is the POSIX one — a keychain-less Linux
+  // build writing tokens at whatever the umask allows.
+  for(const QFileDevice::Permission p : {QFileDevice::ReadGroup,
+                                         QFileDevice::WriteGroup,
+                                         QFileDevice::ExeGroup,
+                                         QFileDevice::ReadOther,
+                                         QFileDevice::WriteOther,
+                                         QFileDevice::ExeOther}) {
+    EXPECT_FALSE(perms.testFlag(p)) << "secrets.json is reachable beyond its owner";
+  }
+#endif
+
+  // Rewriting the file must not widen it again.
+  store.setValue(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("glpat_secret"));
+  EXPECT_TRUE(QFile::permissions(path).testFlag(QFileDevice::ReadOwner));
+#ifndef Q_OS_WIN
+  EXPECT_FALSE(QFile::permissions(path).testFlag(QFileDevice::ReadOther));
+#endif
+
+  store.setValue(QStringLiteral("github"), QStringLiteral("token"), QString());
+  store.setValue(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
+  QFile::remove(path);
 }
 
 TEST(TrelloParse, DueBadgesMembersAndCreatedFromId) {
