@@ -795,3 +795,65 @@ TEST(TaskFilterProxy, WithNoSourceItIsSimplyEmpty) {
   proxy.setStatus(QStringLiteral("todo"));
   EXPECT_EQ(proxy.count(), 0);
 }
+
+// ─── checklist progress ───────────────────────────────────────────────
+// A template ships its steps as markdown task items, and a card could not say
+// how far along it was without being opened. The count is a model role so the
+// board does not re-scan the text in JS once per visible delegate.
+
+namespace {
+
+constexpr int kChecklistRole = Qt::UserRole + 35;
+
+QVariantMap checklistFor(const QString& desc) {
+  Task t;
+  t.id = QStringLiteral("T-1");
+  t.desc = desc;
+  TaskModel m;
+  m.reset({t});
+  return m.data(m.index(0, 0), kChecklistRole).toMap();
+}
+
+}  // namespace
+
+TEST(Checklist, CountsDoneAndTotal) {
+  const QVariantMap c = checklistFor(QStringLiteral("- [x] one\n- [ ] two\n- [ ] three"));
+  EXPECT_EQ(c.value(QStringLiteral("done")).toInt(), 1);
+  EXPECT_EQ(c.value(QStringLiteral("total")).toInt(), 3);
+}
+
+TEST(Checklist, AcceptsEveryListMarkerMarkdownDoes) {
+  const QVariantMap c = checklistFor(QStringLiteral("- [ ] dash\n* [x] star\n+ [ ] plus\n1. [x] ordered"));
+  EXPECT_EQ(c.value(QStringLiteral("total")).toInt(), 4);
+  EXPECT_EQ(c.value(QStringLiteral("done")).toInt(), 2);
+}
+
+TEST(Checklist, AcceptsAnIndentedItem) {
+  const QVariantMap c = checklistFor(QStringLiteral("- [ ] top\n    - [x] nested"));
+  EXPECT_EQ(c.value(QStringLiteral("total")).toInt(), 2);
+  EXPECT_EQ(c.value(QStringLiteral("done")).toInt(), 1);
+}
+
+TEST(Checklist, AcceptsACapitalX) {
+  const QVariantMap c = checklistFor(QStringLiteral("- [X] shouted"));
+  EXPECT_EQ(c.value(QStringLiteral("done")).toInt(), 1);
+}
+
+// No checklist means no chip, so the map has to be empty rather than 0/0 —
+// the card decides by total, and 0/0 would draw an empty bar on every task.
+TEST(Checklist, ADescriptionWithNoItemsIsEmpty) {
+  EXPECT_TRUE(checklistFor(QStringLiteral("just prose")).isEmpty());
+  EXPECT_TRUE(checklistFor(QString()).isEmpty());
+}
+
+// "[ ]" inside prose is not a task item — only a list marker makes one.
+TEST(Checklist, BracketsInProseAreNotItems) {
+  EXPECT_TRUE(checklistFor(QStringLiteral("see [ ] for the empty set")).isEmpty());
+  EXPECT_TRUE(checklistFor(QStringLiteral("array[x] is an index")).isEmpty());
+}
+
+TEST(Checklist, AllDoneReportsEqualCounts) {
+  const QVariantMap c = checklistFor(QStringLiteral("- [x] a\n- [x] b"));
+  EXPECT_EQ(c.value(QStringLiteral("done")).toInt(), 2);
+  EXPECT_EQ(c.value(QStringLiteral("total")).toInt(), 2);
+}

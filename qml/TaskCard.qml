@@ -298,6 +298,50 @@ Rectangle {
             wrapMode: Text.WordWrap
         }
 
+        // Checklist progress. A template ships its steps as markdown task
+        // items, and until now a card could not say how far along it was
+        // without being opened.
+        RowLayout {
+            readonly property var _cl: (card.task && card.task.checklist) ? card.task.checklist : ({})
+            readonly property int _total: _cl.total || 0
+            readonly property int _done: _cl.done || 0
+            visible: _total > 0
+            Layout.fillWidth: true
+            spacing: 6
+
+            Rectangle {
+                objectName: "tc-checklist"
+                radius: 4
+                color: Theme.withAlpha(parent._done === parent._total ? Theme.stDone : Theme.textMuted, 0.16)
+                implicitWidth: clT.implicitWidth + 10
+                implicitHeight: clT.implicitHeight + 2
+                Text {
+                    id: clT
+                    anchors.centerIn: parent
+                    text: parent.parent._done + "/" + parent.parent._total
+                    color: parent.parent._done === parent.parent._total ? Theme.stDone : Theme.textMuted
+                    font.family: Theme.fontMono
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+            }
+            // A bar rather than only a number: the ratio is the thing being
+            // read, and a number has to be compared against its own second
+            // half to mean anything.
+            Rectangle {
+                Layout.fillWidth: true
+                implicitHeight: 3
+                radius: 2
+                color: Theme.panel3
+                Rectangle {
+                    width: parent.width * (parent.parent._total > 0 ? parent.parent._done / parent.parent._total : 0)
+                    height: parent.height
+                    radius: parent.radius
+                    color: parent.parent._done === parent.parent._total ? Theme.stDone : Theme.accent
+                }
+            }
+        }
+
         Text {
             Layout.fillWidth: true
             visible: card.task && card.task.desc && String(card.task.desc).length > 0

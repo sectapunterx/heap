@@ -1,6 +1,8 @@
 #include "Models.h"
 #include "TaskDefer.h"
 
+#include <QRegularExpression>
+
 #include <algorithm>
 
 QString externalKeyOf(const Task& t) {
@@ -43,6 +45,30 @@ QVariantMap ticketToVariant(const Task& t) {
 }
 
 namespace {
+
+// Markdown task items in a description: "- [ ] thing" and "- [x] thing".
+// A template ships checklists, so a card that carries one should be able to
+// say how far along it is without the user opening it.
+QVariantMap checklistOf(const Task& t) {
+  if(!t.desc.contains(QStringLiteral("[ ]")) && !t.desc.contains(QStringLiteral("[x]")) && !t.desc.contains(QStringLiteral("[X]"))) {
+    return {};  // the common case: no scan, no allocation
+  }
+  static const QRegularExpression rx(QStringLiteral(R"(^\s*(?:[-*+]|\d+[.)])\s+\[([ xX])\])"), QRegularExpression::MultilineOption);
+  int total = 0;
+  int done = 0;
+  auto it = rx.globalMatch(t.desc);
+  while(it.hasNext()) {
+    const auto m = it.next();
+    ++total;
+    if(m.captured(1) != QStringLiteral(" ")) {
+      ++done;
+    }
+  }
+  if(total == 0) {
+    return {};
+  }
+  return {{QStringLiteral("done"), done}, {QStringLiteral("total"), total}};
+}
 
 // One lowercase haystack per task, so the five views that filter on a search
 // box each read one role instead of concatenating four themselves — and so a
@@ -124,6 +150,7 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {SearchTextRole, "searchText"},
       {RankRole, "rank"},
       {BlocksRole, "blocks"},
+      {ChecklistRole, "checklist"},
   };
 }
 
@@ -201,6 +228,8 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return searchTextOf(t);
     case RankRole:
       return t.rank;
+    case ChecklistRole:
+      return checklistOf(t);
     case BlocksRole: {
       QStringList ids;
       for(const TaskLink& l : t.links) {

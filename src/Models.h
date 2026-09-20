@@ -210,6 +210,9 @@ class TaskModel : public QAbstractListModel {
     // Manual order within a column, and the dependency links.
     RankRole,
     BlocksRole,
+    // { done, total } for the task list in the description, so a card can show
+    // 2/5 without every delegate re-scanning the text in JS.
+    ChecklistRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
