@@ -11,6 +11,7 @@
 
 #include "AppController.h"
 #include "Models.h"
+
 #include "undo/UndoStack.h"
 
 #include <QApplication>
@@ -169,13 +170,11 @@ TEST_F(UndoTest, BulkMoveIsUndoable) {
   app_->undo();
   EXPECT_EQ(statusOf(QStringLiteral("T-1")), QStringLiteral("todo"));
   EXPECT_EQ(statusOf(QStringLiteral("T-2")), QStringLiteral("todo"));
-  EXPECT_EQ(statusOf(QStringLiteral("T-3")), QStringLiteral("backlog"))
-      << "each task goes back to its own column, not to a shared one";
+  EXPECT_EQ(statusOf(QStringLiteral("T-3")), QStringLiteral("backlog")) << "each task goes back to its own column, not to a shared one";
 }
 
 TEST_F(UndoTest, BulkArchiveIsUndoable) {
-  app_->tasks()->reset({makeTask(QStringLiteral("T-1"), QStringLiteral("todo")),
-                        makeTask(QStringLiteral("T-2"), QStringLiteral("todo"))});
+  app_->tasks()->reset({makeTask(QStringLiteral("T-1"), QStringLiteral("todo")), makeTask(QStringLiteral("T-2"), QStringLiteral("todo"))});
   app_->clearPendingUndo();
   app_->setSelectedTaskIds({QStringLiteral("T-1"), QStringLiteral("T-2")});
 

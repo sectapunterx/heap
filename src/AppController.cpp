@@ -2139,15 +2139,15 @@ QVariantMap AppController::extractTaskMeta(const QString& text) const {
 
 // ───────────────────────────────────────────────────────── Undo ──
 
-AppController::UndoScope::UndoScope(AppController* owner, QString label)
-    : m_owner(owner),
-      m_label(std::move(label)),
-      // Implicitly shared: these are refcount bumps, not copies. The buffers
-      // only diverge if the operation actually writes.
-      m_tasks(owner->m_tasks.items()),
-      m_events(owner->m_events.items()),
-      m_people(owner->m_people.items()),
-      m_statuses(owner->m_statuses) {
+AppController::UndoScope::UndoScope(AppController* owner, QString label) :
+    m_owner(owner),
+    m_label(std::move(label)),
+    // Implicitly shared: these are refcount bumps, not copies. The buffers
+    // only diverge if the operation actually writes.
+    m_tasks(owner->m_tasks.items()),
+    m_events(owner->m_events.items()),
+    m_people(owner->m_people.items()),
+    m_statuses(owner->m_statuses) {
 }
 
 AppController::UndoScope::~UndoScope() {

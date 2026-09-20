@@ -110,16 +110,40 @@ void apply(Model& model, const Edits<T>& edits, PickRow row, PickValue value, Wa
 template<class Model, class T>
 void applyBackward(Model& model, const Edits<T>& edits) {
   detail::apply(
-      model, edits, [](const Edit<T>& e) { return e.rowBefore; }, [](const Edit<T>& e) -> const T& { return e.before; },
-      [](const Edit<T>& e) { return e.existedBefore; }, [](const Edit<T>& e) { return e.existsAfter; });
+      model,
+      edits,
+      [](const Edit<T>& e) {
+        return e.rowBefore;
+      },
+      [](const Edit<T>& e) -> const T& {
+        return e.before;
+      },
+      [](const Edit<T>& e) {
+        return e.existedBefore;
+      },
+      [](const Edit<T>& e) {
+        return e.existsAfter;
+      });
 }
 
 // Re-apply the operation.
 template<class Model, class T>
 void applyForward(Model& model, const Edits<T>& edits) {
   detail::apply(
-      model, edits, [](const Edit<T>& e) { return e.rowAfter; }, [](const Edit<T>& e) -> const T& { return e.after; },
-      [](const Edit<T>& e) { return e.existsAfter; }, [](const Edit<T>& e) { return e.existedBefore; });
+      model,
+      edits,
+      [](const Edit<T>& e) {
+        return e.rowAfter;
+      },
+      [](const Edit<T>& e) -> const T& {
+        return e.after;
+      },
+      [](const Edit<T>& e) {
+        return e.existsAfter;
+      },
+      [](const Edit<T>& e) {
+        return e.existedBefore;
+      });
 }
 
 // One undoable operation.

@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Models.h"
+
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -637,10 +638,13 @@ class AppController : public QObject {
   // kept because QML and several tests call it.
   Q_INVOKABLE void undo();
   Q_INVOKABLE void redo();
+
   Q_INVOKABLE void undoLastDeletion() {
     undo();
   }
+
   Q_INVOKABLE void clearPendingUndo();
+
   // How many operations are currently undoable. Exposed for tests.
   Q_INVOKABLE int undoDepth() const {
     return m_undo.depth();
