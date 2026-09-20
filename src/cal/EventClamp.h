@@ -1,7 +1,7 @@
 #pragma once
 
-#include <QTime>
 #include <QtGlobal>
+#include <QTime>
 
 #include <cmath>
 
