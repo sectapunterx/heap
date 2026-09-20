@@ -2616,8 +2616,7 @@ TEST_F(AppControllerTest, EveryPaletteActionIsLabelled) {
     if(m.value(QStringLiteral("kind")).toString() != QStringLiteral("action")) {
       continue;
     }
-    EXPECT_FALSE(m.value(QStringLiteral("label")).toString().isEmpty())
-        << m.value(QStringLiteral("actionId")).toString().toStdString();
+    EXPECT_FALSE(m.value(QStringLiteral("label")).toString().isEmpty()) << m.value(QStringLiteral("actionId")).toString().toStdString();
     EXPECT_FALSE(m.value(QStringLiteral("actionId")).toString().isEmpty());
   }
 }
