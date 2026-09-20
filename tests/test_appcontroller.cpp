@@ -9,6 +9,7 @@
 #include "FakeHttpServer.h"
 #include "Models.h"
 
+#include "git/BranchTaskMatcher.h"
 #include "integrations/IntegrationTypes.h"
 
 #include <QApplication>
@@ -1142,6 +1143,66 @@ TEST_F(AppControllerTest, AManualSyncRebindsTheProviderToTheOpenProfile) {
 
   writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// ─── A branch finds its own ticket ───
+// A mirrored issue's heap id carries the provider ("jira-PROJ-123"), while the
+// branch anyone writes for it names the tracker key ("PROJ-123").
+
+TEST_F(AppControllerTest, ProjectKeysOfMirroredIssuesAreRegisteredAsPrefixes) {
+  Task jira;
+  jira.id = QStringLiteral("jira-PROJ-123");
+  jira.externalId = QStringLiteral("PROJ-123");
+  jira.externalProvider = QStringLiteral("jira");
+  Task local;
+  local.id = QStringLiteral("LTE-2700");
+  Task numbered;  // a bare issue number has no key to register
+  numbered.id = QStringLiteral("github-42");
+  numbered.externalId = QStringLiteral("42");
+  numbered.externalProvider = QStringLiteral("github");
+  app_->tasks()->reset({jira, local, numbered});
+
+  const QStringList prefixes = app_->collectPrefixes();
+  EXPECT_TRUE(prefixes.contains(QStringLiteral("PROJ"))) << prefixes.join(QStringLiteral(",")).toStdString();
+  EXPECT_FALSE(prefixes.contains(QStringLiteral("GITHUB")));
+  EXPECT_GE(prefixes.size(), 2) << "the configured local prefix must still be there";
+}
+
+TEST_F(AppControllerTest, ATrackerKeyResolvesToTheTaskThatMirrorsIt) {
+  Task jira;
+  jira.id = QStringLiteral("jira-PROJ-123");
+  jira.externalId = QStringLiteral("PROJ-123");
+  jira.externalProvider = QStringLiteral("jira");
+  Task local;
+  local.id = QStringLiteral("LTE-2700");
+  app_->tasks()->reset({jira, local});
+
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("PROJ-123")), QStringLiteral("jira-PROJ-123"));
+  // Case-insensitively, because a branch name is usually lowercased.
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("proj-123")), QStringLiteral("jira-PROJ-123"));
+  // A local task's key IS its id.
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("LTE-2700")), QStringLiteral("LTE-2700"));
+  // Nothing to resolve to: hand the key back rather than inventing a task.
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("NOPE-1")), QStringLiteral("NOPE-1"));
+  EXPECT_TRUE(app_->taskIdForBranchMatch(QString()).isEmpty());
+}
+
+// The loop has to close: a branch heap creates for a ticket must match back to
+// that same ticket. It used to be named after the heap id, which never did.
+TEST_F(AppControllerTest, ABranchCreatedForATicketIsNamedAfterItsTrackerKey) {
+  Task jira;
+  jira.id = QStringLiteral("jira-PROJ-123");
+  jira.title = QStringLiteral("Handover fails");
+  jira.externalId = QStringLiteral("PROJ-123");
+  jira.externalProvider = QStringLiteral("jira");
+  app_->tasks()->reset({jira});
+
+  const QString branch =
+      heap::git::BranchTaskMatcher::branchNameForTask(QStringLiteral("PROJ-123"), jira.title, QStringLiteral("feature/{id}-{slug}"));
+  const heap::git::BranchTaskMatcher m(app_->collectPrefixes());
+  const auto mr = m.extract(branch);
+  ASSERT_TRUE(mr.matched) << branch.toStdString();
+  EXPECT_EQ(app_->taskIdForBranchMatch(mr.taskId), QStringLiteral("jira-PROJ-123"));
 }
 
 TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {

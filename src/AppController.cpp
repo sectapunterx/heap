@@ -359,7 +359,7 @@ AppController::AppController(QObject* parent) :
         entry["prState"] = pr.value("state");
         entry["prNumber"] = pr.value("number");
         entry["prUrl"] = pr.value("url");
-        m_tasks.setGitInfoForId(mr.taskId, entry);
+        m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
       });
   applyGitSettingsFromMap(settingsMap().value("git").toMap());
   connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
@@ -5278,8 +5278,49 @@ void AppController::runAutomation() {
 // ---- Git watcher integration ----
 
 QStringList AppController::collectPrefixes() const {
+  QStringList out;
   const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("LTE")).toString().trimmed().toUpper();
-  return def.isEmpty() ? QStringList{} : QStringList{def};
+  if(!def.isEmpty()) {
+    out << def;
+  }
+  // A mirrored issue's branch is named after the tracker's key ("PROJ-123"),
+  // never after the heap id the merge invented for it ("jira-PROJ-123"). Unless
+  // the project keys in play are registered here, such a branch cannot match
+  // its own ticket — and, with a single local prefix, the digits-only fallback
+  // used to answer with a different task entirely.
+  static const QRegularExpression keyStem(QStringLiteral("^([A-Za-z][A-Za-z0-9]*)-\\d+$"));
+  for(const Task& t : m_tasks.items()) {
+    if(t.externalId.isEmpty()) {
+      continue;
+    }
+    const QRegularExpressionMatch m = keyStem.match(externalKeyOf(t));
+    if(!m.hasMatch()) {
+      continue;  // a bare issue number has no key to register
+    }
+    const QString stem = m.captured(1).toUpper();
+    if(!out.contains(stem)) {
+      out << stem;
+    }
+  }
+  return out;
+}
+
+QString AppController::taskIdForBranchMatch(const QString& matchedId) const {
+  if(matchedId.isEmpty()) {
+    return {};
+  }
+  // Rule 1 answers with the key it found in the branch. For a local task that
+  // is already the task id; for a mirrored issue the id is prefixed with the
+  // provider, so resolve through the tracker key instead.
+  if(m_tasks.indexOfId(matchedId) >= 0) {
+    return matchedId;
+  }
+  for(const Task& t : m_tasks.items()) {
+    if(!t.externalId.isEmpty() && externalKeyOf(t).compare(matchedId, Qt::CaseInsensitive) == 0) {
+      return t.id;
+    }
+  }
+  return matchedId;
 }
 
 void AppController::applyGitSettingsFromMap(const QVariantMap& g) {
@@ -5308,7 +5349,7 @@ void AppController::refreshFocusedTaskId() {
   }
   const heap::git::BranchTaskMatcher m(collectPrefixes());
   const auto mr = m.extract(m_focusedBranch);
-  const QString newId = mr.matched ? mr.taskId : QString();
+  const QString newId = mr.matched ? taskIdForBranchMatch(mr.taskId) : QString();
   if(newId == m_focusedTaskId) {
     return;
   }
@@ -5362,7 +5403,7 @@ void AppController::onGitRepoState(const QString& repo, const QVariantMap& state
   entry["prState"] = pr.value("state");
   entry["prNumber"] = pr.value("number");
   entry["prUrl"] = pr.value("url");
-  m_tasks.setGitInfoForId(mr.taskId, entry);
+  m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
 }
 
 void AppController::dismissGitBanner() {
@@ -5419,7 +5460,13 @@ void AppController::createBranchForTask(const QString& taskId) {
   }
 
   const QString templ = settingsMap().value("integrations").toMap().value("github").toMap().value("branchTemplate").toString();
-  const QString branch = heap::git::BranchTaskMatcher::branchNameForTask(t.id, t.title, templ);
+  // Name the branch after the tracker's key, not the heap id. A branch called
+  // `feature/jira-proj-123-…` matches nothing on the way back; `feature/proj-123`
+  // resolves to this very task, which is the point of creating it from here.
+  const QString key = externalKeyOf(t);
+  static const QRegularExpression branchableKey(QStringLiteral("^[A-Za-z][A-Za-z0-9]*-\\d+$"));
+  const QString branchId = branchableKey.match(key).hasMatch() ? key : t.id;
+  const QString branch = heap::git::BranchTaskMatcher::branchNameForTask(branchId, t.title, templ);
   if(branch.isEmpty()) {
     emit toast(tr("Could not derive a branch name for %1").arg(t.id));
     return;
