@@ -1,9 +1,11 @@
 #pragma once
 
+#include <QByteArray>
 #include <QDateTime>
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QString>
+#include <QUrl>
 
 // Pure helpers for reading one tracker's JSON issue (HEAP-117). They are here
 // rather than in RestIssueProvider so the bespoke parsers (GitHub, GitLab,
@@ -42,5 +44,25 @@ QString sanitizeProject(const QString& raw);
 // Collect one key out of an array of objects into "a, b" — the git forges list
 // several assignees and heap shows one line.
 QString joinObjectField(const QJsonValue& array, const QString& key);
+
+// ── Paging and backoff (pure; the walk itself lives in RestIssueProvider) ──
+
+// The `rel="next"` URL out of an RFC 5988 `Link` header, or empty when there is
+// none. The header carries every relation the server knows — first, prev, next,
+// last — in one comma-separated list, and only `next` means "there is more".
+// Parameters may appear in any order and the relation may be quoted or not.
+QString nextLinkFromHeader(const QByteArray& linkHeader);
+
+// How long a 429 or 503 asked us to wait, in milliseconds. `Retry-After` comes
+// either as delta-seconds or as an HTTP-date; `now` anchors the date form so a
+// test does not have to race the clock. 0 when the header is absent, malformed,
+// or already in the past — the caller then falls back to its own backoff.
+// Negative and absurd values are clamped by the caller's maxDelayMs.
+int retryAfterMs(const QByteArray& retryAfter, const QDateTime& now);
+
+// Set one query parameter on a URL, replacing any existing value for that key.
+// Used to hand a cursor or an offset back to the endpoint the list template
+// already built, without re-expanding the template.
+QUrl withQueryParam(const QUrl& url, const QString& key, const QString& value);
 
 }  // namespace heap::integrations

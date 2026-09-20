@@ -17,6 +17,11 @@ namespace heap::integrations {
 
 namespace {
 
+// One search page, and the hard stop on the walk. 100 is Jira's own maximum;
+// the cap bounds a sync to 2000 issues however many the JQL matches.
+constexpr int kJiraPageSize = 100;
+constexpr int kJiraMaxPages = 20;
+
 // Recursively collect every "text" leaf of an ADF node, separating block-level
 // nodes with newlines so paragraphs stay readable.
 void walkAdf(const QJsonValue& node, QString& out) {
@@ -497,9 +502,29 @@ void JiraProvider::pullTasks() {
     });
     return;
   }
+  if(m_pulling) {
+    // Auto-sync and the Sync-now button can land together; two walks sharing
+    // one accumulator would interleave their pages and emit twice.
+    return;
+  }
+  m_pulling = true;
+  m_pulled.clear();
+  m_pullPage = 0;
+  pullPage(QString(), 0);
+}
+
+void JiraProvider::pullPage(const QString& cursor, int startAt) {
   QJsonObject payload;
   payload.insert(QStringLiteral("jql"), m_jql.isEmpty() ? defaultJiraJql() : m_jql);
-  payload.insert(QStringLiteral("maxResults"), 100);
+  payload.insert(QStringLiteral("maxResults"), kJiraPageSize);
+  // Cloud's /search/jql pages by an opaque token; Server's /search by a row
+  // offset. Neither endpoint minds the other's parameter being absent.
+  if(!cursor.isEmpty()) {
+    payload.insert(QStringLiteral("nextPageToken"), cursor);
+  }
+  if(startAt > 0) {
+    payload.insert(QStringLiteral("startAt"), startAt);
+  }
   // The /search/jql endpoint requires an explicit `fields` list (omitting it
   // returns only ids); the parser needs exactly these. `comment` stays out on
   // purpose — it would inline every comment body of all 100 issues.
@@ -524,20 +549,58 @@ void JiraProvider::pullTasks() {
   // Atlassian retired GET /rest/api/3/search (it answers 410 pointing here);
   // /search/jql is the replacement. POST rather than GET so a long JQL never
   // has to fit in a URL and `fields` can be a real array — the two verbs are
-  // otherwise equivalent, including how they judge an unbounded query. It
-  // paginates by `nextPageToken` and no longer returns `total`; a single
-  // 100-issue page is sufficient for v1.
+  // otherwise equivalent, including how they judge an unbounded query.
   // Cloud retired GET /rest/api/3/search in favour of /search/jql; Server/DC
   // never had it and still answers POST /rest/api/2/search. Same request body,
   // same {"issues":[…]} response.
   const QString searchPath = m_deployment == JiraDeployment::Server ? QStringLiteral("/search") : QStringLiteral("/search/jql");
   const QString site = m_baseUrl;
-  send("POST", searchPath, QJsonDocument(payload).toJson(QJsonDocument::Compact), [this, site](const ApiResult& r) {
+  const bool server = m_deployment == JiraDeployment::Server;
+  send("POST", searchPath, QJsonDocument(payload).toJson(QJsonDocument::Compact), [this, site, server, startAt](const ApiResult& r) {
     if(!r.ok) {
+      if(m_pullPage > 0) {
+        // Pages already in hand are real issues; discarding them because the
+        // tail failed is a worse answer than a short one. Status 0 keeps
+        // AppController out of its refresh-and-resync path, which a mid-walk
+        // 401 would otherwise spin on.
+        const QVector<ExternalTask> got = m_pulled;
+        const int pages = m_pullPage;
+        m_pulling = false;
+        m_pulled.clear();
+        emit tasksFetched(got);
+        emit pullFailed(0, QStringLiteral("Jira: only %1 page(s) — %2").arg(pages).arg(r.error));
+        return;
+      }
+      m_pulling = false;
       emit pullFailed(r.status, r.error);
       return;
     }
-    emit tasksFetched(parseJiraIssues(r.body, site));
+    const QVector<ExternalTask> page = parseJiraIssues(r.body, site);
+    m_pulled += page;
+    ++m_pullPage;
+
+    QString nextCursor;
+    int nextStart = 0;
+    if(m_pullPage < kJiraMaxPages) {
+      const QJsonObject root = QJsonDocument::fromJson(r.body).object();
+      if(server) {
+        // No cursor and, on newer versions, no `total` either: a full page is
+        // the only evidence that another one exists.
+        if(page.size() >= kJiraPageSize) {
+          nextStart = startAt + kJiraPageSize;
+        }
+      } else if(!root.value(QStringLiteral("isLast")).toBool(false)) {
+        nextCursor = root.value(QStringLiteral("nextPageToken")).toString();
+      }
+    }
+    if(nextCursor.isEmpty() && nextStart == 0) {
+      const QVector<ExternalTask> got = m_pulled;
+      m_pulling = false;
+      m_pulled.clear();
+      emit tasksFetched(got);
+      return;
+    }
+    pullPage(nextCursor, nextStart);
   });
 }
 

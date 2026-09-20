@@ -41,6 +41,13 @@ class FakeHttpServer {
     QByteArray key() const {
       return method + " " + path;
     }
+
+    // The same, with the query string kept. A paginating endpoint answers the
+    // same path several times and has to be able to answer each page
+    // differently, so a route may be registered either way.
+    QByteArray keyWithQuery() const {
+      return query.isEmpty() ? key() : key() + "?" + query;
+    }
   };
 
   FakeHttpServer() {
@@ -56,8 +63,18 @@ class FakeHttpServer {
     return QStringLiteral("http://127.0.0.1:%1").arg(m_server.serverPort());
   }
 
+  // Register "METHOD /path", or "METHOD /path?query" to answer one page of a
+  // walk. The more specific route wins.
   void route(const QByteArray& key, const Response& r) {
     m_routes.insert(key, r);
+  }
+
+  // Answer this route with each response in turn, the last one repeating. For
+  // a retry test (429 then 200) or a walk whose pages differ but whose URL
+  // the test would rather not spell out.
+  void routeSequence(const QByteArray& key, const QList<Response>& responses) {
+    m_sequences.insert(key, responses);
+    m_sequenceAt.insert(key, 0);
   }
 
   // "METHOD /path" of every request, in arrival order.
@@ -159,7 +176,7 @@ class FakeHttpServer {
     m_seen.append(req.key());
     m_requests.append(req);
 
-    const Response r = m_routes.value(req.key(), Response{404, "{}", {}});
+    const Response r = responseFor(req);
     QByteArray out = "HTTP/1.1 " + QByteArray::number(r.status) + " " + reason(r.status) + "\r\n";
     out += "Content-Type: application/json\r\n";
     for(const auto& h : r.headers) {
@@ -173,8 +190,30 @@ class FakeHttpServer {
     sock->disconnectFromHost();
   }
 
+  // A query-qualified route beats the bare path, and a sequence beats a single
+  // response, so a test can pin one page without unregistering the rest.
+  Response responseFor(const Request& req) {
+    for(const QByteArray& key : {req.keyWithQuery(), req.key()}) {
+      if(m_sequences.contains(key)) {
+        const QList<Response>& seq = m_sequences[key];
+        if(!seq.isEmpty()) {
+          int& at = m_sequenceAt[key];
+          const Response r = seq.at(qMin(at, seq.size() - 1));
+          ++at;
+          return r;
+        }
+      }
+      if(m_routes.contains(key)) {
+        return m_routes.value(key);
+      }
+    }
+    return Response{404, "{}", {}};
+  }
+
   QTcpServer m_server;
   QHash<QByteArray, Response> m_routes;
+  QHash<QByteArray, QList<Response>> m_sequences;
+  QHash<QByteArray, int> m_sequenceAt;
   QHash<QTcpSocket*, QByteArray> m_buffers;
   QList<QByteArray> m_seen;
   QList<Request> m_requests;
