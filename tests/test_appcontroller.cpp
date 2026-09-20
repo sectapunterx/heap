@@ -169,9 +169,101 @@ TEST_F(AppControllerTest, ScheduleTaskCreatesFocusEvent) {
   EXPECT_EQ(e.type, QString("focus"));
   EXPECT_EQ(e.taskId, QString("T-1"));
   EXPECT_DOUBLE_EQ(e.start, 14.5);
-  EXPECT_DOUBLE_EQ(e.end, 15.5);
+  // No estimate on the task → the focus-block duration from settings (90 min).
+  EXPECT_DOUBLE_EQ(e.end, 16.0);
   EXPECT_EQ(e.profileId, app_->activeProfileId());
   EXPECT_EQ(app_->scheduledLabelFor(QStringLiteral("T-1"), QDate(2026, 5, 15)), QString("14:30"));
+}
+
+// Dropping a task on the calendar used to carve out exactly one hour whatever
+// the task said about itself.
+TEST_F(AppControllerTest, ScheduleTaskUsesTheTaskEstimate) {
+  Task t = mkTask(QStringLiteral("T-1"), QStringLiteral("Quick chore"));
+  t.estimateMinutes = 20;
+  app_->tasks()->reset({t});
+
+  app_->scheduleTask(QStringLiteral("T-1"), 10.0, QDate(2026, 5, 15));
+
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_DOUBLE_EQ(e.start, 10.0);
+  EXPECT_NEAR(e.end - e.start, 0.25, 1e-9) << "20 min snaps to the 15-minute grid";
+}
+
+// The block is only half of scheduling. Week, Month, Timeline and the card's
+// own label all read Task.scheduledAt, so a time-blocked task used to stay
+// unscheduled everywhere except the day it was dropped on.
+TEST_F(AppControllerTest, ScheduleTaskSchedulesTheTaskItself) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("Fix login"))});
+
+  app_->scheduleTask(QStringLiteral("T-1"), 14.5, QDate(2026, 5, 15));
+
+  const Task& t = app_->tasks()->items().at(0);
+  EXPECT_EQ(t.scheduledAt.date(), QDate(2026, 5, 15));
+  EXPECT_EQ(t.scheduledAt.time(), QTime(14, 30));
+  EXPECT_TRUE(t.hasTime);
+}
+
+TEST_F(AppControllerTest, ScheduleTaskLateInTheDayStaysInsideIt) {
+  Task t = mkTask(QStringLiteral("T-1"), QStringLiteral("Long one"));
+  t.estimateMinutes = 180;
+  app_->tasks()->reset({t});
+
+  app_->scheduleTask(QStringLiteral("T-1"), 23.0, QDate(2026, 5, 15));
+
+  const CalEvent& e = app_->events()->items().at(0);
+  EXPECT_LE(e.end, 24.0);
+  EXPECT_LT(e.start, e.end);
+}
+
+TEST_F(AppControllerTest, ScheduleTaskWithoutADateUsesTheSelectedOne) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("x"))});
+  app_->setSelectedDate(QDate(2026, 5, 20));
+
+  app_->scheduleTask(QStringLiteral("T-1"), 10.0, QDate());
+
+  EXPECT_EQ(app_->events()->items().at(0).date, QDate(2026, 5, 20));
+}
+
+// nextFreeSlot replaces the hardcoded 14:00 the card menu used, which stacked
+// every scheduled task on top of the last.
+TEST_F(AppControllerTest, NextFreeSlotStartsAtTheWorkdayWhenTheDayIsEmpty) {
+  const QDate day(2026, 5, 15);  // not today, so "now" does not move the answer
+  EXPECT_DOUBLE_EQ(app_->nextFreeSlot(day, 1.0), app_->workdayStart());
+}
+
+TEST_F(AppControllerTest, NextFreeSlotStepsPastABusyBlock) {
+  const QDate day(2026, 5, 15);
+  QVariantMap draft = app_->newEventDraft(app_->workdayStart(), day);
+  draft["end"] = app_->workdayStart() + 2.0;
+  app_->saveEvent(draft);
+
+  EXPECT_DOUBLE_EQ(app_->nextFreeSlot(day, 1.0), app_->workdayStart() + 2.0);
+}
+
+TEST_F(AppControllerTest, NextFreeSlotFitsIntoAGapBetweenBlocks) {
+  const QDate day(2026, 5, 15);
+  const double start = app_->workdayStart();
+  QVariantMap first = app_->newEventDraft(start, day);
+  first["end"] = start + 1.0;
+  app_->saveEvent(first);
+  // Leaves a one-hour hole at start+1 .. start+2.
+  QVariantMap second = app_->newEventDraft(start + 2.0, day);
+  second["end"] = start + 3.0;
+  app_->saveEvent(second);
+
+  EXPECT_DOUBLE_EQ(app_->nextFreeSlot(day, 1.0), start + 1.0);
+  EXPECT_DOUBLE_EQ(app_->nextFreeSlot(day, 2.0), start + 3.0) << "a 2h block does not fit the 1h hole";
+}
+
+TEST_F(AppControllerTest, NextFreeSlotAlwaysLeavesRoomForTheBlock) {
+  const QDate day(2026, 5, 15);
+  QVariantMap draft = app_->newEventDraft(app_->workdayStart(), day);
+  draft["end"] = 24.0;
+  app_->saveEvent(draft);
+
+  const double at = app_->nextFreeSlot(day, 1.0);
+  EXPECT_LE(at + 1.0, 24.0);
+  EXPECT_GE(at, 0.0);
 }
 
 TEST_F(AppControllerTest, ScheduleTaskUnknownIdIsNoop) {
