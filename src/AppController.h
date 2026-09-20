@@ -432,6 +432,11 @@ class AppController : public QObject {
   // deleted, and undone by restoreExternalContact.
   Q_INVOKABLE void dismissExternalContact(const QString& providerId, const QString& externalId);
   Q_INVOKABLE void restoreExternalContact(const QString& providerId, const QString& externalId);
+  // The same for a mirrored issue: deleting the task is how the user says "not
+  // mine", and without this the next pull simply puts it back. Recorded by
+  // deleteTask, undone by the delete's undo and by restoreExternalTask.
+  Q_INVOKABLE void dismissExternalTask(const QString& providerId, const QString& externalId);
+  Q_INVOKABLE void restoreExternalTask(const QString& providerId, const QString& externalId);
   // The full integration catalogue (id, name, colour, fields, …) for the
   // Settings → Integrations cards. Data-driven from the provider registry.
   Q_INVOKABLE QVariantList integrationCatalog() const;
@@ -852,6 +857,7 @@ class AppController : public QObject {
   // them back. They cannot live in the docs blob: DocsView rewrites it whole
   // and would drop any key it does not know.
   QStringList dismissedContacts(const QString& providerId) const;
+  QStringList dismissedTasks(const QString& providerId) const;
   // Create the Person behind an imported contact, or return the id of the one
   // already there. Never edits an existing Person: those are the user's notes
   // about someone, not a mirror of the directory.

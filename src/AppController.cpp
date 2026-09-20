@@ -1043,6 +1043,10 @@ void AppController::deleteTask(const QString& id) {
   for(const auto& pair : m_pendingUndo.removedEvents) {
     m_events.removeById(pair.second.id);
   }
+  // Deleting a mirrored issue is how the user says "not mine". Without a note
+  // of that, the next pull re-creates it verbatim and the deletion looks like
+  // it never happened. Undo lifts the note again.
+  dismissExternalTask(m_pendingUndo.task.externalProvider, m_pendingUndo.task.externalId);
   m_tasks.removeById(id);
   armUndo(5);
   emit undoableToast(tr_("task.deleted").arg(id), 5);
@@ -2053,6 +2057,9 @@ void AppController::undoLastDeletion() {
   switch(m_pendingUndo.kind) {
     case PendingUndo::Task: {
       m_tasks.insertAt(m_pendingUndo.row, m_pendingUndo.task);
+      // Undoing the delete also withdraws the "not mine" the delete recorded,
+      // so the issue syncs normally again.
+      restoreExternalTask(m_pendingUndo.task.externalProvider, m_pendingUndo.task.externalId);
       // removedEvents captured in ascending row order → re-insert in order.
       for(const auto& pair : m_pendingUndo.removedEvents) {
         m_events.insertAt(pair.first, pair.second);
@@ -2066,6 +2073,7 @@ void AppController::undoLastDeletion() {
       for(int i = 0; i < m_pendingUndo.tasks.size(); ++i) {
         const int row = qBound(0, m_pendingUndo.rows.value(i, m_tasks.rowCount()), m_tasks.rowCount());
         m_tasks.insertAt(row, m_pendingUndo.tasks.at(i));
+        restoreExternalTask(m_pendingUndo.tasks.at(i).externalProvider, m_pendingUndo.tasks.at(i).externalId);
       }
       for(const auto& pair : m_pendingUndo.removedEvents) {
         m_events.insertAt(pair.first, pair.second);
@@ -2295,6 +2303,22 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   using heap::integrations::StatusMap;
   MergeStats stats;
 
+  // Auto-sync fires wherever the user happens to be, and the integration
+  // config is global — so without this, a timer tick while another profile is
+  // open imports every ticket into that profile. Same bind-on-first-use rule
+  // the contact merge has: claim the profile the card was connected from, and
+  // stay out of any other. A manual sync rebinds it.
+  const QString boundProfile = integrationConfig(providerId).value(QStringLiteral("profileId")).toString();
+  if(boundProfile.isEmpty()) {
+    setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
+  } else if(boundProfile != activeProfileId()) {
+    return stats;
+  }
+
+  // Issues the user deleted here. Deleting one is how they say "not mine";
+  // re-adding it on the next pull would make the deletion meaningless.
+  const QStringList dismissed = dismissedTasks(providerId);
+
   // An issue's URL is unique across a whole provider; its number is not, once a
   // pull spans projects. Claim by URL first so "#5 of repo A" cannot be matched
   // to the task that "#5 of repo B" is about to claim. Collected up front
@@ -2313,6 +2337,10 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   }
 
   for(const heap::integrations::ExternalTask& ext : issues) {
+    // An issue the user deleted here stays deleted.
+    if(ext.externalId.isEmpty() || dismissed.contains(ext.externalId)) {
+      continue;
+    }
     // Identity is provider + project + issue id, with the URL bridging rows
     // stored before the project was ever recorded.
     QString existingId;
@@ -2621,6 +2649,37 @@ void AppController::restoreExternalContact(const QString& providerId, const QStr
   }
   byProfile.insert(activeProfileId(), ids);
   setIntegrationField(providerId, QStringLiteral("dismissed"), byProfile);
+}
+
+QStringList AppController::dismissedTasks(const QString& providerId) const {
+  return integrationConfig(providerId).value(QStringLiteral("dismissedTasks")).toMap().value(activeProfileId()).toStringList();
+}
+
+void AppController::dismissExternalTask(const QString& providerId, const QString& externalId) {
+  if(providerId.isEmpty() || externalId.isEmpty()) {
+    return;
+  }
+  QVariantMap byProfile = integrationConfig(providerId).value(QStringLiteral("dismissedTasks")).toMap();
+  QStringList ids = byProfile.value(activeProfileId()).toStringList();
+  if(ids.contains(externalId)) {
+    return;
+  }
+  ids.append(externalId);
+  byProfile.insert(activeProfileId(), ids);
+  setIntegrationField(providerId, QStringLiteral("dismissedTasks"), byProfile);
+}
+
+void AppController::restoreExternalTask(const QString& providerId, const QString& externalId) {
+  if(providerId.isEmpty() || externalId.isEmpty()) {
+    return;
+  }
+  QVariantMap byProfile = integrationConfig(providerId).value(QStringLiteral("dismissedTasks")).toMap();
+  QStringList ids = byProfile.value(activeProfileId()).toStringList();
+  if(ids.removeAll(externalId) == 0) {
+    return;
+  }
+  byProfile.insert(activeProfileId(), ids);
+  setIntegrationField(providerId, QStringLiteral("dismissedTasks"), byProfile);
 }
 
 int AppController::mergeExternalContacts(const QString& providerId, const QVector<heap::integrations::ExternalContact>& contacts) {
@@ -2977,6 +3036,9 @@ void AppController::syncProvider(const QString& providerId) {
   for(const auto& provider : m_syncProviders) {
     if(provider->id() == providerId) {
       emit toast(tr("Syncing…"));
+      // "Sync now" means "sync this, here" — the same rebind the directory
+      // path does, so the tracker follows a deliberate click to this profile.
+      setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
       syncProviderNow(providerId);
       return;
     }
@@ -4969,6 +5031,9 @@ void AppController::deleteSelectedTasks() {
     m_events.removeById(pair.second.id);
   }
   for(const auto& p : snap) {
+    // Same "not mine" note a single delete records, so a bulk delete of
+    // mirrored issues is not undone by the next pull.
+    dismissExternalTask(p.second.externalProvider, p.second.externalId);
     m_tasks.removeById(p.second.id);
   }
 

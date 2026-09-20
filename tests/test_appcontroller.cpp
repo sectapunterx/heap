@@ -1030,6 +1030,120 @@ TEST_F(AppControllerTest, ARecurrenceCloneDropsTheTicketIdentity) {
   EXPECT_EQ(clone->externalMeta, ExternalMeta{});
 }
 
+// ─── Sync must not undo what the user did ───
+// The contact half of this code has guarded against both of these since it
+// was written; the task half never did.
+
+// Deleting a mirrored issue is how the user says "not mine". The next pull
+// used to put it straight back, which made the deletion meaningless.
+TEST_F(AppControllerTest, ADeletedTicketDoesNotComeBackOnTheNextSync) {
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  ASSERT_GE(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0);
+
+  app_->deleteTask(QStringLiteral("github-1"));
+  app_->clearPendingUndo();
+  ASSERT_LT(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0);
+
+  // The tracker still reports it; heap must not.
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0) << "the deleted ticket was re-created by sync";
+
+  // Other issues are unaffected.
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("github-2")), 0);
+
+  app_->restoreExternalTask(QStringLiteral("github"), QStringLiteral("1"));
+}
+
+// …and undoing the delete withdraws that, so it syncs normally again.
+TEST_F(AppControllerTest, UndoingTheDeleteLetsTheTicketSyncAgain) {
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  app_->deleteTask(QStringLiteral("github-1"));
+  app_->undoLastDeletion();
+  ASSERT_GE(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0);
+
+  app_->tasks()->reset({});  // as if the profile were reloaded
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0) << "undo did not withdraw the dismissal";
+}
+
+TEST_F(AppControllerTest, DeletingASelectionOfTicketsDismissesAllOfThem) {
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1")),
+                            ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  app_->setSelectedTaskIds({QStringLiteral("github-1"), QStringLiteral("github-2")});
+  app_->deleteSelectedTasks();
+  app_->clearPendingUndo();
+  ASSERT_EQ(app_->tasks()->rowCount(), 0);
+
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1")),
+                            ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  EXPECT_EQ(app_->tasks()->rowCount(), 0) << "a bulk delete of tickets was undone by sync";
+
+  app_->restoreExternalTask(QStringLiteral("github"), QStringLiteral("1"));
+  app_->restoreExternalTask(QStringLiteral("github"), QStringLiteral("2"));
+}
+
+// The integration config is global and the sync timer keeps running across a
+// profile switch, so a background pull could pour one profile's tickets into
+// whichever profile happened to be open.
+TEST_F(AppControllerTest, AutoSyncIntoAnUnboundProfileIsANoopForTasks) {
+  app_->tasks()->reset({});
+  // The first merge binds the card to the profile it ran in.
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("github")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+
+  // A timer tick while another profile is open must not write into it.
+  QJsonObject cfg = readIntegrationConfig(QStringLiteral("github"));
+  cfg.insert(QStringLiteral("profileId"), QStringLiteral("some-other-profile"));
+  writeIntegrationConfig(QStringLiteral("github"), cfg);
+
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  EXPECT_EQ(app_->tasks()->rowCount(), 1) << "a background sync imported into the wrong profile";
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("github-2")), 0);
+
+  writeIntegrationConfig(QStringLiteral("github"), QJsonObject{});
+}
+
+// "Sync now" means "sync this, here" — a deliberate click rebinds the card.
+TEST_F(AppControllerTest, AManualSyncRebindsTheProviderToTheOpenProfile) {
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), QStringLiteral("http://127.0.0.1:1")},  // never contacted
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                             {QStringLiteral("profileId"), QStringLiteral("some-other-profile")},
+                         });
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+
+  app_->syncProvider(QStringLiteral("gitea"));
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("gitea")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
 TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
   QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
   draft["_isNew"] = true;
