@@ -37,6 +37,12 @@
 // no secret. The Application ID is public by design for PKCE clients.
 #define HEAP_OAUTH_GITLAB_CLIENT_ID "70b8f336ebd850a26e629b82e1388fac9464886befaf85674b402c200fbb9c74"
 #endif
+#ifndef HEAP_OAUTH_SENTRY_CLIENT_ID
+// Sentry API application "heap" (owner: sectapunterx), client type Public —
+// Sentry stores no secret for it at all, and PKCE takes its place. Committing
+// the ID is what makes Sentry sign-in work in a local build and in a fork.
+#define HEAP_OAUTH_SENTRY_CLIENT_ID "18d5ba57d09c4c278e5d11fbd07c57a7b9a5bd301358a5a2af6021eb696fccd0"
+#endif
 
 // Everything below is supplied by CI, empty otherwise.
 #ifndef HEAP_OAUTH_GITHUB_CLIENT_SECRET
@@ -77,10 +83,4 @@
 #endif
 #ifndef HEAP_OAUTH_BITBUCKET_CLIENT_SECRET
 #define HEAP_OAUTH_BITBUCKET_CLIENT_SECRET ""
-#endif
-#ifndef HEAP_OAUTH_SENTRY_CLIENT_ID
-#define HEAP_OAUTH_SENTRY_CLIENT_ID ""
-#endif
-#ifndef HEAP_OAUTH_SENTRY_CLIENT_SECRET
-#define HEAP_OAUTH_SENTRY_CLIENT_SECRET ""
 #endif

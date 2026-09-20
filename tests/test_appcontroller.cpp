@@ -1344,6 +1344,46 @@ TEST_F(AppControllerTest, ARefreshThatReturnsNoNewRefreshTokenKeepsTheOldOne) {
   app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
 }
 
+// A rotated refresh token is single-use, and Sentry in particular rotates with
+// no grace period: spending the same one twice does not merely fail the second
+// call, it invalidates the grant and logs the user out for good. Two syncs
+// landing together on an expired token must therefore produce exactly one
+// token request.
+TEST_F(AppControllerTest, TwoSyncsRacingAnExpiredTokenSpendTheRefreshTokenOnce) {
+  heap::testing::FakeHttpServer gitlab;
+  gitlab.route("POST /oauth/token", {200, R"({"access_token":"at-new","refresh_token":"rt-new","expires_in":7200})", {}});
+  gitlab.route("GET /api/v4/issues", {200, "[]", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("at-old"));
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QStringLiteral("rt-old"));
+  writeIntegrationConfig(QStringLiteral("gitlab"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             {QStringLiteral("host"), gitlab.base()},
+                             {QStringLiteral("clientId"), QStringLiteral("cid")},
+                             {QStringLiteral("tokenExpiresAt"), QDateTime::currentDateTime().addSecs(-3600).toString(Qt::ISODate)},
+                         });
+
+  // Back to back, before the first refresh can have answered.
+  app_->syncProvider(QStringLiteral("gitlab"));
+  app_->syncProvider(QStringLiteral("gitlab"));
+
+  ASSERT_TRUE(heap::testing::waitUntil([&gitlab]() {
+    return gitlab.seen().contains("GET /api/v4/issues");
+  })) << "the sync never reached the issue list";
+
+  int refreshes = 0;
+  for(const QByteArray& seen : gitlab.seen()) {
+    refreshes += seen == "POST /oauth/token" ? 1 : 0;
+  }
+  EXPECT_EQ(refreshes, 1) << "the same refresh token was spent twice, which kills the grant outright";
+
+  writeIntegrationConfig(QStringLiteral("gitlab"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
+  app_->setIntegrationSecret(QStringLiteral("gitlab"), QStringLiteral("refreshToken"), QString());
+}
+
 // ─── Required fields after a browser sign-in ──────────────────────────
 // Signing in proves who you are, not what to sync, so the scope fields stay
 // empty and the card says so. But Trello's "API key" is not a scope field at
@@ -1458,8 +1498,12 @@ TEST_F(AppControllerTest, CatalogFlagsWhichProvidersCanDoOneClick) {
   const QVariantList catalog = app_->integrationCatalog();
   ASSERT_FALSE(catalog.isEmpty());
   int checked = 0;
+  QVariantMap sentry;
   for(const QVariant& entry : catalog) {
     const QVariantMap m = entry.toMap();
+    if(m.value(QStringLiteral("id")).toString() == QStringLiteral("sentry")) {
+      sentry = m;
+    }
     if(!m.value(QStringLiteral("oauthNeedsSecret")).toBool()) {
       continue;
     }
@@ -1467,7 +1511,17 @@ TEST_F(AppControllerTest, CatalogFlagsWhichProvidersCanDoOneClick) {
     EXPECT_FALSE(m.value(QStringLiteral("oauthReady")).toBool()) << m.value(QStringLiteral("id")).toString().toStdString();
     EXPECT_TRUE(m.value(QStringLiteral("oauth")).toBool()) << m.value(QStringLiteral("id")).toString().toStdString();
   }
-  EXPECT_GE(checked, 5) << "todoist, asana, clickup, sentry and bitbucket all need a secret";
+  EXPECT_GE(checked, 4) << "todoist, asana, clickup and bitbucket all need a secret";
+
+  // Sentry is the counterexample, and the whole point of registering it as a
+  // public client: no secret exists to ship, PKCE stands in for one, and the
+  // client ID is committed — so even this build, which has no CI credentials
+  // at all, must still offer one-click sign-in. This fails if Sentry is moved
+  // back to a confidential app, and if the committed client ID is dropped.
+  ASSERT_FALSE(sentry.isEmpty());
+  EXPECT_FALSE(sentry.value(QStringLiteral("oauthNeedsSecret")).toBool());
+  EXPECT_TRUE(sentry.value(QStringLiteral("oauthReady")).toBool())
+      << "a public client needs no secret, so a plain build must still offer the button";
 }
 
 // ─── Mattermost contact merge ─────────────────────────────────────────
