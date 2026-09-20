@@ -14,9 +14,13 @@ namespace {
 
 // Kept in lockstep with src/StateSerializer.cpp: a field that only one of the
 // two serializers knows about is a field the sync transport will drop (HEAP-131).
-static_assert(heap::meta::fieldCount<Task>() == 21,
+static_assert(heap::meta::fieldCount<Task>() == 22,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
+              "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
+              "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
 static_assert(heap::meta::fieldCount<CalEvent>() == 10,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
@@ -108,6 +112,21 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   o[QStringLiteral("estimateMinutes")] = t.estimateMinutes;
   o[QStringLiteral("someday")] = t.someday;
   o[QStringLiteral("assignee")] = t.assignee;
+  // Tracker metadata (HEAP-117). Nested, and its timestamps are deliberately
+  // not named `updatedAt`/`createdAt`: JsonMerger reads those names at a task's
+  // top level as heap's own last-write clock, and it applies "earlier wins" to
+  // a `createdAt` at any depth.
+  QJsonObject meta;
+  meta[QStringLiteral("author")] = t.externalMeta.author;
+  meta[QStringLiteral("issueType")] = t.externalMeta.issueType;
+  meta[QStringLiteral("project")] = t.externalMeta.project;
+  meta[QStringLiteral("milestone")] = t.externalMeta.milestone;
+  meta[QStringLiteral("commentCount")] = t.externalMeta.commentCount;
+  meta[QStringLiteral("remoteCreatedAt")] = dateTimeToStr(t.externalMeta.createdAt);
+  meta[QStringLiteral("remoteUpdatedAt")] = dateTimeToStr(t.externalMeta.updatedAt);
+  meta[QStringLiteral("remoteDueAt")] = dateTimeToStr(t.externalMeta.dueAt);
+  meta[QStringLiteral("crossProject")] = t.externalMeta.crossProject;
+  o[QStringLiteral("externalMeta")] = meta;
   return o;
 }
 
@@ -142,6 +161,16 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.estimateMinutes = o.value(QStringLiteral("estimateMinutes")).toInt();
   t.someday = o.value(QStringLiteral("someday")).toBool();
   t.assignee = o.value(QStringLiteral("assignee")).toString();
+  const QJsonObject meta = o.value(QStringLiteral("externalMeta")).toObject();
+  t.externalMeta.author = meta.value(QStringLiteral("author")).toString();
+  t.externalMeta.issueType = meta.value(QStringLiteral("issueType")).toString();
+  t.externalMeta.project = meta.value(QStringLiteral("project")).toString();
+  t.externalMeta.milestone = meta.value(QStringLiteral("milestone")).toString();
+  t.externalMeta.commentCount = meta.value(QStringLiteral("commentCount")).toInt(-1);
+  t.externalMeta.createdAt = dateTimeFromStr(meta.value(QStringLiteral("remoteCreatedAt")).toString());
+  t.externalMeta.updatedAt = dateTimeFromStr(meta.value(QStringLiteral("remoteUpdatedAt")).toString());
+  t.externalMeta.dueAt = dateTimeFromStr(meta.value(QStringLiteral("remoteDueAt")).toString());
+  t.externalMeta.crossProject = meta.value(QStringLiteral("crossProject")).toBool();
   return t;
 }
 

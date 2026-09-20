@@ -1,6 +1,7 @@
 #include "integrations/JiraProvider.h"
 #include "integrations/ReplyError.h"
 #include "integrations/StatusMap.h"
+#include "integrations/TrackerFields.h"
 
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -97,8 +98,44 @@ QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& bas
         t.labels.append(name);
       }
     }
-    t.updatedAt = QDateTime::fromString(fields.value(QStringLiteral("updated")).toString(), Qt::ISODate);
+    t.updatedAt = parseTrackerTimestamp(fields.value(QStringLiteral("updated")));
+    t.createdAt = parseTrackerTimestamp(fields.value(QStringLiteral("created")));
+    t.dueAt = parseTrackerTimestamp(fields.value(QStringLiteral("duedate")), &t.dueHasTime);
+    t.assignee = fields.value(QStringLiteral("assignee")).toObject().value(QStringLiteral("displayName")).toString();
+    t.author = fields.value(QStringLiteral("reporter")).toObject().value(QStringLiteral("displayName")).toString();
+    t.issueType = fields.value(QStringLiteral("issuetype")).toObject().value(QStringLiteral("name")).toString();
+    t.project = sanitizeProject(fields.value(QStringLiteral("project")).toObject().value(QStringLiteral("key")).toString());
+    // Jira's sprint is an instance-specific custom field; the fix version is the
+    // one milestone-shaped field every site has.
+    t.milestone = fields.value(QStringLiteral("fixVersions")).toArray().isEmpty()
+                      ? QString()
+                      : fields.value(QStringLiteral("fixVersions")).toArray().at(0).toObject().value(QStringLiteral("name")).toString();
+    // The comment count is not requested: asking for `comment` inlines every
+    // comment body of all 100 issues into the search response.
     out.append(t);
+  }
+  return out;
+}
+
+QVector<ExternalComment> parseJiraComments(const QByteArray& json) {
+  QVector<ExternalComment> out;
+  const QJsonDocument doc = QJsonDocument::fromJson(json);
+  if(!doc.isObject()) {
+    return out;
+  }
+  const QJsonArray comments = doc.object().value(QStringLiteral("comments")).toArray();
+  out.reserve(comments.size());
+  for(const auto& v : comments) {
+    const QJsonObject o = v.toObject();
+    ExternalComment c;
+    c.author = o.value(QStringLiteral("author")).toObject().value(QStringLiteral("displayName")).toString();
+    // ADF on Cloud, a plain string on Server/DC — adfValueToText takes both.
+    c.body = adfValueToText(o.value(QStringLiteral("body")));
+    c.createdAt = parseTrackerTimestamp(o.value(QStringLiteral("created")));
+    if(c.body.isEmpty()) {
+      continue;
+    }
+    out.append(c);
   }
   return out;
 }
@@ -464,9 +501,22 @@ void JiraProvider::pullTasks() {
   payload.insert(QStringLiteral("jql"), m_jql.isEmpty() ? defaultJiraJql() : m_jql);
   payload.insert(QStringLiteral("maxResults"), 100);
   // The /search/jql endpoint requires an explicit `fields` list (omitting it
-  // returns only ids); the parser needs exactly these.
+  // returns only ids); the parser needs exactly these. `comment` stays out on
+  // purpose — it would inline every comment body of all 100 issues.
   QJsonArray fields;
-  for(const auto* f : {"summary", "description", "status", "priority", "labels", "updated"}) {
+  for(const auto* f : {"summary",
+                       "description",
+                       "status",
+                       "priority",
+                       "labels",
+                       "updated",
+                       "created",
+                       "duedate",
+                       "assignee",
+                       "reporter",
+                       "issuetype",
+                       "project",
+                       "fixVersions"}) {
     fields.append(QLatin1String(f));
   }
   payload.insert(QStringLiteral("fields"), fields);
@@ -488,6 +538,22 @@ void JiraProvider::pullTasks() {
       return;
     }
     emit tasksFetched(parseJiraIssues(r.body, site));
+  });
+}
+
+void JiraProvider::fetchComments(const QString& externalId, const QString& /*project*/) {
+  // A Jira key already names its project, so the site is all that is needed.
+  if(!isConfigured() || externalId.isEmpty()) {
+    emit commentsFetched(externalId, {}, QStringLiteral("not configured"));
+    return;
+  }
+  const QString path = QStringLiteral("/issue/") + externalId + QStringLiteral("/comment?orderBy=-created&maxResults=30");
+  send("GET", path, {}, [this, externalId](const ApiResult& r) {
+    if(!r.ok) {
+      emit commentsFetched(externalId, {}, r.error);
+      return;
+    }
+    emit commentsFetched(externalId, parseJiraComments(r.body), QString());
   });
 }
 

@@ -78,6 +78,15 @@ ApplicationWindow {
     readonly property int _selectionBarSpace: AppController.selectionCount > 0 ? 68 : 0
     readonly property int _resumePillSpace: welcome.paused ? 52 : 0
 
+    // True while anything modal-ish is up. A single-letter shortcut has to
+    // stand down then: Qt only protects a focused text field, so a picker's
+    // type-ahead or a read-only Text would otherwise swallow the keystroke or
+    // let the shortcut fire over the dialog (HEAP-117).
+    readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
+        || personEditor.opened || profileEditor.opened || welcome.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
+        || tweaks.opened || hotkeys.opened
+
     function _placePopover(pop, anchor) {
         const p = anchor.mapToItem(win.contentItem, 0, 0);
         const wantY = Math.max(8, Math.min(p.y, win.contentItem.height - pop.height - 8));
@@ -782,6 +791,33 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !hotkeys.isCapturing
             && AppController.selectionCount > 0
         onActivated: AppController.deleteSelectedTasks()
+    }
+    // Open the selected (or hovered) mirrored issue in its tracker (HEAP-117).
+    // This is the first bare letter in the catalog. Qt hands a focused text
+    // field the ShortcutOverride for an unmodified key, so typing "o" still
+    // types it — but a read-only Text or a ComboBox's type-ahead would lose,
+    // so the shortcut also stands down while any overlay is open.
+    Shortcut {
+        sequence: _kbd("task.openExternal")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+            && (AppController.currentView === "board"
+                || AppController.currentView === "archive"
+                || AppController.currentView === "timeline"
+                || AppController.currentView === "week")
+        onActivated: {
+            // One selected card is unambiguous. Otherwise act on whatever the
+            // cursor is over — never on a whole multi-selection, which would
+            // open a browser tab per card.
+            let id = "";
+            if (AppController.selectionCount === 1) {
+                id = AppController.selectedTaskIds[0];
+            } else if (AppController.selectionCount === 0) {
+                const v = viewLoader.item;
+                if (v && v.hoveredTaskId) id = v.hoveredTaskId;
+            }
+            if (id) AppController.openTaskExternal(id);
+        }
     }
 
     Connections {

@@ -50,6 +50,11 @@ restores a single default; *Reset all* restores the whole catalog.
 | Select all visible tickets | `Ctrl+A` |
 | Clear selection | `Esc` |
 | Delete selection (undoable 5 s) | `Del` |
+| Open ticket in its tracker | `O` |
+
+`O` acts on the one selected card, or — with nothing selected — on the card
+under the cursor. It does nothing for a locally-created task, and it stands
+down entirely while a dialog is open or the cursor is in a text field.
 
 ## Notes editor
 
