@@ -154,6 +154,17 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
   };
 }
 
+int TaskModel::roleOf(const QString& name) const {
+  const QByteArray needle = name.toUtf8();
+  const QHash<int, QByteArray> names = roleNames();
+  for(auto it = names.constBegin(); it != names.constEnd(); ++it) {
+    if(it.value() == needle) {
+      return it.key();
+    }
+  }
+  return -1;
+}
+
 QVariant TaskModel::data(const QModelIndex& idx, int role) const {
   if(!idx.isValid() || idx.row() < 0 || idx.row() >= m_items.size()) {
     return {};

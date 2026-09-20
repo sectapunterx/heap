@@ -258,6 +258,13 @@ class TaskModel : public QAbstractListModel {
   QVariant data(const QModelIndex& idx, int role) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  // The number behind a role name. QAbstractItemModel::roleNames() is not
+  // invokable from QML, so anything building a plain JS list out of this model
+  // has had to count offsets from Qt::UserRole by hand — and a miscount reads a
+  // different field silently, which is how a filter on `hasTime` came to be
+  // reading the board's rank. Returns -1 for a name that does not exist.
+  Q_INVOKABLE int roleOf(const QString& name) const;
+
   void reset(QVector<Task> items);
 
   const QVector<Task>& items() const {

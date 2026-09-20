@@ -416,13 +416,19 @@ Item {
 
             readonly property int gutterW: 50
             readonly property int dayCount: Math.max(1, root.days.length)
-            readonly property int dayW: Math.max(120, (width - gutterW) / dayCount)
+            // The rail takes its width off the grid rather than overlapping it,
+            // and folds away entirely on a narrow window, where seven columns
+            // already have nothing to spare.
+            readonly property bool railVisible: width > 900
+            readonly property int railW: railVisible ? 240 : 0
+            readonly property int dayW: Math.max(120, (width - gutterW - railW) / dayCount)
             readonly property int dueRowH: 116
 
             // Sticky header band for the day-header + due-chips area
             Rectangle {
                 id: headerBand
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                anchors.rightMargin: gridHost.railW
                 height: 60 + gridHost.dueRowH
                 color: Theme.panel
                 z: 2
@@ -617,6 +623,7 @@ Item {
                 objectName: "allday-strip"
                 anchors.top: headerBand.bottom
                 anchors.left: parent.left; anchors.right: parent.right
+                anchors.rightMargin: gridHost.railW
                 height: visible ? (root.strip.rows * 24 + 8) : 0
                 visible: root.strip.rows > 0
                 color: Theme.panel
@@ -669,16 +676,37 @@ Item {
                 }
             }
 
+            // What still needs a slot, beside the grid that has the slots.
+            UnscheduledRail {
+                id: unscheduledRail
+                objectName: "unscheduled-rail"
+                visible: gridHost.railVisible
+                anchors.top: parent.top; anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                width: gridHost.railW
+                days: {
+                    const out = [];
+                    for (let i = 0; i < root.days.length; i++) out.push(root.days[i].date);
+                    return out;
+                }
+                searchText: root.searchText
+                taskRev: root.taskRev
+                eventRev: root.eventRev
+                onTaskClicked: (id) => root.taskClicked(id)
+                z: 3
+            }
+
             // Scrollable hour grid
             ScrollView {
                 anchors.left: parent.left; anchors.right: parent.right
+                anchors.rightMargin: gridHost.railW
                 anchors.top: weekStrip.bottom; anchors.bottom: parent.bottom
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 Item {
                     id: gridContent
-                    width: gridHost.width
+                    width: gridHost.width - gridHost.railW
                     height: (root.hoursEnd - root.hoursStart) * root.hourH + 4
 
                     // Hour-label gutter
