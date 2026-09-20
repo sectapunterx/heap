@@ -820,6 +820,10 @@ class AppController : public QObject {
   // image of the user's data.
   void retainPreMigrationBackup(const QString& path, int fromVersion);
   QString m_recoveryNotice;  // deferred toast shown once the UI is up
+  // Set when state.json was written by a newer build than this one. Every save
+  // path is a no-op while it is true: this build cannot represent the fields it
+  // did not parse, so writing would drop them.
+  bool m_saveBlocked = false;
   int statusIndexOf(const QString& id) const;
 
   // Undo machinery

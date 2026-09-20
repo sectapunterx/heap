@@ -6,6 +6,8 @@
 #include <QJsonValue>
 #include <QTime>
 
+#include <functional>
+
 namespace heap::state {
 
 namespace {
@@ -430,24 +432,35 @@ QJsonArray migratedTaskArrayV3ToV4(const QJsonArray& tasks) {
   return out;
 }
 
-}  // namespace
-
-bool migrateState(QJsonObject& root, int fromVersion) {
-  if(fromVersion >= kSchemaVersion) {
-    return false;  // the version gate: a v4 document is never re-migrated
-  }
-
-  // Tasks live under profiles[].tasks from v2 on, and at the top level in v1.
+// One rung of the ladder: every task in the document, wherever it lives.
+// Tasks sit under profiles[].tasks from v2 on, and at the top level in v1.
+void forEachTaskArray(QJsonObject& root, const std::function<QJsonArray(const QJsonArray&)>& step) {
   if(root.contains("profiles")) {
     QJsonArray profiles;
     for(const QJsonValue& v : root["profiles"].toArray()) {
       QJsonObject p = v.toObject();
-      p["tasks"] = migratedTaskArrayV3ToV4(p["tasks"].toArray());
+      p["tasks"] = step(p["tasks"].toArray());
       profiles.append(p);
     }
     root["profiles"] = profiles;
   } else if(root.contains("tasks")) {
-    root["tasks"] = migratedTaskArrayV3ToV4(root["tasks"].toArray());
+    root["tasks"] = step(root["tasks"].toArray());
+  }
+}
+
+}  // namespace
+
+bool migrateState(QJsonObject& root, int fromVersion) {
+  if(fromVersion >= kSchemaVersion) {
+    return false;  // the version gate: a current document is never re-migrated
+  }
+
+  // The ladder. Each rung is guarded by the version it upgrades *from*, so a
+  // document entering at v4 walks past the v3→v4 rung instead of running it
+  // again. Without the guard every future rung would also re-run every older
+  // one — harmless only for as long as each step happens to be idempotent.
+  if(fromVersion < 4) {
+    forEachTaskArray(root, migratedTaskArrayV3ToV4);
   }
 
   root["schemaVersion"] = kSchemaVersion;

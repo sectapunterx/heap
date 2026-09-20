@@ -120,6 +120,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "kept as state.corrupt-*.json.",
         "Файл данных был нечитаем, бэкап не найден. Повреждённый файл сохранён как "
         "state.corrupt-*.json."}},
+      {"data.schemaTooNew",
+       {"This data file was written by a newer version of heap. Saving is disabled so nothing is lost — "
+        "update heap to edit it.",
+        "Этот файл данных создан более новой версией heap. Сохранение отключено, чтобы ничего не потерять — "
+        "обнови heap, чтобы редактировать."}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
@@ -3768,7 +3773,7 @@ void AppController::connectOAuth(const QString& providerId) {
 }
 
 void AppController::scheduleSave() {
-  if(m_loading || !m_saveTimer) {
+  if(m_loading || m_saveBlocked || !m_saveTimer) {
     return;
   }
   m_saveTimer->start();
@@ -3978,7 +3983,9 @@ void AppController::quarantineCorruptState(const QString& path) {
 }
 
 void AppController::saveStateNow() {
-  if(m_loading) {
+  // m_saveBlocked is re-checked here, not only in scheduleSave(): flushSave()
+  // and the quit path call this directly.
+  if(m_loading || m_saveBlocked) {
     return;
   }
 
@@ -4094,6 +4101,17 @@ void AppController::loadStateOnStart() {
     heap::state::migrateState(root, onDiskSchema);
     heap::recovery::append(QString::fromLatin1(heap::recovery::kMigrated),
                            {{QStringLiteral("from"), onDiskSchema}, {QStringLiteral("to"), heap::state::kSchemaVersion}});
+  } else if(onDiskSchema > heap::state::kSchemaVersion) {
+    // Written by a newer build — running two builds against one data dir, or a
+    // downgrade. There is no ladder downwards, and this build would silently
+    // drop every field it does not know on the next save. Load what parses so
+    // the user still sees their work, keep a copy, and block all saving.
+    m_saveBlocked = true;
+    retainPreMigrationBackup(path, onDiskSchema);
+    m_recoveryNotice = tr_("data.schemaTooNew");
+    heap::recovery::append(QString::fromLatin1(heap::recovery::kSchemaTooNew),
+                           {{QStringLiteral("onDisk"), onDiskSchema}, {QStringLiteral("supported"), heap::state::kSchemaVersion}});
+    qWarning("state.json schema v%d is newer than this build's v%d — saving disabled", onDiskSchema, heap::state::kSchemaVersion);
   }
 
   m_loading = true;
