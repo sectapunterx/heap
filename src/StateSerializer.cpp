@@ -28,7 +28,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 10,
+static_assert(heap::meta::fieldCount<CalEvent>() == 12,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -290,6 +290,10 @@ QJsonObject eventToJson(const CalEvent& e) {
   o["taskId"] = e.taskId;
   o["profileId"] = e.profileId;
   o["context"] = e.context;
+  o["allDay"] = e.allDay;
+  // Written even when absent so the key set matches the field count; an empty
+  // string reads back as an invalid date, which means "single day".
+  o["endDate"] = e.endDate.isValid() ? e.endDate.toString(Qt::ISODate) : QString();
   return o;
 }
 
@@ -305,6 +309,8 @@ CalEvent eventFromJson(const QJsonObject& o, const QString& fallbackProfileId) {
   e.taskId = o["taskId"].toString();
   e.profileId = o.contains("profileId") ? o["profileId"].toString() : fallbackProfileId;
   e.context = o["context"].toString();
+  e.allDay = o["allDay"].toBool();
+  e.endDate = QDate::fromString(o["endDate"].toString(), Qt::ISODate);
   return e;
 }
 
@@ -528,6 +534,11 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   if(fromVersion < 5) {
     forEachTaskArray(root, migratedTaskArrayV4ToV5);
   }
+  // v5 → v6 added CalEvent::allDay and CalEvent::endDate. It has no rung: a v5
+  // event is a single-day timed event, which is exactly what the two new keys
+  // mean when they are absent (false, and an invalid date). The bump exists so
+  // that a v5 build meets the newer-schema guard instead of quietly writing
+  // every all-day and multi-day event back out as an ordinary one.
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

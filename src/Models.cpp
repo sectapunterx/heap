@@ -438,6 +438,8 @@ QHash<int, QByteArray> EventModel::roleNames() const {
       {TaskIdRole, "taskId"},
       {ProfileIdRole, "profileId"},
       {ContextRole, "context"},
+      {AllDayRole, "allDay"},
+      {EndDateRole, "endDate"},
   };
 }
 
@@ -467,6 +469,12 @@ QVariant EventModel::data(const QModelIndex& idx, int role) const {
       return e.profileId;
     case ContextRole:
       return e.context;
+    case AllDayRole:
+      return e.allDay;
+    case EndDateRole:
+      // Always a usable date, so a delegate can subtract without a validity
+      // check: a single-day event reports its own day.
+      return e.endDate.isValid() ? e.endDate : e.date;
   }
   return {};
 }

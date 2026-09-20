@@ -7,6 +7,7 @@
 
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
+#include "cal/EventSpan.h"
 #include "chrono/ChronoParser.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
@@ -1246,6 +1247,8 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
   m["taskId"] = QString();
   m["profileId"] = m_activeProfileId;  // default attribution: active profile
   m["context"] = QString();
+  m["allDay"] = false;
+  m["endDate"] = QVariant();  // absent = a single day, which is the common case
   m["_isNew"] = true;
   return m;
 }
@@ -1270,12 +1273,16 @@ void AppController::saveEvent(const QVariantMap& draft) {
     e.profileId = (prev >= 0) ? m_events.items().at(prev).profileId : QString();
   }
   e.context = draft.value("context").toString();
-  // The editor parses free-typed times, so start/end arrive unvalidated: the
-  // range has to be forced back into the day here, not only fixed up when the
-  // end precedes the start.
-  const heap::cal::HourRange hours = heap::cal::clampHours(e.start, e.end, snapStepHours());
-  e.start = hours.start;
-  e.end = hours.end;
+  e.allDay = draft.value("allDay").toBool();
+  e.endDate = draft.value("endDate").toDate();
+  // The editor parses free-typed times and a multi-day event may legally end
+  // before it starts by the clock, so the whole span is normalized in one
+  // place rather than clamped edge by edge.
+  const heap::cal::Span span = heap::cal::normalizeSpan(e.date, e.endDate, e.start, e.end, e.allDay, snapStepHours());
+  e.date = span.date;
+  e.endDate = (span.endDate == span.date) ? QDate() : span.endDate;
+  e.start = span.start;
+  e.end = span.end;
   m_events.upsert(e);
   scheduleSave();
 }
@@ -1286,6 +1293,25 @@ void AppController::updateEvent(const QString& id, double start, double end, con
     return;
   }
   CalEvent e = m_events.items().at(row);
+
+  // Dragging a multi-day or all-day block moves the whole span: the grid can
+  // only ever hand back one day's worth of hours, and reading them as the new
+  // extent of the event would silently collapse it onto the day it was
+  // dropped on.
+  const bool spans = e.allDay || (e.endDate.isValid() && e.endDate > e.date);
+  if(spans) {
+    if(date.isValid() && e.date.isValid()) {
+      const qint64 shift = e.date.daysTo(date);
+      e.date = date;
+      if(e.endDate.isValid()) {
+        e.endDate = e.endDate.addDays(shift);
+      }
+    }
+    m_events.upsert(e);
+    scheduleSave();
+    return;
+  }
+
   const heap::cal::HourRange hours = heap::cal::clampHours(start, end, snapStepHours());
   e.start = hours.start;
   e.end = hours.end;
