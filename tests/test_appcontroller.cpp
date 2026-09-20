@@ -634,6 +634,120 @@ TEST_F(AppControllerTest, SyncPreservesUserAddedLocalLabels) {
   EXPECT_TRUE(ids.contains(QStringLiteral("bug")));
 }
 
+// ─── Task ids must never destroy a task ───
+// saveTask ends in upsert(), and TaskModel::upsert on an id that is already
+// taken replaces that row outright. Three ways in, all silent, none undoable.
+
+// The proposed id was "2700 + rowCount()". The count drops when a task is
+// deleted, so the generator walks back over ids that are still in use.
+TEST_F(AppControllerTest, ANewTasksProposedIdIsNeverOneAlreadyInUse) {
+  app_->tasks()->reset({});
+
+  const auto create = [this](const QString& title) {
+    QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+    draft["_isNew"] = true;
+    draft["title"] = title;
+    app_->saveTask(draft);
+    return draft.value(QStringLiteral("id")).toString();
+  };
+
+  const QString first = create(QStringLiteral("A"));
+  const QString second = create(QStringLiteral("B"));
+  ASSERT_NE(first, second);
+  ASSERT_EQ(app_->tasks()->rowCount(), 2);
+
+  // Delete the older one: the row count is now 1 again.
+  app_->deleteTask(first);
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+
+  const QString third = create(QStringLiteral("C"));
+  EXPECT_NE(third, second) << "the new task reused a live id";
+  ASSERT_EQ(app_->tasks()->rowCount(), 2) << "a task was overwritten";
+  const int survivor = app_->tasks()->indexOfId(second);
+  ASSERT_GE(survivor, 0);
+  EXPECT_EQ(app_->tasks()->items().at(survivor).title, QStringLiteral("B")) << "B was replaced by C";
+}
+
+// Even when something else proposes the id, the save itself has to refuse.
+TEST_F(AppControllerTest, CreatingATaskOnATakenIdIsRefusedNotMerged) {
+  Task existing;
+  existing.id = QStringLiteral("LTE-2700");
+  existing.title = QStringLiteral("do not lose me");
+  app_->tasks()->reset({existing});
+
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("LTE-2700");
+  draft["title"] = QStringLiteral("the impostor");
+  app_->saveTask(draft);
+
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+  EXPECT_EQ(app_->tasks()->items().at(0).title, QStringLiteral("do not lose me"));
+}
+
+// Renaming A onto B's id used to remove A's row and overwrite B's — two tasks
+// collapsing into one, with A's calendar events re-pointed at the survivor.
+TEST_F(AppControllerTest, RenamingATaskOntoAnotherTasksIdIsRefused) {
+  Task a;
+  a.id = QStringLiteral("LTE-2700");
+  a.title = QStringLiteral("A");
+  Task b;
+  b.id = QStringLiteral("LTE-2701");
+  b.title = QStringLiteral("B");
+  app_->tasks()->reset({a, b});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("LTE-2700"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("LTE-2700");
+  draft["id"] = QStringLiteral("LTE-2701");  // B's id
+  app_->saveTask(draft);
+
+  ASSERT_EQ(app_->tasks()->rowCount(), 2) << "one of the two tasks was destroyed";
+  const int rowA = app_->tasks()->indexOfId(QStringLiteral("LTE-2700"));
+  const int rowB = app_->tasks()->indexOfId(QStringLiteral("LTE-2701"));
+  ASSERT_GE(rowA, 0) << "the renamed task vanished";
+  ASSERT_GE(rowB, 0);
+  EXPECT_EQ(app_->tasks()->items().at(rowA).title, QStringLiteral("A"));
+  EXPECT_EQ(app_->tasks()->items().at(rowB).title, QStringLiteral("B")) << "B was overwritten by A";
+}
+
+// A rename to a free id still has to work.
+TEST_F(AppControllerTest, RenamingATaskToAFreeIdStillWorks) {
+  Task a;
+  a.id = QStringLiteral("LTE-2700");
+  a.title = QStringLiteral("A");
+  app_->tasks()->reset({a});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("LTE-2700"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("LTE-2700");
+  draft["id"] = QStringLiteral("LTE-9000");
+  app_->saveTask(draft);
+
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("LTE-2700")), 0);
+  const int row = app_->tasks()->indexOfId(QStringLiteral("LTE-9000"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).title, QStringLiteral("A"));
+}
+
+// Saving an unchanged task is not a rename, so the guard must not fire on it.
+TEST_F(AppControllerTest, SavingATaskUnderItsOwnIdIsNotTreatedAsACollision) {
+  Task a;
+  a.id = QStringLiteral("LTE-2700");
+  a.title = QStringLiteral("A");
+  app_->tasks()->reset({a});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("LTE-2700"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("LTE-2700");
+  draft["title"] = QStringLiteral("A, edited");
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("LTE-2700"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).title, QStringLiteral("A, edited"));
+}
+
 TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
   QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
   draft["_isNew"] = true;

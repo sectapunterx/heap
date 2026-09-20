@@ -321,8 +321,14 @@ Popup {
             }
             color: Theme.text
             placeholderTextColor: Theme.textDim
-            // Auto-uppercase so the id stays canonical (matches newTaskDraft).
+            // Auto-uppercase so a hand-typed id stays canonical (matches
+            // newTaskDraft) — but only while composing a NEW one. A synced
+            // ticket's id is lowercase by construction ("github-1234", from the
+            // provider id), and uppercasing it on open made a plain Save look
+            // like a rename to saveTask: the row was silently re-keyed to
+            // GITHUB-1234, and if that id was taken, the other task was lost.
             onTextChanged: {
+                if (!root.isNew) return;
                 const up = text.toUpperCase();
                 if (up !== text) text = up;
             }
