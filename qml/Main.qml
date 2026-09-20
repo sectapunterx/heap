@@ -24,6 +24,25 @@ ApplicationWindow {
     // keys across, so this survives a trip through the settings screen.
     property bool _geometryRestored: false
 
+    // Builds the current view's loader on its first visit. Board, Notes and
+    // Docs are never unloaded again.
+    function activateCurrentView() {
+        const v = AppController.currentView;
+        if (v === "board") boardLoader.active = true;
+        else if (v === "notes") notesLoader.active = true;
+        else if (v === "docs") docsLoader.active = true;
+    }
+
+    // Whichever view is on screen. Four loaders now hold them — three kept
+    // alive, one shared — so nothing outside should have to know which.
+    function activeViewItem() {
+        const v = AppController.currentView;
+        if (v === "board") return boardLoader.item;
+        if (v === "notes") return notesLoader.item;
+        if (v === "docs") return docsLoader.item;
+        return viewLoader.item;
+    }
+
     function _settingsObject() {
         const raw = AppController.appSettingsJson || "";
         if (!raw.length) return ({});
@@ -363,20 +382,63 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // Board, Notes and Docs are kept alive once visited.
+                    // Swapping a Loader's sourceComponent destroys the item,
+                    // and these three hold state the user notices losing: the
+                    // board's scroll position and column focus, the note's
+                    // caret, scroll and editor undo history, the docs
+                    // section the user had scrolled to. Everything else is
+                    // cheap to rebuild and stays on the shared loader below.
+                    //
+                    // They load lazily — `active` is flipped on first visit —
+                    // so starting on the board does not build the notes
+                    // editor and the docs catalogue too.
+                    Loader {
+                        id: boardLoader
+                        anchors.fill: parent
+                        visible: AppController.currentView === "board"
+                        active: false
+                        sourceComponent: boardComp
+                    }
+                    Loader {
+                        id: notesLoader
+                        anchors.fill: parent
+                        visible: AppController.currentView === "notes"
+                        active: false
+                        sourceComponent: notesComp
+                    }
+                    Loader {
+                        id: docsLoader
+                        anchors.fill: parent
+                        visible: AppController.currentView === "docs"
+                        active: false
+                        sourceComponent: docsComp
+                    }
+
                     Loader {
                         id: viewLoader
                         anchors.fill: parent
+                        visible: !boardLoader.visible && !notesLoader.visible && !docsLoader.visible
                         sourceComponent: {
                             if (AppController.currentView === "timeline") return timelineComp;
                             if (AppController.currentView === "week") return weekComp;
                             if (AppController.currentView === "month") return monthComp;
                             if (AppController.currentView === "archive") return archiveComp;
-                            if (AppController.currentView === "docs") return docsComp;
-                            if (AppController.currentView === "notes") return notesComp;
                             if (AppController.currentView === "settings") return settingsComp;
-                            return boardComp;
+                            return null;
                         }
                     }
+
+                    // First visit to one of the kept-alive views builds it.
+                    // The function lives on `win` because a Connections handler
+                    // does not resolve names from the scope its parent item
+                    // declares them in — calling it unqualified from there is a
+                    // ReferenceError, and the two views would never activate.
+                    Connections {
+                        target: AppController
+                        function onCurrentViewChanged() { win.activateCurrentView(); }
+                    }
+                    Component.onCompleted: win.activateCurrentView()
                     SelectionBar {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
@@ -547,7 +609,7 @@ ApplicationWindow {
         onOpenHelp: (anchor) => {
             AppController.currentView = "settings";
             Qt.callLater(() => {
-                const v = viewLoader.item;
+                const v = win.activeViewItem();
                 if (v && v.openHelp)
                     v.openHelp(anchor);
             });
@@ -852,7 +914,7 @@ ApplicationWindow {
         // task box anyway, where typing did nothing to what was on screen.
         // Duck-typed so a view picks this up by declaring focusSearch().
         onActivated: {
-            const view = viewLoader.item;
+            const view = win.activeViewItem();
             if (view && typeof view.focusSearch === "function") {
                 view.focusSearch();
                 return;
@@ -869,7 +931,7 @@ ApplicationWindow {
                 || AppController.currentView === "timeline"
                 || AppController.currentView === "week")
         onActivated: {
-            const v = viewLoader.item;
+            const v = win.activeViewItem();
             if (v && v.selectAllVisible) v.selectAllVisible();
         }
     }
@@ -908,7 +970,7 @@ ApplicationWindow {
             if (AppController.selectionCount === 1) {
                 id = AppController.selectedTaskIds[0];
             } else if (AppController.selectionCount === 0) {
-                const v = viewLoader.item;
+                const v = win.activeViewItem();
                 if (v && v.hoveredTaskId) id = v.hoveredTaskId;
             }
             if (id) AppController.openTaskExternal(id);
