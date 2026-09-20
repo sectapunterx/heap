@@ -1526,6 +1526,9 @@ Item {
             // Q_INVOKABLE (not a property), so the field bindings reference this
             // counter to re-read after the async keychain load and after writes.
             property int secretsRev: 0
+            // Status-mapping rows are read through an invokable, not a property,
+            // so a pick has to say it changed.
+            property int statusMapRev: 0
             // A sign-in that landed but still needs a scope field: provider id
             // → the card labels that are empty. Cleared once they are filled.
             property var pendingFields: ({})
@@ -1615,6 +1618,12 @@ Item {
                         // to `open`/`advanced` on click breaks the initial binding.
                         property bool open: intCard.isConn
                         property bool advanced: false
+                        // "prog" is an id, not something to show a user.
+                        function columnName(id) {
+                            const list = AppController.statuses
+                            for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i].name
+                            return id
+                        }
                         // Card labels the sign-in left empty (Asana workspace,
                         // Sentry org/project…), surfaced by AppController.
                         readonly property var missingFields: intSection.pendingFields[intCard.intKey] || []
@@ -1830,6 +1839,98 @@ Item {
                                         onCommitted: (txt) => modelData.secret
                                             ? AppController.setIntegrationSecret(intCard.intKey, modelData.key, txt)
                                             : root.setNested("integrations", intCard.intKey, modelData.key, txt)
+                                    }
+                                }
+                            }
+
+                            // Status mapping. StatusMap has always accepted
+                            // per-user overrides and never been given any, so a
+                            // status its built-in table does not recognise —
+                            // "QA", "Needs triage", anything from a custom Jira
+                            // workflow — landed in To Do with no way to say
+                            // otherwise. The rows are the statuses this provider
+                            // has actually sent, learned during sync.
+                            ColumnLayout {
+                                id: statusMapBlock
+                                Layout.fillWidth: true
+                                Layout.topMargin: 4
+                                spacing: 6
+                                visible: intCard.isConn && !modelData.directory === true && statusMapRep.count > 0
+
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 6
+                                    Text {
+                                        text: I18n.t("settings.integrations.statusMap")
+                                        color: Theme.text
+                                        font.pixelSize: 11
+                                        font.weight: Font.DemiBold
+                                    }
+                                    Item { Layout.fillWidth: true }
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    text: I18n.t("settings.integrations.statusMapHint")
+                                    color: Theme.textDim
+                                    font.pixelSize: 10
+                                }
+
+                                Repeater {
+                                    id: statusMapRep
+                                    model: (intSection.statusMapRev, AppController.statusMappingFor(intCard.intKey))
+                                    delegate: RowLayout {
+                                        id: mapRow
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        spacing: 8
+
+                                        Text {
+                                            Layout.preferredWidth: 150
+                                            elide: Text.ElideRight
+                                            textFormat: Text.PlainText
+                                            text: mapRow.modelData.status
+                                            color: Theme.text
+                                            font.family: Theme.fontMono
+                                            font.pixelSize: 11
+                                        }
+                                        Text {
+                                            text: "→"
+                                            color: Theme.textDim
+                                            font.pixelSize: 11
+                                        }
+                                        ComboBox {
+                                            id: columnPick
+                                            Layout.fillWidth: true
+                                            implicitHeight: 28
+                                            font.pixelSize: 11
+                                            // "Auto" first, so clearing a choice
+                                            // is a pick rather than a hidden
+                                            // gesture. Its value is the empty
+                                            // string, which removes the override.
+                                            model: [{ id: "", name: I18n.t("settings.integrations.statusMapAuto") }].concat(AppController.statuses)
+                                            textRole: "name"
+                                            valueRole: "id"
+                                            currentIndex: mapRow.modelData.overridden
+                                                          ? Math.max(0, indexOfValue(mapRow.modelData.column))
+                                                          : 0
+                                            onActivated: {
+                                                AppController.setStatusMapping(intCard.intKey, mapRow.modelData.status, currentValue)
+                                                intSection.statusMapRev++
+                                            }
+                                        }
+                                        // What the built-in table guessed, shown
+                                        // only while the user has not decided —
+                                        // once they have, the combo says it.
+                                        Text {
+                                            Layout.preferredWidth: 96
+                                            visible: !mapRow.modelData.overridden
+                                            elide: Text.ElideRight
+                                            textFormat: Text.PlainText
+                                            text: I18n.t("settings.integrations.statusMapGuess").arg(intCard.columnName(mapRow.modelData.column))
+                                            color: Theme.textDim
+                                            font.pixelSize: 10
+                                        }
                                     }
                                 }
                             }

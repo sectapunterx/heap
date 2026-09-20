@@ -2352,6 +2352,12 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   using heap::integrations::StatusMap;
   MergeStats stats;
 
+  // Resolved once for the batch: the map is the same for every issue, and
+  // re-reading the settings blob per issue is how settingsMap() used to show
+  // up in a sync profile.
+  const QHash<QString, QString> statusOverrides = statusOverridesFor(providerId);
+  QStringList seenStatuses;
+
   // Auto-sync fires wherever the user happens to be, and the integration
   // config is global — so without this, a timer tick while another profile is
   // open imports every ticket into that profile. Same bind-on-first-use rule
@@ -2437,7 +2443,10 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
 
     t.title = ext.title;
     t.desc = ext.body;
-    t.status = StatusMap::column(ext.status, {}, QStringLiteral("todo"));
+    if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
+      seenStatuses.append(ext.status);
+    }
+    t.status = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
     if(!ext.priority.isEmpty()) {
       t.priority = StatusMap::priority(ext.priority);
     } else if(t.priority.isEmpty()) {
@@ -2497,10 +2506,148 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     m_tasks.upsert(t);
     (row >= 0 ? stats.updated : stats.added)++;
   }
-  if(stats.added > 0 || stats.updated > 0) {
+  // Learn this provider's vocabulary from what it actually sent, so the
+  // mapping UI can offer real statuses instead of asking the user to type
+  // them. Written even when nothing else changed — a status appearing for the
+  // first time is news whether or not the issue carrying it was new.
+  const bool learned = rememberSeenStatuses(providerId, seenStatuses);
+  if(stats.added > 0 || stats.updated > 0 || learned) {
     scheduleSave();
   }
   return stats;
+}
+
+QHash<QString, QString> AppController::statusOverridesFor(const QString& providerId) const {
+  QHash<QString, QString> out;
+  const QVariantMap raw =
+      settingsMap().value(QStringLiteral("integrations")).toMap().value(providerId).toMap().value(QStringLiteral("statusMap")).toMap();
+  for(auto it = raw.constBegin(); it != raw.constEnd(); ++it) {
+    const QString column = it.value().toString().trimmed();
+    if(!column.isEmpty()) {
+      out.insert(it.key(), column);
+    }
+  }
+  return out;
+}
+
+bool AppController::rememberSeenStatuses(const QString& providerId, const QStringList& statuses) {
+  if(statuses.isEmpty()) {
+    return false;
+  }
+  QVariantMap settings = settingsMap();
+  QVariantMap integrations = settings.value(QStringLiteral("integrations")).toMap();
+  QVariantMap cfg = integrations.value(providerId).toMap();
+  QStringList seen = cfg.value(QStringLiteral("seenStatuses")).toStringList();
+  bool changed = false;
+  for(const QString& s : statuses) {
+    if(!seen.contains(s)) {
+      seen.append(s);
+      changed = true;
+    }
+  }
+  if(!changed) {
+    return false;
+  }
+  // A tracker with a sprawling workflow should not grow the settings blob
+  // without bound; the rows past this would not be usable UI anyway.
+  seen.sort(Qt::CaseInsensitive);
+  if(seen.size() > 64) {
+    seen = seen.mid(0, 64);
+  }
+  cfg.insert(QStringLiteral("seenStatuses"), seen);
+  integrations.insert(providerId, cfg);
+  settings.insert(QStringLiteral("integrations"), integrations);
+  m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
+  emit appSettingsJsonChanged();
+  return true;
+}
+
+QVariantList AppController::statusMappingFor(const QString& providerId) const {
+  using heap::integrations::StatusMap;
+  const QVariantMap cfg = settingsMap().value(QStringLiteral("integrations")).toMap().value(providerId).toMap();
+  const QHash<QString, QString> overrides = statusOverridesFor(providerId);
+
+  // Everything this provider has sent, plus anything the user has already
+  // mapped — a status can disappear upstream without the choice becoming
+  // uninteresting, and dropping the row would silently drop the mapping.
+  QStringList statuses = cfg.value(QStringLiteral("seenStatuses")).toStringList();
+  for(auto it = overrides.constBegin(); it != overrides.constEnd(); ++it) {
+    if(!statuses.contains(it.key())) {
+      statuses.append(it.key());
+    }
+  }
+  statuses.sort(Qt::CaseInsensitive);
+
+  QVariantList out;
+  out.reserve(statuses.size());
+  for(const QString& status : statuses) {
+    QVariantMap row;
+    row.insert(QStringLiteral("status"), status);
+    row.insert(QStringLiteral("column"), StatusMap::column(status, overrides, QStringLiteral("todo")));
+    // The UI shows a guess differently from a decision: a guess is what the
+    // built-in table came up with and may be wrong, a decision is the user's.
+    row.insert(QStringLiteral("overridden"), overrides.contains(status));
+    out.append(row);
+  }
+  return out;
+}
+
+void AppController::setStatusMapping(const QString& providerId, const QString& status, const QString& column) {
+  if(providerId.isEmpty() || status.isEmpty()) {
+    return;
+  }
+  // Only a real column: an id no board has would hide every ticket carrying
+  // that status, with nothing on screen to explain where they went.
+  QString target = column.trimmed();
+  if(!target.isEmpty()) {
+    bool known = false;
+    for(const QVariant& v : m_statuses) {
+      if(v.toMap().value(QStringLiteral("id")).toString() == target) {
+        known = true;
+        break;
+      }
+    }
+    // The six ids StatusMap itself produces count as known even when this
+    // profile has renamed or dropped a column, so a mapping made against the
+    // stock board is not silently discarded by a board that differs.
+    if(!known) {
+      for(const auto* canonical : {"backlog", "todo", "prog", "review", "blocked", "done"}) {
+        if(target == QLatin1String(canonical)) {
+          known = true;
+          break;
+        }
+      }
+    }
+    if(!known) {
+      target.clear();
+    }
+  }
+
+  QVariantMap settings = settingsMap();
+  QVariantMap integrations = settings.value(QStringLiteral("integrations")).toMap();
+  QVariantMap cfg = integrations.value(providerId).toMap();
+  QVariantMap map = cfg.value(QStringLiteral("statusMap")).toMap();
+  if(target.isEmpty()) {
+    // Clearing is how the user goes back to the built-in guess, so an empty
+    // value must remove the key rather than store "".
+    if(!map.remove(status)) {
+      return;
+    }
+  } else {
+    if(map.value(status).toString() == target) {
+      return;
+    }
+    map.insert(status, target);
+  }
+  cfg.insert(QStringLiteral("statusMap"), map);
+  integrations.insert(providerId, cfg);
+  settings.insert(QStringLiteral("integrations"), integrations);
+  m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
+  emit appSettingsJsonChanged();
+  scheduleSave();
+  // Existing cards are not rewritten: moving a mirrored ticket is a real move
+  // that heap pushes back, so re-columning them here would push a change the
+  // user never made. The next sync applies the new mapping.
 }
 
 void AppController::applyIntegrationSettings() {

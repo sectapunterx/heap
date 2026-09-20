@@ -450,6 +450,22 @@ class AppController : public QObject {
   Q_INVOKABLE bool hasIntegrationSecret(const QString& providerId, const QString& field) const;
   Q_INVOKABLE void setIntegrationSecret(const QString& providerId, const QString& field, const QString& value);
 
+  // ---- Status mapping ----
+  // StatusMap has always taken per-user overrides and has never been given
+  // any: every sync called it with an empty map, so a tracker status heap's
+  // built-in table does not recognise — "QA", "Needs triage", anything from a
+  // custom Jira workflow — landed in "todo" with no way to say otherwise.
+  //
+  // The rows to offer: every distinct status this provider has actually sent,
+  // recorded as issues are merged, each with the column it currently resolves
+  // to and whether that is the user's choice or the built-in guess.
+  // [{ status, column, overridden }], sorted by status.
+  Q_INVOKABLE QVariantList statusMappingFor(const QString& providerId) const;
+  // Map one of this provider's statuses onto a heap column. An empty or
+  // unknown \p column clears the override and restores the built-in guess.
+  // Remapping does not rewrite tasks already mirrored; the next sync does.
+  Q_INVOKABLE void setStatusMapping(const QString& providerId, const QString& status, const QString& column);
+
   // ---- Notifications & automation ----
   Q_INVOKABLE void notify(const QString& title, const QString& body, const QString& kind = QString());
   // Post the given rich payload via the native notification backend.
@@ -876,6 +892,13 @@ class AppController : public QObject {
   QVariantMap integrationConfig(const QString& providerId) const;
   // Write one non-secret integration field into the settings blob and persist.
   void setIntegrationField(const QString& providerId, const QString& field, const QVariant& value);
+  // The user's status → column choices for this provider, as StatusMap wants
+  // them. Keys are the tracker's own status strings.
+  QHash<QString, QString> statusOverridesFor(const QString& providerId) const;
+  // Record the statuses a pull actually carried, so the mapping UI can offer
+  // the real vocabulary instead of asking the user to type it. Returns true
+  // when something new was learned and the settings blob needs writing.
+  bool rememberSeenStatuses(const QString& providerId, const QStringList& statuses);
   // Same, for several fields at once. Every write rebuilds the providers, so a
   // sign-in that set three fields one by one tore down and rebuilt the sync
   // layer three times — enough to kill a request already in flight.
