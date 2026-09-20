@@ -207,7 +207,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.tweaks.open.desc", {"Theme, density, workday.", "Тема, плотность, рабочий день."}},
       {"shortcut.hotkeys.open.label", {"Open Hotkeys", "Открыть Hotkeys"}},
       {"shortcut.hotkeys.open.desc", {"This panel.", "Эта панель."}},
-      {"shortcut.undo.label", {"Undo deletion", "Отменить удаление"}},
+      {"shortcut.redo.label", {"Redo", "Повторить"}},
+      {"shortcut.redo.desc", {"Re-apply the operation Ctrl+Z reversed.", "Повторить отменённое действие."}},
+      {"shortcut.undo.label", {"Undo", "Отменить"}},
       {"shortcut.undo.desc",
        {"Restore the last deleted task / event / profile.", "Восстановить последнюю удалённую задачу/событие/профиль."}},
       {"shortcut.search.focus.label", {"Focus search", "Фокус в поиск"}},
@@ -290,15 +292,11 @@ AppController::AppController(QObject* parent) :
     m_today(QDate::currentDate()),
     m_selectedDate(m_today),
     m_saveTimer(new QTimer(this)),
-    m_undoTimer(new QTimer(this)),
     m_automationTimer(new QTimer(this)),
     m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale())) {
   m_saveTimer->setSingleShot(true);
   m_saveTimer->setInterval(300);
   connect(m_saveTimer, &QTimer::timeout, this, &AppController::saveStateNow);
-
-  m_undoTimer->setSingleShot(true);
-  connect(m_undoTimer, &QTimer::timeout, this, &AppController::clearPendingUndo);
 
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
@@ -728,6 +726,10 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   }
   const QString taskId = t.id;
   const QString prevStatus = t.status;
+  // Placed after the guards so a rejected or no-op move records nothing. It
+  // covers the recurrence spawn and the focus block below too, which the old
+  // hand-written undo did not.
+  UndoScope scope(this, tr_("task.moveUndone").arg(taskId));
   // Capture before any upsert can invalidate the `t` reference (HEAP-77).
   const QString recurrence = t.recurrence;
   const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
@@ -751,15 +753,6 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       }
     });
   }
-
-  // Arm undo so a mis-drag to the wrong column is reversible (previously
-  // moveTask had no undo at all).
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::TaskMove;
-  m_pendingUndo.taskId = taskId;
-  m_pendingUndo.prevStatus = prevStatus;
-  armUndo(5);
 
   // Re-evaluate blocked-stuck set (the task may have left "blocked").
   if(m_blockedStuckIds.remove(id)) {
@@ -1073,30 +1066,26 @@ void AppController::deleteTask(const QString& id) {
   if(row < 0) {
     return;
   }
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::Task;
-  m_pendingUndo.task = m_tasks.items().at(row);
-  m_pendingUndo.row = row;
+  UndoScope scope(this, tr_("task.restored").arg(id));
+  const ::Task removed = m_tasks.items().at(row);
   // A task owns its calendar presence: the meeting event a QuickCapture "sync"
   // spawned, plus any focus blocks dragged onto the day grid. Remove them with
-  // the task so a sync is deleted in one action, not two (HEAP-104). Capture
-  // (row, event) in ascending order for a faithful undo.
-  for(int i = 0; i < m_events.items().size(); ++i) {
-    const CalEvent& e = m_events.items().at(i);
+  // the task so a sync is deleted in one action, not two (HEAP-104). The scope
+  // records them, so undo puts each block back where it was.
+  QStringList linkedEventIds;
+  for(const CalEvent& e : m_events.items()) {
     if(e.taskId == id) {
-      m_pendingUndo.removedEvents.append({i, e});
+      linkedEventIds << e.id;
     }
   }
-  for(const auto& pair : m_pendingUndo.removedEvents) {
-    m_events.removeById(pair.second.id);
+  for(const QString& eventId : linkedEventIds) {
+    m_events.removeById(eventId);
   }
   // Deleting a mirrored issue is how the user says "not mine". Without a note
   // of that, the next pull re-creates it verbatim and the deletion looks like
-  // it never happened. Undo lifts the note again.
-  dismissExternalTask(m_pendingUndo.task.externalProvider, m_pendingUndo.task.externalId);
+  // it never happened. Undo lifts the note again (applyUndoEntry).
+  dismissExternalTask(removed.externalProvider, removed.externalId);
   m_tasks.removeById(id);
-  armUndo(5);
   emit undoableToast(tr_("task.deleted").arg(id), 5);
   scheduleSave();
 }
@@ -1187,40 +1176,32 @@ void AppController::deleteEvent(const QString& id) {
   if(row < 0) {
     return;
   }
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::Event;
-  m_pendingUndo.event = m_events.items().at(row);
-  m_pendingUndo.row = row;
+  const CalEvent removedEvent = m_events.items().at(row);
+  UndoScope scope(this, tr_("event.restored").arg(removedEvent.title));
   // A QuickCapture "sync" is one thing shown twice: the meeting event and the
   // task that mirrors it on the board. Deleting the meeting must take the mirror
   // task with it, else the user has to hunt it down separately (HEAP-104). Only
   // a "sync" owns its task — a "focus" block is just a scheduled slice of a task
   // that must outlive the block.
-  const CalEvent ev = m_pendingUndo.event;
+  const CalEvent ev = removedEvent;
   if(ev.type == QStringLiteral("sync") && !ev.taskId.isEmpty()) {
-    const int trow = m_tasks.indexOfId(ev.taskId);
-    if(trow >= 0) {
-      m_pendingUndo.coDeletedTask = m_tasks.items().at(trow);
-      m_pendingUndo.coDeletedTaskRow = trow;
-      m_pendingUndo.hadCoDeletedTask = true;
+    if(m_tasks.indexOfId(ev.taskId) >= 0) {
       // Sweep the task's other blocks (a focus slice, say) so none is left
       // pointing at a task that no longer exists.
-      for(int i = 0; i < m_events.items().size(); ++i) {
-        const CalEvent& sib = m_events.items().at(i);
+      QStringList siblingIds;
+      for(const CalEvent& sib : m_events.items()) {
         if(sib.id != ev.id && sib.taskId == ev.taskId) {
-          m_pendingUndo.removedEvents.append({i, sib});
+          siblingIds << sib.id;
         }
       }
-      for(const auto& pair : m_pendingUndo.removedEvents) {
-        m_events.removeById(pair.second.id);
+      for(const QString& sibId : siblingIds) {
+        m_events.removeById(sibId);
       }
       m_tasks.removeById(ev.taskId);
     }
   }
   m_events.removeById(id);
-  armUndo(5);
-  emit undoableToast(tr_("event.deleted").arg(m_pendingUndo.event.title), 5);
+  emit undoableToast(tr_("event.deleted").arg(ev.title), 5);
   scheduleSave();
 }
 
@@ -1426,14 +1407,10 @@ void AppController::deletePerson(const QString& id) {
   if(row < 0) {
     return;
   }
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::Person;
-  m_pendingUndo.person = m_people.items().at(row);
-  m_pendingUndo.row = row;
+  const Person removedPerson = m_people.items().at(row);
+  UndoScope scope(this, tr_("person.restored").arg(removedPerson.name));
   m_people.removeById(id);
-  armUndo(5);
-  emit undoableToast(tr_("person.deleted").arg(m_pendingUndo.person.name), 5);
+  emit undoableToast(tr_("person.deleted").arg(removedPerson.name), 5);
   scheduleSave();
 }
 
@@ -1552,11 +1529,8 @@ void AppController::deleteStatus(const QString& id) {
   if(i < 0 || m_statuses.size() <= 1) {
     return;  // never let the board run out of columns
   }
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::Status;
-  m_pendingUndo.status = m_statuses[i].toMap();
-  m_pendingUndo.row = i;
+  const QString statusName = m_statuses[i].toMap().value("name").toString();
+  UndoScope scope(this, tr_("status.restored").arg(statusName));
 
   // re-home any tasks with this status to the first remaining one
   QString fallback;
@@ -1567,21 +1541,22 @@ void AppController::deleteStatus(const QString& id) {
     fallback = m_statuses[k].toMap().value("id").toString();
     break;
   }
-  for(const auto& t : m_tasks.items()) {
+  QStringList reHomed;
+  for(const Task& t : m_tasks.items()) {
     if(t.status == id) {
-      m_pendingUndo.reHomedTasks.append({t.id, id});
-      m_pendingUndo.reHomedStamps.append(t.statusChangedAt);
+      reHomed << t.id;
     }
   }
-  for(const auto& pair : m_pendingUndo.reHomedTasks) {
-    m_tasks.setStatus(pair.first, fallback);
+  // statusChangedAt is stamped by setStatus and restored by the recorded diff,
+  // so undoing a column delete does not reset how long a task had been sitting
+  // in it — that timestamp drives the "stuck" badge.
+  for(const QString& taskId : reHomed) {
+    m_tasks.setStatus(taskId, fallback);
   }
 
-  const QString name = m_pendingUndo.status.value("name").toString();
   m_statuses.removeAt(i);
   emit statusesChanged();
-  armUndo(5);
-  emit undoableToast(tr_("status.deleted").arg(name), 5);
+  emit undoableToast(tr_("status.deleted").arg(statusName), 5);
   scheduleSave();
 }
 
@@ -2060,10 +2035,7 @@ void AppController::resetToFirstRun() {
   }
 
   // 2. Drop transient UI state that points at rows we're about to delete.
-  if(m_undoTimer) {
-    m_undoTimer->stop();
-  }
-  m_pendingUndo = PendingUndo{};
+  m_undo.clear();
   emit pendingUndoChanged();
   clearSelection();
   m_focusedStatus.clear();
@@ -2167,127 +2139,125 @@ QVariantMap AppController::extractTaskMeta(const QString& text) const {
 
 // ───────────────────────────────────────────────────────── Undo ──
 
-void AppController::armUndo(int seconds) {
-  m_undoTimer->start(seconds * 1000);
-  emit pendingUndoChanged();
+AppController::UndoScope::UndoScope(AppController* owner, QString label)
+    : m_owner(owner),
+      m_label(std::move(label)),
+      // Implicitly shared: these are refcount bumps, not copies. The buffers
+      // only diverge if the operation actually writes.
+      m_tasks(owner->m_tasks.items()),
+      m_events(owner->m_events.items()),
+      m_people(owner->m_people.items()),
+      m_statuses(owner->m_statuses) {
 }
 
-void AppController::cancelUndo() {
-  if(m_undoTimer) {
-    m_undoTimer->stop();
+AppController::UndoScope::~UndoScope() {
+  if(!m_armed) {
+    return;
   }
-  if(m_pendingUndo.kind != PendingUndo::None) {
-    m_pendingUndo = {};
-    emit pendingUndoChanged();
+  heap::undo::Entry entry;
+  entry.label = m_label;
+  entry.tasks = heap::undo::diff(m_tasks, m_owner->m_tasks.items(), [](const ::Task& t) {
+    return t.id;
+  });
+  entry.events = heap::undo::diff(m_events, m_owner->m_events.items(), [](const ::CalEvent& e) {
+    return e.id;
+  });
+  entry.people = heap::undo::diff(m_people, m_owner->m_people.items(), [](const ::Person& p) {
+    return p.id;
+  });
+  if(m_statuses != m_owner->m_statuses) {
+    entry.statusesTouched = true;
+    entry.statusesBefore = m_statuses;
+    entry.statusesAfter = m_owner->m_statuses;
   }
+  const bool wasEmpty = entry.isEmpty();
+  m_owner->m_undo.push(std::move(entry));
+  if(!wasEmpty) {
+    emit m_owner->pendingUndoChanged();
+  }
+}
+
+void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward) {
+  if(entry.profileRemoved) {
+    // A profile is the whole workspace, so this is a swap rather than a diff.
+    // Only the undo direction is meaningful: redoing a profile deletion would
+    // throw the restored work away again, which is not what Ctrl+Shift+Z is
+    // for, so the stack is cleared instead (see undo()).
+    const int idx = qBound(0, entry.profileRow, static_cast<int>(m_profiles.size()));
+    snapshotActiveProfile();
+    m_profiles.insert(idx, entry.profile);
+    m_activeProfileId = entry.profile.id;
+    applyProfileToModels(entry.profile);
+    emit profilesChanged();
+    emit activeProfileChanged();
+    return;
+  }
+
+  if(backward) {
+    heap::undo::applyBackward(m_tasks, entry.tasks);
+    heap::undo::applyBackward(m_events, entry.events);
+    heap::undo::applyBackward(m_people, entry.people);
+  } else {
+    heap::undo::applyForward(m_tasks, entry.tasks);
+    heap::undo::applyForward(m_events, entry.events);
+    heap::undo::applyForward(m_people, entry.people);
+  }
+
+  // A deleted task told its tracker "not mine"; bringing it back has to
+  // withdraw that, and removing it again has to re-record it.
+  for(const heap::undo::Edit<::Task>& e : entry.tasks) {
+    if(e.existedBefore && !e.existsAfter) {
+      if(backward) {
+        restoreExternalTask(e.before.externalProvider, e.before.externalId);
+      } else {
+        dismissExternalTask(e.before.externalProvider, e.before.externalId);
+      }
+    }
+  }
+
+  if(entry.statusesTouched) {
+    m_statuses = backward ? entry.statusesBefore : entry.statusesAfter;
+    emit statusesChanged();
+  }
+  // The status-count cache drops itself from the task model's own signals, so
+  // nothing here has to remember to invalidate it.
 }
 
 void AppController::clearPendingUndo() {
-  cancelUndo();
-}
-
-void AppController::undoLastDeletion() {
-  if(m_pendingUndo.kind == PendingUndo::None) {
+  if(!m_undo.canUndo() && !m_undo.canRedo()) {
     return;
   }
-  switch(m_pendingUndo.kind) {
-    case PendingUndo::Task: {
-      m_tasks.insertAt(m_pendingUndo.row, m_pendingUndo.task);
-      // Undoing the delete also withdraws the "not mine" the delete recorded,
-      // so the issue syncs normally again.
-      restoreExternalTask(m_pendingUndo.task.externalProvider, m_pendingUndo.task.externalId);
-      // removedEvents captured in ascending row order → re-insert in order.
-      for(const auto& pair : m_pendingUndo.removedEvents) {
-        m_events.insertAt(pair.first, pair.second);
-      }
-      emit toast(tr_("task.restored").arg(m_pendingUndo.task.id));
-      break;
-    }
-    case PendingUndo::BulkTasks: {
-      // m_pendingUndo.tasks/rows captured in ascending row order; re-insert
-      // in that same order so earlier indices stay valid.
-      for(int i = 0; i < m_pendingUndo.tasks.size(); ++i) {
-        const int row = qBound(0, m_pendingUndo.rows.value(i, m_tasks.rowCount()), m_tasks.rowCount());
-        m_tasks.insertAt(row, m_pendingUndo.tasks.at(i));
-        restoreExternalTask(m_pendingUndo.tasks.at(i).externalProvider, m_pendingUndo.tasks.at(i).externalId);
-      }
-      for(const auto& pair : m_pendingUndo.removedEvents) {
-        m_events.insertAt(pair.first, pair.second);
-      }
-      emit toast(tr_("selection.toast.restored").arg(m_pendingUndo.tasks.size()));
-      break;
-    }
-    case PendingUndo::Event: {
-      // Bring back a cascade-deleted mirror task first, then every event (the
-      // deleted one plus any swept siblings) in ascending original-row order.
-      if(m_pendingUndo.hadCoDeletedTask) {
-        m_tasks.insertAt(m_pendingUndo.coDeletedTaskRow, m_pendingUndo.coDeletedTask);
-      }
-      QVector<QPair<int, ::CalEvent>> evs = m_pendingUndo.removedEvents;
-      evs.append({m_pendingUndo.row, m_pendingUndo.event});
-      std::sort(evs.begin(), evs.end(), [](const auto& a, const auto& b) {
-        return a.first < b.first;
-      });
-      for(const auto& pair : evs) {
-        m_events.insertAt(pair.first, pair.second);
-      }
-      emit toast(tr_("event.restored").arg(m_pendingUndo.event.title));
-      break;
-    }
-    case PendingUndo::Person: {
-      m_people.insertAt(m_pendingUndo.row, m_pendingUndo.person);
-      emit toast(tr_("person.restored").arg(m_pendingUndo.person.name));
-      break;
-    }
-    case PendingUndo::Status: {
-      const int idx = qBound(0, m_pendingUndo.row, m_statuses.size());
-      m_statuses.insert(idx, m_pendingUndo.status);
-      for(int k = 0; k < m_pendingUndo.reHomedTasks.size(); ++k) {
-        const auto& pair = m_pendingUndo.reHomedTasks.at(k);
-        // Restore the original statusChangedAt, not a fresh one: undoing a
-        // column delete must not reset how long a task has been sitting in it.
-        const QDateTime stamp = k < m_pendingUndo.reHomedStamps.size() ? m_pendingUndo.reHomedStamps.at(k) : QDateTime();
-        m_tasks.setStatus(pair.first, pair.second, stamp);
-      }
-      emit statusesChanged();
-      emit toast(tr_("status.restored").arg(m_pendingUndo.status.value("name").toString()));
-      break;
-    }
-    case PendingUndo::Profile: {
-      const int idx = qBound(0, m_pendingUndo.row, m_profiles.size());
-      // Snapshot whatever is live now so we don't lose post-delete edits
-      // in whichever profile became active after the deletion.
-      snapshotActiveProfile();
-      m_profiles.insert(idx, m_pendingUndo.profile);
-      m_activeProfileId = m_pendingUndo.profile.id;
-      applyProfileToModels(m_pendingUndo.profile);
-      emit profilesChanged();
-      emit activeProfileChanged();
-      emit toast(tr_("profile.restored").arg(m_pendingUndo.profile.name));
-      break;
-    }
-    case PendingUndo::TaskMove: {
-      if(m_tasks.indexOfId(m_pendingUndo.taskId) >= 0) {
-        m_tasks.setStatus(m_pendingUndo.taskId, m_pendingUndo.prevStatus);
-        emit toast(tr_("task.moveUndone").arg(m_pendingUndo.taskId));
-      }
-      break;
-    }
-    case PendingUndo::TaskArchive: {
-      if(m_tasks.indexOfId(m_pendingUndo.taskId) >= 0) {
-        m_tasks.setArchived(m_pendingUndo.taskId, m_pendingUndo.prevArchived);
-        emit toast(tr_("task.archiveUndone").arg(m_pendingUndo.taskId));
-      }
-      break;
-    }
-    default:
-      break;
+  m_undo.clear();
+  emit pendingUndoChanged();
+}
+
+void AppController::undo() {
+  const heap::undo::Entry* entry = m_undo.takeUndo();
+  if(entry == nullptr) {
+    return;
   }
-  m_pendingUndo = {};
-  if(m_undoTimer) {
-    m_undoTimer->stop();
+  // Copy: restoring a profile re-enters the stack's owner and the pointer
+  // would not survive it.
+  const heap::undo::Entry copy = *entry;
+  const bool wasProfile = copy.profileRemoved;
+  applyUndoEntry(copy, /*backward=*/true);
+  if(wasProfile) {
+    m_undo.clear();
   }
   emit pendingUndoChanged();
+  emit toast(copy.label);
+  scheduleSave();
+}
+
+void AppController::redo() {
+  const heap::undo::Entry* entry = m_undo.takeRedo();
+  if(entry == nullptr) {
+    return;
+  }
+  const heap::undo::Entry copy = *entry;
+  applyUndoEntry(copy, /*backward=*/false);
+  emit pendingUndoChanged();
+  emit toast(copy.label);
   scheduleSave();
 }
 
@@ -4443,12 +4413,17 @@ void AppController::deleteProfile(const QString& id) {
   if(i < 0 || m_profiles.size() <= 1) {
     return;  // never let the app run out of profiles
   }
-  cancelUndo();
   snapshotActiveProfile();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::Profile;
-  m_pendingUndo.profile = m_profiles[i];
-  m_pendingUndo.row = i;
+  // Restoring a profile swaps every collection at once, so this is not a diff.
+  // It also invalidates whatever the stack held about the old workspace, which
+  // is why it goes in alone.
+  heap::undo::Entry entry;
+  entry.profileRemoved = true;
+  entry.profile = m_profiles[i];
+  entry.profileRow = i;
+  entry.label = tr_("profile.restored").arg(m_profiles[i].name);
+  m_undo.pushProfileRemoval(std::move(entry));
+  emit pendingUndoChanged();
   const QString name = m_profiles[i].name;
   m_profiles.removeAt(i);
 
@@ -4472,7 +4447,6 @@ void AppController::deleteProfile(const QString& id) {
     emit activeProfileChanged();
   }
   emit profilesChanged();
-  armUndo(5);
   emit undoableToast(tr_("profile.deleted").arg(name), 5);
   scheduleSave();
 }
@@ -4962,6 +4936,7 @@ void AppController::seedShortcutCatalog() {
   add("tweaks.open", "Ctrl+,");
   add("hotkeys.open", "Ctrl+/");
   add("undo", "Ctrl+Z");
+  add("redo", "Ctrl+Shift+Z");
   add("search.focus", "Ctrl+F");
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
@@ -5235,15 +5210,10 @@ void AppController::setArchived(const QString& taskId, bool archived) {
   if(prev == archived) {
     return;
   }
+  // The scope records the change, so an accidental (un)archive is reversible
+  // without this function knowing anything about undo.
+  UndoScope scope(this, tr_("task.archiveUndone").arg(taskId));
   m_tasks.setArchived(taskId, archived);
-
-  // Arm undo so an accidental (un)archive is reversible.
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::TaskArchive;
-  m_pendingUndo.taskId = taskId;
-  m_pendingUndo.prevArchived = prev;
-  armUndo(5);
 
   emit undoableToast(tr_(archived ? "task.archived" : "task.unarchived").arg(taskId), 5);
   scheduleSave();
@@ -5352,27 +5322,21 @@ void AppController::deleteSelectedTasks() {
     return a.first < b.first;
   });
 
-  cancelUndo();
-  m_pendingUndo = {};
-  m_pendingUndo.kind = PendingUndo::BulkTasks;
-  m_pendingUndo.tasks.reserve(snap.size());
-  m_pendingUndo.rows.reserve(snap.size());
+  UndoScope scope(this, tr_("selection.toast.restored").arg(snap.size()));
   QSet<QString> ids;
   for(const auto& p : snap) {
-    m_pendingUndo.rows.append(p.first);
-    m_pendingUndo.tasks.append(p.second);
     ids.insert(p.second.id);
   }
-  for(int i = 0; i < m_events.items().size(); ++i) {
-    const CalEvent& e = m_events.items().at(i);
+  QStringList linkedEventIds;
+  for(const CalEvent& e : m_events.items()) {
     if(ids.contains(e.taskId)) {
-      m_pendingUndo.removedEvents.append({i, e});
+      linkedEventIds << e.id;
     }
   }
   // Remove the linked events with their tasks (HEAP-104), then the tasks.
-  // Removal order doesn't matter for removeById; undo re-inserts by row.
-  for(const auto& pair : m_pendingUndo.removedEvents) {
-    m_events.removeById(pair.second.id);
+  // Removal order does not matter: the scope records each row for undo.
+  for(const QString& eventId : linkedEventIds) {
+    m_events.removeById(eventId);
   }
   for(const auto& p : snap) {
     // Same "not mine" note a single delete records, so a bulk delete of
@@ -5382,7 +5346,6 @@ void AppController::deleteSelectedTasks() {
   }
 
   const int n = snap.size();
-  armUndo(5);
   emit undoableToast(tr_("selection.toast.deleted").arg(n), 5);
   clearSelection();
   scheduleSave();
@@ -5395,6 +5358,9 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
   if(statusIndexOf(statusId) < 0) {
     return;
   }
+  // A bulk move used to record nothing at all, so dragging a wrong selection
+  // across the board was unrecoverable. The scope covers it for free.
+  UndoScope scope(this, tr_("selection.toast.moved").arg(m_selectedTaskIdsList.size()));
   int moved = 0;
   for(const QString& id : m_selectedTaskIdsList) {
     const int row = m_tasks.indexOfId(id);
@@ -5409,7 +5375,8 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
     ++moved;
   }
   if(moved > 0) {
-    emit toast(tr_("selection.toast.moved").arg(moved));
+    scope.setLabel(tr_("selection.toast.moved").arg(moved));
+    emit undoableToast(tr_("selection.toast.moved").arg(moved), 5);
     scheduleSave();
   }
 }
@@ -5418,6 +5385,9 @@ void AppController::setSelectedTasksArchived(bool archived) {
   if(m_selectedTaskIdsList.isEmpty()) {
     return;
   }
+  // Same as the bulk move above: this recorded nothing before, so archiving
+  // the wrong selection meant restoring each ticket by hand.
+  UndoScope scope(this, tr_(archived ? "selection.toast.archived" : "selection.toast.unarchived").arg(m_selectedTaskIdsList.size()));
   int n = 0;
   for(const QString& id : m_selectedTaskIdsList) {
     if(m_tasks.indexOfId(id) < 0) {
@@ -5427,7 +5397,8 @@ void AppController::setSelectedTasksArchived(bool archived) {
     ++n;
   }
   if(n > 0) {
-    emit toast(tr_(archived ? "selection.toast.archived" : "selection.toast.unarchived").arg(n));
+    scope.setLabel(tr_(archived ? "selection.toast.archived" : "selection.toast.unarchived").arg(n));
+    emit undoableToast(tr_(archived ? "selection.toast.archived" : "selection.toast.unarchived").arg(n), 5);
     // Drop the selection after a bulk archive/restore. Tickets just left
     // the current view (archive view loses unarchived ones; board loses
     // archived ones), so keeping the prior selection is confusing.

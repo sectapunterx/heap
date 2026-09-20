@@ -835,7 +835,13 @@ ApplicationWindow {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo
-        onActivated: AppController.undoLastDeletion()
+        onActivated: AppController.undo()
+    }
+    Shortcut {
+        sequence: _kbd("redo")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.canRedo
+        onActivated: AppController.redo()
     }
     Shortcut {
         sequence: _kbd("search.focus")
