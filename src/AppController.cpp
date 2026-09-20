@@ -1840,7 +1840,7 @@ QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
   out["warnings"] = QStringList();
 
   const QString path = folderUrl.isLocalFile() ? folderUrl.toLocalFile() : folderUrl.toString();
-  QDir root(path);
+  const QDir root(path);
   if(path.isEmpty() || !root.exists()) {
     out["error"] = tr_("notes.vault.badFolder");
     return out;
@@ -1916,7 +1916,7 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl) const {
   out["skipped"] = 0;
 
   const QString path = folderUrl.isLocalFile() ? folderUrl.toLocalFile() : folderUrl.toString();
-  QDir root(path);
+  const QDir root(path);
   if(path.isEmpty() || !root.exists()) {
     out["error"] = tr_("notes.vault.badFolder");
     return out;
