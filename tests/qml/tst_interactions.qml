@@ -105,6 +105,11 @@ TestCase {
 
         AppController.selectedDate = day;
         const dc = make('import TodoCpp; DayCalendar { anchors.fill: parent }');
+        // The grid spans the whole day now, so the working hours are well
+        // below the top of it. The view scrolls itself to the relevant hour on
+        // a callLater; without waiting for that the block is under the fold
+        // and the click lands on whatever is on screen instead.
+        wait(0);
         const block = findChild(dc, "taskblock-" + draft.id);
         verify(block !== null, "scheduled task did not render a day-grid block");
 
