@@ -995,7 +995,7 @@ void AppController::duplicateTask(const QString& id) {
   }
   const Task source = m_tasks.items().at(row);
 
-  UndoScope scope(this, tr_("task.duplicated").arg(source.id));
+  const UndoScope scope(this, tr_("task.duplicated").arg(source.id));
 
   Task copy = source;
   copy.id = mintTaskId();
@@ -1051,7 +1051,7 @@ void AppController::linkTasks(const QString& blockerId, const QString& blockedId
       return;  // already linked
     }
   }
-  UndoScope scope(this, tr_("task.linked").arg(blockerId, blockedId));
+  const UndoScope scope(this, tr_("task.linked").arg(blockerId, blockedId));
   t.links.append(TaskLink{QStringLiteral("blocks"), blockedId});
   m_tasks.upsert(t);
   scheduleSave();
@@ -1070,7 +1070,7 @@ void AppController::unlinkTasks(const QString& blockerId, const QString& blocked
   if(t.links.size() == before) {
     return;
   }
-  UndoScope scope(this, tr_("task.unlinked").arg(blockerId, blockedId));
+  const UndoScope scope(this, tr_("task.unlinked").arg(blockerId, blockedId));
   m_tasks.upsert(t);
   scheduleSave();
 }
