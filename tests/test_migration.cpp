@@ -218,8 +218,7 @@ TEST_F(MigrationTest, LadderSkipsRungsBelowTheEntryVersion) {
   EXPECT_EQ(task["scheduledAt"].toString(), QStringLiteral("2026-07-08T14:30:00"))
       << "a rung below the entry version must not rewrite scheduledAt";
   EXPECT_TRUE(task["hasTime"].toBool()) << "a rung below the entry version must not clear hasTime";
-  EXPECT_TRUE(task.contains(QStringLiteral("deadline")))
-      << "the v3->v4 rung consumes `deadline`; entering at v4 it must be left alone";
+  EXPECT_TRUE(task.contains(QStringLiteral("deadline"))) << "the v3->v4 rung consumes `deadline`; entering at v4 it must be left alone";
   // The v4→v5 rung, on the other hand, is at the entry version and does run.
   EXPECT_TRUE(task.contains(QStringLiteral("rank")));
 }
