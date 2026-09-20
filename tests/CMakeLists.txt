@@ -346,6 +346,9 @@ endfunction()
 # mode so it runs headless and never touches the user's real state file.
 heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
 
+# ─── Meeting reminders ───
+heap_add_appcontroller_test(heap_meeting_reminders_tests test_meeting_reminders.cpp)
+
 # ─── Notes (Quick-capture appendNoteEntry) tests ───
 # Cover AppController::appendNoteEntry — the C++ side of the Ctrl+Shift+N
 # popup: empty-input guard, first-entry vs subsequent-entry formatting,
