@@ -127,8 +127,10 @@ ProviderDescriptor gitlab() {
   d.auth.kind = AuthKind::CustomHeader;
   d.auth.headerName = "PRIVATE-TOKEN";
   d.auth.extraHeaders = {{"Accept", "application/json"}};
-  d.listPathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues?per_page=100&scope=all");
-  d.selfListPathTemplate = QStringLiteral("/api/v4/issues?scope=assigned_to_me&per_page=100");
+  // with_labels_details turns the labels array into {name, color} objects so a
+  // pulled chip keeps the colour the project gave it.
+  d.listPathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues?per_page=100&scope=all&with_labels_details=true");
+  d.selfListPathTemplate = QStringLiteral("/api/v4/issues?scope=assigned_to_me&per_page=100&with_labels_details=true");
   d.scopeKey = QStringLiteral("projectId");
   d.parser = gitlabParse;
   // GitLab supports OAuth 2.0 with PKCE (no secret needed).
@@ -187,6 +189,14 @@ ProviderDescriptor giteaLike(const QString& id,
   d.fields.updatedAt = QStringLiteral("updated_at");
   d.fields.labels = QStringLiteral("labels");
   d.fields.labelNameKey = QStringLiteral("name");
+  d.fields.labelColorKey = QStringLiteral("color");
+  d.fields.assignee = QStringLiteral("assignees.0.login|assignee.login");
+  d.fields.author = QStringLiteral("user.login");
+  d.fields.createdAt = QStringLiteral("created_at");
+  d.fields.dueAt = QStringLiteral("due_date");
+  d.fields.commentCount = QStringLiteral("comments");
+  d.fields.project = QStringLiteral("repository.full_name");
+  d.fields.milestone = QStringLiteral("milestone.title");
   d.pushMethod = QStringLiteral("PATCH");
   d.pushPathTemplate = QStringLiteral("/api/v1/repos/{repo}/issues/{externalId}");
   d.pushBodyTemplate = R"({"state":"{state}"})";
@@ -218,6 +228,14 @@ ProviderDescriptor redmine() {
   d.fields.priority = QStringLiteral("priority.name");
   d.fields.urlTemplate = QStringLiteral("{baseUrl}/issues/{id}");
   d.fields.updatedAt = QStringLiteral("updated_on");
+  d.fields.assignee = QStringLiteral("assigned_to.name");
+  d.fields.author = QStringLiteral("author.name");
+  d.fields.createdAt = QStringLiteral("created_on");
+  d.fields.dueAt = QStringLiteral("due_date");
+  d.fields.issueType = QStringLiteral("tracker.name");
+  d.fields.project = QStringLiteral("project.name");
+  d.fields.milestone = QStringLiteral("fixed_version.name");
+  // The journal (comment) count needs include=journals on a per-issue GET.
   return d;  // pull-only
 }
 
@@ -242,8 +260,19 @@ ProviderDescriptor todoist() {
   d.fields.id = QStringLiteral("id");
   d.fields.title = QStringLiteral("content");
   d.fields.body = QStringLiteral("description");
-  d.fields.boolStatusField = QStringLiteral("is_completed");
+  // v1 renamed the completion flag; accept either spelling.
+  d.fields.boolStatusField = QStringLiteral("is_completed|checked");
   d.fields.url = QStringLiteral("url");
+  d.fields.updatedAt = QStringLiteral("updated_at");
+  d.fields.createdAt = QStringLiteral("added_at|created_at");
+  // The due object is a date, a floating datetime or a zoned datetime; the
+  // timestamp parser tells a bare date from an instant by its length.
+  d.fields.dueAt = QStringLiteral("due.datetime|due.date");
+  d.fields.commentCount = QStringLiteral("note_count");
+  d.fields.labels = QStringLiteral("labels");
+  // Todoist's priority is 1–4, which StatusMap has no name for; mapping it
+  // would resolve to the fallback and overwrite the user's own priority on
+  // every pull. responsible_uid and project_id are ids, not names.
   // Todoist separates scopes with commas and issues a token that never expires,
   // so there is nothing to refresh. Sync is pull-only, hence a read-only scope.
   d.oauth = confidentialOAuth(HEAP_OAUTH_TODOIST_CLIENT_ID,
@@ -274,8 +303,12 @@ ProviderDescriptor asana() {
   d.auth.kind = AuthKind::HeaderToken;
   d.auth.tokenPrefix = "Bearer ";
   d.auth.extraHeaders = {{"Accept", "application/json"}};
+  // Asana returns only the fields named here. `tags` is deliberately absent:
+  // the OAuth scopes below do not include tags:read, and an unscoped opt_field
+  // fails the whole request rather than omitting that one field.
   d.listPathTemplate = QStringLiteral(
-      "/api/1.0/tasks?assignee=me&workspace={workspace}&opt_fields=name,completed,permalink_url,notes,modified_at&limit=100");
+      "/api/1.0/tasks?assignee=me&workspace={workspace}&opt_fields=name,completed,permalink_url,notes,modified_at,created_at,"
+      "due_on,due_at,assignee.name,created_by.name,projects.name,resource_subtype&limit=100");
   d.fields.arrayPointer = QStringLiteral("data");
   d.fields.id = QStringLiteral("gid");
   d.fields.title = QStringLiteral("name");
@@ -283,6 +316,13 @@ ProviderDescriptor asana() {
   d.fields.boolStatusField = QStringLiteral("completed");
   d.fields.url = QStringLiteral("permalink_url");
   d.fields.updatedAt = QStringLiteral("modified_at");
+  d.fields.createdAt = QStringLiteral("created_at");
+  // due_at is the instant, due_on the all-day date; prefer the precise one.
+  d.fields.dueAt = QStringLiteral("due_at|due_on");
+  d.fields.assignee = QStringLiteral("assignee.name");
+  d.fields.author = QStringLiteral("created_by.name");
+  d.fields.project = QStringLiteral("projects.0.name");
+  d.fields.issueType = QStringLiteral("resource_subtype");
   // Asana does support PKCE, but still wants the secret alongside it, and its
   // access token lives an hour — the refresh token is what keeps the session.
   d.oauth = confidentialOAuth(HEAP_OAUTH_ASANA_CLIENT_ID,
@@ -319,6 +359,17 @@ ProviderDescriptor clickup() {
   d.fields.status = QStringLiteral("status.status");
   d.fields.priority = QStringLiteral("priority.priority");
   d.fields.url = QStringLiteral("url");
+  // ClickUp timestamps are epoch milliseconds, as strings.
+  d.fields.updatedAt = QStringLiteral("date_updated");
+  d.fields.createdAt = QStringLiteral("date_created");
+  d.fields.dueAt = QStringLiteral("due_date");
+  d.fields.dueHasTimeField = QStringLiteral("due_date_time");
+  d.fields.assignee = QStringLiteral("assignees.0.username");
+  d.fields.author = QStringLiteral("creator.username");
+  d.fields.project = QStringLiteral("list.name");
+  d.fields.labels = QStringLiteral("tags");
+  d.fields.labelNameKey = QStringLiteral("name");
+  d.fields.labelColorKey = QStringLiteral("tag_bg");
   // ClickUp scopes the grant in its own consent screen rather than on the
   // authorize URL, and wants the exchange as JSON. Its token does not expire.
   d.oauth = confidentialOAuth(HEAP_OAUTH_CLICKUP_CLIENT_ID,
@@ -354,6 +405,12 @@ ProviderDescriptor sentry() {
   d.fields.status = QStringLiteral("status");
   d.fields.url = QStringLiteral("permalink");
   d.fields.updatedAt = QStringLiteral("lastSeen");
+  d.fields.createdAt = QStringLiteral("firstSeen");
+  d.fields.assignee = QStringLiteral("assignedTo.name");
+  d.fields.commentCount = QStringLiteral("numComments");
+  // Sentry has no issue type; its level (error/warning/…) is the closest thing.
+  d.fields.issueType = QStringLiteral("level");
+  d.fields.project = QStringLiteral("project.slug");
   d.oauth = confidentialOAuth(HEAP_OAUTH_SENTRY_CLIENT_ID,
                               HEAP_OAUTH_SENTRY_CLIENT_SECRET,
                               QStringLiteral("https://sentry.io/oauth/authorize/"),
@@ -389,6 +446,12 @@ ProviderDescriptor bitbucket() {
   d.fields.priority = QStringLiteral("priority");
   d.fields.url = QStringLiteral("links.html.href");
   d.fields.updatedAt = QStringLiteral("updated_on");
+  d.fields.createdAt = QStringLiteral("created_on");
+  d.fields.assignee = QStringLiteral("assignee.display_name");
+  d.fields.author = QStringLiteral("reporter.display_name");
+  d.fields.issueType = QStringLiteral("kind");
+  d.fields.project = QStringLiteral("repository.full_name");
+  d.fields.milestone = QStringLiteral("milestone.name");
   // Bitbucket takes the client credentials in an HTTP Basic header and rejects
   // them in the body. Its access token lives two hours; scopes are set on the
   // consumer, not on the authorize URL.

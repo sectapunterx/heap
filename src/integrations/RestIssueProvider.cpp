@@ -12,51 +12,6 @@
 
 namespace heap::integrations {
 
-namespace {
-
-// Walk a dot-path ("status.name") through nested JSON objects and return the
-// leaf value. An empty path or a missing key yields an undefined value.
-QJsonValue valueAtPath(const QJsonObject& obj, const QString& path) {
-  if(path.isEmpty()) {
-    return {};
-  }
-  const QStringList parts = path.split('.');
-  QJsonValue cur = obj;
-  for(const QString& part : parts) {
-    if(!cur.isObject()) {
-      return {};
-    }
-    cur = cur.toObject().value(part);
-  }
-  return cur;
-}
-
-// Stringify a leaf: strings pass through, integral numbers lose the ".0", bools
-// become "true"/"false". Objects/arrays/null → empty string.
-QString leafToString(const QJsonValue& v) {
-  if(v.isString()) {
-    return v.toString();
-  }
-  if(v.isBool()) {
-    return v.toBool() ? QStringLiteral("true") : QStringLiteral("false");
-  }
-  if(v.isDouble()) {
-    const double d = v.toDouble();
-    const auto asLong = static_cast<qlonglong>(d);
-    if(static_cast<double>(asLong) == d) {
-      return QString::number(asLong);
-    }
-    return QString::number(d);
-  }
-  return {};
-}
-
-QString fieldStr(const QJsonObject& obj, const QString& path) {
-  return leafToString(valueAtPath(obj, path));
-}
-
-}  // namespace
-
 QVector<ExternalTask> parseWithFieldMap(const QByteArray& json, const FieldMap& map, const QString& providerId, const QString& baseUrl) {
   QVector<ExternalTask> out;
   const QJsonDocument doc = QJsonDocument::fromJson(json);
@@ -108,21 +63,45 @@ QVector<ExternalTask> parseWithFieldMap(const QByteArray& json, const FieldMap& 
       t.url = fieldStr(o, map.url);
     }
 
-    if(!map.updatedAt.isEmpty()) {
-      t.updatedAt = QDateTime::fromString(fieldStr(o, map.updatedAt), Qt::ISODate);
+    t.updatedAt = parseTrackerTimestamp(valueAtPath(o, map.updatedAt));
+    t.createdAt = parseTrackerTimestamp(valueAtPath(o, map.createdAt));
+    t.dueAt = parseTrackerTimestamp(valueAtPath(o, map.dueAt), &t.dueHasTime);
+    // A provider that answers the question separately (ClickUp's due_date_time)
+    // overrules what the value's own shape suggested.
+    if(!map.dueHasTimeField.isEmpty() && t.dueAt.isValid()) {
+      t.dueHasTime = valueAtPath(o, map.dueHasTimeField).toBool();
+    }
+    t.assignee = fieldStr(o, map.assignee);
+    t.author = fieldStr(o, map.author);
+    t.issueType = fieldStr(o, map.issueType);
+    t.project = sanitizeProject(fieldStr(o, map.project));
+    t.milestone = fieldStr(o, map.milestone);
+    if(!map.commentCount.isEmpty()) {
+      const QJsonValue n = valueAtPath(o, map.commentCount);
+      if(n.isDouble()) {
+        t.commentCount = n.toInt(-1);
+      }
     }
 
     if(!map.labels.isEmpty()) {
       const QJsonArray labels = valueAtPath(o, map.labels).toArray();
       for(const auto& lv : labels) {
         QString name;
+        QString color;
         if(map.labelNameKey.isEmpty()) {
           name = lv.toString();
         } else if(lv.isObject()) {
-          name = lv.toObject().value(map.labelNameKey).toString();
+          const QJsonObject lo = lv.toObject();
+          name = lo.value(map.labelNameKey).toString();
+          if(!map.labelColorKey.isEmpty()) {
+            color = normalizeHexColor(lo.value(map.labelColorKey).toString());
+          }
         }
         if(!name.isEmpty()) {
           t.labels.append(name);
+          if(!color.isEmpty()) {
+            t.labelColors.insert(name, color);
+          }
         }
       }
     }
@@ -258,19 +237,25 @@ void RestIssueProvider::pullTasks() {
   }
   const QString base = resolvedBaseUrl();
   const QString url = base + expand(listPath());
+  // Which endpoint this pull went to decides whether the issue numbers coming
+  // back are unique on their own. Captured now, not when the reply lands, so a
+  // repo configured mid-flight cannot mislabel the answer.
+  const bool crossProject = inSelfScope();
   QNetworkReply* reply = m_nam->get(buildRequest(url));
-  connect(reply, &QNetworkReply::finished, this, [this, reply, base]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, base, crossProject]() {
     reply->deleteLater();
     if(reply->error() != QNetworkReply::NoError) {
       emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
       return;
     }
     const QByteArray body = reply->readAll();
-    if(m_desc.parser) {
-      emit tasksFetched(m_desc.parser(body, base));
-    } else {
-      emit tasksFetched(parseWithFieldMap(body, m_desc.fields, m_desc.id, base));
+    QVector<ExternalTask> tasks = m_desc.parser ? m_desc.parser(body, base) : parseWithFieldMap(body, m_desc.fields, m_desc.id, base);
+    if(crossProject) {
+      for(ExternalTask& t : tasks) {
+        t.crossProject = true;
+      }
     }
+    emit tasksFetched(tasks);
   });
 }
 
