@@ -13,6 +13,82 @@ ApplicationWindow {
     height: 900
     minimumWidth: 1100
     minimumHeight: 680
+
+    // ── Window geometry ───────────────────────────────────────────────
+    // The window opened at a hardcoded 1440x900 in the same spot on every
+    // launch, so resizing or moving it — or maximising it — was undone each
+    // time the app started.
+    //
+    // Stored under settings.window in the same blob everything else uses.
+    // SettingsView rewrites that blob wholesale but carries unknown top-level
+    // keys across, so this survives a trip through the settings screen.
+    property bool _geometryRestored: false
+
+    function _settingsObject() {
+        const raw = AppController.appSettingsJson || "";
+        if (!raw.length) return ({});
+        try { return JSON.parse(raw) || ({}); } catch (e) { return ({}); }
+    }
+
+    // True when at least a good part of `rect` lands on some screen. A window
+    // restored onto a monitor that is no longer attached would otherwise open
+    // off-screen with no way to drag it back.
+    function _isOnAScreen(rect) {
+        const screens = Qt.application.screens;
+        for (let i = 0; i < screens.length; i++) {
+            const s = screens[i];
+            const ix = Math.max(0, Math.min(rect.x + rect.width,  s.virtualX + s.width)  - Math.max(rect.x, s.virtualX));
+            const iy = Math.max(0, Math.min(rect.y + rect.height, s.virtualY + s.height) - Math.max(rect.y, s.virtualY));
+            // A title bar's worth of overlap is enough to grab the window.
+            if (ix >= 120 && iy >= 40) return true;
+        }
+        return false;
+    }
+
+    function _restoreGeometry() {
+        const g = _settingsObject().window;
+        if (!g) { win._geometryRestored = true; return; }
+
+        const w = Math.max(win.minimumWidth,  Number(g.width)  || win.width);
+        const h = Math.max(win.minimumHeight, Number(g.height) || win.height);
+        const x = Number(g.x), y = Number(g.y);
+        if (isFinite(x) && isFinite(y) && _isOnAScreen({ x: x, y: y, width: w, height: h })) {
+            win.x = x;
+            win.y = y;
+        }
+        win.width = w;
+        win.height = h;
+        if (g.maximized === true) win.visibility = Window.Maximized;
+        win._geometryRestored = true;
+    }
+
+    // x/y/width/height change continuously while a window is dragged or
+    // resized, so the write is debounced rather than run per frame.
+    Timer {
+        id: geometrySaveTimer
+        interval: 400
+        onTriggered: win._saveGeometry()
+    }
+
+    function _saveGeometry() {
+        if (!win._geometryRestored) return;
+        const maximized = win.visibility === Window.Maximized;
+        const s = _settingsObject();
+        // While maximised, x/y/width/height describe the maximised frame —
+        // keep the last normal geometry so unmaximising after a restart does
+        // not snap the window to the full screen size.
+        const prev = s.window || ({});
+        s.window = maximized
+            ? { x: prev.x, y: prev.y, width: prev.width, height: prev.height, maximized: true }
+            : { x: win.x, y: win.y, width: win.width, height: win.height, maximized: false };
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+
+    onXChanged: if (win._geometryRestored) geometrySaveTimer.restart()
+    onYChanged: if (win._geometryRestored) geometrySaveTimer.restart()
+    onWidthChanged: if (win._geometryRestored) geometrySaveTimer.restart()
+    onHeightChanged: if (win._geometryRestored) geometrySaveTimer.restart()
+    onVisibilityChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     title: "heap. — Work, in one place."
     color: Theme.bg
 
@@ -37,6 +113,7 @@ ApplicationWindow {
     }
 
     Component.onCompleted: {
+        _restoreGeometry();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
         // First run: greet the user once the overlay is ready.
@@ -657,6 +734,12 @@ ApplicationWindow {
         onActivated: AppController.currentView = "week"
     }
     Shortcut {
+        sequence: _kbd("view.month")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: AppController.currentView = "month"
+    }
+    Shortcut {
         sequence: _kbd("view.docs")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
@@ -758,7 +841,18 @@ ApplicationWindow {
         sequence: _kbd("search.focus")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
-        onActivated: topBar.focusSearch()
+        // The top bar's box searches tasks. In a view that has a search of its
+        // own — Docs, and Notes once it grows one — Ctrl+F used to focus that
+        // task box anyway, where typing did nothing to what was on screen.
+        // Duck-typed so a view picks this up by declaring focusSearch().
+        onActivated: {
+            const view = viewLoader.item;
+            if (view && typeof view.focusSearch === "function") {
+                view.focusSearch();
+                return;
+            }
+            topBar.focusSearch();
+        }
     }
 
     Shortcut {
