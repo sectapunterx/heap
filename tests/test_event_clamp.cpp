@@ -69,10 +69,11 @@ TEST(EventClamp, ADegenerateStepFallsBackToTheDefaultGrid) {
 TEST(EventClamp, NonFiniteInputsDoNotEscapeTheDay) {
   const double nan = std::nan("");
   const double inf = std::numeric_limits<double>::infinity();
-  for(const heap::cal::HourRange r :
-      {heap::cal::clampHours(nan, 10.0, kQuarter), heap::cal::clampHours(9.0, nan, kQuarter),
-       heap::cal::clampHours(inf, inf, kQuarter), heap::cal::clampHours(-inf, 10.0, kQuarter),
-       heap::cal::clampHours(9.0, 10.0, nan)}) {
+  for(const heap::cal::HourRange r : {heap::cal::clampHours(nan, 10.0, kQuarter),
+                                      heap::cal::clampHours(9.0, nan, kQuarter),
+                                      heap::cal::clampHours(inf, inf, kQuarter),
+                                      heap::cal::clampHours(-inf, 10.0, kQuarter),
+                                      heap::cal::clampHours(9.0, 10.0, nan)}) {
     EXPECT_GE(r.start, 0.0);
     EXPECT_LE(r.end, 24.0);
     EXPECT_LT(r.start, r.end);
