@@ -522,6 +522,8 @@ class AppController : public QObject {
   Q_INVOKABLE void addStatus(const QString& name, const QString& color = QString());
   Q_INVOKABLE void renameStatus(const QString& id, const QString& name);
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
+  // Advisory limit on how many cards a column should hold. 0 = none.
+  Q_INVOKABLE void setStatusWipLimit(const QString& id, int limit);
   Q_INVOKABLE void moveStatus(const QString& id, int newIndex);
   Q_INVOKABLE void deleteStatus(const QString& id);
 

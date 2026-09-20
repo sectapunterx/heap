@@ -1635,6 +1635,25 @@ void AppController::renameStatus(const QString& id, const QString& name) {
   scheduleSave();
 }
 
+// A WIP limit is advisory: the column says it is over, and nothing is blocked.
+// A hard cap would mean a drag that silently does nothing, which reads as a
+// bug — the point of the limit is to be noticed, not to police.
+void AppController::setStatusWipLimit(const QString& id, int limit) {
+  const int i = statusIndexOf(id);
+  if(i < 0) {
+    return;
+  }
+  QVariantMap m = m_statuses[i].toMap();
+  const int clamped = qBound(0, limit, 999);  // 0 = no limit
+  if(m.value("wip").toInt() == clamped) {
+    return;
+  }
+  m["wip"] = clamped;
+  m_statuses[i] = m;
+  emit statusesChanged();
+  scheduleSave();
+}
+
 void AppController::setStatusColor(const QString& id, const QString& color) {
   const int i = statusIndexOf(id);
   if(i < 0) {
