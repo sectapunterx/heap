@@ -344,10 +344,19 @@ class AppController : public QObject {
   // no-network-egress guarantee can be exercised without opening a browser.
   Q_INVOKABLE QString issueReportBody() const;
 
+  // How much one pull actually changed. An issue that came back identical
+  // counts as neither, so a quiet auto-sync writes nothing and says so.
+  struct MergeStats {
+    int added = 0;
+    int updated = 0;
+  };
+
   // Fold a batch of pulled external tasks into the model. providerId tags the
   // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
   // Public so the sync merge can be exercised without a live tracker.
-  void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);
+  MergeStats mergeExternalTasks(const QString& providerId,
+                                const QString& idPrefix,
+                                const QVector<heap::integrations::ExternalTask>& issues);
 
   // Fold fetched contacts into the active profile's Docs contact list and, for
   // the people actually talked to, the People rail. Returns how many contacts
@@ -627,6 +636,11 @@ class AppController : public QObject {
   void runAutomation();
 
  private:
+  // `base` if no task holds it, else "base-2", "base-3", … Two pulled issues
+  // can want the same id (the same number from two repos), and upsert on a
+  // colliding id replaces the other task rather than adding one.
+  QString uniqueTaskId(const QString& base) const;
+
   TaskModel m_tasks;
   EventModel m_events;
   PersonModel m_people;
