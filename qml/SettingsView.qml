@@ -205,6 +205,13 @@ Item {
         "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7", "#e6624c"
     ]
 
+    // A stored number, or `fallback` when there is none. `v || fallback` was
+    // the old shape and turned a stored 0 into the default; `??` is the
+    // obvious replacement but qmlcachegen 6.9.1 segfaults on it here.
+    function _num(v, fallback) {
+        return (v === undefined || v === null || v === false) ? fallback : v;
+    }
+
     function _mergeDefaults(src) {
         // Deep-merge user-stored settings on top of defaults; missing
         // keys/sections fall back to defaults so the UI never sees undefined.
@@ -1111,7 +1118,7 @@ Item {
                         visible: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
                         label: I18n.t("settings.notif.leadHours")
                         unit: "h"; min: 1; max: 72; step: 1
-                        value: (root.settings.notifications && root.settings.notifications.deadlineLeadHours) ?? 24
+                        value: _num(root.settings.notifications && root.settings.notifications.deadlineLeadHours, 24)
                         onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
                     }
                     SwitchRow {
@@ -1243,7 +1250,7 @@ Item {
                     }
                     SegRow {
                         label: I18n.t("settings.cal.snap")
-                        value: String((root.settings.calendar && root.settings.calendar.snapMinutes) ?? 15)
+                        value: String(_num(root.settings.calendar && root.settings.calendar.snapMinutes, 15))
                         options: [ ({ value: "5", label: "5 min" }), ({ value: "15", label: "15 min" }), ({ value: "30", label: "30 min" }) ]
                         onSelected: (value) => root.set("calendar", "snapMinutes", parseInt(value))
                     }
@@ -1271,7 +1278,7 @@ Item {
                         visible: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
                         label: I18n.t("settings.cal.focusDuration")
                         unit: " min"; min: 30; max: 240; step: 15
-                        value: (root.settings.calendar && root.settings.calendar.focusBlockDuration) ?? 90
+                        value: _num(root.settings.calendar && root.settings.calendar.focusBlockDuration, 90)
                         onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }
                     TextRow {
