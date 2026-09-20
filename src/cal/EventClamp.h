@@ -1,5 +1,6 @@
 #pragma once
 
+#include <QTime>
 #include <QtGlobal>
 
 #include <cmath>
@@ -67,6 +68,16 @@ inline HourRange clampHours(double start, double end, double step) {
     s = 0.0;
   }
   return {s, e};
+}
+
+// An hours-since-midnight value as a wall-clock time. 24.0 is a legal instant
+// on the grid but not a legal QTime, so it saturates at 23:59.
+inline QTime hourToTime(double hour) {
+  if(!std::isfinite(hour)) {
+    return {0, 0};
+  }
+  const int minutes = qBound(0, static_cast<int>(std::lround(hour * 60.0)), (24 * 60) - 1);
+  return {minutes / 60, minutes % 60};
 }
 
 }  // namespace heap::cal

@@ -482,6 +482,10 @@ class AppController : public QObject {
   Q_INVOKABLE void updateEvent(const QString& id, double start, double end, const QDate& date);
   Q_INVOKABLE void deleteEvent(const QString& id);
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
+  // First hour on `date` where a block of `durationHours` does not land on top
+  // of an existing event, starting from the workday (or from now, for today).
+  // The "schedule this" menu item used to hardcode 14:00 and stack blocks.
+  Q_INVOKABLE double nextFreeSlot(const QDate& date, double durationHours) const;
   Q_INVOKABLE QString scheduledLabelFor(const QString& taskId, const QDate& date) const;
 
   // ---- People ops ----

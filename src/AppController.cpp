@@ -1199,20 +1199,75 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   if(row < 0) {
     return;
   }
-  const Task& t = m_tasks.items().at(row);
+  Task t = m_tasks.items().at(row);  // by value — scheduledAt is written back
+  const QDate day = date.isValid() ? date : m_selectedDate;
+
+  // Length comes from the task's own estimate when it has one: dropping a
+  // 20-minute chore onto the calendar used to carve out a full hour regardless.
+  // Without an estimate, the focus-block duration from settings is the better
+  // guess than a hardcoded 60 minutes.
+  const int fallbackMin = settingsMap().value("calendar").toMap().value("focusBlockDuration", 90).toInt();
+  const int durMin = t.estimateMinutes > 0 ? t.estimateMinutes : fallbackMin;
+  const double step = snapStepHours();
+  const heap::cal::HourRange hours = heap::cal::clampHours(startHour, startHour + durMin / 60.0, step);
+
   CalEvent e;
   e.id = QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
   e.title = QString("Focus · %1").arg(t.title.left(36));
   e.type = "focus";
-  e.start = startHour;
-  e.end = startHour + 1.0;
+  e.start = hours.start;
+  e.end = hours.end;
   e.attendees = "🔒 deep work";
-  e.date = date;
+  e.date = day;
   e.taskId = t.id;
   e.profileId = m_activeProfileId;
   m_events.upsert(e);
-  emit toast(tr_("event.scheduled").arg(t.id, eventHourLabel(startHour)));
+
+  // The task itself has to know when it is happening. Only DayCalendar reads
+  // the focus block; every other surface — Week, Month, Timeline, the card's
+  // own "scheduled" label — goes through Task.scheduledAt, so without this a
+  // time-blocked task stayed unscheduled everywhere but the day it was dropped.
+  t.scheduledAt = QDateTime(day, heap::cal::hourToTime(hours.start));
+  t.hasTime = true;
+  m_tasks.upsert(t);
+
+  emit toast(tr_("event.scheduled").arg(t.id, eventHourLabel(hours.start)));
   scheduleSave();
+}
+
+double AppController::nextFreeSlot(const QDate& date, double durationHours) const {
+  const double step = snapStepHours();
+  const double dur = qMax(step, durationHours);
+  // Start at the top of the working day, or at the next slot from now when the
+  // day in question is today — "schedule this" should not offer a time that has
+  // already passed.
+  const QDateTime now = QDateTime::currentDateTime();
+  double cursor = m_workdayStart;
+  if(date == now.date()) {
+    cursor = qMax(cursor, nextQuarterHour(now));
+  }
+  cursor = std::ceil(cursor / step) * step;
+
+  // Walk the day's existing events in start order, stepping past any that the
+  // candidate would overlap.
+  QVector<QPair<double, double>> busy;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.date == date) {
+      busy.append({e.start, e.end});
+    }
+  }
+  std::sort(busy.begin(), busy.end());
+  for(const auto& b : busy) {
+    if(cursor + dur <= b.first) {
+      break;  // fits in the gap before this one
+    }
+    if(b.second > cursor) {
+      cursor = std::ceil(b.second / step) * step;
+    }
+  }
+  // Past the end of the working day is still a legal answer — the grid runs to
+  // midnight — but there has to be room for the block itself.
+  return qBound(0.0, cursor, qMax(0.0, 24.0 - dur));
 }
 
 void AppController::cyclePerson(const QString& id) {

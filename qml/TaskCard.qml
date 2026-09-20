@@ -576,7 +576,12 @@ Rectangle {
             text: "⏰  " + I18n.t("taskcard.schedule")
             onTriggered: {
                 if (!card.task) return;
-                AppController.scheduleTask(card.task.id, 14, AppController.selectedDate);
+                // 14:00 used to be hardcoded here, so every task scheduled from
+                // the card landed on top of the last one — and on a time that
+                // had already passed for most of the afternoon.
+                const est = card.task.estimateMinutes > 0 ? card.task.estimateMinutes / 60 : 1;
+                const at = AppController.nextFreeSlot(AppController.selectedDate, est);
+                AppController.scheduleTask(card.task.id, at, AppController.selectedDate);
             }
         }
         QQC.MenuItem {
