@@ -252,6 +252,14 @@ class AppController : public QObject {
   // Every folder in use, sorted, for a tree or a picker.
   Q_INVOKABLE QStringList noteFolders() const;
 
+  // ── Notes as a folder of .md files ──
+  //
+  // Import returns a summary rather than a bool, for the same reason .ics does:
+  // a vault that brought in forty notes and skipped two is neither a success
+  // nor a failure. Keys: imported, updated, skipped, warnings.
+  Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl);
+  Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl) const;
+
   QString notesState() const {
     return m_notesState;
   }

@@ -162,6 +162,12 @@ target_include_directories(heap_ics_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_link_libraries(heap_ics_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
 add_test(NAME heap_ics_tests COMMAND heap_ics_tests)
 
+# Notes as a folder of .md files. Gui and Qml for the same reason as above.
+add_executable(heap_md_vault_tests test_md_vault.cpp)
+target_include_directories(heap_md_vault_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_md_vault_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
+add_test(NAME heap_md_vault_tests COMMAND heap_md_vault_tests)
+
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
 target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

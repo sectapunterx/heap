@@ -306,6 +306,8 @@ ApplicationWindow {
             }
             onImportJsonRequested: importJsonDialog.open()
             onImportIcsRequested: importIcsDialog.open()
+            onImportVaultRequested: importVaultDialog.open()
+            onExportVaultRequested: exportVaultDialog.open()
             onExportIcsRequested: {
                 exportIcsDialog.currentFile = "file:///" + (
                     (AppController.activeProfileId || "heap") + ".ics"
@@ -1154,6 +1156,35 @@ ApplicationWindow {
         onAccepted: toast.show(AppController.exportIcsToFile(selectedFile)
                                ? I18n.t("toast.ics.exported")
                                : I18n.t("toast.ics.exportFail"))
+    }
+
+    // ── Notes as a folder of .md files ─────────────────────────────────
+    FileDialog {
+        id: importVaultDialog
+        fileMode: FileDialog.OpenFile
+        // A folder picker, not a file picker: the user chooses any file in the
+        // vault and heap takes the directory, because FolderDialog on Windows
+        // hides the contents and people cannot tell which folder they are in.
+        nameFilters: ["Markdown (*.md *.markdown)", "All files (*)"]
+        title: I18n.t("dialog.importVault.title")
+        onAccepted: {
+            const r = AppController.importNotesFolder(currentFolder);
+            if (r.error) { toast.show(r.error); return; }
+            toast.show(I18n.t("toast.notes.imported")
+                       .arg(r.imported).arg(r.updated).arg(r.skipped));
+            for (let i = 0; i < r.warnings.length; i++) console.warn("[vault]", r.warnings[i]);
+        }
+    }
+    FileDialog {
+        id: exportVaultDialog
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["All files (*)"]
+        title: I18n.t("dialog.exportVault.title")
+        onAccepted: {
+            const r = AppController.exportNotesFolder(currentFolder);
+            toast.show(r.error ? r.error
+                               : I18n.t("toast.notes.exported").arg(r.written));
+        }
     }
 
     Toast {
