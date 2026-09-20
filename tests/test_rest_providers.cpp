@@ -9,7 +9,9 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/TrelloProvider.h"
+#include "platform/Paths.h"
 
+#include <QFile>
 #include <QNetworkReply>
 #include <QTimeZone>
 
@@ -332,6 +334,403 @@ TEST(TrelloParse, ListsResolveCardStatus) {
 TEST(TrelloParse, HandlesGarbage) {
   EXPECT_TRUE(parseTrelloLists("{}").isEmpty());
   EXPECT_TRUE(parseTrelloCards("not json", {}).isEmpty());
+}
+
+// The fallback file holds access tokens and OAuth refresh tokens in plain
+// text. It is what a build without QtKeychain uses, and what every --data-dir
+// run uses regardless. QSaveFile renames a temp file into place, so without an
+// explicit call the result inherits the default mask or the parent's ACL.
+TEST(SecretStoreCache, TheFallbackFileIsReadableOnlyByItsOwner) {
+  const QString path = heap::paths::dataDir() + QStringLiteral("/secrets.json");
+  QFile::remove(path);
+
+  SecretStore store;
+  store.setValue(QStringLiteral("github"), QStringLiteral("token"), QStringLiteral("ghp_secret"));
+  ASSERT_TRUE(QFile::exists(path)) << "the fallback file was not written to " << path.toStdString();
+
+  const QFileDevice::Permissions perms = QFile::permissions(path);
+  EXPECT_TRUE(perms.testFlag(QFileDevice::ReadOwner));
+  EXPECT_TRUE(perms.testFlag(QFileDevice::WriteOwner)) << "the app locked itself out of its own secrets";
+
+#ifndef Q_OS_WIN
+  // Only asserted off Windows: there QFile::permissions() reports a guess
+  // rather than the ACL unless NTFS permission lookup is switched on, so the
+  // group/other bits it returns say nothing about who can actually read the
+  // file. The exposure this guards is the POSIX one — a keychain-less Linux
+  // build writing tokens at whatever the umask allows.
+  for(const QFileDevice::Permission p : {QFileDevice::ReadGroup,
+                                         QFileDevice::WriteGroup,
+                                         QFileDevice::ExeGroup,
+                                         QFileDevice::ReadOther,
+                                         QFileDevice::WriteOther,
+                                         QFileDevice::ExeOther}) {
+    EXPECT_FALSE(perms.testFlag(p)) << "secrets.json is reachable beyond its owner";
+  }
+#endif
+
+  // Rewriting the file must not widen it again.
+  store.setValue(QStringLiteral("gitlab"), QStringLiteral("token"), QStringLiteral("glpat_secret"));
+  EXPECT_TRUE(QFile::permissions(path).testFlag(QFileDevice::ReadOwner));
+#ifndef Q_OS_WIN
+  EXPECT_FALSE(QFile::permissions(path).testFlag(QFileDevice::ReadOther));
+#endif
+
+  store.setValue(QStringLiteral("github"), QStringLiteral("token"), QString());
+  store.setValue(QStringLiteral("gitlab"), QStringLiteral("token"), QString());
+  QFile::remove(path);
+}
+
+TEST(TrelloParse, DueBadgesMembersAndCreatedFromId) {
+  // A Trello object id starts with the creation time in hex seconds:
+  // 0x67b5e880 = 2025-02-19T…
+  const QByteArray cards = R"([
+    {"id":"67b5e880aaaabbbbccccdddd","name":"Card","idList":"L1","url":"https://trello.com/c/x",
+     "due":"2026-08-15T17:00:00.000Z","badges":{"comments":5},
+     "members":[{"fullName":"Ada Lovelace"}],
+     "labels":[{"name":"urgent","color":"red_dark"},{"name":"nocolor","color":""}]}])";
+  const QVector<ExternalTask> tasks = parseTrelloCards(cards, {});
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_EQ(t.commentCount, 5);
+  EXPECT_EQ(t.assignee, QStringLiteral("Ada Lovelace"));
+  ASSERT_TRUE(t.dueAt.isValid());
+  EXPECT_TRUE(t.dueHasTime);  // a real instant, not an all-day date
+  EXPECT_EQ(t.dueAt.toUTC().date(), QDate(2026, 8, 15));
+  ASSERT_TRUE(t.createdAt.isValid());
+  EXPECT_EQ(t.createdAt.toUTC().date(), QDate(2025, 2, 19));
+  // Trello names its colours; heap needs hex.
+  EXPECT_EQ(t.labelColors.value(QStringLiteral("urgent")), QStringLiteral("#eb5a46"));
+  EXPECT_FALSE(t.labelColors.contains(QStringLiteral("nocolor")));
+}
+
+// ── HEAP-117: generic FieldMap extraction ──
+
+TEST(FieldMapParse, ArrayIndexAndFallbackPath) {
+  FieldMap map;
+  map.id = QStringLiteral("id");
+  map.title = QStringLiteral("name");
+  map.assignee = QStringLiteral("assignees.0.login|assignee.login");
+  map.project = QStringLiteral("repo.full_name");
+
+  // The indexed path resolves.
+  const QByteArray withArray = R"([{"id":"1","name":"t","assignees":[{"login":"first"},{"login":"second"}]}])";
+  QVector<ExternalTask> tasks = parseWithFieldMap(withArray, map, QStringLiteral("x"), QString());
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks[0].assignee, QStringLiteral("first"));
+
+  // An empty array falls through to the second alternative.
+  const QByteArray withSingular = R"([{"id":"1","name":"t","assignees":[],"assignee":{"login":"solo"}}])";
+  tasks = parseWithFieldMap(withSingular, map, QStringLiteral("x"), QString());
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks[0].assignee, QStringLiteral("solo"));
+
+  // Neither present → empty, and an out-of-range index does not crash.
+  const QByteArray withNeither = R"([{"id":"1","name":"t","assignees":[]}])";
+  tasks = parseWithFieldMap(withNeither, map, QStringLiteral("x"), QString());
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_TRUE(tasks[0].assignee.isEmpty());
+}
+
+TEST(FieldMapParse, TimestampShapes) {
+  bool hasTime = true;
+  // A bare date is a day: local midnight, no clock.
+  const QDateTime day = parseTrackerTimestamp(QJsonValue(QStringLiteral("2026-08-15")), &hasTime);
+  ASSERT_TRUE(day.isValid());
+  EXPECT_EQ(day.date(), QDate(2026, 8, 15));
+  EXPECT_EQ(day.time(), QTime(0, 0));
+  EXPECT_FALSE(hasTime);
+
+  // An instant keeps its clock.
+  const QDateTime instant = parseTrackerTimestamp(QJsonValue(QStringLiteral("2026-08-15T17:30:00Z")), &hasTime);
+  ASSERT_TRUE(instant.isValid());
+  EXPECT_TRUE(hasTime);
+  EXPECT_EQ(instant.toUTC().time(), QTime(17, 30));
+
+  // Epoch milliseconds, as a number and as a string (ClickUp sends strings).
+  const QDateTime fromNumber = parseTrackerTimestamp(QJsonValue(qint64(1755277800000)));
+  ASSERT_TRUE(fromNumber.isValid());
+  const QDateTime fromString = parseTrackerTimestamp(QJsonValue(QStringLiteral("1755277800000")));
+  EXPECT_EQ(fromNumber, fromString);
+
+  // Nothing, and nonsense, are both "no date" rather than a crash or an epoch.
+  EXPECT_FALSE(parseTrackerTimestamp(QJsonValue()).isValid());
+  EXPECT_FALSE(parseTrackerTimestamp(QJsonValue(QStringLiteral(""))).isValid());
+  EXPECT_FALSE(parseTrackerTimestamp(QJsonValue(QStringLiteral("not a date"))).isValid());
+  // A small number is a count, not an epoch.
+  EXPECT_FALSE(parseTrackerTimestamp(QJsonValue(42)).isValid());
+}
+
+TEST(FieldMapParse, NormalizeHexColorAndSanitizeProject) {
+  EXPECT_EQ(normalizeHexColor(QStringLiteral("d73a4a")), QStringLiteral("#d73a4a"));
+  EXPECT_EQ(normalizeHexColor(QStringLiteral("#D73A4A")), QStringLiteral("#D73A4A"));
+  EXPECT_EQ(normalizeHexColor(QStringLiteral("#fff")), QStringLiteral("#fff"));
+  // A colour name would reach a QML colour property unvalidated; drop it.
+  EXPECT_TRUE(normalizeHexColor(QStringLiteral("green")).isEmpty());
+  EXPECT_TRUE(normalizeHexColor(QStringLiteral("")).isEmpty());
+
+  EXPECT_EQ(sanitizeProject(QStringLiteral("acme/web")), QStringLiteral("acme/web"));
+  EXPECT_EQ(sanitizeProject(QStringLiteral("group/sub/app")), QStringLiteral("group/sub/app"));
+  EXPECT_EQ(sanitizeProject(QStringLiteral("PROJ")), QStringLiteral("PROJ"));
+  EXPECT_EQ(sanitizeProject(QStringLiteral("dot.net.core")), QStringLiteral("dot.net.core"));
+  // The value is spliced into URL paths and task ids.
+  EXPECT_TRUE(sanitizeProject(QStringLiteral("acme/../../evil")).isEmpty());
+  EXPECT_TRUE(sanitizeProject(QStringLiteral("acme/./web")).isEmpty());
+  EXPECT_TRUE(sanitizeProject(QStringLiteral("acme web")).isEmpty());
+  EXPECT_TRUE(sanitizeProject(QStringLiteral("acme?x=1")).isEmpty());
+  EXPECT_TRUE(sanitizeProject(QStringLiteral("https://evil/acme")).isEmpty());
+}
+
+TEST(FieldMapParse, GiteaAssigneeRepoAndBareHexColor) {
+  const QByteArray json = R"([
+    {"number":7,"title":"Fix build","state":"open","html_url":"https://gitea.com/o/r/issues/7",
+     "updated_at":"2026-01-02T03:04:05Z","created_at":"2025-12-01T00:00:00Z","due_date":"2026-03-01T00:00:00Z",
+     "comments":2,"user":{"login":"rep"},"assignees":[{"login":"dev"}],
+     "repository":{"full_name":"o/r"},"milestone":{"title":"v1"},
+     "labels":[{"name":"bug","color":"d73a4a"}]}])";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("gitea"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_EQ(t.assignee, QStringLiteral("dev"));
+  EXPECT_EQ(t.author, QStringLiteral("rep"));
+  EXPECT_EQ(t.commentCount, 2);
+  EXPECT_EQ(t.project, QStringLiteral("o/r"));
+  EXPECT_EQ(t.milestone, QStringLiteral("v1"));
+  EXPECT_TRUE(t.dueAt.isValid());
+  EXPECT_EQ(t.labelColors.value(QStringLiteral("bug")), QStringLiteral("#d73a4a"));
+}
+
+TEST(FieldMapParse, ClickUpEpochMillisecondDatesAndTagColors) {
+  const QByteArray json = R"({"tasks":[
+    {"id":"9x","name":"CU task","status":{"status":"in progress"},"url":"https://app.clickup.com/t/9x",
+     "date_updated":"1755277800000","date_created":"1740000000000",
+     "due_date":"1755277800000","due_date_time":true,
+     "assignees":[{"username":"dev"}],"creator":{"username":"rep"},
+     "list":{"name":"Sprint"},
+     "tags":[{"name":"infra","tag_bg":"#7b68ee"}]}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("clickup"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_TRUE(t.updatedAt.isValid());
+  EXPECT_TRUE(t.createdAt.isValid());
+  ASSERT_TRUE(t.dueAt.isValid());
+  EXPECT_TRUE(t.dueHasTime);
+  EXPECT_EQ(t.assignee, QStringLiteral("dev"));
+  EXPECT_EQ(t.author, QStringLiteral("rep"));
+  EXPECT_EQ(t.project, QStringLiteral("Sprint"));
+  ASSERT_EQ(t.labels.size(), 1);
+  EXPECT_EQ(t.labelColors.value(QStringLiteral("infra")), QStringLiteral("#7b68ee"));
+}
+
+TEST(FieldMapParse, ClickUpAllDayDueDateHasNoClock) {
+  // due_date_time=false means the epoch value is an all-day marker.
+  const QByteArray json = R"({"tasks":[
+    {"id":"9x","name":"t","status":{"status":"open"},"due_date":"1755277800000","due_date_time":false}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("clickup"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_TRUE(tasks[0].dueAt.isValid());
+  EXPECT_FALSE(tasks[0].dueHasTime);
+}
+
+TEST(FieldMapParse, AsanaDueAtBeatsDueOn) {
+  const QByteArray json = R"({"data":[
+    {"gid":"111","name":"Task A","completed":false,"permalink_url":"https://app.asana.com/0/0/111",
+     "modified_at":"2026-01-02T03:04:05Z","created_at":"2025-12-01T00:00:00Z",
+     "due_on":"2026-08-15","due_at":"2026-08-15T17:00:00.000Z",
+     "assignee":{"name":"Ada"},"created_by":{"name":"Grace"},
+     "projects":[{"name":"Roadmap"}],"resource_subtype":"default_task"}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("asana"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  ASSERT_TRUE(t.dueAt.isValid());
+  EXPECT_TRUE(t.dueHasTime) << "due_at is an instant and should win over due_on";
+  EXPECT_EQ(t.assignee, QStringLiteral("Ada"));
+  EXPECT_EQ(t.author, QStringLiteral("Grace"));
+  EXPECT_EQ(t.project, QStringLiteral("Roadmap"));
+}
+
+TEST(FieldMapParse, AsanaFallsBackToDueOn) {
+  const QByteArray json = R"({"data":[
+    {"gid":"111","name":"t","completed":false,"due_on":"2026-08-15"}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("asana"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  ASSERT_TRUE(tasks[0].dueAt.isValid());
+  EXPECT_EQ(tasks[0].dueAt.date(), QDate(2026, 8, 15));
+  EXPECT_FALSE(tasks[0].dueHasTime);
+}
+
+TEST(FieldMapParse, TodoistDueVariantsAndEitherCompletionKey) {
+  // v1 renamed is_completed to checked; both spellings have to work.
+  const QByteArray legacy = R"({"results":[{"id":"a","content":"t","is_completed":true}]})";
+  EXPECT_EQ(parseVia(QStringLiteral("todoist"), legacy)[0].status, QStringLiteral("closed"));
+  const QByteArray v1 = R"({"results":[{"id":"a","content":"t","checked":true}]})";
+  EXPECT_EQ(parseVia(QStringLiteral("todoist"), v1)[0].status, QStringLiteral("closed"));
+
+  const QByteArray dated = R"({"results":[
+    {"id":"a","content":"t","checked":false,"added_at":"2025-12-01T00:00:00Z","note_count":2,
+     "due":{"date":"2026-08-15"}}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("todoist"), dated);
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_EQ(tasks[0].status, QStringLiteral("open"));
+  EXPECT_EQ(tasks[0].commentCount, 2);
+  EXPECT_TRUE(tasks[0].createdAt.isValid());
+  ASSERT_TRUE(tasks[0].dueAt.isValid());
+  EXPECT_FALSE(tasks[0].dueHasTime);
+  // Todoist's 1–4 priority has no StatusMap name, so it must not be mapped at
+  // all — mapping it would resolve to the fallback and overwrite the user's.
+  EXPECT_TRUE(tasks[0].priority.isEmpty());
+
+  const QByteArray timed = R"({"results":[
+    {"id":"a","content":"t","checked":false,"due":{"date":"2026-08-15","datetime":"2026-08-15T17:00:00Z"}}]})";
+  const QVector<ExternalTask> timedTasks = parseVia(QStringLiteral("todoist"), timed);
+  ASSERT_EQ(timedTasks.size(), 1);
+  EXPECT_TRUE(timedTasks[0].dueHasTime);
+}
+
+TEST(FieldMapParse, SentryAssignedToLevelAndCounts) {
+  const QByteArray json = R"([
+    {"id":"55","title":"TypeError","culprit":"foo","status":"unresolved",
+     "permalink":"https://sentry.io/i/55/","lastSeen":"2026-01-02T03:04:05Z",
+     "firstSeen":"2025-11-01T00:00:00Z","numComments":3,"level":"error",
+     "assignedTo":{"name":"Ada"},"project":{"slug":"backend"}}])";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("sentry"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_EQ(t.assignee, QStringLiteral("Ada"));
+  EXPECT_EQ(t.commentCount, 3);
+  EXPECT_EQ(t.issueType, QStringLiteral("error"));
+  EXPECT_EQ(t.project, QStringLiteral("backend"));
+  EXPECT_TRUE(t.createdAt.isValid());
+}
+
+TEST(FieldMapParse, RedmineTrackerProjectAndVersion) {
+  const QByteArray json = R"({"issues":[
+    {"id":42,"subject":"Do thing","status":{"name":"New"},"updated_on":"2026-01-02T03:04:05Z",
+     "created_on":"2025-12-01T00:00:00Z","due_date":"2026-03-01",
+     "assigned_to":{"name":"Ada"},"author":{"name":"Grace"},
+     "tracker":{"name":"Feature"},"project":{"name":"Core"},"fixed_version":{"name":"2.1"}}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("redmine"), json, QStringLiteral("https://r.example.com"));
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_EQ(t.assignee, QStringLiteral("Ada"));
+  EXPECT_EQ(t.author, QStringLiteral("Grace"));
+  EXPECT_EQ(t.issueType, QStringLiteral("Feature"));
+  EXPECT_EQ(t.project, QStringLiteral("Core"));
+  EXPECT_EQ(t.milestone, QStringLiteral("2.1"));
+  ASSERT_TRUE(t.dueAt.isValid());
+  EXPECT_FALSE(t.dueHasTime);
+  // Journals need a per-issue request, so the count stays unknown.
+  EXPECT_EQ(t.commentCount, -1);
+}
+
+TEST(FieldMapParse, BitbucketKindReporterAndMilestone) {
+  const QByteArray json = R"({"values":[
+    {"id":3,"title":"BB issue","content":{"raw":"body"},"state":"new","priority":"major",
+     "links":{"html":{"href":"https://bitbucket.org/ws/repo/issues/3"}},
+     "updated_on":"2026-01-02T03:04:05Z","created_on":"2025-12-01T00:00:00Z",
+     "assignee":{"display_name":"Ada"},"reporter":{"display_name":"Grace"},
+     "kind":"bug","repository":{"full_name":"ws/repo"},"milestone":{"name":"M1"}}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("bitbucket"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  const ExternalTask& t = tasks[0];
+  EXPECT_EQ(t.assignee, QStringLiteral("Ada"));
+  EXPECT_EQ(t.author, QStringLiteral("Grace"));
+  EXPECT_EQ(t.issueType, QStringLiteral("bug"));
+  EXPECT_EQ(t.project, QStringLiteral("ws/repo"));
+  EXPECT_EQ(t.milestone, QStringLiteral("M1"));
+}
+
+TEST(FieldMapParse, AProjectThatIsNotAPlainPathIsDropped) {
+  const QByteArray json = R"({"values":[
+    {"id":3,"title":"t","state":"new","repository":{"full_name":"ws/../../etc"}}]})";
+  const QVector<ExternalTask> tasks = parseVia(QStringLiteral("bitbucket"), json);
+  ASSERT_EQ(tasks.size(), 1);
+  EXPECT_TRUE(tasks[0].project.isEmpty());
+}
+
+TEST(FieldMapParse, GitlabListRequestsLabelDetails) {
+  // The colour only arrives when the list endpoint asks for it.
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("gitlab"));
+  ASSERT_NE(d, nullptr);
+  EXPECT_TRUE(d->listPathTemplate.contains(QStringLiteral("with_labels_details=true")));
+  EXPECT_TRUE(d->selfListPathTemplate.contains(QStringLiteral("with_labels_details=true")));
+}
+
+// ── HEAP-117: read-only comments ──
+
+TEST(CommentParse, GithubShapeIsExtractedAndEmptyBodiesDropped) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("github"));
+  ASSERT_NE(d, nullptr);
+  const QByteArray json = R"([
+    {"user":{"login":"ada"},"body":"first","created_at":"2026-01-02T03:04:05Z",
+     "html_url":"https://github.com/acme/web/issues/1#issuecomment-1"},
+    {"user":{"login":"grace"},"body":"","created_at":"2026-01-03T00:00:00Z"},
+    {"user":{"login":"grace"},"body":"second","created_at":"2026-01-04T00:00:00Z"}])";
+  const QVector<ExternalComment> comments = parseCommentsWithMap(json, d->comments);
+  ASSERT_EQ(comments.size(), 2) << "an empty body was kept";
+  EXPECT_EQ(comments[0].author, QStringLiteral("ada"));
+  EXPECT_EQ(comments[0].body, QStringLiteral("first"));
+  EXPECT_TRUE(comments[0].createdAt.isValid());
+  EXPECT_FALSE(comments[0].url.isEmpty());
+  // The endpoint has no sort parameter, so the provider reverses afterwards.
+  EXPECT_TRUE(d->comments.newestLast);
+}
+
+TEST(CommentParse, GitlabSystemNotesAreSkipped) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("gitlab"));
+  ASSERT_NE(d, nullptr);
+  const QByteArray json = R"([
+    {"author":{"username":"ada"},"body":"a real comment","created_at":"2026-01-04T00:00:00Z","system":false},
+    {"author":{"username":"ada"},"body":"changed the description","created_at":"2026-01-03T00:00:00Z","system":true}])";
+  const QVector<ExternalComment> comments = parseCommentsWithMap(json, d->comments);
+  ASSERT_EQ(comments.size(), 1) << "a system note was shown as a comment";
+  EXPECT_EQ(comments[0].body, QStringLiteral("a real comment"));
+  // GitLab sorts server-side, so nothing is reversed.
+  EXPECT_FALSE(d->comments.newestLast);
+}
+
+TEST(CommentParse, HandlesGarbageAndAnEmptyList) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("github"));
+  ASSERT_NE(d, nullptr);
+  EXPECT_TRUE(parseCommentsWithMap(QByteArray(), d->comments).isEmpty());
+  EXPECT_TRUE(parseCommentsWithMap("not json", d->comments).isEmpty());
+  EXPECT_TRUE(parseCommentsWithMap("[]", d->comments).isEmpty());
+  EXPECT_TRUE(parseCommentsWithMap("{}", d->comments).isEmpty());
+}
+
+TEST(CommentParse, OnlyProvidersWithAKnownEndpointDeclareOne) {
+  // A descriptor with a path must also say how to read the response, and one
+  // without a path answers "unsupported" rather than issuing a request.
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    if(d.commentsPathTemplate.isEmpty()) {
+      continue;
+    }
+    EXPECT_FALSE(d.comments.body.isEmpty()) << d.id.toStdString() << " has a comments path but no body mapping";
+    EXPECT_FALSE(d.comments.author.isEmpty()) << d.id.toStdString();
+    EXPECT_TRUE(d.commentsPathTemplate.contains(QStringLiteral("{externalId}"))) << d.id.toStdString();
+  }
+  // Jira handles its own; the pull-only providers have none.
+  for(const char* id : {"github", "gitlab", "gitea", "forgejo"}) {
+    const ProviderDescriptor* d = findDescriptor(QLatin1String(id));
+    ASSERT_NE(d, nullptr);
+    EXPECT_FALSE(d->commentsPathTemplate.isEmpty()) << id << " lost its comments endpoint";
+  }
+  for(const char* id : {"todoist", "asana", "clickup", "sentry", "bitbucket", "redmine"}) {
+    const ProviderDescriptor* d = findDescriptor(QLatin1String(id));
+    ASSERT_NE(d, nullptr);
+    EXPECT_TRUE(d->commentsPathTemplate.isEmpty()) << id << " declares comments heap cannot read";
+  }
+}
+
+TEST(FieldMapParse, AsanaRequestsTheFieldsItParsesAndNoUnscopedOnes) {
+  const ProviderDescriptor* d = findDescriptor(QStringLiteral("asana"));
+  ASSERT_NE(d, nullptr);
+  // Asana returns only what opt_fields names.
+  for(const char* field : {"created_at", "due_on", "due_at", "assignee.name", "created_by.name", "projects.name", "resource_subtype"}) {
+    EXPECT_TRUE(d->listPathTemplate.contains(QLatin1String(field))) << field << " missing from the Asana opt_fields";
+  }
+  // tags:read is not in the scope list, and an unscoped opt_field fails the
+  // whole request rather than omitting that one field.
+  EXPECT_FALSE(d->listPathTemplate.contains(QStringLiteral("tags")));
 }
 
 TEST(SecretStoreCache, SetValueGetHasRemove) {

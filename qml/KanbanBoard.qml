@@ -11,6 +11,9 @@ Item {
     property var prioritiesFilter: ({})
     property var scheduleMap: ({})
     property bool showArchived: false
+    // The card under the cursor, read by Main.qml so a single-key action knows
+    // which ticket it means when nothing is selected (HEAP-117).
+    property string hoveredTaskId: ""
     signal taskClicked(string id)
     signal createInStatus(string statusId)
 
@@ -471,6 +474,8 @@ Item {
                                             required property var    labels
                                             required property var    dueAt
                                             required property bool   hasTime
+                                            required property var    ticket
+                                            required property string searchText
                                             width: bodyCol.width
 
                                             readonly property var taskData: ({
@@ -483,8 +488,15 @@ Item {
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
                                                 recurrence: tc.recurrence,
-                                                labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime
+                                                labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime,
+                                                ticket: tc.ticket, searchText: tc.searchText
                                             })
+                                            // Which card a bare "O" acts on when
+                                            // nothing is selected.
+                                            onHoveredChanged: {
+                                                if (hovered) root.hoveredTaskId = tc.id;
+                                                else if (root.hoveredTaskId === tc.id) root.hoveredTaskId = "";
+                                            }
                                             task: taskData
                                             scheduled: root.scheduleMap[tc.id] || ""
                                             onClicked: root.taskClicked(tc.id)

@@ -177,6 +177,7 @@ qt_add_library(heap_core STATIC
     src/markdown/MarkdownEditorController.cpp
     src/markdown/MdHighlighter.cpp
     src/integrations/StatusMap.cpp
+    src/integrations/TrackerFields.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
     src/integrations/GitlabProvider.cpp
@@ -276,6 +277,7 @@ qt_add_qml_module(heap_core
         src/integrations/IntegrationProvider.h
         src/integrations/ProviderDescriptor.h
         src/integrations/ReplyError.h
+        src/integrations/TrackerFields.h
         src/integrations/RestIssueProvider.h
         src/integrations/ProviderRegistry.h
         src/integrations/TrelloProvider.h

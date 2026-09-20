@@ -9,6 +9,7 @@
 #include "FakeHttpServer.h"
 #include "Models.h"
 
+#include "git/BranchTaskMatcher.h"
 #include "integrations/IntegrationTypes.h"
 
 #include <QApplication>
@@ -324,6 +325,47 @@ TEST_F(AppControllerTest, ExtractTaskMetaShape) {
 
 // ─── Full-text command-palette entries (HEAP-80) ──────────────────────
 
+// The palette searches the persisted profiles, and the live models only reach
+// a profile when a save runs — which is debounced by 300 ms. So a task created
+// a moment ago was simply missing from Ctrl+K. Note the deliberate absence of
+// flushSave() here: that is the whole point.
+TEST_F(AppControllerTest, ATaskIsFindableInThePaletteBeforeTheSaveDebounceFires) {
+  QVariantMap draft;
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("LTE-9100");
+  draft["title"] = QStringLiteral("unflushed quokka");
+  draft["priority"] = QStringLiteral("P2");
+  draft["status"] = QStringLiteral("todo");
+  app_->saveTask(draft);
+
+  bool found = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    if(v.toMap().value(QStringLiteral("taskId")).toString() == QStringLiteral("LTE-9100")) {
+      found = true;
+    }
+  }
+  EXPECT_TRUE(found) << "a just-created task was missing from the palette";
+
+  // …and an edit is visible just as promptly.
+  QVariantMap edit = app_->taskById(QStringLiteral("LTE-9100"));
+  edit["_isNew"] = false;
+  edit["_originalId"] = QStringLiteral("LTE-9100");
+  edit["title"] = QStringLiteral("renamed wombat");
+  app_->saveTask(edit);
+
+  bool renamed = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("taskId")).toString() == QStringLiteral("LTE-9100")) {
+      renamed = m.value(QStringLiteral("label")).toString().contains(QStringLiteral("wombat"));
+    }
+  }
+  EXPECT_TRUE(renamed) << "the palette showed a stale title";
+
+  app_->deleteTask(QStringLiteral("LTE-9100"));
+  app_->clearPendingUndo();
+}
+
 TEST_F(AppControllerTest, CommandPaletteEntriesCarryBodyText) {
   // Seed a task whose search term lives only in the description, and a note
   // whose term lives only in the body; flush so the active profile picks both
@@ -634,6 +676,576 @@ TEST_F(AppControllerTest, SyncPreservesUserAddedLocalLabels) {
   EXPECT_TRUE(ids.contains(QStringLiteral("bug")));
 }
 
+// ─── Task ids must never destroy a task ───
+// saveTask ends in upsert(), and TaskModel::upsert on an id that is already
+// taken replaces that row outright. Three ways in, all silent, none undoable.
+
+// The proposed id was "2700 + rowCount()". The count drops when a task is
+// deleted, so the generator walks back over ids that are still in use.
+TEST_F(AppControllerTest, ANewTasksProposedIdIsNeverOneAlreadyInUse) {
+  app_->tasks()->reset({});
+
+  const auto create = [this](const QString& title) {
+    QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+    draft["_isNew"] = true;
+    draft["title"] = title;
+    app_->saveTask(draft);
+    return draft.value(QStringLiteral("id")).toString();
+  };
+
+  const QString first = create(QStringLiteral("A"));
+  const QString second = create(QStringLiteral("B"));
+  ASSERT_NE(first, second);
+  ASSERT_EQ(app_->tasks()->rowCount(), 2);
+
+  // Delete the older one: the row count is now 1 again.
+  app_->deleteTask(first);
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+
+  const QString third = create(QStringLiteral("C"));
+  EXPECT_NE(third, second) << "the new task reused a live id";
+  ASSERT_EQ(app_->tasks()->rowCount(), 2) << "a task was overwritten";
+  const int survivor = app_->tasks()->indexOfId(second);
+  ASSERT_GE(survivor, 0);
+  EXPECT_EQ(app_->tasks()->items().at(survivor).title, QStringLiteral("B")) << "B was replaced by C";
+}
+
+// Even when something else proposes the id, the save itself has to refuse.
+TEST_F(AppControllerTest, CreatingATaskOnATakenIdIsRefusedNotMerged) {
+  Task existing;
+  existing.id = QStringLiteral("LTE-2700");
+  existing.title = QStringLiteral("do not lose me");
+  app_->tasks()->reset({existing});
+
+  QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
+  draft["_isNew"] = true;
+  draft["id"] = QStringLiteral("LTE-2700");
+  draft["title"] = QStringLiteral("the impostor");
+  app_->saveTask(draft);
+
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+  EXPECT_EQ(app_->tasks()->items().at(0).title, QStringLiteral("do not lose me"));
+}
+
+// Renaming A onto B's id used to remove A's row and overwrite B's — two tasks
+// collapsing into one, with A's calendar events re-pointed at the survivor.
+TEST_F(AppControllerTest, RenamingATaskOntoAnotherTasksIdIsRefused) {
+  Task a;
+  a.id = QStringLiteral("LTE-2700");
+  a.title = QStringLiteral("A");
+  Task b;
+  b.id = QStringLiteral("LTE-2701");
+  b.title = QStringLiteral("B");
+  app_->tasks()->reset({a, b});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("LTE-2700"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("LTE-2700");
+  draft["id"] = QStringLiteral("LTE-2701");  // B's id
+  app_->saveTask(draft);
+
+  ASSERT_EQ(app_->tasks()->rowCount(), 2) << "one of the two tasks was destroyed";
+  const int rowA = app_->tasks()->indexOfId(QStringLiteral("LTE-2700"));
+  const int rowB = app_->tasks()->indexOfId(QStringLiteral("LTE-2701"));
+  ASSERT_GE(rowA, 0) << "the renamed task vanished";
+  ASSERT_GE(rowB, 0);
+  EXPECT_EQ(app_->tasks()->items().at(rowA).title, QStringLiteral("A"));
+  EXPECT_EQ(app_->tasks()->items().at(rowB).title, QStringLiteral("B")) << "B was overwritten by A";
+}
+
+// A rename to a free id still has to work.
+TEST_F(AppControllerTest, RenamingATaskToAFreeIdStillWorks) {
+  Task a;
+  a.id = QStringLiteral("LTE-2700");
+  a.title = QStringLiteral("A");
+  app_->tasks()->reset({a});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("LTE-2700"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("LTE-2700");
+  draft["id"] = QStringLiteral("LTE-9000");
+  app_->saveTask(draft);
+
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("LTE-2700")), 0);
+  const int row = app_->tasks()->indexOfId(QStringLiteral("LTE-9000"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).title, QStringLiteral("A"));
+}
+
+// Saving an unchanged task is not a rename, so the guard must not fire on it.
+TEST_F(AppControllerTest, SavingATaskUnderItsOwnIdIsNotTreatedAsACollision) {
+  Task a;
+  a.id = QStringLiteral("LTE-2700");
+  a.title = QStringLiteral("A");
+  app_->tasks()->reset({a});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("LTE-2700"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("LTE-2700");
+  draft["title"] = QStringLiteral("A, edited");
+  app_->saveTask(draft);
+
+  const int row = app_->tasks()->indexOfId(QStringLiteral("LTE-2700"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).title, QStringLiteral("A, edited"));
+}
+
+// ─── Ticket identity and the self-scope collision (HEAP-117) ───
+
+namespace {
+
+// One pulled issue, with only the fields a test cares about set.
+heap::integrations::ExternalTask ghIssue(const QString& id, const QString& url, const QString& title = QStringLiteral("t")) {
+  heap::integrations::ExternalTask e;
+  e.providerId = QStringLiteral("github");
+  e.externalId = id;
+  e.url = url;
+  e.title = title;
+  e.status = QStringLiteral("open");
+  return e;
+}
+
+}  // namespace
+
+// The bug: an "assigned to me" pull spans repos, and GitHub's externalId is the
+// bare issue number. #5 of repo A and #5 of repo B used to collapse onto one
+// task that flip-flopped between them on every sync.
+TEST_F(AppControllerTest, SelfScopeSameNumberInTwoReposStaysTwoTasks) {
+  auto a = ghIssue(QStringLiteral("5"), QStringLiteral("https://github.com/acme/web/issues/5"), QStringLiteral("web five"));
+  a.project = QStringLiteral("acme/web");
+  a.crossProject = true;
+  auto b = ghIssue(QStringLiteral("5"), QStringLiteral("https://github.com/acme/api/issues/5"), QStringLiteral("api five"));
+  b.project = QStringLiteral("acme/api");
+  b.crossProject = true;
+
+  app_->tasks()->reset({});
+  const auto first = app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {a, b});
+  EXPECT_EQ(first.added, 2);
+  EXPECT_EQ(app_->tasks()->rowCount(), 2);
+
+  // Re-syncing the same two issues must not add, rename or re-clobber anything.
+  const auto second = app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {a, b});
+  EXPECT_EQ(second.added, 0);
+  EXPECT_EQ(second.updated, 0);
+  ASSERT_EQ(app_->tasks()->rowCount(), 2);
+
+  QStringList titles;
+  for(const Task& t : app_->tasks()->items()) {
+    titles << t.title;
+  }
+  titles.sort();
+  EXPECT_EQ(titles, (QStringList{QStringLiteral("api five"), QStringLiteral("web five")}));
+  // The ids say which repo each came from.
+  for(const Task& t : app_->tasks()->items()) {
+    EXPECT_TRUE(t.id.contains(QStringLiteral("web")) || t.id.contains(QStringLiteral("api"))) << t.id.toStdString();
+  }
+}
+
+// A task stored by an older build has no project recorded. It is matched by URL
+// and heals in one sync; the other repo's issue gets a task of its own.
+TEST_F(AppControllerTest, ACollapsedLegacyTaskHealsOnTheNextSync) {
+  Task legacy;
+  legacy.id = QStringLiteral("github-5");
+  legacy.externalId = QStringLiteral("5");
+  legacy.externalProvider = QStringLiteral("github");
+  legacy.externalUrl = QStringLiteral("https://github.com/acme/api/issues/5");
+  legacy.title = QStringLiteral("stale");
+  app_->tasks()->reset({legacy});
+
+  auto web = ghIssue(QStringLiteral("5"), QStringLiteral("https://github.com/acme/web/issues/5"), QStringLiteral("web five"));
+  web.project = QStringLiteral("acme/web");
+  web.crossProject = true;
+  auto api = ghIssue(QStringLiteral("5"), QStringLiteral("https://github.com/acme/api/issues/5"), QStringLiteral("api five"));
+  api.project = QStringLiteral("acme/api");
+  api.crossProject = true;
+
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {web, api});
+  ASSERT_EQ(app_->tasks()->rowCount(), 2);
+  // The legacy row kept its id and its own issue, matched by URL.
+  const int legacyRow = app_->tasks()->indexOfId(QStringLiteral("github-5"));
+  ASSERT_GE(legacyRow, 0);
+  EXPECT_EQ(app_->tasks()->items().at(legacyRow).title, QStringLiteral("api five"));
+}
+
+// upsert() on a colliding id replaces the other row, so a new task's id has to
+// be checked even when nothing about the tracker is ambiguous.
+TEST_F(AppControllerTest, ANewTicketNeverOverwritesAnExistingTask) {
+  Task local;
+  local.id = QStringLiteral("github-7");
+  local.title = QStringLiteral("hand-made, not a ticket");
+  app_->tasks()->reset({local});
+
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("7"), QStringLiteral("https://github.com/acme/web/issues/7"))});
+
+  ASSERT_EQ(app_->tasks()->rowCount(), 2) << "the local task was overwritten";
+  const int row = app_->tasks()->indexOfId(QStringLiteral("github-7"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).title, QStringLiteral("hand-made, not a ticket"));
+}
+
+TEST_F(AppControllerTest, SyncWritesAndClearsTheTrackerAssignee) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.assignee = QStringLiteral("ada");
+  issue.author = QStringLiteral("grace");
+  issue.commentCount = 3;
+  issue.project = QStringLiteral("acme/web");
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  const int row = app_->tasks()->indexOfId(QStringLiteral("github-9"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).assignee, QStringLiteral("ada"));
+  EXPECT_EQ(app_->tasks()->items().at(row).externalMeta.author, QStringLiteral("grace"));
+  EXPECT_EQ(app_->tasks()->items().at(row).externalMeta.commentCount, 3);
+
+  // Unassigned upstream → unassigned here.
+  issue.assignee.clear();
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  EXPECT_TRUE(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))).assignee.isEmpty());
+}
+
+TEST_F(AppControllerTest, TrackerDueDateFillsAnEmptyDeadline) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.dueAt = QDateTime(QDate(2026, 8, 15), QTime(0, 0));
+  issue.dueHasTime = false;
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")));
+  EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 8, 15), QTime(0, 0)));
+  EXPECT_FALSE(t.hasTime);
+}
+
+// The whole point of storing the tracker's due date: telling "the user moved
+// this" apart from "the tracker moved this".
+TEST_F(AppControllerTest, ALocallyEditedDeadlineSurvivesTheNextSync) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.dueAt = QDateTime(QDate(2026, 8, 15), QTime(0, 0));
+
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("github-9"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-9");
+  draft["dueAt"] = QDateTime(QDate(2026, 9, 1), QTime(18, 0));
+  app_->saveTask(draft);
+
+  // The tracker still says the 15th; the user's own date has to win.
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")));
+  EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 9, 1), QTime(18, 0)));
+}
+
+TEST_F(AppControllerTest, ADeadlineRemovedUpstreamClearsOnlyWhenSyncOwned) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.dueAt = QDateTime(QDate(2026, 8, 15), QTime(0, 0));
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  issue.dueAt = QDateTime();  // the due date is dropped upstream
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  EXPECT_FALSE(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))).dueAt.isValid());
+
+  // Whereas a deadline the user set on an issue that never had one stays put.
+  auto other = ghIssue(QStringLiteral("10"), QStringLiteral("https://github.com/acme/web/issues/10"));
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {other});
+  QVariantMap draft = app_->taskById(QStringLiteral("github-10"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-10");
+  draft["dueAt"] = QDateTime(QDate(2026, 9, 1), QTime(18, 0));
+  app_->saveTask(draft);
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {other});
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-10"))).dueAt,
+            QDateTime(QDate(2026, 9, 1), QTime(18, 0)));
+}
+
+TEST_F(AppControllerTest, ASnoozedDeadlineIsNotSnappedBackBySync) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.dueAt = QDateTime(QDate(2026, 8, 15), QTime(9, 0));
+  issue.dueHasTime = true;
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  app_->snoozeDeadline(QStringLiteral("github-9"), 60);
+  const QDateTime snoozed = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))).dueAt;
+  ASSERT_NE(snoozed, issue.dueAt);
+
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9"))).dueAt, snoozed);
+}
+
+// The editor rewrites labels from comma text, which drops every colour. The
+// next pull has to restore them without touching a colour the user chose.
+TEST_F(AppControllerTest, LabelColoursFillOnlyEmptyChips) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.labels = {QStringLiteral("bug"), QStringLiteral("ci")};
+  issue.labelColors = {{QStringLiteral("bug"), QStringLiteral("#d73a4a")}, {QStringLiteral("ci"), QStringLiteral("#0000ff")}};
+
+  Task existing;
+  existing.id = QStringLiteral("github-9");
+  existing.externalId = QStringLiteral("9");
+  existing.externalProvider = QStringLiteral("github");
+  existing.externalUrl = issue.url;
+  existing.labels = {Label{QStringLiteral("ci"), QStringLiteral("#123456")}};  // the user picked this one
+  app_->tasks()->reset({existing});
+
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")));
+  QHash<QString, QString> byName;
+  for(const Label& l : t.labels) {
+    byName.insert(l.id, l.color);
+  }
+  EXPECT_EQ(byName.value(QStringLiteral("bug")), QStringLiteral("#d73a4a"));
+  EXPECT_EQ(byName.value(QStringLiteral("ci")), QStringLiteral("#123456")) << "sync overwrote a user-chosen colour";
+}
+
+TEST_F(AppControllerTest, AnEditorSavePreservesTheTrackerMetadata) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.author = QStringLiteral("grace");
+  issue.project = QStringLiteral("acme/web");
+  issue.milestone = QStringLiteral("v2");
+  issue.commentCount = 5;
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("github-9"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-9");
+  draft["title"] = QStringLiteral("edited locally");
+  app_->saveTask(draft);
+
+  const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")));
+  EXPECT_EQ(t.externalMeta.author, QStringLiteral("grace"));
+  EXPECT_EQ(t.externalMeta.project, QStringLiteral("acme/web"));
+  EXPECT_EQ(t.externalMeta.milestone, QStringLiteral("v2"));
+  EXPECT_EQ(t.externalMeta.commentCount, 5);
+}
+
+TEST_F(AppControllerTest, TheEditorDraftCarriesTheTicketMap) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.author = QStringLiteral("grace");
+  issue.issueType = QStringLiteral("Bug");
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  const QVariantMap ticket = app_->taskById(QStringLiteral("github-9")).value(QStringLiteral("ticket")).toMap();
+  EXPECT_EQ(ticket.value(QStringLiteral("provider")).toString(), QStringLiteral("github"));
+  EXPECT_EQ(ticket.value(QStringLiteral("key")).toString(), QStringLiteral("#9"));
+  EXPECT_EQ(ticket.value(QStringLiteral("author")).toString(), QStringLiteral("grace"));
+  EXPECT_EQ(ticket.value(QStringLiteral("issueType")).toString(), QStringLiteral("Bug"));
+
+  Task local;
+  local.id = QStringLiteral("LOCAL-1");
+  app_->tasks()->reset({local});
+  EXPECT_TRUE(app_->taskById(QStringLiteral("LOCAL-1")).value(QStringLiteral("ticket")).toMap().isEmpty());
+}
+
+// A completed recurring ticket spawns a local occurrence, which must not carry
+// the original issue's owner or metadata.
+TEST_F(AppControllerTest, ARecurrenceCloneDropsTheTicketIdentity) {
+  auto issue = ghIssue(QStringLiteral("9"), QStringLiteral("https://github.com/acme/web/issues/9"));
+  issue.assignee = QStringLiteral("ada");
+  issue.author = QStringLiteral("grace");
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+
+  QVariantMap draft = app_->taskById(QStringLiteral("github-9"));
+  draft["_isNew"] = false;
+  draft["_originalId"] = QStringLiteral("github-9");
+  draft["recurrence"] = QStringLiteral("every:week");
+  draft["dueAt"] = QDateTime(QDate(2026, 8, 15), QTime(9, 0));
+  app_->saveTask(draft);
+  app_->moveTask(QStringLiteral("github-9"), QStringLiteral("done"));
+
+  const Task* clone = nullptr;
+  for(const Task& t : app_->tasks()->items()) {
+    if(t.id != QStringLiteral("github-9")) {
+      clone = &t;
+    }
+  }
+  ASSERT_NE(clone, nullptr) << "the recurrence clone was not created";
+  EXPECT_TRUE(clone->externalId.isEmpty());
+  EXPECT_TRUE(clone->assignee.isEmpty());
+  EXPECT_EQ(clone->externalMeta, ExternalMeta{});
+}
+
+// ─── Sync must not undo what the user did ───
+// The contact half of this code has guarded against both of these since it
+// was written; the task half never did.
+
+// Deleting a mirrored issue is how the user says "not mine". The next pull
+// used to put it straight back, which made the deletion meaningless.
+TEST_F(AppControllerTest, ADeletedTicketDoesNotComeBackOnTheNextSync) {
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  ASSERT_GE(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0);
+
+  app_->deleteTask(QStringLiteral("github-1"));
+  app_->clearPendingUndo();
+  ASSERT_LT(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0);
+
+  // The tracker still reports it; heap must not.
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0) << "the deleted ticket was re-created by sync";
+
+  // Other issues are unaffected.
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("github-2")), 0);
+
+  app_->restoreExternalTask(QStringLiteral("github"), QStringLiteral("1"));
+}
+
+// …and undoing the delete withdraws that, so it syncs normally again.
+TEST_F(AppControllerTest, UndoingTheDeleteLetsTheTicketSyncAgain) {
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  app_->deleteTask(QStringLiteral("github-1"));
+  app_->undoLastDeletion();
+  ASSERT_GE(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0);
+
+  app_->tasks()->reset({});  // as if the profile were reloaded
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  EXPECT_GE(app_->tasks()->indexOfId(QStringLiteral("github-1")), 0) << "undo did not withdraw the dismissal";
+}
+
+TEST_F(AppControllerTest, DeletingASelectionOfTicketsDismissesAllOfThem) {
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1")),
+                            ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  app_->setSelectedTaskIds({QStringLiteral("github-1"), QStringLiteral("github-2")});
+  app_->deleteSelectedTasks();
+  app_->clearPendingUndo();
+  ASSERT_EQ(app_->tasks()->rowCount(), 0);
+
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1")),
+                            ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  EXPECT_EQ(app_->tasks()->rowCount(), 0) << "a bulk delete of tickets was undone by sync";
+
+  app_->restoreExternalTask(QStringLiteral("github"), QStringLiteral("1"));
+  app_->restoreExternalTask(QStringLiteral("github"), QStringLiteral("2"));
+}
+
+// The integration config is global and the sync timer keeps running across a
+// profile switch, so a background pull could pour one profile's tickets into
+// whichever profile happened to be open.
+TEST_F(AppControllerTest, AutoSyncIntoAnUnboundProfileIsANoopForTasks) {
+  app_->tasks()->reset({});
+  // The first merge binds the card to the profile it ran in.
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("1"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("1"))});
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("github")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
+  ASSERT_EQ(app_->tasks()->rowCount(), 1);
+
+  // A timer tick while another profile is open must not write into it.
+  QJsonObject cfg = readIntegrationConfig(QStringLiteral("github"));
+  cfg.insert(QStringLiteral("profileId"), QStringLiteral("some-other-profile"));
+  writeIntegrationConfig(QStringLiteral("github"), cfg);
+
+  app_->mergeExternalTasks(QStringLiteral("github"),
+                           QStringLiteral("github-"),
+                           {ghIssue(QStringLiteral("2"), QStringLiteral("https://github.com/acme/web/issues/") + QStringLiteral("2"))});
+  EXPECT_EQ(app_->tasks()->rowCount(), 1) << "a background sync imported into the wrong profile";
+  EXPECT_LT(app_->tasks()->indexOfId(QStringLiteral("github-2")), 0);
+
+  writeIntegrationConfig(QStringLiteral("github"), QJsonObject{});
+}
+
+// "Sync now" means "sync this, here" — a deliberate click rebinds the card.
+TEST_F(AppControllerTest, AManualSyncRebindsTheProviderToTheOpenProfile) {
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), QStringLiteral("http://127.0.0.1:1")},  // never contacted
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                             {QStringLiteral("profileId"), QStringLiteral("some-other-profile")},
+                         });
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+
+  app_->syncProvider(QStringLiteral("gitea"));
+  EXPECT_EQ(readIntegrationConfig(QStringLiteral("gitea")).value(QStringLiteral("profileId")).toString(), app_->activeProfileId());
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// ─── A branch finds its own ticket ───
+// A mirrored issue's heap id carries the provider ("jira-PROJ-123"), while the
+// branch anyone writes for it names the tracker key ("PROJ-123").
+
+TEST_F(AppControllerTest, ProjectKeysOfMirroredIssuesAreRegisteredAsPrefixes) {
+  Task jira;
+  jira.id = QStringLiteral("jira-PROJ-123");
+  jira.externalId = QStringLiteral("PROJ-123");
+  jira.externalProvider = QStringLiteral("jira");
+  Task local;
+  local.id = QStringLiteral("LTE-2700");
+  Task numbered;  // a bare issue number has no key to register
+  numbered.id = QStringLiteral("github-42");
+  numbered.externalId = QStringLiteral("42");
+  numbered.externalProvider = QStringLiteral("github");
+  app_->tasks()->reset({jira, local, numbered});
+
+  const QStringList prefixes = app_->collectPrefixes();
+  EXPECT_TRUE(prefixes.contains(QStringLiteral("PROJ"))) << prefixes.join(QStringLiteral(",")).toStdString();
+  EXPECT_FALSE(prefixes.contains(QStringLiteral("GITHUB")));
+  EXPECT_GE(prefixes.size(), 2) << "the configured local prefix must still be there";
+}
+
+TEST_F(AppControllerTest, ATrackerKeyResolvesToTheTaskThatMirrorsIt) {
+  Task jira;
+  jira.id = QStringLiteral("jira-PROJ-123");
+  jira.externalId = QStringLiteral("PROJ-123");
+  jira.externalProvider = QStringLiteral("jira");
+  Task local;
+  local.id = QStringLiteral("LTE-2700");
+  app_->tasks()->reset({jira, local});
+
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("PROJ-123")), QStringLiteral("jira-PROJ-123"));
+  // Case-insensitively, because a branch name is usually lowercased.
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("proj-123")), QStringLiteral("jira-PROJ-123"));
+  // A local task's key IS its id.
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("LTE-2700")), QStringLiteral("LTE-2700"));
+  // Nothing to resolve to: hand the key back rather than inventing a task.
+  EXPECT_EQ(app_->taskIdForBranchMatch(QStringLiteral("NOPE-1")), QStringLiteral("NOPE-1"));
+  EXPECT_TRUE(app_->taskIdForBranchMatch(QString()).isEmpty());
+}
+
+// The loop has to close: a branch heap creates for a ticket must match back to
+// that same ticket. It used to be named after the heap id, which never did.
+TEST_F(AppControllerTest, ABranchCreatedForATicketIsNamedAfterItsTrackerKey) {
+  Task jira;
+  jira.id = QStringLiteral("jira-PROJ-123");
+  jira.title = QStringLiteral("Handover fails");
+  jira.externalId = QStringLiteral("PROJ-123");
+  jira.externalProvider = QStringLiteral("jira");
+  app_->tasks()->reset({jira});
+
+  const QString branch =
+      heap::git::BranchTaskMatcher::branchNameForTask(QStringLiteral("PROJ-123"), jira.title, QStringLiteral("feature/{id}-{slug}"));
+  const heap::git::BranchTaskMatcher m(app_->collectPrefixes());
+  const auto mr = m.extract(branch);
+  ASSERT_TRUE(mr.matched) << branch.toStdString();
+  EXPECT_EQ(app_->taskIdForBranchMatch(mr.taskId), QStringLiteral("jira-PROJ-123"));
+}
+
 TEST_F(AppControllerTest, EstimateAndSomedayRoundTripThroughTheEditorDraft) {
   QVariantMap draft = app_->newTaskDraft(QStringLiteral("todo"));
   draft["_isNew"] = true;
@@ -729,6 +1341,257 @@ TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
 }
 
 // ─── OAuth token refresh ──────────────────────────────────────────────
+// ─── Open in tracker (HEAP-117) ───
+// The URL is tracker-supplied, and a Jira session that never learned its site
+// yields a bare "/browse/KEY". Only a web address may reach the browser.
+// openTaskExternal itself is never called from a test — it would open one.
+TEST_F(AppControllerTest, ExternalUrlForAcceptsOnlyHttpUrls) {
+  Task https;
+  https.id = QStringLiteral("gh-1");
+  https.externalUrl = QStringLiteral("https://github.com/acme/web/issues/1");
+
+  Task relative;  // Jira with no site configured
+  relative.id = QStringLiteral("jira-1");
+  relative.externalUrl = QStringLiteral("/browse/PROJ-1");
+
+  Task scripted;
+  scripted.id = QStringLiteral("evil-1");
+  scripted.externalUrl = QStringLiteral("javascript:alert(1)");
+
+  Task file;
+  file.id = QStringLiteral("evil-2");
+  file.externalUrl = QStringLiteral("file:///c:/windows/system32/calc.exe");
+
+  Task local;
+  local.id = QStringLiteral("LTE-1");
+
+  app_->tasks()->reset({https, relative, scripted, file, local});
+  EXPECT_EQ(app_->externalUrlFor(QStringLiteral("gh-1")).toString(), https.externalUrl);
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("jira-1")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("evil-1")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("evil-2")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("LTE-1")).isEmpty());
+  EXPECT_TRUE(app_->externalUrlFor(QStringLiteral("no-such-task")).isEmpty());
+}
+
+TEST_F(AppControllerTest, TheOpenTicketShortcutIsInTheCatalogAndRebindable) {
+  bool found = false;
+  for(const QVariant& v : app_->shortcuts()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() != QStringLiteral("task.openExternal")) {
+      continue;
+    }
+    found = true;
+    EXPECT_EQ(m.value(QStringLiteral("defaultSequence")).toString(), QStringLiteral("O"));
+    EXPECT_FALSE(m.value(QStringLiteral("label")).toString().isEmpty()) << "the shortcut has no translated label";
+    EXPECT_FALSE(m.value(QStringLiteral("description")).toString().isEmpty());
+  }
+  EXPECT_TRUE(found) << "task.openExternal is missing from the shortcut catalog";
+
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.openExternal"), QStringLiteral("Ctrl+Shift+O")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("Ctrl+Shift+O"));
+  app_->resetShortcut(QStringLiteral("task.openExternal"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.openExternal")), QStringLiteral("O"));
+}
+
+TEST_F(AppControllerTest, ProviderBadgesCoverEveryProviderInTheCatalog) {
+  const QVariantMap badges = app_->providerBadges();
+  for(const QVariant& v : app_->integrationCatalog()) {
+    const QString id = v.toMap().value(QStringLiteral("id")).toString();
+    ASSERT_TRUE(badges.contains(id)) << "no badge for " << id.toStdString();
+    const QVariantMap badge = badges.value(id).toMap();
+    EXPECT_FALSE(badge.value(QStringLiteral("name")).toString().isEmpty());
+    EXPECT_FALSE(badge.value(QStringLiteral("icon")).toString().isEmpty());
+    EXPECT_FALSE(badge.value(QStringLiteral("color")).toString().isEmpty());
+  }
+}
+
+TEST_F(AppControllerTest, ThePaletteFindsAMirroredIssueByItsTrackerKey) {
+  auto issue = ghIssue(QStringLiteral("1234"), QStringLiteral("https://github.com/acme/web/issues/1234"));
+  app_->tasks()->reset({});
+  app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
+  // The palette searches the persisted profiles, not the live model.
+  app_->flushSave();
+
+  bool found = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("taskId")).toString() != QStringLiteral("github-1234")) {
+      continue;
+    }
+    found = true;
+    const QString haystack = m.value(QStringLiteral("label")).toString() + m.value(QStringLiteral("sub")).toString();
+    EXPECT_TRUE(haystack.contains(QStringLiteral("#1234"))) << haystack.toStdString();
+    EXPECT_TRUE(haystack.contains(QStringLiteral("GitHub"))) << haystack.toStdString();
+  }
+  EXPECT_TRUE(found) << "the pulled issue never reached the palette";
+}
+
+// Moving a card writes the new state back to the tracker. An issue pulled from
+// an "assigned to me" endpoint belongs to some other repo, but the push URL is
+// built from the configured one — the PATCH would close a different issue that
+// happens to share the number. Driven against a local fake Gitea, because its
+// base URL is configurable; github's is hard-coded and a mistake here would
+// reach the real API.
+TEST_F(AppControllerTest, MovingACrossProjectTicketNeverPushesToTheConfiguredRepo) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/web/issues", {200, "[]", {}});
+  gitea.route("PATCH /api/v1/repos/acme/web/issues/5", {200, "{}", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), gitea.base()},
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                         });
+
+  // A ticket that came from another repo entirely.
+  Task foreign;
+  foreign.id = QStringLiteral("gitea-api-5");
+  foreign.externalId = QStringLiteral("5");
+  foreign.externalProvider = QStringLiteral("gitea");
+  foreign.externalUrl = QStringLiteral("https://gitea.example.com/acme/api/issues/5");
+  foreign.status = QStringLiteral("todo");
+  foreign.externalMeta.project = QStringLiteral("acme/api");
+  foreign.externalMeta.crossProject = true;
+  app_->tasks()->reset({foreign});
+
+  app_->moveTask(QStringLiteral("gitea-api-5"), QStringLiteral("done"));
+  // Give any push that was going to happen a chance to reach the server.
+  heap::testing::waitUntil(
+      [&gitea]() {
+        return !gitea.seen().isEmpty();
+      },
+      500);
+  EXPECT_FALSE(gitea.seen().contains("PATCH /api/v1/repos/acme/web/issues/5")) << "closed an issue in the wrong repo";
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// "Synced 12 issue(s)" every quarter of an hour said nothing about whether
+// anything changed, and the merge rewrote state.json either way.
+TEST_F(AppControllerTest, AQuietResyncReportsNoChangeAndWritesNothing) {
+  const QByteArray issues = R"([{"number":5,"title":"t","state":"open","html_url":"https://gitea.example.com/acme/web/issues/5"}])";
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/web/issues", {200, issues, {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), gitea.base()},
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                         });
+  app_->tasks()->reset({});
+
+  // syncProvider announces itself before it starts, so collect only the
+  // toast that reports the outcome.
+  QStringList outcomes;
+  QObject::connect(app_.get(), &AppController::toast, app_.get(), [&outcomes](const QString& text) {
+    if(text.contains(QStringLiteral("new")) || text.contains(QStringLiteral("up to date"))) {
+      outcomes << text;
+    }
+  });
+
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&outcomes]() {
+    return !outcomes.isEmpty();
+  }));
+  EXPECT_TRUE(outcomes.last().contains(QStringLiteral("1 new"))) << outcomes.last().toStdString();
+  EXPECT_EQ(app_->tasks()->rowCount(), 1);
+
+  outcomes.clear();
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&outcomes]() {
+    return !outcomes.isEmpty();
+  }));
+  EXPECT_TRUE(outcomes.last().contains(QStringLiteral("up to date"))) << outcomes.last().toStdString();
+  EXPECT_EQ(app_->tasks()->rowCount(), 1);
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// Comments are read on demand and stored nowhere. Against a local fake Gitea,
+// because its base URL is configurable — github's is hard-coded.
+TEST_F(AppControllerTest, TicketCommentsAreFetchedForTheIssuesOwnRepoAndNotStored) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/api/issues/5/comments",
+              {200, R"([{"user":{"login":"ada"},"body":"first","created_at":"2026-01-02T03:04:05Z"}])", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), gitea.base()},
+                             // The configured repo is NOT the issue's own.
+                             {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                         });
+
+  Task t;
+  t.id = QStringLiteral("gitea-api-5");
+  t.externalId = QStringLiteral("5");
+  t.externalProvider = QStringLiteral("gitea");
+  t.externalUrl = QStringLiteral("https://gitea.example.com/acme/api/issues/5");
+  t.externalMeta.project = QStringLiteral("acme/api");
+  t.externalMeta.crossProject = true;
+  app_->tasks()->reset({t});
+  const Task before = app_->tasks()->items().at(0);
+
+  QVariantList got;
+  QString error;
+  bool done = false;
+  QObject::connect(app_.get(),
+                   &AppController::ticketCommentsLoaded,
+                   app_.get(),
+                   [&](const QString& taskId, const QVariantList& comments, const QString& err) {
+                     EXPECT_EQ(taskId, QStringLiteral("gitea-api-5"));
+                     got = comments;
+                     error = err;
+                     done = true;
+                   });
+
+  app_->fetchTicketComments(QStringLiteral("gitea-api-5"));
+  ASSERT_TRUE(heap::testing::waitUntil([&done]() {
+    return done;
+  }));
+  EXPECT_TRUE(error.isEmpty()) << error.toStdString();
+  ASSERT_EQ(got.size(), 1);
+  EXPECT_EQ(got.at(0).toMap().value(QStringLiteral("author")).toString(), QStringLiteral("ada"));
+  EXPECT_EQ(got.at(0).toMap().value(QStringLiteral("body")).toString(), QStringLiteral("first"));
+  // The request went to the issue's repo, not the configured one.
+  EXPECT_TRUE(gitea.seen().contains("GET /api/v1/repos/acme/api/issues/5/comments")) << "asked the wrong repo for comments";
+  // Read-only in every sense: the task is untouched and nothing is pending.
+  EXPECT_EQ(app_->tasks()->items().at(0), before);
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+TEST_F(AppControllerTest, FetchingCommentsForALocalTaskAnswersWithoutARequest) {
+  Task local;
+  local.id = QStringLiteral("LTE-1");
+  app_->tasks()->reset({local});
+
+  QString error;
+  bool done = false;
+  QObject::connect(
+      app_.get(), &AppController::ticketCommentsLoaded, app_.get(), [&](const QString&, const QVariantList& c, const QString& err) {
+        EXPECT_TRUE(c.isEmpty());
+        error = err;
+        done = true;
+      });
+  app_->fetchTicketComments(QStringLiteral("LTE-1"));
+  ASSERT_TRUE(done) << "a local task should be answered synchronously";
+  EXPECT_FALSE(error.isEmpty());
+
+  done = false;
+  app_->fetchTicketComments(QStringLiteral("no-such-task"));
+  EXPECT_TRUE(done);
+}
+
 // The refresh token lives in the secret store but is not one of the card's
 // secretKeys, so integrationConfig() never handed it to the refresh path: a
 // browser-connected tracker went quiet at its first token expiry. Driven end to

@@ -52,6 +52,10 @@ class BranchTaskMatcher {
   QVector<QRegularExpression> m_prefixRx;  // branch-name boundaries ([-/_])
   QVector<QRegularExpression> m_textRx;    // free-text boundaries (commits)
   QRegularExpression m_loneDigitsRx;
+  // A "<word>-<digits>" key that is NOT one of m_prefixes. Its presence is what
+  // disqualifies the bare-digit fallback: a branch that names someone else's
+  // project never meant the local prefix.
+  QRegularExpression m_foreignKeyRx;
 
   void rebuildRegexes();
 };

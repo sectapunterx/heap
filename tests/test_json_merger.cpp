@@ -87,8 +87,7 @@ TEST(JsonMerger, NestedObjectRecurseMergesBothFields) {
 
 TEST(JsonMerger, CreatedAtEarliestWinsNoConflict) {
   const QJsonObject b = O(R"({"createdAt":"2026-05-01T00:00"})");
-  const MergeResult m = JsonMerger::merge(
-      b, O(R"({"createdAt":"2026-04-01T00:00"})"), O(R"({"createdAt":"2026-06-01T00:00"})"));
+  const MergeResult m = JsonMerger::merge(b, O(R"({"createdAt":"2026-04-01T00:00"})"), O(R"({"createdAt":"2026-06-01T00:00"})"));
   EXPECT_TRUE(m.ok);
   EXPECT_EQ(m.merged.value("createdAt").toString(), QString("2026-04-01T00:00"));
 }
@@ -123,6 +122,23 @@ TEST(JsonMerger, ArrayElementBothEditLwwByUpdatedAt) {
   const MergeResult m = JsonMerger::merge(b, l, r);
   EXPECT_TRUE(m.ok);  // LWW resolves it
   EXPECT_EQ(m.merged.value("tasks").toArray().at(0).toObject().value("t").toString(), QString("remote"));
+}
+
+// A tracker's own timestamps are stored nested and under `remote*` names on
+// purpose (HEAP-117): a top-level `updatedAt` is heap's last-write clock, and
+// `createdAt` gets "earlier wins" at any depth. Named naively, a device that
+// merely re-pulled an issue would outrank one that actually edited the task.
+TEST(JsonMerger, NestedTrackerTimestampsDoNotDriveElementLww) {
+  const QJsonObject b = O(R"({"tasks":[{"id":"T1","t":"a","externalMeta":{"remoteUpdatedAt":"2026-01-01T00:00"}}]})");
+  // Local edited the task later by heap's clock; remote only re-pulled, so its
+  // tracker timestamp is newer but its own edit is older.
+  const QJsonObject l = O(R"({"tasks":[{"id":"T1","t":"local","updatedAt":"2026-07-02T10:00",
+                                        "externalMeta":{"remoteUpdatedAt":"2026-01-01T00:00"}}]})");
+  const QJsonObject r = O(R"({"tasks":[{"id":"T1","t":"remote","updatedAt":"2026-07-01T10:00",
+                                        "externalMeta":{"remoteUpdatedAt":"2026-07-09T10:00"}}]})");
+  const MergeResult m = JsonMerger::merge(b, l, r);
+  EXPECT_TRUE(m.ok);
+  EXPECT_EQ(m.merged.value("tasks").toArray().at(0).toObject().value("t").toString(), QString("local"));
 }
 
 TEST(JsonMerger, ArrayElementBothEditNoTimestampConflict) {

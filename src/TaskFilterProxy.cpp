@@ -69,13 +69,12 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   if(!m_priorities.isEmpty() && !m_priorities.contains(src->data(idx, TaskModel::PriorityRole).toString())) {
     return false;
   }
-  if(!m_searchText.isEmpty()) {
-    const QString hay = (src->data(idx, TaskModel::TitleRole).toString() + QChar(' ') + src->data(idx, TaskModel::IdRole).toString() +
-                         QChar(' ') + src->data(idx, TaskModel::DescRole).toString())
-                            .toLower();
-    if(!hay.contains(m_searchText)) {
-      return false;
-    }
+  // SearchTextRole is the model's own prebuilt haystack: already lowercased,
+  // and covering the ticket key, labels, assignee, project and milestone as
+  // well as title/id/description. Concatenating a few fields here instead
+  // would quietly narrow what the board can find.
+  if(!m_searchText.isEmpty() && !src->data(idx, TaskModel::SearchTextRole).toString().contains(m_searchText)) {
+    return false;
   }
   return true;
 }
