@@ -29,8 +29,8 @@ struct RRule {
   // Qt weekday numbers (Mon=1 … Sun=7). Empty means "the weekday of the start
   // date", which is what a WEEKLY rule with no BYDAY means.
   QVector<int> byDay;
-  int count = 0;    // 0 = unbounded
-  QDate until;      // invalid = unbounded
+  int count = 0;  // 0 = unbounded
+  QDate until;    // invalid = unbounded
 
   bool isValid() const {
     return freq != None;
@@ -40,8 +40,12 @@ struct RRule {
 namespace detail {
 
 inline int dayNumberFor(const QString& token) {
-  static const QHash<QString, int> kDays = {{QStringLiteral("MO"), 1}, {QStringLiteral("TU"), 2}, {QStringLiteral("WE"), 3},
-                                            {QStringLiteral("TH"), 4}, {QStringLiteral("FR"), 5}, {QStringLiteral("SA"), 6},
+  static const QHash<QString, int> kDays = {{QStringLiteral("MO"), 1},
+                                            {QStringLiteral("TU"), 2},
+                                            {QStringLiteral("WE"), 3},
+                                            {QStringLiteral("TH"), 4},
+                                            {QStringLiteral("FR"), 5},
+                                            {QStringLiteral("SA"), 6},
                                             {QStringLiteral("SU"), 7}};
   // BYDAY can carry an ordinal ("2TH" = the second Thursday). The ordinal is
   // not supported, and dropping it would silently turn that into "every
@@ -139,8 +143,12 @@ inline QString toRRuleText(const RRule& rule) {
     parts << QStringLiteral("INTERVAL=") + QString::number(rule.interval);
   }
   if(!rule.byDay.isEmpty()) {
-    static const QHash<int, QString> kDays = {{1, QStringLiteral("MO")}, {2, QStringLiteral("TU")}, {3, QStringLiteral("WE")},
-                                              {4, QStringLiteral("TH")}, {5, QStringLiteral("FR")}, {6, QStringLiteral("SA")},
+    static const QHash<int, QString> kDays = {{1, QStringLiteral("MO")},
+                                              {2, QStringLiteral("TU")},
+                                              {3, QStringLiteral("WE")},
+                                              {4, QStringLiteral("TH")},
+                                              {5, QStringLiteral("FR")},
+                                              {6, QStringLiteral("SA")},
                                               {7, QStringLiteral("SU")}};
     QStringList days;
     for(int d : rule.byDay) {

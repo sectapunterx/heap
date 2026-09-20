@@ -128,8 +128,7 @@ TEST(RRuleExpand, YearlyRepeats) {
 // ─── bounds ───────────────────────────────────────────────────────────
 
 TEST(RRuleExpand, UntilEndsTheSeries) {
-  const QVector<QDate> d =
-      datesOf(QStringLiteral("FREQ=DAILY;UNTIL=20270103"), QDate(2027, 1, 1), QDate(2027, 1, 1), QDate(2027, 1, 10));
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=DAILY;UNTIL=20270103"), QDate(2027, 1, 1), QDate(2027, 1, 1), QDate(2027, 1, 10));
   EXPECT_EQ(d.size(), 3);
   EXPECT_EQ(d.last(), QDate(2027, 1, 3));
 }
