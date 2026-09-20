@@ -83,6 +83,30 @@ TestCase {
         te.close();
     }
 
+    // A synced ticket's id is lowercase by construction ("github-1234", built
+    // from the provider id). The field used to uppercase it on open, so simply
+    // opening a ticket and pressing Save re-keyed the row to GITHUB-1234 — a
+    // rename the user never asked for, and a data loss if that id was taken.
+    function test_opening_a_synced_ticket_does_not_rewrite_its_id() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        const idField = findChild(te, "te-id");
+        verify(idField !== null, "te-id not found");
+
+        te.showFor({ id: "github-1234", title: "Fix the crash", _isNew: false });
+        compare(idField.text, "github-1234", "the editor rewrote a synced ticket's id on open");
+        te.close();
+    }
+
+    // …while a hand-typed new id still gets canonicalised.
+    function test_a_new_id_is_still_uppercased_as_the_user_types() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        const idField = findChild(te, "te-id");
+        te.showFor({ id: "", title: "fresh", _isNew: true });
+        idField.text = "lte-9000";
+        compare(idField.text, "LTE-9000");
+        te.close();
+    }
+
     // ── Mirrored tracker issue (HEAP-117) ──
     // The editor edits heap's copy; the strip says whose issue it is, and warns
     // that the next sync overwrites the fields above it.

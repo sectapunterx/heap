@@ -77,6 +77,7 @@ struct I18nEntry {
 const QHash<QString, I18nEntry>& i18nTable() {
   static const QHash<QString, I18nEntry> table = {
       {"task.created", {"Created: %1", "Создано: %1"}},
+      {"task.idTaken", {"%1 already exists — pick another id", "%1 уже занят — выберите другой id"}},
       {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
       {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
       {"task.moved", {"%1 → %2", "%1 → %2"}},
@@ -780,10 +781,32 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
-  const int nextNum = 2700 + m_tasks.rowCount();
+  // The row count is not a high-water mark: it drops when a task is deleted
+  // and it counts archived rows, so "2700 + rowCount()" walks back over ids
+  // that are still in use. saveTask upserts, and upsert on a taken id replaces
+  // that row outright — proposing a colliding id is proposing to destroy a
+  // task. Start past the highest number already minted under this prefix, then
+  // probe, the way newQuickTaskDraft and the recurrence clone already do.
+  const QString stem = prefix.isEmpty() ? QStringLiteral("TASK") : prefix;
+  int nextNum = 2700;
+  const QString head = stem + QChar('-');
+  for(const Task& t : m_tasks.items()) {
+    if(!t.id.startsWith(head)) {
+      continue;
+    }
+    bool numeric = false;
+    const int n = t.id.mid(head.size()).toInt(&numeric);
+    if(numeric && n >= nextNum) {
+      nextNum = n + 1;
+    }
+  }
   QVariantMap m;
   m["_isNew"] = true;
-  m["id"] = QString("%1-%2").arg(prefix.isEmpty() ? QStringLiteral("TASK") : prefix).arg(nextNum);
+  QString candidate;
+  do {
+    candidate = QString("%1-%2").arg(stem).arg(nextNum++);
+  } while(m_tasks.indexOfId(candidate) >= 0);
+  m["id"] = candidate;
   m["title"] = QString();
   m["desc"] = QString();
   m["priority"] = priorityDefault.isEmpty() ? QStringLiteral("P2") : priorityDefault;
@@ -907,6 +930,18 @@ void AppController::saveTask(const QVariantMap& draft) {
   t.labels = labelsFromVariant(draft.value("labels").toList());
   const bool isNew = draft.value("_isNew").toBool();
   if(isNew && t.title.trimmed().isEmpty()) {
+    return;
+  }
+
+  // An id that another task already holds is a destroyed task: the save ends in
+  // upsert(), and upsert on a taken id replaces that row whole — no undo is
+  // armed, and on the rename path the victim also inherits the renamed task's
+  // calendar events. Refuse instead, and say which task is in the way so the
+  // editor stays open on the unsaved draft.
+  const QString claimedBy = draft.value("_originalId").toString().trimmed();
+  const QString heldId = (!isNew && !claimedBy.isEmpty()) ? claimedBy : (isNew ? QString() : t.id);
+  if(t.id != heldId && m_tasks.indexOfId(t.id) >= 0) {
+    emit toast(tr_("task.idTaken").arg(t.id));
     return;
   }
 
