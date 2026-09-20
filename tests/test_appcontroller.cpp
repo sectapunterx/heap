@@ -2520,3 +2520,103 @@ int main(int argc, char** argv) {
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
 }
+
+// ─── palette verbs ────────────────────────────────────────────────────
+// The palette could only ever *go* somewhere: every entry was a task, a doc, a
+// note or a profile to jump to. Anything that was not on a toolbar had to be
+// hunted for in a menu.
+
+namespace {
+
+QStringList paletteActionIds(AppController* app) {
+  QStringList ids;
+  for(const QVariant& v : app->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("kind")).toString() == QStringLiteral("action")) {
+      ids << m.value(QStringLiteral("actionId")).toString();
+    }
+  }
+  return ids;
+}
+
+}  // namespace
+
+TEST_F(AppControllerTest, PaletteOffersTheAlwaysAvailableVerbs) {
+  const QStringList ids = paletteActionIds(app_.get());
+  EXPECT_TRUE(ids.contains(QStringLiteral("task.new")));
+  EXPECT_TRUE(ids.contains(QStringLiteral("view.today")));
+  EXPECT_TRUE(ids.contains(QStringLiteral("theme.toggle")));
+}
+
+// An action whose object does not exist is not offered. A disabled row in a
+// fuzzy list is noise, and typing "archive" to be told no is worse than not
+// matching at all.
+TEST_F(AppControllerTest, PaletteHidesSelectionVerbsWithNoSelection) {
+  app_->clearSelection();
+  const QStringList ids = paletteActionIds(app_.get());
+  EXPECT_FALSE(ids.contains(QStringLiteral("selection.archive")));
+  EXPECT_FALSE(ids.contains(QStringLiteral("selection.delete")));
+  EXPECT_FALSE(ids.contains(QStringLiteral("selection.move")));
+}
+
+TEST_F(AppControllerTest, PaletteOffersSelectionVerbsWithASelection) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("one")), mkTask(QStringLiteral("T-2"), QStringLiteral("two"))});
+  app_->setSelectedTaskIds({QStringLiteral("T-1"), QStringLiteral("T-2")});
+
+  const QStringList ids = paletteActionIds(app_.get());
+  EXPECT_TRUE(ids.contains(QStringLiteral("selection.archive")));
+  EXPECT_TRUE(ids.contains(QStringLiteral("selection.delete")));
+}
+
+// Moving a selection needs a destination, so every column is its own row
+// rather than one row that then asks a second question.
+TEST_F(AppControllerTest, PaletteOffersOneMoveRowPerColumn) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("one"))});
+  app_->setSelectedTaskIds({QStringLiteral("T-1")});
+
+  int moveRows = 0;
+  QSet<QString> destinations;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("actionId")).toString() == QStringLiteral("selection.move")) {
+      ++moveRows;
+      destinations.insert(m.value(QStringLiteral("statusId")).toString());
+    }
+  }
+  EXPECT_EQ(moveRows, app_->statuses().size());
+  EXPECT_EQ(destinations.size(), app_->statuses().size()) << "each row must name a different column";
+}
+
+TEST_F(AppControllerTest, PaletteHidesUndoUntilThereIsSomethingToUndo) {
+  app_->clearPendingUndo();
+  EXPECT_FALSE(paletteActionIds(app_.get()).contains(QStringLiteral("undo")));
+
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("one"))});
+  app_->moveTask(QStringLiteral("T-1"), QStringLiteral("prog"));
+  EXPECT_TRUE(paletteActionIds(app_.get()).contains(QStringLiteral("undo")));
+}
+
+TEST_F(AppControllerTest, PaletteHidesRedoUntilAnUndoHasHappened) {
+  app_->clearPendingUndo();
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("one"))});
+  app_->moveTask(QStringLiteral("T-1"), QStringLiteral("prog"));
+  EXPECT_FALSE(paletteActionIds(app_.get()).contains(QStringLiteral("redo")));
+
+  app_->undo();
+  EXPECT_TRUE(paletteActionIds(app_.get()).contains(QStringLiteral("redo")));
+}
+
+// Every action row has to carry a label the fuzzy matcher can find it by.
+TEST_F(AppControllerTest, EveryPaletteActionIsLabelled) {
+  app_->tasks()->reset({mkTask(QStringLiteral("T-1"), QStringLiteral("one"))});
+  app_->setSelectedTaskIds({QStringLiteral("T-1")});
+
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("kind")).toString() != QStringLiteral("action")) {
+      continue;
+    }
+    EXPECT_FALSE(m.value(QStringLiteral("label")).toString().isEmpty()) << m.value(QStringLiteral("actionId")).toString().toStdString();
+    EXPECT_FALSE(m.value(QStringLiteral("actionId")).toString().isEmpty());
+  }
+}

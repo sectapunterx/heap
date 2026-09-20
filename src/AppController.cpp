@@ -167,6 +167,15 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
+      {"palette.sub.action", {"action", "действие"}},
+      {"palette.action.newTask", {"New task", "Новая задача"}},
+      {"palette.action.today", {"Go to today", "Перейти на сегодня"}},
+      {"palette.action.toggleTheme", {"Toggle light / dark", "Переключить тему"}},
+      {"palette.action.undo", {"Undo", "Отменить"}},
+      {"palette.action.redo", {"Redo", "Повторить"}},
+      {"palette.action.archiveSelected", {"Archive %1 selected", "В архив выделенные: %1"}},
+      {"palette.action.deleteSelected", {"Delete %1 selected", "Удалить выделенные: %1"}},
+      {"palette.action.moveSelected", {"Move %1 selected to %2", "Переместить выделенные (%1) в %2"}},
       {"task.duplicated", {"Duplicated: %1", "Дублирована: %1"}},
       {"task.copyOf", {"%1 (copy)", "%1 (копия)"}},
       {"task.linked", {"%1 now blocks %2", "%1 теперь блокирует %2"}},
@@ -4899,6 +4908,52 @@ QVariantList AppController::commandPaletteEntries() const {
   const_cast<AppController*>(this)->snapshotActiveProfile();
 
   QVariantList out;
+
+  // Verbs. The palette could only ever *go* somewhere — every entry was a
+  // task, a doc, a note or a profile to jump to — so anything that was not on
+  // a toolbar had to be found in a menu. These are the things a keyboard-first
+  // user would reach for by name.
+  //
+  // An action whose object does not exist right now is not offered: a
+  // disabled row in a fuzzy list is noise, and typing "archive" to be told no
+  // is worse than not matching at all.
+  const auto action = [&out](const QString& id, const QString& label, const QString& sub) {
+    QVariantMap m;
+    m["kind"] = "action";
+    m["label"] = label;
+    m["sub"] = sub;
+    m["actionId"] = id;
+    m["color"] = QStringLiteral("#7cc492");
+    out.append(m);
+  };
+  const QString actionSub = tr_("palette.sub.action");
+  action(QStringLiteral("task.new"), tr_("palette.action.newTask"), actionSub);
+  action(QStringLiteral("view.today"), tr_("palette.action.today"), actionSub);
+  action(QStringLiteral("theme.toggle"), tr_("palette.action.toggleTheme"), actionSub);
+  if(m_undo.canUndo()) {
+    action(QStringLiteral("undo"), tr_("palette.action.undo"), actionSub);
+  }
+  if(m_undo.canRedo()) {
+    action(QStringLiteral("redo"), tr_("palette.action.redo"), actionSub);
+  }
+  if(!m_selectedTaskIdsList.isEmpty()) {
+    const int n = m_selectedTaskIdsList.size();
+    action(QStringLiteral("selection.archive"), tr_("palette.action.archiveSelected").arg(n), actionSub);
+    action(QStringLiteral("selection.delete"), tr_("palette.action.deleteSelected").arg(n), actionSub);
+    // Moving a selection needs a destination, so every column is its own row
+    // rather than one row that then asks a second question.
+    for(const QVariant& v : m_statuses) {
+      const QVariantMap st = v.toMap();
+      QVariantMap m;
+      m["kind"] = "action";
+      m["label"] = tr_("palette.action.moveSelected").arg(QString::number(n), st.value("name").toString());
+      m["sub"] = actionSub;
+      m["actionId"] = QStringLiteral("selection.move");
+      m["statusId"] = st.value("id").toString();
+      m["color"] = QStringLiteral("#7cc492");
+      out.append(m);
+    }
+  }
 
   // Task templates (HEAP-77) — "New from template: …" actions.
   for(const auto& t : builtinTemplates()) {
