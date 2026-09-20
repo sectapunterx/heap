@@ -1128,6 +1128,8 @@ add_executable(heap_models_tests
         test_models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/TaskFilterProxy.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/TaskFilterProxy.h
 )
 set_target_properties(heap_models_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

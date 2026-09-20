@@ -6,7 +6,8 @@ import TodoCpp
 
 Rectangle {
     id: card
-    property var task           // QVariantMap-like with id,title,desc,priority,status,deadline,branch,archived,blockedStuck
+    objectName: "tc-card"
+    property var task         // QVariantMap-like with id,title,desc,priority,status,deadline,branch,archived,blockedStuck
     property string scheduled
     property string taskId: task ? task.id : ""
     readonly property bool _isStuck: card.task && card.task.blockedStuck === true
