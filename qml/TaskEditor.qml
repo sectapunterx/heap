@@ -21,6 +21,9 @@ Popup {
 
     property var draft: ({})
     property bool isNew: false
+    // "edit" | "preview" for the description. Starts on edit — the editor is
+    // where you go to change things.
+    property string descMode: "edit"
     // Original id at the moment of opening the editor. Used so that even if
     // the user edits idField, AppController can find and rename the existing
     // row instead of inserting a duplicate.
@@ -549,13 +552,49 @@ Popup {
             placeholderTextColor: Theme.textDim
         }
 
-        FieldLabel {
-            text: I18n.t("editor.label.desc").toUpperCase(); Layout.leftMargin: 18; Layout.rightMargin: 18
+        RowLayout {
+            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.fillWidth: true
+            FieldLabel { text: I18n.t("editor.label.desc").toUpperCase() }
+            Item { Layout.fillWidth: true }
+            // The description is markdown and always has been — it was just
+            // never rendered, so a template's checklist was inert text the
+            // user could not tick.
+            Repeater {
+                model: [ ({ id: "edit", label: I18n.t("notes.mode.edit") }),
+                         ({ id: "preview", label: I18n.t("notes.mode.preview") }) ]
+                delegate: Rectangle {
+                    required property var modelData
+                    objectName: "desc-mode-" + modelData.id
+                    readonly property bool active: root.descMode === modelData.id
+                    radius: 999
+                    color: active ? Theme.accentSoft : (dmMA.containsMouse ? Theme.panel3 : "transparent")
+                    border.color: active ? Theme.accent : "transparent"
+                    border.width: 1
+                    implicitWidth: dmT.implicitWidth + 14
+                    implicitHeight: 20
+                    Text {
+                        id: dmT
+                        anchors.centerIn: parent
+                        text: modelData.label
+                        color: parent.active ? Theme.accentStrong : Theme.textDim
+                        font.pixelSize: 11
+                    }
+                    MouseArea {
+                        id: dmMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.descMode = modelData.id
+                    }
+                }
+            }
         }
         ScrollView {
             Layout.leftMargin: 18; Layout.rightMargin: 18
             Layout.fillWidth: true
             Layout.preferredHeight: 70
+            visible: root.descMode === "edit"
             TextArea {
                 id: descField
                 placeholderText: I18n.t("editor.ph.desc")
@@ -565,6 +604,17 @@ Popup {
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }
+        }
+        // The checkbox write goes through the editor's own document, so
+        // ticking an item in the preview edits the text the Save button will
+        // store — and does it as one undo step.
+        MdView {
+            visible: root.descMode === "preview"
+            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.fillWidth: true
+            Layout.preferredHeight: 70
+            document: descDocument
+            editorDocument: descField.textDocument
         }
 
         GridLayout {
@@ -863,4 +913,24 @@ Popup {
         border.color: Theme.border
         border.width: 1
     }
+    // Parses the description for the preview. Same engine the notes editor
+    // uses, so a checklist behaves the same in both places.
+    MdDocument {
+        id: descDocument
+        text: descField.text
+        allowRemoteImages: false
+        palette: ({
+            "text": Theme.text,
+            "dim": Theme.textDim,
+            "link": Theme.accent,
+            "code": Theme.text,
+            "codeBackground": Theme.panel2,
+            "highlightBackground": Theme.accentSoft,
+            "mention": Theme.stProg,
+            "ticket": Theme.accent,
+            "tag": Theme.stReview,
+            "math": Theme.p2
+        })
+    }
+
 }

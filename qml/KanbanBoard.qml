@@ -593,6 +593,7 @@ Item {
                                             required property string desc
                                             required property string priority
                                             required property string status
+                                            required property var checklist
                                             required property var deadline
                                             required property string branch
                                             required property bool archived
@@ -624,7 +625,8 @@ Item {
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
                                                 recurrence: tc.recurrence,
                                                 labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime,
-                                                ticket: tc.ticket, searchText: tc.searchText
+                                                ticket: tc.ticket, searchText: tc.searchText,
+                                                checklist: tc.checklist
                                             })
                                             // Which card a bare "O" acts on when
                                             // nothing is selected.
