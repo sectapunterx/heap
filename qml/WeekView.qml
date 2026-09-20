@@ -847,6 +847,12 @@ Item {
                             y: (effStart - root.hoursStart) * root.hourH + dragDy
                             width: _slotW - (_cols > 1 ? 2 : 0)
                             height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
+                            // A half-hour meeting is the most common kind and
+                            // the block is too short for two lines of text:
+                            // the title was being clipped away, leaving a row
+                            // of blocks labelled only "09:30". Short blocks put
+                            // the time and the title on one line instead.
+                            readonly property bool compact: height < 30
                             radius: 4
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
                             border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
@@ -865,6 +871,7 @@ Item {
                                 spacing: 0
                                 clip: true
                                 Text {
+                                    visible: !weEv.compact
                                     text: Theme.fmtHour(weEv.effStart)
                                     color: Theme.textMuted
                                     font.family: Theme.fontMono
@@ -873,6 +880,13 @@ Item {
                                 RowLayout {
                                     width: parent.width
                                     spacing: 4
+                                    Text {
+                                        visible: weEv.compact
+                                        text: Theme.fmtHour(weEv.effStart)
+                                        color: Theme.textMuted
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 9
+                                    }
                                     Text {
                                         visible: (weEv.modelData.context || "").length > 0
                                         text: weEv.modelData.context
