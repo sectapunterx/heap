@@ -813,6 +813,9 @@ add_test(NAME heap_roundtrip_tests COMMAND heap_roundtrip_tests)
 # ─── Schema migration (HEAP-146) and fault injection (HEAP-156) ───
 # Both boot a real AppController headless, so they reuse the AppController source
 # set above (each brings its own main()).
+# ─── Duplicate + task dependencies ───
+heap_add_appcontroller_test(heap_task_links_tests test_task_links.cpp)
+
 # ─── Manual card order on the board ───
 heap_add_appcontroller_test(heap_board_order_tests test_board_order.cpp)
 

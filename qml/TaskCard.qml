@@ -11,6 +11,10 @@ Rectangle {
     property string scheduled
     property string taskId: task ? task.id : ""
     readonly property bool _isStuck: card.task && card.task.blockedStuck === true
+    // Recomputed when any task changes: a blocker being finished elsewhere has
+    // to clear this badge without the card being touched.
+    readonly property bool _blockedByOpen: AppController.tasksRevision >= 0
+        && card.taskId.length > 0 && AppController.isBlockedByOpenTask(card.taskId)
     readonly property bool _isArchived: card.task && card.task.archived === true
     // Selection state — re-evaluates via AppController.selectedTaskIdsChanged
     // (selectionCount is read in the binding so QML tracks the dependency).
@@ -153,6 +157,32 @@ Rectangle {
                 }
             }
             Item { Layout.fillWidth: true }
+            // Something this card depends on is still open. It clears itself
+            // when the blocker is done or archived, so it never needs sweeping
+            // up by hand.
+            Rectangle {
+                objectName: "tc-blocked"
+                visible: card._blockedByOpen
+                radius: 4
+                color: Theme.withAlpha(Theme.stBlocked, 0.14)
+                border.color: Theme.stBlocked
+                border.width: 1
+                implicitWidth: blkT.implicitWidth + 10
+                implicitHeight: blkT.implicitHeight + 2
+                Text {
+                    id: blkT
+                    anchors.centerIn: parent
+                    text: I18n.t("task.chip.blockedBy")
+                    color: Theme.stBlocked
+                    font.family: Theme.fontUi
+                    font.pixelSize: 9
+                    font.weight: Font.DemiBold
+                    font.letterSpacing: 0.6
+                }
+                QQC.ToolTip.visible: blkHover.hovered
+                QQC.ToolTip.text: AppController.blockedBy(card.taskId).join(", ")
+                HoverHandler { id: blkHover }
+            }
             Rectangle {
                 visible: card._isStuck
                 radius: 4
@@ -632,6 +662,10 @@ Rectangle {
                 const at = AppController.nextFreeSlot(AppController.selectedDate, est);
                 AppController.scheduleTask(card.task.id, at, AppController.selectedDate);
             }
+        }
+        QQC.MenuItem {
+            text: "⧉  " + I18n.t("taskcard.duplicate")
+            onTriggered: { if (card.task && card.task.id) AppController.duplicateTask(card.task.id) }
         }
         QQC.MenuItem {
             text: "⎘  " + I18n.t("taskcard.copyId")

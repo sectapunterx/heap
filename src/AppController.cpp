@@ -167,6 +167,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.weeklyCopied", {"Weekly report copied to clipboard", "Недельный отчёт скопирован в буфер"}},
       {"profile.imported", {"Profile imported: %1", "Импортирован профиль: %1"}},
       {"tasks.renamed", {"Tasks renamed: %1", "Переименовано задач: %1"}},
+      {"task.duplicated", {"Duplicated: %1", "Дублирована: %1"}},
+      {"task.copyOf", {"%1 (copy)", "%1 (копия)"}},
+      {"task.linked", {"%1 now blocks %2", "%1 теперь блокирует %2"}},
+      {"task.unlinked", {"%1 no longer blocks %2", "%1 больше не блокирует %2"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
        {"Your data file was unreadable — recovered from backup %1", "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
@@ -379,7 +383,9 @@ AppController::AppController(QObject* parent) :
   // mutation path is covered without each one having to remember.
   const auto dropStatusCounts = [this]() {
     m_statusCountsDirty = true;
+    ++m_tasksRevision;
     emit statusCountsChanged();
+    emit tasksRevisionChanged();
   };
   connect(&m_tasks, &QAbstractItemModel::modelReset, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, dropStatusCounts);
@@ -950,18 +956,16 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
   }
 }
 
-QVariantMap AppController::newTaskDraft(const QString& statusId) const {
+// The next free id under the configured prefix.
+//
+// The row count is not a high-water mark: it drops when a task is deleted and
+// it counts archived rows, so "2700 + rowCount()" walks back over ids that are
+// still in use. saveTask upserts, and upsert on a taken id replaces that row
+// outright — proposing a colliding id is proposing to destroy a task. Start
+// past the highest number already minted under this prefix, then probe.
+QString AppController::mintTaskId() const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
   const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("LTE")).toString().trimmed();
-  const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
-  const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
-
-  // The row count is not a high-water mark: it drops when a task is deleted
-  // and it counts archived rows, so "2700 + rowCount()" walks back over ids
-  // that are still in use. saveTask upserts, and upsert on a taken id replaces
-  // that row outright — proposing a colliding id is proposing to destroy a
-  // task. Start past the highest number already minted under this prefix, then
-  // probe, the way newQuickTaskDraft and the recurrence clone already do.
   const QString stem = prefix.isEmpty() ? QStringLiteral("TASK") : prefix;
   int nextNum = 2700;
   const QString head = stem + QChar('-');
@@ -975,13 +979,149 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
       nextNum = n + 1;
     }
   }
-  QVariantMap m;
-  m["_isNew"] = true;
   QString candidate;
   do {
     candidate = QString("%1-%2").arg(stem).arg(nextNum++);
   } while(m_tasks.indexOfId(candidate) >= 0);
-  m["id"] = candidate;
+  return candidate;
+}
+
+// A copy of a task, ready to save. Everything the user wrote comes across;
+// everything that identifies it as *that* task does not.
+void AppController::duplicateTask(const QString& id) {
+  const int row = m_tasks.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  const Task source = m_tasks.items().at(row);
+
+  const UndoScope scope(this, tr_("task.duplicated").arg(source.id));
+
+  Task copy = source;
+  copy.id = mintTaskId();
+  copy.title = source.title.isEmpty() ? source.title : tr_("task.copyOf").arg(source.title);
+  // A duplicate is a new, untouched task: it has not been in its column for
+  // however long the original has, no time has been spent on it, and it does
+  // not mirror the tracker issue the original does — pushing a status for it
+  // would move someone else's ticket.
+  copy.statusChangedAt = QDateTime::currentDateTime();
+  copy.trackedSeconds = 0;
+  copy.timerStartedAt = QDateTime();
+  copy.externalId.clear();
+  copy.externalUrl.clear();
+  copy.externalProvider.clear();
+  copy.assignee.clear();
+  copy.externalMeta = {};
+  // Links point *out* of a task. Copying them would make the duplicate claim
+  // to block the same work, which is not what "duplicate this card" means.
+  copy.links.clear();
+  // Directly below the original, so it appears where the user is looking.
+  const QVector<::Task> ordered = columnTasks(source.status, copy.id);
+  int at = ordered.size();
+  for(int i = 0; i < ordered.size(); ++i) {
+    if(ordered.at(i).id == source.id) {
+      at = i + 1;
+      break;
+    }
+  }
+  const bool hasBefore = at > 0;
+  const bool hasAfter = at < ordered.size();
+  copy.rank = heap::board::between(hasBefore ? ordered.at(at - 1).rank : 0.0, hasAfter ? ordered.at(at).rank : 0.0, hasBefore, hasAfter);
+
+  m_tasks.upsert(copy);
+  emit toast(tr_("task.duplicated").arg(copy.id));
+  scheduleSave();
+}
+
+// ─── dependencies ─────────────────────────────────────────────────────
+// Only "blocks" is stored. "Blocked by" is a reverse lookup over everyone's
+// links, so the two halves of a relationship are one fact and cannot disagree.
+
+void AppController::linkTasks(const QString& blockerId, const QString& blockedId) {
+  if(blockerId == blockedId) {
+    return;  // a task cannot block itself
+  }
+  const int row = m_tasks.indexOfId(blockerId);
+  if(row < 0 || m_tasks.indexOfId(blockedId) < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  for(const TaskLink& l : t.links) {
+    if(l.type == QStringLiteral("blocks") && l.targetId == blockedId) {
+      return;  // already linked
+    }
+  }
+  const UndoScope scope(this, tr_("task.linked").arg(blockerId, blockedId));
+  t.links.append(TaskLink{QStringLiteral("blocks"), blockedId});
+  m_tasks.upsert(t);
+  scheduleSave();
+}
+
+void AppController::unlinkTasks(const QString& blockerId, const QString& blockedId) {
+  const int row = m_tasks.indexOfId(blockerId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  const qsizetype before = t.links.size();
+  t.links.removeIf([&](const TaskLink& l) {
+    return l.type == QStringLiteral("blocks") && l.targetId == blockedId;
+  });
+  if(t.links.size() == before) {
+    return;
+  }
+  const UndoScope scope(this, tr_("task.unlinked").arg(blockerId, blockedId));
+  m_tasks.upsert(t);
+  scheduleSave();
+}
+
+// Ids of the tasks blocking `id`. The reverse of the stored direction, and the
+// only place that reversal happens.
+QStringList AppController::blockedBy(const QString& id) const {
+  QStringList out;
+  for(const Task& t : m_tasks.items()) {
+    for(const TaskLink& l : t.links) {
+      if(l.type == QStringLiteral("blocks") && l.targetId == id) {
+        out << t.id;
+        break;
+      }
+    }
+  }
+  return out;
+}
+
+// True while something blocking this task is not done yet. A blocker that is
+// finished stops blocking — otherwise the badge would need clearing by hand
+// and would quietly stop meaning anything.
+bool AppController::isBlockedByOpenTask(const QString& id) const {
+  for(const QString& blockerId : blockedBy(id)) {
+    const int row = m_tasks.indexOfId(blockerId);
+    if(row < 0) {
+      continue;
+    }
+    const Task& b = m_tasks.items().at(row);
+    if(b.status != QStringLiteral("done") && !b.archived) {
+      return true;
+    }
+  }
+  return false;
+}
+
+QVariantMap AppController::newTaskDraft(const QString& statusId) const {
+  const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
+  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("LTE")).toString().trimmed();
+  const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
+  const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
+
+  // The row count is not a high-water mark: it drops when a task is deleted
+  // and it counts archived rows, so "2700 + rowCount()" walks back over ids
+  // that are still in use. saveTask upserts, and upsert on a taken id replaces
+  // that row outright — proposing a colliding id is proposing to destroy a
+  // task. Start past the highest number already minted under this prefix, then
+  // probe, the way newQuickTaskDraft and the recurrence clone already do.
+  QVariantMap m;
+  m["_isNew"] = true;
+  m["id"] = mintTaskId();
   m["title"] = QString();
   m["desc"] = QString();
   m["priority"] = priorityDefault.isEmpty() ? QStringLiteral("P2") : priorityDefault;

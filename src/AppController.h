@@ -63,6 +63,11 @@ class AppController : public QObject {
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
+  // Bumped whenever any task changes. A QML binding that calls an invokable
+  // over the whole model — "is this card blocked by something still open?" —
+  // has no property to depend on otherwise, and would answer once and then
+  // never again.
+  Q_PROPERTY(int tasksRevision READ tasksRevision NOTIFY tasksRevisionChanged)
   Q_PROPERTY(QDate today READ today CONSTANT)
   // provider id → { name, icon, color } for the badge on a mirrored ticket
   // (HEAP-117). Constant and cheap: a board delegate reads this per card, and
@@ -146,6 +151,10 @@ class AppController : public QObject {
 
   QVariantList statuses() const {
     return m_statuses;
+  }
+
+  int tasksRevision() const {
+    return m_tasksRevision;
   }
 
   QDate today() const {
@@ -295,6 +304,17 @@ class AppController : public QObject {
   // another.
   Q_INVOKABLE void moveSelectedTasksTo(const QString& statusId, const QString& beforeTaskId);
   Q_INVOKABLE QVariantMap newTaskDraft(const QString& statusId) const;
+  // Duplicate a card: everything the user wrote, none of what identifies it
+  // as that task (tracker link, time tracked, outgoing links).
+  Q_INVOKABLE void duplicateTask(const QString& id);
+  // Dependencies. Only "blocks" is stored; blockedBy() is the reverse
+  // lookup, so a relationship is one fact rather than two that can drift.
+  Q_INVOKABLE void linkTasks(const QString& blockerId, const QString& blockedId);
+  Q_INVOKABLE void unlinkTasks(const QString& blockerId, const QString& blockedId);
+  Q_INVOKABLE QStringList blockedBy(const QString& id) const;
+  // True while a task blocking this one is still open. A finished blocker
+  // stops blocking, so the badge clears itself.
+  Q_INVOKABLE bool isBlockedByOpenTask(const QString& id) const;
   // Like newTaskDraft, but the id is a placeholder ("TODO-N") instead of
   // the project prefix — used by QuickCapture so the user is reminded to
   // assign a real ticket id later.
@@ -723,6 +743,7 @@ class AppController : public QObject {
   void shortcutsChanged();
   void blockedStuckChanged();
   void statusCountsChanged();
+  void tasksRevisionChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
   void toast(const QString& message);
   // Device-flow OAuth: prompts the Integrations card to show a "enter this code
@@ -793,6 +814,7 @@ class AppController : public QObject {
   // every mutation path is covered without each one remembering to.
   mutable QVariantMap m_statusCounts;
   mutable bool m_statusCountsDirty = true;
+  int m_tasksRevision = 0;
   bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
   bool m_demoActive = false;   // onboarding: profile still holds seeded demo
 
@@ -865,6 +887,8 @@ class AppController : public QObject {
   // did not parse, so writing would drop them.
   bool m_saveBlocked = false;
   int statusIndexOf(const QString& id) const;
+  // Next free task id under the configured prefix.
+  QString mintTaskId() const;
   // One column's tasks in board order (rank, then id so the order is total).
   QVector<::Task> columnTasks(const QString& statusId, const QString& excludeId) const;
   // Spread a column's ranks back out when a gap has shrunk too far to take
