@@ -19,6 +19,8 @@ Rectangle {
     signal duplicateProfileRequested()
     signal exportJsonRequested()
     signal importJsonRequested()
+    signal exportIcsRequested()
+    signal importIcsRequested()
 
     function focusSearch() {
         searchField.forceActiveFocus();
@@ -163,6 +165,13 @@ Rectangle {
                     }
                     QQC.MenuItem {
                         text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested()
+                    }
+                    QQC.MenuSeparator {}
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.cal.import"); onTriggered: root.importIcsRequested()
+                    }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested()
                     }
                 }
             }

@@ -495,10 +495,41 @@ class AppController : public QObject {
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
 
   // ---- Event ops ----
+  // A fresh event id. Shared by the draft and the series edits, which both
+  // need one and must not invent different shapes.
+  static QString mintEventId();
   Q_INVOKABLE QVariantMap newEventDraft(double startHour, const QDate& date) const;
   Q_INVOKABLE void saveEvent(const QVariantMap& draft);
   Q_INVOKABLE void updateEvent(const QString& id, double start, double end, const QDate& date);
   Q_INVOKABLE void deleteEvent(const QString& id);
+
+  // ── Recurrence ──
+  //
+  // A repeating event is stored once, as a master carrying an RRULE. The dates
+  // it lands on are computed here rather than written out: a daily standup
+  // would otherwise be a row per working day forever, and a merge conflict for
+  // every one of them.
+  //
+  // `eventOccurrences` is what the views read — plain event maps with real
+  // dates, plus `masterId` and `originalDate` on anything generated, so a click
+  // can find the series again.
+  Q_INVOKABLE QVariantList eventOccurrences(const QDate& from, const QDate& to) const;
+  // The stored event behind an occurrence: the master, or the override that
+  // stands in for it. Empty when there is none.
+  Q_INVOKABLE QVariantMap eventSeriesMaster(const QString& masterId) const;
+
+  // Scope is "this", "following" or "all" — the three answers every calendar
+  // asks for when a repeating event is edited or deleted.
+  Q_INVOKABLE void saveOccurrence(const QVariantMap& draft, const QString& scope);
+  Q_INVOKABLE void deleteOccurrence(const QString& masterId, const QDate& occurrenceDate, const QString& scope);
+
+  // ── .ics ──
+  //
+  // Import returns a summary rather than a bool: a file that brought in nine
+  // events and skipped one is neither a success nor a failure, and the user
+  // has to be told which. Keys: imported, updated, skipped, warnings.
+  Q_INVOKABLE QVariantMap importIcs(const QUrl& fileUrl);
+  Q_INVOKABLE bool exportIcsToFile(const QUrl& fileUrl) const;
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).

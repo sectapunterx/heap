@@ -14,7 +14,10 @@ Item {
     property bool showArchived: false
 
     signal taskClicked(string id)
-    signal eventClicked(string id)
+    // The occurrence, not just its id: a repeating event is stored once, so
+    // every occurrence of a series carries the master's id and only the
+    // occurrence map says which date was clicked.
+    signal eventClicked(string id, var occurrence)
     signal dayClicked(date d)
     // An empty slot was clicked: the shell opens the event editor there.
     signal createRequested(real hour, date day)
@@ -164,26 +167,23 @@ Item {
     // binding rather than a local inside buildDays(), because the all-day strip
     // needs the same list and buildDays() must not write a property it is
     // itself bound to.
+    // One week in either direction. Named to match MonthView.step(), so the
+    // keyboard can move the date without knowing which calendar is on screen.
+    function step(dir) {
+        const w = root.weekStart;
+        if (!w || !w.getFullYear) return;
+        AppController.selectedDate = new Date(w.getFullYear(), w.getMonth(), w.getDate() + (7 * dir));
+    }
+
     function buildSpans() {
-        const em = AppController.events;
         const _e = root.eventRev;
-        const out = [];
-        for (let i = 0; i < em.rowCount(); i++) {
-            const idx = em.index(i, 0);
-            out.push({
-                id:        em.data(idx, Qt.UserRole + 1),
-                title:     em.data(idx, Qt.UserRole + 2),
-                type:      em.data(idx, Qt.UserRole + 3),
-                start:     em.data(idx, Qt.UserRole + 4),
-                end:       em.data(idx, Qt.UserRole + 5),
-                attendees: em.data(idx, Qt.UserRole + 6),
-                date:      em.data(idx, Qt.UserRole + 7),
-                context:   em.data(idx, Qt.UserRole + 10) || "",
-                allDay:    Boolean(em.data(idx, Qt.UserRole + 11)),
-                endDate:   em.data(idx, Qt.UserRole + 12),
-            });
-        }
-        return out;
+        const start = root.weekStart;
+        if (!start || !start.getFullYear) return [];
+        // A day either side of the week: a timed event that crosses midnight
+        // reaches in from the Sunday before, and out into the Monday after.
+        const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
+        const to = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
+        return AppController.eventOccurrences(from, to);
     }
     readonly property var spans: buildSpans()
 
@@ -238,6 +238,8 @@ Item {
                     id: e.id, title: e.title, type: e.type,
                     start: seg.start, end: seg.end,
                     attendees: e.attendees, date: e.date, context: e.context,
+                    masterId: e.masterId || "", occurrenceDate: e.occurrenceDate,
+                    occ: e,
                     // Unique per piece: the same event can appear on several
                     // days, and the overlap map is keyed by this. Keying it by
                     // event id would let Tuesday's piece overwrite Monday's.
@@ -277,7 +279,12 @@ Item {
                     id: e.id, title: e.title, type: e.type,
                     start: e.start, end: e.end, attendees: e.attendees,
                     date: e.date, dayIndex: i, context: e.context || "",
-                    key: e.key, segFirst: e.segFirst, segLast: e.segLast
+                    key: e.key, segFirst: e.segFirst, segLast: e.segLast,
+                    masterId: e.masterId || "", occurrenceDate: e.occurrenceDate,
+                    // The occurrence as it came from the expansion: a click
+                    // opens the editor on this, not on a copy missing half
+                    // its fields.
+                    occ: e.occ
                 });
             }
         }
@@ -303,7 +310,8 @@ Item {
                 id: e.id, title: e.title, type: e.type,
                 from: ext.from, span: ext.span,
                 clippedStart: ext.clippedStart, clippedEnd: ext.clippedEnd,
-                row: laid.rows[e.id] || 0
+                row: laid.rows[e.id] || 0,
+                occ: e
             });
         }
         return { bars: bars, rows: laid.count };
@@ -360,7 +368,7 @@ Item {
 
                 PillButton {
                     text: "←"
-                    onClicked: AppController.selectedDate = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() - 7)
+                    onClicked: root.step(-1)
                 }
                 ColumnLayout {
                     spacing: 1
@@ -395,7 +403,7 @@ Item {
                 }
                 PillButton {
                     text: "→"
-                    onClicked: AppController.selectedDate = new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 7)
+                    onClicked: root.step(1)
                 }
             }
         }
@@ -408,13 +416,19 @@ Item {
 
             readonly property int gutterW: 50
             readonly property int dayCount: Math.max(1, root.days.length)
-            readonly property int dayW: Math.max(120, (width - gutterW) / dayCount)
+            // The rail takes its width off the grid rather than overlapping it,
+            // and folds away entirely on a narrow window, where seven columns
+            // already have nothing to spare.
+            readonly property bool railVisible: width > 900
+            readonly property int railW: railVisible ? 240 : 0
+            readonly property int dayW: Math.max(120, (width - gutterW - railW) / dayCount)
             readonly property int dueRowH: 116
 
             // Sticky header band for the day-header + due-chips area
             Rectangle {
                 id: headerBand
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
+                anchors.rightMargin: gridHost.railW
                 height: 60 + gridHost.dueRowH
                 color: Theme.panel
                 z: 2
@@ -609,6 +623,7 @@ Item {
                 objectName: "allday-strip"
                 anchors.top: headerBand.bottom
                 anchors.left: parent.left; anchors.right: parent.right
+                anchors.rightMargin: gridHost.railW
                 height: visible ? (root.strip.rows * 24 + 8) : 0
                 visible: root.strip.rows > 0
                 color: Theme.panel
@@ -656,21 +671,42 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        TapHandler { onTapped: root.eventClicked(weekBar.modelData.id) }
+                        TapHandler { onTapped: root.eventClicked(weekBar.modelData.id, weekBar.modelData.occ) }
                     }
                 }
+            }
+
+            // What still needs a slot, beside the grid that has the slots.
+            UnscheduledRail {
+                id: unscheduledRail
+                objectName: "unscheduled-rail"
+                visible: gridHost.railVisible
+                anchors.top: parent.top; anchors.bottom: parent.bottom
+                anchors.right: parent.right
+                width: gridHost.railW
+                days: {
+                    const out = [];
+                    for (let i = 0; i < root.days.length; i++) out.push(root.days[i].date);
+                    return out;
+                }
+                searchText: root.searchText
+                taskRev: root.taskRev
+                eventRev: root.eventRev
+                onTaskClicked: (id) => root.taskClicked(id)
+                z: 3
             }
 
             // Scrollable hour grid
             ScrollView {
                 anchors.left: parent.left; anchors.right: parent.right
+                anchors.rightMargin: gridHost.railW
                 anchors.top: weekStrip.bottom; anchors.bottom: parent.bottom
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
 
                 Item {
                     id: gridContent
-                    width: gridHost.width
+                    width: gridHost.width - gridHost.railW
                     height: (root.hoursEnd - root.hoursStart) * root.hourH + 4
 
                     // Hour-label gutter
@@ -839,6 +875,12 @@ Item {
                             y: (effStart - root.hoursStart) * root.hourH + dragDy
                             width: _slotW - (_cols > 1 ? 2 : 0)
                             height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
+                            // A half-hour meeting is the most common kind and
+                            // the block is too short for two lines of text:
+                            // the title was being clipped away, leaving a row
+                            // of blocks labelled only "09:30". Short blocks put
+                            // the time and the title on one line instead.
+                            readonly property bool compact: height < 30
                             radius: 4
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
                             border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
@@ -857,6 +899,7 @@ Item {
                                 spacing: 0
                                 clip: true
                                 Text {
+                                    visible: !weEv.compact
                                     text: Theme.fmtHour(weEv.effStart)
                                     color: Theme.textMuted
                                     font.family: Theme.fontMono
@@ -865,6 +908,13 @@ Item {
                                 RowLayout {
                                     width: parent.width
                                     spacing: 4
+                                    Text {
+                                        visible: weEv.compact
+                                        text: Theme.fmtHour(weEv.effStart)
+                                        color: Theme.textMuted
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: 9
+                                    }
                                     Text {
                                         visible: (weEv.modelData.context || "").length > 0
                                         text: weEv.modelData.context
@@ -935,7 +985,7 @@ Item {
                                         const newDate = root.days[weEv.effDayIndex].date;
                                         AppController.updateEvent(weEv.modelData.id, ns, ns + dur, newDate);
                                     } else {
-                                        root.eventClicked(weEv.modelData.id);
+                                        root.eventClicked(weEv.modelData.id, weEv.modelData.occ);
                                     }
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                     didDrag = false;

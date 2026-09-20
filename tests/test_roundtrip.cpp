@@ -94,6 +94,10 @@ CalEvent makeFullEvent() {
   e.context = QStringLiteral("heap");
   e.allDay = true;
   e.endDate = QDate(2026, 7, 12);
+  e.rrule = QStringLiteral("FREQ=WEEKLY;BYDAY=MO,WE;INTERVAL=2");
+  e.exdates = {QDate(2026, 7, 20), QDate(2026, 8, 3)};
+  e.masterId = QStringLiteral("ev-master");
+  e.originalDate = QDate(2026, 7, 13);
   return e;
 }
 
@@ -206,6 +210,18 @@ class Gen {
     // Half the cases carry an end date, so both the single-day and the
     // multi-day shape go through every serializer.
     e.endDate = boolean() ? e.date.addDays(pick(1, 5)) : QDate();
+    e.rrule = boolean() ? QStringLiteral("FREQ=DAILY;INTERVAL=") + QString::number(pick(1, 4)) : QString();
+    // Only off a valid date: an exdate that is itself invalid could never
+    // match an occurrence, so the serializer drops it on purpose and the
+    // generator must not produce one.
+    e.exdates.clear();
+    if(e.date.isValid()) {
+      for(int k = 0, n = pick(0, 3); k < n; ++k) {
+        e.exdates.append(e.date.addDays(pick(1, 60)));
+      }
+    }
+    e.masterId = boolean() ? text() : QString();
+    e.originalDate = boolean() ? date() : QDate();
     return e;
   }
 
@@ -222,7 +238,7 @@ constexpr int kCases = 1000;
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
   EXPECT_EQ(heap::meta::fieldCount<Task>(), 24u);
-  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 12u);
+  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 16u);
 }
 
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole

@@ -133,6 +133,11 @@ Popup {
             } else if (entry.kind === "note") {
                 AppController.currentView = "notes";
                 root.navigateToNoteLine(entry.line !== undefined ? entry.line : 0);
+            } else if (entry.kind === "event") {
+                // The week the event is in, selected on the day it falls on —
+                // landing on the month would leave the reader to find it again.
+                if (entry.eventDate) AppController.selectedDate = entry.eventDate;
+                AppController.currentView = "week";
             } else if (entry.kind === "template") {
                 AppController.currentView = "board";
                 AppController.createTaskFromTemplate(entry.templateName);

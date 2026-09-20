@@ -23,6 +23,30 @@ Popup {
     property var pickedEndDate: AppController.selectedDate
     property bool allDay: false
 
+    // Recurrence. `masterId` is set on anything the expansion generated, which
+    // is what makes an edit a question — this occurrence, this and everything
+    // after, or the whole series.
+    property string masterId: ""
+    property var originalDate: undefined
+    readonly property bool repeating: root.masterId.length > 0 || repeatBox.currentIndex > 0
+
+    // The rules offered in the menu. Anything heap did not write — an .ics
+    // import with a rule it does not model — lands on "custom", which is shown
+    // and kept but not editable here.
+    readonly property var repeatRules: ["", "FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2", "FREQ=MONTHLY", "FREQ=YEARLY"]
+    property string customRule: ""
+
+    function _repeatIndexFor(rule) {
+        if (!rule) return 0;
+        const i = root.repeatRules.indexOf(rule);
+        return i >= 0 ? i : root.repeatRules.length;   // "custom"
+    }
+    function _ruleFromBox() {
+        return repeatBox.currentIndex < root.repeatRules.length
+            ? root.repeatRules[repeatBox.currentIndex]
+            : root.customRule;
+    }
+
     // Open on a draft that has not been saved yet — a click on an empty slot
     // in the calendar. Saving is what brings the event into existence, so
     // cancelling leaves nothing behind.
@@ -36,10 +60,39 @@ Popup {
         root.pickedDate = draft.date;
         root.pickedEndDate = draft.endDate && draft.endDate.getFullYear ? draft.endDate : draft.date;
         root.allDay = !!draft.allDay;
+        root.masterId = draft.masterId || "";
+        root.originalDate = draft.originalDate;
+        root.customRule = draft.rrule || "";
+        repeatBox.currentIndex = root._repeatIndexFor(draft.rrule || "");
         contextField.text = draft.context || "";
         open();
         titleField.forceActiveFocus();
         titleField.selectAll();
+    }
+
+    // Open on one occurrence of a series. `occ` is a map from
+    // AppController.eventOccurrences — it carries the occurrence's own date
+    // plus the master it came from.
+    function showForOccurrence(occ) {
+        eventId = occ.id;
+        titleField.text = occ.title || "";
+        typeBox.currentIndex = Math.max(0, ["standup", "oneone", "sync", "focus"].indexOf(occ.type));
+        startField.text = AppController.eventHourLabel(occ.start);
+        endField.text = AppController.eventHourLabel(occ.end);
+        attField.text = occ.attendees || "";
+        root.pickedDate = occ.date;
+        root.pickedEndDate = occ.endDate && occ.endDate.getFullYear ? occ.endDate : occ.date;
+        root.allDay = !!occ.allDay;
+        root.masterId = occ.masterId || "";
+        root.originalDate = occ.occurrenceDate || occ.originalDate;
+        contextField.text = occ.context || "";
+
+        // The rule lives on the master, never on a generated instance.
+        const master = root.masterId.length > 0 ? AppController.eventSeriesMaster(root.masterId) : null;
+        const rule = (master && master.rrule) ? master.rrule : (occ.rrule || "");
+        root.customRule = rule;
+        repeatBox.currentIndex = root._repeatIndexFor(rule);
+        open();
     }
 
     function showForId(id) {
@@ -58,6 +111,10 @@ Popup {
                 // EndDateRole always reports a usable date: a single-day event
                 // reports its own day.
                 root.pickedEndDate = m.data(idx, Qt.UserRole + 12);
+                root.masterId      = String(m.data(idx, Qt.UserRole + 14) || "");
+                root.originalDate  = undefined;
+                root.customRule    = String(m.data(idx, Qt.UserRole + 13) || "");
+                repeatBox.currentIndex = root._repeatIndexFor(root.customRule);
                 contextField.text  = m.data(idx, Qt.UserRole + 10) || "";
                 break;
             }
@@ -116,8 +173,20 @@ Popup {
         }
     }
 
-    // Shared by the Save button and the Ctrl+Return shortcut.
-    function _save() {
+    // The three answers a calendar asks for when a repeating event is touched.
+    // Asked only when there is a series to disturb: an ordinary event saves
+    // straight through, and so does one that is only now being given a rule.
+    function _commit(scope) {
+        AppController.saveOccurrence(root._draft(), scope);
+        root.close();
+    }
+
+    function _commitDelete(scope) {
+        AppController.deleteOccurrence(root.masterId, root.originalDate, scope);
+        root.close();
+    }
+
+    function _draft() {
         const m = AppController.events;
         let curTaskId = "";
         for (let i = 0; i < m.rowCount(); i++) {
@@ -127,7 +196,7 @@ Popup {
                 break;
             }
         }
-        const d = {
+        return {
             id: root.eventId,
             title: titleField.text,
             type: ["standup", "oneone", "sync", "focus"][typeBox.currentIndex],
@@ -137,10 +206,30 @@ Popup {
             date: root.pickedDate,
             endDate: root.pickedEndDate,
             allDay: root.allDay,
+            rrule: root._ruleFromBox(),
+            masterId: root.masterId,
+            originalDate: root.originalDate,
             taskId: curTaskId,
             context: contextField.text
         };
-        AppController.saveEvent(d);
+    }
+
+    // Shared by the Save button and the Ctrl+Return shortcut.
+    function _save() {
+        if (root.masterId.length > 0 && root.originalDate) {
+            scopePrompt.ask(false);
+            return;
+        }
+        AppController.saveEvent(root._draft());
+        root.close();
+    }
+
+    function _delete() {
+        if (root.masterId.length > 0 && root.originalDate) {
+            scopePrompt.ask(true);
+            return;
+        }
+        AppController.deleteEvent(root.eventId);
         root.close();
     }
 
@@ -156,6 +245,73 @@ Popup {
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
+    }
+
+    // "This event, this and following, or all events?" — asked whenever an
+    // occurrence of a series is saved or deleted, because every wrong answer
+    // is a quiet data loss.
+    Dialog {
+        id: scopePrompt
+        objectName: "series-scope"
+        property bool deleting: false
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: 18
+        // Explicit, because the contentItem wraps: without a width of its own
+        // it sizes from the dialog, which is sizing from it.
+        width: 420
+        title: scopePrompt.deleting ? I18n.t("repeat.scope.deleteTitle") : I18n.t("repeat.scope.saveTitle")
+
+        function ask(isDelete) {
+            scopePrompt.deleting = isDelete;
+            scopePrompt.open();
+        }
+
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        contentItem: Text {
+            text: I18n.t("repeat.scope.body")
+            color: Theme.textMuted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+
+        footer: RowLayout {
+            spacing: 8
+            Layout.margins: 14
+            Item { Layout.fillWidth: true }
+            PillButton {
+                objectName: "series-scope-this"
+                text: I18n.t("repeat.scope.this")
+                onClicked: {
+                    scopePrompt.close();
+                    if (scopePrompt.deleting) root._commitDelete("this"); else root._commit("this");
+                }
+            }
+            PillButton {
+                objectName: "series-scope-following"
+                text: I18n.t("repeat.scope.following")
+                onClicked: {
+                    scopePrompt.close();
+                    if (scopePrompt.deleting) root._commitDelete("following"); else root._commit("following");
+                }
+            }
+            PillButton {
+                objectName: "series-scope-all"
+                text: I18n.t("repeat.scope.all")
+                primary: true
+                onClicked: {
+                    scopePrompt.close();
+                    if (scopePrompt.deleting) root._commitDelete("all"); else root._commit("all");
+                }
+            }
+        }
     }
 
     contentItem: ColumnLayout {
@@ -229,6 +385,25 @@ Popup {
                         Layout.fillWidth: true
                     }
                 }
+            }
+
+            Text {
+                Layout.columnSpan: 2
+                text: I18n.t("editor.label.repeat").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
+            ComboBox {
+                id: repeatBox
+                objectName: "event-repeat"
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                // One entry past the known rules for anything heap did not
+                // write — an imported rule is kept rather than silently
+                // rewritten into something simpler.
+                model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekly"),
+                        I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
+                        I18n.t("repeat.custom")]
+                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
             }
 
             Text {
@@ -373,7 +548,7 @@ Popup {
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 8; Layout.bottomMargin: 16
             spacing: 8
             PillButton {
-                text: I18n.t("common.delete"); danger: true; onClicked: { AppController.deleteEvent(root.eventId); root.close(); }
+                text: I18n.t("common.delete"); danger: true; onClicked: root._delete()
             }
             Item { Layout.fillWidth: true }
             PillButton {

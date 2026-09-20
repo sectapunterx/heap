@@ -305,6 +305,13 @@ ApplicationWindow {
                 exportJsonDialog.open();
             }
             onImportJsonRequested: importJsonDialog.open()
+            onImportIcsRequested: importIcsDialog.open()
+            onExportIcsRequested: {
+                exportIcsDialog.currentFile = "file:///" + (
+                    (AppController.activeProfileId || "heap") + ".ics"
+                );
+                exportIcsDialog.open();
+            }
         }
 
         // Side rail
@@ -484,7 +491,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onEventClicked: (id) => eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                         // A click on an empty slot opens the editor on a draft
                         // rather than saving an untitled event: the user names
                         // it before it exists.
@@ -501,7 +508,7 @@ ApplicationWindow {
                         prioritiesFilter: win.prioritiesFilter
                         showArchived: win.showArchived
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
-                        onEventClicked: (id) => eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                     }
                 }
                 Component {
@@ -591,7 +598,7 @@ ApplicationWindow {
                     DayCalendar {
                         SplitView.fillHeight: true
                         SplitView.minimumHeight: 120
-                        onEventClicked: (id) => eventEditor.showForId(id)
+                        onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                     }
                     PeopleList {
@@ -976,6 +983,39 @@ ApplicationWindow {
     //
     // The catalog holds the vim letter so it can be rebound; the arrow key is
     // a fixed alias alongside it, the way Ctrl+P aliases the palette.
+    // A calendar view is week or month; the day panel follows the same selected
+    // date, so moving it moves everything that is on screen.
+    component CalKey: Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+            && (AppController.currentView === "week" || AppController.currentView === "month")
+    }
+
+    CalKey {
+        sequences: [_kbd("cal.today")]
+        onActivated: AppController.selectedDate = AppController.today
+    }
+    CalKey {
+        sequences: [_kbd("cal.prev")]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(-1); }
+    }
+    CalKey {
+        sequences: [_kbd("cal.next")]
+        onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
+    }
+    CalKey {
+        sequences: [_kbd("cal.goToDate")]
+        onActivated: goToDatePopup.openAt(AppController.selectedDate, win.contentItem)
+    }
+
+    // Jump straight to a day rather than paging to it. Anchored to the window
+    // rather than to a view, because the view under it is swapped out.
+    DatePickerPopup {
+        id: goToDatePopup
+        objectName: "go-to-date"
+        onPicked: (value) => AppController.selectedDate = value
+    }
+
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
         enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
@@ -1084,6 +1124,36 @@ ApplicationWindow {
             if (err && err.length > 0)
                 toast.show(I18n.t("toast.profile.importFail") + err);
         }
+    }
+
+    // ── Calendar import / export via .ics ──────────────────────────────
+    FileDialog {
+        id: importIcsDialog
+        fileMode: FileDialog.OpenFile
+        nameFilters: ["Calendar (*.ics)", "All files (*)"]
+        title: I18n.t("dialog.importIcs.title")
+        onAccepted: {
+            const r = AppController.importIcs(selectedFile);
+            if (r.error) {
+                toast.show(r.error);
+                return;
+            }
+            // Counts, not a bare "done": a file that brought in nine events
+            // and skipped one is neither a success nor a failure.
+            toast.show(I18n.t("toast.ics.imported")
+                       .arg(r.imported).arg(r.updated).arg(r.skipped));
+            for (let i = 0; i < r.warnings.length; i++) console.warn("[ics]", r.warnings[i]);
+        }
+    }
+    FileDialog {
+        id: exportIcsDialog
+        fileMode: FileDialog.SaveFile
+        nameFilters: ["Calendar (*.ics)", "All files (*)"]
+        defaultSuffix: "ics"
+        title: I18n.t("dialog.exportIcs.title")
+        onAccepted: toast.show(AppController.exportIcsToFile(selectedFile)
+                               ? I18n.t("toast.ics.exported")
+                               : I18n.t("toast.ics.exportFail"))
     }
 
     Toast {

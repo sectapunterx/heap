@@ -122,6 +122,15 @@ struct CalEvent {
   // invariants every write path puts these through.
   bool allDay{};
   QDate endDate;
+  // Recurrence. A master carries `rrule` (an RRULE body — see src/cal/RRule.h)
+  // and the dates of the occurrences the user deleted one by one. An override
+  // is a separate event that names the master it replaces and the occurrence
+  // date it stands in for, which is how "edit only this one" is stored without
+  // materialising the whole series.
+  QString rrule;
+  QVector<QDate> exdates;
+  QString masterId;
+  QDate originalDate;
 
   bool operator==(const CalEvent&) const = default;
 };
@@ -249,6 +258,13 @@ class TaskModel : public QAbstractListModel {
   QVariant data(const QModelIndex& idx, int role) const override;
   QHash<int, QByteArray> roleNames() const override;
 
+  // The number behind a role name. QAbstractItemModel::roleNames() is not
+  // invokable from QML, so anything building a plain JS list out of this model
+  // has had to count offsets from Qt::UserRole by hand — and a miscount reads a
+  // different field silently, which is how a filter on `hasTime` came to be
+  // reading the board's rank. Returns -1 for a name that does not exist.
+  Q_INVOKABLE int roleOf(const QString& name) const;
+
   void reset(QVector<Task> items);
 
   const QVector<Task>& items() const {
@@ -305,6 +321,11 @@ class EventModel : public QAbstractListModel {
     // every view at the wrong field.
     AllDayRole,
     EndDateRole,
+    RRuleRole,
+    MasterIdRole,
+    // The date of the occurrence being shown. Equal to DateRole for a
+    // stored event; the expansion sets it per occurrence.
+    OccurrenceDateRole,
   };
 
   explicit EventModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

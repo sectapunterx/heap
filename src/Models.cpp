@@ -154,6 +154,17 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
   };
 }
 
+int TaskModel::roleOf(const QString& name) const {
+  const QByteArray needle = name.toUtf8();
+  const QHash<int, QByteArray> names = roleNames();
+  for(auto it = names.constBegin(); it != names.constEnd(); ++it) {
+    if(it.value() == needle) {
+      return it.key();
+    }
+  }
+  return -1;
+}
+
 QVariant TaskModel::data(const QModelIndex& idx, int role) const {
   if(!idx.isValid() || idx.row() < 0 || idx.row() >= m_items.size()) {
     return {};
@@ -440,6 +451,9 @@ QHash<int, QByteArray> EventModel::roleNames() const {
       {ContextRole, "context"},
       {AllDayRole, "allDay"},
       {EndDateRole, "endDate"},
+      {RRuleRole, "rrule"},
+      {MasterIdRole, "masterId"},
+      {OccurrenceDateRole, "occurrenceDate"},
   };
 }
 
@@ -475,6 +489,14 @@ QVariant EventModel::data(const QModelIndex& idx, int role) const {
       // Always a usable date, so a delegate can subtract without a validity
       // check: a single-day event reports its own day.
       return e.endDate.isValid() ? e.endDate : e.date;
+    case RRuleRole:
+      return e.rrule;
+    case MasterIdRole:
+      return e.masterId;
+    case OccurrenceDateRole:
+      // The stored model holds masters and overrides, never expanded
+      // occurrences, so this is the event's own date.
+      return e.date;
   }
   return {};
 }
