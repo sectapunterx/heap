@@ -18,7 +18,11 @@ Popup {
     property var draft: ({})
     property bool isNew: false
 
-    readonly property var palette: [
+    // Not `palette`: that is QQuickPopup's own property, which every
+    // Control inside this dialog resolves its colours through. Shadowing
+    // it with an array of hex strings hands those controls an array where
+    // they expect a palette.
+    readonly property var swatches: [
         "#d97a6c", "#c87fc7", "#6cc4b8", "#7da8d9",
         "#dcc06a", "#7cc492", "#e69854", "#a4a4d6"
     ]
@@ -44,10 +48,10 @@ Popup {
         idField.text       = draft.id || "";
         _idAutoDerived = isNew || (idField.text.length === 0);
         stateBox.currentIndex = Math.max(0, states.indexOf(draft.state || "todo"));
-        const cur = String(draft.color || palette[0]).toLowerCase();
+        const cur = String(draft.color || swatches[0]).toLowerCase();
         let i = 0;
-        for (let k = 0; k < palette.length; k++)
-            if (palette[k].toLowerCase() === cur) { i = k; break; }
+        for (let k = 0; k < swatches.length; k++)
+            if (swatches[k].toLowerCase() === cur) { i = k; break; }
         colorSwatch.selectedIndex = i;
         open();
     }
@@ -66,7 +70,7 @@ Popup {
             role: roleField.text,
             question: questionField.text,
             state: root.states[stateBox.currentIndex],
-            color: root.palette[colorSwatch.selectedIndex]
+            color: root.swatches[colorSwatch.selectedIndex]
         };
         AppController.savePerson(d);
         root.close();
@@ -186,7 +190,7 @@ Popup {
                     property int selectedIndex: 0
                     spacing: 4
                     Repeater {
-                        model: root.palette
+                        model: root.swatches
                         delegate: Rectangle {
                             required property string modelData
                             required property int index

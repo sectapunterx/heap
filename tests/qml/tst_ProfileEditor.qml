@@ -43,8 +43,8 @@ TestCase {
         compare(pe.presetColor, "");
         verify(!pe.visible, "popup must start closed");
         // Save picks colors out of this array — pin its shape.
-        compare(pe.palette.length, 8);
-        compare(String(pe.palette[0]).toLowerCase(), "#5cc2dd");
+        compare(pe.swatches.length, 8);
+        compare(String(pe.swatches[0]).toLowerCase(), "#5cc2dd");
     }
 
     // showCreate() resets stale rename state back to create mode and opens.
@@ -63,7 +63,7 @@ TestCase {
     // showRename(id, name, color) arms rename mode for the given profile.
     function test_show_rename_presets() {
         const pe = make('import TodoCpp; ProfileEditor { }');
-        pe.showRename("prof-abc", "My profile", pe.palette[3]);
+        pe.showRename("prof-abc", "My profile", pe.swatches[3]);
         compare(pe.mode, "rename");
         compare(pe.profileId, "prof-abc");
         tryCompare(pe, "opened", true);

@@ -103,8 +103,13 @@ Rectangle {
                 required property string name
                 required property string role
                 required property string question
-                required property string state
                 required property var color
+                // `state` is QQuickItem's own property — the name of the active
+                // State — so a `required property string state` here shadows it
+                // and puts a person's workflow state into the item's state
+                // machine. Read the role off the model object instead.
+                required property var model
+                readonly property string personState: prow.model.state
                 width: ListView.view ? ListView.view.width : 0
                 height: layout.implicitHeight + 12
 
@@ -179,7 +184,7 @@ Rectangle {
                         Text {
                             width: parent.width
                             text: prow.name + (prow.role.length ? "  · " + prow.role : "")
-                            color: (prow.state === "todo") ? Theme.text : Theme.textMuted
+                            color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
                             font.pixelSize: 12
                             font.weight: Font.Medium
                             elide: Text.ElideRight
@@ -192,8 +197,8 @@ Rectangle {
                             wrapMode: Text.WordWrap
                             maximumLineCount: 2
                             elide: Text.ElideRight
-                            font.strikeout: prow.state === "replied"
-                            opacity: prow.state === "replied" ? 0.6 : 1.0
+                            font.strikeout: prow.personState === "replied"
+                            opacity: prow.personState === "replied" ? 0.6 : 1.0
                         }
                     }
 
@@ -229,11 +234,11 @@ Rectangle {
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         radius: 999
-                        color: prow.state === "pinged" ? Theme.withAlpha(Theme.p1, 0.10)
-                             : prow.state === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)
+                        color: prow.personState === "pinged" ? Theme.withAlpha(Theme.p1, 0.10)
+                             : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)
                              : Theme.bg2
-                        border.color: prow.state === "pinged" ? Theme.withAlpha(Theme.p1, 0.4)
-                                    : prow.state === "replied" ? Theme.withAlpha(Theme.stDone, 0.4)
+                        border.color: prow.personState === "pinged" ? Theme.withAlpha(Theme.p1, 0.4)
+                                    : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.4)
                                     : Theme.border
                         border.width: 1
                         implicitWidth: stT.implicitWidth + 14
@@ -241,12 +246,12 @@ Rectangle {
                         Text {
                             id: stT
                             anchors.centerIn: parent
-                            text: prow.state === "todo" ? I18n.t("people.state.todo.tag")
-                                : prow.state === "pinged" ? I18n.t("people.state.pinged.tag")
-                                    : prow.state === "replied" ? I18n.t("people.state.replied.tag")
+                            text: prow.personState === "todo" ? I18n.t("people.state.todo.tag")
+                                : prow.personState === "pinged" ? I18n.t("people.state.pinged.tag")
+                                    : prow.personState === "replied" ? I18n.t("people.state.replied.tag")
                                         : I18n.t("people.state.idle.tag")
-                            color: prow.state === "pinged" ? Theme.p1
-                                 : prow.state === "replied" ? Theme.stDone
+                            color: prow.personState === "pinged" ? Theme.p1
+                                 : prow.personState === "replied" ? Theme.stDone
                                  : Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: 10
