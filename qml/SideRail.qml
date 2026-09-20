@@ -17,16 +17,11 @@ Rectangle {
     property alias tweaksAnchor:  tweaksBtn
     property alias hotkeysAnchor: hotkeysBtn
 
-    // Reactive badges — refresh on task model mutations + profile switches.
-    property int _blockedCount: AppController.countByStatus("blocked")
-    property int _reviewCount:  AppController.countByStatus("review")
-    Connections {
-        target: AppController.tasks
-        function onModelReset()   { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
-        function onRowsInserted() { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
-        function onRowsRemoved()  { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
-        function onDataChanged()  { root._blockedCount = AppController.countByStatus("blocked"); root._reviewCount = AppController.countByStatus("review") }
-    }
+    // Reactive badges. statusCounts is one pass over the model, recomputed
+    // when it changes and shared with the top bar — these used to be two
+    // separate full scans, repeated in all four handlers.
+    readonly property int _blockedCount: AppController.statusCounts["blocked"] || 0
+    readonly property int _reviewCount:  AppController.statusCounts["review"] || 0
 
     Rectangle {
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom

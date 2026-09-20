@@ -579,6 +579,73 @@ TEST(TaskModelScheduling, DeadlineRoleIsTheDueDateWithoutItsClockTime) {
   EXPECT_FALSE(m.data(m.index(0, 0), TaskModel::DeadlineRole).toDate().isValid());
 }
 
+// ─── indexOfId is indexed, and the index follows the rows ───
+
+TEST(TaskModelIndex, FollowsInsertsRemovalsAndResets) {
+  TaskModel m;
+  m.reset({mkTask(QStringLiteral("A")), mkTask(QStringLiteral("B")), mkTask(QStringLiteral("C"))});
+  EXPECT_EQ(m.indexOfId(QStringLiteral("A")), 0);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("C")), 2);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("ghost")), -1);
+
+  // Inserting at the front shifts everything after it.
+  m.insertAt(0, mkTask(QStringLiteral("Z")));
+  EXPECT_EQ(m.indexOfId(QStringLiteral("Z")), 0);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("A")), 1);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("C")), 3);
+
+  // Removing from the middle shifts everything after it.
+  m.removeById(QStringLiteral("A"));
+  EXPECT_EQ(m.indexOfId(QStringLiteral("A")), -1);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("B")), 1);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("C")), 2);
+
+  // Appending through upsert.
+  m.upsert(mkTask(QStringLiteral("D")));
+  EXPECT_EQ(m.indexOfId(QStringLiteral("D")), 3);
+
+  // An in-place upsert moves nothing.
+  Task b = mkTask(QStringLiteral("B"));
+  b.title = QStringLiteral("edited");
+  m.upsert(b);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("B")), 1);
+
+  // A reset invalidates everything that went before.
+  m.reset({mkTask(QStringLiteral("only"))});
+  EXPECT_EQ(m.indexOfId(QStringLiteral("only")), 0);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("B")), -1);
+  EXPECT_EQ(m.indexOfId(QStringLiteral("D")), -1);
+
+  m.reset({});
+  EXPECT_EQ(m.indexOfId(QStringLiteral("only")), -1);
+}
+
+TEST(TaskModelIndex, AgreesWithALinearScanAfterAChurnOfEdits) {
+  TaskModel m;
+  QVector<Task> seed;
+  for(int i = 0; i < 50; ++i) {
+    seed.push_back(mkTask(QStringLiteral("T") + QString::number(i)));
+  }
+  m.reset(seed);
+
+  for(int i = 0; i < 50; i += 3) {
+    m.removeById(QStringLiteral("T") + QString::number(i));
+  }
+  for(int i = 0; i < 10; ++i) {
+    m.insertAt(i * 2, mkTask(QStringLiteral("N") + QString::number(i)));
+  }
+
+  // The index must agree with what a scan of the rows would say, for every row
+  // and for a handful of ids that are gone.
+  for(int row = 0; row < m.rowCount(); ++row) {
+    const QString id = m.data(m.index(row, 0), TaskModel::IdRole).toString();
+    EXPECT_EQ(m.indexOfId(id), row) << id.toStdString();
+  }
+  for(int i = 0; i < 50; i += 3) {
+    EXPECT_EQ(m.indexOfId(QStringLiteral("T") + QString::number(i)), -1);
+  }
+}
+
 // ─── TaskFilterProxy: one board column's view of the model ───
 // The board used to hand the whole task model to every status column and let
 // each card hide itself, so a profile with N tasks and C columns built N×C

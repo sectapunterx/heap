@@ -21,24 +21,19 @@ ApplicationWindow {
     property bool showDoneTimeline: false
     property bool showArchived: false
 
-    // Reactive task / status counts — QAbstractItemModel signals refresh
-    // these on profile switch (modelReset) and on individual mutations.
-    property int _taskCount:    AppController.tasks.rowCount()
-    property int _activeCount:  AppController.countByStatus("prog") + AppController.countByStatus("half")
-    property int _blockedCount: AppController.countByStatus("blocked")
-    property int _reviewCount:  AppController.countByStatus("review")
-    function _recountStatuses() {
-        _taskCount    = AppController.tasks.rowCount();
-        _activeCount  = AppController.countByStatus("prog") + AppController.countByStatus("half");
-        _blockedCount = AppController.countByStatus("blocked");
-        _reviewCount  = AppController.countByStatus("review");
-    }
+    // Reactive task / status counts. statusCounts is one pass over the model,
+    // recomputed when the model changes; these used to be four separate full
+    // scans, re-run from all four of the model's signals.
+    readonly property var _counts: AppController.statusCounts
+    readonly property int _activeCount:  (_counts["prog"] || 0) + (_counts["half"] || 0)
+    readonly property int _blockedCount: _counts["blocked"] || 0
+    readonly property int _reviewCount:  _counts["review"] || 0
+    property int _taskCount: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
-        function onModelReset()   { win._recountStatuses() }
-        function onRowsInserted() { win._recountStatuses() }
-        function onRowsRemoved()  { win._recountStatuses() }
-        function onDataChanged()  { win._recountStatuses() }
+        function onModelReset()   { win._taskCount = AppController.tasks.rowCount() }
+        function onRowsInserted() { win._taskCount = AppController.tasks.rowCount() }
+        function onRowsRemoved()  { win._taskCount = AppController.tasks.rowCount() }
     }
 
     Component.onCompleted: {
@@ -108,7 +103,7 @@ ApplicationWindow {
     }
 
     function activeCount() {
-        return AppController.countByStatus("prog") + AppController.countByStatus("half");
+        return win._activeCount;
     }
     function scheduleMap() {
         const out = {};

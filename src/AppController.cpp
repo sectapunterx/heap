@@ -314,6 +314,17 @@ AppController::AppController(QObject* parent) :
     emit toast(body);
   });
 
+  // Invalidate the status-count cache from the model's own signals, so every
+  // mutation path is covered without each one having to remember.
+  const auto dropStatusCounts = [this]() {
+    m_statusCountsDirty = true;
+    emit statusCountsChanged();
+  };
+  connect(&m_tasks, &QAbstractItemModel::modelReset, this, dropStatusCounts);
+  connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, dropStatusCounts);
+  connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, dropStatusCounts);
+  connect(&m_tasks, &QAbstractItemModel::dataChanged, this, dropStatusCounts);
+
   seedShortcutCatalog();
 
   // Re-localize shortcut catalog when language flips so the Settings →
@@ -1340,13 +1351,22 @@ void AppController::deletePerson(const QString& id) {
 }
 
 int AppController::countByStatus(const QString& statusId) const {
-  int n = 0;
-  for(const auto& t : m_tasks.items()) {
-    if(t.status == statusId) {
-      ++n;
-    }
+  return statusCounts().value(statusId).toInt();
+}
+
+QVariantMap AppController::statusCounts() const {
+  // One pass, cached until the task model changes. The rail and the top bar
+  // between them asked for six separate counts on every single task edit, each
+  // a full scan of the model; now they read one map that is built once.
+  if(!m_statusCountsDirty) {
+    return m_statusCounts;
   }
-  return n;
+  m_statusCounts.clear();
+  for(const Task& t : m_tasks.items()) {
+    m_statusCounts[t.status] = m_statusCounts.value(t.status).toInt() + 1;
+  }
+  m_statusCountsDirty = false;
+  return m_statusCounts;
 }
 
 int AppController::statusIndexOf(const QString& id) const {
@@ -4861,15 +4881,27 @@ void AppController::resetAllShortcuts() {
 // ── Notifications, transitions, automation ─────────────────────────────
 
 QVariantMap AppController::settingsMap() const {
+  // Parsed on demand and cached against the string it came from. Twenty-odd
+  // call sites read this, including two per debounced save and one inside a
+  // QML loop (eventHourLabel, called per linked event), so re-parsing the
+  // whole settings document each time was the shape of the cost rather than
+  // its size. Keying the cache on the source string rather than invalidating
+  // it at each of the four writers means no writer can forget to.
+  if(m_settingsCacheSource == m_appSettingsJson) {
+    return m_settingsCache;
+  }
+  m_settingsCacheSource = m_appSettingsJson;
+  m_settingsCache = {};
   if(m_appSettingsJson.isEmpty()) {
-    return {};
+    return m_settingsCache;
   }
   QJsonParseError err;
   const QJsonDocument doc = QJsonDocument::fromJson(m_appSettingsJson.toUtf8(), &err);
   if(err.error != QJsonParseError::NoError || !doc.isObject()) {
-    return {};
+    return m_settingsCache;
   }
-  return doc.object().toVariantMap();
+  m_settingsCache = doc.object().toVariantMap();
+  return m_settingsCache;
 }
 
 bool AppController::canTransitionStatus(const QString& taskId, const QString& newStatus) {
