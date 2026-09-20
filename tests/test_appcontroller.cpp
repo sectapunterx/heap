@@ -1916,6 +1916,152 @@ TEST_F(AppControllerTest, CatalogFlagsWhichProvidersCanDoOneClick) {
       << "a public client needs no secret, so a plain build must still offer the button";
 }
 
+// ─── Status mapping ──────────────────────────────────────────────────
+//
+// StatusMap has always taken per-user overrides and had never been given any:
+// every sync called it with an empty map, so a status its built-in table does
+// not recognise — "QA", "Needs triage", anything from a custom Jira workflow —
+// landed in "todo" with no way to say otherwise.
+
+TEST_F(AppControllerTest, AnUnmappedStatusIsRememberedSoItCanBeMapped) {
+  const QString repo = QStringLiteral("acme/widgets");
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{{"connected", true}, {"host", QStringLiteral("http://127.0.0.1:1")}, {"repo", repo}});
+
+  heap::integrations::ExternalTask ext;
+  ext.providerId = QStringLiteral("gitea");
+  ext.externalId = QStringLiteral("7");
+  ext.title = QStringLiteral("Flaky retry test");
+  ext.status = QStringLiteral("Needs triage");
+  app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {ext});
+
+  // Nothing in the built-in table matches, so the card lands in the fallback.
+  const int row = app_->tasks()->indexOfId(QStringLiteral("gitea-7"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->tasks()->items().at(row).status, QStringLiteral("todo"));
+
+  // But the status itself is now on offer, which is the whole point: the user
+  // cannot map a vocabulary they have to guess at.
+  const QVariantList rows = app_->statusMappingFor(QStringLiteral("gitea"));
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("status")).toString(), QStringLiteral("Needs triage"));
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("column")).toString(), QStringLiteral("todo"));
+  EXPECT_FALSE(rows.at(0).toMap().value(QStringLiteral("overridden")).toBool()) << "an unmapped row is a guess, not a decision";
+}
+
+TEST_F(AppControllerTest, AMappedStatusBeatsTheBuiltInTable) {
+  writeIntegrationConfig(
+      QStringLiteral("gitea"),
+      QJsonObject{{"connected", true}, {"host", QStringLiteral("http://127.0.0.1:1")}, {"repo", QStringLiteral("acme/widgets")}});
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("Needs triage"), QStringLiteral("backlog"));
+  // "open" IS in the built-in table; an override still wins.
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("open"), QStringLiteral("review"));
+
+  heap::integrations::ExternalTask a;
+  a.providerId = QStringLiteral("gitea");
+  a.externalId = QStringLiteral("1");
+  a.title = QStringLiteral("a");
+  a.status = QStringLiteral("Needs triage");
+  heap::integrations::ExternalTask b;
+  b.providerId = QStringLiteral("gitea");
+  b.externalId = QStringLiteral("2");
+  b.title = QStringLiteral("b");
+  b.status = QStringLiteral("open");
+  app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {a, b});
+
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("gitea-1"))).status, QStringLiteral("backlog"));
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("gitea-2"))).status, QStringLiteral("review"));
+}
+
+TEST_F(AppControllerTest, ClearingAMappingGoesBackToTheGuess) {
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{{"connected", true}});
+  // Seen during a sync, so the row survives the mapping being cleared — a
+  // status only ever mapped by hand has nothing left to list once the mapping
+  // is gone, which is right but not what this is about.
+  heap::integrations::ExternalTask e;
+  e.providerId = QStringLiteral("gitea");
+  e.externalId = QStringLiteral("4");
+  e.title = QStringLiteral("t");
+  e.status = QStringLiteral("QA");
+  app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {e});
+
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("QA"), QStringLiteral("review"));
+  QVariantList rows = app_->statusMappingFor(QStringLiteral("gitea"));
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_TRUE(rows.at(0).toMap().value(QStringLiteral("overridden")).toBool());
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("column")).toString(), QStringLiteral("review"));
+
+  // An empty column is how the UI says "Auto" — it has to remove the key, not
+  // store an empty one, or the row would map to nothing at all.
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("QA"), QString());
+  rows = app_->statusMappingFor(QStringLiteral("gitea"));
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_FALSE(rows.at(0).toMap().value(QStringLiteral("overridden")).toBool());
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("column")).toString(), QStringLiteral("todo"));
+}
+
+TEST_F(AppControllerTest, AStatusMappedByHandIsOfferedBeforeItIsEverSeen) {
+  // The mapping outlives the status disappearing upstream, and a row the user
+  // has decided on must not vanish from the list that shows the decision.
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{{"connected", true}});
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("Awaiting deploy"), QStringLiteral("blocked"));
+
+  const QVariantList rows = app_->statusMappingFor(QStringLiteral("gitea"));
+  ASSERT_EQ(rows.size(), 1);
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("status")).toString(), QStringLiteral("Awaiting deploy"));
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("column")).toString(), QStringLiteral("blocked"));
+}
+
+TEST_F(AppControllerTest, AColumnNoBoardHasIsRefused) {
+  // Storing it would hide every ticket carrying that status, with nothing on
+  // screen to say where they went.
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{{"connected", true}});
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("QA"), QStringLiteral("not-a-column"));
+  EXPECT_TRUE(app_->statusMappingFor(QStringLiteral("gitea")).isEmpty());
+}
+
+TEST_F(AppControllerTest, SeenStatusesAccumulateWithoutDuplicating) {
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{{"connected", true}});
+
+  const auto push = [&](const QString& id, const QString& status) {
+    heap::integrations::ExternalTask e;
+    e.providerId = QStringLiteral("gitea");
+    e.externalId = id;
+    e.title = QStringLiteral("t") + id;
+    e.status = status;
+    app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {e});
+  };
+  push(QStringLiteral("1"), QStringLiteral("QA"));
+  push(QStringLiteral("2"), QStringLiteral("QA"));
+  push(QStringLiteral("3"), QStringLiteral("Needs triage"));
+
+  const QVariantList rows = app_->statusMappingFor(QStringLiteral("gitea"));
+  ASSERT_EQ(rows.size(), 2);
+  // Sorted, so the list does not reshuffle under the cursor between syncs.
+  EXPECT_EQ(rows.at(0).toMap().value(QStringLiteral("status")).toString(), QStringLiteral("Needs triage"));
+  EXPECT_EQ(rows.at(1).toMap().value(QStringLiteral("status")).toString(), QStringLiteral("QA"));
+}
+
+TEST_F(AppControllerTest, RemappingDoesNotRecolumnTasksAlreadyMirrored) {
+  // Moving a mirrored ticket is a real move that heap pushes back upstream, so
+  // re-columning existing cards here would push a change the user never made.
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{{"connected", true}});
+  heap::integrations::ExternalTask e;
+  e.providerId = QStringLiteral("gitea");
+  e.externalId = QStringLiteral("5");
+  e.title = QStringLiteral("t");
+  e.status = QStringLiteral("QA");
+  app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {e});
+  ASSERT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("gitea-5"))).status, QStringLiteral("todo"));
+
+  app_->setStatusMapping(QStringLiteral("gitea"), QStringLiteral("QA"), QStringLiteral("review"));
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("gitea-5"))).status, QStringLiteral("todo"))
+      << "the mapping applies on the next sync, not retroactively";
+
+  app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {e});
+  EXPECT_EQ(app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("gitea-5"))).status, QStringLiteral("review"));
+}
+
 // ─── Mattermost contact merge ─────────────────────────────────────────
 // Imported people land in the Docs contact list, and the ones actually talked
 // to also in the People rail. The rules that matter: never clobber an edit of
