@@ -141,6 +141,12 @@ target_include_directories(heap_cal_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/..
 target_link_libraries(heap_cal_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_cal_tests COMMAND heap_cal_tests)
 
+# Calendar recurrence rules — header-only, so only the test TU compiles.
+add_executable(heap_rrule_tests test_rrule.cpp)
+target_include_directories(heap_rrule_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_rrule_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_rrule_tests COMMAND heap_rrule_tests)
+
 # Recurrence engine (HEAP-77) — header-only, so only the test TU compiles.
 add_executable(heap_recur_tests test_recur.cpp)
 target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
