@@ -175,9 +175,12 @@ revisiting.
    no PKCE). The **Public** option — PKCE, device authorization, rotating
    refresh tokens — is the better fit for a desktop app on paper, but heap would
    have to be changed to use it; see "What this is not" below.
-3. **Copy the Client Secret immediately.** The page says it plainly: the secret
-   is shown once, right after creation, and there is no reveal button afterwards
-   — only deleting the application and starting over.
+3. **Copy the Client Secret immediately.** It is shown once, right after
+   creation; on any later visit the field reads *hidden* and cannot be revealed.
+   Losing it is recoverable but not free: the page offers **Rotate client
+   secret**, which issues a new one and invalidates the old, so you must update
+   the `HEAP_OAUTH_SENTRY_CLIENT_SECRET` repository secret at the same time.
+   You do not need to delete and recreate the application.
 4. Sentry auto-fills a random two-word Name; replace it with `heap`. Authorized
    Redirect URIs: `http://127.0.0.1:51789/`. Both fields save on blur — a green
    *Changes applied* toast is the confirmation, there is no Save button.
