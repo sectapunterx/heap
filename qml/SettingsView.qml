@@ -155,7 +155,7 @@ Item {
         },
         calendar: {
             weekStart: "mon", timeFormat: "24h",
-            snapMinutes: 15, showWeekends: false,
+            snapMinutes: 15, showWeekends: true,
             autoFocusBlock: true, focusBlockDuration: 90,
             standupTime: "10:00"
         },
@@ -1111,7 +1111,7 @@ Item {
                         visible: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
                         label: I18n.t("settings.notif.leadHours")
                         unit: "h"; min: 1; max: 72; step: 1
-                        value: (root.settings.notifications && root.settings.notifications.deadlineLeadHours) || 24
+                        value: (root.settings.notifications && root.settings.notifications.deadlineLeadHours) ?? 24
                         onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
                     }
                     SwitchRow {
@@ -1243,7 +1243,7 @@ Item {
                     }
                     SegRow {
                         label: I18n.t("settings.cal.snap")
-                        value: String((root.settings.calendar && root.settings.calendar.snapMinutes) || 15)
+                        value: String((root.settings.calendar && root.settings.calendar.snapMinutes) ?? 15)
                         options: [ ({ value: "5", label: "5 min" }), ({ value: "15", label: "15 min" }), ({ value: "30", label: "30 min" }) ]
                         onSelected: (value) => root.set("calendar", "snapMinutes", parseInt(value))
                     }
@@ -1271,7 +1271,7 @@ Item {
                         visible: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
                         label: I18n.t("settings.cal.focusDuration")
                         unit: " min"; min: 30; max: 240; step: 15
-                        value: (root.settings.calendar && root.settings.calendar.focusBlockDuration) || 90
+                        value: (root.settings.calendar && root.settings.calendar.focusBlockDuration) ?? 90
                         onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }
                     TextRow {

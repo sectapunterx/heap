@@ -25,7 +25,7 @@ QtObject {
     // Convenience reads — all view'ы / делегаты могут идти через Theme.
     readonly property string weekStart:    _calendar.weekStart    || "mon"
     readonly property string timeFormat:   _calendar.timeFormat   || "24h"
-    readonly property int    snapMinutes:  _calendar.snapMinutes  || 15
+    readonly property int    snapMinutes:  _calendar.snapMinutes  ?? 15
     readonly property bool   showWeekends: _calendar.showWeekends === undefined ? true : !!_calendar.showWeekends
 
     // ── Surfaces ──────────────────────────────────────────────────────

@@ -24,6 +24,13 @@ Popup {
     property int _month: selected.getMonth()
     property int _year: selected.getFullYear()
 
+    // MonthGrid orders its columns by the locale's firstDayOfWeek, so the app's
+    // own Settings → Calendar week start has to be expressed as one. Every
+    // other calendar surface honours Theme.weekStart; this popup used to follow
+    // the host locale instead, so the same week could start on a different day
+    // here than in the view it was opened from.
+    readonly property var _gridLocale: Qt.locale(Theme.weekStart === "sun" ? "en_US" : "en_GB")
+
     function _sameDay(a, b) {
         return a && b && a.getFullYear() === b.getFullYear()
             && a.getMonth() === b.getMonth() && a.getDate() === b.getDate();
@@ -72,7 +79,10 @@ Popup {
             Text {
                 Layout.fillWidth: true
                 horizontalAlignment: Text.AlignHCenter
-                text: Qt.formatDate(new Date(pop._year, pop._month, 1), "MMMM yyyy")
+                // I18n, not Qt.formatDate: the month name follows the app
+                // language the same way MonthView's title does, rather than
+                // whatever the host is set to.
+                text: I18n.monthName(pop._month) + " " + pop._year
                 color: Theme.text; font.pixelSize: 12; font.weight: Font.DemiBold
             }
             Rectangle {
@@ -85,10 +95,12 @@ Popup {
 
         DayOfWeekRow {
             Layout.fillWidth: true
-            locale: grid.locale
+            locale: pop._gridLocale
             delegate: Text {
+                required property var model
                 horizontalAlignment: Text.AlignHCenter
-                text: model.shortName
+                // model.day is the JS day-of-week index the column stands for.
+                text: I18n.dayName(model.day)
                 color: Theme.textDim; font.pixelSize: 9; font.weight: Font.DemiBold
             }
         }
@@ -97,6 +109,7 @@ Popup {
             id: grid
             Layout.preferredWidth: 232
             Layout.preferredHeight: 168
+            locale: pop._gridLocale
             month: pop._month
             year: pop._year
             delegate: Rectangle {
