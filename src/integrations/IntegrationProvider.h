@@ -32,7 +32,7 @@ class IntegrationProvider : public QObject {
   // own repo/project, which in a cross-project pull is not the configured one.
   // Always answers commentsFetched, including with an error. The default says
   // "unsupported" so a provider that has no comment endpoint needs no code.
-  virtual void fetchComments(const QString& externalId, const QString& project) {
+  virtual void fetchComments(const QString& externalId, const QString& /*project*/) {
     emit commentsFetched(externalId, {}, QStringLiteral("unsupported"));
   }
 
