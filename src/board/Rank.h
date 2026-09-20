@@ -6,7 +6,6 @@
 
 #include <cmath>
 
-
 // Fractional ranking for manual card order.
 //
 // A card's position in its column is a double, and dropping it between two

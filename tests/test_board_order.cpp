@@ -161,7 +161,7 @@ TEST_F(BoardOrderTest, RepeatedDropsIntoTheSameGapKeepTheOrder) {
   seedColumn({QStringLiteral("A"), QStringLiteral("B"), QStringLiteral("X")}, QStringLiteral("todo"));
 
   for(int i = 0; i < 120; ++i) {
-    app_->moveTaskTo(QStringLiteral("X"), QStringLiteral("todo"), QString());        // to the end
+    app_->moveTaskTo(QStringLiteral("X"), QStringLiteral("todo"), QString());            // to the end
     app_->moveTaskTo(QStringLiteral("X"), QStringLiteral("todo"), QStringLiteral("B"));  // back into the A..B gap
   }
 
