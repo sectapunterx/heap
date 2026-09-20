@@ -19,6 +19,23 @@ Popup {
     // The day this event falls on — editable via the calendar picker below.
     property var pickedDate: AppController.selectedDate
 
+    // Open on a draft that has not been saved yet — a click on an empty slot
+    // in the calendar. Saving is what brings the event into existence, so
+    // cancelling leaves nothing behind.
+    function showForDraft(draft) {
+        eventId = draft.id;
+        titleField.text = draft.title || "";
+        typeBox.currentIndex = Math.max(0, ["standup", "oneone", "sync", "focus"].indexOf(draft.type));
+        startField.text = AppController.eventHourLabel(draft.start);
+        endField.text = AppController.eventHourLabel(draft.end);
+        attField.text = draft.attendees || "";
+        root.pickedDate = draft.date;
+        contextField.text = draft.context || "";
+        open();
+        titleField.forceActiveFocus();
+        titleField.selectAll();
+    }
+
     function showForId(id) {
         eventId = id;
         const m = AppController.events;
