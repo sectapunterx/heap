@@ -84,6 +84,10 @@ class AppController : public QObject {
 
   Q_PROPERTY(QString docsState READ docsState WRITE setDocsState NOTIFY docsStateChanged)
   Q_PROPERTY(QString notesState READ notesState WRITE setNotesState NOTIFY notesStateChanged)
+  // The notes of the active profile, without their bodies. `notesState` is the
+  // body of whichever one is open, so everything that reads it keeps working.
+  Q_PROPERTY(NoteModel* notes READ notes CONSTANT)
+  Q_PROPERTY(QString activeNoteId READ activeNoteId WRITE setActiveNoteId NOTIFY activeNoteChanged)
   Q_PROPERTY(QString appSettingsJson READ appSettingsJson WRITE setAppSettingsJson NOTIFY appSettingsJsonChanged)
   Q_PROPERTY(bool hasPendingUndo READ hasPendingUndo NOTIFY pendingUndoChanged)
   Q_PROPERTY(bool canRedo READ canRedo NOTIFY pendingUndoChanged)
@@ -223,6 +227,30 @@ class AppController : public QObject {
   }
 
   void setDocsState(const QString& v);
+
+  NoteModel* notes() {
+    return &m_notes;
+  }
+
+  QString activeNoteId() const {
+    return m_activeNoteId;
+  }
+
+  void setActiveNoteId(const QString& id);
+
+  // One note's body. The list model deliberately does not carry bodies: fifty
+  // notes would mean fifty documents crossing the QML boundary on a repaint.
+  Q_INVOKABLE QString noteBody(const QString& id) const;
+
+  // Creating one returns its id so a caller can open it straight away.
+  Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString());
+  Q_INVOKABLE void renameNote(const QString& id, const QString& title);
+  Q_INVOKABLE void deleteNote(const QString& id);
+  Q_INVOKABLE void setNoteBody(const QString& id, const QString& body);
+  Q_INVOKABLE void setNotePinned(const QString& id, bool pinned);
+  Q_INVOKABLE void moveNoteToFolder(const QString& id, const QString& folder);
+  // Every folder in use, sorted, for a tree or a picker.
+  Q_INVOKABLE QStringList noteFolders() const;
 
   QString notesState() const {
     return m_notesState;
@@ -739,6 +767,7 @@ class AppController : public QObject {
   void crumbUserChanged();
   void docsStateChanged();
   void notesStateChanged();
+  void activeNoteChanged();
   void appSettingsJsonChanged();
   void statusesChanged();
   void pendingUndoChanged();
@@ -815,6 +844,12 @@ class AppController : public QObject {
   QString m_crumbUser = "You";
   QString m_docsState;
   QString m_notesState;
+  NoteModel m_notes;
+  QString m_activeNoteId;
+
+  // Keeps `notesState` and the active note's body the same thing. Called on
+  // every edit and every switch; silent when there is no active note.
+  void syncActiveNoteBody();
   QString m_appSettingsJson;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.

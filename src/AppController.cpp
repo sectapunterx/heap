@@ -120,6 +120,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
+      {"notes.untitled", {"Untitled note", "Без названия"}},
       {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
       {"undo.importIcs", {"Calendar imported", "Календарь импортирован"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
@@ -702,8 +703,159 @@ void AppController::setNotesState(const QString& v) {
     return;
   }
   m_notesState = v;
+  // `notesState` IS the active note's body. Writing one without the other is
+  // how an edit would survive until the next profile switch and then vanish.
+  syncActiveNoteBody();
   emit notesStateChanged();
   scheduleSave();
+}
+
+void AppController::syncActiveNoteBody() {
+  const int row = m_notes.indexOfId(m_activeNoteId);
+  if(row < 0) {
+    return;
+  }
+  Note n = m_notes.items().at(row);
+  if(n.body == m_notesState) {
+    return;
+  }
+  n.body = m_notesState;
+  n.updated = QDateTime::currentDateTime();
+  m_notes.upsert(n);
+}
+
+void AppController::setActiveNoteId(const QString& id) {
+  if(id == m_activeNoteId) {
+    return;
+  }
+  // The note being left keeps what was typed into it. NotesView debounces its
+  // saves, so the last keystrokes are still only in `notesState` here.
+  syncActiveNoteBody();
+  m_activeNoteId = id;
+  const int row = m_notes.indexOfId(id);
+  m_notesState = row >= 0 ? m_notes.items().at(row).body : QString();
+  emit activeNoteChanged();
+  emit notesStateChanged();
+  scheduleSave();
+}
+
+QString AppController::noteBody(const QString& id) const {
+  const int row = m_notes.indexOfId(id);
+  return row >= 0 ? m_notes.items().at(row).body : QString();
+}
+
+QString AppController::newNote(const QString& title, const QString& folder) {
+  Note n;
+  n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  n.title = title.trimmed().isEmpty() ? tr_("notes.untitled") : title.trimmed();
+  n.folder = folder;
+  n.created = QDateTime::currentDateTime();
+  n.updated = n.created;
+  // The heading, so the document opens saying what it is rather than empty.
+  n.body = QStringLiteral("# %1\n\n").arg(n.title);
+  m_notes.upsert(n);
+  setActiveNoteId(n.id);
+  scheduleSave();
+  return n.id;
+}
+
+void AppController::renameNote(const QString& id, const QString& title) {
+  const int row = m_notes.indexOfId(id);
+  if(row < 0 || title.trimmed().isEmpty()) {
+    return;
+  }
+  Note n = m_notes.items().at(row);
+  n.title = title.trimmed();
+  n.updated = QDateTime::currentDateTime();
+  m_notes.upsert(n);
+  scheduleSave();
+}
+
+void AppController::deleteNote(const QString& id) {
+  const int row = m_notes.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  const bool wasActive = (id == m_activeNoteId);
+  m_notes.removeById(id);
+  if(wasActive) {
+    // Land on a neighbour rather than on nothing: an empty editor after a
+    // delete reads as the rest of the notes having gone too.
+    const int next = qMin(row, m_notes.rowCount() - 1);
+    m_activeNoteId = next >= 0 ? m_notes.items().at(next).id : QString();
+    m_notesState = next >= 0 ? m_notes.items().at(next).body : QString();
+    emit activeNoteChanged();
+    emit notesStateChanged();
+  }
+  scheduleSave();
+}
+
+void AppController::setNoteBody(const QString& id, const QString& body) {
+  const int row = m_notes.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  Note n = m_notes.items().at(row);
+  if(n.body == body) {
+    return;
+  }
+  n.body = body;
+  n.updated = QDateTime::currentDateTime();
+  m_notes.upsert(n);
+  if(id == m_activeNoteId) {
+    m_notesState = body;
+    emit notesStateChanged();
+  }
+  scheduleSave();
+}
+
+void AppController::setNotePinned(const QString& id, bool pinned) {
+  const int row = m_notes.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  Note n = m_notes.items().at(row);
+  if(n.pinned == pinned) {
+    return;
+  }
+  n.pinned = pinned;
+  m_notes.upsert(n);
+  scheduleSave();
+}
+
+void AppController::moveNoteToFolder(const QString& id, const QString& folder) {
+  const int row = m_notes.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  Note n = m_notes.items().at(row);
+  // Normalised the way a path is: no leading or trailing separator, so
+  // "/meetings/" and "meetings" are the same folder rather than two.
+  QString clean = folder.trimmed();
+  while(clean.startsWith(QLatin1Char('/'))) {
+    clean = clean.mid(1);
+  }
+  while(clean.endsWith(QLatin1Char('/'))) {
+    clean.chop(1);
+  }
+  if(n.folder == clean) {
+    return;
+  }
+  n.folder = clean;
+  n.updated = QDateTime::currentDateTime();
+  m_notes.upsert(n);
+  scheduleSave();
+}
+
+QStringList AppController::noteFolders() const {
+  QStringList out;
+  for(const Note& n : m_notes.items()) {
+    if(!n.folder.isEmpty() && !out.contains(n.folder)) {
+      out << n.folder;
+    }
+  }
+  out.sort();
+  return out;
 }
 
 void AppController::appendNoteEntry(const QString& text) {
@@ -4402,7 +4554,10 @@ void AppController::snapshotActiveProfile() {
   p.people = m_people.items();
   p.statuses = m_statuses;
   p.docsState = m_docsState;
+  syncActiveNoteBody();
   p.notesState = m_notesState;
+  p.notes = m_notes.items();
+  p.activeNoteId = m_activeNoteId;
   // Events are global — not snapshotted into the profile.
 }
 
@@ -4413,7 +4568,29 @@ void AppController::applyProfileToModels(const Profile& p) {
   emit statusesChanged();
   m_docsState = p.docsState;
   emit docsStateChanged();
-  m_notesState = p.notesState;
+  // A profile written before v8, opened by a build that has not migrated it
+  // yet, still carries its notes as one blob. Rather than show an empty list,
+  // it becomes the one note it always was.
+  QVector<Note> notes = p.notes;
+  QString activeId = p.activeNoteId;
+  if(notes.isEmpty() && !p.notesState.trimmed().isEmpty()) {
+    Note n;
+    n.id = QStringLiteral("note-migrated");
+    n.title = tr_("notes.untitled");
+    n.body = p.notesState;
+    n.created = QDateTime::currentDateTime();
+    n.updated = n.created;
+    notes.append(n);
+    activeId = n.id;
+  }
+  m_notes.reset(notes);
+  if(activeId.isEmpty() && !notes.isEmpty()) {
+    activeId = notes.first().id;
+  }
+  m_activeNoteId = activeId;
+  const int row = m_notes.indexOfId(m_activeNoteId);
+  m_notesState = row >= 0 ? m_notes.items().at(row).body : p.notesState;
+  emit activeNoteChanged();
   emit notesStateChanged();
   // Events are global — not reset on profile switch.
 }

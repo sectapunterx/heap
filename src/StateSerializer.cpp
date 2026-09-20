@@ -364,6 +364,49 @@ QVector<CalEvent> eventsFromJson(const QJsonArray& a, const QString& fallbackPro
   return v;
 }
 
+// ───────────────── Note ─────────────────
+
+QJsonObject noteToJson(const Note& n) {
+  QJsonObject o;
+  o["id"] = n.id;
+  o["title"] = n.title;
+  o["folder"] = n.folder;
+  o["body"] = n.body;
+  o["pinned"] = n.pinned;
+  o["created"] = dtToStr(n.created);
+  o["updated"] = dtToStr(n.updated);
+  return o;
+}
+
+Note noteFromJson(const QJsonObject& o) {
+  Note n;
+  n.id = o["id"].toString();
+  n.title = o["title"].toString();
+  n.folder = o["folder"].toString();
+  n.body = o["body"].toString();
+  n.pinned = o["pinned"].toBool();
+  n.created = dtFromStr(o["created"].toString());
+  n.updated = dtFromStr(o["updated"].toString());
+  return n;
+}
+
+QJsonArray notesToJson(const QVector<Note>& xs) {
+  QJsonArray a;
+  for(const Note& n : xs) {
+    a.append(noteToJson(n));
+  }
+  return a;
+}
+
+QVector<Note> notesFromJson(const QJsonArray& a) {
+  QVector<Note> v;
+  v.reserve(a.size());
+  for(const auto& it : a) {
+    v.append(noteFromJson(it.toObject()));
+  }
+  return v;
+}
+
 // ───────────────── Person / statuses ─────────────────
 
 QJsonArray peopleToJson(const QVector<Person>& xs) {
@@ -449,8 +492,14 @@ QJsonObject profileToJson(const Profile& p) {
       o["docs"] = d.object();
     }
   }
-  if(!p.notesState.isEmpty()) {
-    o["notes"] = p.notesState;
+  // An array since v8. The key used to hold the whole of a profile's notes as
+  // one markdown string; profileFromJson still reads that form, because a
+  // document written by an older build is not migrated until it is opened.
+  if(!p.notes.isEmpty()) {
+    o["notes"] = notesToJson(p.notes);
+  }
+  if(!p.activeNoteId.isEmpty()) {
+    o["activeNoteId"] = p.activeNoteId;
   }
   return o;
 }
@@ -467,9 +516,18 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
   if(o.contains("docs")) {
     p.docsState = QJsonDocument(o["docs"].toObject()).toJson(QJsonDocument::Compact);
   }
+  // Either shape. A document written before v8 holds every note as one
+  // markdown string; one written since holds an array. Reading both here means
+  // an older file opens correctly whether or not the migration ladder has run
+  // over it yet, which is the same tolerance `deadline` has.
   if(o.contains("notes")) {
-    p.notesState = o["notes"].toString();
+    if(o["notes"].isArray()) {
+      p.notes = notesFromJson(o["notes"].toArray());
+    } else {
+      p.notesState = o["notes"].toString();
+    }
   }
+  p.activeNoteId = o["activeNoteId"].toString();
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
   }
@@ -550,6 +608,48 @@ void forEachTaskArray(QJsonObject& root, const std::function<QJsonArray(const QJ
   }
 }
 
+// The blob becomes one note. Its title is the document's first heading, since
+// that is what the user called it; failing that, "Notes", because a note with
+// no name cannot be found in a list.
+void migrateNotesV7ToV8(QJsonObject& root) {
+  QJsonArray profiles;
+  bool touched = false;
+  for(const QJsonValue& v : root["profiles"].toArray()) {
+    QJsonObject p = v.toObject();
+    if(p.contains("notes") && !p["notes"].isArray()) {
+      const QString blob = p["notes"].toString();
+      QJsonArray notes;
+      if(!blob.trimmed().isEmpty()) {
+        QString title;
+        for(const QString& raw : blob.split(QLatin1Char('\n'))) {
+          const QString line = raw.trimmed();
+          if(line.startsWith(QLatin1Char('#'))) {
+            title = line.mid(line.lastIndexOf(QLatin1Char('#')) + 1).trimmed();
+            break;
+          }
+        }
+        const QString now = QDateTime::currentDateTime().toString(Qt::ISODate);
+        QJsonObject n;
+        n["id"] = QStringLiteral("note-migrated");
+        n["title"] = title.isEmpty() ? QStringLiteral("Notes") : title;
+        n["folder"] = QString();
+        n["body"] = blob;
+        n["pinned"] = false;
+        n["created"] = now;
+        n["updated"] = now;
+        notes.append(n);
+        p["activeNoteId"] = QStringLiteral("note-migrated");
+      }
+      p["notes"] = notes;
+      touched = true;
+    }
+    profiles.append(p);
+  }
+  if(touched) {
+    root["profiles"] = profiles;
+  }
+}
+
 }  // namespace
 
 bool migrateState(QJsonObject& root, int fromVersion) {
@@ -575,6 +675,14 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   //
   // v6 → v7 added the recurrence fields, and has no rung for the same reason:
   // absent means "this event does not repeat", which is what every v6 event is.
+  //
+  // v7 → v8 turned a profile's notes from one markdown string into a list of
+  // notes. This one does need a rung: the old blob is everything the user ever
+  // wrote in Notes, and it has to become a note rather than a key that no
+  // longer parses.
+  if(fromVersion < 8) {
+    migrateNotesV7ToV8(root);
+  }
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

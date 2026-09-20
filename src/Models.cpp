@@ -501,6 +501,118 @@ QVariant EventModel::data(const QModelIndex& idx, int role) const {
   return {};
 }
 
+// ───────────────── NoteModel ─────────────────
+
+QHash<int, QByteArray> NoteModel::roleNames() const {
+  return {
+      {IdRole, "id"},
+      {TitleRole, "title"},
+      {FolderRole, "folder"},
+      {PinnedRole, "pinned"},
+      {CreatedRole, "created"},
+      {UpdatedRole, "updated"},
+      {ExcerptRole, "excerpt"},
+  };
+}
+
+int NoteModel::roleOf(const QString& name) const {
+  const QByteArray needle = name.toUtf8();
+  const QHash<int, QByteArray> names = roleNames();
+  for(auto it = names.constBegin(); it != names.constEnd(); ++it) {
+    if(it.value() == needle) {
+      return it.key();
+    }
+  }
+  return -1;
+}
+
+namespace {
+
+// The first line of a note that is not its own title and not markdown
+// punctuation, so a list row says something about the note rather than
+// repeating its heading back.
+QString noteExcerpt(const Note& n) {
+  const QStringList lines = n.body.split(QLatin1Char('\n'));
+  for(const QString& raw : lines) {
+    QString line = raw.trimmed();
+    if(line.isEmpty()) {
+      continue;
+    }
+    while(line.startsWith(QLatin1Char('#')) || line.startsWith(QLatin1Char('>'))) {
+      line = line.mid(1).trimmed();
+    }
+    if(line.isEmpty() || line == n.title) {
+      continue;
+    }
+    return line.left(120);
+  }
+  return {};
+}
+
+}  // namespace
+
+QVariant NoteModel::data(const QModelIndex& idx, int role) const {
+  if(!idx.isValid() || idx.row() < 0 || idx.row() >= m_items.size()) {
+    return {};
+  }
+  const Note& n = m_items[idx.row()];
+  switch(role) {
+    case IdRole:
+      return n.id;
+    case TitleRole:
+      return n.title;
+    case FolderRole:
+      return n.folder;
+    case PinnedRole:
+      return n.pinned;
+    case CreatedRole:
+      return n.created;
+    case UpdatedRole:
+      return n.updated;
+    case ExcerptRole:
+      return noteExcerpt(n);
+  }
+  return {};
+}
+
+void NoteModel::reset(QVector<Note> items) {
+  beginResetModel();
+  m_items = std::move(items);
+  endResetModel();
+}
+
+int NoteModel::indexOfId(const QString& id) const {
+  for(int i = 0; i < m_items.size(); ++i) {
+    if(m_items[i].id == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
+void NoteModel::upsert(const Note& n) {
+  const int row = indexOfId(n.id);
+  if(row >= 0) {
+    m_items[row] = n;
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi);
+  } else {
+    beginInsertRows({}, m_items.size(), m_items.size());
+    m_items.push_back(n);
+    endInsertRows();
+  }
+}
+
+void NoteModel::removeById(const QString& id) {
+  const int row = indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  beginRemoveRows({}, row, row);
+  m_items.removeAt(row);
+  endRemoveRows();
+}
+
 void EventModel::reset(QVector<CalEvent> items) {
   beginResetModel();
   m_items = std::move(items);
