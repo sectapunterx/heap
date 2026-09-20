@@ -44,8 +44,9 @@ Item {
         if (t.status === "done") return false;
         const q = (root.searchText || "").toLowerCase();
         if (q && q.length > 0) {
-            const hay = ((t.title || "") + " " + (t.id || "") + " " + (t.desc || "")).toLowerCase();
-            if (hay.indexOf(q) < 0) return false;
+            // Built once in C++, already lowercased, and covers the ticket key,
+            // labels and assignee as well as title/id/desc (HEAP-117).
+            if (String(t.searchText || "").indexOf(q) < 0) return false;
         }
         let any = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { any = true; break; }
@@ -101,6 +102,9 @@ Item {
                 priority: tm.data(idx, Qt.UserRole + 4),
                 status:   tm.data(idx, Qt.UserRole + 5),
                 deadline: tm.data(idx, Qt.UserRole + 6),
+                // The one haystack passesFilter() searches (HEAP-117).
+                searchText: tm.data(idx, Qt.UserRole + 32),
+                ticket:     tm.data(idx, Qt.UserRole + 31),
             };
             if (!t.deadline || !t.deadline.getTime) continue;
             if (!root.passesFilter(t)) continue;

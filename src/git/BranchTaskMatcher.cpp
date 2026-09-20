@@ -22,6 +22,23 @@ void BranchTaskMatcher::setPrefixes(QStringList prefixes) {
 void BranchTaskMatcher::rebuildRegexes() {
   m_prefixRx.clear();
   m_textRx.clear();
+  // "A tracker key that is not one of mine." Deliberately case-SENSITIVE:
+  // by convention a key is written in capitals in a branch name
+  // (`feature/PROJ-123`), while a descriptive segment that happens to end in
+  // digits is not (`fix/harq-retx-2398`). That is the only signal available
+  // to tell the two apart, and getting it wrong in either direction costs a
+  // match — so the narrow reading wins. Built from the registered prefixes,
+  // so registering a key stops it from being foreign.
+  QStringList alternatives;
+  for(const QString& raw : m_prefixes) {
+    const QString p = raw.trimmed();
+    if(!p.isEmpty()) {
+      alternatives << QRegularExpression::escape(p.toUpper());
+    }
+  }
+  const QString known = alternatives.isEmpty() ? QStringLiteral("(?!)") : alternatives.join(QChar('|'));
+  m_foreignKeyRx =
+      QRegularExpression(QStringLiteral("(?:^|[-/_])(?!(?:") + known + QStringLiteral(")-\\d)([A-Z][A-Z0-9]*)-\\d+(?:[-/_]|$)"));
   m_prefixRx.reserve(m_prefixes.size());
   m_textRx.reserve(m_prefixes.size());
   for(const QString& raw : m_prefixes) {
@@ -72,6 +89,15 @@ MatchResult BranchTaskMatcher::extract(const QString& branch) const {
     }
   }
   if(nonEmpty.size() != 1) {
+    return out;
+  }
+
+  // …and only if the branch does not already name a key this matcher does not
+  // know. `feature/PROJ-123` used to fall through to the digits and answer
+  // "LTE-123" — a confident, wrong task. A branch that says which project it
+  // belongs to is not a branch that meant the local prefix, so an unrecognised
+  // key is a no-match rather than a guess at the wrong one.
+  if(m_foreignKeyRx.match(branch).hasMatch()) {
     return out;
   }
 

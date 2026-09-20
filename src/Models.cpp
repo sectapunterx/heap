@@ -11,8 +11,51 @@ QString externalKeyOf(const Task& t) {
   // hand us a bare number, which reads as "#123" everywhere they render it.
   bool numeric = false;
   t.externalId.toLongLong(&numeric);
-  return numeric ? QStringLiteral("#") + t.externalId : t.externalId;
+  if(!numeric) {
+    return t.externalId;
+  }
+  // A number pulled from an "assigned to me" endpoint spans projects, so "#42"
+  // alone does not say which issue it is. Qualify it with the repo's own name.
+  if(t.externalMeta.crossProject && !t.externalMeta.project.isEmpty()) {
+    const QString shortName = t.externalMeta.project.section(QChar('/'), -1);
+    return shortName + QStringLiteral("#") + t.externalId;
+  }
+  return QStringLiteral("#") + t.externalId;
 }
+
+QVariantMap ticketToVariant(const Task& t) {
+  if(t.externalProvider.isEmpty()) {
+    return {};
+  }
+  return {
+      {QStringLiteral("provider"), t.externalProvider},
+      {QStringLiteral("key"), externalKeyOf(t)},
+      {QStringLiteral("url"), t.externalUrl},
+      {QStringLiteral("assignee"), t.assignee},
+      {QStringLiteral("author"), t.externalMeta.author},
+      {QStringLiteral("issueType"), t.externalMeta.issueType},
+      {QStringLiteral("project"), t.externalMeta.project},
+      {QStringLiteral("milestone"), t.externalMeta.milestone},
+      {QStringLiteral("commentCount"), t.externalMeta.commentCount},
+      {QStringLiteral("createdAt"), t.externalMeta.createdAt},
+      {QStringLiteral("updatedAt"), t.externalMeta.updatedAt},
+  };
+}
+
+namespace {
+
+// One lowercase haystack per task, so the five views that filter on a search
+// box each read one role instead of concatenating four themselves — and so a
+// ticket is findable by its key, its labels and its owner, not just its title.
+QString searchTextOf(const Task& t) {
+  QStringList parts{t.title, t.id, t.desc, externalKeyOf(t), t.assignee, t.externalMeta.project, t.externalMeta.milestone};
+  for(const Label& l : t.labels) {
+    parts.append(l.id);
+  }
+  return parts.join(QChar(' ')).toLower();
+}
+
+}  // namespace
 
 QVariantList labelsToVariant(const QVector<Label>& labels) {
   QVariantList out;
@@ -77,6 +120,8 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {ExternalKeyRole, "externalKey"},
       {LabelsRole, "labels"},
       {AssigneeRole, "assignee"},
+      {TicketRole, "ticket"},
+      {SearchTextRole, "searchText"},
   };
 }
 
@@ -148,6 +193,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return labelsToVariant(t.labels);
     case AssigneeRole:
       return t.assignee;
+    case TicketRole:
+      return ticketToVariant(t);
+    case SearchTextRole:
+      return searchTextOf(t);
   }
   return {};
 }

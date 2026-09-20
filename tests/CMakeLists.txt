@@ -176,6 +176,8 @@ add_test(NAME heap_notify_tests COMMAND heap_notify_tests)
 set(HEAP_INTEGRATION_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
@@ -964,6 +966,8 @@ add_executable(heap_github_tests
         test_github.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
 )
 set_target_properties(heap_github_tests PROPERTIES AUTOMOC ON)
@@ -985,6 +989,8 @@ add_executable(heap_jira_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
 )
 set_target_properties(heap_jira_tests PROPERTIES AUTOMOC ON)
@@ -1004,6 +1010,8 @@ add_executable(heap_gitlab_tests
         test_gitlab.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
 )
 set_target_properties(heap_gitlab_tests PROPERTIES AUTOMOC ON)
@@ -1027,6 +1035,8 @@ add_executable(heap_rest_providers_tests
         test_rest_providers.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
@@ -1118,6 +1128,8 @@ add_executable(heap_models_tests
         test_models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/TaskFilterProxy.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/TaskFilterProxy.h
 )
 set_target_properties(heap_models_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_models_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)

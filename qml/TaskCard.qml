@@ -6,7 +6,8 @@ import TodoCpp
 
 Rectangle {
     id: card
-    property var task           // QVariantMap-like with id,title,desc,priority,status,deadline,branch,archived,blockedStuck
+    objectName: "tc-card"
+    property var task         // QVariantMap-like with id,title,desc,priority,status,deadline,branch,archived,blockedStuck
     property string scheduled
     property string taskId: task ? task.id : ""
     readonly property bool _isStuck: card.task && card.task.blockedStuck === true
@@ -15,6 +16,16 @@ Rectangle {
     // (selectionCount is read in the binding so QML tracks the dependency).
     readonly property bool _selected: AppController.selectionCount >= 0
         && AppController.isTaskSelected(card.taskId)
+    // Ticket identity (HEAP-117). `ticket` is empty for a locally-created task,
+    // which is what every ticket-only chip below keys off.
+    readonly property var _ticket: (card.task && card.task.ticket) ? card.task.ticket : ({})
+    readonly property bool _isTicket: !!(card._ticket.provider)
+    readonly property var _badge: card._isTicket
+        ? (AppController.providerBadges[card._ticket.provider] || ({}))
+        : ({})
+    // Read by the views so a bare "O" can open whichever card is under the
+    // cursor when nothing is selected.
+    readonly property bool hovered: hoverArea.containsMouse
     signal clicked()
 
     signal rangeSelectRequested(string anchorId)
@@ -86,8 +97,36 @@ Rectangle {
 
         RowLayout {
             spacing: 6
+            // Provider badge: which tracker this card mirrors (HEAP-117).
+            Rectangle {
+                objectName: "tc-badge"
+                visible: card._isTicket
+                radius: 4
+                color: Theme.withAlpha(card._badge.color || Theme.textMuted, 0.18)
+                border.color: card._badge.color || Theme.border
+                border.width: 1
+                implicitWidth: badgeT.implicitWidth + 8
+                implicitHeight: badgeT.implicitHeight + 2
+                Text {
+                    id: badgeT
+                    anchors.centerIn: parent
+                    text: card._badge.icon || "◍"
+                    textFormat: Text.PlainText
+                    color: card._badge.color || Theme.textMuted
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+                QQC.ToolTip.visible: badgeHover.hovered
+                QQC.ToolTip.text: (card._badge.name || card._ticket.provider || "")
+                    + (card._ticket.project ? " · " + card._ticket.project : "")
+                HoverHandler { id: badgeHover }
+            }
             Text {
-                text: card.task ? card.task.id : ""
+                objectName: "tc-key"
+                // A mirrored issue is known by its tracker key, not by the
+                // synthetic heap id ("github-68") the merge invented for it.
+                text: card._isTicket ? (card._ticket.key || "") : (card.task ? card.task.id : "")
+                textFormat: Text.PlainText
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: 11
@@ -243,6 +282,10 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             text: card.task ? card.task.title : ""
+            // A mirrored title is written by whoever filed the issue. Text
+            // defaults to AutoText, which would render HTML — and an <img> in
+            // it fetches from the network on their say-so.
+            textFormat: Text.PlainText
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: 13
@@ -254,6 +297,7 @@ Rectangle {
             Layout.fillWidth: true
             visible: card.task && card.task.desc && String(card.task.desc).length > 0
             text: card.task ? card.task.desc : ""
+            textFormat: Text.PlainText
             color: Theme.textMuted
             font.pixelSize: 11
             wrapMode: Text.WordWrap
@@ -299,8 +343,37 @@ Rectangle {
                 font.family: Theme.fontMono
                 font.pixelSize: 10
             }
-            // Label chips (HEAP-124). Tracker-pulled labels carry no colour, so
-            // they fall back to the muted chip style.
+            // Who owns the issue upstream (HEAP-117).
+            Rectangle {
+                objectName: "tc-assignee"
+                visible: card._isTicket && String(card._ticket.assignee || "").length > 0
+                radius: 4
+                color: Theme.withAlpha(Theme.textMuted, 0.12)
+                implicitWidth: assigneeT.implicitWidth + 10
+                implicitHeight: assigneeT.implicitHeight + 2
+                Text {
+                    id: assigneeT
+                    anchors.centerIn: parent
+                    text: "@" + String(card._ticket.assignee || "")
+                    textFormat: Text.PlainText
+                    color: Theme.textMuted
+                    font.pixelSize: 10
+                    elide: Text.ElideRight
+                }
+            }
+            // Comment count. -1 means the provider never said, which is not the
+            // same as "no comments" — the chip stays away for both, but a zero
+            // from a provider that does report is still worth nothing to show.
+            Text {
+                objectName: "tc-comments"
+                visible: card._isTicket && (card._ticket.commentCount || 0) > 0
+                text: "💬 " + (card._ticket.commentCount || 0)
+                textFormat: Text.PlainText
+                color: Theme.textDim
+                font.pixelSize: 10
+            }
+            // Label chips (HEAP-124). A tracker-pulled label keeps whatever
+            // colour the project gave it, else the muted chip style.
             Repeater {
                 model: card.task && card.task.labels ? card.task.labels : []
                 delegate: Rectangle {
@@ -457,6 +530,7 @@ Rectangle {
 
     QQC.Menu {
         id: taskMenu
+        objectName: "tc-menu"
         QQC.MenuItem {
             enabled: false
             contentItem: Text {
@@ -481,6 +555,21 @@ Rectangle {
                 if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
                 else AppController.startTaskTimer(card.task.id);
             }
+        }
+        QQC.MenuSeparator { visible: card._isTicket }
+        QQC.MenuItem {
+            objectName: "tc-menu-open"
+            visible: card._isTicket && String(card._ticket.url || "").length > 0
+            height: visible ? implicitHeight : 0
+            text: "↗  " + I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
+            onTriggered: AppController.openTaskExternal(card.taskId)
+        }
+        QQC.MenuItem {
+            objectName: "tc-menu-copylink"
+            visible: card._isTicket && String(card._ticket.url || "").length > 0
+            height: visible ? implicitHeight : 0
+            text: "⎘  " + I18n.t("taskcard.copyLink")
+            onTriggered: AppController.copyToClipboard(String(card._ticket.url || ""))
         }
         QQC.MenuSeparator {}
         QQC.MenuItem {

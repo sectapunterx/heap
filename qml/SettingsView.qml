@@ -162,7 +162,7 @@ Item {
         tasks: {
             idPrefix: "LTE", defaultPriority: "P2", defaultStatus: "todo",
             archiveDoneAfterDays: 7, autoMoveBlockedAfterDays: 3,
-            requireBranchOnReview: true, showSubtasks: true
+            requireBranchOnReview: true
         },
         cpp: {
             defaultCompiler: "clang-17", defaultStandard: "C++20",
@@ -1370,11 +1370,6 @@ Item {
                         hint: I18n.t("settings.tasks.branchOnReview.hint")
                         checked: !!(root.settings.tasks && root.settings.tasks.requireBranchOnReview)
                         onToggled: (checked) => root.set("tasks", "requireBranchOnReview", checked)
-                    }
-                    SwitchRow {
-                        label: I18n.t("settings.tasks.showSubtasks")
-                        checked: !!(root.settings.tasks && root.settings.tasks.showSubtasks)
-                        onToggled: (checked) => root.set("tasks", "showSubtasks", checked)
                     }
                 }
             }

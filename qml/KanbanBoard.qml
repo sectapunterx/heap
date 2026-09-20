@@ -11,6 +11,9 @@ Item {
     property var prioritiesFilter: ({})
     property var scheduleMap: ({})
     property bool showArchived: false
+    // The card under the cursor, read by Main.qml so a single-key action knows
+    // which ticket it means when nothing is selected (HEAP-117).
+    property string hoveredTaskId: ""
     signal taskClicked(string id)
     signal createInStatus(string statusId)
 
@@ -107,16 +110,13 @@ Item {
         AppController.setSelectedTaskIds(merged);
     }
 
-    function passesFilter(taskObj) {
-        const q = (root.searchText || "").toLowerCase();
-        if (q && q.length > 0) {
-            const hay = ((taskObj.title || "") + " " + (taskObj.id || "") + " " + (taskObj.desc || "")).toLowerCase();
-            if (hay.indexOf(q) < 0) return false;
-        }
-        let anyPri = false;
-        for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { anyPri = true; break; }
-        if (anyPri && !root.prioritiesFilter[taskObj.priority]) return false;
-        return true;
+    // The priorities the filter bar has switched on, as a plain list for the
+    // per-column proxies. Empty means "no priority filter" — which is what an
+    // all-chips-off filter bar means, not "nothing passes".
+    readonly property var activePriorities: {
+        const out = [];
+        for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) out.push(k);
+        return out;
     }
 
     function _scrollOuter(dy) {
@@ -187,7 +187,7 @@ Item {
                     readonly property color statusColor: modelData.color
                     readonly property alias taskRepeater: colRep
                     property bool dragOver: false
-                    property int visibleCount: 0
+                    readonly property int visibleCount: colFilter.count
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
                     readonly property bool isLast:  index === AppController.statuses.length - 1
@@ -442,7 +442,14 @@ Item {
 
                                     Repeater {
                                         id: colRep
-                                        model: AppController.tasks
+                                        // One proxy per column, so only the
+                                        // cards that belong here are built. The
+                                        // whole task model used to be the model
+                                        // of every column's Repeater, with each
+                                        // card hiding itself — N tasks × C
+                                        // columns delegates, and a JS filter run
+                                        // per card.
+                                        model: colFilter
 
                                         TaskCard {
                                             id: tc
@@ -467,6 +474,8 @@ Item {
                                             required property var    labels
                                             required property var    dueAt
                                             required property bool   hasTime
+                                            required property var    ticket
+                                            required property string searchText
                                             width: bodyCol.width
 
                                             readonly property var taskData: ({
@@ -479,19 +488,19 @@ Item {
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
                                                 recurrence: tc.recurrence,
-                                                labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime
+                                                labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime,
+                                                ticket: tc.ticket, searchText: tc.searchText
                                             })
+                                            // Which card a bare "O" acts on when
+                                            // nothing is selected.
+                                            onHoveredChanged: {
+                                                if (hovered) root.hoveredTaskId = tc.id;
+                                                else if (root.hoveredTaskId === tc.id) root.hoveredTaskId = "";
+                                            }
                                             task: taskData
                                             scheduled: root.scheduleMap[tc.id] || ""
-                                            visible: tc.status === col.statusId
-                                                  && (root.showArchived || !tc.archived)
-                                                  && root.passesFilter(taskData)
                                             onClicked: root.taskClicked(tc.id)
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
-
-                                            onVisibleChanged: col.recountSoon()
-                                            Component.onCompleted: col.recountSoon()
-                                            Component.onDestruction: col.recountSoon()
                                         }
                                     }
 
@@ -540,25 +549,17 @@ Item {
                         }
                     }
 
-                    function recountSoon() { recountTimer.restart() }
-                    Timer {
-                        id: recountTimer
-                        interval: 0
-                        repeat: false
-                        onTriggered: {
-                            let n = 0;
-                            for (let i = 0; i < colRep.count; i++) {
-                                const it = colRep.itemAt(i);
-                                if (it && it.visible) n++;
-                            }
-                            col.visibleCount = n;
-                        }
-                    }
-
-                    Connections {
-                        target: root
-                        function onSearchTextChanged() { col.recountSoon() }
-                        function onPrioritiesFilterChanged() { col.recountSoon() }
+                    // The column's own view of the task model: its status, plus
+                    // whatever the filter bar and the search box say. Filtering
+                    // in C++ is what keeps the delegate count proportional to
+                    // the tasks rather than to tasks × columns.
+                    TaskFilterProxy {
+                        id: colFilter
+                        sourceModel: AppController.tasks
+                        status: col.statusId
+                        showArchived: root.showArchived
+                        searchText: root.searchText
+                        priorities: root.activePriorities
                     }
                 }
             }

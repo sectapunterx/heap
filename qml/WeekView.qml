@@ -120,8 +120,9 @@ Item {
         if (t.status === "done") return false;
         const q = (root.searchText || "").toLowerCase();
         if (q && q.length > 0) {
-            const hay = ((t.title || "") + " " + (t.id || "") + " " + (t.desc || "")).toLowerCase();
-            if (hay.indexOf(q) < 0) return false;
+            // Built once in C++, already lowercased, and covers the ticket key,
+            // labels and assignee as well as title/id/desc (HEAP-117).
+            if (String(t.searchText || "").indexOf(q) < 0) return false;
         }
         let any = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { any = true; break; }
@@ -173,6 +174,9 @@ Item {
                 status:   tm.data(idx, Qt.UserRole + 5),
                 deadline: tm.data(idx, Qt.UserRole + 6),
                 branch:   tm.data(idx, Qt.UserRole + 7),
+                // The one haystack passesFilter() searches (HEAP-117).
+                searchText: tm.data(idx, Qt.UserRole + 32),
+                ticket:     tm.data(idx, Qt.UserRole + 31),
             };
             if (!t.deadline || !t.deadline.getTime) continue;
             if (!root.passesFilter(t)) continue;
@@ -430,7 +434,12 @@ Item {
                                             anchors.leftMargin: 6; anchors.rightMargin: 6
                                             spacing: 4
                                             Text {
-                                                text: modelData.id
+                                                // A mirrored issue reads by its
+                                                // tracker key, not the synthetic
+                                                // heap id (HEAP-117).
+                                                text: (modelData.ticket && modelData.ticket.key)
+                                                      ? modelData.ticket.key : modelData.id
+                                                textFormat: Text.PlainText
                                                 color: Theme.accentStrong
                                                 font.family: Theme.fontMono
                                                 font.pixelSize: 9
@@ -438,6 +447,7 @@ Item {
                                             Text {
                                                 Layout.fillWidth: true
                                                 text: modelData.title
+                                                textFormat: Text.PlainText
                                                 color: Theme.text
                                                 font.pixelSize: 10
                                                 elide: Text.ElideRight

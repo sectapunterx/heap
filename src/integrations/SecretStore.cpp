@@ -257,6 +257,17 @@ void SecretStore::writeFallbackFile() const {
   f.write(QJsonDocument(obj).toJson(QJsonDocument::Indented));
   if(!f.commit()) {
     qWarning() << "cannot write" << path << ":" << f.errorString();
+    return;
+  }
+  // This file holds access tokens and OAuth refresh tokens in plain text — it
+  // is the fallback for builds without QtKeychain, and it is always what a
+  // --data-dir run uses. QSaveFile writes through a temp file and renames, so
+  // the result carries whatever the default mask or the parent ACL gave it.
+  // Owner-only is the only portable guarantee; on Windows this maps onto the
+  // file's own ACL rather than a mode bit, which is still narrower than
+  // inheriting the directory's.
+  if(!QFile::setPermissions(path, QFileDevice::ReadOwner | QFileDevice::WriteOwner)) {
+    qWarning() << "could not restrict permissions on" << path;
   }
 }
 

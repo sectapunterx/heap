@@ -156,6 +156,7 @@ qt_add_library(heap_core STATIC
     src/AppController.cpp
     src/Logger.cpp
     src/Models.cpp
+    src/TaskFilterProxy.cpp
     src/RecoveryLog.cpp
     src/SampleData.cpp
     src/StateSerializer.cpp
@@ -176,6 +177,7 @@ qt_add_library(heap_core STATIC
     src/markdown/MarkdownEditorController.cpp
     src/markdown/MdHighlighter.cpp
     src/integrations/StatusMap.cpp
+    src/integrations/TrackerFields.cpp
     src/integrations/GithubProvider.cpp
     src/integrations/JiraProvider.cpp
     src/integrations/GitlabProvider.cpp
@@ -249,6 +251,7 @@ qt_add_qml_module(heap_core
     SOURCES
         src/AppController.h
         src/Models.h
+        src/TaskFilterProxy.h
         src/SampleData.h
         src/CodeHighlighter.h
         src/chrono/ChronoTypes.h
@@ -274,6 +277,7 @@ qt_add_qml_module(heap_core
         src/integrations/IntegrationProvider.h
         src/integrations/ProviderDescriptor.h
         src/integrations/ReplyError.h
+        src/integrations/TrackerFields.h
         src/integrations/RestIssueProvider.h
         src/integrations/ProviderRegistry.h
         src/integrations/TrelloProvider.h

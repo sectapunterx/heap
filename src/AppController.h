@@ -61,6 +61,10 @@ class AppController : public QObject {
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
   Q_PROPERTY(QDate today READ today CONSTANT)
+  // provider id → { name, icon, color } for the badge on a mirrored ticket
+  // (HEAP-117). Constant and cheap: a board delegate reads this per card, and
+  // integrationCatalog() rebuilds every provider's field list on each call.
+  Q_PROPERTY(QVariantMap providerBadges READ providerBadges CONSTANT)
 
   Q_PROPERTY(QDate selectedDate READ selectedDate WRITE setSelectedDate NOTIFY selectedDateChanged)
   Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
@@ -347,10 +351,19 @@ class AppController : public QObject {
   // no-network-egress guarantee can be exercised without opening a browser.
   Q_INVOKABLE QString issueReportBody() const;
 
+  // How much one pull actually changed. An issue that came back identical
+  // counts as neither, so a quiet auto-sync writes nothing and says so.
+  struct MergeStats {
+    int added = 0;
+    int updated = 0;
+  };
+
   // Fold a batch of pulled external tasks into the model. providerId tags the
   // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
   // Public so the sync merge can be exercised without a live tracker.
-  void mergeExternalTasks(const QString& providerId, const QString& idPrefix, const QVector<heap::integrations::ExternalTask>& issues);
+  MergeStats mergeExternalTasks(const QString& providerId,
+                                const QString& idPrefix,
+                                const QVector<heap::integrations::ExternalTask>& issues);
 
   // Fold fetched contacts into the active profile's Docs contact list and, for
   // the people actually talked to, the People rail. Returns how many contacts
@@ -380,6 +393,23 @@ class AppController : public QObject {
   Q_INVOKABLE void openLatestRelease() const;
 
   // ---- Tracker sync (HEAP-74/75) ----
+  QVariantMap providerBadges() const;
+  // "GitHub" for "github". The id itself when nothing in the catalog matches.
+  QString providerDisplayName(const QString& providerId) const;
+  // The issue URL for a task, or an empty URL when it has none or the tracker
+  // handed over something that is not a web address. Split out from
+  // openTaskExternal so the scheme check is testable without a browser: the
+  // value is tracker-supplied, and a Jira session with no site yields a bare
+  // "/browse/KEY".
+  QUrl externalUrlFor(const QString& taskId) const;
+  // Open a mirrored task's issue in the default browser. False (with a toast)
+  // when the task has no usable issue URL.
+  Q_INVOKABLE bool openTaskExternal(const QString& taskId);
+  // Read a mirrored task's most recent comments (HEAP-117). On demand, never
+  // stored: the answer arrives on ticketCommentsLoaded and lives only as long
+  // as whatever is showing it. A GET, so it cannot change the issue.
+  Q_INVOKABLE void fetchTicketComments(const QString& taskId);
+
   // Pull issues from every connected tracker and mirror them as tasks in the
   // active profile. No-op (with a toast) when no provider is configured.
   Q_INVOKABLE void syncNow();
@@ -405,6 +435,11 @@ class AppController : public QObject {
   // deleted, and undone by restoreExternalContact.
   Q_INVOKABLE void dismissExternalContact(const QString& providerId, const QString& externalId);
   Q_INVOKABLE void restoreExternalContact(const QString& providerId, const QString& externalId);
+  // The same for a mirrored issue: deleting the task is how the user says "not
+  // mine", and without this the next pull simply puts it back. Recorded by
+  // deleteTask, undone by the delete's undo and by restoreExternalTask.
+  Q_INVOKABLE void dismissExternalTask(const QString& providerId, const QString& externalId);
+  Q_INVOKABLE void restoreExternalTask(const QString& providerId, const QString& externalId);
   // The full integration catalogue (id, name, colour, fields, …) for the
   // Settings → Integrations cards. Data-driven from the provider registry.
   Q_INVOKABLE QVariantList integrationCatalog() const;
@@ -575,7 +610,13 @@ class AppController : public QObject {
 
   Q_INVOKABLE void dismissGitBanner();
   Q_INVOKABLE void openFocusedTask();
+  // Task-id prefixes the branch matcher should recognise: the configured local
+  // one, plus the project key of every mirrored issue in the profile.
   Q_INVOKABLE QStringList collectPrefixes() const;
+  // Turn what the matcher found in a branch name into a task id. For a local
+  // task the key IS the id; a mirrored issue's id carries the provider, so it
+  // is resolved through the tracker key instead.
+  Q_INVOKABLE QString taskIdForBranchMatch(const QString& matchedId) const;
   Q_INVOKABLE void refreshGitForTaskBranch(const QString& taskId);
   // Create (and switch to) the task's branch from a task card. Honors the
   // configured integrations.github.branchTemplate; toasts the result.
@@ -624,6 +665,10 @@ class AppController : public QObject {
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.
   void integrationSecretsChanged();
+  // The answer to one fetchTicketComments (HEAP-117). Carries the task id so a
+  // reply for a ticket the user has since navigated away from can be dropped.
+  // `error` is empty on success; an empty list with no error means no comments.
+  void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
   void updateStatusChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
@@ -643,6 +688,11 @@ class AppController : public QObject {
   void runAutomation();
 
  private:
+  // `base` if no task holds it, else "base-2", "base-3", … Two pulled issues
+  // can want the same id (the same number from two repos), and upsert on a
+  // colliding id replaces the other task rather than adding one.
+  QString uniqueTaskId(const QString& base) const;
+
   TaskModel m_tasks;
   EventModel m_events;
   PersonModel m_people;
@@ -837,6 +887,7 @@ class AppController : public QObject {
   // them back. They cannot live in the docs blob: DocsView rewrites it whole
   // and would drop any key it does not know.
   QStringList dismissedContacts(const QString& providerId) const;
+  QStringList dismissedTasks(const QString& providerId) const;
   // Create the Person behind an imported contact, or return the id of the one
   // already there. Never edits an existing Person: those are the user's notes
   // about someone, not a mirror of the directory.

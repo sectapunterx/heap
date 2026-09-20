@@ -227,6 +227,22 @@ QtObject {
             "taskcard.createBranch": "Create branch",
             "taskcard.startTimer": "Start timer",
             "taskcard.stopTimer": "Stop timer",
+            // ── Mirrored tracker issue (HEAP-117) ──
+            "taskcard.openIn": "Open in %1",
+            "taskcard.copyLink": "Copy issue link",
+            "ticket.section": "Ticket",
+            "ticket.assignee": "Assignee",
+            "ticket.author": "Reported by",
+            "ticket.type": "Type",
+            "ticket.project": "Project",
+            "ticket.milestone": "Milestone",
+            "ticket.comments": "Comments",
+            "ticket.created": "Created",
+            "ticket.updated": "Updated",
+            "ticket.open": "Open in tracker",
+            "ticket.overwriteHint": "Title, description, status and labels are overwritten on the next sync.",
+            "ticket.loadComments": "Load comments",
+            "ticket.noComments": "No comments on this issue.",
 
             // ── TaskEditor / EventEditor / PersonEditor / ProfileEditor ──
             "editor.new.task": "New task",
@@ -636,7 +652,6 @@ QtObject {
             "settings.tasks.blockedHi.hint": "Tasks stuck in Blocked longer are marked red.",
             "settings.tasks.branchOnReview": "Require branch before Code Review",
             "settings.tasks.branchOnReview.hint": "Block moving a task to Review without a branch name.",
-            "settings.tasks.showSubtasks": "Show subtasks",
 
             // Shortcuts section
             "settings.shortcuts.sub": "Keyboard shortcuts",
@@ -939,6 +954,22 @@ QtObject {
             "taskcard.createBranch": "Создать ветку",
             "taskcard.startTimer": "Запустить таймер",
             "taskcard.stopTimer": "Остановить таймер",
+            // ── Синхронизированный тикет (HEAP-117) ──
+            "taskcard.openIn": "Открыть в %1",
+            "taskcard.copyLink": "Копировать ссылку на тикет",
+            "ticket.section": "Тикет",
+            "ticket.assignee": "Исполнитель",
+            "ticket.author": "Автор",
+            "ticket.type": "Тип",
+            "ticket.project": "Проект",
+            "ticket.milestone": "Веха",
+            "ticket.comments": "Комментарии",
+            "ticket.created": "Создан",
+            "ticket.updated": "Обновлён",
+            "ticket.open": "Открыть в трекере",
+            "ticket.overwriteHint": "Заголовок, описание, статус и метки перезаписываются при следующей синхронизации.",
+            "ticket.loadComments": "Загрузить комментарии",
+            "ticket.noComments": "У тикета нет комментариев.",
 
             "editor.new.task": "Новая задача",
             "editor.edit.task": "Редактировать задачу",
@@ -1333,7 +1364,6 @@ QtObject {
             "settings.tasks.blockedHi.hint": "Задача в Blocked дольше — отмечается красным.",
             "settings.tasks.branchOnReview": "Требовать branch перед Code Review",
             "settings.tasks.branchOnReview.hint": "Запрещать перевод задачи в Review без branch name.",
-            "settings.tasks.showSubtasks": "Показывать subtasks",
 
             "settings.shortcuts.sub": "Горячие клавиши",
             "settings.shortcuts.open": "Открыть панель Hotkeys ↗",
