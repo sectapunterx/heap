@@ -75,6 +75,116 @@ Item {
         AppController.setSelectedTaskIds(_flatVisibleIds());
     }
 
+    // ── Keyboard cursor ───────────────────────────────────────────────
+    // The board is the app's main surface and was mouse-only: there was no way
+    // to move between cards, open one, or move one, without dragging.
+    //
+    // The cursor is a task id rather than a (column, row) pair, so it survives
+    // a filter change, a drag, or the card moving column — all of which
+    // renumber the rows underneath it.
+    property string cursorTaskId: ""
+
+    // Visible ids per column, in board order. The same walk _flatVisibleIds()
+    // does, but keeping the column structure that left/right needs.
+    function _visibleByColumn() {
+        const cols = [];
+        for (let c = 0; c < colRepeater.count; c++) {
+            const col = colRepeater.itemAt(c);
+            if (!col || !col.taskRepeater) { cols.push({ statusId: "", ids: [] }); continue; }
+            const ids = [];
+            const rep = col.taskRepeater;
+            for (let i = 0; i < rep.count; i++) {
+                const it = rep.itemAt(i);
+                if (it && it.visible && it.taskId) ids.push(it.taskId);
+            }
+            cols.push({ statusId: col.statusId, ids: ids });
+        }
+        return cols;
+    }
+
+    // Where the cursor currently sits, or null when it points at nothing on
+    // screen (a filter may have hidden it).
+    function _cursorPos(cols) {
+        for (let c = 0; c < cols.length; c++) {
+            const r = cols[c].ids.indexOf(root.cursorTaskId);
+            if (r >= 0) return { col: c, row: r };
+        }
+        return null;
+    }
+
+    // First visible card, used when a key arrives with no cursor yet.
+    function _firstVisible(cols) {
+        for (let c = 0; c < cols.length; c++)
+            if (cols[c].ids.length > 0) return cols[c].ids[0];
+        return "";
+    }
+
+    function moveCursor(dx, dy) {
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) {
+            root.cursorTaskId = _firstVisible(cols);
+            return;
+        }
+        let c = pos.col;
+        let r = pos.row;
+        if (dy !== 0) {
+            r = Math.max(0, Math.min(cols[c].ids.length - 1, r + dy));
+        }
+        if (dx !== 0) {
+            // Skip empty columns rather than stopping at one — a gap in the
+            // middle of the board should not swallow the cursor.
+            let next = c;
+            for (let step = c + dx; step >= 0 && step < cols.length; step += dx) {
+                if (cols[step].ids.length > 0) { next = step; break; }
+            }
+            c = next;
+            r = Math.max(0, Math.min(cols[c].ids.length - 1, r));
+        }
+        if (cols[c].ids.length === 0) return;
+        root.cursorTaskId = cols[c].ids[r];
+    }
+
+    function openCursor() {
+        const cols = _visibleByColumn();
+        if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
+        if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
+    }
+
+    function toggleCursorSelection() {
+        const cols = _visibleByColumn();
+        if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
+        if (root.cursorTaskId) AppController.toggleTaskSelection(root.cursorTaskId);
+    }
+
+    // Move the card under the cursor. Vertically it swaps with its neighbour;
+    // horizontally it changes column, landing at the same depth.
+    function moveCursorCard(dx, dy) {
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
+        const id = root.cursorTaskId;
+
+        if (dy !== 0) {
+            const ids = cols[pos.col].ids;
+            const target = pos.row + dy;
+            if (target < 0 || target >= ids.length) return;
+            // Moving down means landing after the card currently below, which
+            // is "before the one after that".
+            const beforeId = dy > 0
+                ? (target + 1 < ids.length ? ids[target + 1] : "")
+                : ids[target];
+            AppController.moveTaskTo(id, cols[pos.col].statusId, beforeId);
+            return;
+        }
+
+        let c = pos.col + dx;
+        if (c < 0 || c >= cols.length) return;
+        const destIds = cols[c].ids;
+        const beforeId = pos.row < destIds.length ? destIds[pos.row] : "";
+        AppController.moveTaskTo(id, cols[c].statusId, beforeId);
+    }
+
     // Flat ordered list of visible task ids across the entire board, column
     // by column in render order, top-to-bottom inside each column. Used by
     // selectAllVisible() and shift-range select.
@@ -503,8 +613,13 @@ Item {
                                                 else if (root.hoveredTaskId === tc.id) root.hoveredTaskId = "";
                                             }
                                             task: taskData
+                                            cursored: root.cursorTaskId === tc.id
                                             scheduled: root.scheduleMap[tc.id] || ""
-                                            onClicked: root.taskClicked(tc.id)
+                                            // Clicking a card also puts the
+                                            // keyboard cursor on it, so mouse
+                                            // and keyboard never disagree about
+                                            // where "here" is.
+                                            onClicked: { root.cursorTaskId = tc.id; root.taskClicked(tc.id); }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                                         }
                                     }

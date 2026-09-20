@@ -14,6 +14,10 @@ Rectangle {
     readonly property bool _isArchived: card.task && card.task.archived === true
     // Selection state — re-evaluates via AppController.selectedTaskIdsChanged
     // (selectionCount is read in the binding so QML tracks the dependency).
+    // The keyboard cursor is on this card. Distinct from selection: the cursor
+    // is where the next key acts, a selection is what a bulk action acts on,
+    // and a card can be either, both or neither.
+    property bool cursored: false
     readonly property bool _selected: AppController.selectionCount >= 0
         && AppController.isTaskSelected(card.taskId)
     // Ticket identity (HEAP-117). `ticket` is empty for a locally-created task,
@@ -66,10 +70,11 @@ Rectangle {
             : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
         : _selected ? Theme.accent
+                : cursored ? Theme.accentStrong
                 : _isStuck ? Theme.p0
                 : hoverArea.containsMouse ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active ? 2 : (_selected ? 2 : (_isStuck ? 2 : 1))
+    border.width: dragArea.drag.active ? 2 : (_selected || cursored ? 2 : (_isStuck ? 2 : 1))
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center

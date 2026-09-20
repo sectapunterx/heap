@@ -954,6 +954,60 @@ ApplicationWindow {
     // field the ShortcutOverride for an unmodified key, so typing "o" still
     // types it — but a read-only Text or a ComboBox's type-ahead would lose,
     // so the shortcut also stands down while any overlay is open.
+    // ── Board keyboard cursor ─────────────────────────────────────────
+    // The board was mouse-only: no way to move between cards, open one or
+    // move one without dragging. Each of these stands down while an overlay
+    // is open and off the board, exactly like task.openExternal below.
+    //
+    // The catalog holds the vim letter so it can be rebound; the arrow key is
+    // a fixed alias alongside it, the way Ctrl+P aliases the palette.
+    component BoardKey: Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+            && AppController.currentView === "board"
+    }
+
+    BoardKey {
+        sequences: [_kbd("board.cursorDown"), "Down"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(0, 1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.cursorUp"), "Up"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(0, -1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.cursorLeft"), "Left"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(-1, 0); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.cursorRight"), "Right"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursor) b.moveCursor(1, 0); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.open"), "Enter"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.openCursor) b.openCursor(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.toggleSelect")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorSelection) b.toggleCursorSelection(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveDown"), "Shift+Down"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, 1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveUp"), "Shift+Up"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, -1); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveLeft"), "Shift+Left"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(-1, 0); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.moveRight"), "Shift+Right"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(1, 0); }
+    }
+
     Shortcut {
         sequence: _kbd("task.openExternal")
         context: Qt.ApplicationShortcut
