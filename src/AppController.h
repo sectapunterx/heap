@@ -560,7 +560,13 @@ class AppController : public QObject {
 
   Q_INVOKABLE void dismissGitBanner();
   Q_INVOKABLE void openFocusedTask();
+  // Task-id prefixes the branch matcher should recognise: the configured local
+  // one, plus the project key of every mirrored issue in the profile.
   Q_INVOKABLE QStringList collectPrefixes() const;
+  // Turn what the matcher found in a branch name into a task id. For a local
+  // task the key IS the id; a mirrored issue's id carries the provider, so it
+  // is resolved through the tracker key instead.
+  Q_INVOKABLE QString taskIdForBranchMatch(const QString& matchedId) const;
   Q_INVOKABLE void refreshGitForTaskBranch(const QString& taskId);
   // Create (and switch to) the task's branch from a task card. Honors the
   // configured integrations.github.branchTemplate; toasts the result.
