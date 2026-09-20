@@ -1540,6 +1540,7 @@ void AppController::deleteStatus(const QString& id) {
   for(const auto& t : m_tasks.items()) {
     if(t.status == id) {
       m_pendingUndo.reHomedTasks.append({t.id, id});
+      m_pendingUndo.reHomedStamps.append(t.statusChangedAt);
     }
   }
   for(const auto& pair : m_pendingUndo.reHomedTasks) {
@@ -2211,8 +2212,12 @@ void AppController::undoLastDeletion() {
     case PendingUndo::Status: {
       const int idx = qBound(0, m_pendingUndo.row, m_statuses.size());
       m_statuses.insert(idx, m_pendingUndo.status);
-      for(const auto& pair : m_pendingUndo.reHomedTasks) {
-        m_tasks.setStatus(pair.first, pair.second);
+      for(int k = 0; k < m_pendingUndo.reHomedTasks.size(); ++k) {
+        const auto& pair = m_pendingUndo.reHomedTasks.at(k);
+        // Restore the original statusChangedAt, not a fresh one: undoing a
+        // column delete must not reset how long a task has been sitting in it.
+        const QDateTime stamp = k < m_pendingUndo.reHomedStamps.size() ? m_pendingUndo.reHomedStamps.at(k) : QDateTime();
+        m_tasks.setStatus(pair.first, pair.second, stamp);
       }
       emit statusesChanged();
       emit toast(tr_("status.restored").arg(m_pendingUndo.status.value("name").toString()));

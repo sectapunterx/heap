@@ -805,6 +805,11 @@ add_test(NAME heap_roundtrip_tests COMMAND heap_roundtrip_tests)
 # ─── Schema migration (HEAP-146) and fault injection (HEAP-156) ───
 # Both boot a real AppController headless, so they reuse the AppController source
 # set above (each brings its own main()).
+# ─── Column (status) CRUD ───
+# addStatus / renameStatus / moveStatus / deleteStatus, including the task
+# re-homing a column delete performs and the undo that reverses it.
+heap_add_appcontroller_test(heap_statuses_tests test_statuses.cpp)
+
 foreach (_suite migration fault_injection save_bench)
     heap_add_appcontroller_test(heap_${_suite}_tests test_${_suite}.cpp)
 endforeach ()

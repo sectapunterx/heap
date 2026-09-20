@@ -33,6 +33,11 @@ Item {
         }
     }
 
+    // One source of truth for the column width. focusColumn() scrolls by
+    // index × width, so a literal here and a different literal in the delegate
+    // silently put the wrong column on screen.
+    readonly property int columnWidth: 280
+
     // ── Column focus (sidebar Blocked / Code Review buttons) ──────────
     // Scroll the target status column into view and briefly highlight it.
     property string _focusPulseStatus: ""
@@ -48,7 +53,7 @@ Item {
         let idx = -1;
         for (let i = 0; i < st.length; ++i) { if (st[i].id === statusId) { idx = i; break; } }
         if (idx < 0) return;
-        const colW = 280 + rowL.spacing;                 // column width + Row spacing
+        const colW = root.columnWidth + rowL.spacing;
         const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
         colScrollAnim.to = Math.max(0, Math.min(idx * colW, maxX));
         colScrollAnim.restart();
@@ -202,7 +207,7 @@ Item {
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
 
-                    width: 280
+                    width: root.columnWidth
                     height: rowL.height
                     radius: Theme.radius
                     color: Theme.panel
