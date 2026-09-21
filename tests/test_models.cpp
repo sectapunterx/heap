@@ -327,6 +327,10 @@ TEST(PersonModelCycle, StateMachineAndDefault) {
   EXPECT_EQ(m.data(m.index(0, 0), PersonModel::StateRole).toString(), QString("pinged"));
   m.cycleState(QStringLiteral("p1"));
   EXPECT_EQ(m.data(m.index(0, 0), PersonModel::StateRole).toString(), QString("replied"));
+  // Past "replied" is off the rail, not back to the start: ActivePeopleModel
+  // hides "idle", so the last cycle is how a finished conversation leaves.
+  m.cycleState(QStringLiteral("p1"));
+  EXPECT_EQ(m.data(m.index(0, 0), PersonModel::StateRole).toString(), QString("idle"));
   m.cycleState(QStringLiteral("p1"));
   EXPECT_EQ(m.data(m.index(0, 0), PersonModel::StateRole).toString(), QString("todo"));
 

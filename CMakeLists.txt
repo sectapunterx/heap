@@ -230,6 +230,7 @@ qt_add_qml_module(heap_core
         qml/TaskEditor.qml
         qml/EventEditor.qml
         qml/PersonEditor.qml
+        qml/PersonPicker.qml
         qml/TweaksPanel.qml
         qml/Toast.qml
         qml/PillButton.qml

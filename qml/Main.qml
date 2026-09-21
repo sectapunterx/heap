@@ -178,7 +178,7 @@ ApplicationWindow {
     // type-ahead or a read-only Text would otherwise swallow the keystroke or
     // let the shortcut fire over the dialog (HEAP-117).
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
-        || personEditor.opened || profileEditor.opened || welcome.opened
+        || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened
 
@@ -607,7 +607,7 @@ ApplicationWindow {
                         SplitView.preferredHeight: 220
                         SplitView.minimumHeight: 64
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
-                        onNewPersonRequested: personEditor.showFor(AppController.newPersonDraft())
+                        onPickPersonRequested: personPicker.open_()
                     }
                 }
             }
@@ -617,6 +617,10 @@ ApplicationWindow {
     TaskEditor    { id: taskEditor }
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
+    PersonPicker  {
+        id: personPicker
+        onDraftRequested: (draft) => personEditor.showFor(draft)
+    }
     ProfileEditor { id: profileEditor }
     WelcomePopup {
         id: welcome
@@ -859,7 +863,7 @@ ApplicationWindow {
         sequence: _kbd("person.new")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
-        onActivated: personEditor.showFor(AppController.newPersonDraft())
+        onActivated: personPicker.open_()
     }
     Shortcut {
         sequence: _kbd("profile.new")
