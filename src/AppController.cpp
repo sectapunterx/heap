@@ -25,6 +25,7 @@
 #include "integrations/StatusMap.h"
 #include "markdown/MdOutline.h"
 #include "notes/MdVault.h"
+#include "notes/NoteGraph.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
@@ -122,6 +123,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
+      {"notes.daily", {"Today's note", "Заметка на сегодня"}},
       {"notes.vault.badFolder", {"That folder could not be opened.", "Не удалось открыть папку."}},
       {"notes.vault.unreadable", {"Could not read %1", "Не удалось прочитать %1"}},
       {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
@@ -1945,6 +1947,95 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl) const {
   out["written"] = written;
   out["skipped"] = skipped;
   return out;
+}
+
+QVariantMap AppController::resolveNoteLink(const QString& target) const {
+  const heap::notes::LinkTarget t = heap::notes::resolveLink(target, m_notes.items(), m_activeNoteId);
+  QVariantMap out;
+  switch(t.kind) {
+    case heap::notes::LinkTarget::NoteRef: {
+      out["kind"] = QStringLiteral("note");
+      out["noteId"] = t.noteId;
+      const int row = m_notes.indexOfId(t.noteId);
+      out["title"] = row >= 0 ? m_notes.items().at(row).title : QString();
+      break;
+    }
+    case heap::notes::LinkTarget::HeadingRef:
+      out["kind"] = QStringLiteral("heading");
+      out["noteId"] = t.noteId;
+      out["heading"] = t.heading;
+      break;
+    case heap::notes::LinkTarget::Missing:
+      out["kind"] = QStringLiteral("missing");
+      out["title"] = target.trimmed();
+      break;
+  }
+  return out;
+}
+
+QVariantList AppController::backlinksToNote(const QString& noteId) const {
+  QVariantList out;
+  for(const heap::notes::Backlink& b : heap::notes::backlinksTo(noteId, m_notes.items())) {
+    QVariantMap m;
+    m["noteId"] = b.noteId;
+    m["title"] = b.noteTitle;
+    m["line"] = b.line;
+    m["text"] = b.text;
+    out.append(m);
+  }
+  return out;
+}
+
+QStringList AppController::unresolvedNoteLinks() const {
+  return heap::notes::unresolvedLinksIn(m_notesState, m_notes.items(), m_activeNoteId);
+}
+
+QString AppController::createNoteForLink(const QString& target) {
+  const QString title = target.trimmed();
+  if(title.isEmpty()) {
+    return {};
+  }
+  // If it exists after all, open it rather than making a second one with the
+  // same name — which would leave the link ambiguous forever.
+  const heap::notes::LinkTarget existing = heap::notes::resolveLink(title, m_notes.items(), m_activeNoteId);
+  if(existing.kind == heap::notes::LinkTarget::NoteRef) {
+    setActiveNoteId(existing.noteId);
+    return existing.noteId;
+  }
+  // Filed beside the note that asked for it: a note created from a link
+  // belongs with its neighbours, not at the root.
+  QString folder;
+  const int row = m_notes.indexOfId(m_activeNoteId);
+  if(row >= 0) {
+    folder = m_notes.items().at(row).folder;
+  }
+  return newNote(title, folder);
+}
+
+QString AppController::openDailyNote() {
+  const QDate today = QDate::currentDate();
+  // ISO, so the folder sorts chronologically in every list and in a vault on
+  // disk.
+  const QString title = today.toString(Qt::ISODate);
+  const QString folder = QStringLiteral("daily");
+
+  for(const Note& n : m_notes.items()) {
+    if(n.title == title && n.folder == folder) {
+      setActiveNoteId(n.id);
+      return n.id;
+    }
+  }
+  const QString id = newNote(title, folder);
+  const int row = m_notes.indexOfId(id);
+  if(row >= 0) {
+    Note n = m_notes.items().at(row);
+    n.body = QStringLiteral("# %1\n\n").arg(today.toString(QStringLiteral("dddd, d MMMM yyyy")));
+    m_notes.upsert(n);
+    m_notesState = n.body;
+    emit notesStateChanged();
+    scheduleSave();
+  }
+  return id;
 }
 
 QString AppController::scheduledLabelFor(const QString& taskId, const QDate& date) const {
@@ -5437,6 +5528,17 @@ QVariantList AppController::commandPaletteEntries() const {
   const_cast<AppController*>(this)->snapshotActiveProfile();
 
   QVariantList out;
+
+  // Today's note. A daily note that has to be made by hand is one people
+  // stop making, so it is one keystroke away from anywhere.
+  {
+    QVariantMap m;
+    m["kind"] = "dailyNote";
+    m["label"] = tr_("notes.daily");
+    m["sub"] = QDate::currentDate().toString(Qt::ISODate);
+    m["color"] = QStringLiteral("#7bc47f");
+    out.append(m);
+  }
 
   // Task templates (HEAP-77) — "New from template: …" actions.
   for(const auto& t : builtinTemplates()) {

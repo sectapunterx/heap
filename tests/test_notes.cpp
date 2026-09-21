@@ -633,6 +633,149 @@ TEST_F(NotesVaultTest, NotesSurviveAnExportAndReimport) {
   EXPECT_TRUE(back.pinned);
 }
 
+// ─── Links between notes, through the controller ─────────────────────
+//
+// NoteGraph.h covers the resolution rules; these cover what AppController adds:
+// which note the link was written in, and what happens when it points nowhere.
+
+class NoteLinkTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    app_ = std::make_unique<AppController>();
+    app_->notes()->reset({});
+  }
+
+  void TearDown() override {
+    app_.reset();
+  }
+
+  std::unique_ptr<AppController> app_;
+};
+
+TEST_F(NoteLinkTest, ALinkResolvesToANote) {
+  const QString target = app_->newNote(QStringLiteral("Standup"));
+  app_->newNote(QStringLiteral("Diary"));
+
+  const QVariantMap hit = app_->resolveNoteLink(QStringLiteral("Standup"));
+
+  EXPECT_EQ(hit.value(QStringLiteral("kind")).toString(), QStringLiteral("note"));
+  EXPECT_EQ(hit.value(QStringLiteral("noteId")).toString(), target);
+}
+
+// A heading resolves only inside the note the link was written in, which means
+// the answer depends on which note is open.
+TEST_F(NoteLinkTest, AHeadingResolvesOnlyInTheOpenNote) {
+  const QString withHeading = app_->newNote(QStringLiteral("A"));
+  app_->setNoteBody(withHeading, QStringLiteral("## Risks\n\nbody"));
+  const QString other = app_->newNote(QStringLiteral("B"));
+
+  app_->setActiveNoteId(other);
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("Risks")).value(QStringLiteral("kind")).toString(), QStringLiteral("missing"));
+
+  app_->setActiveNoteId(withHeading);
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("Risks")).value(QStringLiteral("kind")).toString(), QStringLiteral("heading"));
+}
+
+TEST_F(NoteLinkTest, AnUnknownTargetIsReportedAsMissingWithItsName) {
+  app_->newNote(QStringLiteral("Diary"));
+
+  const QVariantMap hit = app_->resolveNoteLink(QStringLiteral("Ghost"));
+
+  EXPECT_EQ(hit.value(QStringLiteral("kind")).toString(), QStringLiteral("missing"));
+  EXPECT_EQ(hit.value(QStringLiteral("title")).toString(), QStringLiteral("Ghost"));
+}
+
+TEST_F(NoteLinkTest, BacklinksAreReportedAcrossNotes) {
+  const QString target = app_->newNote(QStringLiteral("Standup"));
+  const QString other = app_->newNote(QStringLiteral("Diary"));
+  app_->setNoteBody(other, QStringLiteral("see [[Standup]]"));
+
+  const QVariantList back = app_->backlinksToNote(target);
+
+  ASSERT_EQ(back.size(), 1);
+  EXPECT_EQ(back.at(0).toMap().value(QStringLiteral("title")).toString(), QStringLiteral("Diary"));
+}
+
+TEST_F(NoteLinkTest, UnresolvedLinksInTheOpenNoteAreListed) {
+  const QString id = app_->newNote(QStringLiteral("Diary"));
+  app_->setNotesState(QStringLiteral("see [[Ghost]] and [[Diary]]"));
+
+  EXPECT_EQ(app_->unresolvedNoteLinks(), QStringList{QStringLiteral("Ghost")});
+}
+
+// A broken link is usually a note somebody meant to write.
+TEST_F(NoteLinkTest, CreatingANoteForALinkMakesItAndOpensIt) {
+  app_->newNote(QStringLiteral("Diary"));
+
+  const QString id = app_->createNoteForLink(QStringLiteral("Ghost"));
+
+  EXPECT_FALSE(id.isEmpty());
+  EXPECT_EQ(app_->activeNoteId(), id);
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("Ghost")).value(QStringLiteral("kind")).toString(), QStringLiteral("note"));
+}
+
+// A second note with the same name would leave the link ambiguous forever.
+TEST_F(NoteLinkTest, CreatingANoteForALinkThatExistsOpensItInstead) {
+  const QString existing = app_->newNote(QStringLiteral("Standup"));
+  app_->newNote(QStringLiteral("Diary"));
+  const int before = app_->notes()->rowCount();
+
+  const QString id = app_->createNoteForLink(QStringLiteral("Standup"));
+
+  EXPECT_EQ(id, existing);
+  EXPECT_EQ(app_->notes()->rowCount(), before);
+}
+
+// A note created from a link belongs with its neighbours, not at the root.
+TEST_F(NoteLinkTest, ANoteCreatedFromALinkIsFiledBesideTheNoteThatAskedForIt) {
+  const QString from = app_->newNote(QStringLiteral("Diary"));
+  app_->moveNoteToFolder(from, QStringLiteral("journal"));
+  app_->setActiveNoteId(from);
+
+  const QString made = app_->createNoteForLink(QStringLiteral("Ghost"));
+
+  const int row = app_->notes()->indexOfId(made);
+  EXPECT_EQ(app_->notes()->items().at(row).folder, QStringLiteral("journal"));
+}
+
+TEST_F(NoteLinkTest, CreatingANoteForAnEmptyLinkDoesNothing) {
+  const int before = app_->notes()->rowCount();
+
+  EXPECT_TRUE(app_->createNoteForLink(QStringLiteral("   ")).isEmpty());
+  EXPECT_EQ(app_->notes()->rowCount(), before);
+}
+
+// ── The daily note ──
+
+TEST_F(NoteLinkTest, TheDailyNoteIsCreatedOnFirstUse) {
+  const QString id = app_->openDailyNote();
+
+  EXPECT_FALSE(id.isEmpty());
+  EXPECT_EQ(app_->activeNoteId(), id);
+  const int row = app_->notes()->indexOfId(id);
+  EXPECT_EQ(app_->notes()->items().at(row).title, QDate::currentDate().toString(Qt::ISODate));
+}
+
+// Asking twice in one day is the normal case: it must open the same note, not
+// start a second one.
+TEST_F(NoteLinkTest, TheDailyNoteIsReusedWithinADay) {
+  const QString first = app_->openDailyNote();
+  const int after = app_->notes()->rowCount();
+
+  const QString second = app_->openDailyNote();
+
+  EXPECT_EQ(second, first);
+  EXPECT_EQ(app_->notes()->rowCount(), after);
+}
+
+// ISO, so the folder sorts chronologically in every list and on disk.
+TEST_F(NoteLinkTest, TheDailyNoteIsFiledUnderDaily) {
+  const QString id = app_->openDailyNote();
+
+  const int row = app_->notes()->indexOfId(id);
+  EXPECT_EQ(app_->notes()->items().at(row).folder, QStringLiteral("daily"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
 
