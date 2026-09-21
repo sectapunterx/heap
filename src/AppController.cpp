@@ -123,6 +123,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
+      {"docs.untitledPage", {"Untitled page", "Без названия"}},
+      {"docs.undo.deletePage", {"Page deleted", "Страница удалена"}},
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
       {"notes.vault.badFolder", {"That folder could not be opened.", "Не удалось открыть папку."}},
       {"notes.vault.unreadable", {"Could not read %1", "Не удалось прочитать %1"}},
@@ -2038,6 +2040,191 @@ QString AppController::openDailyNote() {
   return id;
 }
 
+namespace {
+
+// Siblings of `parentId`, sorted by rank then title so the order is stable even
+// for pages that have never been dragged.
+QVector<DocPage> childrenOf(const QVector<DocPage>& all, const QString& parentId) {
+  QVector<DocPage> out;
+  for(const DocPage& p : all) {
+    if(p.parentId == parentId) {
+      out.append(p);
+    }
+  }
+  std::sort(out.begin(), out.end(), [](const DocPage& a, const DocPage& b) {
+    if(a.rank != b.rank) {
+      return a.rank < b.rank;
+    }
+    return a.title.compare(b.title, Qt::CaseInsensitive) < 0;
+  });
+  return out;
+}
+
+}  // namespace
+
+void AppController::setActiveDocPageId(const QString& id) {
+  if(id == m_activeDocPageId) {
+    return;
+  }
+  m_activeDocPageId = id;
+  emit activeDocPageChanged();
+  scheduleSave();
+}
+
+QString AppController::docPageBody(const QString& id) const {
+  const int row = m_docPages.indexOfId(id);
+  return row >= 0 ? m_docPages.items().at(row).body : QString();
+}
+
+QString AppController::newDocPage(const QString& title, const QString& parentId) {
+  DocPage p;
+  p.id = QStringLiteral("doc-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  p.parentId = parentId;
+  p.title = title.trimmed().isEmpty() ? tr_("docs.untitledPage") : title.trimmed();
+  p.created = QDateTime::currentDateTime();
+  p.updated = p.created;
+  p.body = QStringLiteral("# %1\n\n").arg(p.title);
+  // Last among its siblings, which is where a new thing belongs; fractional so
+  // a later drag rewrites one page rather than renumbering the level.
+  const QVector<DocPage> siblings = childrenOf(m_docPages.items(), parentId);
+  p.rank = siblings.isEmpty() ? heap::state::kRankStep : siblings.last().rank + heap::state::kRankStep;
+  m_docPages.upsert(p);
+  setActiveDocPageId(p.id);
+  scheduleSave();
+  return p.id;
+}
+
+void AppController::renameDocPage(const QString& id, const QString& title) {
+  const int row = m_docPages.indexOfId(id);
+  if(row < 0 || title.trimmed().isEmpty()) {
+    return;
+  }
+  DocPage p = m_docPages.items().at(row);
+  p.title = title.trimmed();
+  p.updated = QDateTime::currentDateTime();
+  m_docPages.upsert(p);
+  scheduleSave();
+}
+
+void AppController::setDocPageBody(const QString& id, const QString& body) {
+  const int row = m_docPages.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  DocPage p = m_docPages.items().at(row);
+  if(p.body == body) {
+    return;
+  }
+  p.body = body;
+  p.updated = QDateTime::currentDateTime();
+  m_docPages.upsert(p);
+  scheduleSave();
+}
+
+void AppController::deleteDocPage(const QString& id) {
+  if(m_docPages.indexOfId(id) < 0) {
+    return;
+  }
+  // The subtree goes too. A page whose parent is gone would be unreachable in
+  // the tree and invisible everywhere else — deleted in every sense except the
+  // one that frees the space.
+  QStringList doomed{id};
+  for(int i = 0; i < doomed.size(); ++i) {
+    for(const DocPage& p : m_docPages.items()) {
+      if(p.parentId == doomed.at(i) && !doomed.contains(p.id)) {
+        doomed << p.id;
+      }
+    }
+  }
+  const UndoScope scope(this, tr_("docs.undo.deletePage"));
+  for(const QString& gone : doomed) {
+    m_docPages.removeById(gone);
+  }
+  if(doomed.contains(m_activeDocPageId)) {
+    m_activeDocPageId = m_docPages.rowCount() > 0 ? m_docPages.items().first().id : QString();
+    emit activeDocPageChanged();
+  }
+  scheduleSave();
+}
+
+void AppController::moveDocPage(const QString& id, const QString& newParentId, const QString& beforeId) {
+  const int row = m_docPages.indexOfId(id);
+  if(row < 0 || id == newParentId) {
+    return;
+  }
+  // A page cannot be dropped inside its own subtree: the tree would lose the
+  // branch entirely, since nothing would reach it from the root.
+  QString walk = newParentId;
+  while(!walk.isEmpty()) {
+    if(walk == id) {
+      return;
+    }
+    const int at = m_docPages.indexOfId(walk);
+    if(at < 0) {
+      break;
+    }
+    walk = m_docPages.items().at(at).parentId;
+  }
+
+  DocPage p = m_docPages.items().at(row);
+  p.parentId = newParentId;
+
+  QVector<DocPage> siblings = childrenOf(m_docPages.items(), newParentId);
+  siblings.removeIf([&id](const DocPage& s) {
+    return s.id == id;
+  });
+
+  double before = 0.0;
+  double after = 0.0;
+  bool hasBefore = false;
+  bool hasAfter = false;
+  if(beforeId.isEmpty()) {
+    if(!siblings.isEmpty()) {
+      before = siblings.last().rank;
+      hasBefore = true;
+    }
+  } else {
+    for(int i = 0; i < siblings.size(); ++i) {
+      if(siblings.at(i).id != beforeId) {
+        continue;
+      }
+      after = siblings.at(i).rank;
+      hasAfter = true;
+      if(i > 0) {
+        before = siblings.at(i - 1).rank;
+        hasBefore = true;
+      }
+      break;
+    }
+  }
+  p.rank = heap::board::between(before, after, hasBefore, hasAfter);
+  p.updated = QDateTime::currentDateTime();
+  m_docPages.upsert(p);
+  scheduleSave();
+}
+
+QVariantList AppController::docPageChildren(const QString& parentId) const {
+  QVariantList out;
+  for(const DocPage& p : childrenOf(m_docPages.items(), parentId)) {
+    QVariantMap m;
+    m["id"] = p.id;
+    m["parentId"] = p.parentId;
+    m["title"] = p.title;
+    m["rank"] = p.rank;
+    // So a row can draw a disclosure triangle without asking again.
+    bool hasKids = false;
+    for(const DocPage& c : m_docPages.items()) {
+      if(c.parentId == p.id) {
+        hasKids = true;
+        break;
+      }
+    }
+    m["hasChildren"] = hasKids;
+    out.append(m);
+  }
+  return out;
+}
+
 QString AppController::scheduledLabelFor(const QString& taskId, const QDate& date) const {
   if(taskId.isEmpty() || !date.isValid()) {
     return QString();
@@ -3053,6 +3240,7 @@ AppController::UndoScope::UndoScope(AppController* owner, QString label) :
     m_tasks(m_outermost ? owner->m_tasks.items() : QVector<::Task>{}),
     m_events(m_outermost ? owner->m_events.items() : QVector<::CalEvent>{}),
     m_people(m_outermost ? owner->m_people.items() : QVector<::Person>{}),
+    m_docPages(m_outermost ? owner->m_docPages.items() : QVector<::DocPage>{}),
     m_statuses(m_outermost ? owner->m_statuses : QVariantList{}) {
   ++owner->m_undoScopeDepth;
 }
@@ -3073,6 +3261,9 @@ AppController::UndoScope::~UndoScope() {
     return e.id;
   });
   entry.people = heap::undo::diff(m_people, m_owner->m_people.items(), [](const ::Person& p) {
+    return p.id;
+  });
+  entry.docPages = heap::undo::diff(m_docPages, m_owner->m_docPages.items(), [](const ::DocPage& p) {
     return p.id;
   });
   if(m_statuses != m_owner->m_statuses) {
@@ -3107,10 +3298,12 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     heap::undo::applyBackward(m_tasks, entry.tasks);
     heap::undo::applyBackward(m_events, entry.events);
     heap::undo::applyBackward(m_people, entry.people);
+    heap::undo::applyBackward(m_docPages, entry.docPages);
   } else {
     heap::undo::applyForward(m_tasks, entry.tasks);
     heap::undo::applyForward(m_events, entry.events);
     heap::undo::applyForward(m_people, entry.people);
+    heap::undo::applyForward(m_docPages, entry.docPages);
   }
 
   // A deleted task told its tracker "not mine"; bringing it back has to
@@ -4800,6 +4993,8 @@ void AppController::snapshotActiveProfile() {
   p.notesState = m_notesState;
   p.notes = m_notes.items();
   p.activeNoteId = m_activeNoteId;
+  p.docPages = m_docPages.items();
+  p.activeDocPageId = m_activeDocPageId;
   // Events are global — not snapshotted into the profile.
 }
 
@@ -4834,6 +5029,9 @@ void AppController::applyProfileToModels(const Profile& p) {
   m_notesState = row >= 0 ? m_notes.items().at(row).body : p.notesState;
   emit activeNoteChanged();
   emit notesStateChanged();
+  m_docPages.reset(p.docPages);
+  m_activeDocPageId = p.activeDocPageId.isEmpty() && !p.docPages.isEmpty() ? p.docPages.first().id : p.activeDocPageId;
+  emit activeDocPageChanged();
   // Events are global — not reset on profile switch.
 }
 

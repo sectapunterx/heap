@@ -188,6 +188,29 @@ struct Note {
   bool operator==(const Note&) const = default;
 };
 
+// One page of documentation.
+//
+// Docs was a catalog: links, snippets and contacts, all of them one line long.
+// There was nowhere to write the paragraph explaining why the link matters,
+// which is the thing people actually need from a team's docs.
+//
+// A page is markdown on the same stack notes use. `parentId` makes the tree —
+// a plain parent pointer rather than nested children, because a flat list is
+// what a QAbstractListModel can carry and what survives a merge per element.
+// `rank` orders siblings, fractionally, for the same reason Task::rank does:
+// moving one page rewrites one page.
+struct DocPage {
+  QString id;
+  QString parentId;
+  QString title;
+  QString body;
+  double rank{};
+  QDateTime created;
+  QDateTime updated;
+
+  bool operator==(const DocPage&) const = default;
+};
+
 struct Profile {
   QString id;     // slug, unique
   QString name;   // human-readable
@@ -203,6 +226,8 @@ struct Profile {
   QString notesState;
   QVector<Note> notes;
   QString activeNoteId;
+  QVector<DocPage> docPages;
+  QString activeDocPageId;
 };
 
 // Notes, without their bodies.
@@ -250,6 +275,50 @@ class NoteModel : public QAbstractListModel {
 
  private:
   QVector<Note> m_items;
+};
+
+// Doc pages, without their bodies — for the same reason NoteModel omits them.
+class DocPageModel : public QAbstractListModel {
+  Q_OBJECT
+  QML_ELEMENT
+  QML_UNCREATABLE("Provided by AppController")
+ public:
+  enum Roles {
+    IdRole = Qt::UserRole + 1,
+    ParentIdRole,
+    TitleRole,
+    RankRole,
+    CreatedRole,
+    UpdatedRole,
+    ExcerptRole,
+  };
+
+  explicit DocPageModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
+  }
+
+  int rowCount(const QModelIndex& = {}) const override {
+    return m_items.size();
+  }
+
+  QVariant data(const QModelIndex& idx, int role) const override;
+  QHash<int, QByteArray> roleNames() const override;
+  Q_INVOKABLE int roleOf(const QString& name) const;
+
+  void reset(QVector<DocPage> items);
+
+  const QVector<DocPage>& items() const {
+    return m_items;
+  }
+
+  int indexOfId(const QString& id) const;
+  void upsert(const DocPage& p);
+  // Undo restores a page where it was, not at the end: the tree is ordered by
+  // rank, but the model's own row order is what a reset would otherwise churn.
+  void insertAt(int row, const DocPage& p);
+  void removeById(const QString& id);
+
+ private:
+  QVector<DocPage> m_items;
 };
 
 class TaskModel : public QAbstractListModel {

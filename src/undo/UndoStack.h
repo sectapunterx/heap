@@ -152,6 +152,10 @@ struct Entry {
   Edits<Task> tasks;
   Edits<CalEvent> events;
   Edits<Person> people;
+  // Docs pages are a tree, and deleting one takes its whole subtree — which is
+  // the operation most in need of an undo, and the one that would otherwise
+  // leave the stack silently unable to put it back.
+  Edits<DocPage> docPages;
   // Statuses are a handful of maps with no model behind them, so the whole
   // list is cheaper to keep than a diff.
   bool statusesTouched = false;
@@ -165,7 +169,7 @@ struct Entry {
   int profileRow = -1;
 
   bool isEmpty() const {
-    return !profileRemoved && !statusesTouched && tasks.isEmpty() && events.isEmpty() && people.isEmpty();
+    return !profileRemoved && !statusesTouched && tasks.isEmpty() && events.isEmpty() && people.isEmpty() && docPages.isEmpty();
   }
 };
 

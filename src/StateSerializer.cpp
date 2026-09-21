@@ -407,6 +407,49 @@ QVector<Note> notesFromJson(const QJsonArray& a) {
   return v;
 }
 
+// ───────────────── DocPage ─────────────────
+
+QJsonObject docPageToJson(const DocPage& p) {
+  QJsonObject o;
+  o["id"] = p.id;
+  o["parentId"] = p.parentId;
+  o["title"] = p.title;
+  o["body"] = p.body;
+  o["rank"] = p.rank;
+  o["created"] = dtToStr(p.created);
+  o["updated"] = dtToStr(p.updated);
+  return o;
+}
+
+DocPage docPageFromJson(const QJsonObject& o) {
+  DocPage p;
+  p.id = o["id"].toString();
+  p.parentId = o["parentId"].toString();
+  p.title = o["title"].toString();
+  p.body = o["body"].toString();
+  p.rank = o["rank"].toDouble();
+  p.created = dtFromStr(o["created"].toString());
+  p.updated = dtFromStr(o["updated"].toString());
+  return p;
+}
+
+QJsonArray docPagesToJson(const QVector<DocPage>& xs) {
+  QJsonArray a;
+  for(const DocPage& p : xs) {
+    a.append(docPageToJson(p));
+  }
+  return a;
+}
+
+QVector<DocPage> docPagesFromJson(const QJsonArray& a) {
+  QVector<DocPage> v;
+  v.reserve(a.size());
+  for(const auto& it : a) {
+    v.append(docPageFromJson(it.toObject()));
+  }
+  return v;
+}
+
 // ───────────────── Person / statuses ─────────────────
 
 QJsonArray peopleToJson(const QVector<Person>& xs) {
@@ -501,6 +544,15 @@ QJsonObject profileToJson(const Profile& p) {
   if(!p.activeNoteId.isEmpty()) {
     o["activeNoteId"] = p.activeNoteId;
   }
+  // Separate from `docs`, which is the link/snippet/contact catalog. The
+  // catalog is still there and still useful; pages are the long-form half it
+  // never had.
+  if(!p.docPages.isEmpty()) {
+    o["docPages"] = docPagesToJson(p.docPages);
+  }
+  if(!p.activeDocPageId.isEmpty()) {
+    o["activeDocPageId"] = p.activeDocPageId;
+  }
   return o;
 }
 
@@ -528,6 +580,8 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
     }
   }
   p.activeNoteId = o["activeNoteId"].toString();
+  p.docPages = docPagesFromJson(o["docPages"].toArray());
+  p.activeDocPageId = o["activeDocPageId"].toString();
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
   }
@@ -683,6 +737,8 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   if(fromVersion < 8) {
     migrateNotesV7ToV8(root);
   }
+  // v8 -> v9 added Profile::docPages. No rung: a v8 profile simply has none,
+  // and its `docs` catalog is untouched and still read the same way.
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

@@ -250,6 +250,8 @@ qt_add_qml_module(heap_core
         qml/WelcomePopup.qml
         qml/Mention.js
         qml/NotesListPane.qml
+        qml/MdEditorPane.qml
+        qml/DocsPagesPane.qml
         qml/UnscheduledRail.qml
         qml/Overlap.js
         qml/Segments.js

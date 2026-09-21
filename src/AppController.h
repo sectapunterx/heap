@@ -278,6 +278,37 @@ class AppController : public QObject {
   // hand is one people stop making.
   Q_INVOKABLE QString openDailyNote();
 
+  // ── Doc pages ──
+  //
+  // Docs was a catalog of one-line things. A page is where the paragraph
+  // explaining why the link matters goes. Same shape as notes: the model
+  // carries no bodies, and `docPageBody(id)` fetches one.
+  Q_PROPERTY(DocPageModel* docPages READ docPages CONSTANT)
+  Q_PROPERTY(QString activeDocPageId READ activeDocPageId WRITE setActiveDocPageId NOTIFY activeDocPageChanged)
+
+  DocPageModel* docPages() {
+    return &m_docPages;
+  }
+
+  QString activeDocPageId() const {
+    return m_activeDocPageId;
+  }
+
+  void setActiveDocPageId(const QString& id);
+
+  Q_INVOKABLE QString docPageBody(const QString& id) const;
+  Q_INVOKABLE QString newDocPage(const QString& title = QString(), const QString& parentId = QString());
+  Q_INVOKABLE void renameDocPage(const QString& id, const QString& title);
+  Q_INVOKABLE void setDocPageBody(const QString& id, const QString& body);
+  // Deleting a page takes its subtree: a page whose parent is gone would be
+  // unreachable in the tree and invisible everywhere else.
+  Q_INVOKABLE void deleteDocPage(const QString& id);
+  // Re-parent and re-order in one call, because dragging a page in a tree does
+  // both at once. `beforeId` is the sibling to land above, empty for last.
+  Q_INVOKABLE void moveDocPage(const QString& id, const QString& newParentId, const QString& beforeId);
+  // The pages under `parentId`, in order — what a tree row expands into.
+  Q_INVOKABLE QVariantList docPageChildren(const QString& parentId) const;
+
   QString notesState() const {
     return m_notesState;
   }
@@ -794,6 +825,7 @@ class AppController : public QObject {
   void docsStateChanged();
   void notesStateChanged();
   void activeNoteChanged();
+  void activeDocPageChanged();
   void appSettingsJsonChanged();
   void statusesChanged();
   void pendingUndoChanged();
@@ -872,6 +904,8 @@ class AppController : public QObject {
   QString m_notesState;
   NoteModel m_notes;
   QString m_activeNoteId;
+  DocPageModel m_docPages;
+  QString m_activeDocPageId;
 
   // Keeps `notesState` and the active note's body the same thing. Called on
   // every edit and every switch; silent when there is no active note.
@@ -1008,6 +1042,7 @@ class AppController : public QObject {
     QVector<::Task> m_tasks;
     QVector<::CalEvent> m_events;
     QVector<::Person> m_people;
+    QVector<::DocPage> m_docPages;
     QVariantList m_statuses;
   };
 

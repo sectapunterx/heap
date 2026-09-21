@@ -28,9 +28,36 @@ The header search also takes `field:value` clauses — `status:`, `priority:`,
 | Board | `Ctrl+1` |
 | Timeline | `Ctrl+2` |
 | Week | `Ctrl+3` |
-| Docs | `Ctrl+4` |
-| Notes | `Ctrl+5` |
-| Settings | `Ctrl+6` |
+| Month | `Ctrl+4` |
+| Archive | `Ctrl+5` |
+| Docs | `Ctrl+6` |
+| Notes | `Ctrl+7` |
+| Settings | `Ctrl+8` |
+
+The numbers follow the side rail, top to bottom.
+
+## Board cursor
+
+Bare letters, so a focused text field still types them. Arrow keys work
+alongside each one.
+
+| Action | Default |
+|--------|---------|
+| Next / previous card | `J` / `K` |
+| Previous / next column | `H` / `L` |
+| Open the card | `Return` |
+| Add to the selection | `Space` |
+| Move the card | `Shift+J` / `Shift+K` / `Shift+H` / `Shift+L` |
+
+## Calendar
+
+Live on the week and month views only, where the board's own letters are not.
+
+| Action | Default |
+|--------|---------|
+| Go to today | `T` |
+| Previous / next period | `←` / `→` |
+| Go to a date… | `G` |
 
 ## Profiles
 
