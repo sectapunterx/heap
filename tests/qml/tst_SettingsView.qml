@@ -65,6 +65,81 @@ TestCase {
         compare(merged.calendar.weekStart, sv.defaults.calendar.weekStart);
     }
 
+    // ─── Integrations: connecting by hand ─────────────────────────────
+    // The Connect button was hidden on any card that could do a browser
+    // sign-in, so an OAuth-capable provider filled in under Advanced — a
+    // personal access token, a self-hosted Jira — showed a full set of fields
+    // and nothing but "Test connection" to press.
+
+    // Settings are app-wide, so every case that writes them puts back what it
+    // found — including one that fails partway through.
+    property string savedSettings: ""
+    property bool settingsSaved: false
+
+    function cleanup() {
+        if (!settingsSaved)
+            return;
+        AppController.appSettingsJson = savedSettings;
+        settingsSaved = false;
+    }
+
+    // One provider's card, expanded, with `cfg` as its stored config.
+    function _card(sv, provider, cfg) {
+        if (!settingsSaved) {
+            savedSettings = AppController.appSettingsJson;
+            settingsSaved = true;
+        }
+        const settings = JSON.parse(AppController.appSettingsJson || "{}");
+        settings.integrations = settings.integrations || ({});
+        settings.integrations[provider] = cfg;
+        AppController.appSettingsJson = JSON.stringify(settings);
+        sv._loadFromController();
+        sv.activeSection = "integrations";
+        tryVerify(function () { return findChild(sv, "int-card-" + provider) !== null; },
+                  2000, provider + " must have a card on the Integrations page");
+        const card = findChild(sv, "int-card-" + provider);
+        // A collapsed card makes every child read `visible: false`, whatever
+        // the binding under test says.
+        card.open = true;
+        return card;
+    }
+
+    function test_connect_is_offered_for_a_hand_filled_oauth_card() {
+        const sv = make();
+
+        // A client ID is what makes a card one-click-capable without a baked
+        // credential — the self-hosted path, and the shape every OAuth card
+        // has in a release build.
+        const card = _card(sv, "jira", { clientId: "cid" });
+        compare(card.canOneClick, true);
+
+        const connect = findChild(sv, "int-connect-jira");
+        verify(connect !== null);
+        compare(connect.visible, false, "the browser button is the default for a one-click card");
+
+        card.advanced = true;
+        compare(connect.visible, true, "fields on screen with no way to connect is a dead end");
+    }
+
+    // Redmine has no browser flow in any build, so its card is the token-only
+    // shape — the one the Connect button never left.
+    function test_connect_stays_on_a_card_that_cannot_use_the_browser() {
+        const sv = make();
+
+        const card = _card(sv, "redmine", ({}));
+        compare(card.canOneClick, false);
+        compare(findChild(sv, "int-connect-redmine").visible, true);
+    }
+
+    function test_a_connected_card_has_nothing_left_to_connect() {
+        const sv = make();
+
+        const card = _card(sv, "jira", { clientId: "cid", connected: true });
+        card.advanced = true;
+        compare(findChild(sv, "int-connect-jira").visible, false);
+    }
+
+    // A stored 0 is a real value. These reads used `|| <default>`, so a
     // A stored 0 is a real value. These reads used `|| <default>`, so a
     // hand-edited zero silently became the default instead.
     function test_merge_defaults_keeps_a_stored_zero() {

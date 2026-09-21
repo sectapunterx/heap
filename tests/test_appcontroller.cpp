@@ -1978,6 +1978,83 @@ TEST_F(AppControllerTest, TrelloDoesNotAskForAnApiKeyTheBrowserSignInAlreadySupp
   app_->setIntegrationSecret(QStringLiteral("trello"), QStringLiteral("token"), QString());
 }
 
+// ─── Manual connect ───────────────────────────────────────────────────
+// An OAuth-capable card used to offer no way to connect with typed
+// credentials: the Connect button was hidden as soon as the build carried a
+// client ID, so Advanced showed a full set of fields and only "Test
+// connection". A self-hosted Jira — which the Atlassian gateway has never
+// heard of — had no way in at all.
+
+TEST_F(AppControllerTest, ConnectingByHandMarksTheCardConnected) {
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("pat"));
+  writeIntegrationConfig(QStringLiteral("jira"), QJsonObject{{QStringLiteral("baseUrl"), QStringLiteral("https://jira.acme.internal")}});
+
+  app_->connectIntegrationManually(QStringLiteral("jira"));
+
+  EXPECT_TRUE(readIntegrationConfig(QStringLiteral("jira")).value(QStringLiteral("connected")).toBool());
+
+  writeIntegrationConfig(QStringLiteral("jira"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QString());
+}
+
+TEST_F(AppControllerTest, ConnectingByHandRefusesWhileARequiredFieldIsEmpty) {
+  // A Jira with a token and no base URL builds no provider at all, so marking
+  // it connected produced a card that claimed to work and synced nothing.
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("pat"));
+  writeIntegrationConfig(QStringLiteral("jira"), QJsonObject{});
+
+  QSignalSpy needs(app_.get(), &AppController::integrationNeedsFields);
+  app_->connectIntegrationManually(QStringLiteral("jira"));
+
+  EXPECT_FALSE(readIntegrationConfig(QStringLiteral("jira")).value(QStringLiteral("connected")).toBool());
+  ASSERT_EQ(needs.count(), 1);
+  EXPECT_TRUE(needs.at(0).at(1).toStringList().contains(QStringLiteral("Base URL")))
+      << needs.at(0).at(1).toStringList().join(QStringLiteral(", ")).toStdString();
+
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QString());
+}
+
+TEST_F(AppControllerTest, ConnectingByHandEndsALeftoverBrowserSession) {
+  // authMode=oauth routes every Jira call through api.atlassian.com/ex/jira/
+  // {cloudId}. Left in place, the base URL typed right below it is never used.
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("pat"));
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("refreshToken"), QStringLiteral("rt"));
+  writeIntegrationConfig(QStringLiteral("jira"),
+                         QJsonObject{
+                             {QStringLiteral("baseUrl"), QStringLiteral("https://jira.acme.internal")},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                             {QStringLiteral("tokenExpiresAt"), QStringLiteral("2026-01-01T00:00:00")},
+                         });
+
+  app_->connectIntegrationManually(QStringLiteral("jira"));
+
+  const QJsonObject cfg = readIntegrationConfig(QStringLiteral("jira"));
+  EXPECT_TRUE(cfg.value(QStringLiteral("connected")).toBool());
+  EXPECT_FALSE(cfg.contains(QStringLiteral("authMode")));
+  EXPECT_FALSE(cfg.contains(QStringLiteral("tokenExpiresAt")));
+  EXPECT_TRUE(app_->integrationSecret(QStringLiteral("jira"), QStringLiteral("refreshToken")).isEmpty());
+
+  writeIntegrationConfig(QStringLiteral("jira"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QString());
+}
+
+TEST_F(AppControllerTest, AJiraSignedInWithABrowserIsNotAskedForABaseUrl) {
+  // The site comes from accessible-resources, so requiring it of everyone
+  // would make a complete browser sign-in look half-finished.
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("at"));
+  writeIntegrationConfig(QStringLiteral("jira"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("authMode"), QStringLiteral("oauth")},
+                         });
+
+  EXPECT_TRUE(app_->missingRequiredFields(QStringLiteral("jira")).isEmpty())
+      << app_->missingRequiredFields(QStringLiteral("jira")).join(QStringLiteral(", ")).toStdString();
+
+  writeIntegrationConfig(QStringLiteral("jira"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QString());
+}
+
 // ─── Disconnect / auth mode ───────────────────────────────────────────
 // authMode=oauth used to survive a disconnect, so a personal access token
 // pasted afterwards was still sent as a Bearer — which GitLab (PRIVATE-TOKEN)

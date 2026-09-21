@@ -563,7 +563,10 @@ ProviderDescriptor jira() {
   d.uiFields += oauthAppFields();
   // Browser sign-in supplies the token and the site, so only the token is
   // always required; the Basic-auth pair is checked by JiraProvider itself.
+  // Typed in by hand there is no site to inherit, and a Jira with no base URL
+  // has nowhere to send a request — Server/DC and self-hosted Cloud alike.
   d.requiredKeys = {QStringLiteral("token")};
+  d.manualRequiredKeys = {QStringLiteral("baseUrl")};
   d.secretKeys = {QStringLiteral("token"), QStringLiteral("clientSecret")};
   // Atlassian OAuth 2.0 (3LO). It has no PKCE-only mode, so one-click needs a
   // client secret. `audience` picks the Jira API and `prompt=consent` is what

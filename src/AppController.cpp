@@ -4370,11 +4370,6 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
 }
 
 QStringList AppController::missingRequiredFields(const QString& providerId) const {
-  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
-  if(d == nullptr) {
-    return {};
-  }
-  const QVariantMap cfg = integrationConfig(providerId);
   // A browser sign-in fills some required fields from the app's own identity
   // rather than from anything the user can type. Trello is the case in point:
   // its "API key" *is* the baked client ID (makeBespokeProvider substitutes it),
@@ -4382,11 +4377,31 @@ QStringList AppController::missingRequiredFields(const QString& providerId) cons
   // no way to obtain and makes a working card look broken.
   // The flow cannot have run without a client ID, so if authMode says it did,
   // that field is answered however the ID was obtained.
-  const bool signedInViaBrowser = cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth");
+  return missingRequiredFields(providerId,
+                               integrationConfig(providerId).value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth"));
+}
+
+QStringList AppController::missingRequiredFields(const QString& providerId, bool signedInViaBrowser) const {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(d == nullptr) {
+    return {};
+  }
+  const QVariantMap cfg = integrationConfig(providerId);
   const QString browserSuppliedField = signedInViaBrowser ? d->oauth.clientIdParam : QString();
 
+  // Fields only a hand-filled card has to provide (Jira's base URL) join the
+  // list exactly when there is no browser sign-in to inherit them from.
+  QStringList keys = d->requiredKeys;
+  if(!signedInViaBrowser) {
+    for(const QString& key : d->manualRequiredKeys) {
+      if(!keys.contains(key)) {
+        keys.append(key);
+      }
+    }
+  }
+
   QStringList missing;
-  for(const QString& key : d->requiredKeys) {
+  for(const QString& key : keys) {
     if(!cfg.value(key).toString().trimmed().isEmpty()) {
       continue;
     }
@@ -4680,6 +4695,41 @@ void AppController::setIntegrationSecret(const QString& providerId, const QStrin
   emit integrationSecretsChanged();
 }
 
+void AppController::connectIntegrationManually(const QString& providerId) {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(d == nullptr) {
+    emit toast(tr("Unknown integration"));
+    return;
+  }
+  // Validated as a token card, never as an OAuth one: this connect is what
+  // turns the card into a token card, so a field the browser flow would have
+  // supplied (Trello's API key) is the user's to provide here.
+  const QStringList missing = missingRequiredFields(providerId, /*signedInViaBrowser=*/false);
+  if(!missing.isEmpty()) {
+    // Silence was the old failure mode — "connected" went true, no provider
+    // could be built from the half-filled config, and nothing ever synced.
+    emit toast(tr("%1 needs %2").arg(d->displayName, missing.join(QStringLiteral(", "))));
+    emit integrationNeedsFields(providerId, missing);
+    return;
+  }
+
+  QVariantMap fields{{QStringLiteral("connected"), true}};
+  // Typed credentials are not a browser session. Leaving authMode=oauth behind
+  // would keep sending the old access token as a Bearer and — on Jira — keep
+  // routing every call through the api.atlassian.com gateway, so a self-hosted
+  // base URL typed right here would never be used.
+  if(integrationConfig(providerId).value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth")) {
+    if(m_secretStore) {
+      m_secretStore->remove(providerId, QStringLiteral("refreshToken"));
+    }
+    fields.insert(QStringLiteral("authMode"), QString());
+    fields.insert(QStringLiteral("tokenExpiresAt"), QString());
+  }
+  setIntegrationFields(providerId, fields);
+  emit integrationSecretsChanged();
+  emit toast(tr("%1 connected").arg(d->displayName));
+}
+
 void AppController::disconnectIntegration(const QString& providerId) {
   const QVariantMap cfg = integrationConfig(providerId);
   const QString authMode = cfg.value(QStringLiteral("authMode")).toString();
@@ -4856,7 +4906,10 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
     }
     const heap::integrations::JiraSite site = heap::integrations::pickJiraSite(body, preferred);
     if(site.cloudId.isEmpty()) {
-      emit toast(tr("%1 sign-in succeeded but granted no site — check the app's permissions").arg(label));
+      // Atlassian only ever grants Cloud sites, so this is also what a
+      // self-hosted Jira looks like from here: the sign-in worked and named
+      // nothing this token can reach.
+      emit toast(tr("%1 sign-in granted no site — for a self-hosted Jira, fill in Advanced and press Connect").arg(label));
       return;
     }
     setIntegrationFields(kProviderId,
@@ -4961,6 +5014,13 @@ void AppController::connectOAuth(const QString& providerId) {
       }
       m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
     }
+    // Atlassian's token is not bound to a site: the API base is
+    // api.atlassian.com/ex/jira/{cloudId}, and the cloudId has to be asked for.
+    // Until that answer arrives the card cannot say "connected" — without a
+    // cloudId JiraProvider has no API base at all, so a card marked connected
+    // here built no provider and synced nothing while claiming to work. That is
+    // exactly what a self-hosted Jira hits: the gateway has never heard of it.
+    const bool needsSite = providerId == QStringLiteral("jira");
     // One write: each one rebuilds every provider, and doing that three times
     // in a row could tear down a request already in flight.
     setIntegrationFields(providerId,
@@ -4970,11 +5030,9 @@ void AppController::connectOAuth(const QString& providerId) {
                              // used until the provider started refusing it, which read
                              // as an empty sync.
                              {QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString()},
-                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("connected"), !needsSite},
                          });
-    // Atlassian's token is not bound to a site: the API base is
-    // api.atlassian.com/ex/jira/{cloudId}, and the cloudId has to be asked for.
-    if(providerId == QStringLiteral("jira")) {
+    if(needsSite) {
       resolveJiraSite(r.accessToken, label);
       return;
     }

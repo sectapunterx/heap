@@ -1615,6 +1615,7 @@ Item {
                     required property var modelData
                     ColumnLayout {
                         id: intCard
+                        objectName: "int-card-" + intCard.intKey
                         spacing: 10
                         Layout.fillWidth: true
                         readonly property string intKey: modelData.id
@@ -1806,6 +1807,16 @@ Item {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 text: I18n.t("settings.integrations.connectBrowserHint")
+                                color: Theme.textDim; font.pixelSize: 10
+                            }
+                            // The browser is not the only way in, and on a
+                            // self-hosted instance it is not a way in at all —
+                            // say so where the button is, not in the docs.
+                            Text {
+                                visible: intCard.canOneClick && !intCard.isConn && !intCard.advanced
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                text: I18n.t("settings.integrations.manualHint")
                                 color: Theme.textDim; font.pixelSize: 10
                             }
                             // OAuth-capable but no client ID yet (self-hosted gitea/
@@ -2009,8 +2020,17 @@ Item {
                             RowLayout {
                                 Layout.topMargin: 2
                                 spacing: 8
+                                // Connect with whatever is typed into the card.
+                                // Offered whenever those fields are on screen —
+                                // an OAuth card with Advanced open is a card
+                                // being filled in by hand (a personal access
+                                // token, a self-hosted Jira the Atlassian
+                                // gateway has never heard of), and leaving it
+                                // with only "Test connection" meant a card that
+                                // tested green could never be connected.
                                 Rectangle {
-                                    visible: !intCard.canOneClick && !intCard.isConn
+                                    objectName: "int-connect-" + intCard.intKey
+                                    visible: !intCard.isConn && (!intCard.canOneClick || intCard.advanced)
                                     radius: 6
                                     color: connMA.containsMouse ? Theme.accentStrong : Theme.accent
                                     border.color: Theme.accent; border.width: 1
@@ -2018,7 +2038,12 @@ Item {
                                     Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: "#06121a"; font.pixelSize: 11; font.weight: Font.Medium }
                                     MouseArea {
                                         id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: { intCard.commitFields(); root.setNested("integrations", intCard.intKey, "connected", true) }
+                                        // Not a bare `connected = true`: the
+                                        // controller checks the required fields
+                                        // are filled and clears any leftover
+                                        // browser session, so the typed
+                                        // credentials are the ones that go out.
+                                        onClicked: { intCard.commitFields(); AppController.connectIntegrationManually(intCard.intKey) }
                                     }
                                 }
                                 Rectangle {

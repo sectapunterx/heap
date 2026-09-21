@@ -215,6 +215,12 @@ struct ProviderDescriptor {
   QVector<FieldSpec> uiFields;
   QStringList requiredKeys;  // must be non-empty before the provider is built
   QStringList secretKeys;    // subset of fields kept in the keychain
+  // Also required, but only when the card is filled in by hand. A browser
+  // sign-in can answer a field the user would otherwise have to type — Jira's
+  // base URL comes from accessible-resources — so requiring it of everyone
+  // would block a sign-in that has nothing missing, and requiring it of no one
+  // lets a hand-filled card connect with no idea where to send its requests.
+  QStringList manualRequiredKeys;
 
   bool bespoke = false;
   ProviderKind kind = ProviderKind::Tracker;

@@ -17,7 +17,7 @@ There are three ways to authenticate, depending on the provider:
 | Method | Providers | What you do |
 |--------|-----------|-------------|
 | **One-click browser** | GitHub, GitLab, Jira, Trello, Todoist, Asana, ClickUp, Sentry, Bitbucket* | Click **Connect with browser**, authorize, done. |
-| **Personal access token** | all | Open **Advanced**, paste a token. Fallback everywhere. |
+| **Personal access token** | all | Open **Advanced**, fill in the fields, press **Connect**. Fallback everywhere. |
 | **Device code** | GitHub | The card shows a short code — enter it on the page that opens. |
 
 \* Only in a build that carries the OAuth app credentials, and Gitea/Forgejo/
@@ -171,6 +171,12 @@ On Server/DC, **leave the Email field empty** and paste a Personal Access Token
 from **your avatar → Profile → Personal Access Tokens**. An instance too old for
 PATs still works: fill in your username and it falls back to HTTP Basic.
 
+Either way this is the **Advanced** path, not the browser one: open Advanced,
+fill in **Base URL** (your own host, prefix and all) and the token, then press
+**Connect**. Atlassian's browser sign-in only ever grants Cloud sites, so on a
+self-hosted instance it signs in and reaches nothing — the card says so and
+points here.
+
 ### Trello — token in the fragment
 
 <https://trello.com/power-ups/admin> → your Power-Up → **API key**. Trello has
@@ -201,7 +207,10 @@ with no help from you. It is hidden when any of these is true:
 | GitHub on a build against Qt < 6.9 | The device grant needs Qt 6.9 (`OAuthManager::deviceFlowAvailable()`); use a token |
 
 In every case the personal-access-token path under **Advanced** is fully
-supported — it is not a degraded mode.
+supported — it is not a degraded mode. It is also there on cards that *do* show
+the browser button: open **Advanced** and the **Connect** button appears beside
+**Test connection**, which is how you reach a self-hosted instance the vendor's
+OAuth gateway has never heard of.
 
 ## Mattermost — people, not issues
 
