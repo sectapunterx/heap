@@ -22,6 +22,7 @@
 #include <QString>
 #include <QTemporaryDir>
 #include <QUrl>
+#include <QUuid>
 
 #include <gtest/gtest.h>
 
@@ -502,7 +503,10 @@ class NotesVaultTest : public ::testing::Test {
  protected:
   void SetUp() override {
     app_ = std::make_unique<AppController>();
+    // Both halves: emptying the model alone leaves the loaded profile's text
+    // in notesState with no note behind it, which the next switch adopts.
     app_->notes()->reset({});
+    app_->setNotesState(QString());
     ASSERT_TRUE(dir_.isValid());
   }
 
@@ -643,6 +647,7 @@ class NoteLinkTest : public ::testing::Test {
   void SetUp() override {
     app_ = std::make_unique<AppController>();
     app_->notes()->reset({});
+    app_->setNotesState(QString());
   }
 
   void TearDown() override {
@@ -774,6 +779,230 @@ TEST_F(NoteLinkTest, TheDailyNoteIsFiledUnderDaily) {
 
   const int row = app_->notes()->indexOfId(id);
   EXPECT_EQ(app_->notes()->items().at(row).folder, QStringLiteral("daily"));
+}
+
+// ─── Text with no note behind it ─────────────────────────────────────
+//
+// The bug these exist for, as reported: a note written with Ctrl+Shift+N, or
+// typed into the editor without pressing "+", was shown in the editor, listed
+// nowhere, and gone after a restart; and pressing "+" afterwards overwrote it.
+//
+// Two causes. Text that arrived with no note open lived only in `notesState`,
+// which since notes became a list is no longer written to disk. And "+" asked
+// for a new note before the editor's 250 ms debounce had flushed, so the switch
+// replaced text that had not been saved anywhere yet.
+
+class OrphanNoteTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    app_ = std::make_unique<AppController>();
+    app_->notes()->reset({});
+    app_->setNotesState(QString());
+  }
+
+  void TearDown() override {
+    app_.reset();
+  }
+
+  // The note holding `needle`, from whatever controller is asked.
+  static QString noteHolding(AppController* app, const QString& needle) {
+    for(const Note& n : app->notes()->items()) {
+      if(n.body.contains(needle)) {
+        return n.id;
+      }
+    }
+    return {};
+  }
+
+  QString titleOf(const QString& id) const {
+    const int row = app_->notes()->indexOfId(id);
+    return row >= 0 ? app_->notes()->items().at(row).title : QString();
+  }
+
+  std::unique_ptr<AppController> app_;
+};
+
+TEST_F(OrphanNoteTest, TypingWithNoNoteOpenMakesANote) {
+  ASSERT_EQ(app_->notes()->rowCount(), 0);
+
+  app_->setNotesState(QStringLiteral("typed straight into the editor"));
+
+  ASSERT_EQ(app_->notes()->rowCount(), 1) << "the text has to be listed, not only shown";
+  const QString id = app_->notes()->items().at(0).id;
+  EXPECT_EQ(app_->activeNoteId(), id);
+  EXPECT_EQ(app_->noteBody(id), QStringLiteral("typed straight into the editor"));
+}
+
+// An empty editor is not a note; making one per keystroke-then-delete would
+// fill the list with blanks.
+TEST_F(OrphanNoteTest, EmptyTextWithNoNoteOpenMakesNothing) {
+  app_->setNotesState(QStringLiteral("   \n  "));
+
+  EXPECT_EQ(app_->notes()->rowCount(), 0);
+}
+
+TEST_F(OrphanNoteTest, AdoptedTextKeepsBeingWrittenToTheSameNote) {
+  app_->setNotesState(QStringLiteral("first draft"));
+  const QString id = app_->activeNoteId();
+
+  app_->setNotesState(QStringLiteral("first draft, and more"));
+
+  EXPECT_EQ(app_->notes()->rowCount(), 1) << "one note, not one per save";
+  EXPECT_EQ(app_->noteBody(id), QStringLiteral("first draft, and more"));
+}
+
+TEST_F(OrphanNoteTest, QuickCaptureWithNoNoteOpenLandsInInbox) {
+  app_->appendNoteEntry(QStringLiteral("captured from anywhere"));
+
+  ASSERT_EQ(app_->notes()->rowCount(), 1);
+  const QString id = app_->activeNoteId();
+  EXPECT_EQ(titleOf(id), QStringLiteral("Inbox"));
+  EXPECT_TRUE(app_->noteBody(id).contains(QStringLiteral("captured from anywhere")));
+}
+
+// A second capture goes to the same Inbox rather than starting another.
+TEST_F(OrphanNoteTest, QuickCaptureReusesInbox) {
+  app_->appendNoteEntry(QStringLiteral("first capture"));
+  const QString inbox = app_->activeNoteId();
+  app_->setActiveNoteId(QString());
+
+  app_->appendNoteEntry(QStringLiteral("second capture"));
+
+  EXPECT_EQ(app_->notes()->rowCount(), 1);
+  EXPECT_TRUE(app_->noteBody(inbox).contains(QStringLiteral("first capture")));
+  EXPECT_TRUE(app_->noteBody(inbox).contains(QStringLiteral("second capture")));
+}
+
+// With a note open, capture still goes where it always went.
+TEST_F(OrphanNoteTest, QuickCaptureWithANoteOpenWritesThere) {
+  const QString open = app_->newNote(QStringLiteral("Standup"));
+
+  app_->appendNoteEntry(QStringLiteral("added to the open note"));
+
+  EXPECT_TRUE(app_->noteBody(open).contains(QStringLiteral("added to the open note")));
+  EXPECT_EQ(app_->notes()->rowCount(), 1);
+}
+
+// The second half of the report: "+" after writing erased what was written.
+TEST_F(OrphanNoteTest, PressingPlusAfterWritingKeepsWhatWasWritten) {
+  app_->setNotesState(QStringLiteral("written before pressing plus"));
+  const QString first = app_->activeNoteId();
+
+  const QString second = app_->newNote();
+
+  EXPECT_NE(first, second);
+  EXPECT_EQ(app_->notes()->rowCount(), 2);
+  EXPECT_EQ(app_->noteBody(first), QStringLiteral("written before pressing plus"));
+  EXPECT_EQ(app_->activeNoteId(), second);
+}
+
+// The race: "+" inside the editor's debounce window. The editor flushes on
+// aboutToChangeActiveNote, and whatever it writes then has to land in the note
+// being left — before this, it landed in the new note and the old one lost it.
+TEST_F(OrphanNoteTest, KeystrokesFlushedBeforeASwitchLandInTheNoteBeingLeft) {
+  const QString first = app_->newNote(QStringLiteral("First"));
+  QObject::connect(app_.get(), &AppController::aboutToChangeActiveNote, app_.get(), [this]() {
+    app_->setNotesState(QStringLiteral("late keystrokes"));
+  });
+
+  const QString second = app_->newNote(QStringLiteral("Second"));
+
+  EXPECT_EQ(app_->noteBody(first), QStringLiteral("late keystrokes"));
+  EXPECT_TRUE(app_->noteBody(second).startsWith(QStringLiteral("# Second")));
+}
+
+// Same race with no note open at all: the flush adopts the text into a note of
+// its own, and the switch then goes on to the new one.
+TEST_F(OrphanNoteTest, AFlushWithNoNoteOpenIsAdoptedBeforeTheSwitch) {
+  bool flushed = false;
+  QObject::connect(app_.get(), &AppController::aboutToChangeActiveNote, app_.get(), [this, &flushed]() {
+    if(!flushed) {
+      flushed = true;
+      app_->setNotesState(QStringLiteral("typed then plus, fast"));
+    }
+  });
+
+  const QString made = app_->newNote(QStringLiteral("New"));
+
+  EXPECT_EQ(app_->activeNoteId(), made);
+  EXPECT_FALSE(noteHolding(app_.get(), QStringLiteral("typed then plus, fast")).isEmpty());
+  EXPECT_NE(noteHolding(app_.get(), QStringLiteral("typed then plus, fast")), made);
+}
+
+TEST_F(OrphanNoteTest, SwitchingNotesAsksTheEditorToFlushFirst) {
+  const QString a = app_->newNote(QStringLiteral("A"));
+  const QString b = app_->newNote(QStringLiteral("B"));
+  QSignalSpy spy(app_.get(), &AppController::aboutToChangeActiveNote);
+
+  app_->setActiveNoteId(a);
+
+  EXPECT_EQ(spy.count(), 1);
+  EXPECT_NE(a, b);
+}
+
+TEST_F(OrphanNoteTest, DeletingANoteAsksTheEditorToFlushFirst) {
+  const QString a = app_->newNote(QStringLiteral("A"));
+  QSignalSpy spy(app_.get(), &AppController::aboutToChangeActiveNote);
+
+  app_->deleteNote(a);
+
+  EXPECT_GE(spy.count(), 1);
+}
+
+// Switching to the note already open is not a switch.
+TEST_F(OrphanNoteTest, ReopeningTheOpenNoteDoesNotFlush) {
+  const QString a = app_->newNote(QStringLiteral("A"));
+  QSignalSpy spy(app_.get(), &AppController::aboutToChangeActiveNote);
+
+  app_->setActiveNoteId(a);
+
+  EXPECT_EQ(spy.count(), 0);
+}
+
+// ── Through the disk ──
+//
+// The only test of "it is still there after a restart" that means anything:
+// save, throw the controller away, load a fresh one from the same file.
+
+TEST_F(OrphanNoteTest, TextTypedWithNoNoteOpenSurvivesARestart) {
+  const QString needle = QStringLiteral("orphan-restart-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces).left(8));
+  app_->setNotesState(needle);
+  app_->flushSave();
+  app_.reset();
+
+  AppController reloaded;
+
+  EXPECT_FALSE(noteHolding(&reloaded, needle).isEmpty()) << "typed text must be on disk, inside a note";
+}
+
+TEST_F(OrphanNoteTest, QuickCaptureSurvivesARestart) {
+  const QString needle = QStringLiteral("capture-restart-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces).left(8));
+  app_->appendNoteEntry(needle);
+  app_->flushSave();
+  app_.reset();
+
+  AppController reloaded;
+
+  EXPECT_FALSE(noteHolding(&reloaded, needle).isEmpty()) << "a captured note must be on disk, inside a note";
+}
+
+TEST_F(OrphanNoteTest, BothNotesSurviveARestartAfterPlus) {
+  const QString tag = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  const QString firstText = QStringLiteral("before-plus-%1").arg(tag);
+  const QString secondText = QStringLiteral("after-plus-%1").arg(tag);
+  app_->setNotesState(firstText);
+  app_->newNote();
+  app_->setNotesState(secondText);
+  app_->flushSave();
+  app_.reset();
+
+  AppController reloaded;
+
+  const QString first = noteHolding(&reloaded, firstText);
+  const QString second = noteHolding(&reloaded, secondText);
+  EXPECT_FALSE(first.isEmpty());
+  EXPECT_FALSE(second.isEmpty());
+  EXPECT_NE(first, second);
 }
 
 int main(int argc, char** argv) {

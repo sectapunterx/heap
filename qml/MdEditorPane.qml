@@ -26,9 +26,15 @@ Item {
 
     property bool _loading: false
     property bool _dirty: false
+    // The page the text field actually holds. Writes go here, never to
+    // `pageId`: by the time pageId has changed it names the page being opened,
+    // and writing the old text there is how "+" used to overwrite a new page
+    // with the previous one's unsaved draft — and lose it from the old page.
+    property string _loadedId: ""
 
     function load() {
         root._loading = true;
+        root._loadedId = root.pageId;
         area.text = root.pageId.length > 0 ? AppController.docPageBody(root.pageId) : "";
         root._loading = false;
         root._dirty = false;
@@ -37,13 +43,19 @@ Item {
     // Write now rather than in 250 ms. Called before anything that changes
     // which document is open, and on destruction.
     function flush() {
-        if (!root._dirty || root.pageId.length === 0) return;
         saveTimer.stop();
-        AppController.setDocPageBody(root.pageId, area.text);
+        if (!root._dirty || root._loadedId.length === 0) return;
+        AppController.setDocPageBody(root._loadedId, area.text);
         root._dirty = false;
     }
 
-    onPageIdChanged: root.load()
+    // Every way the open page changes — a click, "+", a new subpage, a delete —
+    // goes through here, so the flush does not depend on each caller
+    // remembering to do it first.
+    onPageIdChanged: {
+        root.flush();
+        root.load();
+    }
     Component.onCompleted: root.load()
     Component.onDestruction: root.flush()
 
@@ -70,8 +82,8 @@ Item {
         id: saveTimer
         interval: 250
         onTriggered: {
-            if (root.pageId.length === 0) return;
-            AppController.setDocPageBody(root.pageId, area.text);
+            if (root._loadedId.length === 0) return;
+            AppController.setDocPageBody(root._loadedId, area.text);
             root._dirty = false;
         }
     }

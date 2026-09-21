@@ -215,4 +215,23 @@ TestCase {
         ed.flush();
         verify(true);
     }
+
+    // "+" inside the debounce window used to write the previous page's draft
+    // into the page being opened, and lose it from the page it was typed in.
+    // Every change of pageId now flushes to the page the text field holds.
+    function test_changing_page_without_a_flush_keeps_the_draft_where_it_was_typed() {
+        const a = page("Draft A");
+        const b = page("Draft B");
+        AppController.setDocPageBody(a, "body A");
+        AppController.setDocPageBody(b, "body B");
+        const ed = makeEditor(a);
+        const area = findChild(ed, "docpage-text");
+
+        area.text = "unsaved draft for A";
+        ed.pageId = b;   // no explicit flush — the way "+" changes it
+
+        compare(AppController.docPageBody(a), "unsaved draft for A");
+        compare(AppController.docPageBody(b), "body B");
+        compare(area.text, "body B");
+    }
 }

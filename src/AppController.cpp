@@ -123,6 +123,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
+      {"notes.inbox", {"Inbox", "Входящие"}},
       {"docs.untitledPage", {"Untitled page", "Без названия"}},
       {"docs.undo.deletePage", {"Page deleted", "Страница удалена"}},
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
@@ -711,10 +712,39 @@ void AppController::setNotesState(const QString& v) {
   }
   m_notesState = v;
   // `notesState` IS the active note's body. Writing one without the other is
-  // how an edit would survive until the next profile switch and then vanish.
-  syncActiveNoteBody();
+  // how an edit would survive until the next profile switch and then vanish —
+  // and with no note open at all, until the next save.
+  if(m_notes.indexOfId(m_activeNoteId) < 0) {
+    adoptOrphanNotesState();
+  } else {
+    syncActiveNoteBody();
+  }
   emit notesStateChanged();
   scheduleSave();
+}
+
+QString AppController::createActiveNote(const QString& title) {
+  Note n;
+  n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  n.title = title.trimmed().isEmpty() ? tr_("notes.untitled") : title.trimmed();
+  n.created = QDateTime::currentDateTime();
+  n.updated = n.created;
+  n.body = m_notesState;
+  m_notes.upsert(n);
+  m_activeNoteId = n.id;
+  emit activeNoteChanged();
+  scheduleSave();
+  return n.id;
+}
+
+void AppController::adoptOrphanNotesState() {
+  if(m_notes.indexOfId(m_activeNoteId) >= 0 || m_notesState.trimmed().isEmpty()) {
+    return;
+  }
+  // Untitled rather than named after its first line: the text is adopted
+  // mid-typing, so the first line is whatever had been typed 250 ms in. The
+  // list shows an excerpt of the body under the title anyway.
+  createActiveNote(QString());
 }
 
 void AppController::syncActiveNoteBody() {
@@ -735,8 +765,16 @@ void AppController::setActiveNoteId(const QString& id) {
   if(id == m_activeNoteId) {
     return;
   }
-  // The note being left keeps what was typed into it. NotesView debounces its
-  // saves, so the last keystrokes are still only in `notesState` here.
+  // The editor flushes on this, while the note being left is still active, so
+  // its unsaved keystrokes land there and not in the note being opened. That
+  // flush may itself adopt orphaned text into a new note, which changes
+  // m_activeNoteId — hence the second check.
+  emit aboutToChangeActiveNote();
+  if(id == m_activeNoteId) {
+    return;
+  }
+  adoptOrphanNotesState();
+  // The note being left keeps what was typed into it.
   syncActiveNoteBody();
   m_activeNoteId = id;
   const int row = m_notes.indexOfId(id);
@@ -779,6 +817,13 @@ void AppController::renameNote(const QString& id, const QString& title) {
 }
 
 void AppController::deleteNote(const QString& id) {
+  if(m_notes.indexOfId(id) < 0) {
+    return;
+  }
+  // Unsaved keystrokes go into the note they were typed in before anything
+  // moves; if that is the note being deleted, they go with it, which is what
+  // deleting it means.
+  emit aboutToChangeActiveNote();
   const int row = m_notes.indexOfId(id);
   if(row < 0) {
     return;
@@ -869,6 +914,28 @@ void AppController::appendNoteEntry(const QString& text) {
   const QString body = text.trimmed();
   if(body.isEmpty()) {
     return;
+  }
+  // Quick capture with no note open goes to Inbox, found or made. It used to
+  // write into `notesState` with no note behind it, where it was shown in the
+  // editor, listed nowhere, and dropped on the next save.
+  adoptOrphanNotesState();
+  if(m_notes.indexOfId(m_activeNoteId) < 0) {
+    const QString inbox = tr_("notes.inbox");
+    QString found;
+    for(const Note& n : m_notes.items()) {
+      if(n.folder.isEmpty() && n.title.compare(inbox, Qt::CaseInsensitive) == 0) {
+        found = n.id;
+        break;
+      }
+    }
+    if(found.isEmpty()) {
+      m_notesState.clear();
+      createActiveNote(inbox);
+    } else {
+      m_activeNoteId = found;
+      m_notesState = m_notes.items().at(m_notes.indexOfId(found)).body;
+      emit activeNoteChanged();
+    }
   }
   const QString stamp = QDateTime::currentDateTime().toString("yyyy-MM-dd HH:mm");
   QString next;
@@ -4989,6 +5056,9 @@ void AppController::snapshotActiveProfile() {
   p.people = m_people.items();
   p.statuses = m_statuses;
   p.docsState = m_docsState;
+  // The last line of defence for the invariant: whatever reaches disk has to
+  // be in `notes`, because the bare `notesState` is not written any more.
+  adoptOrphanNotesState();
   syncActiveNoteBody();
   p.notesState = m_notesState;
   p.notes = m_notes.items();
@@ -5483,6 +5553,8 @@ void AppController::setActiveProfileId(const QString& id) {
     return;
   }
   clearSelection();
+  // The notes editor's unsaved keystrokes belong to this profile's note.
+  emit aboutToChangeActiveNote();
   snapshotActiveProfile();
   m_activeProfileId = id;
   applyProfileToModels(m_profiles[next]);
