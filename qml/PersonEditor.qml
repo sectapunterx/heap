@@ -54,12 +54,25 @@ Popup {
             if (swatches[k].toLowerCase() === cur) { i = k; break; }
         colorSwatch.selectedIndex = i;
         open();
+        // Someone picked in PersonPicker arrives with their name, role and id
+        // already filled in from the contact — the only thing left to type is
+        // what you need from them.
+        if ((draft.name || "").length > 0)
+            questionField.forceActiveFocus();
+        else
+            nameField.forceActiveFocus();
     }
 
     // Shared by the Save button and the Ctrl+Return shortcut.
     function _save() {
         const d = {
             _isNew: root.isNew,
+            // Carried through from PersonPicker: which Docs contact this
+            // person came from, or that a contact should be created for them.
+            // savePerson() reads both — dropping them here would leave the
+            // rail and Docs unlinked.
+            _contactKey: root.draft._contactKey || "",
+            _createContact: !!root.draft._createContact,
             // Prefer the explicit idField value; fall back to the
             // auto-suggested slug when the user left it blank.
             id: (idField.text || "").trim().length > 0
@@ -174,7 +187,13 @@ Popup {
                 ComboBox {
                     id: stateBox
                     Layout.fillWidth: true
-                    model: [I18n.t("editor.person.state.todo"), I18n.t("editor.person.state.pinged"), I18n.t("editor.person.state.replied")]
+                    // One entry per `root.states`, in the same order: _save()
+                    // indexes one by the other, so a three-item model against
+                    // four states saved "pinged" when the user picked
+                    // "answered". "no action needed" also belongs here — it is
+                    // how someone leaves the People rail without being deleted.
+                    model: [I18n.t("editor.person.state.idle"), I18n.t("editor.person.state.todo"),
+                            I18n.t("editor.person.state.pinged"), I18n.t("editor.person.state.replied")]
                     background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                     contentItem: Text { text: stateBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
                 }

@@ -349,6 +349,8 @@ AppController::AppController(QObject* parent) :
   m_saveTimer->setInterval(300);
   connect(m_saveTimer, &QTimer::timeout, this, &AppController::saveStateNow);
 
+  m_activePeople.setSourceModel(&m_people);
+
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
 
@@ -2504,22 +2506,210 @@ void AppController::savePerson(const QVariantMap& draft) {
     return;
   }
   m_people.upsert(p);
+  // Keep Docs and the rail pointing at each other. A Person picked out of a
+  // contact gets that contact's `personId` (so the next pick, and the next
+  // Mattermost sync, reuse this Person instead of making a second one); a
+  // Person created through "add contact" gets a contact of its own, so it is
+  // searchable next time.
+  if(draft.value("_createContact").toBool()) {
+    appendDocsContact(p);
+  } else {
+    linkDocsContact(draft.value("_contactKey").toString(), p.id);
+  }
   if(isNew) {
     emit toast(tr_("person.added").arg(p.name));
   }
   scheduleSave();
 }
 
-QString AppController::suggestPersonId(const QString& name, const QString& exceptId) const {
-  QString base = heap::text::slugifyPersonName(name);
+QString AppController::docsContactKey(const QJsonObject& contact) {
+  const QString ext = contact.value(QStringLiteral("mmId")).toString();
+  if(!ext.isEmpty()) {
+    return QStringLiteral("mm:") + ext;
+  }
+  QString handle = contact.value(QStringLiteral("mattermost")).toString().trimmed();
+  while(handle.startsWith(QLatin1Char('@'))) {
+    handle.remove(0, 1);
+  }
+  if(!handle.isEmpty()) {
+    return QStringLiteral("at:") + handle.toLower();
+  }
+  return QStringLiteral("name:") + contact.value(QStringLiteral("name")).toString().trimmed().toLower();
+}
+
+QVariantList AppController::pingCandidates() const {
+  QVariantList out;
+  // personId → the row in `out` that already represents that human, so a
+  // contact and the Person it was imported into are offered once.
+  QHash<QString, int> byPerson;
+
+  const QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  const QJsonArray contacts = docs.value(QStringLiteral("contacts")).toArray();
+  for(const QJsonValue& v : contacts) {
+    const QJsonObject c = v.toObject();
+    const QString name = c.value(QStringLiteral("name")).toString().trimmed();
+    if(name.isEmpty()) {
+      continue;
+    }
+    // A contact may point at a Person that has since been deleted; treat that
+    // link as absent rather than offering a row that cannot be opened.
+    QString personId = c.value(QStringLiteral("personId")).toString();
+    if(!personId.isEmpty() && m_people.indexOfId(personId) < 0) {
+      personId.clear();
+    }
+    QVariantMap m;
+    m[QStringLiteral("contactKey")] = docsContactKey(c);
+    m[QStringLiteral("personId")] = personId;
+    m[QStringLiteral("name")] = name;
+    m[QStringLiteral("role")] = c.value(QStringLiteral("role")).toString();
+    m[QStringLiteral("handle")] = c.value(QStringLiteral("mattermost")).toString();
+    m[QStringLiteral("channel")] = c.value(QStringLiteral("channel")).toString();
+    m[QStringLiteral("color")] = c.value(QStringLiteral("color")).toString();
+    m[QStringLiteral("source")] = c.value(QStringLiteral("source")).toString();
+    m[QStringLiteral("state")] = QString();
+    m[QStringLiteral("active")] = false;
+    if(!personId.isEmpty()) {
+      const QModelIndex mi = m_people.index(m_people.indexOfId(personId), 0);
+      const QString state = m_people.data(mi, PersonModel::StateRole).toString();
+      m[QStringLiteral("state")] = state;
+      m[QStringLiteral("active")] = state != QLatin1String("idle");
+      byPerson.insert(personId, static_cast<int>(out.size()));
+    }
+    m[QStringLiteral("key")] = personId.isEmpty() ? m.value(QStringLiteral("contactKey")).toString() : QStringLiteral("p:") + personId;
+    out.append(m);
+  }
+
+  // People with no contact behind them — typed straight into the rail, or
+  // created by an import whose contact the user has since deleted.
+  for(const Person& p : m_people.items()) {
+    if(byPerson.contains(p.id)) {
+      continue;
+    }
+    QVariantMap m;
+    m[QStringLiteral("key")] = QStringLiteral("p:") + p.id;
+    m[QStringLiteral("contactKey")] = QString();
+    m[QStringLiteral("personId")] = p.id;
+    m[QStringLiteral("name")] = p.name;
+    m[QStringLiteral("role")] = p.role;
+    m[QStringLiteral("handle")] = QLatin1Char('@') + p.id;
+    m[QStringLiteral("channel")] = QString();
+    m[QStringLiteral("color")] = p.color.name();
+    m[QStringLiteral("source")] = QString();
+    m[QStringLiteral("state")] = p.state;
+    m[QStringLiteral("active")] = p.state != QLatin1String("idle");
+    out.append(m);
+  }
+  return out;
+}
+
+QVariantMap AppController::pingDraftFor(const QVariantMap& candidate) const {
+  const QString personId = candidate.value(QStringLiteral("personId")).toString();
+  if(!personId.isEmpty() && m_people.indexOfId(personId) >= 0) {
+    QVariantMap draft = personById(personId);
+    // Picking someone off the list is the act of putting them on it. Someone
+    // already on it keeps the state they are in — reopening a "pinged" row
+    // from the picker must not quietly walk it back to "to write".
+    if(draft.value(QStringLiteral("state")).toString() == QLatin1String("idle")) {
+      draft[QStringLiteral("state")] = QStringLiteral("todo");
+    }
+    return draft;
+  }
+
+  QVariantMap draft = newPersonDraft();
+  const QString name = candidate.value(QStringLiteral("name")).toString().trimmed();
+  draft[QStringLiteral("name")] = name;
+  draft[QStringLiteral("role")] = candidate.value(QStringLiteral("role")).toString();
+  // The handle is the id people already @-mention this person by; a slug of
+  // the display name would not match it. Same reasoning as
+  // upsertImportedPerson().
+  QString handle = candidate.value(QStringLiteral("handle")).toString().trimmed();
+  while(handle.startsWith(QLatin1Char('@'))) {
+    handle.remove(0, 1);
+  }
+  static const QRegularExpression kUnsafe(QStringLiteral("[^a-z0-9._-]"));
+  handle = handle.toLower().replace(kUnsafe, QString());
+  // uniquePersonId, not suggestPersonId: slugifyPersonName drops the dots and
+  // dashes a handle is made of, so "olga.t" would become "olgat" and stop
+  // matching the @-mention people actually type. Same reasoning as
+  // upsertImportedPerson().
+  draft[QStringLiteral("id")] = handle.isEmpty() ? suggestPersonId(name) : uniquePersonId(handle);
+  const QColor c(candidate.value(QStringLiteral("color")).toString());
+  if(c.isValid()) {
+    draft[QStringLiteral("color")] = c;
+  }
+  // savePerson() links the contact to whatever id the editor ends up saving.
+  draft[QStringLiteral("_contactKey")] = candidate.value(QStringLiteral("contactKey"));
+  return draft;
+}
+
+QVariantMap AppController::newContactDraft(const QString& name) const {
+  QVariantMap draft = newPersonDraft();
+  draft[QStringLiteral("name")] = name.trimmed();
+  draft[QStringLiteral("id")] = suggestPersonId(name);
+  draft[QStringLiteral("_createContact")] = true;
+  return draft;
+}
+
+void AppController::linkDocsContact(const QString& contactKey, const QString& personId) {
+  if(contactKey.isEmpty() || personId.isEmpty()) {
+    return;
+  }
+  QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  for(int i = 0; i < list.size(); ++i) {
+    QJsonObject c = list.at(i).toObject();
+    if(docsContactKey(c) != contactKey) {
+      continue;
+    }
+    if(c.value(QStringLiteral("personId")).toString() == personId) {
+      return;
+    }
+    c.insert(QStringLiteral("personId"), personId);
+    list.replace(i, c);
+    docs.insert(QStringLiteral("contacts"), list);
+    setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
+    scheduleSave();
+    return;
+  }
+}
+
+void AppController::appendDocsContact(const Person& p) {
+  QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  for(const QJsonValue& v : list) {
+    if(v.toObject().value(QStringLiteral("personId")).toString() == p.id) {
+      return;
+    }
+  }
+  QJsonObject c;
+  c.insert(QStringLiteral("name"), p.name);
+  c.insert(QStringLiteral("role"), p.role);
+  c.insert(QStringLiteral("mattermost"), QLatin1Char('@') + p.id);
+  c.insert(QStringLiteral("channel"), QString());
+  c.insert(QStringLiteral("color"), p.color.name());
+  c.insert(QStringLiteral("personId"), p.id);
+  // Append only, for the reason mergeExternalContacts() gives: DocsView
+  // renders this array by index.
+  list.append(c);
+  docs.insert(QStringLiteral("contacts"), list);
+  setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
+  scheduleSave();
+}
+
+QString AppController::uniquePersonId(const QString& base, const QString& exceptId) const {
   if(base.isEmpty()) {
     return QString();
   }
   // Collision check against every Person across every profile so that ids
-  // remain globally unique (even though models are per-profile).
+  // remain globally unique (even though models are per-profile). The live
+  // model is checked too: m_profiles holds the snapshot taken at the last
+  // profile switch, so a Person added since is not in it.
   auto inUse = [this, &exceptId](const QString& candidate) {
     if(candidate == exceptId) {
       return false;
+    }
+    if(m_people.indexOfId(candidate) >= 0) {
+      return true;
     }
     for(const Profile& pr : m_profiles) {
       for(const Person& pe : pr.people) {
@@ -2540,6 +2730,10 @@ QString AppController::suggestPersonId(const QString& name, const QString& excep
     }
   }
   return base;  // last-resort, caller already guarded against empty
+}
+
+QString AppController::suggestPersonId(const QString& name, const QString& exceptId) const {
+  return uniquePersonId(heap::text::slugifyPersonName(name), exceptId);
 }
 
 void AppController::deletePerson(const QString& id) {

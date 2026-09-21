@@ -2575,6 +2575,164 @@ TEST_F(ContactMergeTest, TheSameColourComesBackAcrossRuns) {
   EXPECT_EQ(contactNamed(QStringLiteral("Olga")).value(QStringLiteral("color")).toString(), first);
 }
 
+// ── People picker (the rail's "+") ───────────────────────────────────────
+//
+// The rail is a to-do list now: it shows only the people something is pending
+// on, and adding to it goes through a search over everyone already known.
+// These cover the fold — one row per human across Docs contacts and People —
+// and the link written back so the two never drift into duplicates.
+class PeoplePickerTest : public AppControllerTest {
+ protected:
+  void SetUp() override {
+    AppControllerTest::SetUp();
+    app_->setDocsState(QString());
+    app_->people()->reset({});
+  }
+
+  QVariantMap candidateNamed(const QString& name) const {
+    const QVariantList list = app_->pingCandidates();
+    for(const QVariant& v : list) {
+      const QVariantMap m = v.toMap();
+      if(m.value(QStringLiteral("name")).toString() == name) {
+        return m;
+      }
+    }
+    return {};
+  }
+
+  QJsonArray contacts() const {
+    return QJsonDocument::fromJson(app_->docsState().toUtf8()).object().value(QStringLiteral("contacts")).toArray();
+  }
+};
+
+TEST_F(PeoplePickerTest, TheRailHidesIdlePeopleAndTheCandidateListDoesNot) {
+  Person todo;
+  todo.id = QStringLiteral("ada");
+  todo.name = QStringLiteral("Ada");
+  todo.state = QStringLiteral("todo");
+  Person imported;
+  imported.id = QStringLiteral("olga.t");
+  imported.name = QStringLiteral("Olga");
+  imported.state = QStringLiteral("idle");
+  app_->people()->reset({todo, imported});
+
+  EXPECT_EQ(app_->people()->rowCount(), 2);
+  EXPECT_EQ(app_->activePeople()->rowCount(), 1);
+  EXPECT_EQ(app_->activePeople()->index(0, 0).data(PersonModel::IdRole).toString(), QStringLiteral("ada"));
+  // The idle one is not lost — it is exactly who the picker is for.
+  EXPECT_EQ(app_->pingCandidates().size(), 2);
+  EXPECT_FALSE(candidateNamed(QStringLiteral("Olga")).value(QStringLiteral("active")).toBool());
+  EXPECT_TRUE(candidateNamed(QStringLiteral("Ada")).value(QStringLiteral("active")).toBool());
+}
+
+TEST_F(PeoplePickerTest, TheRailFollowsAStateChangeInBothDirections) {
+  Person p;
+  p.id = QStringLiteral("ada");
+  p.name = QStringLiteral("Ada");
+  p.state = QStringLiteral("idle");
+  app_->people()->reset({p});
+  EXPECT_EQ(app_->activePeople()->rowCount(), 0);
+
+  app_->setPersonState(QStringLiteral("ada"), QStringLiteral("todo"));
+  EXPECT_EQ(app_->activePeople()->rowCount(), 1);
+
+  // …and the last hop of the cycle (replied → idle) takes them back off it,
+  // which is how the rail empties without deleting anybody.
+  app_->setPersonState(QStringLiteral("ada"), QStringLiteral("replied"));
+  EXPECT_EQ(app_->activePeople()->rowCount(), 1);
+  app_->cyclePerson(QStringLiteral("ada"));
+  EXPECT_EQ(app_->activePeople()->rowCount(), 0);
+  EXPECT_EQ(app_->people()->rowCount(), 1);
+}
+
+TEST_F(PeoplePickerTest, AContactAndThePersonItImportedAreOneCandidate) {
+  Person p;
+  p.id = QStringLiteral("olga.t");
+  p.name = QStringLiteral("Olga Titova");
+  p.state = QStringLiteral("idle");
+  app_->people()->reset({p});
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Olga Titova","role":"Tech Lead",)"
+                                    R"("mattermost":"@olga.t","personId":"olga.t"}]})"));
+
+  const QVariantList list = app_->pingCandidates();
+  ASSERT_EQ(list.size(), 1);
+  const QVariantMap m = list.first().toMap();
+  EXPECT_EQ(m.value(QStringLiteral("personId")).toString(), QStringLiteral("olga.t"));
+  EXPECT_EQ(m.value(QStringLiteral("role")).toString(), QStringLiteral("Tech Lead"));
+  EXPECT_EQ(m.value(QStringLiteral("state")).toString(), QStringLiteral("idle"));
+}
+
+TEST_F(PeoplePickerTest, AContactWhosePersonWasDeletedIsOfferedAsANewOne) {
+  // A handle of its own: ids are unique across every profile, and this suite
+  // shares one test-mode state.json, so a name another case saved would come
+  // back here as "…-2".
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Nina Kaur","mattermost":"@nina.k","personId":"gone"}]})"));
+  const QVariantMap m = candidateNamed(QStringLiteral("Nina Kaur"));
+  EXPECT_TRUE(m.value(QStringLiteral("personId")).toString().isEmpty());
+
+  const QVariantMap draft = app_->pingDraftFor(m);
+  EXPECT_TRUE(draft.value(QStringLiteral("_isNew")).toBool());
+  // The id is the handle people already @-mention, not a slug of the name.
+  EXPECT_EQ(draft.value(QStringLiteral("id")).toString(), QStringLiteral("nina.k"));
+}
+
+TEST_F(PeoplePickerTest, PickingAContactCreatesThePersonAndLinksThemBack) {
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Olga Titova","role":"Tech Lead","mattermost":"@olga.t"}]})"));
+  QVariantMap draft = app_->pingDraftFor(candidateNamed(QStringLiteral("Olga Titova")));
+  EXPECT_EQ(draft.value(QStringLiteral("state")).toString(), QStringLiteral("todo"));
+  draft[QStringLiteral("question")] = QStringLiteral("release cut?");
+  app_->savePerson(draft);
+
+  ASSERT_EQ(app_->people()->rowCount(), 1);
+  EXPECT_EQ(app_->activePeople()->rowCount(), 1);
+  ASSERT_EQ(contacts().size(), 1);
+  EXPECT_EQ(contacts().first().toObject().value(QStringLiteral("personId")).toString(), QStringLiteral("olga.t"));
+
+  // Second time round the same contact resolves to that Person instead of
+  // making a duplicate.
+  EXPECT_EQ(app_->pingCandidates().size(), 1);
+  const QVariantMap again = app_->pingDraftFor(candidateNamed(QStringLiteral("Olga Titova")));
+  EXPECT_FALSE(again.value(QStringLiteral("_isNew")).toBool());
+  EXPECT_EQ(again.value(QStringLiteral("question")).toString(), QStringLiteral("release cut?"));
+}
+
+TEST_F(PeoplePickerTest, PickingSomeoneAlreadyOnTheRailKeepsTheirState) {
+  Person p;
+  p.id = QStringLiteral("ada");
+  p.name = QStringLiteral("Ada");
+  p.state = QStringLiteral("pinged");
+  app_->people()->reset({p});
+  const QVariantMap draft = app_->pingDraftFor(candidateNamed(QStringLiteral("Ada")));
+  EXPECT_EQ(draft.value(QStringLiteral("state")).toString(), QStringLiteral("pinged"));
+}
+
+TEST_F(PeoplePickerTest, CreatingAContactFromThePickerWritesBothSides) {
+  QVariantMap draft = app_->newContactDraft(QStringLiteral("Ivan Petrov"));
+  EXPECT_EQ(draft.value(QStringLiteral("name")).toString(), QStringLiteral("Ivan Petrov"));
+  app_->savePerson(draft);
+
+  ASSERT_EQ(app_->people()->rowCount(), 1);
+  EXPECT_EQ(app_->activePeople()->rowCount(), 1);
+  ASSERT_EQ(contacts().size(), 1);
+  const QJsonObject c = contacts().first().toObject();
+  EXPECT_EQ(c.value(QStringLiteral("name")).toString(), QStringLiteral("Ivan Petrov"));
+  EXPECT_EQ(c.value(QStringLiteral("personId")).toString(), QStringLiteral("i.petrov"));
+  // One row per human: the new contact and its Person do not both show up.
+  EXPECT_EQ(app_->pingCandidates().size(), 1);
+}
+
+TEST_F(PeoplePickerTest, AnOrdinaryEditNeitherCreatesNorLinksAContact) {
+  Person p;
+  p.id = QStringLiteral("ada");
+  p.name = QStringLiteral("Ada");
+  p.state = QStringLiteral("todo");
+  app_->people()->reset({p});
+  QVariantMap draft = app_->personById(QStringLiteral("ada"));
+  draft[QStringLiteral("question")] = QStringLiteral("ping about CI");
+  app_->savePerson(draft);
+  EXPECT_TRUE(contacts().isEmpty());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

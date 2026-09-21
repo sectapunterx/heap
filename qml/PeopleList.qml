@@ -9,7 +9,7 @@ Rectangle {
     color: Theme.panel2
 
     signal personRequested(string id)
-    signal newPersonRequested()
+    signal pickPersonRequested()
 
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
@@ -40,17 +40,17 @@ Rectangle {
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount())
+                    text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
                 }
                 Connections {
-                    target: AppController.people
-                    function onDataChanged()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
-                    function onRowsInserted()   { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
-                    function onRowsRemoved()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
-                    function onModelReset()     { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.people.rowCount()) }
+                    target: AppController.activePeople
+                    function onDataChanged()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
+                    function onRowsInserted()   { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
+                    function onRowsRemoved()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
+                    function onModelReset()     { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
                 }
             }
             Item { Layout.fillWidth: true }
@@ -68,7 +68,7 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.newPersonRequested()
+                    onClicked: root.pickPersonRequested()
                     ToolTip.visible: containsMouse
                     ToolTip.delay: 400
                     ToolTip.text: I18n.t("people.tip.add")
@@ -82,10 +82,14 @@ Rectangle {
             Layout.fillHeight: true
             clip: true
             spacing: 6
-            model: AppController.people
+            // Not `people`: the rail carries the people something is pending
+            // on, and a Mattermost sync imports every colleague ever DM'd as
+            // "idle". See ActivePeopleModel.
+            model: AppController.activePeople
             boundsBehavior: Flickable.StopAtBounds
 
-            // Empty state — the string existed in I18n but was never rendered.
+            // Empty is the resting state now, not an unfinished setup: the rail
+            // is only ever as long as what is actually outstanding.
             Text {
                 anchors.centerIn: parent
                 width: parent.width - 32
@@ -137,6 +141,9 @@ Rectangle {
                     id: personMenu
                     QQC.MenuItem { text: I18n.t("people.menu.edit"); onTriggered: root.personRequested(prow.id) }
                     QQC.MenuItem { text: I18n.t("people.menu.cycle"); onTriggered: AppController.cyclePerson(prow.id) }
+                    // Off the rail without losing the person: they stay in
+                    // contacts, @-autocomplete and the picker.
+                    QQC.MenuItem { text: I18n.t("people.menu.dismiss"); onTriggered: AppController.setPersonState(prow.id, "idle") }
                     QQC.MenuSeparator {}
                     QQC.MenuItem { text: I18n.t("people.menu.delete"); onTriggered: AppController.deletePerson(prow.id) }
                 }
