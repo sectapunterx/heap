@@ -21,6 +21,8 @@ Rectangle {
     signal importJsonRequested()
     signal exportIcsRequested()
     signal importIcsRequested()
+    signal exportVaultRequested()
+    signal importVaultRequested()
 
     function focusSearch() {
         searchField.forceActiveFocus();
@@ -172,6 +174,13 @@ Rectangle {
                     }
                     QQC.MenuItem {
                         text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested()
+                    }
+                    QQC.MenuSeparator {}
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.notes.import"); onTriggered: root.importVaultRequested()
+                    }
+                    QQC.MenuItem {
+                        text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested()
                     }
                 }
             }

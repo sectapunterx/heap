@@ -24,6 +24,7 @@
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
 #include "markdown/MdOutline.h"
+#include "notes/MdVault.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
 #include "platform/GlobalHotkey.h"
@@ -121,6 +122,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
+      {"notes.vault.badFolder", {"That folder could not be opened.", "Не удалось открыть папку."}},
+      {"notes.vault.unreadable", {"Could not read %1", "Не удалось прочитать %1"}},
       {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
       {"undo.importIcs", {"Calendar imported", "Календарь импортирован"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
@@ -1794,6 +1797,154 @@ bool AppController::exportIcsToFile(const QUrl& fileUrl) const {
   }
   f.write(doc.toUtf8());
   return f.commit();
+}
+
+namespace {
+
+// Every .md under `root`, as paths relative to it. Depth-limited: a vault that
+// contains a symlink to its own parent is otherwise a walk that does not end.
+constexpr int kMaxVaultDepth = 12;
+constexpr int kMaxVaultFiles = 20000;
+
+void collectMarkdown(const QDir& root, const QString& prefix, int depth, QStringList& out) {
+  if(depth > kMaxVaultDepth || out.size() >= kMaxVaultFiles) {
+    return;
+  }
+  const QFileInfoList entries = root.entryInfoList(QDir::Files | QDir::Dirs | QDir::NoDotAndDotDot);
+  for(const QFileInfo& info : entries) {
+    const QString rel = prefix.isEmpty() ? info.fileName() : prefix + QLatin1Char('/') + info.fileName();
+    if(heap::notes::isIgnoredPath(rel)) {
+      continue;
+    }
+    if(info.isDir()) {
+      // Not through a symlink: a vault synced from elsewhere may well contain
+      // one pointing back at a parent.
+      if(info.isSymLink()) {
+        continue;
+      }
+      collectMarkdown(QDir(info.absoluteFilePath()), rel, depth + 1, out);
+    } else if(info.suffix().compare(QLatin1String("md"), Qt::CaseInsensitive) == 0 ||
+              info.suffix().compare(QLatin1String("markdown"), Qt::CaseInsensitive) == 0) {
+      out << rel;
+    }
+  }
+}
+
+}  // namespace
+
+QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
+  QVariantMap out;
+  out["imported"] = 0;
+  out["updated"] = 0;
+  out["skipped"] = 0;
+  out["warnings"] = QStringList();
+
+  const QString path = folderUrl.isLocalFile() ? folderUrl.toLocalFile() : folderUrl.toString();
+  const QDir root(path);
+  if(path.isEmpty() || !root.exists()) {
+    out["error"] = tr_("notes.vault.badFolder");
+    return out;
+  }
+
+  QStringList relatives;
+  collectMarkdown(root, QString(), 0, relatives);
+  relatives.sort();
+
+  QStringList warnings;
+  int imported = 0;
+  int updated = 0;
+  int skipped = 0;
+
+  // Matching on folder-and-title rather than on a generated id: the whole point
+  // of a vault is that it is edited elsewhere, and a second import of the same
+  // folder has to update the notes it brought in the first time rather than
+  // doubling them.
+  QHash<QString, QString> byKey;
+  for(const Note& n : m_notes.items()) {
+    byKey.insert(n.folder + QLatin1Char('/') + n.title.toLower(), n.id);
+  }
+
+  for(const QString& rel : relatives) {
+    QFile f(root.filePath(rel));
+    if(!f.open(QIODevice::ReadOnly)) {
+      skipped++;
+      warnings << tr_("notes.vault.unreadable").arg(rel);
+      continue;
+    }
+    const QByteArray bytes = f.readAll();
+    f.close();
+
+    Note n = heap::notes::importFile(rel, QString::fromUtf8(bytes));
+    const QString key = n.folder + QLatin1Char('/') + n.title.toLower();
+    const auto existing = byKey.constFind(key);
+    if(existing != byKey.constEnd()) {
+      n.id = existing.value();
+      updated++;
+    } else {
+      n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+      byKey.insert(key, n.id);
+      imported++;
+    }
+    m_notes.upsert(n);
+  }
+
+  if(imported > 0 || updated > 0) {
+    // The open note may have just been rewritten from disk.
+    const int row = m_notes.indexOfId(m_activeNoteId);
+    if(row >= 0) {
+      m_notesState = m_notes.items().at(row).body;
+      emit notesStateChanged();
+    } else if(!m_notes.items().isEmpty() && m_activeNoteId.isEmpty()) {
+      m_activeNoteId = m_notes.items().first().id;
+      m_notesState = m_notes.items().first().body;
+      emit activeNoteChanged();
+      emit notesStateChanged();
+    }
+    scheduleSave();
+  }
+
+  out["imported"] = imported;
+  out["updated"] = updated;
+  out["skipped"] = skipped;
+  out["warnings"] = warnings;
+  return out;
+}
+
+QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl) const {
+  QVariantMap out;
+  out["written"] = 0;
+  out["skipped"] = 0;
+
+  const QString path = folderUrl.isLocalFile() ? folderUrl.toLocalFile() : folderUrl.toString();
+  const QDir root(path);
+  if(path.isEmpty() || !root.exists()) {
+    out["error"] = tr_("notes.vault.badFolder");
+    return out;
+  }
+
+  int written = 0;
+  int skipped = 0;
+  for(const heap::notes::VaultFile& file : heap::notes::exportVault(m_notes.items())) {
+    const QString full = root.filePath(file.path);
+    QDir().mkpath(QFileInfo(full).absolutePath());
+    // QSaveFile, like every other write in this app: a half-written note is
+    // worse than one that was not exported.
+    QSaveFile f(full);
+    if(!f.open(QIODevice::WriteOnly)) {
+      skipped++;
+      continue;
+    }
+    f.write(file.contents.toUtf8());
+    if(f.commit()) {
+      written++;
+    } else {
+      skipped++;
+    }
+  }
+
+  out["written"] = written;
+  out["skipped"] = skipped;
+  return out;
 }
 
 QString AppController::scheduledLabelFor(const QString& taskId, const QDate& date) const {

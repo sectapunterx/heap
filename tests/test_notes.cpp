@@ -13,11 +13,15 @@
 #include "notes/NoteLinks.h"
 
 #include <QApplication>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QString>
 #include <QTemporaryDir>
+#include <QUrl>
 
 #include <gtest/gtest.h>
 
@@ -486,6 +490,147 @@ TEST_F(NotesTest, TheExcerptSkipsTheHeading) {
 
   EXPECT_NE(excerpt, QStringLiteral("Title"));
   EXPECT_FALSE(excerpt.startsWith(QLatin1Char('#')));
+}
+
+// ─── Notes as a folder of .md files ──────────────────────────────────
+//
+// MdVault.h covers the naming and the frontmatter without a filesystem; these
+// go through the disk, because the parts that break there are the walk and the
+// second import.
+
+class NotesVaultTest : public ::testing::Test {
+ protected:
+  void SetUp() override {
+    app_ = std::make_unique<AppController>();
+    app_->notes()->reset({});
+    ASSERT_TRUE(dir_.isValid());
+  }
+
+  void TearDown() override {
+    app_.reset();
+  }
+
+  QUrl vaultUrl() const {
+    return QUrl::fromLocalFile(dir_.path());
+  }
+
+  void writeFile(const QString& relative, const QString& contents) const {
+    const QString full = dir_.path() + QLatin1Char('/') + relative;
+    QDir().mkpath(QFileInfo(full).absolutePath());
+    QFile f(full);
+    ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+    f.write(contents.toUtf8());
+  }
+
+  QTemporaryDir dir_;
+  std::unique_ptr<AppController> app_;
+};
+
+TEST_F(NotesVaultTest, AFolderOfMarkdownBecomesNotes) {
+  writeFile(QStringLiteral("Standup.md"), QStringLiteral("body one"));
+  writeFile(QStringLiteral("meetings/Retro.md"), QStringLiteral("body two"));
+
+  const QVariantMap r = app_->importNotesFolder(vaultUrl());
+
+  EXPECT_EQ(r.value(QStringLiteral("imported")).toInt(), 2);
+  EXPECT_EQ(app_->notes()->rowCount(), 2);
+}
+
+TEST_F(NotesVaultTest, ADirectoryBecomesAFolder) {
+  writeFile(QStringLiteral("meetings/2026/Retro.md"), QStringLiteral("body"));
+
+  app_->importNotesFolder(vaultUrl());
+
+  ASSERT_EQ(app_->notes()->rowCount(), 1);
+  EXPECT_EQ(app_->notes()->items().at(0).folder, QStringLiteral("meetings/2026"));
+}
+
+// A vault is edited elsewhere, so importing it again is the normal case — and
+// it has to update rather than double every note.
+TEST_F(NotesVaultTest, ImportingTheSameVaultTwiceUpdatesRatherThanDoubles) {
+  writeFile(QStringLiteral("Standup.md"), QStringLiteral("first"));
+  app_->importNotesFolder(vaultUrl());
+
+  writeFile(QStringLiteral("Standup.md"), QStringLiteral("second"));
+  const QVariantMap r = app_->importNotesFolder(vaultUrl());
+
+  EXPECT_EQ(app_->notes()->rowCount(), 1);
+  EXPECT_EQ(r.value(QStringLiteral("updated")).toInt(), 1);
+  EXPECT_EQ(app_->notes()->items().at(0).body, QStringLiteral("second"));
+}
+
+// Obsidian keeps its settings in .obsidian and its deletions in .trash.
+TEST_F(NotesVaultTest, ObsidiansOwnDirectoriesAreNotImported) {
+  writeFile(QStringLiteral("Real.md"), QStringLiteral("body"));
+  writeFile(QStringLiteral(".obsidian/workspace.md"), QStringLiteral("config"));
+  writeFile(QStringLiteral(".trash/Deleted.md"), QStringLiteral("gone"));
+
+  app_->importNotesFolder(vaultUrl());
+
+  ASSERT_EQ(app_->notes()->rowCount(), 1);
+  EXPECT_EQ(app_->notes()->items().at(0).title, QStringLiteral("Real"));
+}
+
+TEST_F(NotesVaultTest, NonMarkdownFilesAreNotImported) {
+  writeFile(QStringLiteral("Real.md"), QStringLiteral("body"));
+  writeFile(QStringLiteral("image.png"), QStringLiteral("not markdown"));
+  writeFile(QStringLiteral("notes.txt"), QStringLiteral("also not"));
+
+  app_->importNotesFolder(vaultUrl());
+
+  EXPECT_EQ(app_->notes()->rowCount(), 1);
+}
+
+TEST_F(NotesVaultTest, AMissingFolderIsReportedRatherThanCrashing) {
+  const QVariantMap r = app_->importNotesFolder(QUrl::fromLocalFile(dir_.path() + QStringLiteral("/nope")));
+
+  EXPECT_FALSE(r.value(QStringLiteral("error")).toString().isEmpty());
+  EXPECT_EQ(app_->notes()->rowCount(), 0);
+}
+
+TEST_F(NotesVaultTest, AnEmptyFolderImportsNothing) {
+  const QVariantMap r = app_->importNotesFolder(vaultUrl());
+
+  EXPECT_EQ(r.value(QStringLiteral("imported")).toInt(), 0);
+  EXPECT_TRUE(r.value(QStringLiteral("error")).toString().isEmpty());
+}
+
+TEST_F(NotesVaultTest, ExportWritesAFilePerNote) {
+  app_->newNote(QStringLiteral("One"));
+  app_->newNote(QStringLiteral("Two"));
+
+  const QVariantMap r = app_->exportNotesFolder(vaultUrl());
+
+  EXPECT_EQ(r.value(QStringLiteral("written")).toInt(), 2);
+  EXPECT_TRUE(QFile::exists(dir_.path() + QStringLiteral("/One.md")));
+}
+
+TEST_F(NotesVaultTest, ExportCreatesTheDirectoryForAFolder) {
+  const QString id = app_->newNote(QStringLiteral("Retro"));
+  app_->moveNoteToFolder(id, QStringLiteral("meetings/2026"));
+
+  app_->exportNotesFolder(vaultUrl());
+
+  EXPECT_TRUE(QFile::exists(dir_.path() + QStringLiteral("/meetings/2026/Retro.md")));
+}
+
+// The whole point: out to a folder, back in, and nothing has moved.
+TEST_F(NotesVaultTest, NotesSurviveAnExportAndReimport) {
+  const QString id = app_->newNote(QStringLiteral("Standup"));
+  app_->moveNoteToFolder(id, QStringLiteral("meetings"));
+  app_->setNoteBody(id, QStringLiteral("# Standup\n\nthe body\n"));
+  app_->setNotePinned(id, true);
+
+  app_->exportNotesFolder(vaultUrl());
+  app_->notes()->reset({});
+  app_->importNotesFolder(vaultUrl());
+
+  ASSERT_EQ(app_->notes()->rowCount(), 1);
+  const Note back = app_->notes()->items().at(0);
+  EXPECT_EQ(back.title, QStringLiteral("Standup"));
+  EXPECT_EQ(back.folder, QStringLiteral("meetings"));
+  EXPECT_EQ(back.body, QStringLiteral("# Standup\n\nthe body\n"));
+  EXPECT_TRUE(back.pinned);
 }
 
 int main(int argc, char** argv) {
