@@ -50,12 +50,18 @@ it watches your working copy and matches the current branch to the task you're o
 **Plan** — Kanban board (drag-and-drop columns, priority chips, branch decoration, scheduled-time pill, recurring
 tasks) · Timeline (overdue / today / week / later buckets) · Archive for closed-out tickets.
 
-**Time** — Week view (7-day grid, drag/resize/cross-day events) · Month view · Day calendar (drag-to-create, resize,
-drop a task to schedule a focus block, live now-line).
+**Time** — Week view (7-day grid, drag/resize, side-by-side overlapping events, a rail of what still needs a slot) ·
+Month view · Day calendar (midnight-to-midnight, drag-to-create, resize, drop a task to schedule a focus block, live
+now-line) · Repeating events (daily / weekly / fortnightly / monthly / yearly, edited one occurrence, this-and-
+following, or the whole series) · All-day, multi-day and past-midnight events · Meeting reminders · `.ics` import and
+export · Keyboard date navigation (`T` today, arrows, `G` go to date).
 
-**Know** — Docs (custom sections + fields, snippet editor with syntax highlighting, contact cards) · Notes (per-profile
-markdown editor: headings, task lists, tables, fenced code with syntax highlighting, callouts, footnotes and wiki-links,
-with `@people` / `#ticket` autocomplete, a live rendered view, and search by section).
+**Know** — Docs (a tree of long-form markdown pages, plus the reference catalog: custom sections + fields, snippet
+editor with syntax highlighting, contact cards) · Notes (many notes per profile, with folders, pinning and a daily
+note; markdown editor with headings, task lists, tables, fenced code with syntax highlighting, callouts, footnotes,
+`@people` / `#ticket` autocomplete and a live rendered view) · `[[Wiki-links]]` that cross from one note to another,
+with backlinks and an offer to write the note a broken link was asking for · Import and export notes as a folder of
+`.md` files, Obsidian-compatible.
 
 **Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and nine more (Gitea, Forgejo, Redmine, Todoist,
 Asana, ClickUp, Sentry, Bitbucket) — browser sign-in or a token, issues mirrored as cards, status written back on
