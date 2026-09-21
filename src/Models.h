@@ -7,6 +7,7 @@
 #include <QHash>
 #include <qqmlregistration.h>
 #include <QSet>
+#include <QSortFilterProxyModel>
 #include <QString>
 #include <QVariantList>
 #include <QVariantMap>
@@ -538,4 +539,31 @@ class PersonModel : public QAbstractListModel {
 
  private:
   QVector<Person> m_items;
+};
+
+// The People rail, filtered down to the people something is actually pending
+// on. A Mattermost sync imports every colleague ever direct-messaged as
+// "idle", and rendering those turned the rail into a contact list nobody
+// asked for: the rail is a to-do list, so it starts empty and only carries
+// someone once they are on it. Everyone else stays reachable through the
+// picker, @-autocomplete and the command palette, which all read the
+// unfiltered PersonModel.
+class ActivePeopleModel : public QSortFilterProxyModel {
+  Q_OBJECT
+  QML_ELEMENT
+  QML_UNCREATABLE("Provided by AppController")
+ public:
+  explicit ActivePeopleModel(QObject* parent = nullptr) : QSortFilterProxyModel(parent) {
+  }
+
+  // Role names and rowCount() come straight from QSortFilterProxyModel, which
+  // forwards the source's — PersonModel's roles apply to a delegate unchanged.
+ protected:
+  bool filterAcceptsRow(int row, const QModelIndex& parent) const override {
+    const QAbstractItemModel* src = sourceModel();
+    if(src == nullptr) {
+      return false;
+    }
+    return src->index(row, 0, parent).data(PersonModel::StateRole).toString() != QLatin1String("idle");
+  }
 };

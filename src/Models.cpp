@@ -851,13 +851,18 @@ void PersonModel::cycleState(const QString& id) {
     return;
   }
   const QString cur = m_items[row].state;
+  // todo → pinged → replied → idle. The last hop is what takes someone off the
+  // People rail: "idle" is the state the rail filters out (ActivePeopleModel),
+  // so answering the last person empties the rail instead of cycling it back
+  // round to "to write" forever. Anything unrecognised — including idle —
+  // starts the loop again.
   QString next = "todo";
   if(cur == "todo") {
     next = "pinged";
   } else if(cur == "pinged") {
     next = "replied";
   } else if(cur == "replied") {
-    next = "todo";
+    next = "idle";
   }
   m_items[row].state = next;
   const QModelIndex mi = index(row, 0);

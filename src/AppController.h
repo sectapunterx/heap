@@ -59,6 +59,9 @@ class AppController : public QObject {
   Q_PROPERTY(TaskModel* tasks READ tasks CONSTANT)
   Q_PROPERTY(EventModel* events READ events CONSTANT)
   Q_PROPERTY(PersonModel* people READ people CONSTANT)
+  // The People rail's model: `people` minus everyone in the "idle" state. See
+  // ActivePeopleModel.
+  Q_PROPERTY(ActivePeopleModel* activePeople READ activePeople CONSTANT)
   Q_PROPERTY(QVariantList statuses READ statuses NOTIFY statusesChanged)
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
@@ -146,6 +149,10 @@ class AppController : public QObject {
 
   PersonModel* people() {
     return &m_people;
+  }
+
+  ActivePeopleModel* activePeople() {
+    return &m_activePeople;
   }
 
   QVariantList statuses() const {
@@ -638,6 +645,22 @@ class AppController : public QObject {
   Q_INVOKABLE void savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 
+  // ---- People picker ----
+  // Everyone the rail's "+" can put on the list: the profile's Docs contacts
+  // and its People, folded into one row per human. A contact that already has
+  // a Person behind it (`personId`, written by the Mattermost import) is that
+  // Person's row, so a colleague imported from a DM is offered once, not twice.
+  // Each entry carries { key, contactKey, personId, name, role, handle,
+  // channel, color, state, source, active }.
+  Q_INVOKABLE QVariantList pingCandidates() const;
+  // The PersonEditor draft for a picked candidate. An existing Person opens as
+  // itself, moved to "todo" when it was idle; a contact with no Person yet
+  // opens as a new one carrying the contact's name, role and colour.
+  Q_INVOKABLE QVariantMap pingDraftFor(const QVariantMap& candidate) const;
+  // The draft behind "create contact «name»": a new Person plus, on save, a
+  // Docs contact to find it by next time.
+  Q_INVOKABLE QVariantMap newContactDraft(const QString& name) const;
+
   Q_INVOKABLE int pendingPeopleCount() const {
     return m_people.todoCount();
   }
@@ -714,6 +737,11 @@ class AppController : public QObject {
   // Avoids collisions with already-existing ids in the active profile
   // by appending "-2", "-3", … on conflict.
   Q_INVOKABLE QString suggestPersonId(const QString& name, const QString& exceptId = QString()) const;
+  // The collision walk behind suggestPersonId(), over a base that is already
+  // an id rather than a display name — a Mattermost handle, say, whose dots
+  // the name slugifier would eat. Returns `base`, or `base-2`, `base-3`… when
+  // somebody else already holds it.
+  QString uniquePersonId(const QString& base, const QString& exceptId = QString()) const;
 
   // ---- Profiles ----
   QVariantList profiles() const;
@@ -901,6 +929,7 @@ class AppController : public QObject {
   TaskModel m_tasks;
   EventModel m_events;
   PersonModel m_people;
+  ActivePeopleModel m_activePeople;
   QVariantList m_statuses;
   QDate m_today;
   QDate m_selectedDate;
@@ -1157,6 +1186,18 @@ class AppController : public QObject {
   // `linkedPersonId` is the Person this contact already points at, if any: it
   // is the only id that may be reused when the derived one is already taken.
   QString upsertImportedPerson(const heap::integrations::ExternalContact& ext, const QString& linkedPersonId);
+
+  // A Docs contact's stable identity across a docsState rewrite: its external
+  // id when it has one, else its Mattermost handle, else its name. The picker
+  // hands this back on save so the Person that was just created can be linked
+  // to the contact it came from without holding on to an array index.
+  static QString docsContactKey(const QJsonObject& contact);
+  // Point the Docs contact `contactKey` at `personId`. No-op when the contact
+  // is gone or already links there.
+  void linkDocsContact(const QString& contactKey, const QString& personId);
+  // Append a Docs contact for a Person created through the rail's picker, so
+  // the next search finds them among the contacts.
+  void appendDocsContact(const Person& p);
   // One-time move of any plaintext tokens found in state.json into the keychain.
   void migrateLegacySecrets();
   // Renew an expiring OAuth access token, then run `then`. Providers that use a
