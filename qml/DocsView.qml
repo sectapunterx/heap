@@ -634,6 +634,11 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
 
+    // Pages are the long-form half; References is the catalog this view has
+    // always been. It stays the default, because an existing profile has no
+    // pages yet and landing on an empty tree would read as the docs being gone.
+    property string tab: "references"
+
     ColumnLayout {
         anchors.fill: parent
         spacing: 0
@@ -659,6 +664,37 @@ Item {
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
+                    }
+                }
+
+                // Pages | References
+                Row {
+                    spacing: 0
+                    Repeater {
+                        model: ["pages", "references"]
+                        delegate: Rectangle {
+                            required property var modelData
+                            objectName: "docs-tab-" + modelData
+                            width: 96; height: 26
+                            color: root.tab === modelData ? Theme.withAlpha(Theme.accent, 0.16)
+                                 : tabMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: root.tab === modelData ? Theme.accent : Theme.border
+                            border.width: 1
+                            Text {
+                                anchors.centerIn: parent
+                                text: I18n.t("docs.tab." + modelData)
+                                color: root.tab === modelData ? Theme.text : Theme.textDim
+                                font.pixelSize: 11
+                                font.weight: root.tab === modelData ? Font.DemiBold : Font.Normal
+                            }
+                            MouseArea {
+                                id: tabMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.tab = modelData
+                            }
+                        }
                     }
                 }
 
@@ -710,8 +746,17 @@ Item {
             }
         }
 
+        // Body — the page tree, or the catalog.
+        DocsPagesPane {
+            objectName: "docs-pages-pane"
+            visible: root.tab === "pages"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+        }
+
         // Body — nav + scrollable content
         RowLayout {
+            visible: root.tab === "references"
             Layout.fillWidth: true
             Layout.fillHeight: true
             spacing: 0
