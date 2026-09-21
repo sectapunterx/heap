@@ -523,6 +523,14 @@ class AppController : public QObject {
   // Start the browser OAuth flow for a provider; on success stores the access
   // token in the keychain and marks the provider connected (authMode=oauth).
   Q_INVOKABLE void connectOAuth(const QString& providerId);
+  // Mark a provider connected from the credentials typed into its card. The
+  // counterpart to connectOAuth for every card that is filled in by hand: an
+  // OAuth-capable provider used with a personal access token, a self-hosted
+  // Jira the Atlassian gateway knows nothing about, a tracker with no browser
+  // flow at all. Refuses (with a toast) while a required field is empty, and
+  // drops any leftover browser session so the typed credentials are the ones
+  // actually sent.
+  Q_INVOKABLE void connectIntegrationManually(const QString& providerId);
   // Drop a provider back to disconnected. For a browser/session sign-in this
   // also discards the tokens and clears authMode — otherwise a token pasted
   // afterwards would still be sent as a Bearer, which GitLab (PRIVATE-TOKEN)
@@ -1119,6 +1127,11 @@ class AppController : public QObject {
   Q_INVOKABLE QStringList missingRequiredFields(const QString& providerId) const;
 
  private:
+  // The same list, told explicitly whether to treat the browser sign-in as
+  // having answered the client-ID field. A manual connect is about to clear
+  // authMode, so it must be validated as the token card it is becoming — not
+  // as the OAuth card the config still says it is.
+  QStringList missingRequiredFields(const QString& providerId, bool signedInViaBrowser) const;
   // Finish a Jira browser sign-in: ask accessible-resources which Atlassian
   // site the new token was granted and cache its cloudId. A 3LO token is not
   // bound to a site, and the gateway path needs that id.

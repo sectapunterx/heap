@@ -842,8 +842,11 @@ Item {
             Body {
                 text: "Connect with browser — opens your browser, you authorize, nothing to fill in. "
                     + "Device code (GitHub) — the card shows a short code you type on the page that opens. "
-                    + "Access token — open Advanced and paste one. The token path works for every provider "
-                    + "and is never a degraded mode: it is exactly what the browser flow ends up storing."
+                    + "Access token — open Advanced, fill in the fields and press Connect. The token path "
+                    + "works for every provider, including the ones that also offer the browser button, and "
+                    + "is never a degraded mode: it is exactly what the browser flow ends up storing. It is "
+                    + "also the only way into a self-hosted instance the vendor’s OAuth service has never "
+                    + "heard of — a Jira Server or Data Center of your own, for one."
             }
 
             H3 {
