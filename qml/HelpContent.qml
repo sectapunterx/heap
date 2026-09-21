@@ -242,18 +242,30 @@ Item {
                 text: "Docs"
             }
             Body {
-                text: "A reference across 4 sections: 3GPP, internal, C++, tools. Inside — sections with "
-                    + "tips, code snippets with syntax highlighting, and contact cards. The command palette "
-                    + "searches across all sections and snippets at once."
+                text: "Two halves. Pages is a tree of long-form markdown documents — the place for the "
+                    + "paragraph explaining why something matters. Deleting a page takes everything under "
+                    + "it, and that is undoable like anything else."
+            }
+            Body {
+                text: "References is the catalog: sections with tips, code snippets with syntax "
+                    + "highlighting, and contact cards. The command palette searches across all of it at "
+                    + "once."
             }
 
             H3 {
                 text: "Notes"
             }
             Body {
-                text: "One markdown canvas per profile. Three modes — editor only, split, preview — cycled "
-                    + "with Ctrl+Shift+M. Autocomplete for @user and #ticket pulls in the people and tasks of "
-                    + "the active profile, and [[ links a heading in the same note."
+                text: "As many notes as you like, with folders, pinning and a daily note. Three modes — "
+                    + "editor only, split, preview — cycled with Ctrl+Shift+M. Autocomplete for @user and "
+                    + "#ticket pulls in the people and tasks of the active profile."
+            }
+            Body {
+                text: "[[Double brackets]] link to another note by its title, falling back to a heading in "
+                    + "the note you are in. Clicking one that points nowhere offers to write it. Backlinks "
+                    + "answer what else refers to the note you are reading, and clicking a #TICKET opens the "
+                    + "task. Notes import and export as a folder of .md files with YAML frontmatter, which "
+                    + "is what Obsidian and friends already read."
             }
             Body {
                 text: "Full markdown: headings, nested and task lists, tables, fenced code with syntax "
@@ -691,9 +703,15 @@ Item {
                 text: "Defaults"
             }
             Body {
-                text: "Ctrl+K — palette, Ctrl+N — new task, Ctrl+1/2/3/4/5 — Kanban / Timeline / Week / "
-                    + "Docs / Notes, Ctrl+, — Settings, Ctrl+Tab / Ctrl+Shift+Tab — next/previous profile, "
-                    + "Ctrl+Z — undo, Ctrl+T — Tweaks, Ctrl+Shift+K — hotkey catalog, '/' — focus search."
+                text: "Ctrl+K — palette, Ctrl+N — new task, Ctrl+1…8 — the views in side-rail order "
+                    + "(Kanban, Timeline, Week, Month, Archive, Docs, Notes, Settings), Ctrl+] / Ctrl+[ — "
+                    + "next/previous profile, Ctrl+Z — undo, Ctrl+T — Tweaks, Ctrl+Shift+K — hotkey "
+                    + "catalog, Ctrl+F — focus search."
+            }
+            Body {
+                text: "On the board, J/K/H/L move a cursor between cards and Shift with them moves the card "
+                    + "itself; Return opens it, Space adds it to the selection. On the week and month views "
+                    + "T goes to today, the arrows step a period, and G opens a date picker."
             }
         }
 
