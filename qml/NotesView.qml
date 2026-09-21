@@ -1085,6 +1085,11 @@ Item {
 
     Connections {
         target: AppController
+        // Before the active note changes, while the old one is still active:
+        // the debounced keystrokes go into the note they were typed in, not the
+        // one about to be opened. Without this a "+" pressed inside the 250 ms
+        // window moved the draft into the new note and emptied the old one.
+        function onAboutToChangeActiveNote() { root._flushPending() }
         function onNotesStateChanged() {
             if (!root._loadedOnce || root._persisting) return;
             root._loadFromController();

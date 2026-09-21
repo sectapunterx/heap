@@ -825,6 +825,11 @@ class AppController : public QObject {
   void docsStateChanged();
   void notesStateChanged();
   void activeNoteChanged();
+  // Emitted just before the active note changes, while the old one is still
+  // active. The notes editor debounces its writes, so its last keystrokes are
+  // only in the text field at this point; it flushes on this signal, and they
+  // land in the note they were typed into instead of the one being opened.
+  void aboutToChangeActiveNote();
   void activeDocPageChanged();
   void appSettingsJsonChanged();
   void statusesChanged();
@@ -910,6 +915,16 @@ class AppController : public QObject {
   // Keeps `notesState` and the active note's body the same thing. Called on
   // every edit and every switch; silent when there is no active note.
   void syncActiveNoteBody();
+
+  // `notesState` must always belong to a note. Text that arrives with no note
+  // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
+  // a note of its own here. Without this it lived only in `notesState`, which
+  // is no longer written to disk since notes became a list, and the next "+"
+  // overwrote it.
+  void adoptOrphanNotesState();
+  // A note with no body, made active without announcing a new notesState:
+  // callers write the body next and that is the one change the editor sees.
+  QString createActiveNote(const QString& title);
   QString m_appSettingsJson;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.
