@@ -162,9 +162,13 @@ Item {
             spacing: 0
 
             QQC.ScrollView {
+                // Equal preferred widths and both filling: that is what splits
+                // a RowLayout down the middle. Sizing one half to parent.width
+                // instead leaves the other at zero, which looks exactly like
+                // the preview failing to render.
                 Layout.fillWidth: true
                 Layout.fillHeight: true
-                Layout.preferredWidth: root.mode === "split" ? parent.width / 2 : parent.width
+                Layout.preferredWidth: 1
                 clip: true
 
                 QQC.TextArea {
@@ -198,6 +202,7 @@ Item {
                 visible: root.mode === "split"
                 Layout.fillWidth: true
                 Layout.fillHeight: true
+                Layout.preferredWidth: 1
                 document: previewDoc
             }
         }
