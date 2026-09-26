@@ -143,6 +143,13 @@ QVector<ExternalComment> parseCommentsWithMap(const QByteArray& json, const Comm
     c.body = fieldStr(o, map.body);
     c.createdAt = parseTrackerTimestamp(valueAtPath(o, map.createdAt));
     c.url = fieldStr(o, map.url);
+    if(c.url.isEmpty() && !map.anchorId.isEmpty()) {
+      const QJsonValue id = valueAtPath(o, map.anchorId);
+      const QString idText = id.isDouble() ? QString::number(static_cast<qint64>(id.toDouble())) : id.toString();
+      if(!idText.isEmpty()) {
+        c.anchor = map.anchorPrefix + idText;
+      }
+    }
     if(c.body.isEmpty()) {
       continue;
     }

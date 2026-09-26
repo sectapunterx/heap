@@ -4,6 +4,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "DocsStarter.js" as Starter
 
 Item {
     id: root
@@ -12,159 +13,13 @@ Item {
 
     // ── Data ─────────────────────────────────────────────────────────────────
 
-    property var sections: [
-        {
-            id: "web-standards",
-            title: "Web & API Standards",
-            subtitle: "External — HTTP, HTML, ECMAScript, accessibility, security",
-            accent: Theme.mStandup,
-            customFields: [],
-            items: [
-                { ref: "RFC 9110", title: "HTTP Semantics",
-                  desc: "Core HTTP — methods, status codes, headers, conditional & range requests, caching.",
-                  url: "https://www.rfc-editor.org/rfc/rfc9110", source: "IETF", version: "2022", updated: "" },
-                { ref: "RFC 8259", title: "The JSON Data Interchange Format",
-                  desc: "JSON grammar — objects, arrays, numbers, string escaping, interoperability notes.",
-                  url: "https://www.rfc-editor.org/rfc/rfc8259", source: "IETF", version: "2017", updated: "" },
-                { ref: "RFC 6749", title: "OAuth 2.0 Authorization Framework",
-                  desc: "Grant types, tokens, refresh flow, redirect handling, security considerations.",
-                  url: "https://www.rfc-editor.org/rfc/rfc6749", source: "IETF", version: "2012", updated: "" },
-                { ref: "HTML LS", title: "HTML Living Standard",
-                  desc: "WHATWG HTML — elements, semantics, forms, DOM interfaces, parsing rules.",
-                  url: "https://html.spec.whatwg.org/", source: "WHATWG", version: "living", updated: "" },
-                { ref: "ECMA-262", title: "ECMAScript Language Specification",
-                  desc: "The JavaScript language — grammar, semantics, built-ins, modules.",
-                  url: "https://tc39.es/ecma262/", source: "TC39", version: "ES2024", updated: "" },
-                { ref: "MDN", title: "MDN Web Docs",
-                  desc: "Reference for HTML, CSS, JS and Web APIs — the daily-driver docs.",
-                  url: "https://developer.mozilla.org/", source: "developer.mozilla.org", version: "", updated: "" },
-                { ref: "OpenAPI 3.1", title: "OpenAPI Specification",
-                  desc: "Language-agnostic REST API description — paths, schemas, security schemes.",
-                  url: "https://spec.openapis.org/oas/latest.html", source: "OpenAPI", version: "v3.1.0", updated: "" },
-                { ref: "SemVer", title: "Semantic Versioning 2.0.0",
-                  desc: "MAJOR.MINOR.PATCH rules — breaking changes, pre-release & build metadata.",
-                  url: "https://semver.org/", source: "semver.org", version: "v2.0.0", updated: "" },
-                { ref: "WCAG 2.2", title: "Web Content Accessibility Guidelines",
-                  desc: "Perceivable / operable / understandable / robust — A/AA/AAA success criteria.",
-                  url: "https://www.w3.org/TR/WCAG22/", source: "W3C", version: "v2.2", updated: "" },
-                { ref: "OWASP Top 10", title: "OWASP Top 10 Web Risks",
-                  desc: "Most critical web app security risks — injection, broken auth, SSRF, etc.",
-                  url: "https://owasp.org/www-project-top-ten/", source: "owasp.org", version: "2021", updated: "" }
-            ]
-        },
-        {
-            id: "internal",
-            title: "Internal — Platform",
-            subtitle: "Wiki, runbooks, coding standards, on-call",
-            accent: Theme.mOneone,
-            customFields: [],
-            items: [
-                { ref: "ARCH-001", title: "Platform Architecture Overview",
-                  desc: "Service map, request lifecycle, data flow, async jobs, third-party integrations.",
-                  url: "#/wiki/platform/architecture", source: "wiki.internal", version: "", updated: "2 weeks ago" },
-                { ref: "STYLE-01", title: "Code Style & Review Standard",
-                  desc: "Formatting, naming, error handling, small PRs, test-first for bug fixes.",
-                  url: "#/wiki/platform/code-style", source: "wiki.internal", version: "", updated: "1 month ago" },
-                { ref: "BUILD-101", title: "Build & CI Guide",
-                  desc: "Local setup, CI pipeline, caching, preview envs, release automation.",
-                  url: "#/wiki/platform/build", source: "wiki.internal", version: "", updated: "3 days ago" },
-                { ref: "RUN-001", title: "Runbook · Deploy Rollback",
-                  desc: "How to roll back a bad release — feature flags, blue/green, DB compatibility.",
-                  url: "#/runbooks/rollback", source: "runbook", version: "", updated: "1 week ago" },
-                { ref: "RUN-007", title: "Runbook · Database Migration",
-                  desc: "Expand/contract migrations, backfills, zero-downtime schema changes.",
-                  url: "#/runbooks/db-migration", source: "runbook", version: "", updated: "5 days ago" },
-                { ref: "RUN-012", title: "Runbook · Latency Spike Triage",
-                  desc: "Dashboards to check, slow-query log, thread pool saturation, cache misses.",
-                  url: "#/runbooks/latency-spike", source: "runbook", version: "", updated: "yesterday" },
-                { ref: "OPS-CALL", title: "On-call Rotation & Escalation",
-                  desc: "Pager schedule, severity levels, customer-impact decision matrix.",
-                  url: "#/wiki/oncall", source: "wiki.internal", version: "", updated: "today" },
-                { ref: "REL-24.06.2", title: "Release Notes · 24.06.2",
-                  desc: "Latest cut — checkout bug fix, search reindex speedup, API rate-limit tuning.",
-                  url: "#/releases/24.06.2", source: "release", version: "", updated: "today" },
-                { ref: "TPL-PR", title: "PR Template & Review Checklist",
-                  desc: "What a PR needs: summary, screenshots, perf notes, tests, rollout & risks.",
-                  url: "#/wiki/pr-template", source: "wiki.internal", version: "", updated: "2 months ago" }
-            ]
-        },
-        {
-            id: "reference",
-            title: "Language & Backend Reference",
-            subtitle: "Languages, databases, containers, infra",
-            accent: Theme.mSync,
-            customFields: [],
-            items: [
-                { ref: "TS Handbook", title: "TypeScript Handbook",
-                  desc: "Types, generics, narrowing, utility types, module & config reference.",
-                  url: "https://www.typescriptlang.org/docs/handbook/intro.html", source: "typescriptlang.org", version: "", updated: "" },
-                { ref: "Python Docs", title: "Python Documentation",
-                  desc: "Language reference and standard library — the canonical daily reference.",
-                  url: "https://docs.python.org/3/", source: "docs.python.org", version: "3.x", updated: "" },
-                { ref: "PostgreSQL", title: "PostgreSQL Documentation",
-                  desc: "SQL reference, indexing, EXPLAIN, transactions, JSONB, replication.",
-                  url: "https://www.postgresql.org/docs/current/", source: "postgresql.org", version: "", updated: "" },
-                { ref: "Redis", title: "Redis Documentation",
-                  desc: "Data types, persistence, pub/sub, expiration, cluster & keyspace notifications.",
-                  url: "https://redis.io/docs/latest/", source: "redis.io", version: "", updated: "" },
-                { ref: "Docker", title: "Docker Documentation",
-                  desc: "Dockerfile reference, multi-stage builds, compose, networking, volumes.",
-                  url: "https://docs.docker.com/", source: "docs.docker.com", version: "", updated: "" },
-                { ref: "Kubernetes", title: "Kubernetes Documentation",
-                  desc: "Pods, deployments, services, config maps, probes, resource limits.",
-                  url: "https://kubernetes.io/docs/home/", source: "kubernetes.io", version: "", updated: "" }
-            ]
-        },
-        {
-            id: "tools",
-            title: "Tools & Debug",
-            subtitle: "Profiling, tracing, sanitizers, packet analysis",
-            accent: Theme.mFocus,
-            customFields: [],
-            items: [
-                { ref: "git", title: "Git Reference Manual",
-                  desc: "Full command reference — rebase, bisect, reflog, worktrees, hooks.",
-                  url: "https://git-scm.com/docs", source: "git-scm.com", version: "", updated: "" },
-                { ref: "curl", title: "curl / libcurl Docs",
-                  desc: "HTTP debugging from the shell — headers, auth, TLS, timing, retries.",
-                  url: "https://curl.se/docs/", source: "curl.se", version: "", updated: "" },
-                { ref: "perf", title: "Linux perf",
-                  desc: "Sampling profiler, hardware counters, FlameGraph workflow.",
-                  url: "https://perf.wiki.kernel.org/index.php/Main_Page", source: "kernel.org", version: "", updated: "" },
-                { ref: "ASan", title: "AddressSanitizer",
-                  desc: "Runtime memory bugs — out-of-bounds, use-after-free. -fsanitize=address.",
-                  url: "https://clang.llvm.org/docs/AddressSanitizer.html", source: "clang.llvm", version: "", updated: "" },
-                { ref: "Wireshark", title: "Wireshark",
-                  desc: "Packet capture & analysis — HTTP/TLS, gRPC, follow-stream, display filters.",
-                  url: "https://www.wireshark.org/docs/", source: "wireshark.org", version: "", updated: "" },
-                { ref: "valgrind", title: "Valgrind",
-                  desc: "Memcheck, helgrind, callgrind — slow but precise memory & race detection.",
-                  url: "https://valgrind.org/docs/manual/manual.html", source: "valgrind.org", version: "", updated: "" }
-            ]
-        }
-    ]
-
-    property var snippets: [
-        { title: "Build with sanitizers", lang: "sh", tags: ["build", "sanitizers"],
-          code: "# AddressSanitizer\ncmake -B build -DCMAKE_CXX_FLAGS='-fsanitize=address -g'\ncmake --build build\n\n# ThreadSanitizer (data races)\ncmake -B build-tsan -DCMAKE_CXX_FLAGS='-fsanitize=thread -g'\n\n# UBSan + ASan combo\ncmake -B build -DCMAKE_CXX_FLAGS='-fsanitize=address,undefined -g'" },
-        { title: "GDB · attach to a running process", lang: "sh", tags: ["debug", "gdb"],
-          code: "sudo gdb -p $(pgrep -f my-service)\n(gdb) info threads\n(gdb) thread apply all bt 30\n(gdb) bt full\n(gdb) p *this  # pretty-print" },
-        { title: "curl · debug an HTTP endpoint", lang: "sh", tags: ["network", "http"],
-          code: "# Timing + headers for a request\ncurl -sS -D - -o /dev/null -w '\\ntime_total: %{time_total}s\\n' \\\n  https://api.example.com/v1/health\n\n# POST JSON with a bearer token\ncurl -sS -X POST https://api.example.com/v1/items \\\n  -H 'Authorization: Bearer $TOKEN' \\\n  -H 'Content-Type: application/json' \\\n  -d '{\"name\":\"widget\"}'" },
-        { title: "HTTP status codes (reference)", lang: "cpp", tags: ["reference", "enum"],
-          code: "enum class HttpStatus : int {\n  Ok           = 200,\n  Created      = 201,\n  NoContent    = 204,\n  BadRequest   = 400,\n  Unauthorized = 401,\n  Forbidden    = 403,\n  NotFound     = 404,\n  Conflict     = 409,\n  TooMany      = 429,\n  ServerError  = 500,\n};\n\nconstexpr auto kRequestTimeout =\n  std::chrono::seconds{10};" },
-        { title: "Structured logging", lang: "cpp", tags: ["logging", "observability"],
-          code: "// Prefer structured key/value logs — machine-queryable.\nLOG_INFO(\"request.completed\",\n  {{\"method\", req.method}, {\"path\", req.path},\n   {\"status\", res.status}, {\"ms\", elapsed.count()}});\n\n// Warnings carry enough context to act on.\nLOG_WARN(\"cache.miss\", {{\"key\", key}, {\"shard\", shardId}});" }
-    ]
-
-    property var contacts: [
-        { name: "Olga T.",    role: "Tech Lead",       channel: "#eng-leads",  mattermost: "@olga.t",      color: "#d97a6c" },
-        { name: "Andrey S.",  role: "Senior Backend",  channel: "#backend",    mattermost: "@andrey.s",    color: "#6cc4b8" },
-        { name: "Hiroshi M.", role: "Frontend",        channel: "#frontend",   mattermost: "@hiroshi.m",   color: "#7cc492" },
-        { name: "Masha K.",   role: "QA Lead",         channel: "#qa",         mattermost: "@masha.k",     color: "#c87fc7" },
-        { name: "Victor L.",  role: "Architect",       channel: "#architecture", mattermost: "@victor.l",  color: "#7da8d9" },
-        { name: "On-call",    role: "Pager rotation",  channel: "#oncall",     mattermost: "page: oncall", color: "#e6624c" }
-    ]
+    // Filled with the starter content (qml/DocsStarter.js) on creation, in the
+    // UI language of that moment, then from the profile's saved docs. Plain
+    // values rather than bindings, so a theme or language change later never
+    // resets what the user has.
+    property var sections: []
+    property var snippets: []
+    property var contacts: []
 
     // Pristine copies of the starter content above, so a blob that carries only
     // contacts (the first Mattermost sync on a fresh profile) can be told apart
@@ -261,6 +116,9 @@ Item {
     }
 
     Component.onCompleted: {
+        sections = Starter.sections(I18n.lang, [Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus]);
+        snippets = Starter.snippets(I18n.lang);
+        contacts = Starter.contacts(I18n.lang);
         // Snapshot the starter content before anything can overwrite it — a
         // later profile switch reloads into `sections`, so reading it back then
         // would give that profile's docs instead of the samples.

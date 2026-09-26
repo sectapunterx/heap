@@ -932,10 +932,10 @@ Item {
             Body {
                 text: "Useful starting points:\n"
                     + "assignee = currentUser() AND resolution = Unresolved ORDER BY priority DESC\n"
-                    + "project = LTE AND status IN (\"In Progress\", \"In Review\") ORDER BY updated DESC\n"
+                    + "project = APP AND status IN (\"In Progress\", \"In Review\") ORDER BY updated DESC\n"
                     + "assignee = currentUser() AND sprint IN openSprints() ORDER BY rank\n"
                     + "reporter = currentUser() AND created >= -14d ORDER BY created DESC\n"
-                    + "project = LTE AND labels = backend AND updated >= -7d ORDER BY updated DESC"
+                    + "project = APP AND labels = backend AND updated >= -7d ORDER BY updated DESC"
             }
             Hint {
                 text: "Try a query in Jira's own issue search first — heap. sends it verbatim, so anything "

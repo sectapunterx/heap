@@ -79,14 +79,14 @@ Popup {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.ref").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.version").toUpperCase() }
-                FormField { id: docRef     ; mono: true; placeholderText: "TS 36.331"
+                FormField { id: docRef     ; mono: true; placeholderText: I18n.t("docsEditor.ph.ref")
                             text: root.draft.ref || ""    ; onTextChanged: root.draft.ref = text }
-                FormField { id: docVersion ; mono: true; placeholderText: "v17.5.0"
+                FormField { id: docVersion ; mono: true; placeholderText: I18n.t("docsEditor.ph.version")
                             text: root.draft.version || ""; onTextChanged: root.draft.version = text }
             }
 
             FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
-            FormField { id: docTitle; placeholderText: "Title"
+            FormField { id: docTitle; placeholderText: I18n.t("docsEditor.ph.title")
                         text: root.draft.title || ""; onTextChanged: root.draft.title = text
                         Layout.fillWidth: true }
 
@@ -115,9 +115,9 @@ Popup {
                 columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.source").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.updated").toUpperCase() }
-                FormField { placeholderText: "ETSI, wiki.internal…"
+                FormField { placeholderText: I18n.t("docsEditor.ph.source")
                             text: root.draft.source || ""; onTextChanged: root.draft.source = text }
-                FormField { placeholderText: "today, 2 weeks ago…"
+                FormField { placeholderText: I18n.t("docsEditor.ph.updated")
                             text: root.draft.updated || ""; onTextChanged: root.draft.updated = text }
             }
 
@@ -208,7 +208,7 @@ Popup {
             FieldLabel { text: I18n.t("docs.field.tags").toUpperCase() }
             FormField {
                 Layout.fillWidth: true
-                placeholderText: "comma, separated, tags"
+                placeholderText: I18n.t("docsEditor.ph.tags")
                 text: root.draft.tags || ""
                 onTextChanged: root.draft.tags = text
             }
@@ -222,7 +222,7 @@ Popup {
                     onTextChanged: root.draft.code = text
                     wrapMode: TextEdit.NoWrap
                     color: Theme.text
-                    placeholderText: "// your snippet…"
+                    placeholderText: I18n.t("docsEditor.ph.snippet")
                     placeholderTextColor: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 12
@@ -252,14 +252,14 @@ Popup {
 
             FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
             FormField {
-                placeholderText: "3GPP / ETSI Standards"
+                placeholderText: I18n.t("docsEditor.ph.section")
                 text: root.draft.title || ""
                 onTextChanged: root.draft.title = text
             }
 
             FieldLabel { text: I18n.t("docs.field.subtitle").toUpperCase() }
             FormField {
-                placeholderText: "External — LTE / E-UTRAN protocol specifications"
+                placeholderText: I18n.t("docsEditor.ph.sectionSub")
                 text: root.draft.subtitle || ""
                 onTextChanged: root.draft.subtitle = text
             }
@@ -307,7 +307,7 @@ Popup {
                         property var fld: (root.draft.customFields || [])[index] || ({ key: "", label: "" })
                         FormField {
                             Layout.fillWidth: true
-                            placeholderText: "label"
+                            placeholderText: I18n.t("docsEditor.ph.label")
                             text: parent.fld.label || ""
                             onTextChanged: {
                                 if (!root.draft.customFields) return;
@@ -320,7 +320,7 @@ Popup {
                         FormField {
                             mono: true
                             Layout.preferredWidth: 140
-                            placeholderText: "key"
+                            placeholderText: I18n.t("docsEditor.ph.key")
                             text: parent.fld.key || ""
                             onTextChanged: {
                                 if (!root.draft.customFields) return;
@@ -417,11 +417,11 @@ Popup {
                 FormField {
                     placeholderText: I18n.t("docs.editor.ph.fullName")
                             text: root.draft.name || ""; onTextChanged: root.draft.name = text }
-                FormField { placeholderText: "Tech Lead / QA / PHY team…"
+                FormField { placeholderText: I18n.t("docsEditor.ph.role")
                             text: root.draft.role || ""; onTextChanged: root.draft.role = text }
                 FieldLabel { text: I18n.t("docs.field.mmChannel").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.mmHandle").toUpperCase() }
-                FormField { mono: true; placeholderText: "#lte-core"
+                FormField { mono: true; placeholderText: I18n.t("docsEditor.ph.channel")
                             text: root.draft.channel || ""; onTextChanged: root.draft.channel = text }
                 FormField { mono: true; placeholderText: "@name.surname"
                             text: root.draft.mattermost || ""; onTextChanged: root.draft.mattermost = text }

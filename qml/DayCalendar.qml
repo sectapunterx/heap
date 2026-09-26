@@ -172,7 +172,9 @@ Item {
                     // Elided: the hint is longer than the right-hand panel is
                     // wide, so it used to run off the edge mid-word.
                     Text {
-                        text: I18n.t("day.dragHint")
+                        // The full sentence never fit the column; the
+                        // short form does, and the tooltip keeps the rest.
+                        text: I18n.t("day.dragHint.short")
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: 11
@@ -180,7 +182,7 @@ Item {
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
                         HoverHandler { id: hintHover }
-                        ToolTip.visible: hintHover.hovered && truncated
+                        ToolTip.visible: hintHover.hovered
                         ToolTip.delay: 400
                         ToolTip.text: I18n.t("day.dragHint")
                     }
@@ -558,10 +560,15 @@ Item {
                                     border.width: 1
                                 }
 
+                                // A half-hour block has room for one line: the
+                                // title with the time folded into it. Two lines
+                                // cut the title in half horizontally.
+                                readonly property bool compactRow: evRect.height < 38
                                 Column {
                                     anchors.fill: parent
                                     anchors.leftMargin: 10; anchors.rightMargin: 20
-                                    anchors.topMargin: 6; anchors.bottomMargin: 6
+                                    anchors.topMargin: evRect.compactRow ? 2 : 6
+                                    anchors.bottomMargin: evRect.compactRow ? 2 : 6
                                     spacing: 2
                                     clip: true
                                     RowLayout {
@@ -586,7 +593,9 @@ Item {
                                         }
                                         Text {
                                             Layout.fillWidth: true
+                                            objectName: "day-event-title"
                                             text: evRect.title + (evRect.taskId ? "  " + evRect.taskId : "")
+                                                  + (evRect.compactRow ? "  " + Theme.fmtHour(evRect.effStart) : "")
                                             color: Theme.text
                                             font.pixelSize: 12
                                             font.weight: Font.DemiBold
@@ -594,6 +603,7 @@ Item {
                                         }
                                     }
                                     Text {
+                                        visible: !evRect.compactRow
                                         text: Theme.fmtHour(evRect.effStart) + " – " + Theme.fmtHour(evRect.effEnd)
                                         color: Theme.textMuted
                                         font.family: Theme.fontMono

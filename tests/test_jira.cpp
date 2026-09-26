@@ -917,3 +917,11 @@ TEST(JiraProvider, ParseJiraStatuses_StatusList_ReturnsSortedUniqueNames) {
   const QByteArray json = R"json([{"name":"To Do"},{"name":"Blocked"},{"name":"To Do"},{"name":" In Review "},{"id":"7"}])json";
   EXPECT_EQ(heap::integrations::parseJiraStatuses(json), (QStringList{"Blocked", "In Review", "To Do"}));
 }
+
+// Audit C8: a Jira comment links to itself on the issue page.
+TEST(JiraProvider, ParseJiraComments_CommentId_BecomesAnAnchor) {
+  const QByteArray json = R"json({"comments":[{"id":"10042","author":{"displayName":"A"},"body":"hi"}]})json";
+  const auto comments = heap::integrations::parseJiraComments(json);
+  ASSERT_EQ(comments.size(), 1);
+  EXPECT_EQ(comments.at(0).anchor, QStringLiteral("?focusedCommentId=10042"));
+}

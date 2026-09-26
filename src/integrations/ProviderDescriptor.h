@@ -74,6 +74,10 @@ struct CommentMap {
   QString body;
   QString createdAt;
   QString url;
+  // When there is no url: the comment's id, and what goes before it to make an
+  // anchor on the issue page (GitLab: "id" + "#note_").
+  QString anchorId;
+  QString anchorPrefix;
   // A leaf that, when true, marks an entry as machine-generated noise —
   // GitLab's "changed the description" notes come back with system=true.
   QString skipIfTrue;

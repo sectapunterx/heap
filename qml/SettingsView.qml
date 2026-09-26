@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Controls.impl
 import TodoCpp
 
 Item {
@@ -18,64 +19,64 @@ Item {
     readonly property var allSections: [
         {
             id: "profile",
-            icon: "◉",
+            icon: "qrc:/brand/icons/heap-13-profile.svg",
             title: I18n.t("settings.section.profile.title"),
             sub: I18n.t("settings.section.profile.sub")
         },
         {
             id: "appearance",
-            icon: "◑",
+            icon: "qrc:/brand/icons/heap-14-appearance.svg",
             title: I18n.t("settings.section.appearance.title"),
             sub: I18n.t("settings.section.appearance.sub")
         },
         {
             id: "language",
-            icon: "Aa",
+            icon: "qrc:/brand/icons/heap-15-language.svg",
             title: I18n.t("settings.section.language.title"),
             sub: I18n.t("settings.section.language.sub")
         },
         {
             id: "notifications",
-            icon: "◔",
+            icon: "qrc:/brand/icons/heap-16-notifications.svg",
             title: I18n.t("settings.section.notifications.title"),
             sub: I18n.t("settings.section.notifications.sub")
         },
         {
             id: "calendar",
-            icon: "◫",
+            icon: "qrc:/brand/icons/heap-17-calendar.svg",
             title: I18n.t("settings.section.calendar.title"),
             sub: I18n.t("settings.section.calendar.sub")
         },
         {
             id: "tasks",
-            icon: "▦",
+            icon: "qrc:/brand/icons/heap-01-board.svg",
             title: I18n.t("settings.section.tasks.title"),
             sub: I18n.t("settings.section.tasks.sub")
         },
         {
             id: "shortcuts",
-            icon: "⌨",
+            icon: "qrc:/brand/icons/heap-10-hotkeys.svg",
             title: I18n.t("settings.section.shortcuts.title"),
             sub: I18n.t("settings.section.shortcuts.sub")
         },
         {
             id: "cpp",
-            icon: "C++",
+            icon: "qrc:/brand/icons/heap-18-code.svg",
             title: I18n.t("settings.section.cpp.title"),
             sub: I18n.t("settings.section.cpp.sub"),
           unimplemented: true },
         {
             id: "integrations",
-            icon: "⎘",
+            icon: "qrc:/brand/icons/heap-19-integrations.svg",
             title: I18n.t("settings.section.integrations.title"),
             sub: I18n.t("settings.section.integrations.sub")
         },
-        {id: "git", icon: "⎇", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
-        {id: "data", icon: "↯", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
-        {id: "help", icon: "?", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
+        {id: "git", icon: "qrc:/brand/icons/heap-07-code-review.svg", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
+        {id: "data", icon: "qrc:/brand/icons/heap-20-data.svg", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
+        {id: "help", icon: "qrc:/brand/icons/heap-21-help.svg", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
         {
             id: "about",
-            icon: "ⓘ",
+            icon: "qrc:/brand/icons/heap-22-about.svg",
             title: I18n.t("settings.section.about.title"),
             sub: I18n.t("settings.section.about.sub")
         }
@@ -384,14 +385,16 @@ Item {
                                     anchors.fill: parent
                                     anchors.leftMargin: 10; anchors.rightMargin: 10
                                     spacing: 10
-                                    Text {
-                                        text: modelData.icon
+                                    // One drawn icon set, the same as the side
+                                    // rail's; the unicode glyphs came from
+                                    // whatever font had them, in any size.
+                                    IconImage {
+                                        source: modelData.icon
+                                        Layout.preferredWidth: 18
+                                        Layout.preferredHeight: 18
+                                        sourceSize.width: 36
+                                        sourceSize.height: 36
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
-                                        font.pixelSize: modelData.icon === "C++" ? 11 : 16
-                                        font.family: modelData.icon === "C++" ? Theme.fontMono : Theme.fontUi
-                                        font.weight: Font.DemiBold
-                                        Layout.preferredWidth: 24
-                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -492,11 +495,22 @@ Item {
                             font.pixelSize: 11
                             Layout.topMargin: 12
                         }
-                        Text {
-                            text: (root._activeMeta().icon || "") + "  " + (root._activeMeta().title || "")
-                            color: Theme.text
-                            font.pixelSize: 18
-                            font.weight: Font.DemiBold
+                        RowLayout {
+                            spacing: 10
+                            IconImage {
+                                source: root._activeMeta().icon || ""
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 20
+                                sourceSize.width: 40
+                                sourceSize.height: 40
+                                color: Theme.text
+                            }
+                            Text {
+                                text: root._activeMeta().title || ""
+                                color: Theme.text
+                                font.pixelSize: 18
+                                font.weight: Font.DemiBold
+                            }
                         }
                         Text {
                             text: root._activeMeta().sub || ""
@@ -1735,6 +1749,11 @@ Item {
                                 color: Theme.textDim
                                 font.pixelSize: 10
                                 text: {
+                                    // With a refresh token heap renews the
+                                    // session itself; an expiry time then only
+                                    // made a working card look about to break.
+                                    if ((intSection.secretsRev, AppController.hasIntegrationSecret(intCard.intKey, "refreshToken")))
+                                        return I18n.t("settings.integrations.signedInBrowserRenews");
                                     const raw = intCard.conf.tokenExpiresAt || "";
                                     if (raw.length === 0)
                                         return I18n.t("settings.integrations.signedInBrowser");

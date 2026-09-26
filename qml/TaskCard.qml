@@ -227,7 +227,7 @@ Rectangle {
                 }
             }
             Text {
-                visible: card.task && card.task.branch && String(card.task.branch).length > 0
+                visible: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
                 text: card.task && card.task.branch
                       ? "⎇ " + String(card.task.branch).split("/").pop().substring(0, 18)
                       : ""
@@ -238,7 +238,7 @@ Rectangle {
             }
             // ── Git live-status chips — fed by GitWatcher via TaskModel ──
             Rectangle {
-                visible: card.task && (card.task.gitAhead || 0) > 0
+                visible: !!(card.task && (card.task.gitAhead || 0) > 0)
                 radius: 4
                 color: Theme.withAlpha(Theme.accent, 0.14)
                 border.color: Theme.accent
@@ -256,7 +256,7 @@ Rectangle {
                 }
             }
             Rectangle {
-                visible: card.task && String(card.task.prState || "").length > 0
+                visible: !!(card.task && String(card.task.prState || "").length > 0)
                 radius: 4
                 color: {
                     const s = card.task ? String(card.task.prState || "") : "";
@@ -292,7 +292,7 @@ Rectangle {
             // parsing. Tooltip shows the most recent subject.
             Rectangle {
                 id: commitChip
-                visible: card.task && card.task.recentCommits && card.task.recentCommits.length > 0
+                visible: !!(card.task && card.task.recentCommits && card.task.recentCommits.length > 0)
                 radius: 4
                 color: Theme.withAlpha(Theme.textDim, 0.14)
                 border.color: Theme.border
@@ -381,7 +381,7 @@ Rectangle {
 
         Text {
             Layout.fillWidth: true
-            visible: card.task && card.task.desc && String(card.task.desc).length > 0
+            visible: !!(card.task && card.task.desc && String(card.task.desc).length > 0)
             text: card.task ? card.task.desc : ""
             textFormat: Text.PlainText
             color: Theme.textMuted
@@ -481,7 +481,7 @@ Rectangle {
             }
             // Recurrence chip (HEAP-77).
             Rectangle {
-                visible: card.task && card.task.recurrence && String(card.task.recurrence).length > 0
+                visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
                 radius: 4
                 color: Theme.withAlpha(Theme.mOneone, 0.14)
                 border.color: Theme.mOneone
@@ -501,7 +501,7 @@ Rectangle {
             Item { Layout.fillWidth: true }
             // Time-tracking chip — click to start/stop; live while running.
             Rectangle {
-                visible: card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0)
+                visible: !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
                 radius: 4
                 color: card.task && card.task.isTiming ? Theme.withAlpha(Theme.p1, 0.18) : Theme.withAlpha(Theme.textDim, 0.14)
                 border.color: card.task && card.task.isTiming ? Theme.p1 : Theme.border
@@ -535,7 +535,7 @@ Rectangle {
                 }
             }
             Rectangle {
-                visible: card.scheduled && card.scheduled.length > 0
+                visible: !!(card.scheduled && card.scheduled.length > 0)
                 radius: 4
                 color: Theme.accentSoft
                 implicitWidth: schedT.implicitWidth + 10

@@ -369,6 +369,45 @@ TEST_F(AppController, UpdateEvent_DragThenUndo_RestoresTheSlot) {
   EXPECT_DOUBLE_EQ(e.start, 10.0);
 }
 
+// ─── C6: names, long spans, working hours ─────────────────────────────
+
+TEST_F(AppController, AddStatus_NameAlreadyUsed_IsRefused) {
+  const int before = static_cast<int>(app_->statuses().size());
+  app_->addStatus(QStringLiteral("done"), QString());  // "Done" exists, in another case
+  EXPECT_EQ(static_cast<int>(app_->statuses().size()), before);
+}
+
+TEST_F(AppController, CreateProfile_NameAlreadyUsed_ReturnsEmpty) {
+  const QString first = app_->createProfile(QStringLiteral("Twin"), QString());
+  ASSERT_FALSE(first.isEmpty());
+  EXPECT_TRUE(app_->createProfile(QStringLiteral("twin"), QString()).isEmpty());
+  app_->deleteProfile(first);
+}
+
+TEST_F(AppController, ImportProfileFromJson_SameNameAsExisting_GetsASuffix) {
+  const QString json = app_->exportActiveProfileJson();
+  const QString activeName = app_->profiles().value(0).toMap().value(QStringLiteral("name")).toString();
+  ASSERT_TRUE(app_->importProfileFromJson(json, false).isEmpty());
+  const QString imported = app_->profiles().last().toMap().value(QStringLiteral("name")).toString();
+  EXPECT_NE(imported.compare(activeName, Qt::CaseInsensitive), 0);
+  EXPECT_TRUE(imported.endsWith(QStringLiteral(")"))) << imported.toStdString();
+}
+
+TEST_F(AppController, DeadlineDiffLabel_YearsOverdue_SpeaksInYears) {
+  const QDate today = app_->today();
+  EXPECT_EQ(app_->deadlineDiffLabel(today.addDays(-800)), QStringLiteral("2 yr overdue"));
+  EXPECT_EQ(app_->deadlineDiffLabel(today.addDays(90)), QStringLiteral("in 3 mo"));
+  EXPECT_EQ(app_->deadlineDiffLabel(today.addDays(-3)), QStringLiteral("3d overdue"));
+}
+
+TEST_F(AppController, SetWorkdayEnd_BeforeStart_AdjustsAndSaysSo) {
+  app_->setWorkdayStart(9);
+  QSignalSpy toasts(app_.get(), &::AppController::toast);
+  app_->setWorkdayEnd(8);
+  EXPECT_EQ(app_->workdayEnd(), 10);
+  EXPECT_EQ(toasts.count(), 1);
+}
+
 // ─── S7: one backup per interval, across restarts ──────────────────────
 
 TEST_F(AppController, FlushSave_RecentBackupFromEarlierRun_DoesNotCopyAgain) {

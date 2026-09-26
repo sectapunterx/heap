@@ -488,14 +488,37 @@ Popup {
                         required property var modelData
                         Layout.fillWidth: true
                         spacing: 1
-                        Text {
-                            text: "@" + String(modelData.author || "")
-                                  + (modelData.createdAt && modelData.createdAt.getTime
-                                     && !isNaN(modelData.createdAt.getTime())
-                                     ? " · " + AppController.shortDate(modelData.createdAt) : "")
-                            textFormat: Text.PlainText
-                            color: Theme.textDim
-                            font.pixelSize: 9
+                        RowLayout {
+                            spacing: 6
+                            Text {
+                                text: "@" + String(modelData.author || "")
+                                      + (modelData.createdAt && modelData.createdAt.getTime
+                                         && !isNaN(modelData.createdAt.getTime())
+                                         ? " · " + AppController.shortDate(modelData.createdAt) : "")
+                                textFormat: Text.PlainText
+                                color: Theme.textDim
+                                font.pixelSize: 9
+                            }
+                            // Every tracker's comments can be opened where
+                            // they live; Jira and GitLab had no link at all.
+                            Text {
+                                objectName: "te-comment-link"
+                                visible: String(modelData.url || "").length > 0
+                                text: "↗ " + I18n.t("ticket.openComment")
+                                color: commentLinkMA.containsMouse ? Theme.accent : Theme.accentStrong
+                                font.pixelSize: 9
+                                MouseArea {
+                                    id: commentLinkMA
+                                    anchors.fill: parent
+                                    anchors.margins: -3
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        const url = String(modelData.url || "");
+                                        if (AppController.isSafeLink(url)) Qt.openUrlExternally(url);
+                                    }
+                                }
+                            }
                         }
                         Text {
                             Layout.fillWidth: true
@@ -524,7 +547,7 @@ Popup {
             // New tasks: TODO placeholder — final id is generated on save.
             // Edit: pre-filled with the current id (still editable).
             placeholderText: root.isNew ? I18n.t("editor.ph.ticketId")
-                                        : "LTE-XXXX"
+                                        : I18n.t("editor.ph.ticketIdEdit")
             font.family: Theme.fontMono
             background: FieldBg {
             }

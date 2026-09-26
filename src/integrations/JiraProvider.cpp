@@ -433,6 +433,10 @@ QVector<ExternalComment> parseJiraComments(const QByteArray& json) {
     // ADF on Cloud, a plain string on Server/DC — adfValueToText takes both.
     c.body = adfValueToPlain(o.value(QStringLiteral("body")));
     c.createdAt = parseTrackerTimestamp(o.value(QStringLiteral("created")));
+    const QString id = o.value(QStringLiteral("id")).toString();
+    if(!id.isEmpty()) {
+      c.anchor = QStringLiteral("?focusedCommentId=") + id;
+    }
     if(c.body.isEmpty()) {
       continue;
     }

@@ -987,6 +987,8 @@ class AppController : public QObject {
   int m_bulkMoveDepth = 0;
   // Providers already asked for their full status list this session.
   QSet<QString> m_statusesAsked;
+  // Providers whose next tasksFetched answers a quiet follow-up pull.
+  QSet<QString> m_settlePulls;
 
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
@@ -1080,6 +1082,11 @@ class AppController : public QObject {
   // did not parse, so writing would drop them.
   bool m_saveBlocked = false;
   int statusIndexOf(const QString& id) const;
+  // Whether another column (not `exceptId`) already carries `name`, ignoring case.
+  bool statusNameTaken(const QString& name, const QString& exceptId) const;
+  bool profileNameTaken(const QString& name, const QString& exceptId) const;
+  // `base`, or "base (N)" with the first N no profile uses.
+  QString uniqueProfileName(const QString& base) const;
   // One column's tasks in board order (rank, then id so the order is total).
   QVector<::Task> columnTasks(const QString& statusId, const QString& excludeId) const;
   // Spread a column's ranks back out when a gap has shrunk too far to take

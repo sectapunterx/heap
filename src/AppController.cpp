@@ -102,6 +102,9 @@ bool isLegacyShortcutDefault(const QString& id, const QString& sequence) {
 
 namespace {
 constexpr int kBackupIntervalSeconds = 5 * 60;
+// How long after a Jira pull the follow-up pull runs (see the tasksFetched
+// handler): long enough for Jira Cloud's search index to catch up.
+constexpr int kSettlePullDelayMs = 20 * 1000;
 constexpr int kBackupRetentionCount = 20;
 
 // EN/RU string table for toast / system messages emitted from C++. QML chrome
@@ -277,6 +280,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
       {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
+      {"deadline.overdueLong", {"%1 overdue", "просрочено на %1"}},
+      {"deadline.inLong", {"in %1", "через %1"}},
+      {"span.months", {"%1 mo", "%1 мес."}},
+      {"span.years", {"%1 yr", "%1 г."}},
+      {"workday.adjusted",
+       {"A working day ends after it starts — kept %1:00–%2:00", "Рабочий день должен заканчиваться позже начала — оставлено %1:00–%2:00"}},
+      {"status.nameTaken", {"A column named %1 already exists", "Колонка «%1» уже есть"}},
+      {"profile.nameTaken", {"A profile named %1 already exists", "Профиль «%1» уже есть"}},
       {"deadline.today", {"today", "сегодня"}},
       {"deadline.tomorrow", {"+1 day", "+1 день"}},
       {"deadline.inDays", {"+%1 days", "+%1 дн."}},
@@ -364,11 +375,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"selection.bar.unarchive", {"Unarchive", "Из архива"}},
       {"selection.bar.delete", {"Delete", "Удалить"}},
       {"selection.bar.clear", {"Clear", "Снять"}},
-      {"selection.toast.deleted", {"Deleted %1 tasks", "Удалено задач: %1"}},
-      {"selection.toast.restored", {"Restored %1 tasks", "Восстановлено задач: %1"}},
-      {"selection.toast.moved", {"Moved %1 tasks", "Перемещено задач: %1"}},
-      {"selection.toast.archived", {"Archived %1 tasks", "В архив: %1"}},
-      {"selection.toast.unarchived", {"Unarchived %1 tasks", "Из архива: %1"}},
+      {"selection.toast.deleted", {"Tasks deleted: %1", "Удалено задач: %1"}},
+      {"selection.toast.restored", {"Tasks restored: %1", "Восстановлено задач: %1"}},
+      {"selection.toast.moved", {"Tasks moved: %1", "Перемещено задач: %1"}},
+      {"selection.toast.archived", {"Tasks archived: %1", "Задач в архиве: %1"}},
+      {"selection.toast.unarchived", {"Tasks unarchived: %1", "Задач возвращено из архива: %1"}},
       // ---- Notification copy ----
       {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
       {"notify.deadlineWhen.h1", {"in 1 hour", "через час"}},
@@ -726,8 +737,11 @@ void AppController::focusStatusColumn(const QString& statusId) {
 
 void AppController::setWorkdayStart(int v) {
   v = qBound(0, v, 23);
+  // A working day has to end after it starts; asking for 20 → 8 used to land
+  // silently on 18–19. Keep the adjustment, but say so.
   if(v >= m_workdayEnd) {
     v = m_workdayEnd - 1;
+    emit toast(tr_("workday.adjusted").arg(v).arg(m_workdayEnd));
   }
   if(v == m_workdayStart) {
     return;
@@ -741,6 +755,7 @@ void AppController::setWorkdayEnd(int v) {
   v = qBound(1, v, 24);
   if(v <= m_workdayStart) {
     v = m_workdayStart + 1;
+    emit toast(tr_("workday.adjusted").arg(m_workdayStart).arg(v));
   }
   if(v == m_workdayEnd) {
     return;
@@ -3004,6 +3019,10 @@ void AppController::addStatus(const QString& name, const QString& color) {
   if(name.trimmed().isEmpty()) {
     return;
   }
+  if(statusNameTaken(name, QString())) {
+    emit toast(tr_("status.nameTaken").arg(name.trimmed()));
+    return;
+  }
   const QString base = name.toLower();
   QString slug;
   for(const QChar c : base) {
@@ -3036,9 +3055,26 @@ void AppController::addStatus(const QString& name, const QString& color) {
   scheduleSave();
 }
 
+bool AppController::statusNameTaken(const QString& name, const QString& exceptId) const {
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value("id").toString() != exceptId && m.value("name").toString().trimmed().compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void AppController::renameStatus(const QString& id, const QString& name) {
   const int i = statusIndexOf(id);
   if(i < 0 || name.trimmed().isEmpty()) {
+    return;
+  }
+  // Two columns with one name cannot be told apart on the board, in a filter
+  // or in the status mapping.
+  if(statusNameTaken(name, id)) {
+    emit toast(tr_("status.nameTaken").arg(name.trimmed()));
+    emit statusesChanged();  // the editor falls back to the stored name
     return;
   }
   QVariantMap m = m_statuses[i].toMap();
@@ -3261,6 +3297,16 @@ QString AppController::deadlineDiffLabel(const QDate& deadline) const {
     return QStringLiteral("—");
   }
   const int d = m_today.daysTo(deadline);
+  // Past two months a day count stops meaning anything ("2460d overdue").
+  const auto longSpan = [this](int days) {
+    return days >= 365 ? tr_("span.years").arg(days / 365) : tr_("span.months").arg(days / 30);
+  };
+  if(d <= -60) {
+    return tr_("deadline.overdueLong").arg(longSpan(-d));
+  }
+  if(d >= 60) {
+    return tr_("deadline.inLong").arg(longSpan(d));
+  }
   if(d < 0) {
     return tr_("deadline.overdue").arg(-d);
   }
@@ -3565,11 +3611,14 @@ void AppController::seedExampleProfile() {
   p.tasks = SampleData::tasks(seedLang);
   p.people = SampleData::people(seedLang);
   QVariantList st;
-  for(const auto& m : SampleData::statuses()) {
+  for(const auto& m : SampleData::statuses(seedLang)) {
     st.push_back(m);
   }
   p.statuses = st;
   p.docsState.clear();
+  p.notes = SampleData::notes(seedLang);
+  p.activeNoteId = p.notes.isEmpty() ? QString() : p.notes.constFirst().id;
+  p.notesState = p.notes.isEmpty() ? QString() : p.notes.constFirst().body;
   m_profiles.push_back(p);
   m_activeProfileId = p.id;
 
@@ -4441,7 +4490,21 @@ void AppController::applyIntegrationSettings() {
             this,
             [this, provider, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
               m_retriedAfter401.remove(providerId);
+              const bool settlePull = m_settlePulls.remove(providerId);
               const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues, provider->lastPullComplete());
+              // Jira Cloud's search is eventually consistent: an issue created
+              // a moment ago is often missing from the first answer and turned
+              // up only on the next sync. One quiet follow-up pull a little
+              // later picks it up; it only speaks if it found something.
+              if(!settlePull && providerId == QStringLiteral("jira")) {
+                QTimer::singleShot(kSettlePullDelayMs, this, [this, providerId]() {
+                  m_settlePulls.insert(providerId);
+                  syncProviderNow(providerId);
+                });
+              }
+              if(settlePull && stats.added == 0 && stats.updated == 0 && stats.gone == 0) {
+                return;
+              }
               // "Synced 12 issues" every quarter of an hour says nothing about
               // whether anything happened. Report what actually changed.
               QString message = (stats.added == 0 && stats.updated == 0)
@@ -4459,6 +4522,10 @@ void AppController::applyIntegrationSettings() {
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
     connect(
         provider, &heap::integrations::IntegrationProvider::pullFailed, this, [this, providerId, label](int status, const QString& error) {
+          // A failed follow-up pull is not news: the pull before it answered.
+          if(m_settlePulls.remove(providerId)) {
+            return;
+          }
           // A session connected before expiry tracking existed has no
           // tokenExpiresAt, so its first warning is the 401 itself: refresh once
           // and retry rather than making the user sign in again. Only worth it
@@ -5142,8 +5209,9 @@ void AppController::fetchTicketComments(const QString& taskId) {
   // The issue's own repo, which after a cross-project pull is not the one in
   // the settings card.
   const QString project = t.externalMeta.project;
+  const QString issueUrl = t.externalUrl;
 
-  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project]() {
+  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project, issueUrl]() {
     for(const auto& provider : m_syncProviders) {
       if(provider->id() != providerId) {
         continue;
@@ -5154,7 +5222,7 @@ void AppController::fetchTicketComments(const QString& taskId) {
       connect(provider.get(),
               &heap::integrations::IntegrationProvider::commentsFetched,
               guard,
-              [this, guard, taskId, externalId](
+              [this, guard, taskId, externalId, issueUrl](
                   const QString& id, const QVector<heap::integrations::ExternalComment>& comments, const QString& error) {
                 if(id != externalId) {
                   return;  // another ticket's reply on the same provider
@@ -5163,10 +5231,16 @@ void AppController::fetchTicketComments(const QString& taskId) {
                 QVariantList out;
                 out.reserve(comments.size());
                 for(const heap::integrations::ExternalComment& c : comments) {
+                  // Every comment links somewhere: its own URL, an anchor on
+                  // the issue page, or at worst the issue itself.
+                  QString url = c.url;
+                  if(url.isEmpty() && !issueUrl.isEmpty()) {
+                    url = issueUrl + c.anchor;
+                  }
                   out.append(QVariantMap{{QStringLiteral("author"), c.author},
                                          {QStringLiteral("body"), c.body},
                                          {QStringLiteral("createdAt"), c.createdAt},
-                                         {QStringLiteral("url"), c.url}});
+                                         {QStringLiteral("url"), url}});
                 }
                 emit ticketCommentsLoaded(taskId, out, error);
               });
@@ -5736,7 +5810,7 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
       p.statuses.append(m);
     }
   } else {
-    for(const auto& m : SampleData::statuses()) {
+    for(const auto& m : SampleData::statuses(m_language == QStringLiteral("ru") ? SampleData::Lang::Ru : SampleData::Lang::En)) {
       p.statuses.append(m);
     }
   }
@@ -6208,8 +6282,35 @@ void AppController::setActiveProfileId(const QString& id) {
   scheduleSave();
 }
 
+bool AppController::profileNameTaken(const QString& name, const QString& exceptId) const {
+  for(const Profile& p : m_profiles) {
+    if(p.id != exceptId && p.name.trimmed().compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+QString AppController::uniqueProfileName(const QString& base) const {
+  if(!profileNameTaken(base, QString())) {
+    return base;
+  }
+  // "Work", "Work (2)", "Work (3)" — the switcher shows names, so two equal
+  // ones cannot be told apart there.
+  int n = 2;
+  QString candidate;
+  do {
+    candidate = QStringLiteral("%1 (%2)").arg(base).arg(n++);
+  } while(profileNameTaken(candidate, QString()));
+  return candidate;
+}
+
 QString AppController::createProfile(const QString& name, const QString& color) {
   if(name.trimmed().isEmpty()) {
+    return QString();
+  }
+  if(profileNameTaken(name, QString())) {
+    emit toast(tr_("profile.nameTaken").arg(name.trimmed()));
     return QString();
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
@@ -6232,6 +6333,11 @@ void AppController::renameProfile(const QString& id, const QString& newName) {
     return;
   }
   if(m_profiles[i].name == newName) {
+    return;
+  }
+  if(profileNameTaken(newName, id)) {
+    emit toast(tr_("profile.nameTaken").arg(newName.trimmed()));
+    emit profilesChanged();  // the editor falls back to the stored name
     return;
   }
   m_profiles[i].name = newName.trimmed();
@@ -6324,7 +6430,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
     snapshotActiveProfile();
   }
   Profile copy = m_profiles[i];
-  copy.name = newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed();
+  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
   m_profiles.push_back(copy);
@@ -6742,6 +6848,8 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   if(imported.name.trimmed().isEmpty()) {
     imported.name = QStringLiteral("Imported");
   }
+  // An import of a profile that is already here arrives as "Name (2)".
+  imported.name = uniqueProfileName(imported.name.trimmed());
 
   // Resolve id collisions — re-slug so we never overwrite an existing profile.
   if(imported.id.isEmpty() || profileIndexOf(imported.id) >= 0) {
@@ -6752,7 +6860,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     imported.color = QStringLiteral("#5cc2dd");
   }
   if(imported.statuses.isEmpty()) {
-    for(const auto& m : SampleData::statuses()) {
+    for(const auto& m : SampleData::statuses(m_language == QStringLiteral("ru") ? SampleData::Lang::Ru : SampleData::Lang::En)) {
       imported.statuses.append(m);
     }
   }
