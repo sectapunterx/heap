@@ -40,7 +40,7 @@ jobs:
       - name: Classify changed files
         id: filter
         if: github.event_name == 'pull_request'
-        uses: dorny/paths-filter@v4
+        uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d # v4.0.3
         with:
           # `every`: a file counts as code only if it matches all patterns,
           # i.e. it is neither under docs/ nor Markdown.
@@ -66,7 +66,7 @@ jobs:
     timeout-minutes: 10
     steps:
       # The PR's merge commit; HEAD^1 is the base it merges into.
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
 
@@ -96,8 +96,8 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 5
     steps:
-      - uses: actions/checkout@v7
-      - uses: raven-actions/actionlint@v2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: raven-actions/actionlint@3d39aea434753780c3b3d4a1a31c854b4dbf49d7 # v2.2.0
         with:
           files: ".github/workflows/*.yml"
 
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 2
 
@@ -170,7 +170,7 @@ jobs:
         shell: pwsh
         run: Add-MpPreference -ExclusionPath "${{ github.workspace }}", "${{ runner.temp }}"
 
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       # Ubuntu 24.04's apt ships Qt 6.4.2, which has a static-QML-module
       # qmlcachegen bug: file-based .qml components ("SideRail is not a type")
@@ -188,7 +188,7 @@ jobs:
 
       - name: Install Qt6 (linux)
         if: runner.os == 'Linux'
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.9.1"
           cache: true
@@ -198,7 +198,7 @@ jobs:
       # it only needs the cache directory carried between runs (below).
       - name: Setup ccache (linux, macos)
         if: runner.os != 'Windows'
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
         with:
           key: ${{ runner.os }}-ccache
 
@@ -207,7 +207,7 @@ jobs:
       # up the newest one, a PR's own or master's.
       - name: Restore ccache (windows)
         if: runner.os == 'Windows'
-        uses: actions/cache@v6
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: ${{ github.workspace }}/.ccache
           key: ${{ runner.os }}-ccache-${{ github.sha }}
@@ -219,7 +219,7 @@ jobs:
       - name: Setup MSYS2 (windows)
         id: msys2
         if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: UCRT64
           update: true
@@ -240,7 +240,7 @@ jobs:
       # (HEAP-68). Qt 6.8.1 to match Linux.
       - name: Install Qt6 (macos)
         if: runner.os == 'macOS'
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.9.1"
           cache: true
@@ -351,7 +351,7 @@ jobs:
 
       - name: Upload qmllint report (linux)
         if: always() && runner.os == 'Linux'
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: qmllint
           path: |
@@ -391,14 +391,14 @@ jobs:
 
       - name: Upload test results
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results-${{ matrix.os }}
           path: build/tests/ctest-${{ matrix.os }}.xml
 
       - name: Render test report
         if: always()
-        uses: dorny/test-reporter@v1
+        uses: dorny/test-reporter@3eeb9fc888e82e8be2fb356bbeec2750231672bc # v1
         with:
           name: tests (${{ matrix.os }})
           path: build/tests/ctest-${{ matrix.os }}.xml
@@ -458,7 +458,7 @@ jobs:
     # master too. The tests themselves take a couple of minutes.
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install build tools + system libs
         run: |
@@ -471,14 +471,14 @@ jobs:
       # Qt via install-qt-action (6.8.1) — apt's 6.4.2 can't run heap_qml_tests
       # (HEAP-71); its own QML modules ship with the install.
       - name: Install Qt6
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.9.1"
           cache: true
           modules: qtnetworkauth
 
       - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@v1.2
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
         with:
           key: ${{ runner.os }}-asan-ccache
           # -g + sanitizer objects are several times larger than Release ones.

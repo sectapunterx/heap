@@ -1,0 +1,14 @@
+# Keeps the pinned GitHub Actions current. Actions are pinned to a commit SHA
+# with the version in a trailing comment; Dependabot bumps both together.
+# Grouped into one weekly PR so an update is one review, not a dozen.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+    commit-message:
+      prefix: ci
