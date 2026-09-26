@@ -325,40 +325,48 @@ if (UNIX AND NOT APPLE)
     )
 endif ()
 
+# Compiled once and shared by every AppController suite. Before this each suite
+# compiled the whole list itself — AppController.cpp alone fourteen times, most
+# of the test build's CPU time.
+#
+# Not heap_core: that one is built with the keychain and the baked OAuth
+# credentials, and the suites must keep the secrets.json fallback and the empty
+# defaults. OBJECT rather than STATIC so every object still reaches the link, as
+# it did when the sources were compiled into each suite.
+add_library(heap_appctrl_objs OBJECT ${HEAP_APPCTRL_DEP_SOURCES})
+set_target_properties(heap_appctrl_objs PROPERTIES AUTOMOC ON)
+target_include_directories(heap_appctrl_objs PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src
+)
+target_link_libraries(heap_appctrl_objs PUBLIC
+        Qt6::Core
+        Qt6::Gui
+        Qt6::Network
+        Qt6::NetworkAuth
+        Qt6::Widgets
+        Qt6::Qml
+        Qt6::Test
+        heap_markdown
+)
+if (UNIX AND NOT APPLE)
+    find_package(Qt6 QUIET COMPONENTS DBus)
+    if (TARGET Qt6::DBus)
+        target_link_libraries(heap_appctrl_objs PUBLIC Qt6::DBus)
+    endif ()
+endif ()
+
 # heap_add_appcontroller_test(<name> <sources…>)
 #
-# Declares one gtest suite that links AppController: the given sources plus
-# HEAP_APPCTRL_DEP_SOURCES, AUTOMOC, the src/ include dir, the Qt/GTest link
-# set, optional D-Bus on Linux, and the add_test() registration.
+# Declares one gtest suite that links AppController: the given sources plus the
+# shared heap_appctrl_objs, AUTOMOC, the GTest link and the add_test()
+# registration.
 #
 # Each of these suites brings its own main() (offscreen QPA + QStandardPaths
 # test mode), so GTest::gtest_main is deliberately not linked.
 function(heap_add_appcontroller_test name)
-    add_executable(${name} ${ARGN} ${HEAP_APPCTRL_DEP_SOURCES})
+    add_executable(${name} ${ARGN})
     set_target_properties(${name} PROPERTIES AUTOMOC ON)
-
-    target_include_directories(${name} PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/../src
-    )
-
-    target_link_libraries(${name} PRIVATE
-            Qt6::Core
-            Qt6::Gui
-            Qt6::Network
-            Qt6::NetworkAuth
-            Qt6::Widgets
-            Qt6::Qml
-            Qt6::Test
-            heap_markdown
-            GTest::gtest
-    )
-    if (UNIX AND NOT APPLE)
-        find_package(Qt6 QUIET COMPONENTS DBus)
-        if (TARGET Qt6::DBus)
-            target_link_libraries(${name} PRIVATE Qt6::DBus)
-        endif ()
-    endif ()
-
+    target_link_libraries(${name} PRIVATE heap_appctrl_objs GTest::gtest)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
