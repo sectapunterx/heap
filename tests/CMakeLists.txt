@@ -545,8 +545,11 @@ target_link_libraries(heap_qml_tests PRIVATE
 
 add_test(NAME heap_qml_tests
         COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+# COST: the slowest suite by far; under `ctest --parallel` it starts first so
+# the rest run alongside it instead of after it.
 set_tests_properties(heap_qml_tests PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic"
+        COST 1000)
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
 # ArchiveView, …) failed to resolve in the Quick Test binary on Linux under

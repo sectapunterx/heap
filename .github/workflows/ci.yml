@@ -386,11 +386,18 @@ jobs:
       # tarred build tree up and down, a second Qt / MSYS2 install, and — via
       # `needs: build` on the whole matrix — Linux tests waiting for the macOS
       # build to finish.
+      #
+      # --parallel: every suite is its own process with its own test-mode data
+      # dir (named after the executable), so they are safe to run side by side.
+      # heap_qml_tests is the long pole and carries a COST so it starts first.
+      # --timeout: a hung suite fails in minutes instead of eating the job.
       - name: Run ctest (linux, macos)
         if: runner.os != 'Windows'
         shell: bash
         run: |
           ctest --test-dir build/tests \
+            --parallel "$(getconf _NPROCESSORS_ONLN)" \
+            --timeout 300 \
             --output-on-failure \
             --output-junit ctest-${{ matrix.os }}.xml
 
@@ -402,6 +409,8 @@ jobs:
         shell: msys2 {0}
         run: |
           ctest --test-dir build/tests \
+            --parallel "$(getconf _NPROCESSORS_ONLN)" \
+            --timeout 300 \
             --output-on-failure \
             --output-junit ctest-${{ matrix.os }}.xml
 
@@ -484,7 +493,11 @@ jobs:
           LSAN_OPTIONS: detect_leaks=0
           QT_QPA_PLATFORM: offscreen
         run: |
-          ctest --test-dir build-san/tests --output-on-failure
+          # Sanitized suites run several times slower, hence the longer limit.
+          ctest --test-dir build-san/tests \
+            --parallel "$(getconf _NPROCESSORS_ONLN)" \
+            --timeout 600 \
+            --output-on-failure
 
   # ──────────────────────────────────────────────────────────────────
   # 7b. macOS packaging smoke-test.
