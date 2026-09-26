@@ -800,6 +800,14 @@ foreach (_suite migration fault_injection save_bench)
     heap_add_appcontroller_test(heap_${_suite}_tests test_${_suite}.cpp)
 endforeach ()
 
+# ─── Profiles written by released versions ───
+# Opens the state.json each shipped schema generation wrote (tests/fixtures/
+# state, one file per release that changed the schema) and checks nothing is
+# lost on the way in or on the next save.
+heap_add_appcontroller_test(heap_state_fixture_tests test_state_fixtures.cpp)
+target_compile_definitions(heap_state_fixture_tests PRIVATE
+        HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
+
 # The two benchmarks assert wall-clock budgets. CI runs ctest with --parallel,
 # and a benchmark sharing the runner's cores with other suites misses its
 # budget for reasons that have nothing to do with the code (seen under ASan).
