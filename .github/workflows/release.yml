@@ -689,7 +689,8 @@ jobs:
         working-directory: dist
         run: |
           set -eu
-          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          sums=$(find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum)
+          printf '%s\n' "$sums" > SHA256SUMS
           cat SHA256SUMS
 
       - name: Attest build provenance
@@ -698,13 +699,17 @@ jobs:
           subject-path: dist/*
 
       - name: Release notes preamble
+        env:
+          REPO: ${{ github.repository }}
         run: |
           {
             if [ "$MACOS_NOTARIZED" != "true" ]; then
-              echo '> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.'
+              echo "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**."
               echo
             fi
-            echo 'Verify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo ${{ github.repository }}`.'
+            cat <<EOF
+          Verify a download: \`sha256sum -c SHA256SUMS\`, or \`gh attestation verify <file> --repo $REPO\`.
+          EOF
           } > notes.md
 
       - name: Publish
