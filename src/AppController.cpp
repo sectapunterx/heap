@@ -23,6 +23,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
 #include "notes/MdVault.h"
 #include "notes/NoteGraph.h"
@@ -124,6 +125,17 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
       {"notes.inbox", {"Inbox", "Входящие"}},
+      {"task.idRequired", {"A task needs an id", "У задачи должен быть id"}},
+      {"task.titleRequired", {"A task needs a title", "У задачи должен быть заголовок"}},
+      {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
+      {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+      {"sync.conflicts",
+       {"%1 kept your local edits (also changed in the tracker)", "%1 — оставлены локальные правки (в трекере тоже изменены)"}},
+      {"sync.gone", {"%1 no longer in the tracker", "%1 больше нет в трекере"}},
+      {"sync.pushFailed", {"%1: the tracker did not take the change — %2", "%1: трекер не принял изменение — %2"}},
+      {"onboarding.freshUndone", {"Demo content restored", "Демо-данные возвращены"}},
+      {"notes.deleted", {"Note deleted: %1", "Заметка удалена: %1"}},
+      {"notes.restored", {"Note restored: %1", "Заметка восстановлена: %1"}},
       {"docs.untitledPage", {"Untitled page", "Без названия"}},
       {"docs.undo.deletePage", {"Page deleted", "Страница удалена"}},
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
@@ -824,24 +836,46 @@ void AppController::deleteNote(const QString& id) {
   }
   // Unsaved keystrokes go into the note they were typed in before anything
   // moves; if that is the note being deleted, they go with it, which is what
-  // deleting it means.
+  // deleting it means. Flushed before the undo scope opens, so undoing the
+  // delete does not also roll those keystrokes back.
   emit aboutToChangeActiveNote();
   const int row = m_notes.indexOfId(id);
   if(row < 0) {
     return;
   }
-  const bool wasActive = (id == m_activeNoteId);
-  m_notes.removeById(id);
-  if(wasActive) {
-    // Land on a neighbour rather than on nothing: an empty editor after a
-    // delete reads as the rest of the notes having gone too.
-    const int next = qMin(row, m_notes.rowCount() - 1);
-    m_activeNoteId = next >= 0 ? m_notes.items().at(next).id : QString();
-    m_notesState = next >= 0 ? m_notes.items().at(next).body : QString();
-    emit activeNoteChanged();
-    emit notesStateChanged();
+  const QString title = m_notes.items().at(row).title;
+  {
+    const UndoScope scope(this, tr_("notes.restored").arg(title));
+    const bool wasActive = (id == m_activeNoteId);
+    m_notes.removeById(id);
+    if(wasActive) {
+      // Land on a neighbour rather than on nothing: an empty editor after a
+      // delete reads as the rest of the notes having gone too.
+      const int next = qMin(row, m_notes.rowCount() - 1);
+      m_activeNoteId = next >= 0 ? m_notes.items().at(next).id : QString();
+      m_notesState = next >= 0 ? m_notes.items().at(next).body : QString();
+      emit activeNoteChanged();
+      emit notesStateChanged();
+    }
   }
   scheduleSave();
+  emit undoableToast(tr_("notes.deleted").arg(title), 8);
+}
+
+void AppController::reconcileActiveNote() {
+  const int row = m_notes.indexOfId(m_activeNoteId);
+  if(row < 0) {
+    m_activeNoteId = m_notes.rowCount() > 0 ? m_notes.items().constFirst().id : QString();
+    m_notesState = m_notes.rowCount() > 0 ? m_notes.items().constFirst().body : QString();
+    emit activeNoteChanged();
+    emit notesStateChanged();
+    return;
+  }
+  const QString& body = m_notes.items().at(row).body;
+  if(body != m_notesState) {
+    m_notesState = body;
+    emit notesStateChanged();
+  }
 }
 
 void AppController::setNoteBody(const QString& id, const QString& body) {
@@ -1012,17 +1046,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // repo, but the push path is built from the configured one — the PATCH would
   // land on a different issue that happens to share the number. Its own repo is
   // known, but writing back through it is HEAP-155's problem; skip it here.
-  if(!t.externalId.isEmpty() && !t.externalProvider.isEmpty() && !t.externalMeta.crossProject) {
-    const QString externalId = t.externalId;
-    ensureFreshToken(t.externalProvider, [this, providerId = t.externalProvider, externalId, newStatus]() {
-      for(const auto& provider : m_syncProviders) {
-        if(provider->id() == providerId) {
-          provider->pushStatusChange(externalId, newStatus);
-          return;
-        }
-      }
-    });
-  }
+  pushStatusToTracker(taskId, newStatus);
 
   // Re-evaluate blocked-stuck set (the task may have left "blocked").
   if(m_blockedStuckIds.remove(id)) {
@@ -1037,6 +1061,11 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     if(cal.value("autoFocusBlock", true).toBool()) {
       scheduleFocusBlockFor(taskId);
     }
+  }
+
+  // Time set aside for work that is now finished is time given back.
+  if(newStatus == QStringLiteral("done")) {
+    dropFutureFocusBlocks(taskId);
   }
 
   // Recurring task completed → spawn the next occurrence (HEAP-77).
@@ -1082,8 +1111,80 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     }
   }
 
-  emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
+  if(m_bulkMoveDepth == 0) {
+    emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
+  }
   scheduleSave();
+}
+
+void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  const Task& t = m_tasks.items().at(row);
+  // An issue pulled from an "assigned to me" endpoint belongs to some other
+  // repo, but the push path is built from the configured one — the PATCH would
+  // land on a different issue that happens to share the number. Its own repo is
+  // known, but writing back through it is HEAP-155's problem; skip it here.
+  if(t.externalId.isEmpty() || t.externalProvider.isEmpty() || t.externalMeta.crossProject) {
+    return;
+  }
+  const QString providerId = t.externalProvider;
+  const QString externalId = t.externalId;
+  // Remembered until the tracker answers, so a failure can name the card and
+  // offer to send the same status again.
+  m_pendingPushes.insert(providerId + QChar('\n') + externalId, taskId);
+  ensureFreshToken(providerId, [this, providerId, externalId, status]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() == providerId) {
+        provider->pushStatusChange(externalId, status);
+        return;
+      }
+    }
+  });
+}
+
+void AppController::onTaskPushed(const QString& providerId, const QString& externalId, bool ok, const QString& error) {
+  const QString taskId = m_pendingPushes.take(providerId + QChar('\n') + externalId);
+  int row = taskId.isEmpty() ? -1 : m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    for(int i = 0; i < m_tasks.rowCount(); ++i) {
+      const Task& t = m_tasks.items().at(i);
+      if(t.externalProvider == providerId && t.externalId == externalId && !t.externalMeta.crossProject) {
+        row = i;
+        break;
+      }
+    }
+  }
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  // The flag is what keeps the card where the user put it until the tracker
+  // agrees, and what the card shows as "not synced".
+  const QString wanted = ok ? QString() : t.status;
+  if(t.externalMeta.unsyncedStatus != wanted) {
+    t.externalMeta.unsyncedStatus = wanted;
+    m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(!ok) {
+    qWarning() << providerId << "push failed for" << externalId << ":" << error;
+    emit trackerPushFailed(t.id, tr_("sync.pushFailed").arg(externalKeyOf(t), error));
+  }
+}
+
+bool AppController::isSafeLink(const QString& url) const {
+  return heap::md::isSafeLink(url);
+}
+
+void AppController::retryTrackerPush(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  pushStatusToTracker(taskId, m_tasks.items().at(row).status);
 }
 
 // Tasks of one column, in the order the board shows them. Ties on rank fall
@@ -1321,9 +1422,21 @@ void AppController::createTaskFromTemplate(const QString& name) {
   emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
 }
 
-void AppController::saveTask(const QVariantMap& draft) {
+bool AppController::saveTask(const QVariantMap& draft) {
   Task t;
+  const bool isNew = draft.value("_isNew").toBool();
+  const QString originalId = draft.value("_originalId").toString().trimmed();
   t.id = draft.value("id").toString().trimmed();
+  // A cleared id field on an existing task means "leave the id alone", not
+  // "rename it to nothing" — a task with an empty id cannot be opened, moved or
+  // deleted again.
+  if(t.id.isEmpty() && !isNew) {
+    t.id = originalId;
+  }
+  if(t.id.isEmpty()) {
+    emit toast(tr_("task.idRequired"));
+    return false;
+  }
   t.title = draft.value("title").toString();
   t.desc = draft.value("desc").toString();
   t.priority = draft.value("priority").toString();
@@ -1347,9 +1460,13 @@ void AppController::saveTask(const QVariantMap& draft) {
   t.estimateMinutes = draft.value("estimateMinutes").toInt();
   t.someday = draft.value("someday").toBool();
   t.labels = labelsFromVariant(draft.value("labels").toList());
-  const bool isNew = draft.value("_isNew").toBool();
-  if(isNew && t.title.trimmed().isEmpty()) {
-    return;
+  // Every card needs something to show; an edit that blanks the title used to
+  // leave a card with nothing on it.
+  if(t.title.trimmed().isEmpty()) {
+    if(!isNew) {
+      emit toast(tr_("task.titleRequired"));
+    }
+    return false;
   }
 
   // An id that another task already holds is a destroyed task: the save ends in
@@ -1357,12 +1474,37 @@ void AppController::saveTask(const QVariantMap& draft) {
   // armed, and on the rename path the victim also inherits the renamed task's
   // calendar events. Refuse instead, and say which task is in the way so the
   // editor stays open on the unsaved draft.
-  const QString claimedBy = draft.value("_originalId").toString().trimmed();
-  const QString heldId = (!isNew && !claimedBy.isEmpty()) ? claimedBy : (isNew ? QString() : t.id);
-  if(t.id != heldId && m_tasks.indexOfId(t.id) >= 0) {
-    emit toast(tr_("task.idTaken").arg(t.id));
-    return;
+  // Ids compare without case: "app-104" and "APP-104" read as the same ticket
+  // to a person, so they must not become two tasks.
+  const QString heldId = (!isNew && !originalId.isEmpty()) ? originalId : (isNew ? QString() : t.id);
+  for(const Task& other : m_tasks.items()) {
+    if(other.id != heldId && other.id.compare(t.id, Qt::CaseInsensitive) == 0) {
+      emit toast(tr_("task.idTaken").arg(other.id));
+      return false;
+    }
   }
+
+  const int priorRow = isNew ? -1 : m_tasks.indexOfId(originalId.isEmpty() ? t.id : originalId);
+  const Task* prior = priorRow >= 0 ? &m_tasks.items().at(priorRow) : nullptr;
+  // A status no column has, or a priority outside P0..P3, hides the card: no
+  // column draws it and no filter matches it. Keep what the task had, or fall
+  // back to the board's first column and the default priority.
+  if(statusIndexOf(t.status) < 0) {
+    if(prior != nullptr && statusIndexOf(prior->status) >= 0) {
+      t.status = prior->status;
+    } else {
+      t.status = m_statuses.isEmpty() ? QStringLiteral("todo") : m_statuses.constFirst().toMap().value("id").toString();
+    }
+  }
+  static const QRegularExpression kPriority(QStringLiteral("^P[0-3]$"));
+  if(!kPriority.match(t.priority).hasMatch()) {
+    t.priority = (prior != nullptr && kPriority.match(prior->priority).hasMatch()) ? prior->priority : QStringLiteral("P2");
+  }
+
+  // Everything from here on is one undoable edit: the rename, the re-keyed
+  // calendar links and the row itself.
+  const UndoScope scope(this, tr_(isNew ? "task.createUndone" : "task.editUndone").arg(t.id));
+  const QString statusBefore = prior != nullptr ? prior->status : QString();
 
   // Preserve fields the editor doesn't expose. Without this, opening an
   // archived ticket and hitting Save silently unarchives it (struct
@@ -1407,7 +1549,6 @@ void AppController::saveTask(const QVariantMap& draft) {
   // CalEvent.taskId backlinks, and upsert under the new id. This prevents
   // the previous "duplicate appears after edit" symptom (which used to
   // happen whenever idField text drifted from the stored id).
-  const QString originalId = draft.value("_originalId").toString().trimmed();
   if(!isNew && !originalId.isEmpty() && originalId != t.id) {
     const int row = m_tasks.indexOfId(originalId);
     if(row >= 0) {
@@ -1443,8 +1584,14 @@ void AppController::saveTask(const QVariantMap& draft) {
   m_tasks.upsert(t);
   if(isNew) {
     emit toast(tr_("task.created").arg(t.id));
+  } else if(!statusBefore.isEmpty() && statusBefore != t.status) {
+    // A status picked in the editor is the same move as a drag on the board:
+    // the tracker has to hear about it, or the next pull puts the card back.
+    m_tasks.stampStatusChange(t.id);
+    pushStatusToTracker(t.id, t.status);
   }
   scheduleSave();
+  return true;
 }
 
 void AppController::deleteTask(const QString& id) {
@@ -1609,7 +1756,12 @@ QVariantMap occurrenceToVariant(const CalEvent& e) {
 
 QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to) const {
   QVariantList out;
-  for(const heap::cal::Occurrence& o : heap::cal::expandEvents(m_events.items(), from, to)) {
+  QDate covered;
+  const QVector<heap::cal::Occurrence> occurrences = heap::cal::expandEvents(m_events.items(), from, to, &covered);
+  if(covered.isValid() && covered < to) {
+    qWarning() << "eventOccurrences: range" << from << "…" << to << "cut short at" << covered;
+  }
+  for(const heap::cal::Occurrence& o : occurrences) {
     QVariantMap m = occurrenceToVariant(o.event);
     m["occurrenceDate"] = o.occurrenceDate;
     m["generated"] = o.generated;
@@ -3439,29 +3591,40 @@ void AppController::resetToFirstRun() {
 void AppController::startFresh() {
   // Wipe the active profile's seeded demo content, leaving an empty but usable
   // workspace: keep the profile and its kanban columns, drop tasks / people /
-  // this profile's events / notes / docs.
-  m_tasks.reset({});
-  m_people.reset({});
+  // this profile's events / notes / docs. The banner offers it before the user
+  // has made anything of their own, but nothing stops them adding work first,
+  // so the whole wipe is one undoable step.
+  {
+    const UndoScope scope(this, tr_("onboarding.freshUndone"));
+    m_tasks.reset({});
+    m_people.reset({});
 
-  QVector<CalEvent> kept;
-  for(const CalEvent& e : m_events.items()) {
-    if(e.profileId != m_activeProfileId) {
-      kept.append(e);
+    QVector<CalEvent> kept;
+    for(const CalEvent& e : m_events.items()) {
+      if(e.profileId != m_activeProfileId) {
+        kept.append(e);
+      }
     }
-  }
-  m_events.reset(kept);
+    m_events.reset(kept);
 
-  m_notesState.clear();
-  emit notesStateChanged();
-  m_docsState.clear();
-  emit docsStateChanged();
+    m_notes.reset({});
+    m_activeNoteId.clear();
+    emit activeNoteChanged();
+    m_notesState.clear();
+    emit notesStateChanged();
+    m_docPages.reset({});
+    m_activeDocPageId.clear();
+    emit activeDocPageChanged();
+    m_docsState.clear();
+    emit docsStateChanged();
+  }
 
   m_demoActive = false;
   emit onboardingChanged();
 
   snapshotActiveProfile();
   scheduleSave();
-  emit toast(tr_("onboarding.startedFresh"));
+  emit undoableToast(tr_("onboarding.startedFresh"), 10);
 }
 
 QString AppController::classifyTaskKind(const QString& text) const {
@@ -3502,7 +3665,9 @@ AppController::UndoScope::UndoScope(AppController* owner, QString label) :
     m_events(m_outermost ? owner->m_events.items() : QVector<::CalEvent>{}),
     m_people(m_outermost ? owner->m_people.items() : QVector<::Person>{}),
     m_docPages(m_outermost ? owner->m_docPages.items() : QVector<::DocPage>{}),
-    m_statuses(m_outermost ? owner->m_statuses : QVariantList{}) {
+    m_notes(m_outermost ? owner->m_notes.items() : QVector<::Note>{}),
+    m_statuses(m_outermost ? owner->m_statuses : QVariantList{}),
+    m_docsState(m_outermost ? owner->m_docsState : QString{}) {
   ++owner->m_undoScopeDepth;
 }
 
@@ -3527,10 +3692,18 @@ AppController::UndoScope::~UndoScope() {
   entry.docPages = heap::undo::diff(m_docPages, m_owner->m_docPages.items(), [](const ::DocPage& p) {
     return p.id;
   });
+  entry.notes = heap::undo::diff(m_notes, m_owner->m_notes.items(), [](const ::Note& n) {
+    return n.id;
+  });
   if(m_statuses != m_owner->m_statuses) {
     entry.statusesTouched = true;
     entry.statusesBefore = m_statuses;
     entry.statusesAfter = m_owner->m_statuses;
+  }
+  if(m_docsState != m_owner->m_docsState) {
+    entry.docsStateTouched = true;
+    entry.docsStateBefore = m_docsState;
+    entry.docsStateAfter = m_owner->m_docsState;
   }
   const bool wasEmpty = entry.isEmpty();
   m_owner->m_undo.push(std::move(entry));
@@ -3560,11 +3733,25 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     heap::undo::applyBackward(m_events, entry.events);
     heap::undo::applyBackward(m_people, entry.people);
     heap::undo::applyBackward(m_docPages, entry.docPages);
+    heap::undo::applyBackward(m_notes, entry.notes);
   } else {
     heap::undo::applyForward(m_tasks, entry.tasks);
     heap::undo::applyForward(m_events, entry.events);
     heap::undo::applyForward(m_people, entry.people);
     heap::undo::applyForward(m_docPages, entry.docPages);
+    heap::undo::applyForward(m_notes, entry.notes);
+  }
+  if(!entry.notes.isEmpty()) {
+    reconcileActiveNote();
+  }
+
+  // Undoing a move is a move too: the tracker was told about the first one, so
+  // it has to hear the status the card is going back to, or the next pull
+  // re-applies the move the user just took back.
+  for(const heap::undo::Edit<::Task>& e : entry.tasks) {
+    if(e.existedBefore && e.existsAfter && e.before.status != e.after.status) {
+      pushStatusToTracker(e.id, backward ? e.before.status : e.after.status);
+    }
   }
 
   // A deleted task told its tracker "not mine"; bringing it back has to
@@ -3582,6 +3769,10 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   if(entry.statusesTouched) {
     m_statuses = backward ? entry.statusesBefore : entry.statusesAfter;
     emit statusesChanged();
+  }
+  if(entry.docsStateTouched) {
+    m_docsState = backward ? entry.docsStateBefore : entry.docsStateAfter;
+    emit docsStateChanged();
   }
   // The status-count cache drops itself from the task model's own signals, so
   // nothing here has to remember to invalidate it.
@@ -3773,7 +3964,8 @@ QString AppController::uniqueTaskId(const QString& base) const {
 
 AppController::MergeStats AppController::mergeExternalTasks(const QString& providerId,
                                                             const QString& idPrefix,
-                                                            const QVector<heap::integrations::ExternalTask>& issues) {
+                                                            const QVector<heap::integrations::ExternalTask>& issues,
+                                                            bool complete) {
   using heap::integrations::StatusMap;
   MergeStats stats;
 
@@ -3798,6 +3990,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // Issues the user deleted here. Deleting one is how they say "not mine";
   // re-adding it on the next pull would make the deletion meaningless.
   const QStringList dismissed = dismissedTasks(providerId);
+  // Rows this pull accounted for, and the ones it closed.
+  QSet<QString> seenIds;
+  QStringList closedIds;
 
   // An issue's URL is unique across a whole provider; its number is not, once a
   // pull spans projects. Claim by URL first so "#5 of repo A" cannot be matched
@@ -3865,13 +4060,74 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       t.statusChangedAt = QDateTime::currentDateTime();
     }
     const Task before = t;
+    const bool isNewRow = row < 0;
+    seenIds.insert(t.id);
 
-    t.title = ext.title;
-    t.desc = ext.body;
+    // Title and description are a three-way merge against what the tracker
+    // sent last time. Nothing is ever pushed back for them, so a local edit
+    // the tracker did not also touch has to survive the pull; when both sides
+    // changed, the local text wins and the user is told.
+    const bool noBase = !isNewRow && before.externalMeta.title.isEmpty() && before.externalMeta.status.isEmpty();
+    const auto mergeText = [&](QString& local, QString& base, const QString& remote) {
+      if(isNewRow || noBase) {
+        // No base means a card from before bases were kept; that build
+        // overwrote every pull, so the tracker's text is what it expects.
+        local = remote;
+      } else {
+        const bool localEdited = local != base;
+        const bool remoteChanged = remote != base;
+        if(!localEdited) {
+          local = remote;
+        } else if(remoteChanged && local != remote) {
+          ++stats.conflicts;
+        }
+      }
+      base = remote;
+    };
+    mergeText(t.title, t.externalMeta.title, ext.title);
+    mergeText(t.desc, t.externalMeta.body, ext.body);
+
     if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
       seenStatuses.append(ext.status);
     }
-    t.status = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
+    // The column is the tracker's only while the tracker is the one moving it.
+    // A status that has not changed since the last pull says nothing new, so
+    // the column the user picked here stands; that is what lets a card sit in
+    // In Progress or Blocked against a tracker that only knows open/closed.
+    const QString mapped = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
+    const QString prevRemote = t.externalMeta.status;
+    const bool remoteMoved = !prevRemote.isEmpty() && prevRemote != ext.status;
+    const auto isDone = [](const QString& column) {
+      return column == QStringLiteral("done");
+    };
+    if(isNewRow) {
+      t.status = mapped;
+    } else if(remoteMoved) {
+      // Someone moved the issue in the tracker: that is news, and it wins.
+      t.status = mapped;
+      t.externalMeta.unsyncedStatus.clear();
+    } else if(!t.externalMeta.unsyncedStatus.isEmpty()) {
+      // A move the tracker refused: keep it here until a push goes through.
+    } else if(prevRemote.isEmpty()) {
+      // Stored before the last-seen status was kept. Only a change of kind
+      // (open ↔ closed) is evidence; the rest is the user's arrangement.
+      if(isDone(mapped) != isDone(t.status)) {
+        t.status = mapped;
+      }
+    } else if(t.status == t.externalMeta.column) {
+      // Still where the last pull put it, so the user has not placed it:
+      // follow the mapping, which may have changed since.
+      t.status = mapped;
+    }
+    t.externalMeta.column = mapped;
+    t.externalMeta.status = ext.status;
+    t.externalMeta.goneUpstream = false;
+    if(t.status != before.status && !isNewRow) {
+      t.statusChangedAt = QDateTime::currentDateTime();
+      if(isDone(t.status)) {
+        closedIds.append(t.id);
+      }
+    }
     if(!ext.priority.isEmpty()) {
       t.priority = StatusMap::priority(ext.priority);
     } else if(t.priority.isEmpty()) {
@@ -3931,12 +4187,29 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     m_tasks.upsert(t);
     (row >= 0 ? stats.updated : stats.added)++;
   }
+  // A complete pull that no longer carries an issue means it was deleted or
+  // left the filter. The card stays — it may hold local notes — but says so,
+  // instead of looking like live work forever.
+  if(complete) {
+    for(int i = 0; i < m_tasks.rowCount(); ++i) {
+      Task t = m_tasks.items().at(i);
+      if(t.externalProvider != providerId || t.externalId.isEmpty() || seenIds.contains(t.id) || t.externalMeta.goneUpstream) {
+        continue;
+      }
+      t.externalMeta.goneUpstream = true;
+      m_tasks.upsert(t);
+      ++stats.gone;
+    }
+  }
+  for(const QString& id : closedIds) {
+    dropFutureFocusBlocks(id);
+  }
   // Learn this provider's vocabulary from what it actually sent, so the
   // mapping UI can offer real statuses instead of asking the user to type
   // them. Written even when nothing else changed — a status appearing for the
   // first time is news whether or not the issue carrying it was new.
   const bool learned = rememberSeenStatuses(providerId, seenStatuses);
-  if(stats.added > 0 || stats.updated > 0 || learned) {
+  if(stats.added > 0 || stats.updated > 0 || stats.gone > 0 || learned) {
     scheduleSave();
   }
   return stats;
@@ -4085,16 +4358,21 @@ void AppController::applyIntegrationSettings() {
     connect(provider,
             &heap::integrations::IntegrationProvider::tasksFetched,
             this,
-            [this, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
+            [this, provider, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
               m_retriedAfter401.remove(providerId);
-              const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues);
+              const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues, provider->lastPullComplete());
               // "Synced 12 issues" every quarter of an hour says nothing about
               // whether anything happened. Report what actually changed.
-              if(stats.added == 0 && stats.updated == 0) {
-                emit toast(tr_("sync.upToDate").arg(label));
-              } else {
-                emit toast(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
+              QString message = (stats.added == 0 && stats.updated == 0)
+                                    ? tr_("sync.upToDate").arg(label)
+                                    : tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated);
+              if(stats.conflicts > 0) {
+                message += QStringLiteral(" · ") + tr_("sync.conflicts").arg(stats.conflicts);
               }
+              if(stats.gone > 0) {
+                message += QStringLiteral(" · ") + tr_("sync.gone").arg(stats.gone);
+              }
+              emit toast(message);
             });
     // A failed pull used to arrive as an empty task list, so a bad token read
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
@@ -4122,10 +4400,8 @@ void AppController::applyIntegrationSettings() {
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
             this,
-            [providerId](const QString& externalId, bool ok, const QString& error) {
-              if(!ok) {
-                qWarning() << providerId << "push failed for" << externalId << ":" << error;
-              }
+            [this, providerId](const QString& externalId, bool ok, const QString& error) {
+              onTaskPushed(providerId, externalId, ok, error);
             });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
       emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
@@ -5426,6 +5702,12 @@ void AppController::rotateBackupIfDue() {
   } else if(interval == QLatin1String("weekly")) {
     intervalSecs = 7 * 24 * 3600;
   }
+  // The clock lives on disk, not only in memory: a fresh process used to see
+  // "never backed up", copy on every launch, and let retention push the old
+  // copies out — twenty restarts erased the whole history.
+  if(!m_lastBackupAt.isValid()) {
+    m_lastBackupAt = newestBackupTime();
+  }
   if(m_lastBackupAt.isValid() && m_lastBackupAt.secsTo(now) < intervalSecs) {
     return;
   }
@@ -5436,12 +5718,35 @@ void AppController::rotateBackupIfDue() {
   m_lastBackupAt = now;
 }
 
+QDateTime AppController::newestBackupTime() const {
+  const QDir d(backupDirPath());
+  QDateTime newest;
+  const QFileInfoList all = d.entryInfoList({"state-*.json"}, QDir::Files | QDir::NoSymLinks);
+  for(const QFileInfo& fi : all) {
+    if(fi.fileName().contains(QLatin1String("premigration"))) {
+      continue;
+    }
+    // The name carries when the copy was taken. The file time may not: a copy
+    // on Windows keeps the source's last-write time.
+    QDateTime when = QDateTime::fromString(fi.completeBaseName().mid(6), QStringLiteral("yyyyMMdd-HHmmss"));
+    if(!when.isValid()) {
+      when = fi.lastModified();
+    }
+    if(!newest.isValid() || when > newest) {
+      newest = when;
+    }
+  }
+  return newest;
+}
+
 void AppController::pruneBackups(int keep) {
   QDir d(backupDirPath());
   // Rotational snapshots only. The pre-migration copy retained by
   // loadStateOnStart must survive retention: it is the only pre-v4 image of the
   // user's data.
-  const QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
+  // Newest first by the stamp in the name, which is when the copy was taken.
+  QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Name);
+  std::reverse(all.begin(), all.end());
   int kept = 0;
   for(const QString& name : all) {
     if(name.contains(QLatin1String("premigration"))) {
@@ -6896,19 +7201,24 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
   // A bulk move used to record nothing at all, so dragging a wrong selection
   // across the board was unrecoverable. The scope covers it for free.
   UndoScope scope(this, tr_("selection.toast.moved").arg(m_selectedTaskIdsList.size()));
+  // Each card goes through moveTask, so a bulk move does what a drag does: the
+  // tracker hears about it, the review-branch rule applies, a finished
+  // recurring task spawns its next one. Only the per-card toast is held back.
   int moved = 0;
-  for(const QString& id : m_selectedTaskIdsList) {
+  ++m_bulkMoveDepth;
+  const QStringList ids = m_selectedTaskIdsList;
+  for(const QString& id : ids) {
     const int row = m_tasks.indexOfId(id);
-    if(row < 0) {
+    if(row < 0 || m_tasks.items().at(row).status == statusId) {
       continue;
     }
-    if(m_tasks.items().at(row).status == statusId) {
-      continue;
+    moveTask(id, statusId);
+    const int after = m_tasks.indexOfId(id);
+    if(after >= 0 && m_tasks.items().at(after).status == statusId) {
+      ++moved;
     }
-    m_tasks.setStatus(id, statusId);
-    m_tasks.stampStatusChange(id);
-    ++moved;
   }
+  --m_bulkMoveDepth;
   if(moved > 0) {
     scope.setLabel(tr_("selection.toast.moved").arg(moved));
     emit undoableToast(tr_("selection.toast.moved").arg(moved), 5);
@@ -6978,27 +7288,57 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
     return;
   }
   const Task& t = m_tasks.items().at(row);
-  const QVariantMap s = settingsMap();
-  const QVariantMap cal = s.value("calendar").toMap();
+  const QDateTime now = QDateTime::currentDateTime();
+  // One planned block per task is enough: a card dragged back and forth
+  // through In Progress must not stack them up.
+  for(const CalEvent& e : m_events.items()) {
+    if(e.taskId == taskId && e.type == QStringLiteral("focus") && QDateTime(e.date, heap::cal::hourToTime(qMin(e.end, 23.99))) > now) {
+      return;
+    }
+  }
+  const QVariantMap cal = settingsMap().value("calendar").toMap();
   const int durMin = cal.value("focusBlockDuration", 90).toInt();
   const double dur = std::max(0.25, durMin / 60.0);
-  const QDateTime now = QDateTime::currentDateTime();
-  const double start = nextQuarterHour(now);
-  if(start >= 24.0) {
-    return;  // No room left in today.
+  // The first free stretch inside working hours, on a working day, within the
+  // coming week. A Saturday-night drag used to book 21:00 that same night.
+  for(int offset = 0; offset < 7; ++offset) {
+    const QDate day = now.date().addDays(offset);
+    if(day.dayOfWeek() > 5) {
+      continue;
+    }
+    const double start = nextFreeSlot(day, dur);
+    if(start + dur > m_workdayEnd + 1e-9 || start < m_workdayStart - 1e-9) {
+      continue;
+    }
+    CalEvent e;
+    e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    e.title = QStringLiteral("Focus: %1").arg(t.title);
+    e.type = QStringLiteral("focus");
+    e.start = start;
+    e.end = start + dur;
+    e.date = day;
+    e.taskId = taskId;
+    e.profileId = m_activeProfileId;
+    m_events.upsert(e);
+    scheduleSave();
+    return;
   }
-  const double end = std::min(24.0, start + dur);
-  CalEvent e;
-  e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-  e.title = QStringLiteral("Focus: %1").arg(t.title);
-  e.type = QStringLiteral("focus");
-  e.start = start;
-  e.end = end;
-  e.date = now.date();
-  e.taskId = taskId;
-  e.profileId = m_activeProfileId;
-  m_events.upsert(e);
-  scheduleSave();
+}
+
+void AppController::dropFutureFocusBlocks(const QString& taskId) {
+  const QDateTime now = QDateTime::currentDateTime();
+  QStringList doomed;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.taskId == taskId && e.type == QStringLiteral("focus") && QDateTime(e.date, heap::cal::hourToTime(e.start)) > now) {
+      doomed.append(e.id);
+    }
+  }
+  for(const QString& id : doomed) {
+    m_events.removeById(id);
+  }
+  if(!doomed.isEmpty()) {
+    scheduleSave();
+  }
 }
 
 void AppController::runAutomation() {

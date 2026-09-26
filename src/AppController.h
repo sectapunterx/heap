@@ -396,7 +396,14 @@ class AppController : public QObject {
   // task (checklist in the description) onto the board.
   Q_INVOKABLE QVariantList taskTemplates() const;
   Q_INVOKABLE void createTaskFromTemplate(const QString& name);
-  Q_INVOKABLE void saveTask(const QVariantMap& draft);
+  // False when the draft was refused (taken or empty id, empty title) — the
+  // editor then stays open on it.
+  Q_INVOKABLE bool saveTask(const QVariantMap& draft);
+  // Send a card's current status to its tracker again, after a failed push.
+  Q_INVOKABLE void retryTrackerPush(const QString& taskId);
+  // Whether a link from user or tracker content may open without asking. See
+  // heap::md::isSafeLink.
+  Q_INVOKABLE bool isSafeLink(const QString& url) const;
   Q_INVOKABLE void deleteTask(const QString& id);
   Q_INVOKABLE bool canTransitionStatus(const QString& taskId, const QString& newStatus);
   Q_INVOKABLE void setArchived(const QString& taskId, bool archived);
@@ -466,14 +473,22 @@ class AppController : public QObject {
   struct MergeStats {
     int added = 0;
     int updated = 0;
+    // Cards whose title or description was edited here while the tracker
+    // changed the same field: the local text is kept and the user is told.
+    int conflicts = 0;
+    // Cards whose issue was missing from a complete pull.
+    int gone = 0;
   };
 
   // Fold a batch of pulled external tasks into the model. providerId tags the
   // task's externalProvider; idPrefix seeds ids for newly-created local tasks.
   // Public so the sync merge can be exercised without a live tracker.
+  // `complete` says the batch holds every issue the provider's filter
+  // matches; only then is a missing issue marked as gone upstream.
   MergeStats mergeExternalTasks(const QString& providerId,
                                 const QString& idPrefix,
-                                const QVector<heap::integrations::ExternalTask>& issues);
+                                const QVector<heap::integrations::ExternalTask>& issues,
+                                bool complete = false);
 
   // Fold fetched contacts into the active profile's Docs contact list and, for
   // the people actually talked to, the People rail. Returns how many contacts
@@ -906,6 +921,8 @@ class AppController : public QObject {
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
   void undoableToast(const QString& message, int seconds);
+  // A status change did not reach the tracker. The UI offers a retry.
+  void trackerPushFailed(const QString& taskId, const QString& message);
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
   void selectedTaskIdsChanged();
@@ -952,6 +969,19 @@ class AppController : public QObject {
   // Keeps `notesState` and the active note's body the same thing. Called on
   // every edit and every switch; silent when there is no active note.
   void syncActiveNoteBody();
+  // After undo/redo touched the notes: the open note may be gone, or be back
+  // with a different body. Keeps `notesState` pointing at a note that exists.
+  void reconcileActiveNote();
+
+  // Tell a mirrored card's tracker about its status. No-op for local tasks.
+  void pushStatusToTracker(const QString& taskId, const QString& status);
+  // Drop the not-yet-started focus blocks planned for a task that is finished.
+  void dropFutureFocusBlocks(const QString& taskId);
+  void onTaskPushed(const QString& providerId, const QString& externalId, bool ok, const QString& error);
+  // provider + '\n' + externalId → task id, for pushes still in flight.
+  QHash<QString, QString> m_pendingPushes;
+  // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
+  int m_bulkMoveDepth = 0;
 
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
@@ -1028,6 +1058,8 @@ class AppController : public QObject {
   QString backupDirPath() const;
   void rotateBackupIfDue();
   void pruneBackups(int keep);
+  // When the newest rotational backup on disk was taken; invalid when none.
+  QDateTime newestBackupTime() const;
   // Crash/corruption recovery for loadStateOnStart(): find the newest backup
   // that still parses (returns its object + path), and move a damaged
   // state.json aside so a fresh seed can never silently overwrite it.
@@ -1095,7 +1127,9 @@ class AppController : public QObject {
     QVector<::CalEvent> m_events;
     QVector<::Person> m_people;
     QVector<::DocPage> m_docPages;
+    QVector<::Note> m_notes;
     QVariantList m_statuses;
+    QString m_docsState;
   };
 
   // Applies one recorded entry in either direction and refreshes what the UI

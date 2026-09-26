@@ -200,6 +200,7 @@ void TrelloProvider::fetchCards(const QHash<QString, QString>& listNames) {
       emit pullFailed(replyHttpStatus(reply), describeReplyError(reply));
       return;
     }
+    setLastPullComplete(true);
     emit tasksFetched(parseTrelloCards(reply->readAll(), listNames));
   });
 }

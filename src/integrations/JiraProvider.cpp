@@ -567,6 +567,7 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
         const int pages = m_pullPage;
         m_pulling = false;
         m_pulled.clear();
+        setLastPullComplete(false);
         emit tasksFetched(got);
         emit pullFailed(0, QStringLiteral("Jira: only %1 page(s) — %2").arg(pages).arg(r.error));
         return;
@@ -581,8 +582,10 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
 
     QString nextCursor;
     int nextStart = 0;
+    const QJsonObject root = QJsonDocument::fromJson(r.body).object();
+    // Whether the tracker has more to give, cap or no cap.
+    const bool more = server ? page.size() >= kJiraPageSize : !root.value(QStringLiteral("isLast")).toBool(false);
     if(m_pullPage < kJiraMaxPages) {
-      const QJsonObject root = QJsonDocument::fromJson(r.body).object();
       if(server) {
         // No cursor and, on newer versions, no `total` either: a full page is
         // the only evidence that another one exists.
@@ -597,6 +600,7 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
       const QVector<ExternalTask> got = m_pulled;
       m_pulling = false;
       m_pulled.clear();
+      setLastPullComplete(!more || m_pullPage < kJiraMaxPages);
       emit tasksFetched(got);
       return;
     }

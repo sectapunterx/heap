@@ -625,8 +625,10 @@ Item {
         if (!url) return;
         if (url.indexOf("#") === 0) {
             showToast("Open in wiki: " + url.substring(1));
-        } else {
+        } else if (AppController.isSafeLink(url)) {
             Qt.openUrlExternally(url);
+        } else {
+            showToast(I18n.t("md.link.blocked").arg(url));
         }
     }
 

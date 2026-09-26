@@ -257,6 +257,11 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg) { toast.show(msg) }
+        function onTrackerPushFailed(taskId, msg) {
+            toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
+                AppController.retryTrackerPush(taskId)
+            });
+        }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoLastDeletion()
@@ -354,10 +359,26 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
+                        // Two-step: the first click arms, the second wipes.
+                        // One stray click used to take every task with it.
                         PillButton {
-                            text: I18n.t("demo.banner.startFresh")
-                            primary: true
-                            onClicked: AppController.startFresh()
+                            id: startFreshBtn
+                            objectName: "demo-start-fresh"
+                            property bool armed: false
+                            text: armed ? I18n.t("demo.banner.startFresh.confirm") : I18n.t("demo.banner.startFresh")
+                            primary: !armed
+                            danger: armed
+                            onClicked: {
+                                if (!armed) {
+                                    armed = true;
+                                    startFreshDisarm.restart();
+                                    return;
+                                }
+                                armed = false;
+                                startFreshDisarm.stop();
+                                AppController.startFresh();
+                            }
+                            Timer { id: startFreshDisarm; interval: 4000; onTriggered: startFreshBtn.armed = false }
                         }
                         PillButton {
                             text: I18n.t("demo.banner.keep")

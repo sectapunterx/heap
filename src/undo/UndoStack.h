@@ -156,11 +156,19 @@ struct Entry {
   // the operation most in need of an undo, and the one that would otherwise
   // leave the stack silently unable to put it back.
   Edits<DocPage> docPages;
+  // A deleted note used to be gone for good: the menu item removed it at once
+  // and nothing recorded what it held.
+  Edits<Note> notes;
   // Statuses are a handful of maps with no model behind them, so the whole
   // list is cheaper to keep than a diff.
   bool statusesTouched = false;
   QVariantList statusesBefore;
   QVariantList statusesAfter;
+  // The Docs catalog (links, snippets, contacts) is one JSON blob, so it is
+  // kept whole, like the statuses.
+  bool docsStateTouched = false;
+  QString docsStateBefore;
+  QString docsStateAfter;
   // A deleted profile is not a diff: restoring it swaps the whole workspace,
   // including which tasks the models hold. Such an entry stands alone — see
   // UndoStack::pushProfileRemoval.
@@ -169,7 +177,8 @@ struct Entry {
   int profileRow = -1;
 
   bool isEmpty() const {
-    return !profileRemoved && !statusesTouched && tasks.isEmpty() && events.isEmpty() && people.isEmpty() && docPages.isEmpty();
+    return !profileRemoved && !statusesTouched && !docsStateTouched && tasks.isEmpty() && events.isEmpty() && people.isEmpty() &&
+           docPages.isEmpty() && notes.isEmpty();
   }
 };
 

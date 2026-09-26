@@ -62,12 +62,25 @@ inline QString overrideKey(const QString& masterId, const QDate& date) {
 // Overrides are never emitted on their own: one whose master is gone would
 // otherwise appear as a ghost the user cannot explain, and one whose occurrence
 // falls outside the range has no business being drawn.
-inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored, const QDate& from, const QDate& to) {
+//
+// A range longer than kMaxExpandDays is cut short. `coveredUntil`, when given,
+// receives the last day actually expanded, so a caller can tell a quiet stretch
+// from one that was never looked at.
+inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
+                                        const QDate& from,
+                                        const QDate& to,
+                                        QDate* coveredUntil = nullptr) {
   QVector<Occurrence> out;
   if(!from.isValid() || !to.isValid() || to < from) {
+    if(coveredUntil != nullptr) {
+      *coveredUntil = QDate();
+    }
     return out;
   }
   const QDate last = from.daysTo(to) > kMaxExpandDays ? from.addDays(kMaxExpandDays) : to;
+  if(coveredUntil != nullptr) {
+    *coveredUntil = last;
+  }
 
   // Overrides, by the occurrence they replace.
   QHash<QString, const CalEvent*> overrides;

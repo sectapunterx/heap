@@ -229,9 +229,11 @@ Popup {
         // New tasks: if user left idField blank, fall back to the
         // auto-generated id captured in the draft. Edit: take the
         // (possibly renamed) text from idField.
+        // An emptied field on an existing task keeps its id: saving a task
+        // under "" made it unreachable.
         let finalId = idField.text.trim();
-        if (finalId.length === 0 && root.isNew) {
-            finalId = root.draft.id || "";
+        if (finalId.length === 0) {
+            finalId = root.isNew ? (root.draft.id || "") : root._originalId;
         }
         // Extract @handle attendees and "// comment" tail. Handles
         // remain visible in the title — only the "//" tail is
@@ -275,7 +277,10 @@ Popup {
             estimateMinutes: parseInt(estimateField.text || "0") || 0,
             someday: somedayBox.checked
         };
-        AppController.saveTask(d);
+        // A refused save (id taken, no title) keeps the editor open on the
+        // draft; closing it threw the user's edits away.
+        if (!AppController.saveTask(d))
+            return;
         // The parsed clock time now lives on the task itself, so a
         // focus block is no longer needed to keep it. A "sync" still
         // means a meeting, and a meeting is a calendar event.

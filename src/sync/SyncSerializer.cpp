@@ -22,7 +22,7 @@ static_assert(heap::meta::fieldCount<Task>() == 24,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -153,6 +153,12 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   meta[QStringLiteral("remoteUpdatedAt")] = dateTimeToStr(t.externalMeta.updatedAt);
   meta[QStringLiteral("remoteDueAt")] = dateTimeToStr(t.externalMeta.dueAt);
   meta[QStringLiteral("crossProject")] = t.externalMeta.crossProject;
+  meta[QStringLiteral("remoteStatus")] = t.externalMeta.status;
+  meta[QStringLiteral("remoteTitle")] = t.externalMeta.title;
+  meta[QStringLiteral("remoteBody")] = t.externalMeta.body;
+  meta[QStringLiteral("remoteColumn")] = t.externalMeta.column;
+  meta[QStringLiteral("unsyncedStatus")] = t.externalMeta.unsyncedStatus;
+  meta[QStringLiteral("goneUpstream")] = t.externalMeta.goneUpstream;
   o[QStringLiteral("externalMeta")] = meta;
   return o;
 }
@@ -198,6 +204,12 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.externalMeta.updatedAt = dateTimeFromStr(meta.value(QStringLiteral("remoteUpdatedAt")).toString());
   t.externalMeta.dueAt = dateTimeFromStr(meta.value(QStringLiteral("remoteDueAt")).toString());
   t.externalMeta.crossProject = meta.value(QStringLiteral("crossProject")).toBool();
+  t.externalMeta.status = meta.value(QStringLiteral("remoteStatus")).toString();
+  t.externalMeta.title = meta.value(QStringLiteral("remoteTitle")).toString();
+  t.externalMeta.body = meta.value(QStringLiteral("remoteBody")).toString();
+  t.externalMeta.column = meta.value(QStringLiteral("remoteColumn")).toString();
+  t.externalMeta.unsyncedStatus = meta.value(QStringLiteral("unsyncedStatus")).toString();
+  t.externalMeta.goneUpstream = meta.value(QStringLiteral("goneUpstream")).toBool();
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   return t;

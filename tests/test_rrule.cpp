@@ -188,3 +188,16 @@ TEST(RRuleNext, ReachesPastAWideYearlyInterval) {
   const RRule r = parseRRule(QStringLiteral("FREQ=YEARLY;INTERVAL=5"));
   EXPECT_EQ(heap::cal::nextAfter(r, QDate(2027, 3, 1), QDate(2027, 3, 1)), QDate(2032, 3, 1));
 }
+
+// ─── Month ends (audit S9) ────────────────────────────────────────────
+
+TEST(RRule, Expand_MonthlyOnThe31st_ReturnsToThe31stAfterShortMonths) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=MONTHLY"), QDate(2027, 1, 31), QDate(2027, 1, 1), QDate(2027, 5, 31));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2027, 1, 31), QDate(2027, 2, 28), QDate(2027, 3, 31), QDate(2027, 4, 30), QDate(2027, 5, 31)}));
+}
+
+TEST(RRule, Expand_YearlyOnLeapDay_ReturnsToLeapDay) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=YEARLY"), QDate(2028, 2, 29), QDate(2028, 1, 1), QDate(2032, 12, 31));
+  ASSERT_EQ(d.size(), 5);
+  EXPECT_EQ(d.last(), QDate(2032, 2, 29));
+}

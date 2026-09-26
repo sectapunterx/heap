@@ -153,6 +153,34 @@ Rectangle {
                 }
             }
             Item { Layout.fillWidth: true }
+            // The tracker refused the last status change, or the issue is no
+            // longer in the tracker. Either way the card is out of step with it.
+            Rectangle {
+                objectName: "tc-sync-state"
+                visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
+                radius: 4
+                color: Theme.withAlpha(Theme.p1, 0.14)
+                border.color: Theme.p1
+                border.width: 1
+                implicitWidth: syncStateT.implicitWidth + 10
+                implicitHeight: syncStateT.implicitHeight + 2
+                Text {
+                    id: syncStateT
+                    anchors.centerIn: parent
+                    text: card._ticket.gone ? I18n.t("taskcard.gone") : I18n.t("taskcard.unsynced")
+                    textFormat: Text.PlainText
+                    color: Theme.p1
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+                QQC.ToolTip.visible: syncStateHover.hovered
+                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip") : I18n.t("taskcard.unsynced.tip")
+                HoverHandler { id: syncStateHover }
+                TapHandler {
+                    enabled: !!card._ticket.unsynced && !card._ticket.gone
+                    onTapped: AppController.retryTrackerPush(card.task.id)
+                }
+            }
             Rectangle {
                 visible: card._isStuck
                 radius: 4

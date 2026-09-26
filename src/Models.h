@@ -41,6 +41,22 @@ struct ExternalMeta {
   // projects. Such an issue's number is unique only within its own project, and
   // it must never be pushed back through the configured-project path.
   bool crossProject = false;
+  // What the tracker said last time, per field. A pull compares against these
+  // to tell "changed upstream" from "changed here": only the first may
+  // overwrite the card, so a local move or edit survives a sync that did not
+  // touch the issue.
+  QString status;
+  QString title;
+  QString body;
+  // The column that pull put the card in. A card still sitting there was not
+  // moved by the user, so it follows a changed status mapping.
+  QString column;
+  // The status heap tried to push and the tracker refused. While set, the card
+  // keeps its local column and shows that it is out of step.
+  QString unsyncedStatus;
+  // The issue was missing from the last complete pull: deleted upstream, or
+  // moved somewhere this connection cannot see.
+  bool goneUpstream = false;
 
   bool operator==(const ExternalMeta&) const = default;
 };
@@ -272,6 +288,8 @@ class NoteModel : public QAbstractListModel {
 
   int indexOfId(const QString& id) const;
   void upsert(const Note& n);
+  // Undo puts a deleted note back in its old row, not at the end of the list.
+  void insertAt(int row, const Note& n);
   void removeById(const QString& id);
 
  private:
@@ -311,7 +329,7 @@ class DocPageModel : public QAbstractListModel {
     return m_items;
   }
 
-  int indexOfId(const QString& id) const;
+  Q_INVOKABLE int indexOfId(const QString& id) const;
   void upsert(const DocPage& p);
   // Undo restores a page where it was, not at the end: the tree is ordered by
   // rank, but the model's own row order is what a reset would otherwise churn.

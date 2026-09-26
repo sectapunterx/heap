@@ -36,6 +36,14 @@ class IntegrationProvider : public QObject {
     emit commentsFetched(externalId, {}, QStringLiteral("unsupported"));
   }
 
+  // Whether the most recent tasksFetched carried every issue the filter
+  // matches. False after a walk cut short by an error or the page cap: an
+  // issue missing from such a pull may simply be on a page never fetched, so
+  // it must not be read as deleted upstream.
+  bool lastPullComplete() const {
+    return m_lastPullComplete;
+  }
+
  signals:
   void connectionTested(bool ok, const QString& error);
   // Only emitted for a successful pull. A failed one used to report an empty
@@ -49,6 +57,14 @@ class IntegrationProvider : public QObject {
 
  protected:
   using QObject::QObject;
+
+  // Providers set this right before emitting tasksFetched.
+  void setLastPullComplete(bool complete) {
+    m_lastPullComplete = complete;
+  }
+
+ private:
+  bool m_lastPullComplete = true;
 };
 
 }  // namespace heap::integrations

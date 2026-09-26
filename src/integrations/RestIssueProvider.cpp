@@ -420,6 +420,7 @@ void RestIssueProvider::finishPull(const QString& truncatedReason) {
   m_pull.tasks.clear();
   // tasksFetched first: the issues we did get should land whatever happened to
   // the rest, and AppController's toast for the merge is the useful one.
+  setLastPullComplete(truncatedReason.isEmpty());
   emit tasksFetched(tasks);
   if(!truncatedReason.isEmpty()) {
     // Status 0 deliberately: a mid-walk 401 must not send AppController into

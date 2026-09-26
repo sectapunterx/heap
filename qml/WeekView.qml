@@ -93,6 +93,19 @@ Item {
     readonly property int workEnd:    AppController.workdayEnd
 
     property date now: new Date()
+
+    function scrollToWorkday() {
+        const flick = hourScroll.contentItem;
+        if (!flick) return;
+        const nowHour = new Date().getHours();
+        const first = Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
+        const maxY = Math.max(0, flick.contentHeight - flick.height);
+        flick.contentY = Math.min(maxY, first * root.hourH);
+    }
+
+    // The "Needs a slot" rail, when the window has room for it. The header
+    // button hides it for good on a window that has room but no need.
+    property bool railWanted: true
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
     readonly property int hourH: 38
     // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
@@ -398,6 +411,13 @@ Item {
                     font.pixelSize: 11
                 }
                 PillButton {
+                    objectName: "week-rail-toggle"
+                    visible: gridHost.railFits
+                    text: I18n.t("week.rail.toggle")
+                    primary: root.railWanted
+                    onClicked: root.railWanted = !root.railWanted
+                }
+                PillButton {
                     text: I18n.t("common.today")
                     onClicked: AppController.selectedDate = AppController.today
                 }
@@ -416,13 +436,27 @@ Item {
 
             readonly property int gutterW: 50
             readonly property int dayCount: Math.max(1, root.days.length)
+            // Narrowest a day column may get before the rail has to give way.
+            readonly property int minDayW: 96
             // The rail takes its width off the grid rather than overlapping it,
-            // and folds away entirely on a narrow window, where seven columns
-            // already have nothing to spare.
-            readonly property bool railVisible: width > 900
+            // and folds away whenever keeping it would squeeze the days below
+            // minDayW. The old test was a fixed 900px, while dayW refused to go
+            // under 120 — so at 1400px the week overflowed its own view and the
+            // weekend was cut off behind the rail.
+            readonly property bool railFits: (width - gutterW - 240) / dayCount >= minDayW
+            readonly property bool railVisible: root.railWanted && railFits
             readonly property int railW: railVisible ? 240 : 0
-            readonly property int dayW: Math.max(120, (width - gutterW - railW) / dayCount)
-            readonly property int dueRowH: 116
+            // Never wider than the space there is: every day stays on screen.
+            readonly property int dayW: Math.max(40, Math.floor((width - gutterW - railW) / dayCount))
+            // As tall as the busiest day needs, not a fixed block of empty rows.
+            readonly property int dueRowH: {
+                let most = 0;
+                for (let i = 0; i < root.days.length; i++) {
+                    const n = root.days[i].tasks.length;
+                    most = Math.max(most, n === 0 ? 28 : 12 + Math.min(4, n) * 26 + (n > 4 ? 16 : 0));
+                }
+                return Math.max(28, most);
+            }
 
             // Sticky header band for the day-header + due-chips area
             Rectangle {
@@ -698,6 +732,11 @@ Item {
 
             // Scrollable hour grid
             ScrollView {
+                id: hourScroll
+                objectName: "week-hour-scroll"
+                // Open on the working day (or the current hour, if that is
+                // earlier), not on midnight.
+                Component.onCompleted: Qt.callLater(root.scrollToWorkday)
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
                 anchors.top: weekStrip.bottom; anchors.bottom: parent.bottom

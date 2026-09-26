@@ -13,6 +13,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import TodoCpp
 
 ListView {
@@ -73,7 +74,74 @@ ListView {
                 return;
             }
         }
-        Qt.openUrlExternally(link);
+        view.openExternal(link);
+    }
+
+    // Links in a note or an issue body are written by someone else. http(s),
+    // mailto and heap:// open straight away; anything else (file:, ms-settings:,
+    // a program path) can start a program, so the reader sees it first.
+    function openExternal(link) {
+        if (!link) return;
+        if (AppController.isSafeLink(link)) {
+            Qt.openUrlExternally(link);
+            return;
+        }
+        linkConfirm.link = link;
+        linkConfirm.open();
+    }
+
+    QQC.Dialog {
+        id: linkConfirm
+        objectName: "mdLinkConfirm"
+        property string link: ""
+        modal: true
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: Math.min(460, (parent ? parent.width : 460) - 32)
+        padding: 18
+        title: I18n.t("md.link.confirm.title")
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+        contentItem: ColumnLayout {
+            spacing: 8
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("md.link.confirm.body")
+                color: Theme.textMuted
+                font.pixelSize: 12
+                wrapMode: Text.Wrap
+            }
+            Text {
+                Layout.fillWidth: true
+                text: linkConfirm.link
+                color: Theme.text
+                font.family: Theme.fontMono
+                font.pixelSize: 12
+                wrapMode: Text.WrapAnywhere
+            }
+        }
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton {
+                text: I18n.t("common.cancel")
+                onClicked: linkConfirm.close()
+            }
+            PillButton {
+                objectName: "mdLinkConfirmOpen"
+                text: I18n.t("md.link.confirm.open")
+                danger: true
+                onClicked: {
+                    linkConfirm.close();
+                    Qt.openUrlExternally(linkConfirm.link);
+                }
+            }
+            Item { Layout.preferredWidth: 10 }
+        }
     }
 
     // Colour for a callout kind. Unknown kinds fall back to the accent, so a
@@ -449,7 +517,12 @@ ListView {
                     // A remote image is not loaded until the reader asks. heap
                     // makes no network requests of its own, and an image in a note
                     // would make one to a host the note's author chose.
-                    sourceComponent: (rowItem.model.imageIsRemote && !view.document.allowRemoteImages)
+                    // file:, UNC and drive paths stay behind the placeholder
+                    // even when remote images are allowed: loading one can hand
+                    // an SMB host the user's credentials.
+                    sourceComponent: (rowItem.model.imageIsRemote
+                                      && !(view.document.allowRemoteImages
+                                           && /^https?:\/\//i.test(rowItem.model.imageSource)))
                                      ? remoteImagePlaceholder : localImage
                 }
             }
@@ -507,7 +580,7 @@ ListView {
                             anchors.fill: parent
                             anchors.margins: -4
                             hoverEnabled: true
-                            onClicked: Qt.openUrlExternally(rowItem.model.imageSource)
+                            onClicked: view.openExternal(rowItem.model.imageSource)
                         }
                     }
                 }

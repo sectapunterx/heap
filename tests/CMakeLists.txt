@@ -382,6 +382,9 @@ heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 # ─── Docs as a tree of pages ───
 heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 
+# ─── Regressions from the 0.5.0 end-to-end audit ───
+heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
+
 # ─── Notes (Quick-capture appendNoteEntry) tests ───
 # Cover AppController::appendNoteEntry — the C++ side of the Ctrl+Shift+N
 # popup: empty-input guard, first-entry vs subsequent-entry formatting,
