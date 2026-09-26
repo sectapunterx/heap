@@ -138,10 +138,12 @@ jobs:
       - name: Check the changed lines
         run: |
           set -uo pipefail
+          # clang-tidy-diff exits non-zero on its own findings; the verdict is
+          # taken from the log below, so the step must not stop here first.
           git diff -U0 HEAD^1 -- '*.cpp' '*.h' '*.mm' \
             | clang-tidy-diff-18.py -p1 -path build -iregex '.*\.(cpp|mm)' \
                 -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
-                -checks='-readability-identifier-naming' > tidy.log 2>&1
+                -checks='-readability-identifier-naming' > tidy.log 2>&1 || true
           cat tidy.log
           if grep -qE ': (warning|error): ' tidy.log; then
             echo "::error::clang-tidy found issues in changed lines (above)"
@@ -360,6 +362,7 @@ jobs:
           if-no-files-found: ignore
 
       - name: Smoke-test the app (linux)
+        timeout-minutes: 5
         if: runner.os == 'Linux'
         env:
           QT_QPA_PLATFORM: offscreen
@@ -377,6 +380,7 @@ jobs:
           cmake --build build --target portable
 
       - name: Smoke-test the portable bundle (windows)
+        timeout-minutes: 5
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
@@ -442,6 +446,7 @@ jobs:
           hdiutil detach /Volumes/heap
 
       - name: Smoke-test the deployed app (macos)
+        timeout-minutes: 5
         if: runner.os == 'macOS'
         run: build/heap.app/Contents/MacOS/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
 

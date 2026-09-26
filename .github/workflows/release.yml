@@ -118,6 +118,7 @@ jobs:
     name: Package (Windows)
     needs: meta
     runs-on: windows-latest
+    timeout-minutes: 60
     permissions:
       contents: read
       actions: read
@@ -204,6 +205,7 @@ jobs:
       # so a DLL or plugin windeployqt/copy-deps missed (the v0.4.3 zip shipped
       # without Qt6Svg and the UCRT) fails the release instead of the user.
       - name: Smoke-test the portable bundle
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
@@ -305,6 +307,7 @@ jobs:
     name: Package (Linux)
     needs: meta
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
     permissions:
       contents: read
     steps:
@@ -351,9 +354,23 @@ jobs:
           install -Dm755 build/heap                                   "$DEST/usr/bin/heap"
           install -Dm644 packaging/linux/heap.desktop                 "$DEST/usr/share/applications/heap.desktop"
           install -Dm644 design/brand-export/icon/heap-icon.svg       "$DEST/usr/share/icons/hicolor/scalable/apps/heap.svg"
+          # Depends is derived, not hand-kept: the package owning every shared
+          # library the binary links (exact names on this Ubuntu, t64 suffixes
+          # included), plus what Qt loads at runtime and ldd cannot see — the
+          # QML modules qml/ imports, the xcb platform plugin, the svg image
+          # plugin. The hand-written list missed NetworkAuth, qtkeychain and
+          # every QML module; the .deb smoke test below proves this one.
+          SHLIBS=$(ldd build/heap | awk '/=> \//{print $3}' | xargs -r readlink -f \
+            | xargs -r dpkg -S 2>/dev/null | cut -d: -f1 | sort -u)
+          RUNTIME="qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts
+                   qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtquick-dialogs
+                   qml6-module-qtqml-workerscript qt6-qpa-plugins libqt6svg6"
+          # shellcheck disable=SC2086 # word-splitting the lists is the point
+          DEPENDS=$(printf '%s\n' $SHLIBS $RUNTIME | sort -u | paste -sd, - | sed 's/,/, /g')
+          echo "Depends: $DEPENDS"
           # Debian control metadata.
           mkdir -p "$DEST/DEBIAN"
-          sed "s/@VERSION@/${VER}/" packaging/linux/control.in > "$DEST/DEBIAN/control"
+          sed -e "s/@VERSION@/${VER}/" -e "s/@DEPENDS@/${DEPENDS}/" packaging/linux/control.in > "$DEST/DEBIAN/control"
 
       - name: Build .deb
         run: |
@@ -364,13 +381,23 @@ jobs:
       # Depends pull in — and start it under a virtual X server. A missing
       # dependency or QML module fails here, not on a user's machine.
       - name: Smoke-test the .deb in a clean container
+        timeout-minutes: 10
+        env:
+          DEB: heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb
         run: |
           set -eu
-          docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash -euc '
-            export DEBIAN_FRONTEND=noninteractive
-            apt-get update -qq
-            apt-get install -y -qq ./heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb xvfb xauth >/dev/null
-            xvfb-run -a heap --smoke --data-dir /tmp/heap-smoke'
+          docker run --rm -v "$PWD:/w" -w /w -e DEB -e DEBIAN_FRONTEND=noninteractive ubuntu:24.04 bash -euc '
+            echo "::group::apt install ./$DEB (+ Xvfb)"
+            apt-get update -q
+            apt-get install -y "./$DEB" xvfb xauth
+            echo "::endgroup::"
+            # A library the Depends line forgot shows up here by name, rather
+            # than as a loader error or a hang further down.
+            if ldd /usr/bin/heap | grep "not found"; then
+              echo "::error::the .deb does not pull in every library heap links"
+              exit 1
+            fi
+            timeout 120 xvfb-run -a -s "-screen 0 1280x800x24" heap --smoke --data-dir /tmp/heap-smoke'
 
       # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
       # desktop/icon, laid out flat under a versioned top dir. Depends on system
@@ -422,6 +449,7 @@ jobs:
       # The AppImage is best-effort, so a broken one is left out of the release
       # with a warning rather than failing it — but it is never shipped unchecked.
       - name: Smoke-test the AppImage
+        timeout-minutes: 5
         if: steps.appimage.outcome == 'success'
         run: |
           set -u
@@ -454,6 +482,7 @@ jobs:
     # required for the browser-OAuth device flow (QOAuth2DeviceAuthorizationFlow).
     needs: meta
     runs-on: macos-14
+    timeout-minutes: 60
     permissions:
       contents: read
     # Job-level env so the optional signing step's `if:` can read it (a step's
@@ -598,6 +627,7 @@ jobs:
 
       # Run the app from the mounted dmg — the bundle a user drags out.
       - name: Smoke-test the app from the dmg
+        timeout-minutes: 5
         run: |
           set -eu
           hdiutil attach "heap-${{ needs.meta.outputs.tag }}-macos.dmg" -nobrowse -mountpoint /Volumes/heap
@@ -653,6 +683,7 @@ jobs:
           && needs.package-windows.result == 'success'
           && needs.package-linux.result == 'success' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
     permissions:
       contents: write       # create the release
       id-token: write       # sign the provenance attestation (Sigstore)
