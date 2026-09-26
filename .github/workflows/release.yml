@@ -10,6 +10,9 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  # The nightly workflow's release dry run. Called from a branch, it builds
+  # like a manual dispatch: a -dev version, nothing tagged or published.
+  workflow_call:
 
 # Read-only by default; the publish job asks for what it needs.
 permissions:

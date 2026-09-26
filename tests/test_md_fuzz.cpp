@@ -20,6 +20,7 @@
 #include "MdPartitionCheck.h"
 
 #include <QString>
+#include <QtGlobal>
 #include <QStringList>
 
 #include <gtest/gtest.h>
@@ -139,12 +140,29 @@ QString mutateFixture(std::mt19937& rng) {
 // budget under the sanitizer build takes roughly a second.
 constexpr int kCasesPerGenerator = 3000;
 
-void runGenerator(const char* name, QString (*generate)(std::mt19937&), unsigned seed) {
+// The nightly run digs deeper than the per-PR one: HEAP_FUZZ_CASES raises the
+// count and HEAP_FUZZ_SEED shifts every generator onto fresh seeds (it prints
+// in the failure message, so a nightly find reproduces locally). Unset, the
+// run is the same fixed 3000 cases on every machine.
+int casesPerGenerator() {
+  bool ok = false;
+  const int fromEnv = qEnvironmentVariableIntValue("HEAP_FUZZ_CASES", &ok);
+  return ok && fromEnv > 0 ? fromEnv : kCasesPerGenerator;
+}
+
+unsigned seedFor(unsigned base) {
+  return base + static_cast<unsigned>(qEnvironmentVariableIntValue("HEAP_FUZZ_SEED"));
+}
+
+void runGenerator(const char* name, QString (*generate)(std::mt19937&), unsigned baseSeed) {
+  const unsigned seed = seedFor(baseSeed);
   std::mt19937 rng(seed);
-  for(int i = 0; i < kCasesPerGenerator; ++i) {
+  const int cases = casesPerGenerator();
+  for(int i = 0; i < cases; ++i) {
     const QString document = generate(rng);
     const QString problem = checkPartition(document);
-    ASSERT_TRUE(problem.isEmpty()) << name << " case " << i << " (seed " << seed << ")\n"
+    ASSERT_TRUE(problem.isEmpty()) << name << " case " << i << " (seed " << seed
+                                   << ", reproduce with HEAP_FUZZ_SEED=" << (seed - baseSeed) << ")\n"
                                    << "problem: " << problem.toStdString() << "\n"
                                    << "document (escaped): " << heap::md::test::escape(document).toStdString();
   }
