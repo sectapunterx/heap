@@ -23,6 +23,36 @@ concurrency:
 jobs:
 
   # ──────────────────────────────────────────────────────────────────
+  # 0. Does this change need a build at all?
+  # A PR that touches only docs/ or Markdown skips build, sanitizers and the
+  # macOS package smoke test; `ci` counts a skipped job as passed. Pushes
+  # (master, develop) always build everything. Not `paths-ignore` on the
+  # trigger: then no `ci` check would report and the PR could not merge.
+  # ──────────────────────────────────────────────────────────────────
+  changes:
+    name: changes
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      code: ${{ github.event_name != 'pull_request' || steps.filter.outputs.code == 'true' }}
+    steps:
+      # On pull_request the filter reads the file list from the API — no
+      # checkout needed.
+      - name: Classify changed files
+        id: filter
+        if: github.event_name == 'pull_request'
+        uses: dorny/paths-filter@v4
+        with:
+          # `every`: a file counts as code only if it matches all patterns,
+          # i.e. it is neither under docs/ nor Markdown.
+          predicate-quantifier: every
+          filters: |
+            code:
+              - '**'
+              - '!docs/**'
+              - '!**/*.md'
+
+  # ──────────────────────────────────────────────────────────────────
   # 1. C++ auto-format (PR only).
   # Runs `clang-format -i` on the files touched by the PR and pushes the
   # result back to the branch. Idempotent — a second run after a successful
@@ -220,6 +250,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   build:
     name: build (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 30
     strategy:
@@ -394,6 +426,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   sanitizers:
     name: ASan + UBSan
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     # A cold-cache sanitizer build has taken up to 24 minutes; at 25 the job
     # was cancelled and turned master red with nothing wrong in the code.
@@ -463,6 +497,8 @@ jobs:
   # ──────────────────────────────────────────────────────────────────
   package-macos-smoke:
     name: package (macOS smoke)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: macos-14
     timeout-minutes: 30
     steps:
@@ -535,6 +571,7 @@ jobs:
     name: ci
     if: always()
     needs:
+      - changes
       - lint-actions
       - format-cpp
       - tidy
