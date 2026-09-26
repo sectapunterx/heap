@@ -69,12 +69,13 @@ Rectangle {
         : _selected ? Theme.withAlpha(Theme.accent, 0.10)
             : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
+        : activeFocus ? Theme.accentStrong
         : _selected ? Theme.accent
                 : cursored ? Theme.accentStrong
                 : _isStuck ? Theme.p0
                 : hoverArea.containsMouse ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active ? 2 : (_selected || cursored ? 2 : (_isStuck ? 2 : 1))
+    border.width: dragArea.drag.active ? 2 : (_selected || cursored || activeFocus ? 2 : (_isStuck ? 2 : 1))
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
@@ -84,6 +85,14 @@ Rectangle {
 
     implicitWidth: parent ? parent.width : 260
     implicitHeight: contentCol.implicitHeight + 20
+
+    // A card is a button to assistive tech and to the Tab key.
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: card.task ? ((card._isTicket ? (card._ticket.key || "") : card.task.id) + " " + card.task.title) : ""
+    Accessible.onPressAction: card.clicked()
+    Keys.onReturnPressed: card.clicked()
+    Keys.onEnterPressed: card.clicked()
 
     // Drag.active is automatically driven by MouseArea.drag.active
     Drag.active: dragArea.drag.active
@@ -153,6 +162,34 @@ Rectangle {
                 }
             }
             Item { Layout.fillWidth: true }
+            // The tracker refused the last status change, or the issue is no
+            // longer in the tracker. Either way the card is out of step with it.
+            Rectangle {
+                objectName: "tc-sync-state"
+                visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
+                radius: 4
+                color: Theme.withAlpha(Theme.p1, 0.14)
+                border.color: Theme.p1
+                border.width: 1
+                implicitWidth: syncStateT.implicitWidth + 10
+                implicitHeight: syncStateT.implicitHeight + 2
+                Text {
+                    id: syncStateT
+                    anchors.centerIn: parent
+                    text: card._ticket.gone ? I18n.t("taskcard.gone") : I18n.t("taskcard.unsynced")
+                    textFormat: Text.PlainText
+                    color: Theme.p1
+                    font.pixelSize: 10
+                    font.weight: Font.DemiBold
+                }
+                QQC.ToolTip.visible: syncStateHover.hovered
+                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip") : I18n.t("taskcard.unsynced.tip")
+                HoverHandler { id: syncStateHover }
+                TapHandler {
+                    enabled: !!card._ticket.unsynced && !card._ticket.gone
+                    onTapped: AppController.retryTrackerPush(card.task.id)
+                }
+            }
             Rectangle {
                 visible: card._isStuck
                 radius: 4
@@ -190,7 +227,7 @@ Rectangle {
                 }
             }
             Text {
-                visible: card.task && card.task.branch && String(card.task.branch).length > 0
+                visible: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
                 text: card.task && card.task.branch
                       ? "⎇ " + String(card.task.branch).split("/").pop().substring(0, 18)
                       : ""
@@ -201,7 +238,7 @@ Rectangle {
             }
             // ── Git live-status chips — fed by GitWatcher via TaskModel ──
             Rectangle {
-                visible: card.task && (card.task.gitAhead || 0) > 0
+                visible: !!(card.task && (card.task.gitAhead || 0) > 0)
                 radius: 4
                 color: Theme.withAlpha(Theme.accent, 0.14)
                 border.color: Theme.accent
@@ -219,7 +256,7 @@ Rectangle {
                 }
             }
             Rectangle {
-                visible: card.task && String(card.task.prState || "").length > 0
+                visible: !!(card.task && String(card.task.prState || "").length > 0)
                 radius: 4
                 color: {
                     const s = card.task ? String(card.task.prState || "") : "";
@@ -255,7 +292,7 @@ Rectangle {
             // parsing. Tooltip shows the most recent subject.
             Rectangle {
                 id: commitChip
-                visible: card.task && card.task.recentCommits && card.task.recentCommits.length > 0
+                visible: !!(card.task && card.task.recentCommits && card.task.recentCommits.length > 0)
                 radius: 4
                 color: Theme.withAlpha(Theme.textDim, 0.14)
                 border.color: Theme.border
@@ -344,7 +381,7 @@ Rectangle {
 
         Text {
             Layout.fillWidth: true
-            visible: card.task && card.task.desc && String(card.task.desc).length > 0
+            visible: !!(card.task && card.task.desc && String(card.task.desc).length > 0)
             text: card.task ? card.task.desc : ""
             textFormat: Text.PlainText
             color: Theme.textMuted
@@ -444,7 +481,7 @@ Rectangle {
             }
             // Recurrence chip (HEAP-77).
             Rectangle {
-                visible: card.task && card.task.recurrence && String(card.task.recurrence).length > 0
+                visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
                 radius: 4
                 color: Theme.withAlpha(Theme.mOneone, 0.14)
                 border.color: Theme.mOneone
@@ -464,7 +501,7 @@ Rectangle {
             Item { Layout.fillWidth: true }
             // Time-tracking chip — click to start/stop; live while running.
             Rectangle {
-                visible: card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0)
+                visible: !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
                 radius: 4
                 color: card.task && card.task.isTiming ? Theme.withAlpha(Theme.p1, 0.18) : Theme.withAlpha(Theme.textDim, 0.14)
                 border.color: card.task && card.task.isTiming ? Theme.p1 : Theme.border
@@ -498,7 +535,7 @@ Rectangle {
                 }
             }
             Rectangle {
-                visible: card.scheduled && card.scheduled.length > 0
+                visible: !!(card.scheduled && card.scheduled.length > 0)
                 radius: 4
                 color: Theme.accentSoft
                 implicitWidth: schedT.implicitWidth + 10

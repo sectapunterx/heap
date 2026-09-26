@@ -7,10 +7,15 @@
 // The Setup object enables QStandardPaths test mode before any test loads, so
 // component tests that construct AppController (which reads/seeds state.json
 // under AppDataLocation) never touch the real user data.
+#include <QMutex>
 #include <QObject>
 #include <QStandardPaths>
+#include <QStringList>
 #include <QtPlugin>
 #include <QtQuickTest/quicktest.h>
+
+#include <cstdio>
+#include <cstdlib>
 
 // Explicitly instantiate the statically-linked TodoCpp module plugin so its
 // type registrations run. Auto-registration happens to work on Windows but is
@@ -20,12 +25,49 @@
 // (qmldir + component .qml) are retained alongside it.
 Q_IMPORT_PLUGIN(TodoCppPlugin)
 
+namespace {
+
+// A TypeError or ReferenceError in a binding is logged and then ignored by
+// QML: the binding keeps its old value and the test that happened to exercise
+// it passes. A missing Q_INVOKABLE (DocPageModel::indexOfId) lived behind a
+// fully green suite that way. Every such error is collected here, and the run
+// fails at the end if there was one.
+QtMessageHandler g_previousHandler = nullptr;
+QMutex g_errorsMutex;
+QStringList g_scriptErrors;
+
+void collectScriptErrors(QtMsgType type, const QMessageLogContext& context, const QString& message) {
+  if(type == QtWarningMsg && (message.contains(QLatin1String("TypeError:")) || message.contains(QLatin1String("ReferenceError:")))) {
+    const QMutexLocker lock(&g_errorsMutex);
+    g_scriptErrors.append(message);
+  }
+  if(g_previousHandler != nullptr) {
+    g_previousHandler(type, context, message);
+  }
+}
+
+}  // namespace
+
 class Setup : public QObject {
   Q_OBJECT
  public slots:
 
   void applicationAvailable() {
     QStandardPaths::setTestModeEnabled(true);
+    g_previousHandler = qInstallMessageHandler(collectScriptErrors);
+  }
+
+  void cleanupTestCase() {
+    const QMutexLocker lock(&g_errorsMutex);
+    if(g_scriptErrors.isEmpty()) {
+      return;
+    }
+    std::fprintf(stderr, "\n%lld script error(s) were logged during the QML tests:\n", static_cast<long long>(g_scriptErrors.size()));
+    for(const QString& e : g_scriptErrors) {
+      std::fprintf(stderr, "  %s\n", qUtf8Printable(e));
+    }
+    std::fflush(stderr);
+    std::_Exit(1);
   }
 };
 

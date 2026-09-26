@@ -894,3 +894,78 @@ TEST_F(Chrono, RuNumberGapIsNotBridged) {
   EXPECT_FALSE(r.hasTime);
   EXPECT_EQ(r.consumed, QString::fromUtf8("понедельник"));
 }
+
+// ── Relative clock times and named times (audit A7 / B13) ────────────────
+// A separate fixture named after the class under test.
+class ChronoParserTest : public ::testing::Test {
+ protected:
+  ChronoParser parser{QLocale(QLocale::English, QLocale::UnitedStates)};
+};
+
+TEST_F(ChronoParserTest, Parse_RuInTwoHours_ReturnsMomentTwoHoursAhead) {
+  const QString text = QString::fromUtf8("Deploy через 2 часа");
+  auto r = parser.parse(text, kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 20);
+  EXPECT_TIME(r, 12, 0);
+  EXPECT_TRUE(r.hasTime);
+  EXPECT_EQ(text.left(r.startOffset).trimmed(), QStringLiteral("Deploy"));
+}
+
+TEST_F(ChronoParserTest, Parse_EnInTwoHoursPastMidnight_RollsToNextDay) {
+  auto r = parser.parse("ship in 3 hours", QDateTime(kRefDate, QTime(22, 30)));
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 1, 30);
+}
+
+TEST_F(ChronoParserTest, Parse_InAnHourAndInMinutes_ReturnsClockOffset) {
+  auto a = parser.parse("call in an hour", kRef);
+  EXPECT_OK(a);
+  EXPECT_TIME(a, 11, 0);
+  auto b = parser.parse(QString::fromUtf8("через 30 минут"), kRef);
+  EXPECT_OK(b);
+  EXPECT_TIME(b, 10, 30);
+}
+
+TEST_F(ChronoParserTest, Parse_RuInAWeekWithoutNumber_ReturnsNextWeek) {
+  auto r = parser.parse(QString::fromUtf8("отчёт через неделю"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 27);
+  EXPECT_FALSE(r.hasTime);
+}
+
+TEST_F(ChronoParserTest, Parse_NoonAndEod_ReturnNamedTimesToday) {
+  auto noon = parser.parse("lunch at noon", kRef);
+  EXPECT_OK(noon);
+  EXPECT_DATE(noon, 2026, 5, 20);
+  EXPECT_TIME(noon, 12, 0);
+  auto eod = parser.parse("report eod", kRef);
+  EXPECT_OK(eod);
+  EXPECT_TIME(eod, 18, 0);
+  auto friEod = parser.parse("report friday eod", kRef);
+  EXPECT_OK(friEod);
+  EXPECT_DATE(friEod, 2026, 5, 22);
+  EXPECT_TIME(friEod, 18, 0);
+}
+
+TEST_F(ChronoParserTest, Parse_EndOfMonth_ReturnsLastDayOfMonth) {
+  auto r = parser.parse("invoice end of month", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 31);
+  auto ru = parser.parse(QString::fromUtf8("счёт конец месяца"), kRef);
+  EXPECT_OK(ru);
+  EXPECT_DATE(ru, 2026, 5, 31);
+}
+
+TEST_F(ChronoParserTest, Parse_PrepositionBeforeDate_IsConsumedWithIt) {
+  const QString text = QStringLiteral("ship on friday");
+  auto r = parser.parse(text, kRef);
+  EXPECT_OK(r);
+  EXPECT_EQ(text.left(r.startOffset).trimmed(), QStringLiteral("ship"));
+}
+
+TEST_F(ChronoParserTest, Parse_InvalidIsoDate_IsNotReadAsTimeRange) {
+  auto r = parser.parse("2026-13-01", kRef);
+  EXPECT_FALSE(r.ok);
+}

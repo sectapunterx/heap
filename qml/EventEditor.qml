@@ -536,7 +536,7 @@ Popup {
             TextField {
                 id: contextField
                 Layout.fillWidth: true
-                placeholderText: "LTE handover · sprint-12 · on-call …"
+                placeholderText: I18n.t("event.ph.context")
                 background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim

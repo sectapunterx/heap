@@ -95,4 +95,17 @@ TestCase {
         w2._finish();
         verify(!w2.paused, "finishing clears the paused flag");
     }
+
+    // The first page shows what heap is made of, not one line over a blank
+    // frame (audit C1).
+    function test_first_step_lists_the_parts_of_the_app() {
+        const w = mk();
+        w.step = 0;
+        verify(w.cur.highlights && w.cur.highlights.length >= 4, "the first step carries highlights");
+        for (let i = 0; i < w.cur.highlights.length; i++) {
+            const h = w.cur.highlights[i];
+            verify(I18n.t(h.title) !== h.title, h.title + " is translated");
+            verify(I18n.t(h.desc) !== h.desc, h.desc + " is translated");
+        }
+    }
 }

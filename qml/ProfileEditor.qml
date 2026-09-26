@@ -90,7 +90,7 @@ Popup {
         TextField {
             id: nameField
             Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            placeholderText: "LTE handover · feat/timeout · …"
+            placeholderText: I18n.t("profile.ph.name")
             background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim

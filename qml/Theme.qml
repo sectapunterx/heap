@@ -52,7 +52,9 @@ QtObject {
     readonly property color text:         highContrast ? (dark ? "#ffffff" : "#000000")
                                                        : (dark ? Brand.text : Brand.lightText)
     readonly property color textMuted:    dark ? Brand.text3 : Brand.lightText3
-    readonly property color textDim:      dark ? Brand.text4 : Qt.lighter(Brand.lightText3, 1.4)
+    // The smallest text in the app uses this, so it has to clear WCAG AA
+    // (4.5:1) on every surface it sits on. Brand.text4 gave 3.2–3.4:1.
+    readonly property color textDim:      dark ? "#808a9a" : "#656e7d"
 
     // ── Accent — Brand cyan by default, settings overrides win ───────
     readonly property color _defaultAccent: dark ? Brand.accent : Brand.lightAccent

@@ -41,6 +41,8 @@ QVariantMap ticketToVariant(const Task& t) {
       {QStringLiteral("commentCount"), t.externalMeta.commentCount},
       {QStringLiteral("createdAt"), t.externalMeta.createdAt},
       {QStringLiteral("updatedAt"), t.externalMeta.updatedAt},
+      {QStringLiteral("unsynced"), !t.externalMeta.unsyncedStatus.isEmpty()},
+      {QStringLiteral("gone"), t.externalMeta.goneUpstream},
   };
 }
 
@@ -718,6 +720,13 @@ void NoteModel::upsert(const Note& n) {
     m_items.push_back(n);
     endInsertRows();
   }
+}
+
+void NoteModel::insertAt(int row, const Note& n) {
+  row = qBound(0, row, static_cast<int>(m_items.size()));
+  beginInsertRows({}, row, row);
+  m_items.insert(row, n);
+  endInsertRows();
 }
 
 void NoteModel::removeById(const QString& id) {

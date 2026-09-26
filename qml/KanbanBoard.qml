@@ -95,14 +95,8 @@ Item {
         const cols = [];
         for (let c = 0; c < colRepeater.count; c++) {
             const col = colRepeater.itemAt(c);
-            if (!col || !col.taskRepeater) { cols.push({ statusId: "", ids: [] }); continue; }
-            const ids = [];
-            const rep = col.taskRepeater;
-            for (let i = 0; i < rep.count; i++) {
-                const it = rep.itemAt(i);
-                if (it && it.visible && it.taskId) ids.push(it.taskId);
-            }
-            cols.push({ statusId: col.statusId, ids: ids });
+            if (!col || !col.taskFilter) { cols.push({ statusId: "", ids: [] }); continue; }
+            cols.push({ statusId: col.statusId, ids: col.taskFilter.ids() });
         }
         return cols;
     }
@@ -197,12 +191,9 @@ Item {
         const out = [];
         for (let c = 0; c < colRepeater.count; c++) {
             const col = colRepeater.itemAt(c);
-            if (!col || !col.taskRepeater) continue;
-            const rep = col.taskRepeater;
-            for (let i = 0; i < rep.count; i++) {
-                const it = rep.itemAt(i);
-                if (it && it.visible && it.taskId) out.push(it.taskId);
-            }
+            if (!col || !col.taskFilter) continue;
+            const ids = col.taskFilter.ids();
+            for (let i = 0; i < ids.length; i++) out.push(ids[i]);
         }
         return out;
     }
@@ -305,7 +296,8 @@ Item {
                     readonly property string statusId: modelData.id
                     readonly property string statusName: modelData.name
                     readonly property color statusColor: modelData.color
-                    readonly property alias taskRepeater: colRep
+                    readonly property alias taskList: bodyFlick
+                    readonly property alias taskFilter: colFilter
                     property bool dragOver: false
                     readonly property int visibleCount: colFilter.count
                     // Advisory work-in-progress limit. 0 = none. Over the
@@ -521,13 +513,22 @@ Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
 
-                            Flickable {
+                            // A ListView, not a Repeater in a Flickable: only
+                            // the cards on screen are built. A board of 2000
+                            // tasks held 580 MB of delegates the other way.
+                            ListView {
                                 id: bodyFlick
+                                objectName: "column-list"
                                 anchors.fill: parent
                                 anchors.margins: 8
-                                contentHeight: bodyCol.implicitHeight
                                 clip: true
+                                spacing: 8
+                                cacheBuffer: 600
+                                boundsBehavior: Flickable.StopAtBounds
                                 flickableDirection: Flickable.VerticalFlick
+                                // One proxy per column, so only the cards that
+                                // belong here are in the model at all.
+                                model: colFilter
                                 // pressDelay: 0 — same rationale as the
                                 // outer hscroll: instant drag on cards.
                                 pressDelay: 0
@@ -570,23 +571,7 @@ Item {
                                     }
                                 }
 
-                                Column {
-                                    id: bodyCol
-                                    width: bodyFlick.width
-                                    spacing: 8
-
-                                    Repeater {
-                                        id: colRep
-                                        // One proxy per column, so only the
-                                        // cards that belong here are built. The
-                                        // whole task model used to be the model
-                                        // of every column's Repeater, with each
-                                        // card hiding itself — N tasks × C
-                                        // columns delegates, and a JS filter run
-                                        // per card.
-                                        model: colFilter
-
-                                        TaskCard {
+                                delegate: TaskCard {
                                             id: tc
                                             required property string id
                                             required property string title
@@ -612,7 +597,7 @@ Item {
                                             required property bool   hasTime
                                             required property var    ticket
                                             required property string searchText
-                                            width: bodyCol.width
+                                            width: bodyFlick.width
 
                                             readonly property var taskData: ({
                                                 id: tc.id, title: tc.title, desc: tc.desc,
@@ -644,18 +629,16 @@ Item {
                                             onClicked: { root.cursorTaskId = tc.id; root.taskClicked(tc.id); }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                                         }
-                                    }
 
-                                    Text {
-                                        visible: col.visibleCount === 0
-                                        width: bodyCol.width
-                                        topPadding: 12
-                                        text: I18n.t("kanban.empty")
-                                        color: Theme.textDim
-                                        font.italic: true
-                                        font.pixelSize: 11
-                                        horizontalAlignment: Text.AlignHCenter
-                                    }
+                                Text {
+                                    visible: col.visibleCount === 0
+                                    width: bodyFlick.width
+                                    topPadding: 12
+                                    text: I18n.t("kanban.empty")
+                                    color: Theme.textDim
+                                    font.italic: true
+                                    font.pixelSize: 11
+                                    horizontalAlignment: Text.AlignHCenter
                                 }
                             }
 
@@ -670,26 +653,30 @@ Item {
                                 property string beforeId: ""
                                 property real indicatorY: 0
 
-                                // Which card sits under `y` (in bodyCol's
+                                // Which card sits under `y` (in the list's content
                                 // coordinates): the first whose midpoint the
                                 // pointer is above. The dragged card is
                                 // skipped — it is still in the column it came
                                 // from, and counting it would make a one-place
                                 // move look like no move at all.
                                 function _slotAt(y, draggedId) {
-                                    for (let i = 0; i < colRep.count; i++) {
-                                        const item = colRep.itemAt(i);
-                                        if (!item || !item.visible || item.taskId === draggedId) continue;
+                                    // Cards off screen are not built; the
+                                    // ones around the pointer always are, so
+                                    // skipping the unbuilt ones is safe.
+                                    for (let i = 0; i < bodyFlick.count; i++) {
+                                        const item = bodyFlick.itemAtIndex(i);
+                                        if (!item) continue;
+                                        if (item.taskId === draggedId) continue;
                                         if (y < item.y + item.height / 2) {
                                             return { id: item.taskId, y: item.y };
                                         }
                                     }
-                                    return { id: "", y: bodyCol.height };
+                                    return { id: "", y: bodyFlick.contentHeight };
                                 }
 
                                 function _update(drag) {
                                     const src = drag.source;
-                                    const p = bodyCol.mapFromItem(colDrop, drag.x, drag.y);
+                                    const p = bodyFlick.contentItem.mapFromItem(colDrop, drag.x, drag.y);
                                     const slot = _slotAt(p.y, src && src.taskId ? src.taskId : "");
                                     colDrop.beforeId = slot.id;
                                     colDrop.indicatorY = slot.y;

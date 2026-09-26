@@ -19,8 +19,19 @@ Task mkTask(const char* id, const char* title, const char* desc, const char* pri
 
 namespace SampleData {
 
-QVector<QVariantMap> statuses() {
+QVector<QVariantMap> statuses(Lang lang) {
   // { id, name, color }
+  if(lang == Lang::Ru) {
+    return {
+        {{"id", "backlog"}, {"name", "Бэклог"}, {"color", QColor("#8a8e98")}},
+        {{"id", "todo"}, {"name", "К выполнению"}, {"color", QColor("#9aa3b4")}},
+        {{"id", "prog"}, {"name", "В работе"}, {"color", QColor("#5aa9e6")}},
+        {{"id", "half"}, {"name", "50/50"}, {"color", QColor("#dcb86b")}},
+        {{"id", "blocked"}, {"name", "Заблокировано"}, {"color", QColor("#e6624c")}},
+        {{"id", "review"}, {"name", "Ревью кода"}, {"color", QColor("#c07acf")}},
+        {{"id", "done"}, {"name", "Готово"}, {"color", QColor("#6ec18a")}},
+    };
+  }
   return {
       {{"id", "backlog"}, {"name", "Backlog"}, {"color", QColor("#8a8e98")}},
       {{"id", "todo"}, {"name", "To Do"}, {"color", QColor("#9aa3b4")}},
@@ -40,14 +51,14 @@ QVector<Task> tasks(Lang lang) {
   if(lang == Lang::Ru) {
     return {
         mkTask("APP-101",
-               "Обход rate-limit при логине",
+               "Обход ограничения попыток входа",
                "После сброса пароля счётчик попыток иногда обнуляется — возможен перебор. Воспроизводится на мобильных клиентах.",
                "P0",
                "prog",
                d(1),
                "fix/login-rate-limit"),
         mkTask("APP-102",
-               "API пагинация: сдвиг курсора на больших списках",
+               "Постраничный API: сдвиг курсора на больших списках",
                "По результатам профилирования: при удалении элементов во время прокрутки курсор пропускает страницу.",
                "P1",
                "prog",
@@ -55,7 +66,7 @@ QVector<Task> tasks(Lang lang) {
                "feat/api-pagination"),
         mkTask("APP-103",
                "Дашборд: пустое состояние для новых аккаунтов",
-               "Не уверен, какие метрики показывать новым vs активным аккаунтам. Нужен совет от Олега.",
+               "Не уверен, какие метрики показывать новым и активным аккаунтам. Нужен совет от Олега.",
                "P1",
                "half",
                d(2),
@@ -69,27 +80,27 @@ QVector<Task> tasks(Lang lang) {
                "fix/search-empty-state"),
         mkTask("APP-105",
                "Оформление заказа: таймаут 10с",
-               "Жду trace от QA: воспроизводится только у одного клиента с медленной сетью.",
+               "Жду трассировку от QA: воспроизводится только у одного клиента с медленной сетью.",
                "P0",
                "blocked",
                d(0),
                "fix/checkout-timeout"),
         mkTask("APP-106",
                "Экспорт в CSV: постраничная выгрузка",
-               "PR #4471. Жду Andrey, маленький review.",
+               "PR #4471. Жду Андрея, ревью небольшое.",
                "P2",
                "review",
                d(3),
                "feat/csv-export"),
         mkTask("APP-107",
                "Генерация превью изображений: кэширование",
-               "PR #4488. +18% скорости на сервере, -3% памяти — обсудить trade-off.",
+               "PR #4488. +18% скорости на сервере, −3% памяти — обсудить компромисс.",
                "P1",
                "review",
                d(2),
                "perf/image-thumbnails"),
         mkTask("APP-108",
-               "Race condition при обновлении профиля",
+               "Гонка при обновлении профиля",
                "Сохранение аватара иногда приходит до завершения обновления профиля — гонка на общем состоянии.",
                "P1",
                "todo",
@@ -97,21 +108,21 @@ QVector<Task> tasks(Lang lang) {
                ""),
         mkTask("APP-109",
                "Рефакторинг обработчика вебхуков",
-               "Разбить монолитный 1.4k LOC handler на валидацию + маршрутизацию + доставку.",
+               "Разбить монолитный обработчик на 1,4 тыс. строк на проверку, маршрутизацию и доставку.",
                "P2",
                "todo",
                d(8),
                ""),
         mkTask("APP-110",
-               "Настройки уведомлений: гранулярные тумблеры",
-               "Добавить поддержку per-channel настроек в путь настроек уведомлений.",
+               "Настройки уведомлений: переключатели по каналам",
+               "Добавить настройки для каждого канала в экран уведомлений.",
                "P2",
                "todo",
                d(9),
                ""),
         mkTask("APP-111",
                "Утечка памяти в хранилище сессий",
-               "Профилировщик clean, смёржено в master сегодня утром.",
+               "Профилировщик чист, влито в master сегодня утром.",
                "P1",
                "done",
                d(-1),
@@ -119,14 +130,14 @@ QVector<Task> tasks(Lang lang) {
         mkTask("APP-112", "Логи: структурированные поля для API-запросов", "Готово, смёржено.", "P3", "done", d(-2), ""),
         mkTask("APP-113",
                "Улучшения внутреннего логирования",
-               "Логи медленного пути в горячем цикле, нужен ring buffer.",
+               "Медленное логирование в горячем цикле, нужен кольцевой буфер.",
                "P3",
                "backlog",
                {},
                ""),
         mkTask("APP-114",
-               "Экспорт: edge case пустого отчёта",
-               "Edge case: пустой отчёт vs отчёт с одной строкой при низкой нагрузке.",
+               "Экспорт: граничный случай пустого отчёта",
+               "Граничный случай: пустой отчёт и отчёт из одной строки при низкой нагрузке.",
                "P3",
                "backlog",
                {},
@@ -243,9 +254,9 @@ QVector<CalEvent> events(const QDate& today, Lang lang) {
     return {
         mk("ev-1", "Дейли стендап", "standup", 10.0, 10.25, "Команда продукта", 0),
         mk("ev-2", "1:1 с Олегом", "oneone", 11.0, 11.5, "Олег Т.", 1),
-        mk("ev-3", "Фокус-блок", "focus", 13.0, 15.0, "🔒 deep work", 0),
+        mk("ev-3", "Фокус-блок", "focus", 13.0, 15.0, "🔒 глубокая работа", 0),
         mk("ev-4", "Планирование спринта", "sync", 16.0, 16.5, "Вся команда", 2),
-        mk("ev-5", "Ревью кода", "sync", 17.0, 17.5, "Andrey, Виктор", 3),
+        mk("ev-5", "Ревью кода", "sync", 17.0, 17.5, "Андрей, Виктор", 3),
     };
   }
   return {
@@ -301,6 +312,35 @@ QVector<Person> people(Lang lang) {
       mk("p5", "Ekaterina", "PM", "Confirm acceptance criteria for APP-102", "replied", QColor("#dcc06a")),
       mk("p6", "Hiroshi M.", "Frontend dev", "Ask about notification toggles (APP-110) — are there tests?", "todo", QColor("#7cc492")),
   };
+}
+
+QVector<Note> notes(Lang lang) {
+  Note n;
+  n.id = QStringLiteral("note-welcome");
+  n.created = QDateTime::currentDateTime();
+  n.updated = n.created;
+  if(lang == Lang::Ru) {
+    n.title = QStringLiteral("С чего начать");
+    n.body = QStringLiteral(
+        "# С чего начать\n\n"
+        "Заметки — это markdown: **жирный**, *курсив*, `код`, списки и таблицы.\n\n"
+        "- [ ] Открыть задачу APP-101 на доске\n"
+        "- [ ] Перетащить задачу в календарь справа\n"
+        "- [x] Прочитать эту заметку\n\n"
+        "Ссылка на задачу: [[APP-101]].\n\n"
+        "> Нажмите «Начать с чистого листа» на баннере, чтобы убрать демо-данные.\n");
+  } else {
+    n.title = QStringLiteral("Getting started");
+    n.body = QStringLiteral(
+        "# Getting started\n\n"
+        "Notes are markdown: **bold**, *italic*, `code`, lists and tables.\n\n"
+        "- [ ] Open APP-101 on the board\n"
+        "- [ ] Drag a task onto the calendar on the right\n"
+        "- [x] Read this note\n\n"
+        "Link to a task: [[APP-101]].\n\n"
+        "> Press \"Start fresh\" on the banner to clear the demo data.\n");
+  }
+  return {n};
 }
 
 }  // namespace SampleData

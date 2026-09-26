@@ -236,22 +236,26 @@ inline QVector<QDate> expand(const RRule& rule, const QDate& start, const QDate&
     return out;
   }
 
+  // Every date is measured from the start, never from the previous
+  // occurrence. addMonths clamps — the 31st in a 30-day month lands on the
+  // 30th, which is what calendars do with a monthly meeting — and stepping
+  // from the previous date made that clamp permanent: after February a series
+  // on the 31st ran on the 28th until it ended.
   QDate d = start;
   for(int step = 0; step < kMaxSteps && d <= hardEnd; ++step) {
     if(!take(d)) {
       return out;
     }
+    const int next = (step + 1) * rule.interval;
     switch(rule.freq) {
       case RRule::Daily:
-        d = d.addDays(rule.interval);
+        d = start.addDays(next);
         break;
       case RRule::Monthly:
-        // addMonths clamps: the 31st in a 30-day month lands on the 30th,
-        // which is what every calendar does with a monthly meeting.
-        d = d.addMonths(rule.interval);
+        d = start.addMonths(next);
         break;
       case RRule::Yearly:
-        d = d.addYears(rule.interval);
+        d = start.addYears(next);
         break;
       default:
         return out;

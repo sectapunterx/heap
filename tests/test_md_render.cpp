@@ -303,3 +303,42 @@ TEST(MdHtmlTest, HandlesEmptyAndDegenerateInput) {
   EXPECT_NO_FATAL_FAILURE(renderParagraph(QStringLiteral("@ # [^] ==x\n")));
   EXPECT_NO_FATAL_FAILURE(renderParagraph(QStringLiteral("![](  )\n")));
 }
+
+// ── Sources and links that reach outside the note (audit S3) ─────────
+
+TEST(MdHtml, IsLocalSource_FileUrlWithHost_IsNotLocal) {
+  EXPECT_FALSE(isLocalSource(QStringLiteral("file://host/share/x.png")));
+  EXPECT_FALSE(isLocalSource(QStringLiteral("file:///C:/Users/me/x.png")));
+  EXPECT_FALSE(isLocalSource(QStringLiteral("\\\\host\\share\\x.png")));
+  EXPECT_FALSE(isLocalSource(QStringLiteral("C:\\Users\\me\\x.png")));
+  EXPECT_FALSE(isLocalSource(QStringLiteral("//host/x.png")));
+  EXPECT_FALSE(isLocalSource(QStringLiteral("/etc/x.png")));
+}
+
+TEST(MdHtml, IsLocalSource_RelativePathOrEmbedded_IsLocal) {
+  EXPECT_TRUE(isLocalSource(QStringLiteral("attachments/x.png")));
+  EXPECT_TRUE(isLocalSource(QStringLiteral("../img/x.png")));
+  EXPECT_TRUE(isLocalSource(QStringLiteral("qrc:/brand/logo.png")));
+  EXPECT_TRUE(isLocalSource(QStringLiteral("data:image/png;base64,AAAA")));
+}
+
+TEST(MdHtml, InlineHtml_FileImageEvenWithRemoteAllowed_RendersAsLink) {
+  MdHtmlOptions options = testOptions();
+  options.allowRemoteImages = true;
+  const QString html = renderFirst(QStringLiteral("![x](file://host/share/x.png)\n"), BlockType::Paragraph, options);
+  EXPECT_FALSE(html.contains(QStringLiteral("<img")));
+}
+
+TEST(MdHtml, IsSafeLink_WebAndMail_AreSafe) {
+  EXPECT_TRUE(isSafeLink(QStringLiteral("https://example.com")));
+  EXPECT_TRUE(isSafeLink(QStringLiteral("HTTP://example.com")));
+  EXPECT_TRUE(isSafeLink(QStringLiteral("mailto:a@b.c")));
+  EXPECT_TRUE(isSafeLink(QStringLiteral("heap://note/abc")));
+}
+
+TEST(MdHtml, IsSafeLink_LocalProgramOrSystemScheme_IsNotSafe) {
+  EXPECT_FALSE(isSafeLink(QStringLiteral("file:///C:/Windows/System32/calc.exe")));
+  EXPECT_FALSE(isSafeLink(QStringLiteral("ms-settings:privacy")));
+  EXPECT_FALSE(isSafeLink(QStringLiteral("javascript:alert(1)")));
+  EXPECT_FALSE(isSafeLink(QStringLiteral("smb://host/share")));
+}

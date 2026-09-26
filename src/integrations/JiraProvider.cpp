@@ -3,6 +3,7 @@
 #include "integrations/StatusMap.h"
 #include "integrations/TrackerFields.h"
 
+#include <QDateTime>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -10,8 +11,11 @@
 #include <QNetworkAccessManager>
 #include <QNetworkReply>
 #include <QNetworkRequest>
+#include <QTimeZone>
 #include <QUrl>
 #include <QUrlQuery>
+
+#include <algorithm>
 
 namespace heap::integrations {
 
@@ -22,48 +26,328 @@ namespace {
 constexpr int kJiraPageSize = 100;
 constexpr int kJiraMaxPages = 20;
 
-// Recursively collect every "text" leaf of an ADF node, separating block-level
-// nodes with newlines so paragraphs stay readable.
-void walkAdf(const QJsonValue& node, QString& out) {
-  if(node.isString()) {
-    out += node.toString();
-    return;
+// Atlassian Document Format → markdown.
+//
+// ADF is a tree: block nodes (paragraph, heading, lists, codeBlock, table,
+// blockquote, panel, rule) hold inline nodes (text with marks, mention, emoji,
+// inlineCard, hardBreak). Each block renders to a list of lines; a container
+// joins its children's lines, indenting list continuations, and top-level
+// blocks are separated by a blank line. Inline runs carry their marks as
+// markdown delimiters. The old walker kept only the text leaves, so code ran
+// into the list after it, tables fell apart into loose lines and every link
+// vanished.
+class AdfRenderer {
+ public:
+  explicit AdfRenderer(bool markdown) : m_markdown(markdown) {
   }
-  if(node.isArray()) {
-    for(const auto& child : node.toArray()) {
-      walkAdf(child, out);
-    }
-    return;
-  }
-  if(!node.isObject()) {
-    return;
-  }
-  const QJsonObject o = node.toObject();
-  const QString type = o.value(QStringLiteral("type")).toString();
-  if(o.contains(QStringLiteral("text"))) {
-    out += o.value(QStringLiteral("text")).toString();
-  }
-  if(o.contains(QStringLiteral("content"))) {
-    walkAdf(o.value(QStringLiteral("content")), out);
-  }
-  // Block separators keep list items / paragraphs on their own lines.
-  if(type == QStringLiteral("paragraph") || type == QStringLiteral("listItem") || type == QStringLiteral("heading")) {
-    out += QChar('\n');
-  }
-}
 
+  QString render(const QJsonValue& root) const {
+    QStringList lines;
+    if(root.isArray()) {
+      appendBlocks(root.toArray(), lines);
+    } else if(root.isObject()) {
+      const QJsonObject o = root.toObject();
+      if(o.value(QStringLiteral("type")).toString() == QStringLiteral("doc")) {
+        appendBlocks(o.value(QStringLiteral("content")).toArray(), lines);
+      } else {
+        appendBlocks(QJsonArray{o}, lines);
+      }
+    }
+    return lines.join(QChar('\n')).trimmed();
+  }
+
+ private:
+  bool m_markdown;
+
+  static QString type(const QJsonObject& o) {
+    return o.value(QStringLiteral("type")).toString();
+  }
+
+  static QJsonObject attrs(const QJsonObject& o) {
+    return o.value(QStringLiteral("attrs")).toObject();
+  }
+
+  // Blocks in sequence, one blank line between them.
+  void appendBlocks(const QJsonArray& blocks, QStringList& out) const {
+    bool first = true;
+    for(const QJsonValue& v : blocks) {
+      const QStringList lines = block(v.toObject());
+      if(lines.isEmpty()) {
+        continue;
+      }
+      if(!first) {
+        out << QString();
+      }
+      out << lines;
+      first = false;
+    }
+  }
+
+  QStringList block(const QJsonObject& o) const {
+    const QString t = type(o);
+    const QJsonArray content = o.value(QStringLiteral("content")).toArray();
+    if(t == QStringLiteral("paragraph")) {
+      const QString text = inlines(content);
+      return text.isEmpty() ? QStringList{} : text.split(QChar('\n'));
+    }
+    if(t == QStringLiteral("heading")) {
+      const int level = qBound(1, attrs(o).value(QStringLiteral("level")).toInt(1), 6);
+      const QString text = inlines(content);
+      return {m_markdown ? QString(level, QChar('#')) + QChar(' ') + text : text};
+    }
+    if(t == QStringLiteral("bulletList") || t == QStringLiteral("orderedList") || t == QStringLiteral("taskList") ||
+       t == QStringLiteral("decisionList")) {
+      return list(o);
+    }
+    if(t == QStringLiteral("codeBlock")) {
+      QString code;
+      for(const QJsonValue& v : content) {
+        code += v.toObject().value(QStringLiteral("text")).toString();
+      }
+      if(!m_markdown) {
+        return code.split(QChar('\n'));
+      }
+      QStringList lines{QStringLiteral("```") + attrs(o).value(QStringLiteral("language")).toString()};
+      lines << code.split(QChar('\n'));
+      lines << QStringLiteral("```");
+      return lines;
+    }
+    if(t == QStringLiteral("blockquote") || t == QStringLiteral("panel")) {
+      QStringList inner;
+      appendBlocks(content, inner);
+      if(!m_markdown) {
+        return inner;
+      }
+      QStringList lines;
+      if(t == QStringLiteral("panel")) {
+        const QString kind = attrs(o).value(QStringLiteral("panelType")).toString(QStringLiteral("info")).toUpper();
+        lines << QStringLiteral("> [!") + kind + QChar(']');
+      }
+      for(const QString& l : inner) {
+        lines << (l.isEmpty() ? QStringLiteral(">") : QStringLiteral("> ") + l);
+      }
+      return lines;
+    }
+    if(t == QStringLiteral("expand") || t == QStringLiteral("nestedExpand")) {
+      QStringList lines;
+      const QString title = attrs(o).value(QStringLiteral("title")).toString();
+      if(!title.isEmpty()) {
+        lines << (m_markdown ? QStringLiteral("**") + title + QStringLiteral("**") : title);
+      }
+      appendBlocks(content, lines);
+      return lines;
+    }
+    if(t == QStringLiteral("rule")) {
+      return {m_markdown ? QStringLiteral("---") : QString()};
+    }
+    if(t == QStringLiteral("table")) {
+      return table(o);
+    }
+    if(t == QStringLiteral("mediaSingle") || t == QStringLiteral("mediaGroup") || t == QStringLiteral("media")) {
+      return {QStringLiteral("[attachment]")};
+    }
+    // Anything unknown: keep what text it has rather than dropping it.
+    if(!content.isEmpty()) {
+      bool hasBlocks = false;
+      for(const QJsonValue& v : content) {
+        const QString ct = type(v.toObject());
+        hasBlocks = hasBlocks || !(ct == QStringLiteral("text") || ct == QStringLiteral("hardBreak") || ct == QStringLiteral("mention") ||
+                                   ct == QStringLiteral("emoji") || ct == QStringLiteral("inlineCard"));
+      }
+      if(hasBlocks) {
+        QStringList lines;
+        appendBlocks(content, lines);
+        return lines;
+      }
+      const QString text = inlines(content);
+      return text.isEmpty() ? QStringList{} : text.split(QChar('\n'));
+    }
+    const QString text = o.value(QStringLiteral("text")).toString();
+    return text.isEmpty() ? QStringList{} : QStringList{text};
+  }
+
+  QStringList list(const QJsonObject& o) const {
+    const QString t = type(o);
+    int number = attrs(o).value(QStringLiteral("order")).toInt(1);
+    QStringList lines;
+    for(const QJsonValue& v : o.value(QStringLiteral("content")).toArray()) {
+      const QJsonObject item = v.toObject();
+      QString marker;
+      if(t == QStringLiteral("orderedList")) {
+        marker = QString::number(number++) + QStringLiteral(". ");
+      } else if(t == QStringLiteral("taskList")) {
+        const bool done = attrs(item).value(QStringLiteral("state")).toString() == QStringLiteral("DONE");
+        marker = done ? QStringLiteral("- [x] ") : QStringLiteral("- [ ] ");
+      } else {
+        marker = QStringLiteral("- ");
+      }
+      // A task item holds inline content directly; a list item holds blocks.
+      QStringList body;
+      const QJsonArray itemContent = item.value(QStringLiteral("content")).toArray();
+      const bool inlineItem = type(item) == QStringLiteral("taskItem") || type(item) == QStringLiteral("decisionItem");
+      if(inlineItem) {
+        body = inlines(itemContent).split(QChar('\n'));
+      } else {
+        // Blocks inside one item sit on consecutive lines: a blank line would
+        // turn a tight list loose and break the numbering.
+        for(const QJsonValue& child : itemContent) {
+          body << block(child.toObject());
+        }
+      }
+      if(body.isEmpty()) {
+        body << QString();
+      }
+      const QString pad(marker.size(), QChar(' '));
+      for(int i = 0; i < body.size(); ++i) {
+        lines << (i == 0 ? marker + body.at(i) : (body.at(i).isEmpty() ? QString() : pad + body.at(i)));
+      }
+    }
+    return lines;
+  }
+
+  QStringList table(const QJsonObject& o) const {
+    QVector<QStringList> rows;
+    int columns = 0;
+    for(const QJsonValue& rv : o.value(QStringLiteral("content")).toArray()) {
+      QStringList cells;
+      for(const QJsonValue& cv : rv.toObject().value(QStringLiteral("content")).toArray()) {
+        QStringList parts;
+        for(const QJsonValue& bv : cv.toObject().value(QStringLiteral("content")).toArray()) {
+          parts << block(bv.toObject());
+        }
+        QString cell = parts.join(QChar(' ')).simplified();
+        if(m_markdown) {
+          cell.replace(QChar('|'), QStringLiteral("\\|"));
+        }
+        cells << cell;
+      }
+      columns = std::max(columns, static_cast<int>(cells.size()));
+      rows << cells;
+    }
+    QStringList lines;
+    if(rows.isEmpty()) {
+      return lines;
+    }
+    for(int r = 0; r < rows.size(); ++r) {
+      QStringList cells = rows.at(r);
+      while(cells.size() < columns) {
+        cells << QString();
+      }
+      lines << (m_markdown ? QStringLiteral("| ") + cells.join(QStringLiteral(" | ")) + QStringLiteral(" |")
+                           : cells.join(QStringLiteral(" · ")));
+      if(r == 0 && m_markdown) {
+        QStringList rule;
+        for(int c = 0; c < columns; ++c) {
+          rule << QStringLiteral("---");
+        }
+        lines << QStringLiteral("| ") + rule.join(QStringLiteral(" | ")) + QStringLiteral(" |");
+      }
+    }
+    return lines;
+  }
+
+  QString inlines(const QJsonArray& content) const {
+    QString out;
+    for(const QJsonValue& v : content) {
+      const QJsonObject o = v.toObject();
+      const QString t = type(o);
+      if(t == QStringLiteral("text")) {
+        out += marked(o);
+      } else if(t == QStringLiteral("hardBreak")) {
+        out += QChar('\n');
+      } else if(t == QStringLiteral("mention")) {
+        const QString who = attrs(o).value(QStringLiteral("text")).toString();
+        out += who.startsWith(QChar('@')) ? who : QStringLiteral("@") + who;
+      } else if(t == QStringLiteral("emoji")) {
+        const QJsonObject a = attrs(o);
+        out += a.value(QStringLiteral("text")).toString(a.value(QStringLiteral("shortName")).toString());
+      } else if(t == QStringLiteral("inlineCard") || t == QStringLiteral("blockCard")) {
+        const QString url = attrs(o).value(QStringLiteral("url")).toString();
+        out += m_markdown ? QStringLiteral("<") + url + QStringLiteral(">") : url;
+      } else if(t == QStringLiteral("status")) {
+        out += QStringLiteral("[") + attrs(o).value(QStringLiteral("text")).toString() + QStringLiteral("]");
+      } else if(t == QStringLiteral("date")) {
+        const qint64 ms = attrs(o).value(QStringLiteral("timestamp")).toVariant().toLongLong();
+        out += QDateTime::fromMSecsSinceEpoch(ms, QTimeZone::utc()).date().toString(Qt::ISODate);
+      } else if(o.contains(QStringLiteral("content"))) {
+        out += inlines(o.value(QStringLiteral("content")).toArray());
+      } else {
+        out += o.value(QStringLiteral("text")).toString();
+      }
+    }
+    return out;
+  }
+
+  // One text run with its marks as markdown. A link keeps its target, which
+  // the plain-text walk used to drop entirely.
+  QString marked(const QJsonObject& o) const {
+    QString text = o.value(QStringLiteral("text")).toString();
+    QString href;
+    bool code = false;
+    bool strong = false;
+    bool em = false;
+    bool strike = false;
+    for(const QJsonValue& mv : o.value(QStringLiteral("marks")).toArray()) {
+      const QJsonObject m = mv.toObject();
+      const QString mt = type(m);
+      if(mt == QStringLiteral("link")) {
+        href = attrs(m).value(QStringLiteral("href")).toString();
+      } else if(mt == QStringLiteral("code")) {
+        code = true;
+      } else if(mt == QStringLiteral("strong")) {
+        strong = true;
+      } else if(mt == QStringLiteral("em")) {
+        em = true;
+      } else if(mt == QStringLiteral("strike")) {
+        strike = true;
+      }
+    }
+    if(!m_markdown) {
+      return href.isEmpty() || href == text ? text : text + QStringLiteral(" (") + href + QChar(')');
+    }
+    if(text.trimmed().isEmpty()) {
+      return text;
+    }
+    if(code) {
+      text = QChar('`') + text + QChar('`');
+    } else {
+      if(strike) {
+        text = QStringLiteral("~~") + text + QStringLiteral("~~");
+      }
+      if(em) {
+        text = QChar('*') + text + QChar('*');
+      }
+      if(strong) {
+        text = QStringLiteral("**") + text + QStringLiteral("**");
+      }
+    }
+    if(!href.isEmpty()) {
+      text = QChar('[') + text + QStringLiteral("](") + href + QChar(')');
+    }
+    return text;
+  }
+};
+
+// A description: markdown, so the editor's preview draws it as it looked in
+// Jira. Server/DC hands over a plain string, which passes through.
 QString adfValueToText(const QJsonValue& description) {
   if(description.isString()) {
     return description.toString();
   }
-  QString out;
-  walkAdf(description, out);
-  return out.trimmed();
+  return AdfRenderer(/*markdown=*/true).render(description);
+}
+
+// A comment is shown as plain text, so it keeps link targets but no markup.
+QString adfValueToPlain(const QJsonValue& body) {
+  if(body.isString()) {
+    return body.toString();
+  }
+  return AdfRenderer(/*markdown=*/false).render(body);
 }
 
 }  // namespace
 
-QString jiraAdfToPlainText(const QByteArray& adfJson) {
+QString jiraAdfToMarkdown(const QByteArray& adfJson) {
   const QJsonDocument doc = QJsonDocument::fromJson(adfJson);
   if(doc.isObject()) {
     return adfValueToText(doc.object());
@@ -72,6 +356,18 @@ QString jiraAdfToPlainText(const QByteArray& adfJson) {
     return adfValueToText(doc.array());
   }
   return QString();
+}
+
+QStringList parseJiraStatuses(const QByteArray& json) {
+  QStringList out;
+  for(const QJsonValue& v : QJsonDocument::fromJson(json).array()) {
+    const QString name = v.toObject().value(QStringLiteral("name")).toString().trimmed();
+    if(!name.isEmpty() && !out.contains(name)) {
+      out.append(name);
+    }
+  }
+  out.sort(Qt::CaseInsensitive);
+  return out;
 }
 
 QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl) {
@@ -135,8 +431,12 @@ QVector<ExternalComment> parseJiraComments(const QByteArray& json) {
     ExternalComment c;
     c.author = o.value(QStringLiteral("author")).toObject().value(QStringLiteral("displayName")).toString();
     // ADF on Cloud, a plain string on Server/DC — adfValueToText takes both.
-    c.body = adfValueToText(o.value(QStringLiteral("body")));
+    c.body = adfValueToPlain(o.value(QStringLiteral("body")));
     c.createdAt = parseTrackerTimestamp(o.value(QStringLiteral("created")));
+    const QString id = o.value(QStringLiteral("id")).toString();
+    if(!id.isEmpty()) {
+      c.anchor = QStringLiteral("?focusedCommentId=") + id;
+    }
     if(c.body.isEmpty()) {
       continue;
     }
@@ -567,6 +867,7 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
         const int pages = m_pullPage;
         m_pulling = false;
         m_pulled.clear();
+        setLastPullComplete(false);
         emit tasksFetched(got);
         emit pullFailed(0, QStringLiteral("Jira: only %1 page(s) — %2").arg(pages).arg(r.error));
         return;
@@ -581,8 +882,10 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
 
     QString nextCursor;
     int nextStart = 0;
+    const QJsonObject root = QJsonDocument::fromJson(r.body).object();
+    // Whether the tracker has more to give, cap or no cap.
+    const bool more = server ? page.size() >= kJiraPageSize : !root.value(QStringLiteral("isLast")).toBool(false);
     if(m_pullPage < kJiraMaxPages) {
-      const QJsonObject root = QJsonDocument::fromJson(r.body).object();
       if(server) {
         // No cursor and, on newer versions, no `total` either: a full page is
         // the only evidence that another one exists.
@@ -597,6 +900,7 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
       const QVector<ExternalTask> got = m_pulled;
       m_pulling = false;
       m_pulled.clear();
+      setLastPullComplete(!more || m_pullPage < kJiraMaxPages);
       emit tasksFetched(got);
       return;
     }
@@ -620,6 +924,17 @@ void JiraProvider::fetchComments(const QString& externalId, const QString& /*pro
   });
 }
 
+void JiraProvider::fetchStatuses() {
+  if(!isConfigured()) {
+    return;
+  }
+  send("GET", QStringLiteral("/status"), {}, [this](const ApiResult& r) {
+    if(r.ok) {
+      emit statusesFetched(parseJiraStatuses(r.body));
+    }
+  });
+}
+
 void JiraProvider::pushStatusChange(const QString& externalId, const QString& newStatus) {
   if(!isConfigured() || externalId.isEmpty()) {
     emit taskPushed(externalId, false, QStringLiteral("not configured"));
@@ -639,14 +954,19 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
     QString transitionId;
     for(const auto& tv : transitions) {
       const QJsonObject to = tv.toObject().value(QStringLiteral("to")).toObject();
-      const QString targetColumn = StatusMap::column(to.value(QStringLiteral("name")).toString(), {}, QString());
+      // The user's own mapping decides first: a "Blocked" or "50/50" column
+      // is only reachable through a status the user said belongs there.
+      const QString targetColumn = StatusMap::column(to.value(QStringLiteral("name")).toString(), m_statusOverrides, QString());
       if(targetColumn == newStatus) {
         transitionId = tv.toObject().value(QStringLiteral("id")).toString();
         break;
       }
     }
     if(transitionId.isEmpty()) {
-      emit taskPushed(externalId, false, QStringLiteral("no matching transition for column '%1'").arg(newStatus));
+      emit taskPushed(
+          externalId,
+          false,
+          QStringLiteral("this issue has no transition to a status mapped to '%1' — map one in Settings → Integrations").arg(newStatus));
       return;
     }
     QJsonObject body;

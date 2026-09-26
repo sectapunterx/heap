@@ -46,6 +46,13 @@ class SecretStore : public QObject {
   // backends cap the blob size). A value that already fits comes back whole.
   static QStringList chunkValue(const QString& value, int maxBytes);
 
+  // How a value is written to / read from the fallback file. On Windows the
+  // value is wrapped with DPAPI ("dpapi:" + base64); elsewhere it passes
+  // through, and the file is owner-only. Reading accepts plaintext written by
+  // an older build.
+  static QString protectForFile(const QString& plain);
+  static QString unprotectFromFile(const QString& stored);
+
  private:
   static QString cacheKey(const QString& providerId, const QString& field);
   QString fallbackPath() const;

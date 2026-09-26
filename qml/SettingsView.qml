@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Controls.impl
 import TodoCpp
 
 Item {
@@ -18,64 +19,64 @@ Item {
     readonly property var allSections: [
         {
             id: "profile",
-            icon: "◉",
+            icon: "qrc:/brand/icons/heap-13-profile.svg",
             title: I18n.t("settings.section.profile.title"),
             sub: I18n.t("settings.section.profile.sub")
         },
         {
             id: "appearance",
-            icon: "◑",
+            icon: "qrc:/brand/icons/heap-14-appearance.svg",
             title: I18n.t("settings.section.appearance.title"),
             sub: I18n.t("settings.section.appearance.sub")
         },
         {
             id: "language",
-            icon: "Aa",
+            icon: "qrc:/brand/icons/heap-15-language.svg",
             title: I18n.t("settings.section.language.title"),
             sub: I18n.t("settings.section.language.sub")
         },
         {
             id: "notifications",
-            icon: "◔",
+            icon: "qrc:/brand/icons/heap-16-notifications.svg",
             title: I18n.t("settings.section.notifications.title"),
             sub: I18n.t("settings.section.notifications.sub")
         },
         {
             id: "calendar",
-            icon: "◫",
+            icon: "qrc:/brand/icons/heap-17-calendar.svg",
             title: I18n.t("settings.section.calendar.title"),
             sub: I18n.t("settings.section.calendar.sub")
         },
         {
             id: "tasks",
-            icon: "▦",
+            icon: "qrc:/brand/icons/heap-01-board.svg",
             title: I18n.t("settings.section.tasks.title"),
             sub: I18n.t("settings.section.tasks.sub")
         },
         {
             id: "shortcuts",
-            icon: "⌨",
+            icon: "qrc:/brand/icons/heap-10-hotkeys.svg",
             title: I18n.t("settings.section.shortcuts.title"),
             sub: I18n.t("settings.section.shortcuts.sub")
         },
         {
             id: "cpp",
-            icon: "C++",
+            icon: "qrc:/brand/icons/heap-18-code.svg",
             title: I18n.t("settings.section.cpp.title"),
             sub: I18n.t("settings.section.cpp.sub"),
           unimplemented: true },
         {
             id: "integrations",
-            icon: "⎘",
+            icon: "qrc:/brand/icons/heap-19-integrations.svg",
             title: I18n.t("settings.section.integrations.title"),
             sub: I18n.t("settings.section.integrations.sub")
         },
-        {id: "git", icon: "⎇", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
-        {id: "data", icon: "↯", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
-        {id: "help", icon: "?", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
+        {id: "git", icon: "qrc:/brand/icons/heap-07-code-review.svg", title: I18n.t("settings.section.git.title"), sub: I18n.t("settings.section.git.sub")},
+        {id: "data", icon: "qrc:/brand/icons/heap-20-data.svg", title: I18n.t("settings.section.data.title"), sub: I18n.t("settings.section.data.sub")},
+        {id: "help", icon: "qrc:/brand/icons/heap-21-help.svg", title: I18n.t("settings.section.help.title"), sub: I18n.t("settings.section.help.sub")},
         {
             id: "about",
-            icon: "ⓘ",
+            icon: "qrc:/brand/icons/heap-22-about.svg",
             title: I18n.t("settings.section.about.title"),
             sub: I18n.t("settings.section.about.sub")
         }
@@ -127,12 +128,13 @@ Item {
     property bool _reloading:  false
 
     readonly property var defaults: ({
+        // Blank until the user fills it in: a fresh install used to open on
+        // the author's own name, role and team.
         profile: {
-            name: I18n.lang === "ru" ? "Алексей Тимофеев" : "Alex Timofeev",
-            handle: "alex.t",
-            role: "C++ Engineer · LTE",
-            team: "eNB-core",
-            timezone: "Europe/Moscow",
+            name: "",
+            handle: "",
+            role: "",
+            team: "",
             color: "#5cc2dd"
         },
         appearance: {
@@ -149,7 +151,7 @@ Item {
         notifications: {
             deadlineReminders: true, deadlineLeadHours: 24,
             standupReminder: true, meetingLead: 5, meetingReminders: true,
-            mmPingsOnReview: true, blockedDailyDigest: false,
+            blockedDailyDigest: false,
             soundOnPing: false, desktopNotif: true,
             quietHours: true, quietFrom: "19:00", quietTo: "09:00"
         },
@@ -160,9 +162,11 @@ Item {
             standupTime: "10:00"
         },
         tasks: {
-            idPrefix: "LTE", defaultPriority: "P2", defaultStatus: "todo",
+            idPrefix: "TASK", defaultPriority: "P2", defaultStatus: "todo",
             archiveDoneAfterDays: 7, autoMoveBlockedAfterDays: 3,
-            requireBranchOnReview: true
+            // Off by default: a user without git could not move anything to
+            // Code Review.
+            requireBranchOnReview: false
         },
         cpp: {
             defaultCompiler: "clang-17", defaultStandard: "C++20",
@@ -381,14 +385,16 @@ Item {
                                     anchors.fill: parent
                                     anchors.leftMargin: 10; anchors.rightMargin: 10
                                     spacing: 10
-                                    Text {
-                                        text: modelData.icon
+                                    // One drawn icon set, the same as the side
+                                    // rail's; the unicode glyphs came from
+                                    // whatever font had them, in any size.
+                                    IconImage {
+                                        source: modelData.icon
+                                        Layout.preferredWidth: 18
+                                        Layout.preferredHeight: 18
+                                        sourceSize.width: 36
+                                        sourceSize.height: 36
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
-                                        font.pixelSize: modelData.icon === "C++" ? 11 : 16
-                                        font.family: modelData.icon === "C++" ? Theme.fontMono : Theme.fontUi
-                                        font.weight: Font.DemiBold
-                                        Layout.preferredWidth: 24
-                                        horizontalAlignment: Text.AlignHCenter
                                     }
                                     ColumnLayout {
                                         Layout.fillWidth: true
@@ -489,11 +495,22 @@ Item {
                             font.pixelSize: 11
                             Layout.topMargin: 12
                         }
-                        Text {
-                            text: (root._activeMeta().icon || "") + "  " + (root._activeMeta().title || "")
-                            color: Theme.text
-                            font.pixelSize: 18
-                            font.weight: Font.DemiBold
+                        RowLayout {
+                            spacing: 10
+                            IconImage {
+                                source: root._activeMeta().icon || ""
+                                Layout.preferredWidth: 20
+                                Layout.preferredHeight: 20
+                                sourceSize.width: 40
+                                sourceSize.height: 40
+                                color: Theme.text
+                            }
+                            Text {
+                                text: root._activeMeta().title || ""
+                                color: Theme.text
+                                font.pixelSize: 18
+                                font.weight: Font.DemiBold
+                            }
                         }
                         Text {
                             text: root._activeMeta().sub || ""
@@ -997,12 +1014,6 @@ Item {
                             value: (root.settings.profile && root.settings.profile.team) || ""
                             onCommitted: (text) => root.set("profile", "team", text)
                         }
-                        TextRow {
-                            Layout.fillWidth: true
-                            label: I18n.t("settings.profile.timezone"); mono: true
-                            value: (root.settings.profile && root.settings.profile.timezone) || ""
-                            onCommitted: (text) => root.set("profile", "timezone", text)
-                        }
                     }
                     SwatchRow {
                         label: I18n.t("settings.profile.avatarColor")
@@ -1062,6 +1073,15 @@ Item {
                         hint: I18n.t("settings.appearance.highContrast.hint")
                         checked: !!(root.settings.appearance && root.settings.appearance.highContrast)
                         onToggled: (checked) => root.set("appearance", "highContrast", checked)
+                    }
+                    // Only where there is a tray to close into.
+                    SwitchRow {
+                        objectName: "settings-close-to-tray"
+                        visible: Qt.platform.os === "windows" || Qt.platform.os === "osx"
+                        label: I18n.t("settings.system.closeToTray")
+                        hint: I18n.t("settings.system.closeToTray.hint")
+                        checked: !(root.settings.system && root.settings.system.closeToTray === false)
+                        onToggled: (checked) => root.set("system", "closeToTray", checked)
                     }
                 }
             }
@@ -1155,12 +1175,6 @@ Item {
                         label: I18n.t("settings.notif.desktopNotif")
                         checked: !!(root.settings.notifications && root.settings.notifications.desktopNotif)
                         onToggled: (checked) => root.set("notifications", "desktopNotif", checked)
-                    }
-                    SwitchRow {
-                        label: I18n.t("settings.notif.mmPings")
-                        hint: I18n.t("settings.notif.mmPings.hint")
-                        checked: !!(root.settings.notifications && root.settings.notifications.mmPingsOnReview)
-                        onToggled: (checked) => root.set("notifications", "mmPingsOnReview", checked)
                     }
                     SwitchRow {
                         label: I18n.t("settings.notif.blockedDigest")
@@ -1315,8 +1329,8 @@ Item {
                         TextRow {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
-                            label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "LTE"
-                            hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE")
+                            label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "TASK"
+                            hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK")
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
                             onCommitted: (text) => {
                                 const next = (text || "").toUpperCase().trim();
@@ -1343,7 +1357,7 @@ Item {
                     SwitchRow {
                         label: I18n.t("settings.tasks.renameExisting")
                         hint: I18n.t("settings.tasks.renameExisting.hint")
-                            .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
+                            .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK").toUpperCase())
                         checked: sectionTasksRoot.renameExistingOnCommit
                         onToggled: (checked) => sectionTasksRoot.renameExistingOnCommit = checked
                     }
@@ -1568,6 +1582,19 @@ Item {
                 }
             }
 
+            // Where the tokens are. Without a keychain they sit in a file in
+            // the data folder, and a portable folder carries them with it.
+            Text {
+                objectName: "int-secrets-file-note"
+                visible: !AppController.secretsInKeychain()
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: I18n.t(Qt.platform.os === "windows" ? "settings.integrations.secretsFileWin"
+                                                          : "settings.integrations.secretsFile")
+                color: Theme.p1
+                font.pixelSize: 11
+            }
+
             // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
             SectionCard {
                 RowLayout {
@@ -1722,6 +1749,11 @@ Item {
                                 color: Theme.textDim
                                 font.pixelSize: 10
                                 text: {
+                                    // With a refresh token heap renews the
+                                    // session itself; an expiry time then only
+                                    // made a working card look about to break.
+                                    if ((intSection.secretsRev, AppController.hasIntegrationSecret(intCard.intKey, "refreshToken")))
+                                        return I18n.t("settings.integrations.signedInBrowserRenews");
                                     const raw = intCard.conf.tokenExpiresAt || "";
                                     if (raw.length === 0)
                                         return I18n.t("settings.integrations.signedInBrowser");
@@ -1932,12 +1964,22 @@ Item {
                                             // is a pick rather than a hidden
                                             // gesture. Its value is the empty
                                             // string, which removes the override.
-                                            model: [{ id: "", name: I18n.t("settings.integrations.statusMapAuto") }].concat(AppController.statuses)
+                                            objectName: "status-map-combo"
+                                            readonly property var options: [{ id: "", name: I18n.t("settings.integrations.statusMapAuto") }].concat(AppController.statuses)
+                                            model: options
                                             textRole: "name"
                                             valueRole: "id"
-                                            currentIndex: mapRow.modelData.overridden
-                                                          ? Math.max(0, indexOfValue(mapRow.modelData.column))
-                                                          : 0
+                                            // Looked up in the array this binding
+                                            // owns. indexOfValue() ran before the
+                                            // combo had its model, answered -1,
+                                            // and was never asked again, so every
+                                            // row read "Auto".
+                                            currentIndex: {
+                                                if (!mapRow.modelData.overridden) return 0;
+                                                for (let i = 1; i < options.length; i++)
+                                                    if (options[i].id === mapRow.modelData.column) return i;
+                                                return 0;
+                                            }
                                             onActivated: {
                                                 AppController.setStatusMapping(intCard.intKey, mapRow.modelData.status, currentValue)
                                                 intSection.statusMapRev++
@@ -1948,7 +1990,9 @@ Item {
                                         // once they have, the combo says it.
                                         Text {
                                             Layout.preferredWidth: 96
-                                            visible: !mapRow.modelData.overridden
+                                            // Faded rather than removed, so the
+                                            // combo keeps its width either way.
+                                            opacity: mapRow.modelData.overridden ? 0 : 1
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                             text: I18n.t("settings.integrations.statusMapGuess").arg(intCard.columnName(mapRow.modelData.column))
@@ -2109,7 +2153,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: I18n.t("settings.git.match.hint")
-                                .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
+                                .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK").toUpperCase())
                         color: Theme.textMuted
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap

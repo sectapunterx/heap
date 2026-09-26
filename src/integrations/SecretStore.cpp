@@ -17,10 +17,27 @@
 #include <qt6keychain/keychain.h>
 #endif
 
+#ifdef Q_OS_WIN
+// clang-format off
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+#ifndef WIN32_LEAN_AND_MEAN
+#define WIN32_LEAN_AND_MEAN
+#endif
+#include <windows.h>
+#include <dpapi.h>
+// clang-format on
+#endif
+
 namespace heap::integrations {
 
 namespace {
 const QString kService = QStringLiteral("heap.integrations");
+
+// Values in secrets.json carrying this prefix are DPAPI blobs (Windows): only
+// the same Windows user on the same machine can read them back.
+const QString kProtectedPrefix = QStringLiteral("dpapi:");
 
 #ifdef HEAP_USE_KEYCHAIN
 // Windows Credential Manager refuses blobs over 2560 bytes and an Atlassian
@@ -223,6 +240,41 @@ void SecretStore::load(const QVector<QPair<QString, QString>>& keys, const std::
   }
 }
 
+QString SecretStore::protectForFile(const QString& plain) {
+#ifdef Q_OS_WIN
+  // The fallback file was plaintext, and on Windows setPermissions() does
+  // next to nothing for it. DPAPI ties the value to this Windows account.
+  QByteArray bytes = plain.toUtf8();
+  DATA_BLOB in{static_cast<DWORD>(bytes.size()), reinterpret_cast<BYTE*>(bytes.data())};
+  DATA_BLOB out{};
+  if(CryptProtectData(&in, L"heap", nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
+    const QByteArray blob(reinterpret_cast<const char*>(out.pbData), static_cast<qsizetype>(out.cbData));
+    LocalFree(out.pbData);
+    return kProtectedPrefix + QString::fromLatin1(blob.toBase64());
+  }
+  qWarning() << "CryptProtectData failed; storing the secret unprotected";
+#endif
+  return plain;
+}
+
+QString SecretStore::unprotectFromFile(const QString& stored) {
+  if(!stored.startsWith(kProtectedPrefix)) {
+    return stored;  // plaintext, as written by an older build or another OS
+  }
+#ifdef Q_OS_WIN
+  QByteArray blob = QByteArray::fromBase64(stored.mid(kProtectedPrefix.size()).toLatin1());
+  DATA_BLOB in{static_cast<DWORD>(blob.size()), reinterpret_cast<BYTE*>(blob.data())};
+  DATA_BLOB out{};
+  if(CryptUnprotectData(&in, nullptr, nullptr, nullptr, nullptr, CRYPTPROTECT_UI_FORBIDDEN, &out)) {
+    const QString plain = QString::fromUtf8(reinterpret_cast<const char*>(out.pbData), static_cast<qsizetype>(out.cbData));
+    LocalFree(out.pbData);
+    return plain;
+  }
+  qWarning() << "CryptUnprotectData failed; the stored secret is unreadable here";
+#endif
+  return {};
+}
+
 QString SecretStore::fallbackPath() const {
   return heap::paths::dataDir() + QStringLiteral("/secrets.json");
 }
@@ -238,7 +290,10 @@ void SecretStore::loadFallbackFile() {
   }
   const QJsonObject obj = doc.object();
   for(auto it = obj.constBegin(); it != obj.constEnd(); ++it) {
-    m_cache.insert(it.key(), it.value().toString());
+    const QString value = unprotectFromFile(it.value().toString());
+    if(!value.isEmpty()) {
+      m_cache.insert(it.key(), value);
+    }
   }
 }
 
@@ -247,7 +302,7 @@ void SecretStore::writeFallbackFile() const {
   QDir().mkpath(QFileInfo(path).absolutePath());
   QJsonObject obj;
   for(auto it = m_cache.constBegin(); it != m_cache.constEnd(); ++it) {
-    obj.insert(it.key(), it.value());
+    obj.insert(it.key(), protectForFile(it.value()));
   }
   QSaveFile f(path);
   if(!f.open(QIODevice::WriteOnly)) {
@@ -259,7 +314,8 @@ void SecretStore::writeFallbackFile() const {
     qWarning() << "cannot write" << path << ":" << f.errorString();
     return;
   }
-  // This file holds access tokens and OAuth refresh tokens in plain text — it
+  // This file holds access tokens and OAuth refresh tokens — DPAPI-wrapped on
+  // Windows, in plain text elsewhere. It
   // is the fallback for builds without QtKeychain, and it is always what a
   // --data-dir run uses. QSaveFile writes through a temp file and renames, so
   // the result carries whatever the default mask or the parent ACL gave it.

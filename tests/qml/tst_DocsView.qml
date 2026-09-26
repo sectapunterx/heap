@@ -11,6 +11,7 @@ import QtQuick
 import QtQuick.Controls
 import QtTest
 import TodoCpp
+import "../../qml/DocsStarter.js" as Starter
 
 TestCase {
     id: tc
@@ -132,5 +133,22 @@ TestCase {
         dv.focusSearch();
         tryVerify(function () { return field.activeFocus; }, 2000,
                   "focusSearch() must put the caret in the search field");
+    }
+
+    // The starter catalogue exists in Russian too (audit C7): same entries,
+    // same links, translated text.
+    function test_starter_docs_have_a_russian_edition() {
+        const acc = ["#111111", "#222222", "#333333", "#444444"];
+        const en = Starter.sections("en", acc);
+        const ru = Starter.sections("ru", acc);
+        compare(ru.length, en.length);
+        for (let i = 0; i < en.length; i++) {
+            compare(ru[i].items.length, en[i].items.length);
+            verify(ru[i].title !== en[i].title, "section " + en[i].id + " is translated");
+            verify(/[а-яё]/i.test(ru[i].items[0].desc), en[i].items[0].ref + " has a Russian description");
+            compare(ru[i].items[0].url, en[i].items[0].url);
+        }
+        compare(Starter.snippets("ru").length, Starter.snippets("en").length);
+        compare(Starter.contacts("ru").length, Starter.contacts("en").length);
     }
 }

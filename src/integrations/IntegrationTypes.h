@@ -65,6 +65,10 @@ struct ExternalComment {
   QString body;
   QDateTime createdAt;
   QString url;
+  // Where on the issue's own page the comment sits, for trackers that give a
+  // comment an id but no URL: appended to the issue URL ("#note_7",
+  // "?focusedCommentId=10042").
+  QString anchor;
 };
 
 // Outcome of one sync cycle for a provider.

@@ -83,6 +83,12 @@ inline Span normalizeSpan(QDate date, QDate endDate, double start, double end, b
     return out;
   }
 
+  // A single-day event that ends before it starts ("23:00 – 01:00") runs past
+  // midnight. Clamping it to one snap step turned it into a 15-minute event.
+  if(out.endDate == out.date && out.date.isValid() && std::isfinite(start) && std::isfinite(end) && end < start && end >= 0.0) {
+    out.endDate = out.date.addDays(1);
+  }
+
   if(out.endDate == out.date) {
     const HourRange r = clampHours(start, end, step);
     out.start = r.start;

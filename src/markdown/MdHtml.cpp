@@ -44,12 +44,6 @@ QString internalLink(const QString& scheme, const QString& target, const QString
       .arg(scheme, QString::fromUtf8(QUrl::toPercentEncoding(target)), colorOr(color, QStringLiteral("inherit")), label);
 }
 
-bool isRemote(const QString& href) {
-  const QString lower = href.trimmed().toLower();
-  return lower.startsWith(QStringLiteral("http://")) || lower.startsWith(QStringLiteral("https://")) ||
-         lower.startsWith(QStringLiteral("//"));
-}
-
 // Text with heap's decorations applied. The input is raw document text; every
 // piece of it is escaped here, including the parts that end up inside a tag.
 QString decorate(const QString& text, const MdHtmlOptions& options) {
@@ -225,7 +219,7 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
       if(alt.isEmpty()) {
         alt = escapeHtml(node.href);
       }
-      if(isRemote(node.href) && !options.allowRemoteImages) {
+      if(!isLocalSource(node.href) && !(options.allowRemoteImages && isWebSource(node.href))) {
         // Emitting <img> here would make Qt fetch the URL as soon as the note
         // is opened, on behalf of whoever wrote it. Offer it as a link and let
         // the reader decide.
@@ -329,6 +323,40 @@ QHash<QString, int> footnoteNumbers(const MdAst& ast) {
     }
   }
   return numbers;
+}
+
+bool isLocalSource(const QString& source) {
+  const QString src = source.trimmed();
+  if(src.isEmpty()) {
+    return true;
+  }
+  const QString lower = src.toLower();
+  if(lower.startsWith(QStringLiteral("qrc:")) || lower.startsWith(QStringLiteral("data:image/"))) {
+    return true;
+  }
+  // "//host/x", "\\host\share" and "C:\x" / "C:/x" all leave the note.
+  if(src.startsWith(QChar('/')) || src.startsWith(QChar('\\'))) {
+    return false;
+  }
+  if(src.size() >= 2 && src.at(0).isLetter() && src.at(1) == QChar(':')) {
+    return false;
+  }
+  // Any scheme at all ("file:", "smb:", "http:") is outside; a relative path
+  // has no colon before its first slash.
+  const qsizetype colon = src.indexOf(QChar(':'));
+  const qsizetype slash = src.indexOf(QChar('/'));
+  return colon < 0 || (slash >= 0 && slash < colon);
+}
+
+bool isWebSource(const QString& source) {
+  const QString lower = source.trimmed().toLower();
+  return lower.startsWith(QStringLiteral("http://")) || lower.startsWith(QStringLiteral("https://"));
+}
+
+bool isSafeLink(const QString& url) {
+  const QString lower = url.trimmed().toLower();
+  return lower.startsWith(QStringLiteral("http://")) || lower.startsWith(QStringLiteral("https://")) ||
+         lower.startsWith(QStringLiteral("mailto:")) || lower.startsWith(QStringLiteral("heap://"));
 }
 
 }  // namespace heap::md

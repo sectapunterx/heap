@@ -11,5 +11,9 @@ enum class Lang { En, Ru };
 QVector<Task> tasks(Lang lang = Lang::En);
 QVector<CalEvent> events(const QDate& today, Lang lang = Lang::En);
 QVector<Person> people(Lang lang = Lang::En);
-QVector<QVariantMap> statuses();
+// Column names follow the seed language; the ids never change, so a column
+// renamed or translated still means the same thing to sync and automation.
+QVector<QVariantMap> statuses(Lang lang = Lang::En);
+// A first note, so the Notes view does not open on nothing in the demo.
+QVector<Note> notes(Lang lang = Lang::En);
 }  // namespace SampleData
