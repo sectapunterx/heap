@@ -125,6 +125,57 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
       {"notes.inbox", {"Inbox", "Входящие"}},
+      {"undo.splitSeries", {"Series change undone", "Изменение серии отменено"}},
+      {"undo.deleteSeries", {"Series restored", "Серия восстановлена"}},
+      {"undo.deleteFollowing", {"Following events restored", "Последующие события восстановлены"}},
+      {"undo.deleteOccurrence", {"Event restored", "Событие восстановлено"}},
+      {"update.available", {"Update available: %1", "Доступно обновление: %1"}},
+      {"update.upToDate", {"You're up to date", "У вас последняя версия"}},
+      {"update.failed", {"Update check failed", "Не удалось проверить обновления"}},
+      {"task.recurs", {"Recurs: %1 due %2", "Повтор: %1 на %2"}},
+      {"task.fromTemplate", {"Created from template: %1", "Создано по шаблону: %1"}},
+      {"recovery.saved", {"Recovery log saved", "Журнал восстановления сохранён"}},
+      {"recovery.empty", {"No recovery log to export", "Журнал восстановления пуст"}},
+      {"update.checking", {"Checking for updates…", "Проверка обновлений…"}},
+      {"sync.noTracker", {"Connect a tracker in Settings → Integrations first", "Сначала подключите трекер: Настройки → Интеграции"}},
+      {"sync.running", {"Syncing…", "Синхронизация…"}},
+      {"sync.failed", {"%1 sync failed: %2", "%1: синхронизация не удалась — %2"}},
+      {"int.connected", {"%1 connected", "%1 подключён"}},
+      {"int.connectFailed", {"%1 connection failed: %2", "%1: не удалось подключиться — %2"}},
+      {"contacts.upToDate", {"%1: contacts are up to date", "%1: контакты без изменений"}},
+      {"int.sessionExpired", {"%1 session expired — sign in again", "%1: сессия истекла — войдите снова"}},
+      {"int.noPassword",
+       {"Signing in with a password is not available for this integration", "Вход по паролю для этой интеграции недоступен"}},
+      {"int.needUrl", {"Enter the %1 server URL first", "Сначала укажите адрес сервера %1"}},
+      {"int.signInFailed", {"%1 sign-in failed: %2", "%1: вход не удался — %2"}},
+      {"int.unknown", {"Unknown integration", "Неизвестная интеграция"}},
+      {"int.notConfigured", {"%1 is not fully configured", "%1 настроен не полностью"}},
+      {"int.needs", {"%1 needs %2", "%1: нужно заполнить %2"}},
+      {"int.noSite",
+       {"%1 sign-in granted no site — for a self-hosted Jira, fill in Advanced and press Connect",
+        "%1: вход не дал доступа ни к одному сайту — для своего Jira заполните «Дополнительно» и нажмите «Подключить»"}},
+      {"int.browserConnectedSite", {"%1 connected via browser — %2", "%1 подключён через браузер — %2"}},
+      {"int.noBrowser", {"Browser sign-in is not available for this integration", "Вход через браузер для этой интеграции недоступен"}},
+      {"int.noOAuthApp",
+       {"No OAuth app configured — add a client ID under Advanced first",
+        "OAuth-приложение не настроено — добавьте client ID в разделе «Дополнительно»"}},
+      {"int.needSecret",
+       {"%1 browser sign-in needs an OAuth client secret — add one under Advanced",
+        "%1: для входа через браузер нужен client secret — добавьте его в разделе «Дополнительно»"}},
+      {"int.needQt",
+       {"%1 browser sign-in needs Qt 6.9 or newer — use an access token",
+        "%1: вход через браузер требует Qt 6.9 или новее — используйте токен доступа"}},
+      {"int.deviceCode", {"%1: open %2 and enter code %3", "%1: откройте %2 и введите код %3"}},
+      {"int.browserConnected", {"%1 connected via browser", "%1 подключён через браузер"}},
+      {"int.signedInNeeds", {"%1 signed in — now fill in %2", "%1: вход выполнен — теперь заполните %2"}},
+      {"int.browserStarting", {"Starting %1 browser sign-in…", "Запуск входа в %1 через браузер…"}},
+      {"int.browserOpening", {"Opening browser for %1 — OAuth redirect: %2", "Открываю браузер для %1 — OAuth redirect: %2"}},
+      {"git.noRepo",
+       {"No git repository configured — add one in Settings › Git", "Git-репозиторий не настроен — добавьте его в Настройки › Git"}},
+      {"git.noBranchName", {"Could not derive a branch name for %1", "Не удалось составить имя ветки для %1"}},
+      {"git.branchFailed", {"Branch create failed: %1", "Не удалось создать ветку: %1"}},
+      {"git.branchCreated", {"Created branch %1", "Создана ветка %1"}},
+      {"contacts.updated", {"%1: %2 contact(s) updated", "%1: обновлено контактов — %2"}},
       {"event.editUndone", {"Event change undone: %1", "Изменение события отменено: %1"}},
       {"event.badRule",
        {"Repeat rule not supported, saved as a single event: %1", "Правило повтора не поддерживается, сохранено одно событие: %1"}},
@@ -488,17 +539,17 @@ AppController::AppController(QObject* parent) :
   m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
   connect(m_updater.get(), &heap::update::Updater::updateAvailable, this, [this](const QString& version, const QString& url) {
     m_latestReleaseUrl = url;
-    m_updateStatus = tr("Update available: %1").arg(version);
+    m_updateStatus = tr_("update.available").arg(version);
     emit updateStatusChanged();
     emit updateAvailable(version, url);
   });
   connect(m_updater.get(), &heap::update::Updater::upToDate, this, [this](const QString&) {
-    m_updateStatus = tr("You're up to date");
+    m_updateStatus = tr_("update.upToDate");
     emit updateStatusChanged();
   });
   connect(m_updater.get(), &heap::update::Updater::checkFailed, this, [this](const QString& error) {
     qWarning() << "update check failed:" << error;
-    m_updateStatus = tr("Update check failed");
+    m_updateStatus = tr_("update.failed");
     emit updateStatusChanged();
   });
   // Opt-out background check shortly after startup (never auto-downloads). The
@@ -636,11 +687,10 @@ void AppController::setLanguage(const QString& v) {
   }
   m_language = norm;
   emit languageChanged();
-  // Date helpers (shortDate, humanDate) depend on m_language — nudge any
-  // bindings that read them by re-emitting selectedDateChanged. Cheap, and
-  // keeps QML chrome that references AppController.shortDate(selectedDate)
-  // in sync without per-binding wiring.
-  emit selectedDateChanged();
+  // Re-emitting selectedDateChanged here used to refresh the few labels built
+  // by shortDate()/humanDate() — and also rebuilt every calendar view from
+  // scratch, which is most of what made a language switch take seconds on a
+  // large profile. Those labels read I18n.lang in their bindings instead.
   scheduleSave();
 }
 
@@ -1114,7 +1164,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       copy.assignee.clear();
       copy.externalMeta = {};
       m_tasks.upsert(copy);
-      emit toast(tr("Recurs: %1 due %2").arg(newId, next.toString(Qt::ISODate)));
+      emit toast(tr_("task.recurs").arg(newId, next.toString(Qt::ISODate)));
     }
   }
 
@@ -1180,6 +1230,10 @@ void AppController::onTaskPushed(const QString& providerId, const QString& exter
     qWarning() << providerId << "push failed for" << externalId << ":" << error;
     emit trackerPushFailed(t.id, tr_("sync.pushFailed").arg(externalKeyOf(t), error));
   }
+}
+
+bool AppController::secretsInKeychain() const {
+  return m_secretStore != nullptr && m_secretStore->usingKeychain();
 }
 
 bool AppController::isSafeLink(const QString& url) const {
@@ -1425,7 +1479,7 @@ void AppController::createTaskFromTemplate(const QString& name) {
   t.statusChangedAt = QDateTime::currentDateTime();
   m_tasks.upsert(t);
   scheduleSave();
-  emit toast(tr("Created from template: %1").arg(it->name));
+  emit toast(tr_("task.fromTemplate").arg(it->name));
   emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
 }
 
@@ -3897,7 +3951,7 @@ QVariantList AppController::recoveryLog() const {
 bool AppController::exportRecoveryLog(const QUrl& fileUrl) {
   const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
   const bool ok = heap::recovery::exportTo(path);
-  emit toast(ok ? tr("Recovery log saved") : tr("No recovery log to export"));
+  emit toast(ok ? tr_("recovery.saved") : tr_("recovery.empty"));
   return ok;
 }
 
@@ -3916,7 +3970,7 @@ void AppController::checkForUpdates() {
   if(!m_updater || m_updater->isChecking()) {
     return;
   }
-  m_updateStatus = tr("Checking for updates…");
+  m_updateStatus = tr_("update.checking");
   emit updateStatusChanged();
   m_updater->checkForUpdates();
 }
@@ -3933,7 +3987,7 @@ void AppController::syncNow() {
     directories.append(it.key());
   }
   if(m_syncProviders.empty() && directories.isEmpty()) {
-    emit toast(tr("Connect a tracker in Settings → Integrations first"));
+    emit toast(tr_("sync.noTracker"));
     return;
   }
   for(const QString& id : directories) {
@@ -3942,7 +3996,7 @@ void AppController::syncNow() {
   if(m_syncProviders.empty()) {
     return;
   }
-  emit toast(tr("Syncing…"));
+  emit toast(tr_("sync.running"));
   // Collect the ids first: refreshing a token rebuilds m_syncProviders.
   QStringList ids;
   ids.reserve(static_cast<qsizetype>(m_syncProviders.size()));
@@ -3958,6 +4012,10 @@ void AppController::syncProviderNow(const QString& providerId) {
   ensureFreshToken(providerId, [this, providerId]() {
     for(const auto& provider : m_syncProviders) {
       if(provider->id() == providerId) {
+        if(!m_statusesAsked.contains(providerId)) {
+          m_statusesAsked.insert(providerId);
+          provider->fetchStatuses();
+        }
         provider->pullTasks();
         return;
       }
@@ -4361,6 +4419,11 @@ void AppController::setStatusMapping(const QString& providerId, const QString& s
   m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
   emit appSettingsJsonChanged();
   scheduleSave();
+  for(const auto& provider : m_syncProviders) {
+    if(provider->id() == providerId) {
+      provider->setStatusOverrides(statusOverridesFor(providerId));
+    }
+  }
   // Existing cards are not rewritten: moving a mirrored ticket is a real move
   // that heap pushes back, so re-columning them here would push a change the
   // user never made. The next sync applies the new mapping.
@@ -4413,7 +4476,7 @@ void AppController::applyIntegrationSettings() {
             });
             return;
           }
-          emit toast(tr("%1 sync failed: %2").arg(label, error));
+          emit toast(tr_("sync.failed").arg(label, error));
         });
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
@@ -4422,8 +4485,16 @@ void AppController::applyIntegrationSettings() {
               onTaskPushed(providerId, externalId, ok, error);
             });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
-      emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
     });
+    // The mapping UI used to list only statuses an issue had already arrived
+    // in; the tracker's own list fills in the rest.
+    connect(provider, &heap::integrations::IntegrationProvider::statusesFetched, this, [this, providerId](const QStringList& statuses) {
+      if(rememberSeenStatuses(providerId, statuses)) {
+        scheduleSave();
+      }
+    });
+    provider->setStatusOverrides(statusOverridesFor(providerId));
   };
 
   // Build every connected + configured provider from the registry. Generic
@@ -4509,7 +4580,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   const QString label = d ? d->displayName : providerId;
   connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, label](bool ok, const QString& error) {
-    emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
   });
   connect(client,
           &heap::integrations::MattermostClient::contactsFetched,
@@ -4517,20 +4588,20 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
             const int changed = mergeExternalContacts(providerId, contacts);
             if(changed == 0) {
-              emit toast(tr("%1: contacts are up to date").arg(label));
+              emit toast(tr_("contacts.upToDate").arg(label));
               return;
             }
-            emit toast(tr("%n contact(s) updated from %1", "", changed).arg(label));
+            emit toast(tr_("contacts.updated").arg(label).arg(changed));
           });
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
     // Saying "expired" beats repeating the same failure on every auto-sync.
     if(status == 401) {
       disconnectIntegration(providerId);
-      emit toast(tr("%1 session expired — sign in again").arg(label));
+      emit toast(tr_("int.sessionExpired").arg(label));
       return;
     }
-    emit toast(tr("%1 sync failed: %2").arg(label, error));
+    emit toast(tr_("sync.failed").arg(label, error));
   });
 
   m_directoryClients.insert(providerId, client);
@@ -4815,12 +4886,12 @@ void AppController::fetchDirectory(const QString& providerId, bool rebindProfile
 void AppController::connectWithCredentials(const QString& providerId, const QVariantMap& credentials) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(d == nullptr || d->loginFields.isEmpty()) {
-    emit toast(tr("Signing in with a password is not available for this integration"));
+    emit toast(tr_("int.noPassword"));
     return;
   }
   const QString host = integrationConfig(providerId).value(QStringLiteral("host")).toString().trimmed();
   if(host.isEmpty()) {
-    emit toast(tr("Enter the %1 server URL first").arg(d->displayName));
+    emit toast(tr_("int.needUrl").arg(d->displayName));
     emit integrationLoginFinished(providerId, false);
     return;
   }
@@ -4836,7 +4907,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
             client->deleteLater();
             emit integrationLoginFinished(providerId, ok);
             if(!ok) {
-              emit toast(tr("%1 sign-in failed: %2").arg(label, error));
+              emit toast(tr_("int.signInFailed").arg(label, error));
               return;
             }
             if(m_secretStore) {
@@ -4850,7 +4921,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
                                      {QStringLiteral("connected"), true},
                                  });
             emit integrationSecretsChanged();
-            emit toast(tr("%1 connected").arg(label));
+            emit toast(tr_("int.connected").arg(label));
           });
   client->login(credentials.value(QStringLiteral("loginId")).toString(),
                 credentials.value(QStringLiteral("password")).toString(),
@@ -4959,13 +5030,13 @@ void AppController::migrateLegacySecrets() {
 
 void AppController::syncProvider(const QString& providerId) {
   if(m_directoryClients.contains(providerId)) {
-    emit toast(tr("Syncing…"));
+    emit toast(tr_("sync.running"));
     fetchDirectory(providerId, /*rebindProfile=*/true);
     return;
   }
   for(const auto& provider : m_syncProviders) {
     if(provider->id() == providerId) {
-      emit toast(tr("Syncing…"));
+      emit toast(tr_("sync.running"));
       // "Sync now" means "sync this, here" — the same rebind the directory
       // path does, so the tracker follows a deliberate click to this profile.
       setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
@@ -4973,19 +5044,19 @@ void AppController::syncProvider(const QString& providerId) {
       return;
     }
   }
-  emit toast(tr("Connect a tracker in Settings → Integrations first"));
+  emit toast(tr_("sync.noTracker"));
 }
 
 void AppController::testIntegration(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d) {
-    emit toast(tr("Unknown integration"));
+    emit toast(tr_("int.unknown"));
     return;
   }
   if(d->kind == heap::integrations::ProviderKind::Directory) {
     heap::integrations::MattermostClient* client = directoryClient(providerId);
     if(client == nullptr) {
-      emit toast(tr("%1 is not fully configured").arg(d->displayName));
+      emit toast(tr_("int.notConfigured").arg(d->displayName));
       return;
     }
     client->testConnection();
@@ -5001,13 +5072,13 @@ void AppController::testIntegration(const QString& providerId) {
     provider = rest;
   }
   if(!provider) {
-    emit toast(tr("%1 is not fully configured").arg(d->displayName));
+    emit toast(tr_("int.notConfigured").arg(d->displayName));
     return;
   }
   const QString label = d->displayName;
   connect(
       provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, provider, label](bool ok, const QString& error) {
-        emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
         provider->deleteLater();
       });
   provider->testConnection();
@@ -5186,7 +5257,7 @@ void AppController::setIntegrationSecret(const QString& providerId, const QStrin
 void AppController::connectIntegrationManually(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(d == nullptr) {
-    emit toast(tr("Unknown integration"));
+    emit toast(tr_("int.unknown"));
     return;
   }
   // Validated as a token card, never as an OAuth one: this connect is what
@@ -5196,7 +5267,7 @@ void AppController::connectIntegrationManually(const QString& providerId) {
   if(!missing.isEmpty()) {
     // Silence was the old failure mode — "connected" went true, no provider
     // could be built from the half-filled config, and nothing ever synced.
-    emit toast(tr("%1 needs %2").arg(d->displayName, missing.join(QStringLiteral(", "))));
+    emit toast(tr_("int.needs").arg(d->displayName, missing.join(QStringLiteral(", "))));
     emit integrationNeedsFields(providerId, missing);
     return;
   }
@@ -5215,7 +5286,7 @@ void AppController::connectIntegrationManually(const QString& providerId) {
   }
   setIntegrationFields(providerId, fields);
   emit integrationSecretsChanged();
-  emit toast(tr("%1 connected").arg(d->displayName));
+  emit toast(tr_("int.connected").arg(d->displayName));
 }
 
 void AppController::disconnectIntegration(const QString& providerId) {
@@ -5340,7 +5411,7 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
           // panel offers the sign-in button again instead of failing forever.
           qWarning() << providerId << "token refresh failed:" << r.error;
           setIntegrationField(providerId, QStringLiteral("connected"), false);
-          emit toast(tr("%1 session expired — sign in again").arg(label));
+          emit toast(tr_("int.sessionExpired").arg(label));
           done(false);
           return;
         }
@@ -5381,7 +5452,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
     const QByteArray body = reply->readAll();
     if(reply->error() != QNetworkReply::NoError) {
       emit toast(
-          tr("%1 sign-in failed: %2")
+          tr_("int.signInFailed")
               .arg(label, heap::integrations::describeHttpError(heap::integrations::replyHttpStatus(reply), body, reply->errorString())));
       return;
     }
@@ -5397,7 +5468,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
       // Atlassian only ever grants Cloud sites, so this is also what a
       // self-hosted Jira looks like from here: the sign-in worked and named
       // nothing this token can reach.
-      emit toast(tr("%1 sign-in granted no site — for a self-hosted Jira, fill in Advanced and press Connect").arg(label));
+      emit toast(tr_("int.noSite").arg(label));
       return;
     }
     setIntegrationFields(kProviderId,
@@ -5406,14 +5477,14 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
                              {QStringLiteral("siteUrl"), site.url},
                              {QStringLiteral("connected"), true},
                          });
-    emit toast(tr("%1 connected via browser — %2").arg(label, site.url));
+    emit toast(tr_("int.browserConnectedSite").arg(label, site.url));
   });
 }
 
 void AppController::connectOAuth(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d || !d->oauth.supported) {
-    emit toast(tr("Browser sign-in is not available for this integration"));
+    emit toast(tr_("int.noBrowser"));
     return;
   }
   const QVariantMap cfg = integrationConfig(providerId);
@@ -5424,7 +5495,7 @@ void AppController::connectOAuth(const QString& providerId) {
     clientId = d->oauth.clientId;
   }
   if(clientId.isEmpty()) {
-    emit toast(tr("No OAuth app configured — add a client ID under Advanced first"));
+    emit toast(tr_("int.noOAuthApp"));
     return;
   }
   QString clientSecret = cfg.value(QStringLiteral("clientSecret")).toString();
@@ -5435,11 +5506,11 @@ void AppController::connectOAuth(const QString& providerId) {
   // release build carries one; a build made without the CI credentials does
   // not, so say so instead of opening a browser that will refuse the exchange.
   if(d->oauth.needsSecret && clientSecret.isEmpty()) {
-    emit toast(tr("%1 browser sign-in needs an OAuth client secret — add one under Advanced").arg(d->displayName));
+    emit toast(tr_("int.needSecret").arg(d->displayName));
     return;
   }
   if(d->oauth.effectiveFlow() == heap::integrations::OAuthFlow::Device && !heap::integrations::OAuthManager::deviceFlowAvailable()) {
-    emit toast(tr("%1 browser sign-in needs Qt 6.9 or newer — use an access token").arg(d->displayName));
+    emit toast(tr_("int.needQt").arg(d->displayName));
     return;
   }
   // {host} defaults to the descriptor fallback (e.g. gitlab.com) so gitlab.com
@@ -5486,13 +5557,13 @@ void AppController::connectOAuth(const QString& providerId) {
   // to the Integrations card as a banner.
   connect(mgr, &heap::integrations::OAuthManager::userCode, this, [this, providerId, label](const QString& code, const QString& uri) {
     emit oauthDeviceCode(providerId, code, uri);
-    emit toast(tr("%1: open %2 and enter code %3").arg(label, uri, code));
+    emit toast(tr_("int.deviceCode").arg(label, uri, code));
   });
   connect(mgr, &heap::integrations::OAuthManager::finished, this, [this, providerId, label, mgr](const heap::integrations::OAuthResult& r) {
     mgr->deleteLater();
     emit oauthDeviceCode(providerId, QString(), QString());  // clear the banner
     if(!r.ok) {
-      emit toast(tr("%1 sign-in failed: %2").arg(label, r.error));
+      emit toast(tr_("int.signInFailed").arg(label, r.error));
       return;
     }
     if(m_secretStore) {
@@ -5530,16 +5601,16 @@ void AppController::connectOAuth(const QString& providerId) {
     // then quietly sync nothing.
     const QStringList missing = missingRequiredFields(providerId);
     if(missing.isEmpty()) {
-      emit toast(tr("%1 connected via browser").arg(label));
+      emit toast(tr_("int.browserConnected").arg(label));
     } else {
-      emit toast(tr("%1 signed in — now fill in %2").arg(label, missing.join(QStringLiteral(", "))));
+      emit toast(tr_("int.signedInNeeds").arg(label, missing.join(QStringLiteral(", "))));
       emit integrationNeedsFields(providerId, missing);
     }
   });
   if(deviceFlow) {
-    emit toast(tr("Starting %1 browser sign-in…").arg(label));
+    emit toast(tr_("int.browserStarting").arg(label));
   } else {
-    emit toast(tr("Opening browser for %1 — OAuth redirect: %2").arg(label, heap::integrations::OAuthManager::redirectUri()));
+    emit toast(tr_("int.browserOpening").arg(label, heap::integrations::OAuthManager::redirectUri()));
   }
   mgr->start(p);
 }
@@ -7688,7 +7759,7 @@ void AppController::createBranchForTask(const QString& taskId) {
     repo = repos.first();
   }
   if(repo.isEmpty()) {
-    emit toast(tr("No git repository configured — add one in Settings › Git"));
+    emit toast(tr_("git.noRepo"));
     return;
   }
 
@@ -7701,7 +7772,7 @@ void AppController::createBranchForTask(const QString& taskId) {
   const QString branchId = branchableKey.match(key).hasMatch() ? key : t.id;
   const QString branch = heap::git::BranchTaskMatcher::branchNameForTask(branchId, t.title, templ);
   if(branch.isEmpty()) {
-    emit toast(tr("Could not derive a branch name for %1").arg(t.id));
+    emit toast(tr_("git.noBranchName").arg(t.id));
     return;
   }
 
@@ -7721,7 +7792,7 @@ void AppController::createBranchForTask(const QString& taskId) {
                           delete connection;
 
                           if(!ok) {
-                            emit toast(tr("Branch create failed: %1").arg(error));
+                            emit toast(tr_("git.branchFailed").arg(error));
                             return;
                           }
                           const int taskRow = m_tasks.indexOfId(pendingTaskId);
@@ -7731,7 +7802,7 @@ void AppController::createBranchForTask(const QString& taskId) {
                             m_tasks.upsert(updated);
                             scheduleSave();
                           }
-                          emit toast(tr("Created branch %1").arg(branch));
+                          emit toast(tr_("git.branchCreated").arg(branch));
                         });
 
   QString err;

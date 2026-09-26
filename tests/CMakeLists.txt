@@ -358,6 +358,10 @@ function(heap_add_appcontroller_test name)
             target_link_libraries(${name} PRIVATE Qt6::DBus)
         endif ()
     endif ()
+    # SecretStore wraps the fallback file with DPAPI on Windows.
+    if (WIN32)
+        target_link_libraries(${name} PRIVATE crypt32)
+    endif ()
 
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
@@ -549,6 +553,14 @@ set_tests_properties(heap_qml_tests PROPERTIES
 # type"). CI now provisions Qt 6.8 via install-qt-action (matching local), where
 # they resolve, so Linux execution is re-enabled.
 
+# ─── Translation keys used by the QML exist in both dictionaries ───
+add_executable(heap_i18n_keys_tests test_i18n_keys.cpp)
+target_compile_definitions(heap_i18n_keys_tests PRIVATE
+        HEAP_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml"
+        HEAP_SRC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../src")
+target_link_libraries(heap_i18n_keys_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_i18n_keys_tests COMMAND heap_i18n_keys_tests)
+
 # ─── Integrations (tracker-sync StatusMap) tests ───
 # Pure status/priority translation for the post-release tracker sync. No QObject,
 # no network — Qt6::Core only.
@@ -681,6 +693,9 @@ add_executable(heap_rest_providers_tests
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
 )
 set_target_properties(heap_rest_providers_tests PROPERTIES AUTOMOC ON)
+if (WIN32)
+    target_link_libraries(heap_rest_providers_tests PRIVATE crypt32)
+endif ()
 target_include_directories(heap_rest_providers_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_rest_providers_tests PRIVATE
         Qt6::Core

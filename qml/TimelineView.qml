@@ -315,7 +315,7 @@ Item {
                                      && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
                                      && rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
                             text: rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
-                                  ? AppController.shortDate(rowItem.list[0].deadline) : ""
+                                  ? (I18n.lang, AppController.shortDate(rowItem.list[0].deadline)) : ""
                             color: Theme.textMuted
                             font.pixelSize: 11
                             leftPadding: 34
@@ -513,7 +513,7 @@ Item {
                             }
                         }
                         Text {
-                            text: AppController.deadlineDiffLabel(tlRow.t.deadline)
+                            text: (I18n.lang, AppController.deadlineDiffLabel(tlRow.t.deadline))
                             color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.p0
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.p1

@@ -92,9 +92,21 @@ Item {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
             cells.push({ date: d, tasks: [], events: [] });
         }
+        // The deadline decides whether a task is in the grid at all, so it is
+        // read first and the cell found by arithmetic. Reading nine roles for
+        // every task and then scanning 42 cells per task is what made opening
+        // Month take seconds on a large profile.
         const tm = AppController.tasks;
+        const first = new Date(start.getFullYear(), start.getMonth(), start.getDate());
+        const dayMs = 86400000;
         for (let i = 0; i < tm.rowCount(); i++) {
             const idx = tm.index(i, 0);
+            const deadline = tm.data(idx, Qt.UserRole + 6);
+            if (!deadline || !deadline.getTime) continue;
+            const day = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
+            // Round, not floor: a DST change makes one day 23 or 25 hours long.
+            const k = Math.round((day.getTime() - first.getTime()) / dayMs);
+            if (k < 0 || k >= n) continue;
             if (tm.data(idx, Qt.UserRole + 9) && !root.showArchived) continue;  // archived
             const t = {
                 id:       tm.data(idx, Qt.UserRole + 1),
@@ -102,15 +114,13 @@ Item {
                 desc:     tm.data(idx, Qt.UserRole + 3),
                 priority: tm.data(idx, Qt.UserRole + 4),
                 status:   tm.data(idx, Qt.UserRole + 5),
-                deadline: tm.data(idx, Qt.UserRole + 6),
+                deadline: deadline,
                 // The one haystack passesFilter() searches (HEAP-117).
                 searchText: tm.data(idx, Qt.UserRole + 32),
                 ticket:     tm.data(idx, Qt.UserRole + 31),
             };
-            if (!t.deadline || !t.deadline.getTime) continue;
             if (!root.passesFilter(t)) continue;
-            for (let k = 0; k < cells.length; k++)
-                if (root.isSameDay(cells[k].date, t.deadline)) { cells[k].tasks.push(t); break; }
+            cells[k].tasks.push(t);
         }
         // The expansion, not the rows: a repeating event is stored once, and
         // a month is the view most likely to be showing a whole series at

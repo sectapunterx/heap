@@ -10,6 +10,7 @@
 #include "Models.h"
 
 #include "integrations/IntegrationTypes.h"
+#include "integrations/SecretStore.h"
 
 #include <QApplication>
 #include <QDateTime>
@@ -334,6 +335,40 @@ TEST_F(AppController, MoveSelectedTasksToStatus_RecurringTaskDone_SpawnsNextOccu
   EXPECT_EQ(undoable.count(), 1);
 }
 
+// ─── B13 / A6: events ──────────────────────────────────────────────────
+
+TEST_F(AppController, SaveEvent_UnsupportedRule_DropsItAndSaysSo) {
+  QSignalSpy toasts(app_.get(), &::AppController::toast);
+  app_->saveEvent({{"id", QStringLiteral("ev-bogus")},
+                   {"title", QStringLiteral("standup")},
+                   {"type", QStringLiteral("standup")},
+                   {"start", 10.0},
+                   {"end", 10.5},
+                   {"date", QDate(2027, 1, 4)},
+                   {"rrule", QStringLiteral("FREQ=BOGUS")}});
+
+  const int row = app_->events()->indexOfId(QStringLiteral("ev-bogus"));
+  ASSERT_GE(row, 0);
+  EXPECT_TRUE(app_->events()->items().at(row).rrule.isEmpty());
+  EXPECT_GE(toasts.count(), 1);
+}
+
+TEST_F(AppController, UpdateEvent_DragThenUndo_RestoresTheSlot) {
+  app_->saveEvent({{"id", QStringLiteral("ev-drag")},
+                   {"title", QStringLiteral("1:1")},
+                   {"type", QStringLiteral("oneone")},
+                   {"start", 10.0},
+                   {"end", 11.0},
+                   {"date", QDate(2027, 1, 4)}});
+  app_->updateEvent(QStringLiteral("ev-drag"), 14.0, 15.0, QDate(2027, 1, 5));
+
+  app_->undo();
+
+  const CalEvent& e = app_->events()->items().at(app_->events()->indexOfId(QStringLiteral("ev-drag")));
+  EXPECT_EQ(e.date, QDate(2027, 1, 4));
+  EXPECT_DOUBLE_EQ(e.start, 10.0);
+}
+
 // ─── S7: one backup per interval, across restarts ──────────────────────
 
 TEST_F(AppController, FlushSave_RecentBackupFromEarlierRun_DoesNotCopyAgain) {
@@ -356,6 +391,22 @@ TEST_F(AppController, FlushSave_RecentBackupFromEarlierRun_DoesNotCopyAgain) {
   app_->flushSave();
 
   EXPECT_EQ(backups.entryList({QStringLiteral("state-*.json")}, QDir::Files).size(), 1);
+}
+
+// ─── B8: the secrets.json fallback ─────────────────────────────────────
+
+TEST(SecretStore, UnprotectFromFile_PlainValueFromOlderBuild_ReadsAsIs) {
+  EXPECT_EQ(heap::integrations::SecretStore::unprotectFromFile(QStringLiteral("ghp_token")), QStringLiteral("ghp_token"));
+}
+
+TEST(SecretStore, ProtectForFile_RoundTrip_ReturnsTheValue) {
+  const QString token = QStringLiteral("glpat-ÄÖ-токен-123");
+  const QString stored = heap::integrations::SecretStore::protectForFile(token);
+#ifdef Q_OS_WIN
+  EXPECT_TRUE(stored.startsWith(QStringLiteral("dpapi:")));
+  EXPECT_FALSE(stored.contains(token));
+#endif
+  EXPECT_EQ(heap::integrations::SecretStore::unprotectFromFile(stored), token);
 }
 
 }  // namespace regression

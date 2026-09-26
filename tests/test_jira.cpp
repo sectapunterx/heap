@@ -912,3 +912,8 @@ TEST(JiraProvider, ParseJiraComments_LinkInAdfBody_KeepsTarget) {
   ASSERT_EQ(comments.size(), 1);
   EXPECT_EQ(comments.at(0).body, QStringLiteral("log (https://x.test/log)"));
 }
+
+TEST(JiraProvider, ParseJiraStatuses_StatusList_ReturnsSortedUniqueNames) {
+  const QByteArray json = R"json([{"name":"To Do"},{"name":"Blocked"},{"name":"To Do"},{"name":" In Review "},{"id":"7"}])json";
+  EXPECT_EQ(heap::integrations::parseJiraStatuses(json), (QStringList{"Blocked", "In Review", "To Do"}));
+}

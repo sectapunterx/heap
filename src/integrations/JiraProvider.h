@@ -30,6 +30,10 @@ QString jiraAdfToMarkdown(const QByteArray& adfJson);
 // Cloud and as plain strings on Server/DC; both flatten to text. No network.
 QVector<ExternalComment> parseJiraComments(const QByteArray& json);
 
+// Status names from a /status response (an array of {name, …}), de-duplicated
+// and sorted. Pure, no network.
+QStringList parseJiraStatuses(const QByteArray& json);
+
 // Make whatever the user pasted into a site root. People paste the URL from
 // their browser ("acme.atlassian.net/jira/software/projects/LTE/boards/1"), and
 // every one of those forms has to end up as "https://acme.atlassian.net".
@@ -122,8 +126,15 @@ class JiraProvider : public IntegrationProvider {
   void pullTasks() override;
   void pushStatusChange(const QString& externalId, const QString& newStatus) override;
   void fetchComments(const QString& externalId, const QString& project) override;
+  void fetchStatuses() override;
+
+  void setStatusOverrides(const QHash<QString, QString>& overrides) override {
+    m_statusOverrides = overrides;
+  }
 
  private:
+  QHash<QString, QString> m_statusOverrides;
+
   // One finished request, already drained — the reply itself is gone by the
   // time a callback runs, because a retry may outlive it.
   struct ApiResult {

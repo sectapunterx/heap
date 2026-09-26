@@ -9,6 +9,12 @@ Button {
 
     padding: 8
     leftPadding: 12
+
+    // Reachable with Tab and named for screen readers; the focus ring below
+    // is the only sign of where the keyboard is.
+    focusPolicy: Qt.StrongFocus
+    Accessible.role: Accessible.Button
+    Accessible.name: root.text
     rightPadding: 12
 
     // Every hand-rolled button in the app switches the cursor; this one is a
@@ -27,10 +33,11 @@ Button {
         color: primary ? Theme.accent
               : danger  ? Theme.withAlpha(Theme.p0, 0.12)
               : root.hovered ? Theme.panel3 : Theme.panel2
-        border.color: primary ? "transparent"
+        border.color: root.visualFocus ? Theme.accentStrong
+                   : primary ? "transparent"
                    : danger  ? Theme.withAlpha(Theme.p0, 0.4)
                    : (root.hovered ? Theme.borderStrong : Theme.border)
-        border.width: 1
+        border.width: root.visualFocus ? 2 : 1
     }
     contentItem: Text {
         text: root.text

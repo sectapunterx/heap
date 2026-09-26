@@ -135,6 +135,27 @@ inline QString hintForStatus(int status) {
   }
 }
 
+// When the body only repeats the reason phrase ("Not Found", GitLab's "404
+// Project Not Found"), the user still does not know what to fix. GitHub, for
+// one, answers 404 rather than 403 for a private repo the token cannot see.
+inline QString explainBareReason(int status, const QString& message) {
+  const QString lower = message.toLower();
+  switch(status) {
+    case 401:
+      return lower.contains(QStringLiteral("unauthorized")) ? QStringLiteral("the token was rejected — sign in again or paste a new one")
+                                                            : QString();
+    case 403:
+      return lower.contains(QStringLiteral("forbidden")) ? QStringLiteral("the token lacks access to this, or a required scope")
+                                                         : QString();
+    case 404:
+      return lower.contains(QStringLiteral("not found"))
+                 ? QStringLiteral("the repo or project does not exist, or this token has no access to it")
+                 : QString();
+    default:
+      return {};
+  }
+}
+
 // The HTTP status to report for a finished reply.
 //
 // Qt turns a 401 carrying a WWW-Authenticate header into
@@ -167,6 +188,11 @@ inline QString describeHttpError(int status, const QByteArray& body, const QStri
   QString message = detail::messageFromBody(body);
   if(message.isEmpty()) {
     message = detail::hintForStatus(status);
+  } else if(message.size() <= 40) {
+    const QString why = detail::explainBareReason(status, message);
+    if(!why.isEmpty()) {
+      message += QStringLiteral(": ") + why;
+    }
   }
   if(status <= 0) {
     return detail::clampMessage(message.isEmpty() ? fallback : message);

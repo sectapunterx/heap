@@ -148,7 +148,7 @@ Item {
                     anchors.leftMargin: 14; anchors.rightMargin: 14
                     Column {
                         Text {
-                            text: AppController.humanDate(AppController.selectedDate)
+                            text: (I18n.lang, AppController.humanDate(AppController.selectedDate))
                             color: Theme.text
                             font.pixelSize: 13
                             font.weight: Font.DemiBold

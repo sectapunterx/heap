@@ -358,6 +358,18 @@ QString jiraAdfToMarkdown(const QByteArray& adfJson) {
   return QString();
 }
 
+QStringList parseJiraStatuses(const QByteArray& json) {
+  QStringList out;
+  for(const QJsonValue& v : QJsonDocument::fromJson(json).array()) {
+    const QString name = v.toObject().value(QStringLiteral("name")).toString().trimmed();
+    if(!name.isEmpty() && !out.contains(name)) {
+      out.append(name);
+    }
+  }
+  out.sort(Qt::CaseInsensitive);
+  return out;
+}
+
 QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl) {
   QVector<ExternalTask> out;
   const QJsonDocument doc = QJsonDocument::fromJson(json);
@@ -908,6 +920,17 @@ void JiraProvider::fetchComments(const QString& externalId, const QString& /*pro
   });
 }
 
+void JiraProvider::fetchStatuses() {
+  if(!isConfigured()) {
+    return;
+  }
+  send("GET", QStringLiteral("/status"), {}, [this](const ApiResult& r) {
+    if(r.ok) {
+      emit statusesFetched(parseJiraStatuses(r.body));
+    }
+  });
+}
+
 void JiraProvider::pushStatusChange(const QString& externalId, const QString& newStatus) {
   if(!isConfigured() || externalId.isEmpty()) {
     emit taskPushed(externalId, false, QStringLiteral("not configured"));
@@ -927,14 +950,19 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
     QString transitionId;
     for(const auto& tv : transitions) {
       const QJsonObject to = tv.toObject().value(QStringLiteral("to")).toObject();
-      const QString targetColumn = StatusMap::column(to.value(QStringLiteral("name")).toString(), {}, QString());
+      // The user's own mapping decides first: a "Blocked" or "50/50" column
+      // is only reachable through a status the user said belongs there.
+      const QString targetColumn = StatusMap::column(to.value(QStringLiteral("name")).toString(), m_statusOverrides, QString());
       if(targetColumn == newStatus) {
         transitionId = tv.toObject().value(QStringLiteral("id")).toString();
         break;
       }
     }
     if(transitionId.isEmpty()) {
-      emit taskPushed(externalId, false, QStringLiteral("no matching transition for column '%1'").arg(newStatus));
+      emit taskPushed(
+          externalId,
+          false,
+          QStringLiteral("this issue has no transition to a status mapped to '%1' — map one in Settings → Integrations").arg(newStatus));
       return;
     }
     QJsonObject body;

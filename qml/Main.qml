@@ -3,6 +3,7 @@ import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import QtQuick.Dialogs
 import TodoCpp
 
@@ -170,10 +171,75 @@ ApplicationWindow {
     // QCoreApplication::quit() directly, so a real exit bypasses this. On Linux
     // there is no tray icon, so closing quits as usual.
     readonly property bool _minimizeToTray: Qt.platform.os === "windows" || Qt.platform.os === "osx"
+    // Whether the X button hides to the tray: settings.system.closeToTray.
+    // Unset until the first close asks, because doing it silently left people
+    // thinking heap had quit while it kept running.
+    function _closeToTrayPref() {
+        const sys = _settingsObject().system;
+        return sys ? sys.closeToTray : undefined;
+    }
+    function _setCloseToTray(v) {
+        const s = _settingsObject();
+        s.system = Object.assign({}, s.system || ({}), { closeToTray: v });
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
     onClosing: (close) => {
-        if (win._minimizeToTray) {
-            close.accepted = false;
-            win.hide();
+        if (!win._minimizeToTray) return;
+        const pref = win._closeToTrayPref();
+        if (pref === false) return;   // a real quit
+        close.accepted = false;
+        if (pref === undefined) {
+            closeAsk.open();
+            return;
+        }
+        win.hide();
+    }
+
+    QQC.Dialog {
+        id: closeAsk
+        objectName: "close-to-tray-ask"
+        modal: true
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: 440
+        padding: 18
+        title: I18n.t("close.ask.title")
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+        contentItem: Text {
+            text: I18n.t("close.ask.body")
+            color: Theme.textMuted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton {
+                objectName: "close-ask-quit"
+                text: I18n.t("close.ask.quit")
+                onClicked: {
+                    win._setCloseToTray(false);
+                    closeAsk.close();
+                    AppController.flushSave();
+                    Qt.quit();
+                }
+            }
+            PillButton {
+                objectName: "close-ask-tray"
+                text: I18n.t("close.ask.tray")
+                primary: true
+                onClicked: {
+                    win._setCloseToTray(true);
+                    closeAsk.close();
+                    win.hide();
+                }
+            }
+            Item { Layout.preferredWidth: 10 }
         }
     }
 

@@ -321,6 +321,10 @@ target_link_libraries(heap_core PUBLIC
     Qt6::QuickControls2
     Qt6::Widgets
 )
+# DPAPI (CryptProtectData) wraps the tokens in the secrets.json fallback.
+if (WIN32)
+    target_link_libraries(heap_core PUBLIC crypt32)
+endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
 endif()

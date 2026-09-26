@@ -1060,6 +1060,15 @@ Item {
                         checked: !!(root.settings.appearance && root.settings.appearance.highContrast)
                         onToggled: (checked) => root.set("appearance", "highContrast", checked)
                     }
+                    // Only where there is a tray to close into.
+                    SwitchRow {
+                        objectName: "settings-close-to-tray"
+                        visible: Qt.platform.os === "windows" || Qt.platform.os === "osx"
+                        label: I18n.t("settings.system.closeToTray")
+                        hint: I18n.t("settings.system.closeToTray.hint")
+                        checked: !(root.settings.system && root.settings.system.closeToTray === false)
+                        onToggled: (checked) => root.set("system", "closeToTray", checked)
+                    }
                 }
             }
         }
@@ -1559,6 +1568,19 @@ Item {
                 }
             }
 
+            // Where the tokens are. Without a keychain they sit in a file in
+            // the data folder, and a portable folder carries them with it.
+            Text {
+                objectName: "int-secrets-file-note"
+                visible: !AppController.secretsInKeychain()
+                Layout.fillWidth: true
+                wrapMode: Text.WordWrap
+                text: I18n.t(Qt.platform.os === "windows" ? "settings.integrations.secretsFileWin"
+                                                          : "settings.integrations.secretsFile")
+                color: Theme.p1
+                font.pixelSize: 11
+            }
+
             // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
             SectionCard {
                 RowLayout {
@@ -1923,12 +1945,22 @@ Item {
                                             // is a pick rather than a hidden
                                             // gesture. Its value is the empty
                                             // string, which removes the override.
-                                            model: [{ id: "", name: I18n.t("settings.integrations.statusMapAuto") }].concat(AppController.statuses)
+                                            objectName: "status-map-combo"
+                                            readonly property var options: [{ id: "", name: I18n.t("settings.integrations.statusMapAuto") }].concat(AppController.statuses)
+                                            model: options
                                             textRole: "name"
                                             valueRole: "id"
-                                            currentIndex: mapRow.modelData.overridden
-                                                          ? Math.max(0, indexOfValue(mapRow.modelData.column))
-                                                          : 0
+                                            // Looked up in the array this binding
+                                            // owns. indexOfValue() ran before the
+                                            // combo had its model, answered -1,
+                                            // and was never asked again, so every
+                                            // row read "Auto".
+                                            currentIndex: {
+                                                if (!mapRow.modelData.overridden) return 0;
+                                                for (let i = 1; i < options.length; i++)
+                                                    if (options[i].id === mapRow.modelData.column) return i;
+                                                return 0;
+                                            }
                                             onActivated: {
                                                 AppController.setStatusMapping(intCard.intKey, mapRow.modelData.status, currentValue)
                                                 intSection.statusMapRev++
@@ -1939,7 +1971,9 @@ Item {
                                         // once they have, the combo says it.
                                         Text {
                                             Layout.preferredWidth: 96
-                                            visible: !mapRow.modelData.overridden
+                                            // Faded rather than removed, so the
+                                            // combo keeps its width either way.
+                                            opacity: mapRow.modelData.overridden ? 0 : 1
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                             text: I18n.t("settings.integrations.statusMapGuess").arg(intCard.columnName(mapRow.modelData.column))

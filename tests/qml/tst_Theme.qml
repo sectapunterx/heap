@@ -221,4 +221,27 @@ TestCase {
         compare(fallback, 0.25);
         verify(Theme.minEventHours > 0, "a zero floor would make events un-draggable");
     }
+
+    // WCAG relative luminance of a QML colour.
+    function _lum(c) {
+        const f = (v) => v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+        return 0.2126 * f(c.r) + 0.7152 * f(c.g) + 0.0722 * f(c.b);
+    }
+    function _contrast(a, b) {
+        const la = _lum(a), lb = _lum(b);
+        return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+    }
+
+    // The small dim text must be readable (audit B10): WCAG AA asks 4.5:1.
+    function test_text_dim_meets_wcag_aa_on_every_surface() {
+        const saved = AppController.theme;
+        for (const mode of ["dark", "light"]) {
+            AppController.theme = mode;
+            for (const surface of [Theme.bg, Theme.panel, Theme.panel2]) {
+                const ratio = _contrast(Theme.textDim, surface);
+                verify(ratio >= 4.5, mode + ": textDim on " + surface + " is " + ratio.toFixed(2) + ":1");
+            }
+        }
+        AppController.theme = saved;
+    }
 }

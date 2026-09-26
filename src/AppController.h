@@ -404,6 +404,9 @@ class AppController : public QObject {
   // Whether a link from user or tracker content may open without asking. See
   // heap::md::isSafeLink.
   Q_INVOKABLE bool isSafeLink(const QString& url) const;
+  // False when tokens live in secrets.json in the data folder rather than the
+  // OS keychain (portable --data-dir run, or a build without QtKeychain).
+  Q_INVOKABLE bool secretsInKeychain() const;
   Q_INVOKABLE void deleteTask(const QString& id);
   Q_INVOKABLE bool canTransitionStatus(const QString& taskId, const QString& newStatus);
   Q_INVOKABLE void setArchived(const QString& taskId, bool archived);
@@ -982,6 +985,8 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
+  // Providers already asked for their full status list this session.
+  QSet<QString> m_statusesAsked;
 
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes

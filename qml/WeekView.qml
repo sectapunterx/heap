@@ -396,7 +396,7 @@ Item {
                             font.letterSpacing: 1
                         }
                         Text {
-                            text: AppController.shortDate(weekStart) + " — " + AppController.shortDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
+                            text: (I18n.lang, AppController.shortDate(weekStart)) + " — " + AppController.shortDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
                             color: Theme.text
                             font.pixelSize: 14
                             font.weight: Font.DemiBold

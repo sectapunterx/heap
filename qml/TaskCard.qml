@@ -69,12 +69,13 @@ Rectangle {
         : _selected ? Theme.withAlpha(Theme.accent, 0.10)
             : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
+        : activeFocus ? Theme.accentStrong
         : _selected ? Theme.accent
                 : cursored ? Theme.accentStrong
                 : _isStuck ? Theme.p0
                 : hoverArea.containsMouse ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active ? 2 : (_selected || cursored ? 2 : (_isStuck ? 2 : 1))
+    border.width: dragArea.drag.active ? 2 : (_selected || cursored || activeFocus ? 2 : (_isStuck ? 2 : 1))
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
@@ -84,6 +85,14 @@ Rectangle {
 
     implicitWidth: parent ? parent.width : 260
     implicitHeight: contentCol.implicitHeight + 20
+
+    // A card is a button to assistive tech and to the Tab key.
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Button
+    Accessible.name: card.task ? ((card._isTicket ? (card._ticket.key || "") : card.task.id) + " " + card.task.title) : ""
+    Accessible.onPressAction: card.clicked()
+    Keys.onReturnPressed: card.clicked()
+    Keys.onEnterPressed: card.clicked()
 
     // Drag.active is automatically driven by MouseArea.drag.active
     Drag.active: dragArea.drag.active
