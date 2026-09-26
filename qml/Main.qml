@@ -3,6 +3,7 @@ import QtQuick.Window
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Controls as QQC
 import QtQuick.Dialogs
 import TodoCpp
 
@@ -113,6 +114,26 @@ ApplicationWindow {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+
+    // The calendar + people column. It took 420px on every view, which on a
+    // narrow window left two board columns. It folds away below
+    // _rightPanelMinWidth unless asked for, and the choice on a wide window is
+    // remembered in settings.
+    readonly property int _rightPanelMinWidth: 1280
+    readonly property bool _narrow: win.width < _rightPanelMinWidth
+    property bool _rightPanelWanted: _settingsObject().rightPanel !== false
+    property bool _rightPanelOnNarrow: false
+    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow : _rightPanelWanted
+    function toggleRightPanel() {
+        if (_narrow) {
+            _rightPanelOnNarrow = !_rightPanelOnNarrow;
+            return;
+        }
+        _rightPanelWanted = !_rightPanelWanted;
+        const s = _settingsObject();
+        s.rightPanel = _rightPanelWanted;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
     property bool showDoneTimeline: false
     property bool showArchived: false
     // Board column order. Lives on the window so it survives the board being
@@ -150,10 +171,75 @@ ApplicationWindow {
     // QCoreApplication::quit() directly, so a real exit bypasses this. On Linux
     // there is no tray icon, so closing quits as usual.
     readonly property bool _minimizeToTray: Qt.platform.os === "windows" || Qt.platform.os === "osx"
+    // Whether the X button hides to the tray: settings.system.closeToTray.
+    // Unset until the first close asks, because doing it silently left people
+    // thinking heap had quit while it kept running.
+    function _closeToTrayPref() {
+        const sys = _settingsObject().system;
+        return sys ? sys.closeToTray : undefined;
+    }
+    function _setCloseToTray(v) {
+        const s = _settingsObject();
+        s.system = Object.assign({}, s.system || ({}), { closeToTray: v });
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
     onClosing: (close) => {
-        if (win._minimizeToTray) {
-            close.accepted = false;
-            win.hide();
+        if (!win._minimizeToTray) return;
+        const pref = win._closeToTrayPref();
+        if (pref === false) return;   // a real quit
+        close.accepted = false;
+        if (pref === undefined) {
+            closeAsk.open();
+            return;
+        }
+        win.hide();
+    }
+
+    QQC.Dialog {
+        id: closeAsk
+        objectName: "close-to-tray-ask"
+        modal: true
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: 440
+        padding: 18
+        title: I18n.t("close.ask.title")
+        background: Rectangle {
+            radius: 12
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+        contentItem: Text {
+            text: I18n.t("close.ask.body")
+            color: Theme.textMuted
+            font.pixelSize: 12
+            wrapMode: Text.Wrap
+        }
+        footer: RowLayout {
+            spacing: 8
+            Item { Layout.fillWidth: true }
+            PillButton {
+                objectName: "close-ask-quit"
+                text: I18n.t("close.ask.quit")
+                onClicked: {
+                    win._setCloseToTray(false);
+                    closeAsk.close();
+                    AppController.flushSave();
+                    Qt.quit();
+                }
+            }
+            PillButton {
+                objectName: "close-ask-tray"
+                text: I18n.t("close.ask.tray")
+                primary: true
+                onClicked: {
+                    win._setCloseToTray(true);
+                    closeAsk.close();
+                    win.hide();
+                }
+            }
+            Item { Layout.preferredWidth: 10 }
         }
     }
 
@@ -257,6 +343,11 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg) { toast.show(msg) }
+        function onTrackerPushFailed(taskId, msg) {
+            toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
+                AppController.retryTrackerPush(taskId)
+            });
+        }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoLastDeletion()
@@ -285,6 +376,8 @@ ApplicationWindow {
             searchText: win.searchText
             onSearchTextChanged: win.searchText = searchText
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+            rightPanelShown: win.rightPanelShown
+            onRightPanelToggleRequested: win.toggleRightPanel()
             onNewProfileRequested: profileEditor.showCreate()
             onRenameProfileRequested: {
                 const list = AppController.profiles;
@@ -354,10 +447,26 @@ ApplicationWindow {
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
+                        // Two-step: the first click arms, the second wipes.
+                        // One stray click used to take every task with it.
                         PillButton {
-                            text: I18n.t("demo.banner.startFresh")
-                            primary: true
-                            onClicked: AppController.startFresh()
+                            id: startFreshBtn
+                            objectName: "demo-start-fresh"
+                            property bool armed: false
+                            text: armed ? I18n.t("demo.banner.startFresh.confirm") : I18n.t("demo.banner.startFresh")
+                            primary: !armed
+                            danger: armed
+                            onClicked: {
+                                if (!armed) {
+                                    armed = true;
+                                    startFreshDisarm.restart();
+                                    return;
+                                }
+                                armed = false;
+                                startFreshDisarm.stop();
+                                AppController.startFresh();
+                            }
+                            Timer { id: startFreshDisarm; interval: 4000; onTriggered: startFreshBtn.armed = false }
                         }
                         PillButton {
                             text: I18n.t("demo.banner.keep")
@@ -565,6 +674,8 @@ ApplicationWindow {
 
         // Right column
         Rectangle {
+            objectName: "right-panel"
+            visible: win.rightPanelShown
             Layout.row: 1; Layout.column: 2
             Layout.preferredWidth: 420
             Layout.minimumWidth: 360
@@ -787,6 +898,12 @@ ApplicationWindow {
         onActivated: cmdPalette.open()
     }
 
+    Shortcut {
+        sequence: _kbd("panel.right")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: win.toggleRightPanel()
+    }
     Shortcut {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut

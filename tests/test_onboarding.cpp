@@ -146,7 +146,9 @@ TEST_F(OnboardingTest, ResetToFirstRunRebuildsFreshInstall) {
     EXPECT_TRUE(a.demoActive());
     EXPECT_EQ(a.profiles().size(), 1);
     EXPECT_GT(a.tasks()->rowCount(), 0);  // demo content re-seeded
-    EXPECT_TRUE(a.notesState().isEmpty());
+    // The user's notes are gone; what is open now is the demo's own note.
+    EXPECT_FALSE(a.notesState().contains(QStringLiteral("my notes")));
+    EXPECT_EQ(a.notes()->rowCount(), 1);
     // On disk: stale backup + corrupt snapshot erased, fresh state.json written.
     EXPECT_FALSE(QFile::exists(base + QStringLiteral("/backups/state-old.json")));
     EXPECT_FALSE(QFile::exists(base + QStringLiteral("/state.corrupt-1.json")));

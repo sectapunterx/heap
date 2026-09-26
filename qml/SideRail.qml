@@ -118,6 +118,12 @@ Rectangle {
         property color countColor: Theme.p0
         property int iconSize: 20
         signal activated()
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: btn.tooltipText
+        Accessible.onPressAction: btn.activated()
+        Keys.onReturnPressed: btn.activated()
+        Keys.onSpacePressed: btn.activated()
         Layout.alignment: Qt.AlignHCenter
         Layout.preferredWidth: 36
         Layout.preferredHeight: 36
@@ -126,6 +132,8 @@ Rectangle {
             radius: 8
             color: btn.active ? Theme.accentSoft
                  : ma.containsMouse ? Theme.panel2 : "transparent"
+            border.color: Theme.accentStrong
+            border.width: btn.activeFocus ? 2 : 0
         }
         IconImage {
             anchors.centerIn: parent

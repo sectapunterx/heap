@@ -488,9 +488,10 @@ jobs:
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
-    # A cold-cache sanitizer build has taken up to 24 minutes; at 25 the job
-    # was cancelled and turned master red with nothing wrong in the code.
-    timeout-minutes: 40
+    # The instrumented Debug build alone takes ~23 minutes on a hosted runner,
+    # so a 25-minute cap cancelled the job before a single test ran — on
+    # master too. The tests themselves take a couple of minutes.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 

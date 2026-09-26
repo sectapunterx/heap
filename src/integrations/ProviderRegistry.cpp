@@ -184,6 +184,9 @@ ProviderDescriptor gitlab() {
   d.comments.body = QStringLiteral("body");
   d.comments.createdAt = QStringLiteral("created_at");
   d.comments.skipIfTrue = QStringLiteral("system");
+  // Notes have no web URL of their own; the issue page anchors each one.
+  d.comments.anchorId = QStringLiteral("id");
+  d.comments.anchorPrefix = QStringLiteral("#note_");
   d.pushMethod = QStringLiteral("PUT");
   d.pushPathTemplate = QStringLiteral("/api/v4/projects/{projectId:enc}/issues/{externalId}?state_event={state}");
   d.pushMap = gitlabStateEventForColumn;

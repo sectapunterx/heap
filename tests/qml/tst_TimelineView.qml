@@ -63,4 +63,37 @@ TestCase {
         AppController.deleteTask(p0.id);
         AppController.deleteTask(p1.id);
     }
+
+    function countRows(item, acc) {
+        if (!item) return acc;
+        if (String(item.objectName) === "tl-row") acc.n++;
+        const kids = item.children || [];
+        for (let i = 0; i < kids.length; i++) countRows(kids[i], acc);
+        return acc;
+    }
+
+    // The timeline builds the rows on screen, not one per task (audit A5):
+    // 2000 tasks used to cost over a gigabyte of delegates.
+    function test_a_long_timeline_builds_only_the_visible_rows() {
+        const day = new Date();
+        day.setDate(day.getDate() + 1);
+        day.setHours(0, 0, 0, 0);
+        const ids = [];
+        for (let i = 0; i < 300; i++) {
+            const d = AppController.newTaskDraft("todo");
+            d._isNew = true;
+            d.id = "TLV-" + i;
+            d.title = "virtual " + i;
+            d.dueAt = day; d.scheduledAt = day; d.hasTime = false;
+            AppController.saveTask(d);
+            ids.push(d.id);
+        }
+        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent }');
+        wait(0);
+        const built = countRows(tv, { n: 0 }).n;
+        verify(built > 0, "the timeline shows rows");
+        verify(built < 150, "the timeline built " + built + " rows for 300 tasks");
+        for (let i = 0; i < ids.length; i++) AppController.deleteTask(ids[i]);
+        AppController.clearPendingUndo();
+    }
 }

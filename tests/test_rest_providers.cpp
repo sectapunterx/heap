@@ -1318,3 +1318,15 @@ TEST_F(PagingWalk, ASecondPullWhileOneIsInFlightIsIgnored) {
   EXPECT_EQ(w.fetched, 1);
   EXPECT_EQ(srv.seen().size(), 1);
 }
+
+// A body that only repeats the reason phrase gets an explanation (audit B5).
+TEST(ReplyError, DescribeHttpError_BareNotFound_ExplainsAccess) {
+  EXPECT_EQ(describeHttpError(404, R"({"message":"Not Found"})", QString()),
+            QStringLiteral("HTTP 404 — Not Found: the repo or project does not exist, or this token has no access to it"));
+  EXPECT_EQ(describeHttpError(404, R"({"message":"404 Project Not Found"})", QString()),
+            QStringLiteral("HTTP 404 — 404 Project Not Found: the repo or project does not exist, or this token has no access to it"));
+}
+
+TEST(ReplyError, DescribeHttpError_SpecificMessage_IsLeftAlone) {
+  EXPECT_EQ(describeHttpError(401, R"({"message":"Bad credentials"})", QString()), QStringLiteral("HTTP 401 — Bad credentials"));
+}

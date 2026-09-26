@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.21)
 # C is enabled for the vendored md4c parser (third_party/md4c), the only C in
 # the tree.
-project(heap VERSION 0.5.0 LANGUAGES C CXX)
+project(heap VERSION 0.5.1 LANGUAGES C CXX)
 
 # Windows resource compiler (windres on mingw / rc.exe on MSVC). Required so
 # design/brand-export/icon/heap-icon.rc is actually compiled into heap.exe —
@@ -249,6 +249,7 @@ qt_add_qml_module(heap_core
         qml/QuickCaptureNotesPopup.qml
         qml/MentionAutocomplete.qml
         qml/WelcomePopup.qml
+        qml/DocsStarter.js
         qml/Mention.js
         qml/NotesListPane.qml
         qml/MdEditorPane.qml
@@ -321,6 +322,10 @@ target_link_libraries(heap_core PUBLIC
     Qt6::QuickControls2
     Qt6::Widgets
 )
+# DPAPI (CryptProtectData) wraps the tokens in the secrets.json fallback.
+if (WIN32)
+    target_link_libraries(heap_core PUBLIC crypt32)
+endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
 endif()
@@ -371,7 +376,9 @@ qt_add_executable(heap WIN32 MACOSX_BUNDLE
 target_link_libraries(heap PRIVATE heap_core heap_coreplugin)
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
-qt_add_resources(heap "brand"
+# On heap_core, not the app, so every binary that loads the QML — the test
+# runner included — has the icons the QML asks for.
+qt_add_resources(heap_core "brand"
     PREFIX "/brand"
     BASE "design/brand-export"
     FILES
@@ -396,6 +403,16 @@ qt_add_resources(heap "brand"
         design/brand-export/icons/heap-10-hotkeys.svg
         design/brand-export/icons/heap-11-tweaks.svg
         design/brand-export/icons/heap-12-settings.svg
+        design/brand-export/icons/heap-13-profile.svg
+        design/brand-export/icons/heap-14-appearance.svg
+        design/brand-export/icons/heap-15-language.svg
+        design/brand-export/icons/heap-16-notifications.svg
+        design/brand-export/icons/heap-17-calendar.svg
+        design/brand-export/icons/heap-18-code.svg
+        design/brand-export/icons/heap-19-integrations.svg
+        design/brand-export/icons/heap-20-data.svg
+        design/brand-export/icons/heap-21-help.svg
+        design/brand-export/icons/heap-22-about.svg
         design/brand-export/surfaces/heap-splash.svg
         design/brand-export/surfaces/heap-readme-banner.svg
         design/brand-export/surfaces/heap-marketing-hero.svg

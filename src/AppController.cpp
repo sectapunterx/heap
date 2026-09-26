@@ -23,6 +23,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
 #include "notes/MdVault.h"
 #include "notes/NoteGraph.h"
@@ -101,6 +102,9 @@ bool isLegacyShortcutDefault(const QString& id, const QString& sequence) {
 
 namespace {
 constexpr int kBackupIntervalSeconds = 5 * 60;
+// How long after a Jira pull the follow-up pull runs (see the tasksFetched
+// handler): long enough for Jira Cloud's search index to catch up.
+constexpr int kSettlePullDelayMs = 20 * 1000;
 constexpr int kBackupRetentionCount = 20;
 
 // EN/RU string table for toast / system messages emitted from C++. QML chrome
@@ -124,6 +128,71 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
       {"notes.inbox", {"Inbox", "Входящие"}},
+      {"undo.splitSeries", {"Series change undone", "Изменение серии отменено"}},
+      {"undo.deleteSeries", {"Series restored", "Серия восстановлена"}},
+      {"undo.deleteFollowing", {"Following events restored", "Последующие события восстановлены"}},
+      {"undo.deleteOccurrence", {"Event restored", "Событие восстановлено"}},
+      {"update.available", {"Update available: %1", "Доступно обновление: %1"}},
+      {"update.upToDate", {"You're up to date", "У вас последняя версия"}},
+      {"update.failed", {"Update check failed", "Не удалось проверить обновления"}},
+      {"task.recurs", {"Recurs: %1 due %2", "Повтор: %1 на %2"}},
+      {"task.fromTemplate", {"Created from template: %1", "Создано по шаблону: %1"}},
+      {"recovery.saved", {"Recovery log saved", "Журнал восстановления сохранён"}},
+      {"recovery.empty", {"No recovery log to export", "Журнал восстановления пуст"}},
+      {"update.checking", {"Checking for updates…", "Проверка обновлений…"}},
+      {"sync.noTracker", {"Connect a tracker in Settings → Integrations first", "Сначала подключите трекер: Настройки → Интеграции"}},
+      {"sync.running", {"Syncing…", "Синхронизация…"}},
+      {"sync.failed", {"%1 sync failed: %2", "%1: синхронизация не удалась — %2"}},
+      {"int.connected", {"%1 connected", "%1 подключён"}},
+      {"int.connectFailed", {"%1 connection failed: %2", "%1: не удалось подключиться — %2"}},
+      {"contacts.upToDate", {"%1: contacts are up to date", "%1: контакты без изменений"}},
+      {"int.sessionExpired", {"%1 session expired — sign in again", "%1: сессия истекла — войдите снова"}},
+      {"int.noPassword",
+       {"Signing in with a password is not available for this integration", "Вход по паролю для этой интеграции недоступен"}},
+      {"int.needUrl", {"Enter the %1 server URL first", "Сначала укажите адрес сервера %1"}},
+      {"int.signInFailed", {"%1 sign-in failed: %2", "%1: вход не удался — %2"}},
+      {"int.unknown", {"Unknown integration", "Неизвестная интеграция"}},
+      {"int.notConfigured", {"%1 is not fully configured", "%1 настроен не полностью"}},
+      {"int.needs", {"%1 needs %2", "%1: нужно заполнить %2"}},
+      {"int.noSite",
+       {"%1 sign-in granted no site — for a self-hosted Jira, fill in Advanced and press Connect",
+        "%1: вход не дал доступа ни к одному сайту — для своего Jira заполните «Дополнительно» и нажмите «Подключить»"}},
+      {"int.browserConnectedSite", {"%1 connected via browser — %2", "%1 подключён через браузер — %2"}},
+      {"int.noBrowser", {"Browser sign-in is not available for this integration", "Вход через браузер для этой интеграции недоступен"}},
+      {"int.noOAuthApp",
+       {"No OAuth app configured — add a client ID under Advanced first",
+        "OAuth-приложение не настроено — добавьте client ID в разделе «Дополнительно»"}},
+      {"int.needSecret",
+       {"%1 browser sign-in needs an OAuth client secret — add one under Advanced",
+        "%1: для входа через браузер нужен client secret — добавьте его в разделе «Дополнительно»"}},
+      {"int.needQt",
+       {"%1 browser sign-in needs Qt 6.9 or newer — use an access token",
+        "%1: вход через браузер требует Qt 6.9 или новее — используйте токен доступа"}},
+      {"int.deviceCode", {"%1: open %2 and enter code %3", "%1: откройте %2 и введите код %3"}},
+      {"int.browserConnected", {"%1 connected via browser", "%1 подключён через браузер"}},
+      {"int.signedInNeeds", {"%1 signed in — now fill in %2", "%1: вход выполнен — теперь заполните %2"}},
+      {"int.browserStarting", {"Starting %1 browser sign-in…", "Запуск входа в %1 через браузер…"}},
+      {"int.browserOpening", {"Opening browser for %1 — OAuth redirect: %2", "Открываю браузер для %1 — OAuth redirect: %2"}},
+      {"git.noRepo",
+       {"No git repository configured — add one in Settings › Git", "Git-репозиторий не настроен — добавьте его в Настройки › Git"}},
+      {"git.noBranchName", {"Could not derive a branch name for %1", "Не удалось составить имя ветки для %1"}},
+      {"git.branchFailed", {"Branch create failed: %1", "Не удалось создать ветку: %1"}},
+      {"git.branchCreated", {"Created branch %1", "Создана ветка %1"}},
+      {"contacts.updated", {"%1: %2 contact(s) updated", "%1: обновлено контактов — %2"}},
+      {"event.editUndone", {"Event change undone: %1", "Изменение события отменено: %1"}},
+      {"event.badRule",
+       {"Repeat rule not supported, saved as a single event: %1", "Правило повтора не поддерживается, сохранено одно событие: %1"}},
+      {"task.idRequired", {"A task needs an id", "У задачи должен быть id"}},
+      {"task.titleRequired", {"A task needs a title", "У задачи должен быть заголовок"}},
+      {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
+      {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+      {"sync.conflicts",
+       {"%1 kept your local edits (also changed in the tracker)", "%1 — оставлены локальные правки (в трекере тоже изменены)"}},
+      {"sync.gone", {"%1 no longer in the tracker", "%1 больше нет в трекере"}},
+      {"sync.pushFailed", {"%1: the tracker did not take the change — %2", "%1: трекер не принял изменение — %2"}},
+      {"onboarding.freshUndone", {"Demo content restored", "Демо-данные возвращены"}},
+      {"notes.deleted", {"Note deleted: %1", "Заметка удалена: %1"}},
+      {"notes.restored", {"Note restored: %1", "Заметка восстановлена: %1"}},
       {"docs.untitledPage", {"Untitled page", "Без названия"}},
       {"docs.undo.deletePage", {"Page deleted", "Страница удалена"}},
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
@@ -211,6 +280,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
       {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
+      {"deadline.overdueLong", {"%1 overdue", "просрочено на %1"}},
+      {"deadline.inLong", {"in %1", "через %1"}},
+      {"span.months", {"%1 mo", "%1 мес."}},
+      {"span.years", {"%1 yr", "%1 г."}},
+      {"workday.adjusted",
+       {"A working day ends after it starts — kept %1:00–%2:00", "Рабочий день должен заканчиваться позже начала — оставлено %1:00–%2:00"}},
+      {"status.nameTaken", {"A column named %1 already exists", "Колонка «%1» уже есть"}},
+      {"profile.nameTaken", {"A profile named %1 already exists", "Профиль «%1» уже есть"}},
       {"deadline.today", {"today", "сегодня"}},
       {"deadline.tomorrow", {"+1 day", "+1 день"}},
       {"deadline.inDays", {"+%1 days", "+%1 дн."}},
@@ -273,6 +350,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть Quick-capture для Заметок (дописывает в блок Notes)."}},
       {"shortcut.view.archive.label", {"Go to Archive", "Перейти в Архив"}},
       {"shortcut.view.archive.desc", {"Archived tickets of the active profile.", "Архивные тикеты активного профиля."}},
+      {"shortcut.panel.right.label", {"Show / hide calendar column", "Показать/скрыть колонку календаря"}},
+      {"shortcut.panel.right.desc",
+       {"Fold the calendar and people column away to give the board the room.",
+        "Спрятать колонку календаря и людей, чтобы доске хватило места."}},
       {"shortcut.theme.toggle.label", {"Toggle light / dark", "Переключить светлую/тёмную"}},
       {"shortcut.theme.toggle.desc", {"Flip the app theme between dark and light.", "Переключить тему приложения между тёмной и светлой."}},
       {"shortcut.person.new.label", {"New contact", "Новый контакт"}},
@@ -294,11 +375,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"selection.bar.unarchive", {"Unarchive", "Из архива"}},
       {"selection.bar.delete", {"Delete", "Удалить"}},
       {"selection.bar.clear", {"Clear", "Снять"}},
-      {"selection.toast.deleted", {"Deleted %1 tasks", "Удалено задач: %1"}},
-      {"selection.toast.restored", {"Restored %1 tasks", "Восстановлено задач: %1"}},
-      {"selection.toast.moved", {"Moved %1 tasks", "Перемещено задач: %1"}},
-      {"selection.toast.archived", {"Archived %1 tasks", "В архив: %1"}},
-      {"selection.toast.unarchived", {"Unarchived %1 tasks", "Из архива: %1"}},
+      {"selection.toast.deleted", {"Tasks deleted: %1", "Удалено задач: %1"}},
+      {"selection.toast.restored", {"Tasks restored: %1", "Восстановлено задач: %1"}},
+      {"selection.toast.moved", {"Tasks moved: %1", "Перемещено задач: %1"}},
+      {"selection.toast.archived", {"Tasks archived: %1", "Задач в архиве: %1"}},
+      {"selection.toast.unarchived", {"Tasks unarchived: %1", "Задач возвращено из архива: %1"}},
       // ---- Notification copy ----
       {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
       {"notify.deadlineWhen.h1", {"in 1 hour", "через час"}},
@@ -469,17 +550,17 @@ AppController::AppController(QObject* parent) :
   m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
   connect(m_updater.get(), &heap::update::Updater::updateAvailable, this, [this](const QString& version, const QString& url) {
     m_latestReleaseUrl = url;
-    m_updateStatus = tr("Update available: %1").arg(version);
+    m_updateStatus = tr_("update.available").arg(version);
     emit updateStatusChanged();
     emit updateAvailable(version, url);
   });
   connect(m_updater.get(), &heap::update::Updater::upToDate, this, [this](const QString&) {
-    m_updateStatus = tr("You're up to date");
+    m_updateStatus = tr_("update.upToDate");
     emit updateStatusChanged();
   });
   connect(m_updater.get(), &heap::update::Updater::checkFailed, this, [this](const QString& error) {
     qWarning() << "update check failed:" << error;
-    m_updateStatus = tr("Update check failed");
+    m_updateStatus = tr_("update.failed");
     emit updateStatusChanged();
   });
   // Opt-out background check shortly after startup (never auto-downloads). The
@@ -617,11 +698,10 @@ void AppController::setLanguage(const QString& v) {
   }
   m_language = norm;
   emit languageChanged();
-  // Date helpers (shortDate, humanDate) depend on m_language — nudge any
-  // bindings that read them by re-emitting selectedDateChanged. Cheap, and
-  // keeps QML chrome that references AppController.shortDate(selectedDate)
-  // in sync without per-binding wiring.
-  emit selectedDateChanged();
+  // Re-emitting selectedDateChanged here used to refresh the few labels built
+  // by shortDate()/humanDate() — and also rebuilt every calendar view from
+  // scratch, which is most of what made a language switch take seconds on a
+  // large profile. Those labels read I18n.lang in their bindings instead.
   scheduleSave();
 }
 
@@ -657,8 +737,11 @@ void AppController::focusStatusColumn(const QString& statusId) {
 
 void AppController::setWorkdayStart(int v) {
   v = qBound(0, v, 23);
+  // A working day has to end after it starts; asking for 20 → 8 used to land
+  // silently on 18–19. Keep the adjustment, but say so.
   if(v >= m_workdayEnd) {
     v = m_workdayEnd - 1;
+    emit toast(tr_("workday.adjusted").arg(v).arg(m_workdayEnd));
   }
   if(v == m_workdayStart) {
     return;
@@ -672,6 +755,7 @@ void AppController::setWorkdayEnd(int v) {
   v = qBound(1, v, 24);
   if(v <= m_workdayStart) {
     v = m_workdayStart + 1;
+    emit toast(tr_("workday.adjusted").arg(m_workdayStart).arg(v));
   }
   if(v == m_workdayEnd) {
     return;
@@ -824,24 +908,46 @@ void AppController::deleteNote(const QString& id) {
   }
   // Unsaved keystrokes go into the note they were typed in before anything
   // moves; if that is the note being deleted, they go with it, which is what
-  // deleting it means.
+  // deleting it means. Flushed before the undo scope opens, so undoing the
+  // delete does not also roll those keystrokes back.
   emit aboutToChangeActiveNote();
   const int row = m_notes.indexOfId(id);
   if(row < 0) {
     return;
   }
-  const bool wasActive = (id == m_activeNoteId);
-  m_notes.removeById(id);
-  if(wasActive) {
-    // Land on a neighbour rather than on nothing: an empty editor after a
-    // delete reads as the rest of the notes having gone too.
-    const int next = qMin(row, m_notes.rowCount() - 1);
-    m_activeNoteId = next >= 0 ? m_notes.items().at(next).id : QString();
-    m_notesState = next >= 0 ? m_notes.items().at(next).body : QString();
-    emit activeNoteChanged();
-    emit notesStateChanged();
+  const QString title = m_notes.items().at(row).title;
+  {
+    const UndoScope scope(this, tr_("notes.restored").arg(title));
+    const bool wasActive = (id == m_activeNoteId);
+    m_notes.removeById(id);
+    if(wasActive) {
+      // Land on a neighbour rather than on nothing: an empty editor after a
+      // delete reads as the rest of the notes having gone too.
+      const int next = qMin(row, m_notes.rowCount() - 1);
+      m_activeNoteId = next >= 0 ? m_notes.items().at(next).id : QString();
+      m_notesState = next >= 0 ? m_notes.items().at(next).body : QString();
+      emit activeNoteChanged();
+      emit notesStateChanged();
+    }
   }
   scheduleSave();
+  emit undoableToast(tr_("notes.deleted").arg(title), 8);
+}
+
+void AppController::reconcileActiveNote() {
+  const int row = m_notes.indexOfId(m_activeNoteId);
+  if(row < 0) {
+    m_activeNoteId = m_notes.rowCount() > 0 ? m_notes.items().constFirst().id : QString();
+    m_notesState = m_notes.rowCount() > 0 ? m_notes.items().constFirst().body : QString();
+    emit activeNoteChanged();
+    emit notesStateChanged();
+    return;
+  }
+  const QString& body = m_notes.items().at(row).body;
+  if(body != m_notesState) {
+    m_notesState = body;
+    emit notesStateChanged();
+  }
 }
 
 void AppController::setNoteBody(const QString& id, const QString& body) {
@@ -1012,17 +1118,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   // repo, but the push path is built from the configured one — the PATCH would
   // land on a different issue that happens to share the number. Its own repo is
   // known, but writing back through it is HEAP-155's problem; skip it here.
-  if(!t.externalId.isEmpty() && !t.externalProvider.isEmpty() && !t.externalMeta.crossProject) {
-    const QString externalId = t.externalId;
-    ensureFreshToken(t.externalProvider, [this, providerId = t.externalProvider, externalId, newStatus]() {
-      for(const auto& provider : m_syncProviders) {
-        if(provider->id() == providerId) {
-          provider->pushStatusChange(externalId, newStatus);
-          return;
-        }
-      }
-    });
-  }
+  pushStatusToTracker(taskId, newStatus);
 
   // Re-evaluate blocked-stuck set (the task may have left "blocked").
   if(m_blockedStuckIds.remove(id)) {
@@ -1037,6 +1133,11 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     if(cal.value("autoFocusBlock", true).toBool()) {
       scheduleFocusBlockFor(taskId);
     }
+  }
+
+  // Time set aside for work that is now finished is time given back.
+  if(newStatus == QStringLiteral("done")) {
+    dropFutureFocusBlocks(taskId);
   }
 
   // Recurring task completed → spawn the next occurrence (HEAP-77).
@@ -1078,12 +1179,88 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       copy.assignee.clear();
       copy.externalMeta = {};
       m_tasks.upsert(copy);
-      emit toast(tr("Recurs: %1 due %2").arg(newId, next.toString(Qt::ISODate)));
+      emit toast(tr_("task.recurs").arg(newId, next.toString(Qt::ISODate)));
     }
   }
 
-  emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
+  if(m_bulkMoveDepth == 0) {
+    emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
+  }
   scheduleSave();
+}
+
+void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  const Task& t = m_tasks.items().at(row);
+  // An issue pulled from an "assigned to me" endpoint belongs to some other
+  // repo, but the push path is built from the configured one — the PATCH would
+  // land on a different issue that happens to share the number. Its own repo is
+  // known, but writing back through it is HEAP-155's problem; skip it here.
+  if(t.externalId.isEmpty() || t.externalProvider.isEmpty() || t.externalMeta.crossProject) {
+    return;
+  }
+  const QString providerId = t.externalProvider;
+  const QString externalId = t.externalId;
+  // Remembered until the tracker answers, so a failure can name the card and
+  // offer to send the same status again.
+  m_pendingPushes.insert(providerId + QChar('\n') + externalId, taskId);
+  ensureFreshToken(providerId, [this, providerId, externalId, status]() {
+    for(const auto& provider : m_syncProviders) {
+      if(provider->id() == providerId) {
+        provider->pushStatusChange(externalId, status);
+        return;
+      }
+    }
+  });
+}
+
+void AppController::onTaskPushed(const QString& providerId, const QString& externalId, bool ok, const QString& error) {
+  const QString taskId = m_pendingPushes.take(providerId + QChar('\n') + externalId);
+  int row = taskId.isEmpty() ? -1 : m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    for(int i = 0; i < m_tasks.rowCount(); ++i) {
+      const Task& t = m_tasks.items().at(i);
+      if(t.externalProvider == providerId && t.externalId == externalId && !t.externalMeta.crossProject) {
+        row = i;
+        break;
+      }
+    }
+  }
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  // The flag is what keeps the card where the user put it until the tracker
+  // agrees, and what the card shows as "not synced".
+  const QString wanted = ok ? QString() : t.status;
+  if(t.externalMeta.unsyncedStatus != wanted) {
+    t.externalMeta.unsyncedStatus = wanted;
+    m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(!ok) {
+    qWarning() << providerId << "push failed for" << externalId << ":" << error;
+    emit trackerPushFailed(t.id, tr_("sync.pushFailed").arg(externalKeyOf(t), error));
+  }
+}
+
+bool AppController::secretsInKeychain() const {
+  return m_secretStore != nullptr && m_secretStore->usingKeychain();
+}
+
+bool AppController::isSafeLink(const QString& url) const {
+  return heap::md::isSafeLink(url);
+}
+
+void AppController::retryTrackerPush(const QString& taskId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  pushStatusToTracker(taskId, m_tasks.items().at(row).status);
 }
 
 // Tasks of one column, in the order the board shows them. Ties on rank fall
@@ -1196,7 +1373,7 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
 
 QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
-  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("LTE")).toString().trimmed();
+  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("TASK")).toString().trimmed();
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
@@ -1317,13 +1494,25 @@ void AppController::createTaskFromTemplate(const QString& name) {
   t.statusChangedAt = QDateTime::currentDateTime();
   m_tasks.upsert(t);
   scheduleSave();
-  emit toast(tr("Created from template: %1").arg(it->name));
+  emit toast(tr_("task.fromTemplate").arg(it->name));
   emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
 }
 
-void AppController::saveTask(const QVariantMap& draft) {
+bool AppController::saveTask(const QVariantMap& draft) {
   Task t;
+  const bool isNew = draft.value("_isNew").toBool();
+  const QString originalId = draft.value("_originalId").toString().trimmed();
   t.id = draft.value("id").toString().trimmed();
+  // A cleared id field on an existing task means "leave the id alone", not
+  // "rename it to nothing" — a task with an empty id cannot be opened, moved or
+  // deleted again.
+  if(t.id.isEmpty() && !isNew) {
+    t.id = originalId;
+  }
+  if(t.id.isEmpty()) {
+    emit toast(tr_("task.idRequired"));
+    return false;
+  }
   t.title = draft.value("title").toString();
   t.desc = draft.value("desc").toString();
   t.priority = draft.value("priority").toString();
@@ -1347,9 +1536,13 @@ void AppController::saveTask(const QVariantMap& draft) {
   t.estimateMinutes = draft.value("estimateMinutes").toInt();
   t.someday = draft.value("someday").toBool();
   t.labels = labelsFromVariant(draft.value("labels").toList());
-  const bool isNew = draft.value("_isNew").toBool();
-  if(isNew && t.title.trimmed().isEmpty()) {
-    return;
+  // Every card needs something to show; an edit that blanks the title used to
+  // leave a card with nothing on it.
+  if(t.title.trimmed().isEmpty()) {
+    if(!isNew) {
+      emit toast(tr_("task.titleRequired"));
+    }
+    return false;
   }
 
   // An id that another task already holds is a destroyed task: the save ends in
@@ -1357,12 +1550,37 @@ void AppController::saveTask(const QVariantMap& draft) {
   // armed, and on the rename path the victim also inherits the renamed task's
   // calendar events. Refuse instead, and say which task is in the way so the
   // editor stays open on the unsaved draft.
-  const QString claimedBy = draft.value("_originalId").toString().trimmed();
-  const QString heldId = (!isNew && !claimedBy.isEmpty()) ? claimedBy : (isNew ? QString() : t.id);
-  if(t.id != heldId && m_tasks.indexOfId(t.id) >= 0) {
-    emit toast(tr_("task.idTaken").arg(t.id));
-    return;
+  // Ids compare without case: "app-104" and "APP-104" read as the same ticket
+  // to a person, so they must not become two tasks.
+  const QString heldId = (!isNew && !originalId.isEmpty()) ? originalId : (isNew ? QString() : t.id);
+  for(const Task& other : m_tasks.items()) {
+    if(other.id != heldId && other.id.compare(t.id, Qt::CaseInsensitive) == 0) {
+      emit toast(tr_("task.idTaken").arg(other.id));
+      return false;
+    }
   }
+
+  const int priorRow = isNew ? -1 : m_tasks.indexOfId(originalId.isEmpty() ? t.id : originalId);
+  const Task* prior = priorRow >= 0 ? &m_tasks.items().at(priorRow) : nullptr;
+  // A status no column has, or a priority outside P0..P3, hides the card: no
+  // column draws it and no filter matches it. Keep what the task had, or fall
+  // back to the board's first column and the default priority.
+  if(statusIndexOf(t.status) < 0) {
+    if(prior != nullptr && statusIndexOf(prior->status) >= 0) {
+      t.status = prior->status;
+    } else {
+      t.status = m_statuses.isEmpty() ? QStringLiteral("todo") : m_statuses.constFirst().toMap().value("id").toString();
+    }
+  }
+  static const QRegularExpression kPriority(QStringLiteral("^P[0-3]$"));
+  if(!kPriority.match(t.priority).hasMatch()) {
+    t.priority = (prior != nullptr && kPriority.match(prior->priority).hasMatch()) ? prior->priority : QStringLiteral("P2");
+  }
+
+  // Everything from here on is one undoable edit: the rename, the re-keyed
+  // calendar links and the row itself.
+  const UndoScope scope(this, tr_(isNew ? "task.createUndone" : "task.editUndone").arg(t.id));
+  const QString statusBefore = prior != nullptr ? prior->status : QString();
 
   // Preserve fields the editor doesn't expose. Without this, opening an
   // archived ticket and hitting Save silently unarchives it (struct
@@ -1407,7 +1625,6 @@ void AppController::saveTask(const QVariantMap& draft) {
   // CalEvent.taskId backlinks, and upsert under the new id. This prevents
   // the previous "duplicate appears after edit" symptom (which used to
   // happen whenever idField text drifted from the stored id).
-  const QString originalId = draft.value("_originalId").toString().trimmed();
   if(!isNew && !originalId.isEmpty() && originalId != t.id) {
     const int row = m_tasks.indexOfId(originalId);
     if(row >= 0) {
@@ -1440,11 +1657,24 @@ void AppController::saveTask(const QVariantMap& draft) {
     t.rank = heap::board::beforeFirst(ordered.isEmpty() ? 0.0 : ordered.first().rank, !ordered.isEmpty());
   }
 
+  // A status picked in the editor is the same move as a drag on the board: it
+  // goes through moveTask, so the tracker hears about it, the review-branch
+  // rule applies and a finished recurring task spawns its next one. The row is
+  // saved in its old column first; the nested undo scope records nothing of
+  // its own.
+  const QString statusAfter = t.status;
+  const bool statusMoved = !isNew && !statusBefore.isEmpty() && statusBefore != statusAfter;
+  if(statusMoved) {
+    t.status = statusBefore;
+  }
   m_tasks.upsert(t);
   if(isNew) {
     emit toast(tr_("task.created").arg(t.id));
+  } else if(statusMoved) {
+    moveTask(t.id, statusAfter);
   }
   scheduleSave();
+  return true;
 }
 
 void AppController::deleteTask(const QString& id) {
@@ -1500,6 +1730,8 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
 }
 
 void AppController::saveEvent(const QVariantMap& draft) {
+  // Creating or editing an event is one undoable step, like a task edit.
+  const UndoScope scope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   CalEvent e;
   e.id = draft.value("id").toString();
   e.title = draft.value("title").toString();
@@ -1534,6 +1766,12 @@ void AppController::saveEvent(const QVariantMap& draft) {
   if(prev) {
     e.exdates = prev->exdates;
   }
+  // A rule this build cannot expand used to be stored anyway and draw as one
+  // event, with nothing saying why the series never repeated.
+  if(!e.rrule.isEmpty() && !heap::cal::parseRRule(e.rrule).isValid()) {
+    emit toast(tr_("event.badRule").arg(e.rrule));
+    e.rrule.clear();
+  }
   // The editor parses free-typed times and a multi-day event may legally end
   // before it starts by the clock, so the whole span is normalized in one
   // place rather than clamped edge by edge.
@@ -1552,6 +1790,8 @@ void AppController::updateEvent(const QString& id, double start, double end, con
     return;
   }
   CalEvent e = m_events.items().at(row);
+  // A drag on the calendar is an edit like any other: Ctrl+Z puts it back.
+  const UndoScope scope(this, tr_("event.editUndone").arg(e.title));
 
   // Dragging a multi-day or all-day block moves the whole span: the grid can
   // only ever hand back one day's worth of hours, and reading them as the new
@@ -1609,7 +1849,12 @@ QVariantMap occurrenceToVariant(const CalEvent& e) {
 
 QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to) const {
   QVariantList out;
-  for(const heap::cal::Occurrence& o : heap::cal::expandEvents(m_events.items(), from, to)) {
+  QDate covered;
+  const QVector<heap::cal::Occurrence> occurrences = heap::cal::expandEvents(m_events.items(), from, to, &covered);
+  if(covered.isValid() && covered < to) {
+    qWarning() << "eventOccurrences: range" << from << "…" << to << "cut short at" << covered;
+  }
+  for(const heap::cal::Occurrence& o : occurrences) {
     QVariantMap m = occurrenceToVariant(o.event);
     m["occurrenceDate"] = o.occurrenceDate;
     m["generated"] = o.generated;
@@ -1624,6 +1869,7 @@ QVariantMap AppController::eventSeriesMaster(const QString& masterId) const {
 }
 
 void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
+  const UndoScope editScope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   const QString masterId = draft.value("masterId").toString();
   const QDate original = draft.value("originalDate").toDate();
 
@@ -2780,6 +3026,10 @@ void AppController::addStatus(const QString& name, const QString& color) {
   if(name.trimmed().isEmpty()) {
     return;
   }
+  if(statusNameTaken(name, QString())) {
+    emit toast(tr_("status.nameTaken").arg(name.trimmed()));
+    return;
+  }
   const QString base = name.toLower();
   QString slug;
   for(const QChar c : base) {
@@ -2812,9 +3062,26 @@ void AppController::addStatus(const QString& name, const QString& color) {
   scheduleSave();
 }
 
+bool AppController::statusNameTaken(const QString& name, const QString& exceptId) const {
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value("id").toString() != exceptId && m.value("name").toString().trimmed().compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
 void AppController::renameStatus(const QString& id, const QString& name) {
   const int i = statusIndexOf(id);
   if(i < 0 || name.trimmed().isEmpty()) {
+    return;
+  }
+  // Two columns with one name cannot be told apart on the board, in a filter
+  // or in the status mapping.
+  if(statusNameTaken(name, id)) {
+    emit toast(tr_("status.nameTaken").arg(name.trimmed()));
+    emit statusesChanged();  // the editor falls back to the stored name
     return;
   }
   QVariantMap m = m_statuses[i].toMap();
@@ -3037,6 +3304,16 @@ QString AppController::deadlineDiffLabel(const QDate& deadline) const {
     return QStringLiteral("—");
   }
   const int d = m_today.daysTo(deadline);
+  // Past two months a day count stops meaning anything ("2460d overdue").
+  const auto longSpan = [this](int days) {
+    return days >= 365 ? tr_("span.years").arg(days / 365) : tr_("span.months").arg(days / 30);
+  };
+  if(d <= -60) {
+    return tr_("deadline.overdueLong").arg(longSpan(-d));
+  }
+  if(d >= 60) {
+    return tr_("deadline.inLong").arg(longSpan(d));
+  }
   if(d < 0) {
     return tr_("deadline.overdue").arg(-d);
   }
@@ -3341,11 +3618,14 @@ void AppController::seedExampleProfile() {
   p.tasks = SampleData::tasks(seedLang);
   p.people = SampleData::people(seedLang);
   QVariantList st;
-  for(const auto& m : SampleData::statuses()) {
+  for(const auto& m : SampleData::statuses(seedLang)) {
     st.push_back(m);
   }
   p.statuses = st;
   p.docsState.clear();
+  p.notes = SampleData::notes(seedLang);
+  p.activeNoteId = p.notes.isEmpty() ? QString() : p.notes.constFirst().id;
+  p.notesState = p.notes.isEmpty() ? QString() : p.notes.constFirst().body;
   m_profiles.push_back(p);
   m_activeProfileId = p.id;
 
@@ -3401,7 +3681,7 @@ void AppController::resetToFirstRun() {
   m_currentView = "board";
   m_workdayStart = 9;
   m_workdayEnd = 19;
-  m_crumbProject = "eNB-core";
+  m_crumbProject.clear();
   m_crumbUser = "You";
   m_selectedDate = m_today;
   m_appSettingsJson.clear();
@@ -3439,29 +3719,40 @@ void AppController::resetToFirstRun() {
 void AppController::startFresh() {
   // Wipe the active profile's seeded demo content, leaving an empty but usable
   // workspace: keep the profile and its kanban columns, drop tasks / people /
-  // this profile's events / notes / docs.
-  m_tasks.reset({});
-  m_people.reset({});
+  // this profile's events / notes / docs. The banner offers it before the user
+  // has made anything of their own, but nothing stops them adding work first,
+  // so the whole wipe is one undoable step.
+  {
+    const UndoScope scope(this, tr_("onboarding.freshUndone"));
+    m_tasks.reset({});
+    m_people.reset({});
 
-  QVector<CalEvent> kept;
-  for(const CalEvent& e : m_events.items()) {
-    if(e.profileId != m_activeProfileId) {
-      kept.append(e);
+    QVector<CalEvent> kept;
+    for(const CalEvent& e : m_events.items()) {
+      if(e.profileId != m_activeProfileId) {
+        kept.append(e);
+      }
     }
-  }
-  m_events.reset(kept);
+    m_events.reset(kept);
 
-  m_notesState.clear();
-  emit notesStateChanged();
-  m_docsState.clear();
-  emit docsStateChanged();
+    m_notes.reset({});
+    m_activeNoteId.clear();
+    emit activeNoteChanged();
+    m_notesState.clear();
+    emit notesStateChanged();
+    m_docPages.reset({});
+    m_activeDocPageId.clear();
+    emit activeDocPageChanged();
+    m_docsState.clear();
+    emit docsStateChanged();
+  }
 
   m_demoActive = false;
   emit onboardingChanged();
 
   snapshotActiveProfile();
   scheduleSave();
-  emit toast(tr_("onboarding.startedFresh"));
+  emit undoableToast(tr_("onboarding.startedFresh"), 10);
 }
 
 QString AppController::classifyTaskKind(const QString& text) const {
@@ -3502,7 +3793,9 @@ AppController::UndoScope::UndoScope(AppController* owner, QString label) :
     m_events(m_outermost ? owner->m_events.items() : QVector<::CalEvent>{}),
     m_people(m_outermost ? owner->m_people.items() : QVector<::Person>{}),
     m_docPages(m_outermost ? owner->m_docPages.items() : QVector<::DocPage>{}),
-    m_statuses(m_outermost ? owner->m_statuses : QVariantList{}) {
+    m_notes(m_outermost ? owner->m_notes.items() : QVector<::Note>{}),
+    m_statuses(m_outermost ? owner->m_statuses : QVariantList{}),
+    m_docsState(m_outermost ? owner->m_docsState : QString{}) {
   ++owner->m_undoScopeDepth;
 }
 
@@ -3527,10 +3820,18 @@ AppController::UndoScope::~UndoScope() {
   entry.docPages = heap::undo::diff(m_docPages, m_owner->m_docPages.items(), [](const ::DocPage& p) {
     return p.id;
   });
+  entry.notes = heap::undo::diff(m_notes, m_owner->m_notes.items(), [](const ::Note& n) {
+    return n.id;
+  });
   if(m_statuses != m_owner->m_statuses) {
     entry.statusesTouched = true;
     entry.statusesBefore = m_statuses;
     entry.statusesAfter = m_owner->m_statuses;
+  }
+  if(m_docsState != m_owner->m_docsState) {
+    entry.docsStateTouched = true;
+    entry.docsStateBefore = m_docsState;
+    entry.docsStateAfter = m_owner->m_docsState;
   }
   const bool wasEmpty = entry.isEmpty();
   m_owner->m_undo.push(std::move(entry));
@@ -3560,11 +3861,25 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     heap::undo::applyBackward(m_events, entry.events);
     heap::undo::applyBackward(m_people, entry.people);
     heap::undo::applyBackward(m_docPages, entry.docPages);
+    heap::undo::applyBackward(m_notes, entry.notes);
   } else {
     heap::undo::applyForward(m_tasks, entry.tasks);
     heap::undo::applyForward(m_events, entry.events);
     heap::undo::applyForward(m_people, entry.people);
     heap::undo::applyForward(m_docPages, entry.docPages);
+    heap::undo::applyForward(m_notes, entry.notes);
+  }
+  if(!entry.notes.isEmpty()) {
+    reconcileActiveNote();
+  }
+
+  // Undoing a move is a move too: the tracker was told about the first one, so
+  // it has to hear the status the card is going back to, or the next pull
+  // re-applies the move the user just took back.
+  for(const heap::undo::Edit<::Task>& e : entry.tasks) {
+    if(e.existedBefore && e.existsAfter && e.before.status != e.after.status) {
+      pushStatusToTracker(e.id, backward ? e.before.status : e.after.status);
+    }
   }
 
   // A deleted task told its tracker "not mine"; bringing it back has to
@@ -3582,6 +3897,10 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   if(entry.statusesTouched) {
     m_statuses = backward ? entry.statusesBefore : entry.statusesAfter;
     emit statusesChanged();
+  }
+  if(entry.docsStateTouched) {
+    m_docsState = backward ? entry.docsStateBefore : entry.docsStateAfter;
+    emit docsStateChanged();
   }
   // The status-count cache drops itself from the task model's own signals, so
   // nothing here has to remember to invalidate it.
@@ -3688,7 +4007,7 @@ QVariantList AppController::recoveryLog() const {
 bool AppController::exportRecoveryLog(const QUrl& fileUrl) {
   const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
   const bool ok = heap::recovery::exportTo(path);
-  emit toast(ok ? tr("Recovery log saved") : tr("No recovery log to export"));
+  emit toast(ok ? tr_("recovery.saved") : tr_("recovery.empty"));
   return ok;
 }
 
@@ -3707,7 +4026,7 @@ void AppController::checkForUpdates() {
   if(!m_updater || m_updater->isChecking()) {
     return;
   }
-  m_updateStatus = tr("Checking for updates…");
+  m_updateStatus = tr_("update.checking");
   emit updateStatusChanged();
   m_updater->checkForUpdates();
 }
@@ -3724,7 +4043,7 @@ void AppController::syncNow() {
     directories.append(it.key());
   }
   if(m_syncProviders.empty() && directories.isEmpty()) {
-    emit toast(tr("Connect a tracker in Settings → Integrations first"));
+    emit toast(tr_("sync.noTracker"));
     return;
   }
   for(const QString& id : directories) {
@@ -3733,7 +4052,7 @@ void AppController::syncNow() {
   if(m_syncProviders.empty()) {
     return;
   }
-  emit toast(tr("Syncing…"));
+  emit toast(tr_("sync.running"));
   // Collect the ids first: refreshing a token rebuilds m_syncProviders.
   QStringList ids;
   ids.reserve(static_cast<qsizetype>(m_syncProviders.size()));
@@ -3749,6 +4068,10 @@ void AppController::syncProviderNow(const QString& providerId) {
   ensureFreshToken(providerId, [this, providerId]() {
     for(const auto& provider : m_syncProviders) {
       if(provider->id() == providerId) {
+        if(!m_statusesAsked.contains(providerId)) {
+          m_statusesAsked.insert(providerId);
+          provider->fetchStatuses();
+        }
         provider->pullTasks();
         return;
       }
@@ -3773,7 +4096,8 @@ QString AppController::uniqueTaskId(const QString& base) const {
 
 AppController::MergeStats AppController::mergeExternalTasks(const QString& providerId,
                                                             const QString& idPrefix,
-                                                            const QVector<heap::integrations::ExternalTask>& issues) {
+                                                            const QVector<heap::integrations::ExternalTask>& issues,
+                                                            bool complete) {
   using heap::integrations::StatusMap;
   MergeStats stats;
 
@@ -3798,6 +4122,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // Issues the user deleted here. Deleting one is how they say "not mine";
   // re-adding it on the next pull would make the deletion meaningless.
   const QStringList dismissed = dismissedTasks(providerId);
+  // Rows this pull accounted for, and the ones it closed.
+  QSet<QString> seenIds;
+  QStringList closedIds;
 
   // An issue's URL is unique across a whole provider; its number is not, once a
   // pull spans projects. Claim by URL first so "#5 of repo A" cannot be matched
@@ -3865,13 +4192,74 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       t.statusChangedAt = QDateTime::currentDateTime();
     }
     const Task before = t;
+    const bool isNewRow = row < 0;
+    seenIds.insert(t.id);
 
-    t.title = ext.title;
-    t.desc = ext.body;
+    // Title and description are a three-way merge against what the tracker
+    // sent last time. Nothing is ever pushed back for them, so a local edit
+    // the tracker did not also touch has to survive the pull; when both sides
+    // changed, the local text wins and the user is told.
+    const bool noBase = !isNewRow && before.externalMeta.title.isEmpty() && before.externalMeta.status.isEmpty();
+    const auto mergeText = [&](QString& local, QString& base, const QString& remote) {
+      if(isNewRow || noBase) {
+        // No base means a card from before bases were kept; that build
+        // overwrote every pull, so the tracker's text is what it expects.
+        local = remote;
+      } else {
+        const bool localEdited = local != base;
+        const bool remoteChanged = remote != base;
+        if(!localEdited) {
+          local = remote;
+        } else if(remoteChanged && local != remote) {
+          ++stats.conflicts;
+        }
+      }
+      base = remote;
+    };
+    mergeText(t.title, t.externalMeta.title, ext.title);
+    mergeText(t.desc, t.externalMeta.body, ext.body);
+
     if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
       seenStatuses.append(ext.status);
     }
-    t.status = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
+    // The column is the tracker's only while the tracker is the one moving it.
+    // A status that has not changed since the last pull says nothing new, so
+    // the column the user picked here stands; that is what lets a card sit in
+    // In Progress or Blocked against a tracker that only knows open/closed.
+    const QString mapped = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
+    const QString prevRemote = t.externalMeta.status;
+    const bool remoteMoved = !prevRemote.isEmpty() && prevRemote != ext.status;
+    const auto isDone = [](const QString& column) {
+      return column == QStringLiteral("done");
+    };
+    if(isNewRow) {
+      t.status = mapped;
+    } else if(remoteMoved) {
+      // Someone moved the issue in the tracker: that is news, and it wins.
+      t.status = mapped;
+      t.externalMeta.unsyncedStatus.clear();
+    } else if(!t.externalMeta.unsyncedStatus.isEmpty()) {
+      // A move the tracker refused: keep it here until a push goes through.
+    } else if(prevRemote.isEmpty()) {
+      // Stored before the last-seen status was kept. Only a change of kind
+      // (open ↔ closed) is evidence; the rest is the user's arrangement.
+      if(isDone(mapped) != isDone(t.status)) {
+        t.status = mapped;
+      }
+    } else if(t.status == t.externalMeta.column) {
+      // Still where the last pull put it, so the user has not placed it:
+      // follow the mapping, which may have changed since.
+      t.status = mapped;
+    }
+    t.externalMeta.column = mapped;
+    t.externalMeta.status = ext.status;
+    t.externalMeta.goneUpstream = false;
+    if(t.status != before.status && !isNewRow) {
+      t.statusChangedAt = QDateTime::currentDateTime();
+      if(isDone(t.status)) {
+        closedIds.append(t.id);
+      }
+    }
     if(!ext.priority.isEmpty()) {
       t.priority = StatusMap::priority(ext.priority);
     } else if(t.priority.isEmpty()) {
@@ -3931,12 +4319,29 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     m_tasks.upsert(t);
     (row >= 0 ? stats.updated : stats.added)++;
   }
+  // A complete pull that no longer carries an issue means it was deleted or
+  // left the filter. The card stays — it may hold local notes — but says so,
+  // instead of looking like live work forever.
+  if(complete) {
+    for(int i = 0; i < m_tasks.rowCount(); ++i) {
+      Task t = m_tasks.items().at(i);
+      if(t.externalProvider != providerId || t.externalId.isEmpty() || seenIds.contains(t.id) || t.externalMeta.goneUpstream) {
+        continue;
+      }
+      t.externalMeta.goneUpstream = true;
+      m_tasks.upsert(t);
+      ++stats.gone;
+    }
+  }
+  for(const QString& id : closedIds) {
+    dropFutureFocusBlocks(id);
+  }
   // Learn this provider's vocabulary from what it actually sent, so the
   // mapping UI can offer real statuses instead of asking the user to type
   // them. Written even when nothing else changed — a status appearing for the
   // first time is news whether or not the issue carrying it was new.
   const bool learned = rememberSeenStatuses(providerId, seenStatuses);
-  if(stats.added > 0 || stats.updated > 0 || learned) {
+  if(stats.added > 0 || stats.updated > 0 || stats.gone > 0 || learned) {
     scheduleSave();
   }
   return stats;
@@ -4070,6 +4475,11 @@ void AppController::setStatusMapping(const QString& providerId, const QString& s
   m_appSettingsJson = QJsonDocument(QJsonObject::fromVariantMap(settings)).toJson(QJsonDocument::Compact);
   emit appSettingsJsonChanged();
   scheduleSave();
+  for(const auto& provider : m_syncProviders) {
+    if(provider->id() == providerId) {
+      provider->setStatusOverrides(statusOverridesFor(providerId));
+    }
+  }
   // Existing cards are not rewritten: moving a mirrored ticket is a real move
   // that heap pushes back, so re-columning them here would push a change the
   // user never made. The next sync applies the new mapping.
@@ -4085,21 +4495,44 @@ void AppController::applyIntegrationSettings() {
     connect(provider,
             &heap::integrations::IntegrationProvider::tasksFetched,
             this,
-            [this, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
+            [this, provider, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
               m_retriedAfter401.remove(providerId);
-              const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues);
+              const bool settlePull = m_settlePulls.remove(providerId);
+              const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues, provider->lastPullComplete());
+              // Jira Cloud's search is eventually consistent: an issue created
+              // a moment ago is often missing from the first answer and turned
+              // up only on the next sync. One quiet follow-up pull a little
+              // later picks it up; it only speaks if it found something.
+              if(!settlePull && providerId == QStringLiteral("jira")) {
+                QTimer::singleShot(kSettlePullDelayMs, this, [this, providerId]() {
+                  m_settlePulls.insert(providerId);
+                  syncProviderNow(providerId);
+                });
+              }
+              if(settlePull && stats.added == 0 && stats.updated == 0 && stats.gone == 0) {
+                return;
+              }
               // "Synced 12 issues" every quarter of an hour says nothing about
               // whether anything happened. Report what actually changed.
-              if(stats.added == 0 && stats.updated == 0) {
-                emit toast(tr_("sync.upToDate").arg(label));
-              } else {
-                emit toast(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
+              QString message = (stats.added == 0 && stats.updated == 0)
+                                    ? tr_("sync.upToDate").arg(label)
+                                    : tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated);
+              if(stats.conflicts > 0) {
+                message += QStringLiteral(" · ") + tr_("sync.conflicts").arg(stats.conflicts);
               }
+              if(stats.gone > 0) {
+                message += QStringLiteral(" · ") + tr_("sync.gone").arg(stats.gone);
+              }
+              emit toast(message);
             });
     // A failed pull used to arrive as an empty task list, so a bad token read
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
     connect(
         provider, &heap::integrations::IntegrationProvider::pullFailed, this, [this, providerId, label](int status, const QString& error) {
+          // A failed follow-up pull is not news: the pull before it answered.
+          if(m_settlePulls.remove(providerId)) {
+            return;
+          }
           // A session connected before expiry tracking existed has no
           // tokenExpiresAt, so its first warning is the 401 itself: refresh once
           // and retry rather than making the user sign in again. Only worth it
@@ -4117,19 +4550,25 @@ void AppController::applyIntegrationSettings() {
             });
             return;
           }
-          emit toast(tr("%1 sync failed: %2").arg(label, error));
+          emit toast(tr_("sync.failed").arg(label, error));
         });
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
             this,
-            [providerId](const QString& externalId, bool ok, const QString& error) {
-              if(!ok) {
-                qWarning() << providerId << "push failed for" << externalId << ":" << error;
-              }
+            [this, providerId](const QString& externalId, bool ok, const QString& error) {
+              onTaskPushed(providerId, externalId, ok, error);
             });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
-      emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
     });
+    // The mapping UI used to list only statuses an issue had already arrived
+    // in; the tracker's own list fills in the rest.
+    connect(provider, &heap::integrations::IntegrationProvider::statusesFetched, this, [this, providerId](const QStringList& statuses) {
+      if(rememberSeenStatuses(providerId, statuses)) {
+        scheduleSave();
+      }
+    });
+    provider->setStatusOverrides(statusOverridesFor(providerId));
   };
 
   // Build every connected + configured provider from the registry. Generic
@@ -4215,7 +4654,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   const QString label = d ? d->displayName : providerId;
   connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, label](bool ok, const QString& error) {
-    emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
   });
   connect(client,
           &heap::integrations::MattermostClient::contactsFetched,
@@ -4223,20 +4662,20 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
             const int changed = mergeExternalContacts(providerId, contacts);
             if(changed == 0) {
-              emit toast(tr("%1: contacts are up to date").arg(label));
+              emit toast(tr_("contacts.upToDate").arg(label));
               return;
             }
-            emit toast(tr("%n contact(s) updated from %1", "", changed).arg(label));
+            emit toast(tr_("contacts.updated").arg(label).arg(changed));
           });
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
     // Saying "expired" beats repeating the same failure on every auto-sync.
     if(status == 401) {
       disconnectIntegration(providerId);
-      emit toast(tr("%1 session expired — sign in again").arg(label));
+      emit toast(tr_("int.sessionExpired").arg(label));
       return;
     }
-    emit toast(tr("%1 sync failed: %2").arg(label, error));
+    emit toast(tr_("sync.failed").arg(label, error));
   });
 
   m_directoryClients.insert(providerId, client);
@@ -4521,12 +4960,12 @@ void AppController::fetchDirectory(const QString& providerId, bool rebindProfile
 void AppController::connectWithCredentials(const QString& providerId, const QVariantMap& credentials) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(d == nullptr || d->loginFields.isEmpty()) {
-    emit toast(tr("Signing in with a password is not available for this integration"));
+    emit toast(tr_("int.noPassword"));
     return;
   }
   const QString host = integrationConfig(providerId).value(QStringLiteral("host")).toString().trimmed();
   if(host.isEmpty()) {
-    emit toast(tr("Enter the %1 server URL first").arg(d->displayName));
+    emit toast(tr_("int.needUrl").arg(d->displayName));
     emit integrationLoginFinished(providerId, false);
     return;
   }
@@ -4542,7 +4981,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
             client->deleteLater();
             emit integrationLoginFinished(providerId, ok);
             if(!ok) {
-              emit toast(tr("%1 sign-in failed: %2").arg(label, error));
+              emit toast(tr_("int.signInFailed").arg(label, error));
               return;
             }
             if(m_secretStore) {
@@ -4556,7 +4995,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
                                      {QStringLiteral("connected"), true},
                                  });
             emit integrationSecretsChanged();
-            emit toast(tr("%1 connected").arg(label));
+            emit toast(tr_("int.connected").arg(label));
           });
   client->login(credentials.value(QStringLiteral("loginId")).toString(),
                 credentials.value(QStringLiteral("password")).toString(),
@@ -4665,13 +5104,13 @@ void AppController::migrateLegacySecrets() {
 
 void AppController::syncProvider(const QString& providerId) {
   if(m_directoryClients.contains(providerId)) {
-    emit toast(tr("Syncing…"));
+    emit toast(tr_("sync.running"));
     fetchDirectory(providerId, /*rebindProfile=*/true);
     return;
   }
   for(const auto& provider : m_syncProviders) {
     if(provider->id() == providerId) {
-      emit toast(tr("Syncing…"));
+      emit toast(tr_("sync.running"));
       // "Sync now" means "sync this, here" — the same rebind the directory
       // path does, so the tracker follows a deliberate click to this profile.
       setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
@@ -4679,19 +5118,19 @@ void AppController::syncProvider(const QString& providerId) {
       return;
     }
   }
-  emit toast(tr("Connect a tracker in Settings → Integrations first"));
+  emit toast(tr_("sync.noTracker"));
 }
 
 void AppController::testIntegration(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d) {
-    emit toast(tr("Unknown integration"));
+    emit toast(tr_("int.unknown"));
     return;
   }
   if(d->kind == heap::integrations::ProviderKind::Directory) {
     heap::integrations::MattermostClient* client = directoryClient(providerId);
     if(client == nullptr) {
-      emit toast(tr("%1 is not fully configured").arg(d->displayName));
+      emit toast(tr_("int.notConfigured").arg(d->displayName));
       return;
     }
     client->testConnection();
@@ -4707,13 +5146,13 @@ void AppController::testIntegration(const QString& providerId) {
     provider = rest;
   }
   if(!provider) {
-    emit toast(tr("%1 is not fully configured").arg(d->displayName));
+    emit toast(tr_("int.notConfigured").arg(d->displayName));
     return;
   }
   const QString label = d->displayName;
   connect(
       provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, provider, label](bool ok, const QString& error) {
-        emit toast(ok ? tr("%1 connected").arg(label) : tr("%1 connection failed: %2").arg(label, error));
+        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
         provider->deleteLater();
       });
   provider->testConnection();
@@ -4777,8 +5216,9 @@ void AppController::fetchTicketComments(const QString& taskId) {
   // The issue's own repo, which after a cross-project pull is not the one in
   // the settings card.
   const QString project = t.externalMeta.project;
+  const QString issueUrl = t.externalUrl;
 
-  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project]() {
+  ensureFreshToken(providerId, [this, taskId, providerId, externalId, project, issueUrl]() {
     for(const auto& provider : m_syncProviders) {
       if(provider->id() != providerId) {
         continue;
@@ -4789,7 +5229,7 @@ void AppController::fetchTicketComments(const QString& taskId) {
       connect(provider.get(),
               &heap::integrations::IntegrationProvider::commentsFetched,
               guard,
-              [this, guard, taskId, externalId](
+              [this, guard, taskId, externalId, issueUrl](
                   const QString& id, const QVector<heap::integrations::ExternalComment>& comments, const QString& error) {
                 if(id != externalId) {
                   return;  // another ticket's reply on the same provider
@@ -4798,10 +5238,16 @@ void AppController::fetchTicketComments(const QString& taskId) {
                 QVariantList out;
                 out.reserve(comments.size());
                 for(const heap::integrations::ExternalComment& c : comments) {
+                  // Every comment links somewhere: its own URL, an anchor on
+                  // the issue page, or at worst the issue itself.
+                  QString url = c.url;
+                  if(url.isEmpty() && !issueUrl.isEmpty()) {
+                    url = issueUrl + c.anchor;
+                  }
                   out.append(QVariantMap{{QStringLiteral("author"), c.author},
                                          {QStringLiteral("body"), c.body},
                                          {QStringLiteral("createdAt"), c.createdAt},
-                                         {QStringLiteral("url"), c.url}});
+                                         {QStringLiteral("url"), url}});
                 }
                 emit ticketCommentsLoaded(taskId, out, error);
               });
@@ -4892,7 +5338,7 @@ void AppController::setIntegrationSecret(const QString& providerId, const QStrin
 void AppController::connectIntegrationManually(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(d == nullptr) {
-    emit toast(tr("Unknown integration"));
+    emit toast(tr_("int.unknown"));
     return;
   }
   // Validated as a token card, never as an OAuth one: this connect is what
@@ -4902,7 +5348,7 @@ void AppController::connectIntegrationManually(const QString& providerId) {
   if(!missing.isEmpty()) {
     // Silence was the old failure mode — "connected" went true, no provider
     // could be built from the half-filled config, and nothing ever synced.
-    emit toast(tr("%1 needs %2").arg(d->displayName, missing.join(QStringLiteral(", "))));
+    emit toast(tr_("int.needs").arg(d->displayName, missing.join(QStringLiteral(", "))));
     emit integrationNeedsFields(providerId, missing);
     return;
   }
@@ -4921,7 +5367,7 @@ void AppController::connectIntegrationManually(const QString& providerId) {
   }
   setIntegrationFields(providerId, fields);
   emit integrationSecretsChanged();
-  emit toast(tr("%1 connected").arg(d->displayName));
+  emit toast(tr_("int.connected").arg(d->displayName));
 }
 
 void AppController::disconnectIntegration(const QString& providerId) {
@@ -5046,7 +5492,7 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
           // panel offers the sign-in button again instead of failing forever.
           qWarning() << providerId << "token refresh failed:" << r.error;
           setIntegrationField(providerId, QStringLiteral("connected"), false);
-          emit toast(tr("%1 session expired — sign in again").arg(label));
+          emit toast(tr_("int.sessionExpired").arg(label));
           done(false);
           return;
         }
@@ -5087,7 +5533,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
     const QByteArray body = reply->readAll();
     if(reply->error() != QNetworkReply::NoError) {
       emit toast(
-          tr("%1 sign-in failed: %2")
+          tr_("int.signInFailed")
               .arg(label, heap::integrations::describeHttpError(heap::integrations::replyHttpStatus(reply), body, reply->errorString())));
       return;
     }
@@ -5103,7 +5549,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
       // Atlassian only ever grants Cloud sites, so this is also what a
       // self-hosted Jira looks like from here: the sign-in worked and named
       // nothing this token can reach.
-      emit toast(tr("%1 sign-in granted no site — for a self-hosted Jira, fill in Advanced and press Connect").arg(label));
+      emit toast(tr_("int.noSite").arg(label));
       return;
     }
     setIntegrationFields(kProviderId,
@@ -5112,14 +5558,14 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
                              {QStringLiteral("siteUrl"), site.url},
                              {QStringLiteral("connected"), true},
                          });
-    emit toast(tr("%1 connected via browser — %2").arg(label, site.url));
+    emit toast(tr_("int.browserConnectedSite").arg(label, site.url));
   });
 }
 
 void AppController::connectOAuth(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d || !d->oauth.supported) {
-    emit toast(tr("Browser sign-in is not available for this integration"));
+    emit toast(tr_("int.noBrowser"));
     return;
   }
   const QVariantMap cfg = integrationConfig(providerId);
@@ -5130,7 +5576,7 @@ void AppController::connectOAuth(const QString& providerId) {
     clientId = d->oauth.clientId;
   }
   if(clientId.isEmpty()) {
-    emit toast(tr("No OAuth app configured — add a client ID under Advanced first"));
+    emit toast(tr_("int.noOAuthApp"));
     return;
   }
   QString clientSecret = cfg.value(QStringLiteral("clientSecret")).toString();
@@ -5141,11 +5587,11 @@ void AppController::connectOAuth(const QString& providerId) {
   // release build carries one; a build made without the CI credentials does
   // not, so say so instead of opening a browser that will refuse the exchange.
   if(d->oauth.needsSecret && clientSecret.isEmpty()) {
-    emit toast(tr("%1 browser sign-in needs an OAuth client secret — add one under Advanced").arg(d->displayName));
+    emit toast(tr_("int.needSecret").arg(d->displayName));
     return;
   }
   if(d->oauth.effectiveFlow() == heap::integrations::OAuthFlow::Device && !heap::integrations::OAuthManager::deviceFlowAvailable()) {
-    emit toast(tr("%1 browser sign-in needs Qt 6.9 or newer — use an access token").arg(d->displayName));
+    emit toast(tr_("int.needQt").arg(d->displayName));
     return;
   }
   // {host} defaults to the descriptor fallback (e.g. gitlab.com) so gitlab.com
@@ -5192,13 +5638,13 @@ void AppController::connectOAuth(const QString& providerId) {
   // to the Integrations card as a banner.
   connect(mgr, &heap::integrations::OAuthManager::userCode, this, [this, providerId, label](const QString& code, const QString& uri) {
     emit oauthDeviceCode(providerId, code, uri);
-    emit toast(tr("%1: open %2 and enter code %3").arg(label, uri, code));
+    emit toast(tr_("int.deviceCode").arg(label, uri, code));
   });
   connect(mgr, &heap::integrations::OAuthManager::finished, this, [this, providerId, label, mgr](const heap::integrations::OAuthResult& r) {
     mgr->deleteLater();
     emit oauthDeviceCode(providerId, QString(), QString());  // clear the banner
     if(!r.ok) {
-      emit toast(tr("%1 sign-in failed: %2").arg(label, r.error));
+      emit toast(tr_("int.signInFailed").arg(label, r.error));
       return;
     }
     if(m_secretStore) {
@@ -5236,16 +5682,16 @@ void AppController::connectOAuth(const QString& providerId) {
     // then quietly sync nothing.
     const QStringList missing = missingRequiredFields(providerId);
     if(missing.isEmpty()) {
-      emit toast(tr("%1 connected via browser").arg(label));
+      emit toast(tr_("int.browserConnected").arg(label));
     } else {
-      emit toast(tr("%1 signed in — now fill in %2").arg(label, missing.join(QStringLiteral(", "))));
+      emit toast(tr_("int.signedInNeeds").arg(label, missing.join(QStringLiteral(", "))));
       emit integrationNeedsFields(providerId, missing);
     }
   });
   if(deviceFlow) {
-    emit toast(tr("Starting %1 browser sign-in…").arg(label));
+    emit toast(tr_("int.browserStarting").arg(label));
   } else {
-    emit toast(tr("Opening browser for %1 — OAuth redirect: %2").arg(label, heap::integrations::OAuthManager::redirectUri()));
+    emit toast(tr_("int.browserOpening").arg(label, heap::integrations::OAuthManager::redirectUri()));
   }
   mgr->start(p);
 }
@@ -5371,7 +5817,7 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
       p.statuses.append(m);
     }
   } else {
-    for(const auto& m : SampleData::statuses()) {
+    for(const auto& m : SampleData::statuses(m_language == QStringLiteral("ru") ? SampleData::Lang::Ru : SampleData::Lang::En)) {
       p.statuses.append(m);
     }
   }
@@ -5426,6 +5872,12 @@ void AppController::rotateBackupIfDue() {
   } else if(interval == QLatin1String("weekly")) {
     intervalSecs = 7 * 24 * 3600;
   }
+  // The clock lives on disk, not only in memory: a fresh process used to see
+  // "never backed up", copy on every launch, and let retention push the old
+  // copies out — twenty restarts erased the whole history.
+  if(!m_lastBackupAt.isValid()) {
+    m_lastBackupAt = newestBackupTime();
+  }
   if(m_lastBackupAt.isValid() && m_lastBackupAt.secsTo(now) < intervalSecs) {
     return;
   }
@@ -5436,12 +5888,35 @@ void AppController::rotateBackupIfDue() {
   m_lastBackupAt = now;
 }
 
+QDateTime AppController::newestBackupTime() const {
+  const QDir d(backupDirPath());
+  QDateTime newest;
+  const QFileInfoList all = d.entryInfoList({"state-*.json"}, QDir::Files | QDir::NoSymLinks);
+  for(const QFileInfo& fi : all) {
+    if(fi.fileName().contains(QLatin1String("premigration"))) {
+      continue;
+    }
+    // The name carries when the copy was taken. The file time may not: a copy
+    // on Windows keeps the source's last-write time.
+    QDateTime when = QDateTime::fromString(fi.completeBaseName().mid(6), QStringLiteral("yyyyMMdd-HHmmss"));
+    if(!when.isValid()) {
+      when = fi.lastModified();
+    }
+    if(!newest.isValid() || when > newest) {
+      newest = when;
+    }
+  }
+  return newest;
+}
+
 void AppController::pruneBackups(int keep) {
   QDir d(backupDirPath());
   // Rotational snapshots only. The pre-migration copy retained by
   // loadStateOnStart must survive retention: it is the only pre-v4 image of the
   // user's data.
-  const QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
+  // Newest first by the stamp in the name, which is when the copy was taken.
+  QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Name);
+  std::reverse(all.begin(), all.end());
   int kept = 0;
   for(const QString& name : all) {
     if(name.contains(QLatin1String("premigration"))) {
@@ -5814,8 +6289,35 @@ void AppController::setActiveProfileId(const QString& id) {
   scheduleSave();
 }
 
+bool AppController::profileNameTaken(const QString& name, const QString& exceptId) const {
+  for(const Profile& p : m_profiles) {
+    if(p.id != exceptId && p.name.trimmed().compare(name.trimmed(), Qt::CaseInsensitive) == 0) {
+      return true;
+    }
+  }
+  return false;
+}
+
+QString AppController::uniqueProfileName(const QString& base) const {
+  if(!profileNameTaken(base, QString())) {
+    return base;
+  }
+  // "Work", "Work (2)", "Work (3)" — the switcher shows names, so two equal
+  // ones cannot be told apart there.
+  int n = 2;
+  QString candidate;
+  do {
+    candidate = QStringLiteral("%1 (%2)").arg(base).arg(n++);
+  } while(profileNameTaken(candidate, QString()));
+  return candidate;
+}
+
 QString AppController::createProfile(const QString& name, const QString& color) {
   if(name.trimmed().isEmpty()) {
+    return QString();
+  }
+  if(profileNameTaken(name, QString())) {
+    emit toast(tr_("profile.nameTaken").arg(name.trimmed()));
     return QString();
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
@@ -5838,6 +6340,11 @@ void AppController::renameProfile(const QString& id, const QString& newName) {
     return;
   }
   if(m_profiles[i].name == newName) {
+    return;
+  }
+  if(profileNameTaken(newName, id)) {
+    emit toast(tr_("profile.nameTaken").arg(newName.trimmed()));
+    emit profilesChanged();  // the editor falls back to the stored name
     return;
   }
   m_profiles[i].name = newName.trimmed();
@@ -5930,7 +6437,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
     snapshotActiveProfile();
   }
   Profile copy = m_profiles[i];
-  copy.name = newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed();
+  copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
   m_profiles.push_back(copy);
@@ -6348,6 +6855,8 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   if(imported.name.trimmed().isEmpty()) {
     imported.name = QStringLiteral("Imported");
   }
+  // An import of a profile that is already here arrives as "Name (2)".
+  imported.name = uniqueProfileName(imported.name.trimmed());
 
   // Resolve id collisions — re-slug so we never overwrite an existing profile.
   if(imported.id.isEmpty() || profileIndexOf(imported.id) >= 0) {
@@ -6358,7 +6867,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
     imported.color = QStringLiteral("#5cc2dd");
   }
   if(imported.statuses.isEmpty()) {
-    for(const auto& m : SampleData::statuses()) {
+    for(const auto& m : SampleData::statuses(m_language == QStringLiteral("ru") ? SampleData::Lang::Ru : SampleData::Lang::En)) {
       imported.statuses.append(m);
     }
   }
@@ -6456,6 +6965,7 @@ void AppController::seedShortcutCatalog() {
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
   add("theme.toggle", "Ctrl+Shift+T");
+  add("panel.right", "Ctrl+\\");
   add("person.new", "Ctrl+Shift+U");
   add("profile.new", "Ctrl+Shift+P");
   add("selection.selectAll", "Ctrl+A");
@@ -6728,7 +7238,7 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
   if(newStatus == QStringLiteral("review")) {
     const QVariantMap s = settingsMap();
     const QVariantMap tasks = s.value("tasks").toMap();
-    if(tasks.value("requireBranchOnReview", true).toBool() && t.branch.trimmed().isEmpty()) {
+    if(tasks.value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
       emit toast(tr_("branch.required"));
       return false;
     }
@@ -6896,19 +7406,24 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
   // A bulk move used to record nothing at all, so dragging a wrong selection
   // across the board was unrecoverable. The scope covers it for free.
   UndoScope scope(this, tr_("selection.toast.moved").arg(m_selectedTaskIdsList.size()));
+  // Each card goes through moveTask, so a bulk move does what a drag does: the
+  // tracker hears about it, the review-branch rule applies, a finished
+  // recurring task spawns its next one. Only the per-card toast is held back.
   int moved = 0;
-  for(const QString& id : m_selectedTaskIdsList) {
+  ++m_bulkMoveDepth;
+  const QStringList ids = m_selectedTaskIdsList;
+  for(const QString& id : ids) {
     const int row = m_tasks.indexOfId(id);
-    if(row < 0) {
+    if(row < 0 || m_tasks.items().at(row).status == statusId) {
       continue;
     }
-    if(m_tasks.items().at(row).status == statusId) {
-      continue;
+    moveTask(id, statusId);
+    const int after = m_tasks.indexOfId(id);
+    if(after >= 0 && m_tasks.items().at(after).status == statusId) {
+      ++moved;
     }
-    m_tasks.setStatus(id, statusId);
-    m_tasks.stampStatusChange(id);
-    ++moved;
   }
+  --m_bulkMoveDepth;
   if(moved > 0) {
     scope.setLabel(tr_("selection.toast.moved").arg(moved));
     emit undoableToast(tr_("selection.toast.moved").arg(moved), 5);
@@ -6978,27 +7493,57 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
     return;
   }
   const Task& t = m_tasks.items().at(row);
-  const QVariantMap s = settingsMap();
-  const QVariantMap cal = s.value("calendar").toMap();
+  const QDateTime now = QDateTime::currentDateTime();
+  // One planned block per task is enough: a card dragged back and forth
+  // through In Progress must not stack them up.
+  for(const CalEvent& e : m_events.items()) {
+    if(e.taskId == taskId && e.type == QStringLiteral("focus") && QDateTime(e.date, heap::cal::hourToTime(qMin(e.end, 23.99))) > now) {
+      return;
+    }
+  }
+  const QVariantMap cal = settingsMap().value("calendar").toMap();
   const int durMin = cal.value("focusBlockDuration", 90).toInt();
   const double dur = std::max(0.25, durMin / 60.0);
-  const QDateTime now = QDateTime::currentDateTime();
-  const double start = nextQuarterHour(now);
-  if(start >= 24.0) {
-    return;  // No room left in today.
+  // The first free stretch inside working hours, on a working day, within the
+  // coming week. A Saturday-night drag used to book 21:00 that same night.
+  for(int offset = 0; offset < 7; ++offset) {
+    const QDate day = now.date().addDays(offset);
+    if(day.dayOfWeek() > 5) {
+      continue;
+    }
+    const double start = nextFreeSlot(day, dur);
+    if(start + dur > m_workdayEnd + 1e-9 || start < m_workdayStart - 1e-9) {
+      continue;
+    }
+    CalEvent e;
+    e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+    e.title = QStringLiteral("Focus: %1").arg(t.title);
+    e.type = QStringLiteral("focus");
+    e.start = start;
+    e.end = start + dur;
+    e.date = day;
+    e.taskId = taskId;
+    e.profileId = m_activeProfileId;
+    m_events.upsert(e);
+    scheduleSave();
+    return;
   }
-  const double end = std::min(24.0, start + dur);
-  CalEvent e;
-  e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-  e.title = QStringLiteral("Focus: %1").arg(t.title);
-  e.type = QStringLiteral("focus");
-  e.start = start;
-  e.end = end;
-  e.date = now.date();
-  e.taskId = taskId;
-  e.profileId = m_activeProfileId;
-  m_events.upsert(e);
-  scheduleSave();
+}
+
+void AppController::dropFutureFocusBlocks(const QString& taskId) {
+  const QDateTime now = QDateTime::currentDateTime();
+  QStringList doomed;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.taskId == taskId && e.type == QStringLiteral("focus") && QDateTime(e.date, heap::cal::hourToTime(e.start)) > now) {
+      doomed.append(e.id);
+    }
+  }
+  for(const QString& id : doomed) {
+    m_events.removeById(id);
+  }
+  if(!doomed.isEmpty()) {
+    scheduleSave();
+  }
 }
 
 void AppController::runAutomation() {
@@ -7153,7 +7698,7 @@ void AppController::runAutomation() {
 
 QStringList AppController::collectPrefixes() const {
   QStringList out;
-  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("LTE")).toString().trimmed().toUpper();
+  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
   if(!def.isEmpty()) {
     out << def;
   }
@@ -7329,7 +7874,7 @@ void AppController::createBranchForTask(const QString& taskId) {
     repo = repos.first();
   }
   if(repo.isEmpty()) {
-    emit toast(tr("No git repository configured — add one in Settings › Git"));
+    emit toast(tr_("git.noRepo"));
     return;
   }
 
@@ -7342,7 +7887,7 @@ void AppController::createBranchForTask(const QString& taskId) {
   const QString branchId = branchableKey.match(key).hasMatch() ? key : t.id;
   const QString branch = heap::git::BranchTaskMatcher::branchNameForTask(branchId, t.title, templ);
   if(branch.isEmpty()) {
-    emit toast(tr("Could not derive a branch name for %1").arg(t.id));
+    emit toast(tr_("git.noBranchName").arg(t.id));
     return;
   }
 
@@ -7362,7 +7907,7 @@ void AppController::createBranchForTask(const QString& taskId) {
                           delete connection;
 
                           if(!ok) {
-                            emit toast(tr("Branch create failed: %1").arg(error));
+                            emit toast(tr_("git.branchFailed").arg(error));
                             return;
                           }
                           const int taskRow = m_tasks.indexOfId(pendingTaskId);
@@ -7372,7 +7917,7 @@ void AppController::createBranchForTask(const QString& taskId) {
                             m_tasks.upsert(updated);
                             scheduleSave();
                           }
-                          emit toast(tr("Created branch %1").arg(branch));
+                          emit toast(tr_("git.branchCreated").arg(branch));
                         });
 
   QString err;

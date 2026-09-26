@@ -43,6 +43,12 @@ ExternalMeta makeFullMeta() {
   m.updatedAt = QDateTime(QDate(2026, 7, 8), QTime(11, 45, 10, 125));
   m.dueAt = QDateTime(QDate(2026, 7, 11), QTime(16, 0, 0, 750));
   m.crossProject = true;
+  m.status = QStringLiteral("In Review");
+  m.title = QStringLiteral("Harden the task data model (tracker)");
+  m.body = QStringLiteral("as the tracker last sent it");
+  m.column = QStringLiteral("review");
+  m.unsyncedStatus = QStringLiteral("blocked");
+  m.goneUpstream = true;
   return m;
 }
 
@@ -183,6 +189,12 @@ class Gen {
       t.externalMeta.updatedAt = dateTime();
       t.externalMeta.dueAt = dateTime();
       t.externalMeta.crossProject = boolean();
+      t.externalMeta.status = text();
+      t.externalMeta.title = text();
+      t.externalMeta.body = text();
+      t.externalMeta.column = text();
+      t.externalMeta.unsyncedStatus = text();
+      t.externalMeta.goneUpstream = boolean();
     }
     // Ranks are fractional in practice — a drop between two cards is their
     // midpoint — so halves are generated, not whole numbers.
@@ -244,7 +256,7 @@ TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole
 // object — this is what stops a field added in there from being dropped.
 TEST(FieldCountGuard, ExternalMetaArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 9u);
+  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 15u);
 }
 
 // ── The runtime half: one emitted key per declared field ──

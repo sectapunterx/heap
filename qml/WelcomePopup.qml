@@ -54,7 +54,16 @@ Popup {
     //                "action" → emit openAction(arg), handled in Main.qml
     readonly property var steps: [
         { glyph: "✦", title: "welcome.title", desc: "welcome.subtitle",
-          keys: [], action: null, help: "" },
+          keys: [], action: null, help: "",
+          // The first page was one line over a blank frame; it now says what
+          // the app is made of before the tour walks through each part.
+          highlights: [
+              { glyph: "▦", title: "welcome.board.title", desc: "welcome.board.desc" },
+              { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.desc" },
+              { glyph: "⚡", title: "welcome.capture.title", desc: "welcome.capture.desc" },
+              { glyph: "⌘", title: "welcome.palette.title", desc: "welcome.palette.desc" }
+          ],
+          note: "welcome.demoNote" },
         { glyph: "▦", title: "welcome.views.title", desc: "welcome.views.desc",
           keys: ["view.board", "view.timeline", "view.week", "view.docs", "view.notes", "view.settings"],
           action: { label: "welcome.act.board", kind: "view", arg: "board" }, help: "help-views" },
@@ -239,6 +248,58 @@ Popup {
                     color: Theme.textMuted
                     font.pixelSize: 13
                     lineHeight: 1.35
+                    wrapMode: Text.WordWrap
+                }
+
+                // What heap is made of — the first page only.
+                GridLayout {
+                    objectName: "welcome-highlights"
+                    Layout.fillWidth: true
+                    visible: !!root.cur.highlights
+                    columns: 2
+                    columnSpacing: 14
+                    rowSpacing: 10
+                    Repeater {
+                        model: root.cur.highlights || []
+                        delegate: RowLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            Layout.preferredWidth: 1
+                            Layout.alignment: Qt.AlignTop
+                            spacing: 8
+                            Text {
+                                Layout.alignment: Qt.AlignTop
+                                text: modelData.glyph
+                                color: Theme.accentStrong
+                                font.pixelSize: 14
+                            }
+                            ColumnLayout {
+                                Layout.fillWidth: true
+                                spacing: 2
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: I18n.t(modelData.title)
+                                    color: Theme.text
+                                    font.pixelSize: 12
+                                    font.weight: Font.DemiBold
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    text: I18n.t(modelData.desc)
+                                    color: Theme.textMuted
+                                    font.pixelSize: 11
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+                }
+                Text {
+                    Layout.fillWidth: true
+                    visible: !!root.cur.note
+                    text: root.cur.note ? I18n.t(root.cur.note) : ""
+                    color: Theme.textDim
+                    font.pixelSize: 11
                     wrapMode: Text.WordWrap
                 }
 

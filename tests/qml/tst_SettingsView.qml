@@ -152,4 +152,19 @@ TestCase {
         compare(merged.calendar.focusBlockDuration, 0);
         compare(merged.notifications.deadlineLeadHours, 0);
     }
+
+    // A mapped status must show its column, not "Auto" (audit B1): the combo
+    // read indexOfValue() before it had a model and never looked again.
+    function test_status_map_combo_shows_the_chosen_column() {
+        const sv = make();
+        const card = _card(sv, "jira", {
+            clientId: "cid", connected: true,
+            seenStatuses: ["In Progress", "To Do"],
+            statusMap: { "In Progress": "blocked" }
+        });
+        tryVerify(function () { return findChild(sv, "status-map-combo") !== null; }, 2000);
+        const combo = findChild(sv, "status-map-combo");
+        tryCompare(combo, "currentValue", "blocked");
+        verify(combo.currentIndex > 0);
+    }
 }

@@ -91,6 +91,15 @@ QVector<ExternalTask> parseGitlabIssues(const QByteArray& json) {
         }
       }
     }
+    // A confidential issue is visible only to project members. The card has
+    // to say so, or it gets pasted into a public channel like any other.
+    if(o.value(QStringLiteral("confidential")).toBool()) {
+      const QString mark = QStringLiteral("confidential");
+      if(!t.labels.contains(mark)) {
+        t.labels.prepend(mark);
+      }
+      t.labelColors.insert(mark, QStringLiteral("#e6624c"));
+    }
     out.append(t);
   }
   return out;

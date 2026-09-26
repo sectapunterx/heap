@@ -163,3 +163,12 @@ TEST(EventSpan, AnInvalidDateStillYieldsOneDay) {
 
   EXPECT_EQ(s.dayCount(), 1);
 }
+
+// Audit C6: an end before the start on one day runs past midnight.
+TEST(EventSpan, NormalizeSpan_SameDayEndBeforeStart_RunsPastMidnight) {
+  const Span s = normalizeSpan(kMon, kMon, 23.0, 1.0, false, kQuarter);
+  EXPECT_EQ(s.date, kMon);
+  EXPECT_EQ(s.endDate, kMon.addDays(1));
+  EXPECT_DOUBLE_EQ(s.start, 23.0);
+  EXPECT_DOUBLE_EQ(s.end, 1.0);
+}

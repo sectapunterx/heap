@@ -169,3 +169,13 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   }
   return true;
 }
+
+QStringList TaskFilterProxy::ids() const {
+  QStringList out;
+  const int n = rowCount();
+  out.reserve(n);
+  for(int row = 0; row < n; ++row) {
+    out.append(data(index(row, 0), TaskModel::IdRole).toString());
+  }
+  return out;
+}

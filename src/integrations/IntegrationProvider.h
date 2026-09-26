@@ -2,6 +2,7 @@
 
 #include "integrations/IntegrationTypes.h"
 
+#include <QHash>
 #include <QObject>
 #include <QString>
 #include <QVector>
@@ -36,6 +37,25 @@ class IntegrationProvider : public QObject {
     emit commentsFetched(externalId, {}, QStringLiteral("unsupported"));
   }
 
+  // Every status the tracker's workflows can put an issue in, so the mapping
+  // UI can offer them before an issue in that status has ever been pulled.
+  // Answers statusesFetched; the default has nothing to say.
+  virtual void fetchStatuses() {
+  }
+
+  // The user's status → column choices, which a push must honour when it
+  // picks a target status. The default provider pushes by column name alone.
+  virtual void setStatusOverrides(const QHash<QString, QString>& /*overrides*/) {
+  }
+
+  // Whether the most recent tasksFetched carried every issue the filter
+  // matches. False after a walk cut short by an error or the page cap: an
+  // issue missing from such a pull may simply be on a page never fetched, so
+  // it must not be read as deleted upstream.
+  bool lastPullComplete() const {
+    return m_lastPullComplete;
+  }
+
  signals:
   void connectionTested(bool ok, const QString& error);
   // Only emitted for a successful pull. A failed one used to report an empty
@@ -46,9 +66,18 @@ class IntegrationProvider : public QObject {
   void taskPushed(const QString& externalId, bool ok, const QString& error);
   // Newest first. An empty list with an empty error means the issue has none.
   void commentsFetched(const QString& externalId, const QVector<ExternalComment>& comments, const QString& error);
+  void statusesFetched(const QStringList& statuses);
 
  protected:
   using QObject::QObject;
+
+  // Providers set this right before emitting tasksFetched.
+  void setLastPullComplete(bool complete) {
+    m_lastPullComplete = complete;
+  }
+
+ private:
+  bool m_lastPullComplete = true;
 };
 
 }  // namespace heap::integrations

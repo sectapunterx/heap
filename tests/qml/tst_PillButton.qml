@@ -137,4 +137,17 @@ TestCase {
         compare(n, 0);
         parkCursor();
     }
+
+    // Keyboard and screen readers (audit B10): Tab reaches the pill, Space
+    // presses it, and it is announced by its text.
+    function test_keyboard_focus_and_accessible_name() {
+        const b = make('import TodoCpp; PillButton { text: "Save" }');
+        compare(b.focusPolicy, Qt.StrongFocus);
+        compare(b.Accessible.name, "Save");
+        let clicks = 0;
+        b.clicked.connect(function () { clicks++; });
+        b.forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Space);
+        compare(clicks, 1);
+    }
 }

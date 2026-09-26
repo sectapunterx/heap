@@ -24,7 +24,7 @@ static_assert(heap::meta::fieldCount<Task>() == 24,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 9,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -127,6 +127,24 @@ QJsonObject externalMetaToJson(const ExternalMeta& m) {
   if(m.crossProject) {
     o["crossProject"] = true;
   }
+  if(!m.status.isEmpty()) {
+    o["remoteStatus"] = m.status;
+  }
+  if(!m.title.isEmpty()) {
+    o["remoteTitle"] = m.title;
+  }
+  if(!m.body.isEmpty()) {
+    o["remoteBody"] = m.body;
+  }
+  if(!m.column.isEmpty()) {
+    o["remoteColumn"] = m.column;
+  }
+  if(!m.unsyncedStatus.isEmpty()) {
+    o["unsyncedStatus"] = m.unsyncedStatus;
+  }
+  if(m.goneUpstream) {
+    o["goneUpstream"] = true;
+  }
   return o;
 }
 
@@ -141,6 +159,12 @@ ExternalMeta externalMetaFromJson(const QJsonObject& o) {
   m.updatedAt = dtFromStr(o["remoteUpdatedAt"].toString());
   m.dueAt = dtFromStr(o["remoteDueAt"].toString());
   m.crossProject = o["crossProject"].toBool(false);
+  m.status = o["remoteStatus"].toString();
+  m.title = o["remoteTitle"].toString();
+  m.body = o["remoteBody"].toString();
+  m.column = o["remoteColumn"].toString();
+  m.unsyncedStatus = o["unsyncedStatus"].toString();
+  m.goneUpstream = o["goneUpstream"].toBool(false);
   return m;
 }
 

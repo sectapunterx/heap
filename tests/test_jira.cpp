@@ -12,7 +12,7 @@
 #include <gtest/gtest.h>
 
 using heap::integrations::ExternalTask;
-using heap::integrations::jiraAdfToPlainText;
+using heap::integrations::jiraAdfToMarkdown;
 using heap::integrations::parseJiraIssues;
 
 TEST(JiraParse, ParsesSearchResponse) {
@@ -169,7 +169,7 @@ TEST(JiraAdf, FlattensNestedContent) {
       { "type": "paragraph", "content": [ { "type": "text", "text": "Hello " }, { "type": "text", "text": "world" } ] }
     ]
   })";
-  const QString text = jiraAdfToPlainText(adf);
+  const QString text = jiraAdfToMarkdown(adf);
   EXPECT_TRUE(text.contains("Hello world"));
 }
 
@@ -856,4 +856,72 @@ TEST_F(JiraNetwork, AServerSearchPagesByRowOffset) {
   // The first page must not carry startAt at all — some older Server versions
   // reject startAt=0 alongside an empty JQL clause.
   EXPECT_FALSE(server.lastBody().contains("startAt")) << server.lastBody().toStdString();
+}
+
+// ── ADF → markdown (audit A4) ──────────────────────────────────────────────
+
+TEST(JiraProvider, JiraAdfToMarkdown_CodeBlockThenList_KeepsThemApart) {
+  const QByteArray adf = R"json({"type":"doc","content":[
+    {"type":"codeBlock","attrs":{"language":"cpp"},"content":[{"type":"text","text":"int main() {\n}"}]},
+    {"type":"bulletList","content":[
+      {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"item one"}]}]},
+      {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"item two"}]}]}]}]})json";
+  EXPECT_EQ(jiraAdfToMarkdown(adf), QStringLiteral("```cpp\nint main() {\n}\n```\n\n- item one\n- item two"));
+}
+
+TEST(JiraProvider, JiraAdfToMarkdown_Table_BecomesMarkdownTable) {
+  const QByteArray adf = R"json({"type":"doc","content":[{"type":"table","content":[
+    {"type":"tableRow","content":[
+      {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Key"}]}]},
+      {"type":"tableHeader","content":[{"type":"paragraph","content":[{"type":"text","text":"Value"}]}]}]},
+    {"type":"tableRow","content":[
+      {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"a|b"}]}]},
+      {"type":"tableCell","content":[{"type":"paragraph","content":[{"type":"text","text":"1"}]}]}]}]}]})json";
+  EXPECT_EQ(jiraAdfToMarkdown(adf), QStringLiteral("| Key | Value |\n| --- | --- |\n| a\\|b | 1 |"));
+}
+
+TEST(JiraProvider, JiraAdfToMarkdown_HeadingMarksAndLink_AreKept) {
+  const QByteArray adf = R"json({"type":"doc","content":[
+    {"type":"heading","attrs":{"level":2},"content":[{"type":"text","text":"Steps"}]},
+    {"type":"paragraph","content":[
+      {"type":"text","text":"see "},
+      {"type":"text","text":"the spec","marks":[{"type":"link","attrs":{"href":"https://example.com/spec"}}]},
+      {"type":"text","text":" and "},
+      {"type":"text","text":"this","marks":[{"type":"strong"}]},
+      {"type":"text","text":" "},
+      {"type":"text","text":"x()","marks":[{"type":"code"}]}]}]})json";
+  EXPECT_EQ(jiraAdfToMarkdown(adf), QStringLiteral("## Steps\n\nsee [the spec](https://example.com/spec) and **this** `x()`"));
+}
+
+TEST(JiraProvider, JiraAdfToMarkdown_OrderedAndTaskLists_KeepMarkers) {
+  const QByteArray adf = R"json({"type":"doc","content":[
+    {"type":"orderedList","attrs":{"order":1},"content":[
+      {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"first"}]}]},
+      {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"second"}]}]}]},
+    {"type":"taskList","content":[
+      {"type":"taskItem","attrs":{"state":"DONE"},"content":[{"type":"text","text":"done"}]},
+      {"type":"taskItem","attrs":{"state":"TODO"},"content":[{"type":"text","text":"open"}]}]}]})json";
+  EXPECT_EQ(jiraAdfToMarkdown(adf), QStringLiteral("1. first\n2. second\n\n- [x] done\n- [ ] open"));
+}
+
+TEST(JiraProvider, ParseJiraComments_LinkInAdfBody_KeepsTarget) {
+  const QByteArray json = R"json({"comments":[{"author":{"displayName":"A"},"created":"2026-01-01T10:00:00.000+0000",
+    "body":{"type":"doc","content":[{"type":"paragraph","content":[
+      {"type":"text","text":"log","marks":[{"type":"link","attrs":{"href":"https://x.test/log"}}]}]}]}}]})json";
+  const auto comments = heap::integrations::parseJiraComments(json);
+  ASSERT_EQ(comments.size(), 1);
+  EXPECT_EQ(comments.at(0).body, QStringLiteral("log (https://x.test/log)"));
+}
+
+TEST(JiraProvider, ParseJiraStatuses_StatusList_ReturnsSortedUniqueNames) {
+  const QByteArray json = R"json([{"name":"To Do"},{"name":"Blocked"},{"name":"To Do"},{"name":" In Review "},{"id":"7"}])json";
+  EXPECT_EQ(heap::integrations::parseJiraStatuses(json), (QStringList{"Blocked", "In Review", "To Do"}));
+}
+
+// Audit C8: a Jira comment links to itself on the issue page.
+TEST(JiraProvider, ParseJiraComments_CommentId_BecomesAnAnchor) {
+  const QByteArray json = R"json({"comments":[{"id":"10042","author":{"displayName":"A"},"body":"hi"}]})json";
+  const auto comments = heap::integrations::parseJiraComments(json);
+  ASSERT_EQ(comments.size(), 1);
+  EXPECT_EQ(comments.at(0).anchor, QStringLiteral("?focusedCommentId=10042"));
 }

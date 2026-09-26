@@ -50,6 +50,22 @@ struct MdHtmlOptions {
   QHash<QString, int> footnoteNumbers;
 };
 
+// True for an image source that names nothing outside the note: a relative
+// path, a qrc: resource or a data: URI. Everything else — http(s), file:, a
+// UNC or drive path, any other scheme — reaches outside, and a file: URL with a
+// host (or a \\host\share path) makes Windows open an SMB session that hands
+// the host the user's NTLM hash. Such a source is never loaded on its own.
+bool isLocalSource(const QString& source);
+
+// True for an http(s) source: the only outside kind that `allowRemoteImages`
+// may load. file: and friends stay blocked even then.
+bool isWebSource(const QString& source);
+
+// True for a link that may be opened without asking: http, https, mailto and
+// heap's own heap:// links. file:, ms-settings:, javascript: and every other
+// scheme can launch a program or a system panel, so the reader confirms first.
+bool isSafeLink(const QString& url);
+
 // Rich text for the inline content of one block.
 QString inlineHtml(const MdAst& ast, const MdBlock& block, const MdHtmlOptions& options);
 

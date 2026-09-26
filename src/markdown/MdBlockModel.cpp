@@ -1,5 +1,6 @@
 #include "markdown/MdBlockModel.h"
 #include "markdown/MdExtensions.h"
+#include "markdown/MdHtml.h"
 
 #include <algorithm>
 #include <functional>
@@ -32,12 +33,6 @@ QString bulletFor(int indent) {
     default:
       return QStringLiteral("▪");
   }
-}
-
-bool isRemoteSource(const QString& source) {
-  const QString lower = source.trimmed().toLower();
-  return lower.startsWith(QStringLiteral("http://")) || lower.startsWith(QStringLiteral("https://")) ||
-         lower.startsWith(QStringLiteral("//"));
 }
 
 // A paragraph whose whole content is one image is drawn as an image, not as a
@@ -305,7 +300,7 @@ void MdBlockModel::setDocument(const MdSourceMap& src, const MdAst& ast, const M
         if(const MdInline* image = soleImage(ast, block); image != nullptr) {
           Row row = makeRow(Image);
           row.imageSource = image->href;
-          row.imageIsRemote = isRemoteSource(image->href);
+          row.imageIsRemote = !isLocalSource(image->href);
           row.imageAlt = image->text.isEmpty() ? image->href : image->text;
           for(const int child : image->children) {
             row.imageAlt += ast.inlines.at(child).text;

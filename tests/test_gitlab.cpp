@@ -126,3 +126,13 @@ TEST(GitlabPushState, MapsColumnToStateEvent) {
   EXPECT_EQ(gitlabStateEventForColumn("prog"), QString("reopen"));
   EXPECT_EQ(gitlabStateEventForColumn(""), QString("reopen"));
 }
+
+// Audit C8: a confidential issue is marked on the card.
+TEST(GitlabProvider, ParseGitlabIssues_ConfidentialIssue_CarriesAMarkLabel) {
+  const QByteArray json = R"json([{"iid":3,"title":"secret","state":"opened","confidential":true,"labels":["bug"]}])json";
+  const auto issues = heap::integrations::parseGitlabIssues(json);
+  ASSERT_EQ(issues.size(), 1);
+  EXPECT_EQ(issues.at(0).labels.first(), QStringLiteral("confidential"));
+  EXPECT_TRUE(issues.at(0).labels.contains(QStringLiteral("bug")));
+  EXPECT_EQ(issues.at(0).labelColors.value(QStringLiteral("confidential")), QStringLiteral("#e6624c"));
+}

@@ -327,3 +327,9 @@ TEST(MdBlockModelTest, HandlesEmptyAndDegenerateInput) {
   ASSERT_EQ(doc.rows(), 1);
   EXPECT_EQ(doc.type(0), static_cast<int>(MdBlockModel::Heading));
 }
+
+TEST(MdBlockModel, Data_FileImageSource_IsMarkedRemote) {
+  Doc doc(QStringLiteral("![x](file://host/share/x.png)\n"));
+  ASSERT_EQ(doc.rows(), 1);
+  EXPECT_TRUE(doc.at(0, MdBlockModel::ImageIsRemoteRole).toBool());
+}
