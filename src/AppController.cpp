@@ -125,6 +125,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
       {"notes.inbox", {"Inbox", "Входящие"}},
+      {"event.editUndone", {"Event change undone: %1", "Изменение события отменено: %1"}},
+      {"event.badRule",
+       {"Repeat rule not supported, saved as a single event: %1", "Правило повтора не поддерживается, сохранено одно событие: %1"}},
       {"task.idRequired", {"A task needs an id", "У задачи должен быть id"}},
       {"task.titleRequired", {"A task needs a title", "У задачи должен быть заголовок"}},
       {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
@@ -285,6 +288,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть Quick-capture для Заметок (дописывает в блок Notes)."}},
       {"shortcut.view.archive.label", {"Go to Archive", "Перейти в Архив"}},
       {"shortcut.view.archive.desc", {"Archived tickets of the active profile.", "Архивные тикеты активного профиля."}},
+      {"shortcut.panel.right.label", {"Show / hide calendar column", "Показать/скрыть колонку календаря"}},
+      {"shortcut.panel.right.desc",
+       {"Fold the calendar and people column away to give the board the room.",
+        "Спрятать колонку календаря и людей, чтобы доске хватило места."}},
       {"shortcut.theme.toggle.label", {"Toggle light / dark", "Переключить светлую/тёмную"}},
       {"shortcut.theme.toggle.desc", {"Flip the app theme between dark and light.", "Переключить тему приложения между тёмной и светлой."}},
       {"shortcut.person.new.label", {"New contact", "Новый контакт"}},
@@ -1297,7 +1304,7 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
 
 QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
-  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("LTE")).toString().trimmed();
+  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("TASK")).toString().trimmed();
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
@@ -1647,6 +1654,8 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
 }
 
 void AppController::saveEvent(const QVariantMap& draft) {
+  // Creating or editing an event is one undoable step, like a task edit.
+  const UndoScope scope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   CalEvent e;
   e.id = draft.value("id").toString();
   e.title = draft.value("title").toString();
@@ -1681,6 +1690,12 @@ void AppController::saveEvent(const QVariantMap& draft) {
   if(prev) {
     e.exdates = prev->exdates;
   }
+  // A rule this build cannot expand used to be stored anyway and draw as one
+  // event, with nothing saying why the series never repeated.
+  if(!e.rrule.isEmpty() && !heap::cal::parseRRule(e.rrule).isValid()) {
+    emit toast(tr_("event.badRule").arg(e.rrule));
+    e.rrule.clear();
+  }
   // The editor parses free-typed times and a multi-day event may legally end
   // before it starts by the clock, so the whole span is normalized in one
   // place rather than clamped edge by edge.
@@ -1699,6 +1714,8 @@ void AppController::updateEvent(const QString& id, double start, double end, con
     return;
   }
   CalEvent e = m_events.items().at(row);
+  // A drag on the calendar is an edit like any other: Ctrl+Z puts it back.
+  const UndoScope scope(this, tr_("event.editUndone").arg(e.title));
 
   // Dragging a multi-day or all-day block moves the whole span: the grid can
   // only ever hand back one day's worth of hours, and reading them as the new
@@ -1776,6 +1793,7 @@ QVariantMap AppController::eventSeriesMaster(const QString& masterId) const {
 }
 
 void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
+  const UndoScope editScope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   const QString masterId = draft.value("masterId").toString();
   const QDate original = draft.value("originalDate").toDate();
 
@@ -3553,7 +3571,7 @@ void AppController::resetToFirstRun() {
   m_currentView = "board";
   m_workdayStart = 9;
   m_workdayEnd = 19;
-  m_crumbProject = "eNB-core";
+  m_crumbProject.clear();
   m_crumbUser = "You";
   m_selectedDate = m_today;
   m_appSettingsJson.clear();
@@ -6761,6 +6779,7 @@ void AppController::seedShortcutCatalog() {
   add("quick-capture", "Ctrl+Shift+Space");
   add("quick-capture-notes", "Ctrl+Shift+N");
   add("theme.toggle", "Ctrl+Shift+T");
+  add("panel.right", "Ctrl+\\");
   add("person.new", "Ctrl+Shift+U");
   add("profile.new", "Ctrl+Shift+P");
   add("selection.selectAll", "Ctrl+A");
@@ -7033,7 +7052,7 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
   if(newStatus == QStringLiteral("review")) {
     const QVariantMap s = settingsMap();
     const QVariantMap tasks = s.value("tasks").toMap();
-    if(tasks.value("requireBranchOnReview", true).toBool() && t.branch.trimmed().isEmpty()) {
+    if(tasks.value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
       emit toast(tr_("branch.required"));
       return false;
     }
@@ -7493,7 +7512,7 @@ void AppController::runAutomation() {
 
 QStringList AppController::collectPrefixes() const {
   QStringList out;
-  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("LTE")).toString().trimmed().toUpper();
+  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
   if(!def.isEmpty()) {
     out << def;
   }

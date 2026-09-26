@@ -73,6 +73,11 @@ TestCase {
         verify(acc.n <= n * 2,
                "the board built " + acc.n + " delegates for " + n + " tasks across "
                + columns + " columns — it is instantiating every task in every column");
+        // And the columns are virtualised: a tall column builds what fits on
+        // screen, not every card it holds (audit A5).
+        verify(acc.n < n / 2,
+               "the board built " + acc.n + " delegates for " + n + " tasks — columns are not virtualised");
+        unseed();
     }
 
     // Filtering moved from a per-card JS predicate into the per-column proxy,

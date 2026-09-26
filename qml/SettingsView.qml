@@ -127,12 +127,13 @@ Item {
     property bool _reloading:  false
 
     readonly property var defaults: ({
+        // Blank until the user fills it in: a fresh install used to open on
+        // the author's own name, role and team.
         profile: {
-            name: I18n.lang === "ru" ? "Алексей Тимофеев" : "Alex Timofeev",
-            handle: "alex.t",
-            role: "C++ Engineer · LTE",
-            team: "eNB-core",
-            timezone: "Europe/Moscow",
+            name: "",
+            handle: "",
+            role: "",
+            team: "",
             color: "#5cc2dd"
         },
         appearance: {
@@ -149,7 +150,7 @@ Item {
         notifications: {
             deadlineReminders: true, deadlineLeadHours: 24,
             standupReminder: true, meetingLead: 5, meetingReminders: true,
-            mmPingsOnReview: true, blockedDailyDigest: false,
+            blockedDailyDigest: false,
             soundOnPing: false, desktopNotif: true,
             quietHours: true, quietFrom: "19:00", quietTo: "09:00"
         },
@@ -160,9 +161,11 @@ Item {
             standupTime: "10:00"
         },
         tasks: {
-            idPrefix: "LTE", defaultPriority: "P2", defaultStatus: "todo",
+            idPrefix: "TASK", defaultPriority: "P2", defaultStatus: "todo",
             archiveDoneAfterDays: 7, autoMoveBlockedAfterDays: 3,
-            requireBranchOnReview: true
+            // Off by default: a user without git could not move anything to
+            // Code Review.
+            requireBranchOnReview: false
         },
         cpp: {
             defaultCompiler: "clang-17", defaultStandard: "C++20",
@@ -997,12 +1000,6 @@ Item {
                             value: (root.settings.profile && root.settings.profile.team) || ""
                             onCommitted: (text) => root.set("profile", "team", text)
                         }
-                        TextRow {
-                            Layout.fillWidth: true
-                            label: I18n.t("settings.profile.timezone"); mono: true
-                            value: (root.settings.profile && root.settings.profile.timezone) || ""
-                            onCommitted: (text) => root.set("profile", "timezone", text)
-                        }
                     }
                     SwatchRow {
                         label: I18n.t("settings.profile.avatarColor")
@@ -1157,12 +1154,6 @@ Item {
                         onToggled: (checked) => root.set("notifications", "desktopNotif", checked)
                     }
                     SwitchRow {
-                        label: I18n.t("settings.notif.mmPings")
-                        hint: I18n.t("settings.notif.mmPings.hint")
-                        checked: !!(root.settings.notifications && root.settings.notifications.mmPingsOnReview)
-                        onToggled: (checked) => root.set("notifications", "mmPingsOnReview", checked)
-                    }
-                    SwitchRow {
                         label: I18n.t("settings.notif.blockedDigest")
                         checked: !!(root.settings.notifications && root.settings.notifications.blockedDailyDigest)
                         onToggled: (checked) => root.set("notifications", "blockedDailyDigest", checked)
@@ -1315,8 +1306,8 @@ Item {
                         TextRow {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
-                            label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "LTE"
-                            hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE")
+                            label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "TASK"
+                            hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK")
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
                             onCommitted: (text) => {
                                 const next = (text || "").toUpperCase().trim();
@@ -1343,7 +1334,7 @@ Item {
                     SwitchRow {
                         label: I18n.t("settings.tasks.renameExisting")
                         hint: I18n.t("settings.tasks.renameExisting.hint")
-                            .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
+                            .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK").toUpperCase())
                         checked: sectionTasksRoot.renameExistingOnCommit
                         onToggled: (checked) => sectionTasksRoot.renameExistingOnCommit = checked
                     }
@@ -2109,7 +2100,7 @@ Item {
                     Text {
                         Layout.fillWidth: true
                         text: I18n.t("settings.git.match.hint")
-                                .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "LTE").toUpperCase())
+                                .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK").toUpperCase())
                         color: Theme.textMuted
                         font.pixelSize: 11
                         wrapMode: Text.WordWrap

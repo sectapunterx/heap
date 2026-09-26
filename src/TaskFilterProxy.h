@@ -87,6 +87,11 @@ class TaskFilterProxy : public QSortFilterProxyModel {
     return rowCount();
   }
 
+  // Task ids in the order the column shows them. The column is a ListView
+  // that only builds the cards on screen, so keyboard navigation and range
+  // selection walk the model through this rather than the delegates.
+  Q_INVOKABLE QStringList ids() const;
+
  signals:
   void filterChanged();
   void countChanged();

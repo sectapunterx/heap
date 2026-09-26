@@ -167,6 +167,22 @@ Item {
         return out;
     }
 
+    // Every bucket's rows in display order, flat, for the virtualised list.
+    // `first` marks the row that carries its bucket's label.
+    readonly property var flatRows: {
+        const out = [];
+        for (const k of root.bucketOrder) {
+            const list = root.groups[k] || [];
+            if (list.length === 0) continue;
+            const rows = root.bucketRows(k, list);
+            for (let i = 0; i < rows.length; i++) {
+                const r = Object.assign({ bucketId: k, first: i === 0 }, rows[i]);
+                out.push(r);
+            }
+        }
+        return out;
+    }
+
     function totalShown() {
         let n = 0;
         for (const k of root.bucketOrder) n += (groups[k] || []).length;
@@ -230,303 +246,303 @@ Item {
             }
         }
 
-        // Body — scrollable list of bucket groups
-        ScrollView {
+        // Body — one virtualised list of rows. Buckets used to be a Repeater of
+        // Repeaters inside a ScrollView, which built every card up front: 2000
+        // tasks cost 1.24 GB. A ListView only builds what is on screen. The
+        // bucket label sits beside the first row of its bucket, as before.
+        ListView {
+            id: rowList
+            objectName: "timeline-rows"
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+            boundsBehavior: Flickable.StopAtBounds
+            ScrollBar.vertical: ThinScrollBar {}
+            model: root.flatRows
+            cacheBuffer: 400
+            footer: Item { width: rowList.width; height: 24 }
 
-            ColumnLayout {
-                width: root.width
-                spacing: 0
+            delegate: Item {
+                id: rowItem
+                required property var modelData
+                required property int index
+                readonly property var rd: modelData
+                readonly property bool first: !!(rd && rd.first)
+                readonly property var meta: rd ? root.bucketMeta[rd.bucketId] : null
+                readonly property var list: rd ? (root.groups[rd.bucketId] || []) : []
+                width: rowList.width
+                height: Math.max(first ? labelCol.implicitHeight : 0, rowLoader.item ? rowLoader.item.implicitHeight : 0)
+                        + (first ? 14 : 0) + 6
 
-                Repeater {
-                    model: root.bucketOrder
-                    delegate: Item {
-                        id: groupItem
-                        required property string modelData
-                        readonly property string bucketId: modelData
-                        readonly property var meta: root.bucketMeta[modelData]
-                        readonly property var list: root.groups[modelData] || []
-                        visible: list.length > 0
-                        Layout.fillWidth: true
-                        Layout.preferredHeight: visible ? (rowsCol.implicitHeight + 20) : 0
-                        Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 14
+                RowLayout {
+                    anchors.fill: parent
+                    anchors.leftMargin: 18; anchors.rightMargin: 18
+                    anchors.topMargin: rowItem.first ? 14 : 0
+                    anchors.bottomMargin: 6
+                    spacing: 14
 
+                    // Left side — label / marker, on the bucket's first row only
+                    ColumnLayout {
+                        id: labelCol
+                        Layout.preferredWidth: 160
+                        Layout.alignment: Qt.AlignTop
+                        spacing: 4
+                        opacity: rowItem.first ? 1 : 0
                         RowLayout {
-                            anchors.fill: parent
-                            spacing: 14
-
-                            // Left side — label / marker
-                            ColumnLayout {
-                                Layout.preferredWidth: 160
-                                Layout.alignment: Qt.AlignTop
-                                spacing: 4
-                                RowLayout {
-                                    spacing: 8
-                                    Rectangle {
-                                        width: 26; height: 26; radius: 13
-                                        color: groupItem.meta.color
-                                        Text {
-                                            anchors.centerIn: parent
-                                            text: groupItem.meta.icon
-                                            color: "#06121a"
-                                            font.weight: Font.DemiBold
-                                            font.pixelSize: 13
-                                        }
-                                    }
-                                    Text {
-                                        text: groupItem.meta.name
-                                        color: groupItem.bucketId === "overdue" ? Theme.p0
-                                             : groupItem.bucketId === "today" ? Theme.accentStrong
-                                             : Theme.text
-                                        font.pixelSize: 14
-                                        font.weight: Font.DemiBold
-                                    }
-                                }
+                            spacing: 8
+                            Rectangle {
+                                width: 26; height: 26; radius: 13
+                                color: rowItem.meta ? rowItem.meta.color : "transparent"
                                 Text {
-                                    visible: (groupItem.bucketId === "overdue" || groupItem.bucketId === "today" || groupItem.bucketId === "tomorrow")
-                                             && groupItem.list.length > 0 && groupItem.list[0].deadline && groupItem.list[0].deadline.getTime
-                                    text: groupItem.list.length > 0 && groupItem.list[0].deadline && groupItem.list[0].deadline.getTime
-                                          ? AppController.shortDate(groupItem.list[0].deadline) : ""
-                                    color: Theme.textMuted
-                                    font.pixelSize: 11
-                                    leftPadding: 34
-                                }
-                                Text {
-                                    text: I18n.tasks(groupItem.list.length)
-                                    color: Theme.textDim
-                                    font.family: Theme.fontMono
-                                    font.pixelSize: 11
-                                    leftPadding: 34
+                                    anchors.centerIn: parent
+                                    text: rowItem.meta ? rowItem.meta.icon : ""
+                                    color: "#06121a"
+                                    font.weight: Font.DemiBold
+                                    font.pixelSize: 13
                                 }
                             }
-
-                            // Rows
-                            ColumnLayout {
-                                id: rowsCol
-                                Layout.fillWidth: true
-                                spacing: 6
-
-                                Repeater {
-                                    model: root.bucketRows(groupItem.bucketId, groupItem.list)
-                                    delegate: Loader {
-                                        required property var modelData
-                                        property var rowData: modelData
-                                        Layout.fillWidth: true
-                                        sourceComponent: (modelData && modelData.kind === "header") ? subHeaderComp : taskRowComp
-                                    }
-                                }
-
-                                Component {
-                                    id: subHeaderComp
-                                    RowLayout {
-                                        id: hdr
-                                        readonly property var rd: parent && parent.rowData ? parent.rowData : null
-                                        width: parent ? parent.width : 0
-                                        spacing: 8
-                                        Rectangle {
-                                            Layout.preferredWidth: 3
-                                            Layout.preferredHeight: 12
-                                            radius: 1
-                                            color: Theme.border
-                                        }
-                                        Text {
-                                            text: hdr.rd ? hdr.rd.label : ""
-                                            color: Theme.textMuted
-                                            font.family: Theme.fontMono
-                                            font.pixelSize: 11
-                                            font.weight: Font.DemiBold
-                                            font.capitalization: Font.MixedCase
-                                        }
-                                        Rectangle {
-                                            Layout.fillWidth: true
-                                            Layout.preferredHeight: 1
-                                            color: Theme.border
-                                            opacity: 0.4
-                                        }
-                                    }
-                                }
-
-                                Component {
-                                    id: taskRowComp
-                                    Rectangle {
-                                        id: tlRow
-                                        readonly property var rd: parent && parent.rowData ? parent.rowData : null
-                                        readonly property var t: rd ? rd.task : null
-                                        readonly property var st: t ? root.statusInfo(t.status) : null
-                                        readonly property bool _selected: t && AppController.selectionCount >= 0
-                                            && AppController.isTaskSelected(t.id)
-                                        width: parent ? parent.width : 0
-                                        radius: 8
-                                        color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
-                                            : rowMA.containsMouse ? Theme.panel2 : Theme.panel
-                                        border.color: _selected ? Theme.accent
-                                            : rowMA.containsMouse ? Theme.borderStrong : Theme.border
-                                        border.width: _selected ? 2 : 1
-                                        implicitHeight: rowContent.implicitHeight + 16
-
-                                        // Left accent stripe
-                                        Rectangle {
-                                            anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                                            anchors.leftMargin: 0
-                                            width: 3
-                                            color: groupItem.bucketId === "overdue" ? Theme.withAlpha(Theme.p0, 0.6)
-                                                 : groupItem.bucketId === "today" ? Theme.accent
-                                                 : groupItem.bucketId === "tomorrow" ? Theme.withAlpha(Theme.p1, 0.6)
-                                                 : "transparent"
-                                            radius: 1
-                                        }
-
-                                        RowLayout {
-                                            id: rowContent
-                                            anchors.fill: parent
-                                            anchors.leftMargin: 14
-                                            anchors.rightMargin: 12
-                                            anchors.topMargin: 8
-                                            anchors.bottomMargin: 8
-                                            spacing: 10
-
-                                            Rectangle { width: 10; height: 10; radius: 3; color: tlRow.st.color }
-                                            Rectangle {
-                                                radius: 4
-                                                color: Theme.withAlpha(Theme.priorityColor(tlRow.t.priority), 0.14)
-                                                implicitWidth: priT.implicitWidth + 10; implicitHeight: 18
-                                                Text {
-                                                    id: priT
-                                                    anchors.centerIn: parent
-                                                    text: tlRow.t.priority
-                                                    color: Theme.priorityColor(tlRow.t.priority)
-                                                    font.pixelSize: 10
-                                                    font.weight: Font.DemiBold
-                                                }
-                                            }
-                                            Text {
-                                                // A mirrored issue reads by its
-                                                // tracker key (HEAP-117).
-                                                text: (tlRow.t.ticket && tlRow.t.ticket.key)
-                                                      ? tlRow.t.ticket.key : tlRow.t.id
-                                                textFormat: Text.PlainText
-                                                color: Theme.accentStrong
-                                                font.family: Theme.fontMono
-                                                font.pixelSize: 11
-                                                font.weight: Font.Medium
-                                            }
-                                            ColumnLayout {
-                                                Layout.fillWidth: true
-                                                spacing: 1
-                                                Text {
-                                                    Layout.fillWidth: true
-                                                    text: tlRow.t.title
-                                                    textFormat: Text.PlainText
-                                                    color: Theme.text
-                                                    font.pixelSize: 13
-                                                    font.weight: Font.Medium
-                                                    elide: Text.ElideRight
-                                                }
-                                                Text {
-                                                    Layout.fillWidth: true
-                                                    visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
-                                                    text: String(tlRow.t.desc || "").substring(0, 90) + (String(tlRow.t.desc || "").length > 90 ? "…" : "")
-                                                    color: Theme.textMuted
-                                                    font.pixelSize: 11
-                                                    elide: Text.ElideRight
-                                                }
-                                            }
-                                            Rectangle {
-                                                radius: 999
-                                                color: "transparent"
-                                                border.color: Theme.withAlpha(tlRow.st.color, 0.4)
-                                                border.width: 1
-                                                implicitWidth: stT.implicitWidth + 14; implicitHeight: 20
-                                                Text {
-                                                    id: stT
-                                                    anchors.centerIn: parent
-                                                    text: tlRow.st.name
-                                                    color: tlRow.st.color
-                                                    font.pixelSize: 10
-                                                    font.weight: Font.DemiBold
-                                                }
-                                            }
-                                            Text {
-                                                visible: tlRow.t.branch && String(tlRow.t.branch).length > 0
-                                                text: tlRow.t.branch ? "⎇ " + String(tlRow.t.branch).split("/").pop() : ""
-                                                color: Theme.textDim
-                                                font.family: Theme.fontMono
-                                                font.pixelSize: 10
-                                            }
-                                            Rectangle {
-                                                visible: root.scheduleMap[tlRow.t.id] !== undefined && String(root.scheduleMap[tlRow.t.id]).length > 0
-                                                radius: 4
-                                                color: Theme.accentSoft
-                                                implicitWidth: schT.implicitWidth + 10; implicitHeight: 18
-                                                Text {
-                                                    id: schT
-                                                    anchors.centerIn: parent
-                                                    text: "⏰ " + (root.scheduleMap[tlRow.t.id] || "")
-                                                    color: Theme.accentStrong
-                                                    font.family: Theme.fontMono
-                                                    font.pixelSize: 10
-                                                }
-                                            }
-                                            Text {
-                                                text: AppController.deadlineDiffLabel(tlRow.t.deadline)
-                                                color: groupItem.bucketId === "overdue" ? Theme.p0
-                                                     : groupItem.bucketId === "today" ? Theme.accentStrong
-                                                     : groupItem.bucketId === "tomorrow" ? Theme.p1
-                                                     : Theme.textMuted
-                                                font.family: Theme.fontMono
-                                                font.pixelSize: 11
-                                                font.weight: groupItem.bucketId === "overdue" || groupItem.bucketId === "today" ? Font.DemiBold : Font.Normal
-                                            }
-                                        }
-
-                                        MouseArea {
-                                            id: rowMA
-                                            anchors.fill: parent
-                                            hoverEnabled: true
-                                            cursorShape: Qt.PointingHandCursor
-                                            acceptedButtons: Qt.LeftButton
-                                            onClicked: (mouse) => {
-                                                const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
-                                                const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
-                                                if (ctrl) {
-                                                    AppController.toggleTaskSelection(tlRow.t.id);
-                                                } else if (shift) {
-                                                    root._rangeSelect(tlRow.t.id);
-                                                } else {
-                                                    if (AppController.selectionCount > 0) AppController.clearSelection();
-                                                    root.taskClicked(tlRow.t.id);
-                                                }
-                                            }
-                                        }
-                                    }
-                                }
+                            Text {
+                                text: rowItem.meta ? rowItem.meta.name : ""
+                                color: rowItem.rd.bucketId === "overdue" ? Theme.p0
+                                     : rowItem.rd.bucketId === "today" ? Theme.accentStrong
+                                     : Theme.text
+                                font.pixelSize: 14
+                                font.weight: Font.DemiBold
                             }
                         }
-                    }
-                }
-
-                Item {
-                    visible: root.totalShown() === 0
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: 200
-                    Column {
-                        anchors.centerIn: parent
-                        spacing: 6
-                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: 26 }
                         Text {
-                            anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: 13
+                            visible: rowItem.first
+                                     && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
+                                     && rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
+                            text: rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
+                                  ? AppController.shortDate(rowItem.list[0].deadline) : ""
+                            color: Theme.textMuted
+                            font.pixelSize: 11
+                            leftPadding: 34
                         }
                         Text {
-                            anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: 12
+                            visible: rowItem.first
+                            text: I18n.tasks(rowItem.list.length)
+                            color: Theme.textDim
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            leftPadding: 34
                         }
                     }
-                }
 
-                Item { Layout.fillWidth: true; Layout.preferredHeight: 24 }
+                    Loader {
+                        id: rowLoader
+                        property var rowData: rowItem.rd
+                        Layout.fillWidth: true
+                        Layout.alignment: Qt.AlignTop
+                        sourceComponent: (rowItem.rd && rowItem.rd.kind === "header") ? subHeaderComp : taskRowComp
+                    }
+                }
+            }
+
+            Item {
+                visible: root.totalShown() === 0
+                anchors.left: parent.left; anchors.right: parent.right
+                anchors.top: parent.top; anchors.topMargin: 14
+                height: 200
+                Column {
+                    anchors.centerIn: parent
+                    spacing: 6
+                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: 26 }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: 13
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: 12
+                    }
+                }
             }
         }
     }
+
+            Component {
+                id: subHeaderComp
+                RowLayout {
+                    id: hdr
+                    readonly property var rd: parent && parent.rowData ? parent.rowData : null
+                    width: parent ? parent.width : 0
+                    spacing: 8
+                    Rectangle {
+                        Layout.preferredWidth: 3
+                        Layout.preferredHeight: 12
+                        radius: 1
+                        color: Theme.border
+                    }
+                    Text {
+                        text: hdr.rd ? hdr.rd.label : ""
+                        color: Theme.textMuted
+                        font.family: Theme.fontMono
+                        font.pixelSize: 11
+                        font.weight: Font.DemiBold
+                        font.capitalization: Font.MixedCase
+                    }
+                    Rectangle {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 1
+                        color: Theme.border
+                        opacity: 0.4
+                    }
+                }
+            }
+
+            Component {
+                id: taskRowComp
+                Rectangle {
+                    id: tlRow
+                    objectName: "tl-row"
+                    readonly property var rd: parent && parent.rowData ? parent.rowData : null
+                    readonly property var t: rd ? rd.task : null
+                    readonly property var st: t ? root.statusInfo(t.status) : null
+                    readonly property bool _selected: t && AppController.selectionCount >= 0
+                        && AppController.isTaskSelected(t.id)
+                    width: parent ? parent.width : 0
+                    radius: 8
+                    color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
+                        : rowMA.containsMouse ? Theme.panel2 : Theme.panel
+                    border.color: _selected ? Theme.accent
+                        : rowMA.containsMouse ? Theme.borderStrong : Theme.border
+                    border.width: _selected ? 2 : 1
+                    implicitHeight: rowContent.implicitHeight + 16
+
+                    // Left accent stripe
+                    Rectangle {
+                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
+                        anchors.leftMargin: 0
+                        width: 3
+                        color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.withAlpha(Theme.p0, 0.6)
+                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accent
+                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.withAlpha(Theme.p1, 0.6)
+                             : "transparent"
+                        radius: 1
+                    }
+
+                    RowLayout {
+                        id: rowContent
+                        anchors.fill: parent
+                        anchors.leftMargin: 14
+                        anchors.rightMargin: 12
+                        anchors.topMargin: 8
+                        anchors.bottomMargin: 8
+                        spacing: 10
+
+                        Rectangle { width: 10; height: 10; radius: 3; color: tlRow.st.color }
+                        Rectangle {
+                            radius: 4
+                            color: Theme.withAlpha(Theme.priorityColor(tlRow.t.priority), 0.14)
+                            implicitWidth: priT.implicitWidth + 10; implicitHeight: 18
+                            Text {
+                                id: priT
+                                anchors.centerIn: parent
+                                text: tlRow.t.priority
+                                color: Theme.priorityColor(tlRow.t.priority)
+                                font.pixelSize: 10
+                                font.weight: Font.DemiBold
+                            }
+                        }
+                        Text {
+                            // A mirrored issue reads by its
+                            // tracker key (HEAP-117).
+                            text: (tlRow.t.ticket && tlRow.t.ticket.key)
+                                  ? tlRow.t.ticket.key : tlRow.t.id
+                            textFormat: Text.PlainText
+                            color: Theme.accentStrong
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            font.weight: Font.Medium
+                        }
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Text {
+                                Layout.fillWidth: true
+                                text: tlRow.t.title
+                                textFormat: Text.PlainText
+                                color: Theme.text
+                                font.pixelSize: 13
+                                font.weight: Font.Medium
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
+                                text: String(tlRow.t.desc || "").substring(0, 90) + (String(tlRow.t.desc || "").length > 90 ? "…" : "")
+                                color: Theme.textMuted
+                                font.pixelSize: 11
+                                elide: Text.ElideRight
+                            }
+                        }
+                        Rectangle {
+                            radius: 999
+                            color: "transparent"
+                            border.color: Theme.withAlpha(tlRow.st.color, 0.4)
+                            border.width: 1
+                            implicitWidth: stT.implicitWidth + 14; implicitHeight: 20
+                            Text {
+                                id: stT
+                                anchors.centerIn: parent
+                                text: tlRow.st.name
+                                color: tlRow.st.color
+                                font.pixelSize: 10
+                                font.weight: Font.DemiBold
+                            }
+                        }
+                        Text {
+                            visible: tlRow.t.branch && String(tlRow.t.branch).length > 0
+                            text: tlRow.t.branch ? "⎇ " + String(tlRow.t.branch).split("/").pop() : ""
+                            color: Theme.textDim
+                            font.family: Theme.fontMono
+                            font.pixelSize: 10
+                        }
+                        Rectangle {
+                            visible: root.scheduleMap[tlRow.t.id] !== undefined && String(root.scheduleMap[tlRow.t.id]).length > 0
+                            radius: 4
+                            color: Theme.accentSoft
+                            implicitWidth: schT.implicitWidth + 10; implicitHeight: 18
+                            Text {
+                                id: schT
+                                anchors.centerIn: parent
+                                text: "⏰ " + (root.scheduleMap[tlRow.t.id] || "")
+                                color: Theme.accentStrong
+                                font.family: Theme.fontMono
+                                font.pixelSize: 10
+                            }
+                        }
+                        Text {
+                            text: AppController.deadlineDiffLabel(tlRow.t.deadline)
+                            color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.p0
+                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
+                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.p1
+                                 : Theme.textMuted
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            font.weight: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" || (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Font.DemiBold : Font.Normal
+                        }
+                    }
+
+                    MouseArea {
+                        id: rowMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        acceptedButtons: Qt.LeftButton
+                        onClicked: (mouse) => {
+                            const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
+                            const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
+                            if (ctrl) {
+                                AppController.toggleTaskSelection(tlRow.t.id);
+                            } else if (shift) {
+                                root._rangeSelect(tlRow.t.id);
+                            } else {
+                                if (AppController.selectionCount > 0) AppController.clearSelection();
+                                root.taskClicked(tlRow.t.id);
+                            }
+                        }
+                    }
+                }
+            }
 }

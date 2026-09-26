@@ -957,7 +957,7 @@ class AppController : public QObject {
   QString m_focusedStatus;
   int m_workdayStart = 9;
   int m_workdayEnd = 19;
-  QString m_crumbProject = "eNB-core";
+  QString m_crumbProject;
   QString m_crumbUser = "You";
   QString m_docsState;
   QString m_notesState;

@@ -17,13 +17,14 @@ namespace heap::integrations {
 
 // Parse a Jira Cloud REST v3 search response ({ "issues": [...] }) into
 // ExternalTasks. `baseUrl` builds each issue's browse URL. Descriptions arrive
-// as ADF (Atlassian Document Format) JSON and are flattened to plain text.
+// as ADF (Atlassian Document Format) JSON and are converted to markdown.
 // Pure, no network — unit-tested with canned JSON.
 QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& baseUrl);
 
-// Flatten an Atlassian Document Format value (string or ADF object) to plain
-// text by concatenating every "text" leaf. Exposed for unit testing.
-QString jiraAdfToPlainText(const QByteArray& adfJson);
+// Convert an Atlassian Document Format value (string or ADF object) to
+// markdown: headings, lists, task lists, code blocks, quotes, tables and links
+// keep their shape. Exposed for unit testing.
+QString jiraAdfToMarkdown(const QByteArray& adfJson);
 
 // Parse a /issue/{key}/comment response (HEAP-117). Bodies arrive as ADF on
 // Cloud and as plain strings on Server/DC; both flatten to text. No network.

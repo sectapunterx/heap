@@ -14,6 +14,9 @@ Rectangle {
     // task list, unlike the filtering itself.
     readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
     signal newTaskRequested()
+    signal rightPanelToggleRequested()
+    // Whether the calendar/people column is on screen, for the toggle's look.
+    property bool rightPanelShown: true
     signal newProfileRequested()
     signal renameProfileRequested()
     signal duplicateProfileRequested()
@@ -444,6 +447,15 @@ Rectangle {
             text: I18n.t("topbar.newTask")
             primary: true
             onClicked: root.newTaskRequested()
+        }
+        PillButton {
+            objectName: "topbar-right-panel"
+            text: root.rightPanelShown ? "▸" : "◂"
+            onClicked: root.rightPanelToggleRequested()
+            ToolTip.visible: hovered
+            ToolTip.delay: 400
+            ToolTip.text: I18n.t(root.rightPanelShown ? "topbar.rightPanel.hide" : "topbar.rightPanel.show")
+                          + "  " + AppController.shortcutFor("panel.right")
         }
     }
 

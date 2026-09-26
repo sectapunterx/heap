@@ -237,6 +237,9 @@ class ChronoParser::Impl {
     if(tryAgoPhrase(toks, i, ref, primary, fallback, dm)) {
       return true;
     }
+    if(tryEndOf(toks, i, ref, primary, fallback, dm)) {
+      return true;
+    }
     if(tryRelativeOffsetPhrase(toks, i, ref, primary, fallback, dm)) {
       return true;
     }
@@ -258,6 +261,23 @@ class ChronoParser::Impl {
   FromMatch tryFromEx(
       const QVector<Token>& toks, int i, const QDateTime& ref, const ChronoLocale* primary, const ChronoLocale* fallback) const {
     FromMatch out;
+    // "in 2 hours" / "через 30 минут" name a moment, date and clock at once.
+    // Without this, "через 2 часа" read as 02:00 today — in the past — and
+    // left "через" in the title.
+    {
+      QDateTime at;
+      int last = -1;
+      if(tryRelativeClock(toks, i, ref, primary, fallback, at, last)) {
+        out.ok = true;
+        out.hasExplicitDate = true;
+        out.hasTime = true;
+        out.date = at.date();
+        out.start = QTime(at.time().hour(), at.time().minute());
+        out.dateFirst = i;
+        out.dateLast = last;
+        return out;
+      }
+    }
     DateMatch dm;
     QString recurrence;
     int recFirst = -1;
@@ -349,6 +369,12 @@ class ChronoParser::Impl {
     if(m.timeFirst >= 0) {
       first = (first < 0 ? m.timeFirst : std::min(first, m.timeFirst));
       last = std::max(last, m.timeLast);
+    }
+    // A preposition right before the date belongs to it ("ship on friday",
+    // "отчёт к пятнице"): leaving it would end the title on a dangling "on".
+    if(first > 0 && toks[first - 1].kind == TokenKind::Word &&
+       inListAny(toks[first - 1].lower, englishLocale().leadWords, russianLocale().leadWords)) {
+      --first;
     }
     const Token& firstT = toks[first];
     const Token& lastT = toks[last];
@@ -660,24 +686,26 @@ class ChronoParser::Impl {
     if(!inListAny(toks[i].lower, primary->relPrefixes, fallback->relPrefixes)) {
       return false;
     }
-    if(i + 2 >= toks.size()) {
-      return false;
+    // "in 2 weeks", but also "in a week" and "через неделю": no number means one.
+    int u = i + 1;
+    int n = 1;
+    if(u < toks.size() && toks[u].kind == TokenKind::Number) {
+      n = toks[u].value;
+      ++u;
+    } else if(u < toks.size() && toks[u].kind == TokenKind::Word && inListAny(toks[u].lower, primary->articles, fallback->articles)) {
+      ++u;
     }
-    if(toks[i + 1].kind != TokenKind::Number) {
-      return false;
-    }
-    if(toks[i + 2].kind != TokenKind::Word) {
+    if(u >= toks.size() || toks[u].kind != TokenKind::Word) {
       return false;
     }
     bool foundUnit = false;
-    const int days = lookupHashAny(toks[i + 2].lower, primary->unitToDays, fallback->unitToDays, &foundUnit);
+    const int days = lookupHashAny(toks[u].lower, primary->unitToDays, fallback->unitToDays, &foundUnit);
     if(!foundUnit) {
       return false;
     }
-    const int n = toks[i + 1].value;
 
-    const bool isMonth = primary->monthUnits.contains(toks[i + 2].lower) || fallback->monthUnits.contains(toks[i + 2].lower);
-    const bool isYear = primary->yearUnits.contains(toks[i + 2].lower) || fallback->yearUnits.contains(toks[i + 2].lower);
+    const bool isMonth = primary->monthUnits.contains(toks[u].lower) || fallback->monthUnits.contains(toks[u].lower);
+    const bool isYear = primary->yearUnits.contains(toks[u].lower) || fallback->yearUnits.contains(toks[u].lower);
 
     QDate d = ref.date();
     if(isYear) {
@@ -690,7 +718,114 @@ class ChronoParser::Impl {
 
     out.date = d;
     out.firstTok = i;
-    out.lastTok = i + 2;
+    out.lastTok = u;
+    return true;
+  }
+
+  // ── "in 2 hours" / "через 30 минут" / "in an hour" / "через час" ───────
+  bool tryRelativeClock(const QVector<Token>& toks,
+                        int i,
+                        const QDateTime& ref,
+                        const ChronoLocale* primary,
+                        const ChronoLocale* fallback,
+                        QDateTime& at,
+                        int& last) const {
+    if(i >= toks.size() || toks[i].kind != TokenKind::Word || !inListAny(toks[i].lower, primary->relPrefixes, fallback->relPrefixes)) {
+      return false;
+    }
+    int u = i + 1;
+    int n = 1;
+    if(u < toks.size() && toks[u].kind == TokenKind::Number) {
+      n = toks[u].value;
+      ++u;
+    } else if(u < toks.size() && toks[u].kind == TokenKind::Word && inListAny(toks[u].lower, primary->articles, fallback->articles)) {
+      ++u;
+    }
+    if(u >= toks.size() || toks[u].kind != TokenKind::Word) {
+      return false;
+    }
+    const QString& unit = toks[u].lower;
+    const bool hours = primary->hourUnits.contains(unit) || fallback->hourUnits.contains(unit);
+    const bool minutes = primary->minuteUnits.contains(unit) || fallback->minuteUnits.contains(unit);
+    if(!hours && !minutes) {
+      return false;
+    }
+    const QDateTime base(ref.date(), QTime(ref.time().hour(), ref.time().minute()));
+    at = base.addSecs(static_cast<qint64>(n) * (hours ? 3600 : 60));
+    last = u;
+    return true;
+  }
+
+  // ── "end of week/month/year" / "конец недели/месяца" ──────────────────
+  bool tryEndOf(const QVector<Token>& toks,
+                int i,
+                const QDateTime& ref,
+                const ChronoLocale* primary,
+                const ChronoLocale* fallback,
+                DateMatch& out) const {
+    if(i >= toks.size() || toks[i].kind != TokenKind::Word || !inListAny(toks[i].lower, primary->endWords, fallback->endWords)) {
+      return false;
+    }
+    int u = i + 1;
+    if(u < toks.size() && toks[u].kind == TokenKind::Word && inListAny(toks[u].lower, primary->ofWords, fallback->ofWords)) {
+      ++u;
+    }
+    if(u < toks.size() && toks[u].kind == TokenKind::Word && inListAny(toks[u].lower, primary->thisAdjectives, fallback->thisAdjectives)) {
+      ++u;
+    }
+    if(u >= toks.size() || toks[u].kind != TokenKind::Word) {
+      return false;
+    }
+    const QString& unit = toks[u].lower;
+    const QDate today = ref.date();
+    QDate d;
+    if(primary->weekUnits.contains(unit) || fallback->weekUnits.contains(unit)) {
+      // The working week ends on Friday; past it, the next one does.
+      const int dow = today.dayOfWeek();
+      d = today.addDays(dow <= 5 ? 5 - dow : 12 - dow);
+    } else if(primary->monthUnits.contains(unit) || fallback->monthUnits.contains(unit)) {
+      d = QDate(today.year(), today.month(), today.daysInMonth());
+    } else if(primary->yearUnits.contains(unit) || fallback->yearUnits.contains(unit)) {
+      d = QDate(today.year(), 12, 31);
+    } else {
+      return false;
+    }
+    out.date = d;
+    out.firstTok = i;
+    out.lastTok = u;
+    return true;
+  }
+
+  // ── Named time: "noon", "eod", "end of day", "конец дня" ──────────────
+  bool tryNamedTime(const QVector<Token>& toks, int i, const ChronoLocale* primary, const ChronoLocale* fallback, TimeMatch& out) const {
+    if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
+      return false;
+    }
+    bool found = false;
+    int minutes = lookupHashAny(toks[i].lower, primary->namedTimes, fallback->namedTimes, &found);
+    int last = i;
+    if(!found && inListAny(toks[i].lower, primary->endWords, fallback->endWords)) {
+      int u = i + 1;
+      if(u < toks.size() && toks[u].kind == TokenKind::Word && inListAny(toks[u].lower, primary->ofWords, fallback->ofWords)) {
+        ++u;
+      }
+      if(u < toks.size() && toks[u].kind == TokenKind::Word) {
+        bool isUnit = false;
+        const int days = lookupHashAny(toks[u].lower, primary->unitToDays, fallback->unitToDays, &isUnit);
+        if(isUnit && days == 1) {
+          found = true;
+          minutes = 18 * 60;
+          last = u;
+        }
+      }
+    }
+    if(!found) {
+      return false;
+    }
+    out = TimeMatch{};
+    out.time = QTime(minutes / 60, minutes % 60);
+    out.firstTok = i;
+    out.lastTok = last;
     return true;
   }
 
@@ -971,6 +1106,18 @@ class ChronoParser::Impl {
                             const ChronoLocale* fallback,
                             bool allowBareHour,
                             TimeMatch& out) const {
+    if(tryNamedTime(toks, i, primary, fallback, out)) {
+      return true;
+    }
+    // A number inside a dashed run ("2026-13-01") is a date that failed to
+    // validate, not a "13-01" time range.
+    if(i >= 2 && toks[i - 1].kind == TokenKind::Dash && toks[i - 2].kind == TokenKind::Number) {
+      return false;
+    }
+    if(i + 4 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
+       toks[i + 2].kind == TokenKind::Number && toks[i + 3].kind == TokenKind::Dash && toks[i + 4].kind == TokenKind::Number) {
+      return false;
+    }
     // Try first time. For range form "N-M", allow bare hour.
     TimeMatch first;
     // Detect range "N - M[pm/am/:MM]" by lookahead.

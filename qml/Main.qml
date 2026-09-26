@@ -113,6 +113,26 @@ ApplicationWindow {
 
     property string searchText: ""
     property var prioritiesFilter: ({})
+
+    // The calendar + people column. It took 420px on every view, which on a
+    // narrow window left two board columns. It folds away below
+    // _rightPanelMinWidth unless asked for, and the choice on a wide window is
+    // remembered in settings.
+    readonly property int _rightPanelMinWidth: 1280
+    readonly property bool _narrow: win.width < _rightPanelMinWidth
+    property bool _rightPanelWanted: _settingsObject().rightPanel !== false
+    property bool _rightPanelOnNarrow: false
+    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow : _rightPanelWanted
+    function toggleRightPanel() {
+        if (_narrow) {
+            _rightPanelOnNarrow = !_rightPanelOnNarrow;
+            return;
+        }
+        _rightPanelWanted = !_rightPanelWanted;
+        const s = _settingsObject();
+        s.rightPanel = _rightPanelWanted;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
     property bool showDoneTimeline: false
     property bool showArchived: false
     // Board column order. Lives on the window so it survives the board being
@@ -290,6 +310,8 @@ ApplicationWindow {
             searchText: win.searchText
             onSearchTextChanged: win.searchText = searchText
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
+            rightPanelShown: win.rightPanelShown
+            onRightPanelToggleRequested: win.toggleRightPanel()
             onNewProfileRequested: profileEditor.showCreate()
             onRenameProfileRequested: {
                 const list = AppController.profiles;
@@ -586,6 +608,8 @@ ApplicationWindow {
 
         // Right column
         Rectangle {
+            objectName: "right-panel"
+            visible: win.rightPanelShown
             Layout.row: 1; Layout.column: 2
             Layout.preferredWidth: 420
             Layout.minimumWidth: 360
@@ -808,6 +832,12 @@ ApplicationWindow {
         onActivated: cmdPalette.open()
     }
 
+    Shortcut {
+        sequence: _kbd("panel.right")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: win.toggleRightPanel()
+    }
     Shortcut {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut
