@@ -56,6 +56,9 @@ def main() -> int:
         # First run on a new Qt or a fresh checkout of this script: record where
         # things stand instead of failing; commit the file from the artifact.
         write_baseline(baseline_path, current)
+        print("::group::baseline")
+        print(baseline_path.read_text(encoding="utf-8"))
+        print("::endgroup::")
         print(f"::warning::no qmllint baseline yet - wrote {baseline_path} with {sum(current.values())} findings; "
               f"commit it from the job's qmllint artifact")
         return 0

@@ -78,7 +78,8 @@ jobs:
       - name: Check formatting of the changed lines
         run: |
           set -uo pipefail
-          out=$(git-clang-format-18 --binary clang-format-18 --extensions cpp,h,mm --diff HEAD^1 2>&1)
+          # Exits 1 when it has a diff to show; the case below decides.
+          out=$(git-clang-format-18 --binary clang-format-18 --extensions cpp,h,mm --diff HEAD^1 2>&1) || true
           case "$out" in
             *"no modified files to format"*|*"did not modify any files"*|"")
               echo "formatting OK" ;;

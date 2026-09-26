@@ -71,7 +71,7 @@ QMap<QString, QString> titlesById(const QJsonArray& items, const QString& titleK
   return out;
 }
 
-template <typename Item>
+template<typename Item>
 QMap<QString, QString> titlesById(const QVector<Item>& items) {
   QMap<QString, QString> out;
   for(const Item& item : items) {
@@ -89,11 +89,13 @@ QMap<QString, QString> namesById(const QVector<Person>& people) {
 }
 
 bool hasNoteWithMarker(AppController& app) {
-  return std::ranges::any_of(app.notes()->items(), [](const Note& n) { return n.body.contains(kNoteMarker); });
+  return std::ranges::any_of(app.notes()->items(), [](const Note& n) {
+    return n.body.contains(kNoteMarker);
+  });
 }
 
 class StateFixtureTest : public ::testing::TestWithParam<std::string> {
-protected:
+ protected:
   void SetUp() override {
     QDir(appDataDir()).removeRecursively();
     QDir().mkpath(appDataDir());
@@ -105,8 +107,8 @@ protected:
     const QJsonObject profile = root.value("profiles").toArray().at(0).toObject();
     tasks_ = titlesById(profile.value("tasks").toArray(), QStringLiteral("title"));
     // Events moved between the root and the profile across versions.
-    events_ = titlesById(root.contains("events") ? root.value("events").toArray() : profile.value("events").toArray(),
-                         QStringLiteral("title"));
+    events_ =
+        titlesById(root.contains("events") ? root.value("events").toArray() : profile.value("events").toArray(), QStringLiteral("title"));
     people_ = titlesById(profile.value("people").toArray(), QStringLiteral("name"));
     ASSERT_FALSE(tasks_.isEmpty()) << "a fixture with no tasks checks nothing";
   }
@@ -149,7 +151,9 @@ TEST_P(StateFixtureTest, SurvivesASaveAndTheNextLaunch) {
   expectEverythingFromTheFile(reopened);
 }
 
-INSTANTIATE_TEST_SUITE_P(Releases, StateFixtureTest, ::testing::ValuesIn(fixtureNames()),
+INSTANTIATE_TEST_SUITE_P(Releases,
+                         StateFixtureTest,
+                         ::testing::ValuesIn(fixtureNames()),
                          [](const ::testing::TestParamInfo<std::string>& info) {
                            std::string name = info.param.substr(0, info.param.rfind('.'));
                            for(char& c : name) {

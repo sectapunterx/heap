@@ -20,8 +20,8 @@
 #include "MdPartitionCheck.h"
 
 #include <QString>
-#include <QtGlobal>
 #include <QStringList>
+#include <QtGlobal>
 
 #include <gtest/gtest.h>
 
@@ -161,8 +161,8 @@ void runGenerator(const char* name, QString (*generate)(std::mt19937&), unsigned
   for(int i = 0; i < cases; ++i) {
     const QString document = generate(rng);
     const QString problem = checkPartition(document);
-    ASSERT_TRUE(problem.isEmpty()) << name << " case " << i << " (seed " << seed
-                                   << ", reproduce with HEAP_FUZZ_SEED=" << (seed - baseSeed) << ")\n"
+    ASSERT_TRUE(problem.isEmpty()) << name << " case " << i << " (seed " << seed << ", reproduce with HEAP_FUZZ_SEED=" << (seed - baseSeed)
+                                   << ")\n"
                                    << "problem: " << problem.toStdString() << "\n"
                                    << "document (escaped): " << heap::md::test::escape(document).toStdString();
   }
