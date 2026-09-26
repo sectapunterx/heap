@@ -313,11 +313,13 @@ jobs:
       # dir (named after the executable), so they are safe to run side by side.
       # heap_qml_tests is the long pole and carries a COST so it starts first.
       # --timeout: a hung suite fails in minutes instead of eating the job.
+      # ctest_with_retry.sh gives a failed suite one more try and reports it as
+      # flaky if that passes; a suite that fails twice fails the job.
       - name: Run ctest (linux, macos)
         if: runner.os != 'Windows'
         shell: bash
         run: |
-          ctest --test-dir build/tests \
+          bash .github/scripts/ctest_with_retry.sh build/tests \
             --parallel "$(getconf _NPROCESSORS_ONLN)" \
             --timeout 300 \
             --output-on-failure \
@@ -330,7 +332,7 @@ jobs:
         if: runner.os == 'Windows'
         shell: msys2 {0}
         run: |
-          ctest --test-dir build/tests \
+          bash .github/scripts/ctest_with_retry.sh build/tests \
             --parallel "$(getconf _NPROCESSORS_ONLN)" \
             --timeout 300 \
             --output-on-failure \
@@ -509,7 +511,7 @@ jobs:
           QT_QPA_PLATFORM: offscreen
         run: |
           # Sanitized suites run several times slower, hence the longer limit.
-          ctest --test-dir build-san/tests \
+          bash .github/scripts/ctest_with_retry.sh build-san/tests \
             --parallel "$(getconf _NPROCESSORS_ONLN)" \
             --timeout 600 \
             --output-on-failure
