@@ -29,6 +29,10 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# heap's warning set (root CMakeLists) for every suite below — added after
+# googletest so its own targets keep their flags. Empty in a standalone build.
+add_compile_options("${HEAP_WARNING_OPTIONS}")
+
 # The query language resolves `deadline:<friday` through the app's own date
 # parser, so every target that compiles TaskQuery.cpp drags the whole chrono
 # chain (both locales included) behind it. Named once so the two suites that

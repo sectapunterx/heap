@@ -1015,7 +1015,7 @@ TEST(Paging, EveryDescriptorsRecipeIsUsable) {
 TEST(Paging, AnOffsetWalkAgreesWithTheSizeItsTemplateAsks) {
   // `pageSize` has to equal the limit baked into the list template, or a full
   // page looks short and the walk stops one page early.
-  static const QRegularExpression limitRx(QStringLiteral("[?&](?:limit|per_page|pagelen)=(\d+)"));
+  static const QRegularExpression limitRx(QStringLiteral(R"([?&](?:limit|per_page|pagelen)=(\d+))"));
   for(const ProviderDescriptor& d : providerCatalog()) {
     if(d.paging.style != PageStyle::Offset) {
       continue;

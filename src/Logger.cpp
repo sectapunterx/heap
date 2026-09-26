@@ -59,7 +59,12 @@ void rotateIfNeeded() {
   }
 
   g_logFile.setFileName(base);
-  g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text);
+  if(!g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
+    // Called from inside the message handler, so qWarning() would re-enter
+    // it: the console is the only place left to say the log is gone.
+    static_cast<void>(
+        fputs(qPrintable(QStringLiteral("heap: cannot reopen log file %1: %2\n").arg(base, g_logFile.errorString())), stderr));
+  }
 }
 
 void messageHandler(QtMsgType type, const QMessageLogContext& ctx, const QString& msg) {

@@ -352,6 +352,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DHEAP_WARNINGS_AS_ERRORS=ON \
             -DCMAKE_OSX_DEPLOYMENT_TARGET=12.0 \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
@@ -367,6 +368,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DHEAP_WARNINGS_AS_ERRORS=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -383,6 +385,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DHEAP_WARNINGS_AS_ERRORS=ON \
             -DMSYS_ROOT="$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
@@ -562,6 +565,7 @@ jobs:
         run: |
           cmake -S . -B build-san -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
+            -DHEAP_WARNINGS_AS_ERRORS=ON \
             -DHEAP_ENABLE_SANITIZERS=ON \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache

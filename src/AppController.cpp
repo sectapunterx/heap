@@ -423,8 +423,8 @@ AppController::AppController(QObject* parent) :
     QObject(parent),
     m_today(QDate::currentDate()),
     m_selectedDate(m_today),
-    m_saveTimer(new QTimer(this)),
     m_automationTimer(new QTimer(this)),
+    m_saveTimer(new QTimer(this)),
     m_chrono(std::make_unique<heap::chrono::ChronoParser>(QLocale())) {
   m_saveTimer->setSingleShot(true);
   m_saveTimer->setInterval(300);
