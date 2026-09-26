@@ -183,7 +183,6 @@ qt_add_library(heap_core STATIC
     src/integrations/JiraProvider.cpp
     src/integrations/GitlabProvider.cpp
     src/integrations/RestIssueProvider.cpp
-    src/integrations/ProviderRegistry.cpp
     src/integrations/TrelloProvider.cpp
     src/integrations/SecretStore.cpp
     src/integrations/OAuthManager.cpp
@@ -307,10 +306,6 @@ qt_add_qml_module(heap_core
 # src/markdown too: qt_add_qml_module's generated registration file includes
 # each QML-exposed header by its bare name.
 target_include_directories(heap_core PUBLIC src src/markdown)
-# PRIVATE: only ProviderRegistry.cpp reads the generated credentials header, and
-# the test targets compile their own copy without this directory, so they see
-# the empty defaults from OAuthClients.h.
-target_include_directories(heap_core PRIVATE "${CMAKE_BINARY_DIR}/generated")
 target_link_libraries(heap_core PUBLIC
     heap_markdown
     Qt6::Core
@@ -361,6 +356,19 @@ else()
     message(STATUS "heap: QtKeychain not found — integration tokens use the secrets.json fallback")
 endif()
 
+# ── Provider registry, with the baked OAuth credentials ──────────
+# ProviderRegistry.cpp is the only file that reads the generated credentials
+# header, so it is the only file kept out of heap_core: the app links this
+# copy, and the test suites link one built without the header (tests/), so they
+# see the empty defaults from OAuthClients.h on every machine — including a
+# maintainer's with oauth-clients.local.cmake. Everything else in heap_core is
+# shared by the app and the tests. OBJECT so the objects always reach the link:
+# heap_core calls into the registry, and a static archive listed after it
+# would not be searched again.
+add_library(heap_provider_registry OBJECT src/integrations/ProviderRegistry.cpp)
+target_include_directories(heap_provider_registry PRIVATE "${CMAKE_BINARY_DIR}/generated")
+target_link_libraries(heap_provider_registry PUBLIC heap_core)
+
 # ── Application executable — thin shell that loads Main.qml from heap_core ──
 # WIN32 → GUI subsystem on Windows (no console); MACOSX_BUNDLE → a .app on macOS
 # so windeployqt/macdeployqt and `install(... BUNDLE ...)` have a bundle to
@@ -373,7 +381,7 @@ qt_add_executable(heap WIN32 MACOSX_BUNDLE
 # carries the type-registration + qmlcache resource init. Linking only the
 # backing library lets the linker drop those symbols, so `import TodoCpp` (and
 # Main.qml) fail to load at runtime. Linking the plugin force-references them.
-target_link_libraries(heap PRIVATE heap_core heap_coreplugin)
+target_link_libraries(heap PRIVATE heap_core heap_coreplugin heap_provider_registry)
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
 # On heap_core, not the app, so every binary that loads the QML — the test
