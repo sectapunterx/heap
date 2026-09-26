@@ -216,7 +216,7 @@ jobs:
           file_pattern: "*.cpp *.h"
 
   # ──────────────────────────────────────────────────────────────────
-  # 5. Build matrix (Linux + Windows).
+  # 5. Build + test matrix (Linux, Windows, macOS).
   # ──────────────────────────────────────────────────────────────────
   build:
     name: build (${{ matrix.os }})
@@ -350,86 +350,12 @@ jobs:
           cmake --build build --parallel --target heap heap_all_tests
           ccache -s
 
-      - name: Tar build dir
-        if: always()
-        shell: bash
-        run: tar -cf build-${{ matrix.os }}.tar build
-
-      - name: Upload build artifact
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: build-${{ matrix.os }}
-          path: build-${{ matrix.os }}.tar
-          retention-days: 1
-
-  # ──────────────────────────────────────────────────────────────────
-  # 6. Test (depends on build via artifact).
-  # ──────────────────────────────────────────────────────────────────
-  test:
-    name: test (${{ matrix.os }})
-    needs: build
-    runs-on: ${{ matrix.os }}
-    timeout-minutes: 15
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-24.04, windows-latest, macos-14]
-    steps:
-      - uses: actions/checkout@v7
-
-      # Same Qt (install-qt-action 6.8.1) as the build job so the tarred build
-      # tree matches the runtime. Qt's own QML modules ship with the install, so
-      # no qml6-module-* apt packages are needed. System libs the Qt libs dlopen
-      # (GL, xkb, fontconfig, dbus) still come from apt.
-      - name: Install system libs (linux)
-        if: runner.os == 'Linux'
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build \
-            libgl1 libegl1 libxkbcommon0 libfontconfig1 libfreetype6 libdbus-1-3
-
-      - name: Install Qt6 (linux)
-        if: runner.os == 'Linux'
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.9.1"
-          cache: true
-          modules: qtnetworkauth
-
-      - name: Setup MSYS2 (windows)
-        if: runner.os == 'Windows'
-        uses: msys2/setup-msys2@v2
-        with:
-          msystem: UCRT64
-          update: true
-          install: >-
-            mingw-w64-ucrt-x86_64-qt6-base
-            mingw-w64-ucrt-x86_64-qt6-declarative
-            mingw-w64-ucrt-x86_64-qt6-networkauth
-            mingw-w64-ucrt-x86_64-cmake
-
-      - name: Install Qt6 (macos)
-        if: runner.os == 'macOS'
-        uses: jurplel/install-qt-action@v4
-        with:
-          version: "6.9.1"
-          cache: true
-          modules: qtnetworkauth
-
-      - name: Download build artifact
-        uses: actions/download-artifact@v8
-        with:
-          name: build-${{ matrix.os }}
-
-      - name: Untar build
-        shell: bash
-        run: tar -xf build-${{ matrix.os }}.tar
-
-      # Linux: native bash, Qt DLLs picked up via ld.so.cache.
-      - name: Run ctest (linux)
-        if: runner.os == 'Linux'
+      # Tests run on the runner that built them. A separate test job meant a
+      # tarred build tree up and down, a second Qt / MSYS2 install, and — via
+      # `needs: build` on the whole matrix — Linux tests waiting for the macOS
+      # build to finish.
+      - name: Run ctest (linux, macos)
+        if: runner.os != 'Windows'
         shell: bash
         run: |
           ctest --test-dir build/tests \
@@ -442,15 +368,6 @@ jobs:
       - name: Run ctest (windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
-        run: |
-          ctest --test-dir build/tests \
-            --output-on-failure \
-            --output-junit ctest-${{ matrix.os }}.xml
-
-      # macOS: native bash; install-qt-action put Qt on DYLD/CMAKE paths.
-      - name: Run ctest (macos)
-        if: runner.os == 'macOS'
-        shell: bash
         run: |
           ctest --test-dir build/tests \
             --output-on-failure \
@@ -620,7 +537,6 @@ jobs:
       - format-cpp
       - tidy
       - build
-      - test
       - sanitizers
       - package-macos-smoke
     runs-on: ubuntu-24.04
