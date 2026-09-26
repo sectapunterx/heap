@@ -314,6 +314,7 @@ jobs:
       # so CI tests the Qt that ships. qt6-svg and qtkeychain were missing here;
       # a release without Qt6Svg (v0.4.3) went unnoticed partly because of it.
       - name: Setup MSYS2 (windows)
+        id: msys2
         if: runner.os == 'Windows'
         uses: msys2/setup-msys2@v2
         with:
@@ -382,6 +383,7 @@ jobs:
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
+            -DMSYS_ROOT="$(cygpath -m "${{ steps.msys2.outputs.msys2-location }}")" \
             -DCMAKE_C_COMPILER_LAUNCHER=ccache \
             -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
@@ -427,6 +429,39 @@ jobs:
             --timeout 300 \
             --output-on-failure \
             --output-junit ctest-${{ matrix.os }}.xml
+
+      # --smoke loads the whole UI and fails on any QML error, missing plugin or
+      # image format. Here it checks the build tree; the Windows and macOS steps
+      # below run it on the deployed bundle, which is what users get.
+      - name: Smoke-test the app (linux)
+        if: runner.os == 'Linux'
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: build/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+
+      # The portable bundle exactly as release.yml assembles it (windeployqt +
+      # copy-deps + UCRT), started with a PATH that has no MSYS2 on it — so a DLL
+      # or plugin the bundle forgot fails here instead of on a user's machine.
+      - name: Assemble portable bundle (windows)
+        if: runner.os == 'Windows'
+        shell: msys2 {0}
+        run: |
+          set -eu
+          export PATH="/ucrt64/bin:/ucrt64/share/qt6/libexec:/ucrt64/share/qt6/bin:$PATH"
+          cmake --build build --target portable
+
+      - name: Smoke-test the portable bundle (windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $dataDir = Join-Path $env:RUNNER_TEMP 'smoke'
+          # heap.exe is a GUI-subsystem binary: no console output, so the
+          # verdict is read back from its log.
+          $p = Start-Process -FilePath build\heap-portable\heap.exe `
+                 -ArgumentList '--smoke', '--data-dir', $dataDir -Wait -PassThru
+          Get-Content (Join-Path $dataDir 'logs\heap.log') -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { Write-Error "smoke failed with exit code $($p.ExitCode)"; exit 1 }
 
       - name: Upload test results
         if: always()
@@ -479,6 +514,10 @@ jobs:
           test -d /Volumes/heap/heap.app
           test -L /Volumes/heap/Applications
           hdiutil detach /Volumes/heap
+
+      - name: Smoke-test the deployed app (macos)
+        if: runner.os == 'macOS'
+        run: build/heap.app/Contents/MacOS/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
 
   # ──────────────────────────────────────────────────────────────────
   # 7. ASan + UBSan run (Linux only).
