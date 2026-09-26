@@ -140,7 +140,7 @@ int main(int argc, char* argv[]) {
   // AppController resolves state.json. The flag wins over the environment so a
   // single run can override a shell-wide HEAP_DATA_DIR. --smoke never touches a
   // real profile: without --data-dir it gets a temporary one, removed on exit.
-  QTemporaryDir smokeDataDir;
+  const QTemporaryDir smokeDataDir;
   QString dataDir = cli.dataDir.isEmpty() ? qEnvironmentVariable("HEAP_DATA_DIR") : cli.dataDir;
   if(cli.smoke && cli.dataDir.isEmpty()) {
     dataDir = smokeDataDir.path();
