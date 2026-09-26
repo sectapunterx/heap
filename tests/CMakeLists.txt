@@ -796,6 +796,12 @@ foreach (_suite migration fault_injection save_bench)
     heap_add_appcontroller_test(heap_${_suite}_tests test_${_suite}.cpp)
 endforeach ()
 
+# The two benchmarks assert wall-clock budgets. CI runs ctest with --parallel,
+# and a benchmark sharing the runner's cores with other suites misses its
+# budget for reasons that have nothing to do with the code (seen under ASan).
+# RUN_SERIAL runs each one alone; everything else stays parallel.
+set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
