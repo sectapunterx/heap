@@ -395,7 +395,9 @@ jobs:
   sanitizers:
     name: ASan + UBSan
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # A cold-cache sanitizer build has taken up to 24 minutes; at 25 the job
+    # was cancelled and turned master red with nothing wrong in the code.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
 
