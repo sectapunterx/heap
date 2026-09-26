@@ -106,7 +106,8 @@ Item {
             const day = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
             // Round, not floor: a DST change makes one day 23 or 25 hours long.
             const k = Math.round((day.getTime() - first.getTime()) / dayMs);
-            if (k < 0 || k >= n) continue;
+            // Written so NaN fails it too: an invalid date gives no cell.
+            if (!(k >= 0 && k < n)) continue;
             if (tm.data(idx, Qt.UserRole + 9) && !root.showArchived) continue;  // archived
             const t = {
                 id:       tm.data(idx, Qt.UserRole + 1),
