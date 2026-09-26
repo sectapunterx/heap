@@ -1657,14 +1657,21 @@ bool AppController::saveTask(const QVariantMap& draft) {
     t.rank = heap::board::beforeFirst(ordered.isEmpty() ? 0.0 : ordered.first().rank, !ordered.isEmpty());
   }
 
+  // A status picked in the editor is the same move as a drag on the board: it
+  // goes through moveTask, so the tracker hears about it, the review-branch
+  // rule applies and a finished recurring task spawns its next one. The row is
+  // saved in its old column first; the nested undo scope records nothing of
+  // its own.
+  const QString statusAfter = t.status;
+  const bool statusMoved = !isNew && !statusBefore.isEmpty() && statusBefore != statusAfter;
+  if(statusMoved) {
+    t.status = statusBefore;
+  }
   m_tasks.upsert(t);
   if(isNew) {
     emit toast(tr_("task.created").arg(t.id));
-  } else if(!statusBefore.isEmpty() && statusBefore != t.status) {
-    // A status picked in the editor is the same move as a drag on the board:
-    // the tracker has to hear about it, or the next pull puts the card back.
-    m_tasks.stampStatusChange(t.id);
-    pushStatusToTracker(t.id, t.status);
+  } else if(statusMoved) {
+    moveTask(t.id, statusAfter);
   }
   scheduleSave();
   return true;

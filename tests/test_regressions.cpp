@@ -318,6 +318,20 @@ TEST_F(AppController, SaveTask_EditThenUndo_RestoresPreviousTitle) {
   EXPECT_EQ(task(QStringLiteral("APP-1"))->title, QStringLiteral("before"));
 }
 
+TEST_F(AppController, SaveTask_StatusChangedToDone_GoesThroughMoveTask) {
+  Task t = local(QStringLiteral("REC-2"), QStringLiteral("weekly report"));
+  t.recurrence = QStringLiteral("every:week");
+  t.dueAt = QDateTime(QDate::currentDate(), QTime(9, 0));
+  app_->tasks()->reset({t});
+  QVariantMap d = draftOf(t, false);
+  d.insert("status", QStringLiteral("done"));
+
+  ASSERT_TRUE(app_->saveTask(d));
+
+  EXPECT_EQ(task(QStringLiteral("REC-2"))->status, QStringLiteral("done"));
+  EXPECT_NE(task(QStringLiteral("REC-2-r1")), nullptr) << "a finished recurring task spawns its next one";
+}
+
 // ─── A2: bulk move goes through moveTask ───────────────────────────────
 
 TEST_F(AppController, MoveSelectedTasksToStatus_RecurringTaskDone_SpawnsNextOccurrence) {
