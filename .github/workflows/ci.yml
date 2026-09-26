@@ -7,14 +7,13 @@ on:
     branches: ["**"]
 
 permissions:
-  # `contents: write` is needed by the auto-format/auto-tidy jobs that push
-  # corrections back to the PR branch via stefanzweifel/git-auto-commit-action.
-  contents: write
-  # dorny/test-reporter posts a Check Run with test details on PRs.
-  # Private repos need explicit grants — defaulting GITHUB_TOKEN to read-only
-  # breaks the action with HTTP 403 "Resource not accessible by integration".
+  # Read-only: no job pushes to the branch any more (formatting and tidy
+  # report instead of committing fixes).
+  contents: read
+  # dorny/test-reporter posts a Check Run with the test results.
   checks: write
-  pull-requests: write
+  # dorny/paths-filter lists a PR's files through the API.
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -53,100 +52,44 @@ jobs:
               - '!**/*.md'
 
   # ──────────────────────────────────────────────────────────────────
-  # 1. C++ auto-format (PR only).
-  # Runs `clang-format -i` on the files touched by the PR and pushes the
-  # result back to the branch. Idempotent — a second run after a successful
-  # format produces no diff and the auto-commit step no-ops, so the workflow
-  # does not loop.
+  # 1. clang-format on the changed lines (PR only).
+  # Reports instead of committing: the old auto-fix bot pushed to PR branches,
+  # which raced the author's own pushes and left the head commit needing
+  # approval to run. Pinned to clang-format 18 so CI and the fix command in
+  # the error agree; only the lines a PR changes are checked, so touching a
+  # legacy file does not mean reformatting all of it.
   # ──────────────────────────────────────────────────────────────────
   format-cpp:
-    name: clang-format (auto-fix)
-    # Auto-commit only works when the workflow can push to the head branch —
-    # forks have a read-only token. Skip on fork PRs (they get reviewed
-    # manually).
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    name: clang-format
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 10
     steps:
-      - name: Checkout PR head
-        uses: actions/checkout@v7
+      # The PR's merge commit; HEAD^1 is the base it merges into.
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 2
 
-      - name: Install clang-format
+      - name: Install clang-format 18
         run: |
           sudo apt-get update
-          sudo apt-get install -y --no-install-recommends clang-format
+          sudo apt-get install -y --no-install-recommends clang-format-18
 
-      - name: Apply clang-format to changed files
-        env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
+      - name: Check formatting of the changed lines
         run: |
-          set -euo pipefail
-          chmod +x .github/scripts/changed_files.sh
-          mapfile -t files < <(.github/scripts/changed_files.sh 'cpp|cc|cxx|h|hpp|hxx')
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No C/C++ changes — skipping."
-            exit 0
-          fi
-          echo "Reformatting: ${files[*]}"
-          clang-format -i --style=file "${files[@]}"
-
-      - name: Commit formatting
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "style: apply clang-format"
-          commit_user_name: heap-ci
-          commit_user_email: heap-ci@users.noreply.github.com
-          # Only extensions actually present in the repo — git-auto-commit
-          # invokes `git add` with raw globs and fails on any pattern that
-          # matches nothing (`fatal: pathspec '*.cc' did not match any files`).
-          file_pattern: "*.cpp *.h"
+          set -uo pipefail
+          out=$(git-clang-format-18 --binary clang-format-18 --extensions cpp,h,mm --diff HEAD^1 2>&1)
+          case "$out" in
+            *"no modified files to format"*|*"did not modify any files"*|"")
+              echo "formatting OK" ;;
+            *)
+              echo "$out"
+              echo "::error::changed lines are not clang-formatted — run: git clang-format --binary clang-format-18 origin/master"
+              exit 1 ;;
+          esac
 
   # ──────────────────────────────────────────────────────────────────
-  # 2. QML lint — DISABLED.
-  #
-  # qmllint needs the `qmldir` and `.qmltypes` files emitted by Qt's
-  # `qt_add_qml_module(... URI TodoCpp ...)` at build time to resolve the
-  # project's singletons (Theme, Brand, AppController). Running it
-  # without a full build produces hundreds of false-positive "Property X
-  # not found on type Theme" / "Unqualified access settingsBus" warnings.
-  #
-  # To re-enable: gate the job on a prior `build (ubuntu-24.04)` artifact
-  # and point qmllint at the generated `<build>/qml/TodoCpp/qmldir` via
-  # `-I <build-dir>`. Left as a follow-up.
-  # ──────────────────────────────────────────────────────────────────
-  # lint-qml:
-  #   name: qmllint
-  #   runs-on: ubuntu-24.04
-  #   timeout-minutes: 10
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #       with: { fetch-depth: 0 }
-  #     - name: Install Qt6 declarative tools
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y --no-install-recommends \
-  #           qt6-declarative-dev qt6-declarative-dev-tools
-  #     - name: qmllint changed files
-  #       env: { GITHUB_BASE_REF: ${{ github.base_ref }} }
-  #       run: |
-  #         set -euo pipefail
-  #         chmod +x .github/scripts/changed_files.sh
-  #         mapfile -t files < <(.github/scripts/changed_files.sh 'qml')
-  #         [[ ${#files[@]} -eq 0 ]] && exit 0
-  #         qmllint_bin="$(command -v qmllint \
-  #           || ls /usr/lib/qt6/bin/qmllint /usr/lib/qt6/libexec/qmllint \
-  #               /usr/lib/x86_64-linux-gnu/qt6/bin/qmllint 2>/dev/null | head -1)"
-  #         [[ -z "$qmllint_bin" ]] && { echo "::warning::qmllint missing"; exit 0; }
-  #         "$qmllint_bin" -I qml "${files[@]}"
-
-  # ──────────────────────────────────────────────────────────────────
-  # 3. GitHub Actions YAML lint (full sweep — fast).
+  # 2. GitHub Actions YAML lint (full sweep — fast).
   # ──────────────────────────────────────────────────────────────────
   lint-actions:
     name: actionlint
@@ -159,91 +102,51 @@ jobs:
           files: ".github/workflows/*.yml"
 
   # ──────────────────────────────────────────────────────────────────
-  # 4. clang-tidy auto-fix (PR only).
-  # Applies auto-fixable diagnostics (modernize-*, readability-*, …) and
-  # pushes the result back to the PR branch. Non-auto-fixable findings are
-  # left as warnings — the job does not fail on those, so reviewers can
-  # see them inline without blocking merges.
+  # 3. clang-tidy on the changed lines (PR only).
+  # Fails on any finding in a line the PR changed; the rest of a touched file
+  # is left alone. readability-identifier-naming stays off: the legacy code
+  # predates the naming rules and a changed line that merely uses an old name
+  # would be flagged. Pinned to clang-tidy 18, the same as clang-format.
   # ──────────────────────────────────────────────────────────────────
   tidy:
-    name: clang-tidy (auto-fix)
-    # Serialize after format-cpp so the auto-commit chain stays linear —
-    # otherwise the two jobs race and the second push is rejected as
-    # non-fast-forward when the first one lands on origin first.
-    needs: format-cpp
-    if: >-
-      github.event_name == 'pull_request' &&
-      github.event.pull_request.head.repo.full_name == github.repository
+    name: clang-tidy
+    if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
     timeout-minutes: 25
     steps:
-      - name: Checkout PR head
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
         with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.ref }}
-          repository: ${{ github.event.pull_request.head.repo.full_name }}
+          fetch-depth: 2
 
       - name: Install toolchain
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
-            clang-tidy clang-format cmake ninja-build \
+            clang-tidy-18 cmake ninja-build \
             qt6-base-dev qt6-declarative-dev qt6-tools-dev qt6-networkauth-dev libgl1-mesa-dev
 
+      # Tests included, so test sources have compile commands too; every
+      # target's moc/autogen output must exist or clang-tidy cannot parse it.
       - name: Configure (compile_commands.json)
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON \
-            -DHEAP_BUILD_TESTS=OFF
+            -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+          ninja -C build -t targets all | sed -nE 's/^([A-Za-z0-9_]+_(autogen|qmltyperegistrations)):.*/\1/p' \
+            | sort -u | xargs ninja -C build
 
-      - name: Build Qt-generated sources only
-        # AUTOMOC / qmltyperegistrations files only exist after a partial
-        # build; clang-tidy fails to find them otherwise.
-        run: cmake --build build --target heap_autogen heap_qmltyperegistrations || true
-
-      - name: Apply clang-tidy --fix to changed files
-        env:
-          GITHUB_BASE_REF: ${{ github.base_ref }}
+      - name: Check the changed lines
         run: |
-          set -euo pipefail
-          chmod +x .github/scripts/changed_files.sh
-          mapfile -t files < <(.github/scripts/changed_files.sh 'cpp|cc|cxx')
-          if [[ ${#files[@]} -eq 0 ]]; then
-            echo "No C/C++ source changes — skipping clang-tidy."
-            exit 0
+          set -uo pipefail
+          git diff -U0 HEAD^1 -- '*.cpp' '*.h' '*.mm' \
+            | clang-tidy-diff-18.py -p1 -path build -iregex '.*\.(cpp|mm)' \
+                -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
+                -checks='-readability-identifier-naming' > tidy.log 2>&1
+          cat tidy.log
+          if grep -qE ': (warning|error): ' tidy.log; then
+            echo "::error::clang-tidy found issues in changed lines (above)"
+            exit 1
           fi
-          tidy_files=()
-          for f in "${files[@]}"; do
-            if grep -q "\"file\": *\"$(pwd)/$f\"" build/compile_commands.json; then
-              tidy_files+=("$f")
-            fi
-          done
-          if [[ ${#tidy_files[@]} -eq 0 ]]; then
-            echo "No source files with compile-commands entries — skipping."
-            exit 0
-          fi
-          echo "clang-tidy --fix on: ${tidy_files[*]}"
-          # `--fix-errors` applies every available rewrite even when other
-          # diagnostics are non-fatal; `--quiet` keeps the log readable.
-          # Identifier-naming auto-fixes would rename hundreds of legacy
-          # symbols in one commit — opt out of those here; the warnings are
-          # still visible inline in the PR.
-          clang-tidy --fix --fix-errors --quiet \
-            --checks='-readability-identifier-naming' \
-            -p build "${tidy_files[@]}" || true
-
-      - name: Commit clang-tidy fixes
-        uses: stefanzweifel/git-auto-commit-action@v5
-        with:
-          commit_message: "style: apply clang-tidy auto-fixes"
-          commit_user_name: heap-ci
-          commit_user_email: heap-ci@users.noreply.github.com
-          # Only extensions actually present in the repo — git-auto-commit
-          # invokes `git add` with raw globs and fails on any pattern that
-          # matches nothing (`fatal: pathspec '*.cc' did not match any files`).
-          file_pattern: "*.cpp *.h"
 
   # ──────────────────────────────────────────────────────────────────
   # 5. Build + test matrix (Linux, Windows, macOS).
@@ -436,6 +339,24 @@ jobs:
       # --smoke loads the whole UI and fails on any QML error, missing plugin or
       # image format. Here it checks the build tree; the Windows and macOS steps
       # below run it on the deployed bundle, which is what users get.
+      # qmllint over the whole QML module, held to a per-file baseline: a file
+      # may not gain findings (see .github/scripts/qmllint_ratchet.py).
+      - name: qmllint ratchet (linux)
+        if: runner.os == 'Linux'
+        run: |
+          cmake --build build --target all_qmllint_json
+          python3 .github/scripts/qmllint_ratchet.py build/heap_core_qmllint.json .github/qmllint-baseline.json
+
+      - name: Upload qmllint report (linux)
+        if: always() && runner.os == 'Linux'
+        uses: actions/upload-artifact@v7
+        with:
+          name: qmllint
+          path: |
+            build/heap_core_qmllint.json
+            .github/qmllint-baseline.json
+          if-no-files-found: ignore
+
       - name: Smoke-test the app (linux)
         if: runner.os == 'Linux'
         env:
@@ -634,65 +555,3 @@ jobs:
             exit 1
           fi
           echo "All required jobs succeeded or were skipped."
-
-  # ──────────────────────────────────────────────────────────────────
-  # 9. Coverage (Linux only) — DISABLED.
-  # Re-enable by uncommenting the block below. Requires `CODECOV_TOKEN`
-  # secret for upload (private repo). Without it, coverage.lcov is still
-  # produced and kept as a build artifact.
-  # ──────────────────────────────────────────────────────────────────
-  # coverage:
-  #   name: coverage
-  #   runs-on: ubuntu-24.04
-  #   timeout-minutes: 20
-  #   needs: test
-  #   steps:
-  #     - uses: actions/checkout@v7
-  #
-  #     - name: Install toolchain
-  #       run: |
-  #         sudo apt-get update
-  #         sudo apt-get install -y --no-install-recommends \
-  #           cmake ninja-build g++ gcovr \
-  #           qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-  #           libgl1-mesa-dev libegl1-mesa-dev
-  #
-  #     - name: Configure with coverage
-  #       run: |
-  #         cmake -S . -B build-cov -G Ninja \
-  #           -DCMAKE_BUILD_TYPE=Debug \
-  #           -DHEAP_ENABLE_COVERAGE=ON
-  #
-  #     - name: Build tests
-  #       run: |
-  #         cmake --build build-cov --parallel \
-  #           --target heap_chrono_tests heap_git_tests heap_text_tests
-  #
-  #     - name: Run tests
-  #       run: ctest --test-dir build-cov/tests --output-on-failure
-  #
-  #     - name: Generate lcov report
-  #       run: |
-  #         gcovr --root . \
-  #           --filter 'src/.*' \
-  #           --exclude '.*_autogen.*' \
-  #           --lcov coverage.lcov \
-  #           --print-summary
-  #
-  #     - name: Upload coverage artifact
-  #       if: always()
-  #       uses: actions/upload-artifact@v7
-  #       with:
-  #         name: coverage-lcov
-  #         path: coverage.lcov
-  #         retention-days: 7
-  #
-  #     - name: Upload to Codecov
-  #       if: env.CODECOV_TOKEN != ''
-  #       uses: codecov/codecov-action@v4
-  #       with:
-  #         files: coverage.lcov
-  #         fail_ci_if_error: true
-  #         token: ${{ env.CODECOV_TOKEN }}
-  #       env:
-  #         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
