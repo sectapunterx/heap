@@ -454,7 +454,10 @@ jobs:
   sanitizers:
     name: ASan + UBSan
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    # The instrumented Debug build alone takes ~23 minutes on a hosted runner,
+    # so a 25-minute cap cancelled the job before a single test ran — on
+    # master too. The tests themselves take a couple of minutes.
+    timeout-minutes: 45
     steps:
       - uses: actions/checkout@v7
 
