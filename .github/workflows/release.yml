@@ -11,8 +11,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+# Read-only by default; the publish job asks for what it needs.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ──────────────────────────────────────────────────────────────────
@@ -27,6 +28,11 @@ jobs:
   meta:
     name: Resolve version
     runs-on: ubuntu-24.04
+    # Covers the wait for CI below (up to 50 minutes) plus the checkout.
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      checks: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       release: ${{ steps.tag.outputs.release }}
@@ -76,6 +82,31 @@ jobs:
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
 
+      # A tag may only ship a commit that passed CI. Master accepts admin
+      # pushes that bypass the ruleset, so a tag can point at a commit whose
+      # `ci` check is red, still running, or was never run. The version bump is
+      # usually pushed moments before its tag, so wait for the check to finish
+      # rather than failing on "in progress". A manual test build skips this.
+      - name: Require a green CI run for the tagged commit
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${{ github.sha }}"
+          for attempt in $(seq 1 100); do
+            state=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=ci&filter=latest" \
+              --jq '.check_runs | sort_by(.started_at) | last | if . == null then "missing" else "\(.status) \(.conclusion)" end')
+            case "$state" in
+              "completed success") echo "ci passed on $sha"; exit 0 ;;
+              completed*)          echo "::error::ci on $sha finished as '${state#completed }' — fix master and re-tag"; exit 1 ;;
+              *)                   echo "ci on $sha: $state (check $attempt/100)"; sleep 30 ;;
+            esac
+          done
+          echo "::error::no finished ci run for $sha after 50 minutes — was this commit pushed to master?"
+          exit 1
+
   # ──────────────────────────────────────────────────────────────────
   # Windows: portable zip (proven windeployqt bundle) + Inno Setup
   # installer (.exe).
@@ -84,6 +115,9 @@ jobs:
     name: Package (Windows)
     needs: meta
     runs-on: windows-latest
+    permissions:
+      contents: read
+      actions: read
     # Job-level env so the optional signing steps' `if:` can read the secret (a
     # step's own env is not reliably visible to its own `if`, and `secrets`
     # cannot be referenced in `if` directly). Mirrors the macOS signing pattern.
@@ -162,6 +196,20 @@ jobs:
           MSYS_BASE_UNIX=$(cygpath -u "${{ steps.msys2.outputs.msys2-location }}")
           export PATH="$MSYS_BASE_UNIX/ucrt64/bin:$MSYS_BASE_UNIX/ucrt64/share/qt6/libexec:$MSYS_BASE_UNIX/ucrt64/share/qt6/bin:$PATH"
           cmake --build build --target portable
+
+      # Start the bundle exactly as a user would get it — PATH without MSYS2,
+      # so a DLL or plugin windeployqt/copy-deps missed (the v0.4.3 zip shipped
+      # without Qt6Svg and the UCRT) fails the release instead of the user.
+      - name: Smoke-test the portable bundle
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $dataDir = Join-Path $env:RUNNER_TEMP 'smoke'
+          # GUI-subsystem binary: no console, so read the verdict from its log.
+          $p = Start-Process -FilePath build\heap-portable\heap.exe `
+                 -ArgumentList '--smoke', '--data-dir', $dataDir -Wait -PassThru
+          Get-Content (Join-Path $dataDir 'logs\heap.log') -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { Write-Error "smoke failed with exit code $($p.ExitCode)"; exit 1 }
 
       # Authenticode-sign heap.exe + the bundled Qt DLLs before they are
       # packaged, so both the portable zip and the installer carry signed
@@ -254,6 +302,8 @@ jobs:
     name: Package (Linux)
     needs: meta
     runs-on: ubuntu-24.04
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
 
@@ -307,6 +357,18 @@ jobs:
           set -eu
           dpkg-deb --build --root-owner-group pkgroot "heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb"
 
+      # Install the .deb into a clean ubuntu:24.04 — nothing but what its
+      # Depends pull in — and start it under a virtual X server. A missing
+      # dependency or QML module fails here, not on a user's machine.
+      - name: Smoke-test the .deb in a clean container
+        run: |
+          set -eu
+          docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash -euc '
+            export DEBIAN_FRONTEND=noninteractive
+            apt-get update -qq
+            apt-get install -y -qq ./heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb xvfb xauth >/dev/null
+            xvfb-run -a heap --smoke --data-dir /tmp/heap-smoke'
+
       # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
       # desktop/icon, laid out flat under a versioned top dir. Depends on system
       # Qt 6 (Arch/source-install convention); install.sh warns if it is absent.
@@ -326,8 +388,20 @@ jobs:
         continue-on-error: true
         run: |
           set -eu
-          curl -fsSL -o linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          curl -fsSL -o linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          # Checked against known hashes: `continuous` is rebuilt in place, so
+          # the tool that went into a release could change unseen. linuxdeploy
+          # is pinned to a tagged release; the Qt plugin's last tag is too old,
+          # so it stays on `continuous` but only the build hashed here is used —
+          # when upstream rebuilds it, this step fails and the release ships
+          # without an AppImage until the hash is bumped deliberately.
+          curl -fsSL -o linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-qt \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          sha256sum -c - <<'SUMS'
+          c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  linuxdeploy
+          cfc1055b2b9dbc08412b579f20990b7b41a17b61beaa5847dc9477c96c9e9617  linuxdeploy-plugin-qt
+          SUMS
           chmod +x linuxdeploy linuxdeploy-plugin-qt
           # ubuntu-24.04 has fuse3, not libfuse2 — run the AppImage tools by
           # self-extracting instead of mounting.
@@ -341,6 +415,19 @@ jobs:
             --icon-file design/brand-export/icon/heap-icon.svg \
             --icon-filename heap \
             --plugin qt --output appimage
+
+      # The AppImage is best-effort, so a broken one is left out of the release
+      # with a warning rather than failing it — but it is never shipped unchecked.
+      - name: Smoke-test the AppImage
+        if: steps.appimage.outcome == 'success'
+        run: |
+          set -u
+          sudo apt-get install -y -qq xvfb xauth >/dev/null
+          IMG="heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
+          if ! APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "./$IMG" --smoke --data-dir "$RUNNER_TEMP/smoke"; then
+            echo "::warning::the AppImage failed its smoke test and is left out of this release"
+            rm -f "$IMG"
+          fi
 
       - name: Upload Linux artifacts
         uses: actions/upload-artifact@v7
@@ -364,6 +451,8 @@ jobs:
     # required for the browser-OAuth device flow (QOAuth2DeviceAuthorizationFlow).
     needs: meta
     runs-on: macos-14
+    permissions:
+      contents: read
     # Job-level env so the optional signing step's `if:` can read it (a step's
     # own env is not reliably visible to its own `if`, and `secrets` cannot be
     # referenced in `if` directly).
@@ -504,6 +593,14 @@ jobs:
           hdiutil create -volname "heap" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov \
             "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
 
+      # Run the app from the mounted dmg — the bundle a user drags out.
+      - name: Smoke-test the app from the dmg
+        run: |
+          set -eu
+          hdiutil attach "heap-${{ needs.meta.outputs.tag }}-macos.dmg" -nobrowse -mountpoint /Volumes/heap
+          trap 'hdiutil detach /Volumes/heap' EXIT
+          /Volumes/heap/heap.app/Contents/MacOS/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+
       # Notarize only when the Apple secrets are configured — the .app is already
       # signed + hardened above. Sign the dmg, submit, staple, accept-check. Do
       # NOT run spctl on the ad-hoc default: it is expected to report "rejected".
@@ -519,6 +616,14 @@ jobs:
             --team-id "$MACOS_NOTARY_TEAM_ID" --wait
           xcrun stapler staple "$DMG"
           spctl -a -t open --context context:primary-signature -vv "$DMG"
+
+      # Without Apple's secrets the dmg is ad-hoc signed only, and Gatekeeper
+      # tells users it "can't be checked for malicious software". Not fatal —
+      # no Developer ID is configured yet — but a stable release says so rather
+      # than shipping it silently; publish adds the same note to the release.
+      - name: Flag an un-notarized stable release
+        if: ${{ env.MACOS_CERT_P12 == '' && needs.meta.outputs.prerelease == 'false' }}
+        run: echo "::warning::stable release with an un-notarized macOS dmg — set the MACOS_* secrets to notarize"
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v7
@@ -545,6 +650,12 @@ jobs:
           && needs.package-windows.result == 'success'
           && needs.package-linux.result == 'success' }}
     runs-on: ubuntu-24.04
+    permissions:
+      contents: write       # create the release
+      id-token: write       # sign the provenance attestation (Sigstore)
+      attestations: write   # store it with the repository
+    env:
+      MACOS_NOTARIZED: ${{ secrets.MACOS_CERT_P12 != '' }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@v8
@@ -559,11 +670,49 @@ jobs:
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
 
+      # What went into the binaries (Qt frameworks and plugins, md4c,
+      # qtkeychain, …), as catalogued from the packaged artifacts.
+      - name: SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          path: dist
+          format: spdx-json
+          output-file: dist/heap-${{ needs.meta.outputs.tag }}-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      # A verifiable release: SHA256SUMS for a quick integrity check, and a
+      # signed build-provenance attestation per artifact, which ties each file
+      # to this workflow run and commit:
+      #   gh attestation verify <file> --repo ${{ github.repository }}
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -eu
+          find . -maxdepth 1 -type f ! -name SHA256SUMS -printf '%f\n' | sort | xargs sha256sum > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: dist/*
+
+      - name: Release notes preamble
+        run: |
+          {
+            if [ "$MACOS_NOTARIZED" != "true" ]; then
+              echo '> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**.'
+              echo
+            fi
+            echo 'Verify a download: `sha256sum -c SHA256SUMS`, or `gh attestation verify <file> --repo ${{ github.repository }}`.'
+          } > notes.md
+
       - name: Publish
         uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: "heap ${{ needs.meta.outputs.tag }}"
+          body_path: notes.md
           generate_release_notes: true
           # A full release becomes /releases/latest (the updater's target); a
           # hyphenated tag (rc/beta) is flagged pre-release and stays off latest.
