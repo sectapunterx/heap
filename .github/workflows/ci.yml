@@ -251,11 +251,24 @@ jobs:
           cache: true
           modules: qtnetworkauth
 
-      - name: Setup ccache (linux)
-        if: runner.os == 'Linux'
+      # Linux + macOS. Windows builds inside MSYS2 with MSYS2's own ccache, so
+      # it only needs the cache directory carried between runs (below).
+      - name: Setup ccache (linux, macos)
+        if: runner.os != 'Windows'
         uses: hendrikmuhs/ccache-action@v1.2
         with:
           key: ${{ runner.os }}-ccache
+
+      # Without this the MSYS2 ccache starts empty on every run and only adds
+      # overhead. Unique key per commit so each run saves; restore-keys picks
+      # up the newest one, a PR's own or master's.
+      - name: Restore ccache (windows)
+        if: runner.os == 'Windows'
+        uses: actions/cache@v6
+        with:
+          path: ${{ github.workspace }}/.ccache
+          key: ${{ runner.os }}-ccache-${{ github.sha }}
+          restore-keys: ${{ runner.os }}-ccache-
 
       - name: Setup MSYS2 (windows)
         if: runner.os == 'Windows'
@@ -291,7 +304,11 @@ jobs:
       - name: Configure (macos)
         if: runner.os == 'macOS'
         run: |
-          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake -S . -B build -G Ninja \
+            -DCMAKE_BUILD_TYPE=Release \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_OBJCXX_COMPILER_LAUNCHER=ccache
 
       - name: Build (macos)
         if: runner.os == 'macOS'
@@ -314,6 +331,8 @@ jobs:
       - name: Configure (windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
         run: |
           cmake -S . -B build -G Ninja \
             -DCMAKE_BUILD_TYPE=Release \
@@ -323,8 +342,13 @@ jobs:
       - name: Build (windows)
         if: runner.os == 'Windows'
         shell: msys2 {0}
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 500M
         run: |
+          ccache -z
           cmake --build build --parallel --target heap heap_all_tests
+          ccache -s
 
       - name: Tar build dir
         if: always()
@@ -475,11 +499,20 @@ jobs:
           cache: true
           modules: qtnetworkauth
 
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@v1.2
+        with:
+          key: ${{ runner.os }}-asan-ccache
+          # -g + sanitizer objects are several times larger than Release ones.
+          max-size: 1G
+
       - name: Configure with sanitizers
         run: |
           cmake -S . -B build-san -G Ninja \
             -DCMAKE_BUILD_TYPE=Debug \
-            -DHEAP_ENABLE_SANITIZERS=ON
+            -DHEAP_ENABLE_SANITIZERS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
 
       - name: Build tests
         run: |
