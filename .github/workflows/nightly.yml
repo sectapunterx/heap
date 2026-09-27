@@ -9,10 +9,6 @@ on:
   schedule:
     - cron: "17 2 * * *"
   workflow_dispatch:
-  # TEMPORARY: lets the PR that adds this workflow run it once; a dispatch
-  # only works for a workflow already on the default branch. Remove before merge.
-  push:
-    branches: [ci/speedup]
 
 permissions:
   contents: read

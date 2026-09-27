@@ -5,8 +5,7 @@ name: CodeQL
 # fast: on every push to master, weekly for newly added queries, and on demand.
 on:
   push:
-    # TEMPORARY ci/speedup: prove the workflow before merge. Remove before merge.
-    branches: [master, ci/speedup]
+    branches: [master]
   schedule:
     - cron: "41 3 * * 1"
   workflow_dispatch:
