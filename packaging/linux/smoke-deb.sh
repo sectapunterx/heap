@@ -33,13 +33,15 @@ DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address)
 export DBUS_SESSION_BUS_ADDRESS
 sleep 2
 
-if timeout 120 heap --smoke --data-dir /tmp/heap-smoke; then
+# -k: heap turns SIGTERM into a quit request, which a blocked main thread
+# never reads, so a hang also needs the SIGKILL that follows.
+if timeout -k 10 120 heap --smoke --data-dir /tmp/heap-smoke; then
   exit 0
 fi
 
 echo "::group::where it stops (gdb)"
 apt-get install -y -q gdb >/dev/null
-timeout -s INT 90 gdb -q -batch -ex run -ex "thread apply all bt 25" \
+timeout -s INT -k 20 90 gdb -q -batch -ex run -ex "thread apply all bt 25" \
   --args heap --smoke --data-dir /tmp/heap-smoke-gdb || true
 echo "::endgroup::"
 exit 1
