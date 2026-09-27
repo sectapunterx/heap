@@ -389,7 +389,7 @@ jobs:
           docker run --rm -v "$PWD:/w" -w /w -e DEB -e DEBIAN_FRONTEND=noninteractive ubuntu:24.04 bash -euc '
             echo "::group::apt install ./$DEB (+ Xvfb)"
             apt-get update -q
-            apt-get install -y "./$DEB" xvfb xauth dbus
+            apt-get install -y "./$DEB" xvfb dbus
             echo "::endgroup::"
             # A library the Depends line forgot shows up here by name, rather
             # than as a loader error or a hang further down.
@@ -397,12 +397,25 @@ jobs:
               echo "::error::the .deb does not pull in every library heap links"
               exit 1
             fi
-            # A desktop session always has a session bus; without one, Qt
-            # blocks at startup on D-Bus (accessibility, the GTK platform
-            # theme the Depends pull in) and the run only measures the
-            # container. dbus-run-session gives heap the bus a user has.
-            timeout 120 dbus-run-session -- \
-              xvfb-run -a -s "-screen 0 1280x800x24" heap --smoke --data-dir /tmp/heap-smoke'
+            # A desktop session has an X server and a session bus; without the
+            # bus Qt blocks at startup on D-Bus (accessibility, the GTK
+            # platform theme). Both are started here directly, so heap — or
+            # gdb — is the timeout's own child and gets its signal.
+            Xvfb :99 -screen 0 1280x800x24 -nolisten tcp & export DISPLAY=:99
+            DBUS_SESSION_BUS_ADDRESS=$(dbus-daemon --session --fork --print-address)
+            export DBUS_SESSION_BUS_ADDRESS
+            sleep 2
+            if timeout 120 heap --smoke --data-dir /tmp/heap-smoke; then
+              exit 0
+            fi
+            # Failed or hung: run it again under gdb; the timeout's SIGINT stops
+            # it and the log shows where every thread was.
+            echo "::group::where it stops (gdb)"
+            apt-get install -y -q gdb >/dev/null
+            timeout -s INT 90 gdb -q -batch -ex run -ex "thread apply all bt 25" \
+              --args heap --smoke --data-dir /tmp/heap-smoke-gdb || true
+            echo "::endgroup::"
+            exit 1'
 
       # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
       # desktop/icon, laid out flat under a versioned top dir. Depends on system
