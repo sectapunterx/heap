@@ -10,7 +10,7 @@
 
 [![CI](https://github.com/sectapunterx/heap/actions/workflows/ci.yml/badge.svg)](https://github.com/sectapunterx/heap/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/sectapunterx/heap?sort=semver)](https://github.com/sectapunterx/heap/releases)
-[![Qt 6](https://img.shields.io/badge/Qt-6.4%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
+[![Qt 6](https://img.shields.io/badge/Qt-6.9%2B-41cd52?logo=qt&logoColor=white)](https://www.qt.io/)
 [![C++20](https://img.shields.io/badge/C%2B%2B-20-00599C?logo=c%2B%2B&logoColor=white)](https://en.cppreference.com/w/cpp/20)
 [![License](https://img.shields.io/badge/license-MIT-blue)](#license)
 
@@ -112,29 +112,18 @@ Interactive first-run guide · In-app update check.
 ## Get it
 
 **Prebuilt binaries** — attached to each [**GitHub release**](https://github.com/sectapunterx/heap/releases):
-a Windows installer + portable zip, a macOS `.dmg`, and for Linux an AppImage, a `.deb`, and an
-`install.sh` tarball. Download and run; nothing else to install.
+a Windows installer + portable zip, a macOS `.dmg`, and a Linux AppImage. Download and run; nothing else to
+install.
 
-**Linux (any distro)** — download `heap-<ver>-linux-x86_64.tar.gz`, unpack, run `install.sh`:
-
-```sh
-tar xzf heap-*-linux-x86_64.tar.gz
-cd heap-*-linux-x86_64
-./install.sh                 # system-wide as root, else into ~/.local (no sudo)
-```
-
-`install.sh` also takes `--prefix=DIR` and `--uninstall`. The tarball links against your distribution's
-Qt 6 (>= 6.4) — install it first if it is missing:
+**Linux (any distro)** — the AppImage carries its own Qt:
 
 ```sh
-sudo pacman -S qt6-base qt6-declarative qt6-svg qt6-wayland                 # Arch
-sudo apt install libqt6core6 libqt6quick6 libqt6svg6 qml6-module-qtquick    # Debian / Ubuntu
-sudo dnf install qt6-qtbase qt6-qtdeclarative qt6-qtsvg                     # Fedora
+chmod +x heap-*-linux-x86_64.AppImage
+./heap-*-linux-x86_64.AppImage
 ```
 
-Want a **self-contained** binary with Qt bundled in (nothing else to install)? Use the **AppImage** —
-`chmod +x heap-*-linux-x86_64.AppImage` and run it. On Debian / Ubuntu you can instead install the package
-directly: `sudo apt install ./heap-*-linux-amd64.deb`.
+Releases up to 0.5.1 also shipped a `.deb` and a tarball built against Ubuntu 24.04's Qt 6.4. The UI does not
+run on Qt 6.4, so those are gone; use the AppImage.
 
 **Package managers** — Windows via [Scoop](https://scoop.sh):
 
@@ -146,7 +135,7 @@ scoop install heap
 winget and Flathub (Linux) manifests are prepared and pending submission — see
 [`docs/DISTRIBUTION.md`](docs/DISTRIBUTION.md).
 
-**Build from source** — three commands, any platform (Qt 6.4+ and a C++20 toolchain):
+**Build from source** — three commands, any platform (Qt 6.9+ — what CI builds and tests — and a C++20 toolchain):
 
 ```sh
 cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
@@ -154,11 +143,15 @@ cmake --build build -j
 ./build/heap                  # ./build/heap.exe on Windows
 ```
 
-### Linux (Debian / Ubuntu)
+### Linux
+
+Distribution Qt is often too old: Ubuntu 24.04 ships 6.4, on which the UI does not run. Take Qt 6.9 from
+[aqtinstall](https://github.com/miurahr/aqtinstall) (what CI does) or the Qt online installer:
 
 ```sh
-sudo apt install qt6-base-dev qt6-declarative-dev libqt6svg6-dev cmake g++
-cmake -S . -B build && cmake --build build -j
+pip install aqtinstall
+aqt install-qt linux desktop 6.9.1 linux_gcc_64 -m qtnetworkauth -O ~/Qt
+cmake -S . -B build -DCMAKE_PREFIX_PATH=~/Qt/6.9.1/gcc_64 && cmake --build build -j
 ```
 
 ### macOS

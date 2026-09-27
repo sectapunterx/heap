@@ -60,6 +60,14 @@ endif()
 set(HEAP_WARNING_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:${HEAP_WARNING_FLAGS}>")
 
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network NetworkAuth)
+# CI and every released package build on Qt 6.9+. Older Qt still configures
+# (the clang-tidy job analyses against Ubuntu's 6.4), but the UI does not run on
+# 6.4: its compiled Main.qml bindings hang at startup and the TodoCpp singletons
+# fail to resolve. Say so, rather than let a build that cannot start look fine.
+if(Qt6_VERSION VERSION_LESS 6.9)
+    message(WARNING "heap: Qt ${Qt6_VERSION} is older than 6.9, which CI and the releases use. "
+                    "The app is known not to start on Qt 6.4; use Qt 6.9 or newer.")
+endif()
 # Test is used by the unit suites (QAbstractItemModelTester, QSignalSpy).
 find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Test)
 # DBus is only needed for the Linux native notifications backend.

@@ -300,8 +300,13 @@ jobs:
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
-  # Linux: .deb (dpkg-deb) + AppImage (linuxdeploy). The AppImage step is
-  # best-effort — if the linuxdeploy toolchain hiccups, the .deb still ships.
+  # Linux: one AppImage, built on Qt 6.9.1 — the Qt CI tests — with Qt bundled.
+  # Earlier releases also shipped a .deb and a tarball built against Ubuntu
+  # 24.04's system Qt 6.4.2; the UI does not run on 6.4 (Main.qml's compiled
+  # bindings hang, and without them the TodoCpp singletons fail to resolve), so
+  # those are gone. The AppImage is no longer best-effort: it is the Linux
+  # artifact, and it has to build and pass its smoke test for the release to
+  # publish.
   # ──────────────────────────────────────────────────────────────────
   package-linux:
     name: Package (Linux)
@@ -313,14 +318,27 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install toolchain
+      # The xcb libraries are here so linuxdeploy finds and bundles what Qt's
+      # xcb platform plugin needs (libxcb-cursor0 among them, required since
+      # Qt 6.5 and missing from many desktops).
+      - name: Install build tools + system libs
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ file \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-            qt6-svg-dev qt6-networkauth-dev qtkeychain-qt6-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            libfontconfig1-dev libfreetype-dev libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
+
+      # Same Qt as CI. QtKeychain is not on aqt, so, as on macOS, SecretStore
+      # keeps tokens in its secrets.json fallback.
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.9.1"
+          cache: true
+          modules: qtnetworkauth
 
       - name: Configure & build
         # Baked-in OAuth app credentials for one-click browser sign-in. CMake reads
@@ -346,75 +364,14 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
           cmake --build build --parallel --target heap
 
-      - name: Stage install tree
-        run: |
-          set -eu
-          VER="${{ needs.meta.outputs.tag }}"; VER="${VER#v}"
-          DEST="pkgroot"
-          install -Dm755 build/heap                                   "$DEST/usr/bin/heap"
-          install -Dm644 packaging/linux/heap.desktop                 "$DEST/usr/share/applications/heap.desktop"
-          install -Dm644 design/brand-export/icon/heap-icon.svg       "$DEST/usr/share/icons/hicolor/scalable/apps/heap.svg"
-          # Depends is derived, not hand-kept: the package owning every shared
-          # library the binary links (exact names on this Ubuntu, t64 suffixes
-          # included), plus what Qt loads at runtime and ldd cannot see — the
-          # QML modules qml/ imports, the xcb platform plugin, the svg image
-          # plugin. The hand-written list missed NetworkAuth, qtkeychain and
-          # every QML module; the .deb smoke test below proves this one.
-          SHLIBS=$(ldd build/heap | awk '/=> \//{print $3}' | xargs -r readlink -f \
-            | xargs -r dpkg -S 2>/dev/null | cut -d: -f1 | sort -u)
-          RUNTIME="qml6-module-qtquick qml6-module-qtquick-controls qml6-module-qtquick-layouts
-                   qml6-module-qtquick-templates qml6-module-qtquick-window qml6-module-qtquick-dialogs
-                   qml6-module-qtqml-workerscript qt6-qpa-plugins libqt6svg6"
-          # shellcheck disable=SC2086 # word-splitting the lists is the point
-          DEPENDS=$(printf '%s\n' $SHLIBS $RUNTIME | sort -u | paste -sd, - | sed 's/,/, /g')
-          echo "Depends: $DEPENDS"
-          # Debian control metadata.
-          mkdir -p "$DEST/DEBIAN"
-          sed -e "s/@VERSION@/${VER}/" -e "s/@DEPENDS@/${DEPENDS}/" packaging/linux/control.in > "$DEST/DEBIAN/control"
-
-      - name: Build .deb
-        run: |
-          set -eu
-          dpkg-deb --build --root-owner-group pkgroot "heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb"
-
-      # Install the .deb into a clean ubuntu:24.04 — nothing but what its
-      # Depends pull in — and start it under a virtual X server. A missing
-      # dependency or QML module fails here, not on a user's machine.
-      - name: Smoke-test the .deb in a clean container
-        timeout-minutes: 10
-        env:
-          DEB: heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb
-        run: |
-          set -eu
-          # The script lives in a file, not in a quoted bash -c string: one
-          # apostrophe in that string once ran half of it on the runner instead.
-          docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash packaging/linux/smoke-deb.sh "$DEB"
-
-      # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
-      # desktop/icon, laid out flat under a versioned top dir. Depends on system
-      # Qt 6 (Arch/source-install convention); install.sh warns if it is absent.
-      - name: Build tarball
-        run: |
-          set -eu
-          STAGE="heap-${{ needs.meta.outputs.tag }}-linux-x86_64"
-          rm -rf "$STAGE"
-          install -Dm755 build/heap                             "$STAGE/heap"
-          install -m644  packaging/linux/heap.desktop           "$STAGE/heap.desktop"
-          install -m644  design/brand-export/icon/heap-icon.svg "$STAGE/heap.svg"
-          install -m755  packaging/linux/install.sh             "$STAGE/install.sh"
-          tar -czf "$STAGE.tar.gz" "$STAGE"
-
       - name: Build AppImage
-        id: appimage
-        continue-on-error: true
         run: |
           set -eu
           # Checked against known hashes: `continuous` is rebuilt in place, so
           # the tool that went into a release could change unseen. linuxdeploy
           # is pinned to a tagged release; the Qt plugin's last tag is too old,
           # so it stays on `continuous` but only the build hashed here is used —
-          # when upstream rebuilds it, this step fails and the release ships
-          # without an AppImage until the hash is bumped deliberately.
+          # when upstream rebuilds it, this step fails until the hash is bumped.
           curl -fsSL -o linuxdeploy \
             https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
           curl -fsSL -o linuxdeploy-plugin-qt \
@@ -427,7 +384,11 @@ jobs:
           # ubuntu-24.04 has fuse3, not libfuse2 — run the AppImage tools by
           # self-extracting instead of mounting.
           export APPIMAGE_EXTRACT_AND_RUN=1
+          # The Qt to bundle is install-qt-action's, not a system one.
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           export QML_SOURCES_PATHS="$PWD/qml"
+          export EXTRA_QT_PLUGINS="svg"
           export OUTPUT="heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
           # --icon-filename must match the desktop file's Icon=heap key.
           ./linuxdeploy --appdir AppDir \
@@ -436,30 +397,24 @@ jobs:
             --icon-file design/brand-export/icon/heap-icon.svg \
             --icon-filename heap \
             --plugin qt --output appimage
+          test -f "$OUTPUT"
 
-      # The AppImage is best-effort, so a broken one is left out of the release
-      # with a warning rather than failing it — but it is never shipped unchecked.
-      - name: Smoke-test the AppImage
-        timeout-minutes: 5
-        if: steps.appimage.outcome == 'success'
-        run: |
-          set -u
-          sudo apt-get install -y -qq xvfb xauth >/dev/null
-          IMG="heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
-          if ! APPIMAGE_EXTRACT_AND_RUN=1 xvfb-run -a "./$IMG" --smoke --data-dir "$RUNNER_TEMP/smoke"; then
-            echo "::warning::the AppImage failed its smoke test and is left out of this release"
-            rm -f "$IMG"
-          fi
+      # In a clean ubuntu:24.04 that has only what a desktop has, so anything
+      # the AppImage fails to bundle shows up here rather than on a user's
+      # machine. The script lives in a file: a quoted bash -c string once ran
+      # half of a test on the runner because of one apostrophe.
+      - name: Smoke-test the AppImage in a clean container
+        timeout-minutes: 10
+        env:
+          IMG: heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+        run: docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash packaging/linux/smoke-appimage.sh "$IMG"
 
-      - name: Upload Linux artifacts
+      - name: Upload Linux artifact
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-linux
-          path: |
-            heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb
-            heap-${{ needs.meta.outputs.tag }}-linux-x86_64.tar.gz
-            heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
-          if-no-files-found: warn
+          path: heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+          if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
   # macOS: .app via macdeployqt + .dmg. Unsigned by default; if the
