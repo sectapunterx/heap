@@ -325,6 +325,16 @@ qt_add_qml_module(heap_core
 # each QML-exposed header by its bare name.
 target_include_directories(heap_core PUBLIC src src/markdown)
 target_compile_options(heap_core PRIVATE "${HEAP_WARNING_OPTIONS}")
+
+# Qt before 6.5 (Ubuntu 24.04's system Qt is 6.4.2, which the Linux .deb and
+# tarball build against): the C++ that qmlcachegen generates for Main.qml's
+# bindings spins forever in QQmlContextWrapper::lookupType at startup — the app
+# never shows a window. Cache bytecode only there; newer Qt keeps the compiled
+# bindings. Found by the release's .deb smoke test (gdb backtrace).
+if(Qt6_VERSION VERSION_LESS 6.5)
+    message(STATUS "heap: Qt ${Qt6_VERSION} — QML cached as bytecode only (its AOT bindings hang)")
+    set_target_properties(heap_core PROPERTIES QT_QMLCACHEGEN_ARGUMENTS "--only-bytecode")
+endif()
 target_link_libraries(heap_core PUBLIC
     heap_markdown
     Qt6::Core
