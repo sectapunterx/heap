@@ -1,63 +1,126 @@
-name: Deploy Pages
+name: Site
 
-# The single-page site + brandbook live under docs/ and are hand-written static
-# HTML/CSS/JS (no Jekyll — see docs/.nojekyll). The legacy Jekyll Pages builder
-# errored opaquely and left the site stale, so publish via GitHub Actions
-# instead: reliable, with real build logs.
+# The website lives in site/ (Astro + React islands) and is published to GitHub
+# Pages. It reads the repository's docs/*.md, the screenshots in
+# docs/assets/img/screens and the brand assets, and pulls release data from the
+# GitHub API at build time — so it rebuilds when any of those change and after
+# the Release workflow finishes (the download page and changelog follow each
+# release). That hook is workflow_run, not `release: published`: the release is
+# created with GITHUB_TOKEN, which never triggers other workflows, and a
+# workflow_run build runs on master — the only branch the github-pages
+# environment deploys from. Pull requests build and test without deploying.
 
 on:
   push:
     branches: [master]
     paths:
+      - 'site/**'
       - 'docs/**'
+      - 'design/brand-export/**'
       - '.github/workflows/pages.yml'
+  pull_request:
+    paths:
+      - 'site/**'
+      - 'docs/**'
+      - 'design/brand-export/**'
+      - '.github/workflows/pages.yml'
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
   workflow_dispatch:
 
-# Least privilege for the deploy: read the repo, write Pages, mint the OIDC
-# token deploy-pages needs. `deployments: write` lets the prune step delete the
-# stale github-pages deployment records each publish leaves behind.
 permissions:
   contents: read
-  pages: write
-  id-token: write
-  deployments: write
 
-# One deploy at a time; don't cancel an in-flight publish.
+# One deploy at a time and never cancel one in flight; a newer push to the
+# same pull request cancels the older check.
 concurrency:
-  group: pages
-  cancel-in-progress: false
+  group: site-${{ github.event_name == 'pull_request' && github.ref || 'deploy' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  ASTRO_TELEMETRY_DISABLED: '1'
 
 jobs:
-  deploy:
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+  build:
+    name: build & test
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: site
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # enablement: true flips the repo Pages source from the legacy builder to
-      # GitHub Actions on first run, so no manual Settings → Pages toggle.
+      - name: Setup Node
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type check
+        run: npm run check
+
+      - name: Unit tests
+        run: npm test
+
+      - name: Build
+        env:
+          # Read-only token for the releases API; avoids the anonymous rate limit.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm run build
+
+      - name: Install Playwright's Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: End-to-end tests
+        run: npm run test:e2e
+
+      - name: Upload the site as the Pages artifact
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
+        with:
+          path: site/dist
+
+  deploy:
+    name: deploy
+    needs: build
+    if: github.event_name != 'pull_request'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    # Write Pages, mint the OIDC token deploy-pages needs; `deployments: write`
+    # lets the prune step delete the stale github-pages deployment records each
+    # publish leaves behind.
+    permissions:
+      pages: write
+      id-token: write
+      deployments: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      # enablement: true flips the repo Pages source to GitHub Actions on first
+      # run, so no manual Settings → Pages toggle.
       - name: Configure Pages
         uses: actions/configure-pages@45bfe0192ca1faeb007ade9deae92b16b8254a0d # v6.0.0
         with:
           enablement: true
-
-      - name: Upload docs/ as the Pages artifact
-        uses: actions/upload-pages-artifact@fc324d3547104276b827a68afc52ff2a11cc49c9 # v5.0.0
-        with:
-          path: docs
 
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@368f82528645a54fb793d4d04e342629a3f51346 # v5.0.1
 
       # Every publish mints a new github-pages deployment record; only the newest
-      # is live. Left alone they pile up in the Environments view (one per docs
-      # push). Keep just the deployment we published above and delete the rest —
-      # set each inactive first (required before an active deployment can be
-      # deleted), then remove it. Live site is unaffected.
+      # is live. Left alone they pile up in the Environments view. Keep just the
+      # deployment we published above and delete the rest — set each inactive
+      # first (required before an active deployment can be deleted), then remove
+      # it. Live site is unaffected.
       - name: Prune stale Pages deployments
         env:
           GH_TOKEN: ${{ github.token }}
