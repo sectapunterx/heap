@@ -609,12 +609,7 @@ jobs:
       - name: Build .dmg
         run: |
           set -eu
-          STAGE="$RUNNER_TEMP/dmg"
-          mkdir -p "$STAGE"
-          cp -R build/heap.app "$STAGE/"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "heap" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov \
-            "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          bash packaging/macos/make-dmg.sh build/heap.app "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
 
       # Run the app from the mounted dmg — the bundle a user drags out.
       - name: Smoke-test the app from the dmg

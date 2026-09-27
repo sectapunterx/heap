@@ -431,11 +431,7 @@ jobs:
           # invalidated signature (the "damaged" bug) fails this verify.
           codesign --force --deep --sign - build/heap.app
           codesign --verify --deep --strict --verbose=2 build/heap.app
-          STAGE="$RUNNER_TEMP/dmg"
-          mkdir -p "$STAGE"
-          cp -R build/heap.app "$STAGE/"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "heap" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov smoke.dmg
+          bash packaging/macos/make-dmg.sh build/heap.app smoke.dmg
 
       - name: Verify dmg mounts with the app + Applications target (macos)
         if: runner.os == 'macOS'
