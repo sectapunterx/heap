@@ -1,0 +1,366 @@
+[
+ {
+  "tag": "v0.5.1",
+  "name": "heap v0.5.1",
+  "date": "2026-09-26T21:14:05Z",
+  "body": "## What's Changed\n* fix: close the 0.5.0 audit tier list (S\u2013D) by @sectapunterx in https://github.com/sectapunterx/heap/pull/155\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.5.0...v0.5.1",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.1",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.5.1-linux-amd64.deb",
+    "size": 1741202,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.5.1-linux-x86_64.AppImage",
+    "size": 40851960,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.5.1-linux-x86_64.tar.gz",
+    "size": 2235386,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.5.1-macos.dmg",
+    "size": 59071236,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-macos.dmg"
+   },
+   {
+    "name": "heap-v0.5.1-windows-portable.zip",
+    "size": 62651146,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.5.1-windows-setup.exe",
+    "size": 40407110,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.1/heap-v0.5.1-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.5.0",
+  "name": "heap v0.5.0",
+  "date": "2026-09-21T02:32:47Z",
+  "body": "## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0\n\n## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n* fix(notes): never lose text that has no note behind it by @sectapunterx in https://github.com/sectapunterx/heap/pull/152\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0\n\n## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n* fix(notes): never lose text that has no note behind it by @sectapunterx in https://github.com/sectapunterx/heap/pull/152\n* fix(integrations): let a card be connected with typed credentials by @sectapunterx in https://github.com/sectapunterx/heap/pull/153\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0\n\n## What's Changed\n* feat(search): make the header search box a query box by @sectapunterx in https://github.com/sectapunterx/heap/pull/115\n* fix(archive): stop the binding loop and the recursive rearrange by @sectapunterx in https://github.com/sectapunterx/heap/pull/116\n* fix(qml): stop shadowing base-type properties on Popup and Item by @sectapunterx in https://github.com/sectapunterx/heap/pull/117\n* feat(sync): walk every page of a tracker pull, and wait out a rate limit by @sectapunterx in https://github.com/sectapunterx/heap/pull/118\n* feat(integrations): let the user map a tracker's statuses onto columns by @sectapunterx in https://github.com/sectapunterx/heap/pull/119\n* build(tests): share the AppController dependency list by @sectapunterx in https://github.com/sectapunterx/heap/pull/120\n* fix(notes): flush a pending edit on destruction and on quit by @sectapunterx in https://github.com/sectapunterx/heap/pull/121\n* fix(tests): restore the three suites the source-list refactor emptied by @sectapunterx in https://github.com/sectapunterx/heap/pull/123\n* fix(state): gate the ladder per rung and refuse a newer schema by @sectapunterx in https://github.com/sectapunterx/heap/pull/122\n* fix(calendar): clamp every event write into the day by @sectapunterx in https://github.com/sectapunterx/heap/pull/124\n* fix(calendar): settings defaults, week start in the picker, month paging by @sectapunterx in https://github.com/sectapunterx/heap/pull/125\n* fix(calendar): time-block a task from its own estimate, and find a free slot by @sectapunterx in https://github.com/sectapunterx/heap/pull/126\n* fix(markdown): highlight a fence with its own language's comment syntax by @sectapunterx in https://github.com/sectapunterx/heap/pull/127\n* fix(board): keep statusChangedAt through a column-delete undo, cover status CRUD by @sectapunterx in https://github.com/sectapunterx/heap/pull/128\n* fix(shell): rail-ordered view shortcuts, docs search, window geometry by @sectapunterx in https://github.com/sectapunterx/heap/pull/129\n* feat(state): schema v5 \u2014 per-task rank and dependency links by @sectapunterx in https://github.com/sectapunterx/heap/pull/130\n* feat(undo): a real undo/redo stack by @sectapunterx in https://github.com/sectapunterx/heap/pull/131\n* feat(board): manual card order with drop-position insert by @sectapunterx in https://github.com/sectapunterx/heap/pull/132\n* feat(board): sort a column by priority, due date, recency or title by @sectapunterx in https://github.com/sectapunterx/heap/pull/136\n* feat(task): render the description as markdown, and tick its checklist by @sectapunterx in https://github.com/sectapunterx/heap/pull/137\n* fix(calendar): draw the whole day, and open on the part of it you are in by @sectapunterx in https://github.com/sectapunterx/heap/pull/140\n* feat(cal): a recurrence-rule engine for events by @sectapunterx in https://github.com/sectapunterx/heap/pull/141\n* fix(week): lay overlapping events side by side instead of on top by @sectapunterx in https://github.com/sectapunterx/heap/pull/142\n* feat(week): the whole day, a now line, dropped cards, and click to create by @sectapunterx in https://github.com/sectapunterx/heap/pull/143\n* feat(calendar): remind about meetings, not only the standup by @sectapunterx in https://github.com/sectapunterx/heap/pull/144\n* feat(calendar): all-day, multi-day and cross-midnight events by @sectapunterx in https://github.com/sectapunterx/heap/pull/145\n* feat(calendar): recurring events, .ics, and keyboard navigation by @sectapunterx in https://github.com/sectapunterx/heap/pull/146\n* feat(notes): many notes instead of one blob by @sectapunterx in https://github.com/sectapunterx/heap/pull/147\n* feat(notes): a list of notes beside the one being edited by @sectapunterx in https://github.com/sectapunterx/heap/pull/148\n* feat(notes): import and export a folder of .md files by @sectapunterx in https://github.com/sectapunterx/heap/pull/149\n* feat(notes): links that cross from one note to another by @sectapunterx in https://github.com/sectapunterx/heap/pull/150\n* feat(docs): a tree of pages, not just a catalog by @sectapunterx in https://github.com/sectapunterx/heap/pull/151\n* fix(notes): never lose text that has no note behind it by @sectapunterx in https://github.com/sectapunterx/heap/pull/152\n* fix(integrations): let a card be connected with typed credentials by @sectapunterx in https://github.com/sectapunterx/heap/pull/153\n* feat(people): make the rail a to-do list and add someone by searching by @sectapunterx in https://github.com/sectapunterx/heap/pull/154\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.9...v0.5.0",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.5.0",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.5.0-linux-amd64.deb",
+    "size": 1670778,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.5.0-linux-x86_64.AppImage",
+    "size": 40786424,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.5.0-linux-x86_64.tar.gz",
+    "size": 2149025,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.5.0-macos.dmg",
+    "size": 59588341,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-macos.dmg"
+   },
+   {
+    "name": "heap-v0.5.0-windows-portable.zip",
+    "size": 62490554,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.5.0-windows-setup.exe",
+    "size": 40302877,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.5.0/heap-v0.5.0-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.9",
+  "name": "heap v0.4.9",
+  "date": "2026-09-20T11:58:01Z",
+  "body": "## What's Changed\n* feat(oauth): register Sentry as a public client, dropping its secret by @sectapunterx in https://github.com/sectapunterx/heap/pull/107\n* Ticket enrichment: make a mirrored issue look and behave like one (HEAP-117) by @sectapunterx in https://github.com/sectapunterx/heap/pull/108\n* Stop a task id from silently destroying another task by @sectapunterx in https://github.com/sectapunterx/heap/pull/109\n* Stop a tracker pull from undoing what the user decided by @sectapunterx in https://github.com/sectapunterx/heap/pull/110\n* Let a branch find its own ticket, and stop it finding someone else's by @sectapunterx in https://github.com/sectapunterx/heap/pull/111\n* Restrict the secrets file, refresh the palette, drop a lying toggle by @sectapunterx in https://github.com/sectapunterx/heap/pull/112\n* Build one card per task, not one per task per column by @sectapunterx in https://github.com/sectapunterx/heap/pull/113\n* Stop recomputing what has not changed by @sectapunterx in https://github.com/sectapunterx/heap/pull/114\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.8...v0.4.9",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.9",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.9-linux-amd64.deb",
+    "size": 1389388,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.9-linux-x86_64.AppImage",
+    "size": 40450552,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.9-linux-x86_64.tar.gz",
+    "size": 1769691,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.4.9-macos.dmg",
+    "size": 59067371,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.9-windows-portable.zip",
+    "size": 61899724,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.9-windows-setup.exe",
+    "size": 39912792,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.9/heap-v0.4.9-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.8",
+  "name": "heap v0.4.8",
+  "date": "2026-09-20T01:06:00Z",
+  "body": "## What's Changed\n* docs(pages): readable screenshots + new landing by @sectapunterx in https://github.com/sectapunterx/heap/pull/74\n* fix(pages): landing fetched a raw {{ }} placeholder; drop build chrome and SRI strip by @sectapunterx in https://github.com/sectapunterx/heap/pull/75\n* docs(landing): add qt6-networkauth-dev to Linux build deps by @sectapunterx in https://github.com/sectapunterx/heap/pull/77\n* fix(build): resolve heap_core link-feature clash in QML tests by @sectapunterx in https://github.com/sectapunterx/heap/pull/78\n* HEAP-104: sync cascade-delete, any-order datetime parse, sync-comment context, column scrollbar by @sectapunterx in https://github.com/sectapunterx/heap/pull/79\n* HEAP-104: harden the task data model for lossless, time-aware persistence by @sectapunterx in https://github.com/sectapunterx/heap/pull/76\n* test(qml): full component coverage + 10 confirmed bug fixes by @sectapunterx in https://github.com/sectapunterx/heap/pull/80\n* fix(ui): visual bugs, dead hit targets and the RU/EN mix by @sectapunterx in https://github.com/sectapunterx/heap/pull/81\n* fix(integrations): make the trackers actually connect and sync by @sectapunterx in https://github.com/sectapunterx/heap/pull/82\n* feat(cli): add --data-dir so a run can use a throwaway profile by @sectapunterx in https://github.com/sectapunterx/heap/pull/83\n* build: vendor md4c as a static library by @sectapunterx in https://github.com/sectapunterx/heap/pull/84\n* feat(markdown): parse notes into an AST that knows its source lines by @sectapunterx in https://github.com/sectapunterx/heap/pull/85\n* feat(markdown): outline, callouts, footnotes and rich-text rendering by @sectapunterx in https://github.com/sectapunterx/heap/pull/86\n* feat(notes): draw the parsed document instead of handing it to Qt by @sectapunterx in https://github.com/sectapunterx/heap/pull/87\n* feat(notes): make the rendered view answer back by @sectapunterx in https://github.com/sectapunterx/heap/pull/88\n* feat(notes): give the editor markdown keys, and move the rules into C++ by @sectapunterx in https://github.com/sectapunterx/heap/pull/89\n* feat(notes): replace the editor's line-by-line highlighting by @sectapunterx in https://github.com/sectapunterx/heap/pull/90\n* docs(notes): describe the editor that now exists by @sectapunterx in https://github.com/sectapunterx/heap/pull/91\n* perf(git): stop freezing the window while a branch is created by @sectapunterx in https://github.com/sectapunterx/heap/pull/92\n* fix(integrations): actually refresh expired OAuth tokens by @sectapunterx in https://github.com/sectapunterx/heap/pull/93\n* feat(integrations): hand-rolled OAuth engine for every provider dialect by @sectapunterx in https://github.com/sectapunterx/heap/pull/94\n* feat(integrations): browser sign-in for Todoist, Asana, ClickUp, Sentry, Bitbucket by @sectapunterx in https://github.com/sectapunterx/heap/pull/95\n* feat(integrations): browser sign-in for Jira and Trello by @sectapunterx in https://github.com/sectapunterx/heap/pull/96\n* docs(help): in-app guide for integrations by @sectapunterx in https://github.com/sectapunterx/heap/pull/97\n* feat(integrations): Mattermost directory \u2014 sign in and fetch contacts by @sectapunterx in https://github.com/sectapunterx/heap/pull/98\n* feat(integrations): import Mattermost contacts into Docs and the People rail by @sectapunterx in https://github.com/sectapunterx/heap/pull/99\n* fix(jira): a pasted ticket URL broke the base URL, and a 401 said nothing by @sectapunterx in https://github.com/sectapunterx/heap/pull/100\n* fix(integrations): crash, credential leaks and a dead Trello flow by @sectapunterx in https://github.com/sectapunterx/heap/pull/101\n* feat(jira): support Server and Data Center by @sectapunterx in https://github.com/sectapunterx/heap/pull/102\n* docs(oauth): a step-by-step setup guide, and fix two things it exposed by @sectapunterx in https://github.com/sectapunterx/heap/pull/103\n* docs(oauth): correct the setup guide against the live consoles by @sectapunterx in https://github.com/sectapunterx/heap/pull/104\n* docs(oauth): Sentry rotates its client secret, it does not need recreating by @sectapunterx in https://github.com/sectapunterx/heap/pull/105\n* fix(oauth): stop asking Trello users for an API key the sign-in supplied by @sectapunterx in https://github.com/sectapunterx/heap/pull/106\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.7...v0.4.8",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.8",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.8-linux-amd64.deb",
+    "size": 1332628,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.8-linux-x86_64.AppImage",
+    "size": 40397304,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.8-linux-x86_64.tar.gz",
+    "size": 1696705,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.4.8-macos.dmg",
+    "size": 59010358,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.8-windows-portable.zip",
+    "size": 61789598,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.8-windows-setup.exe",
+    "size": 39843625,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.8/heap-v0.4.8-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.7",
+  "name": "heap v0.4.7",
+  "date": "2026-07-08T20:16:24Z",
+  "body": "## What's Changed\n* docs(pages): replace GitHub Pages landing with new build by @sectapunterx in https://github.com/sectapunterx/heap/pull/72\n* ci: bump first-party actions to Node 24 majors by @sectapunterx in https://github.com/sectapunterx/heap/pull/73\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.6...v0.4.7",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.7",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.7-linux-amd64.deb",
+    "size": 1004314,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.7-linux-x86_64.AppImage",
+    "size": 40081912,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.7-linux-x86_64.tar.gz",
+    "size": 1281287,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.4.7-macos.dmg",
+    "size": 58571408,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.7-windows-portable.zip",
+    "size": 61346321,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.7-windows-setup.exe",
+    "size": 39483914,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.7/heap-v0.4.7-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.6",
+  "name": "heap v0.4.6",
+  "date": "2026-07-08T12:40:52Z",
+  "body": "## What's Changed\n* fix(onboarding): keep the welcome guide resumable after a step action by @sectapunterx in https://github.com/sectapunterx/heap/pull/71\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.5...v0.4.6",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.6",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.6-linux-amd64.deb",
+    "size": 1003450,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.6-linux-x86_64.AppImage",
+    "size": 40081912,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.6-linux-x86_64.tar.gz",
+    "size": 1280720,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.4.6-macos.dmg",
+    "size": 58572052,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.6-windows-portable.zip",
+    "size": 61313777,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.6-windows-setup.exe",
+    "size": 39451000,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.6/heap-v0.4.6-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.5",
+  "name": "heap v0.4.5",
+  "date": "2026-07-08T10:52:25Z",
+  "body": "## What's Changed\n* feat(onboarding): interactive stepped welcome guide with skip & replay by @sectapunterx in https://github.com/sectapunterx/heap/pull/70\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.4...v0.4.5",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.5",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.5-linux-amd64.deb",
+    "size": 1002064,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.5-linux-x86_64.AppImage",
+    "size": 40081912,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.5-linux-x86_64.tar.gz",
+    "size": 1278136,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.4.5-macos.dmg",
+    "size": 58582711,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.5-windows-portable.zip",
+    "size": 61299017,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.5-windows-setup.exe",
+    "size": 39445188,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.5/heap-v0.4.5-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.4",
+  "name": "heap v0.4.4",
+  "date": "2026-07-08T09:36:43Z",
+  "body": "**Full Changelog**: https://github.com/sectapunterx/heap/compare/v0.4.3...v0.4.4",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.4",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.4-linux-amd64.deb",
+    "size": 991634,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.4-linux-x86_64.AppImage",
+    "size": 40069624,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.4-linux-x86_64.tar.gz",
+    "size": 1251860,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-linux-x86_64.tar.gz"
+   },
+   {
+    "name": "heap-v0.4.4-macos.dmg",
+    "size": 57939675,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.4-windows-portable.zip",
+    "size": 61266207,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.4-windows-setup.exe",
+    "size": 39424493,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.4/heap-v0.4.4-windows-setup.exe"
+   }
+  ]
+ },
+ {
+  "tag": "v0.4.2",
+  "name": "heap v0.4.2",
+  "date": "2026-07-07T07:24:07Z",
+  "body": "## What's Changed\n* Bugfix: heap 40 no icon release by @sectapunterx in https://github.com/sectapunterx/heap/pull/15\n* bugfix: calendar fix by @sectapunterx in https://github.com/sectapunterx/heap/pull/16\n* UI: heap-37 create manual by @sectapunterx in https://github.com/sectapunterx/heap/pull/17\n* ci: release triggering manually by @sectapunterx in https://github.com/sectapunterx/heap/pull/18\n* ui: some improvements by @sectapunterx in https://github.com/sectapunterx/heap/pull/19\n* ui: new design by @sectapunterx in https://github.com/sectapunterx/heap/pull/20\n* ui: gh pages by @sectapunterx in https://github.com/sectapunterx/heap/pull/21\n* UI/heap 45 gh pages by @sectapunterx in https://github.com/sectapunterx/heap/pull/22\n* Update .clang-format by @sectapunterx in https://github.com/sectapunterx/heap/pull/23\n* ui: en ru toggle by @sectapunterx in https://github.com/sectapunterx/heap/pull/24\n* ui: selecting multiple tickets and archive by @sectapunterx in https://github.com/sectapunterx/heap/pull/25\n* tests: all tests auto in ci and CMakeLists.txt by @sectapunterx in https://github.com/sectapunterx/heap/pull/26\n* feature: capture notes + tests by @sectapunterx in https://github.com/sectapunterx/heap/pull/27\n* MVP release-prep: pre-release blockers + global hotkeys (HEAP-15, 50\u201360) by @sectapunterx in https://github.com/sectapunterx/heap/pull/28\n* test(qml): Notes @mention caret fix + first Qt Quick Test harness (HEAP-65, HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/29\n* fix(ui): remove redundant C++ sidebar button (HEAP-70) by @sectapunterx in https://github.com/sectapunterx/heap/pull/30\n* feat(ui): wire dead Blocked & Code Review sidebar buttons (HEAP-69) by @sectapunterx in https://github.com/sectapunterx/heap/pull/31\n* test(ui): component test harness \u2014 extract heap_core lib, test real QML (HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/32\n* test(ui): click-driven interaction tests for FilterBar + SideRail (HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/33\n* fix: suppress duplicate OS notification when window is focused (HEAP-47) by @sectapunterx in https://github.com/sectapunterx/heap/pull/34\n* feat: hotkeys for archive, theme toggle, new contact/profile (HEAP-48) by @sectapunterx in https://github.com/sectapunterx/heap/pull/35\n* feat: side-by-side layout for overlapping calendar events (HEAP-31) by @sectapunterx in https://github.com/sectapunterx/heap/pull/36\n* docs: onboarding tutorial, hotkeys & data references (HEAP-29) by @sectapunterx in https://github.com/sectapunterx/heap/pull/37\n* docs: public release announcement copy (HEAP-30) by @sectapunterx in https://github.com/sectapunterx/heap/pull/38\n* feat: tracker-sync foundation \u2014 integration types + StatusMap (HEAP-18) by @sectapunterx in https://github.com/sectapunterx/heap/pull/39\n* feat: SyncSerializer \u2014 git-friendly profile/event JSON (HEAP-19) by @sectapunterx in https://github.com/sectapunterx/heap/pull/40\n* feat: Notes query-language parser (HEAP-20) by @sectapunterx in https://github.com/sectapunterx/heap/pull/41\n* feat: JsonMerger \u2014 3-way structural merge for non-git sync (HEAP-27) by @sectapunterx in https://github.com/sectapunterx/heap/pull/42\n* ci: cross-platform packaging + tag-triggered release (HEAP-28) by @sectapunterx in https://github.com/sectapunterx/heap/pull/43\n* test: broaden unit coverage \u2014 models, AppController, text edges (HEAP-49) by @sectapunterx in https://github.com/sectapunterx/heap/pull/44\n* docs: dev-friendly + accurate landing and README (HEAP-72) by @sectapunterx in https://github.com/sectapunterx/heap/pull/45\n* docs: reliable Pages deploy + dev-first README & landing (HEAP-73) by @sectapunterx in https://github.com/sectapunterx/heap/pull/46\n* ci: Authenticode-sign Windows binaries + installer (HEAP-62) by @sectapunterx in https://github.com/sectapunterx/heap/pull/47\n* feat: rotating log file + Report an issue / Open logs folder (HEAP-64) by @sectapunterx in https://github.com/sectapunterx/heap/pull/48\n* feat: auto-update check via GitHub Releases + single-sourced version (HEAP-63) by @sectapunterx in https://github.com/sectapunterx/heap/pull/49\n* feat: 2-way GitHub Issues sync (HEAP-74) by @sectapunterx in https://github.com/sectapunterx/heap/pull/50\n* feat: git write-actions \u2014 branch-from-task, commit\u2194task, inline PR/CI (HEAP-76) by @sectapunterx in https://github.com/sectapunterx/heap/pull/51\n* ci: unblock Release by disabling the macOS package job by @sectapunterx in https://github.com/sectapunterx/heap/pull/52\n* feat: Jira + GitLab tracker-sync providers (HEAP-75) by @sectapunterx in https://github.com/sectapunterx/heap/pull/53\n* feat: global full-text search across tasks, notes, docs, snippets (HEAP-80) by @sectapunterx in https://github.com/sectapunterx/heap/pull/54\n* feat: [[wiki-links]] + backlinks in notes and a searchable snippet library (HEAP-79) by @sectapunterx in https://github.com/sectapunterx/heap/pull/55\n* feat: per-task time tracking + weekly \"what I shipped\" report (HEAP-78) by @sectapunterx in https://github.com/sectapunterx/heap/pull/56\n* feat: recurring tasks + reusable task/checklist templates (HEAP-77) by @sectapunterx in https://github.com/sectapunterx/heap/pull/57\n* content: genericize DocsView demo seed from telecom to generic-dev (HEAP-66) by @sectapunterx in https://github.com/sectapunterx/heap/pull/58\n* ci: run heap_qml_tests on Linux via Qt 6.8 (HEAP-71) by @sectapunterx in https://github.com/sectapunterx/heap/pull/59\n* feat: native macOS support \u2014 .app bundle, Carbon global hotkey, CI (HEAP-68) by @sectapunterx in https://github.com/sectapunterx/heap/pull/60\n* ci: fix macOS Release Qt install (unblocks the whole Release) by @sectapunterx in https://github.com/sectapunterx/heap/pull/61\n* ci: fix macOS release .dmg \u2014 re-sign bundle + drag-install layout by @sectapunterx in https://github.com/sectapunterx/heap/pull/62\n* heap 1.0 polish: settings fixes, calendar, data-reset, macOS chrome by @sectapunterx in https://github.com/sectapunterx/heap/pull/64\n* ci(release): semver release naming + v1.0.0 by @sectapunterx in https://github.com/sectapunterx/heap/pull/63\n* fix(git): re-match focused branch on prefix change + settings hint by @sectapunterx in https://github.com/sectapunterx/heap/pull/65\n* ci(release): sign Windows artifacts via SignPath Foundation by @sectapunterx in https://github.com/sectapunterx/heap/pull/66\n\n\n**Full Changelog**: https://github.com/sectapunterx/heap/commits/v0.4.2",
+  "url": "https://github.com/sectapunterx/heap/releases/tag/v0.4.2",
+  "prerelease": false,
+  "draft": false,
+  "assets": [
+   {
+    "name": "heap-v0.4.2-linux-amd64.deb",
+    "size": 942314,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-linux-amd64.deb"
+   },
+   {
+    "name": "heap-v0.4.2-linux-x86_64.AppImage",
+    "size": 39758328,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-linux-x86_64.AppImage"
+   },
+   {
+    "name": "heap-v0.4.2-macos.dmg",
+    "size": 58064026,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-macos.dmg"
+   },
+   {
+    "name": "heap-v0.4.2-windows-portable.zip",
+    "size": 37393667,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-windows-portable.zip"
+   },
+   {
+    "name": "heap-v0.4.2-windows-setup.exe",
+    "size": 24461292,
+    "url": "https://github.com/sectapunterx/heap/releases/download/v0.4.2/heap-v0.4.2-windows-setup.exe"
+   }
+  ]
+ }
+]

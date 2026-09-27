@@ -1,0 +1,121 @@
+/* heap. site tokens — the app palette (qml/Brand.qml, qml/Theme.qml) on the web.
+   The inline script in Base.astro sets data-theme before first paint; without
+   JS the media query below still picks the right scheme. */
+
+:root,
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #0b0e13;
+  --bg2: #11151c;
+  --panel: #14181f;
+  --panel2: #1a1f29;
+  --border: #262d39;
+  --hair: #1c2230;
+  --text: #e5ecf3;
+  --text2: #b8c2cc;
+  --text3: #8a94a3;
+  /* Theme.textDim — the smallest text still clears WCAG AA */
+  --text4: #808a9a;
+  --accent: #3bccdd;
+  --accent2: #5fdaea;
+  --accent-soft: rgba(59, 204, 221, 0.14);
+  --btn: #3bccdd;
+  --btn-ink: #0b0e13;
+  --nav-bg: rgba(11, 14, 19, 0.86);
+  --mark-ink: #c6d0dc;
+  --mark-crown: #ffffff;
+  --code: #0e1218;
+  --scrim: rgba(5, 7, 10, 0.62);
+  --shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  --shadow-sm: 0 12px 32px rgba(0, 0, 0, 0.4);
+
+  --st-backlog: #8a8e98;
+  --st-todo: #86a0bd;
+  --st-prog: #32b2e7;
+  --st-review: #bf94ec;
+  --st-done: #78be7a;
+  --p0: #e6624c;
+  --p1: #fe9c3a;
+  --p2: #d8c277;
+  --p3: #7d9bc7;
+  --yes: #78be7a;
+  --no: #808a9a;
+  --part: #d8c277;
+  --mention: #bf94ec;
+  --now: #e6624c;
+}
+
+:root[data-theme='light'] {
+  color-scheme: light;
+  --bg: #f3f5f8;
+  --bg2: #eaeef3;
+  --panel: #ffffff;
+  --panel2: #f7f9fb;
+  --border: #dde3ec;
+  --hair: #e3e8ef;
+  --text: #11151c;
+  --text2: #333d4a;
+  --text3: #56606e;
+  --text4: #565f6c;
+  --accent: #0d6370;
+  --accent2: #0a525d;
+  --accent-soft: rgba(13, 99, 112, 0.1);
+  --btn: #11707f;
+  --btn-ink: #ffffff;
+  --nav-bg: rgba(243, 245, 248, 0.9);
+  --mark-ink: #404b58;
+  --mark-crown: #0b0e13;
+  --code: #f7f9fb;
+  --scrim: rgba(17, 21, 28, 0.35);
+  --shadow: 0 30px 80px rgba(17, 21, 28, 0.14);
+  --shadow-sm: 0 12px 32px rgba(17, 21, 28, 0.1);
+
+  --st-backlog: #7a808c;
+  --st-todo: #5a6371;
+  --st-prog: #1f6fb0;
+  --st-review: #7d4fb0;
+  --st-done: #2f7a33;
+  --p0: #a33626;
+  --p1: #8a4a10;
+  --p2: #6a5309;
+  --p3: #3a5677;
+  --yes: #2f7a33;
+  --no: #656e7d;
+  --part: #6a5309;
+  --mention: #7d4fb0;
+  --now: #c34a36;
+}
+
+@media (prefers-color-scheme: light) {
+  :root:not([data-theme]) {
+    color-scheme: light;
+    --bg: #f3f5f8;
+    --bg2: #eaeef3;
+    --panel: #ffffff;
+    --panel2: #f7f9fb;
+    --border: #dde3ec;
+    --hair: #e3e8ef;
+    --text: #11151c;
+    --text2: #333d4a;
+    --text3: #56606e;
+    --text4: #565f6c;
+    --accent: #0d6370;
+    --accent2: #0a525d;
+    --accent-soft: rgba(13, 99, 112, 0.1);
+    --btn: #11707f;
+    --btn-ink: #ffffff;
+    --nav-bg: rgba(243, 245, 248, 0.9);
+    --mark-ink: #404b58;
+    --mark-crown: #0b0e13;
+    --code: #f7f9fb;
+  }
+}
+
+:root {
+  --sans: 'IBM Plex Sans', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --serif: 'IBM Plex Serif', Georgia, serif;
+  --mono: 'JetBrains Mono', ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+  --nav-h: 64px;
+  --gut: clamp(16px, 5vw, 120px);
+  --radius: 14px;
+}

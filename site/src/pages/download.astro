@@ -1,0 +1,295 @@
+---
+import Base from '../layouts/Base.astro';
+import OsFiles from '../components/OsFiles.astro';
+import { getLatestRelease } from '../lib/github';
+import { assetsByOS, formatDate, formatSize, versionOf } from '../lib/releases';
+import { OS_LABEL } from '../lib/os';
+import { GITHUB_URL, RELEASES_URL, url } from '../lib/site';
+
+const latest = await getLatestRelease();
+const byOS = assetsByOS(latest);
+const all = (['linux', 'windows', 'macos'] as const).flatMap((os) => byOS[os].map((a) => ({ ...a, osLabel: OS_LABEL[os] })));
+
+const ways = [
+  {
+    title: 'Scoop · Windows',
+    body: 'The bucket lives in the heap. repository itself.',
+    code: `scoop bucket add heap ${GITHUB_URL}\nscoop install heap`,
+  },
+  {
+    title: 'Tarball · any Linux',
+    body: 'Installs system-wide as root, into ~/.local otherwise. --prefix and --uninstall work too.',
+    code: 'tar xzf heap-*-linux-x86_64.tar.gz\ncd heap-*-linux-x86_64\n./install.sh',
+  },
+  {
+    title: 'From source',
+    body: 'Qt 6.4+ and a C++20 compiler, on any platform.',
+    code: `git clone ${GITHUB_URL} && cd heap\ncmake -S . -B build -DCMAKE_BUILD_TYPE=Release\ncmake --build build -j`,
+  },
+];
+
+const qt = [
+  ['Arch', 'sudo pacman -S qt6-base qt6-declarative qt6-svg qt6-wayland'],
+  ['Debian / Ubuntu', 'sudo apt install libqt6core6 libqt6quick6 libqt6svg6 qml6-module-qtquick'],
+  ['Fedora', 'sudo dnf install qt6-qtbase qt6-qtdeclarative qt6-qtsvg'],
+];
+---
+
+<Base title="Download" description={`Download heap. ${versionOf(latest.tag)} for Windows, macOS or Linux — installer, portable zip, disk image, AppImage, .deb or tarball.`} active="download">
+  <section class="section">
+    <div class="wrap split" style="align-items: start">
+      <div class="stack" style="gap: 22px">
+        <span class="eyebrow">Download · v{versionOf(latest.tag)} · {formatDate(latest.date)}</span>
+        <h1 class="h1">Get heap.</h1>
+        <p class="lead">
+          One download, nothing else to install. On Linux, pick the AppImage if you just want it to run — Qt is inside. The .deb and the
+          tarball are small because they use the Qt 6 your distribution already ships.
+        </p>
+        <p class="mobile-note" data-mobile-note hidden>
+          You’re on a phone — heap. is a desktop app.
+          <button type="button" class="btn btn--sm" data-share-link={new URL(url('download'), Astro.site).href}>Send me the link</button>
+        </p>
+      </div>
+      <div class="card dl-card">
+        <OsFiles release={latest} />
+      </div>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap">
+      <h2 class="h2" style="margin-bottom: 32px">Other ways to install</h2>
+      <div class="ways">
+        {
+          ways.map((w) => (
+            <div class="card way">
+              <div class="way__text">
+                <h3 class="h3" style="font-size: 18px">
+                  {w.title}
+                </h3>
+                <p>{w.body}</p>
+              </div>
+              <pre class="mono">{w.code}</pre>
+            </div>
+          ))
+        }
+      </div>
+      <details class="qt">
+        <summary>The .deb or tarball says Qt is missing?</summary>
+        <div class="qt__list">
+          {
+            qt.map(([distro, cmd]) => (
+              <div>
+                <span class="muted">{distro}</span>
+                <code class="mono">{cmd}</code>
+              </div>
+            ))
+          }
+        </div>
+      </details>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap split split--narrow-left">
+      <div class="stack">
+        <h2 class="h2">Every file in this release</h2>
+        <p class="lead">Straight from GitHub Releases, where older versions and the source archive live too.</p>
+        <a class="link-arrow" href={url('changelog')}>What’s new in {versionOf(latest.tag)}</a>
+        <a class="link-arrow" href={RELEASES_URL}>All releases on GitHub</a>
+      </div>
+      <ul class="files">
+        {
+          all.map((a) => (
+            <li>
+              <span class="muted">{a.osLabel}</span>
+              <a class="mono" href={a.url}>
+                {a.name}
+              </a>
+              <span class="mono files__size">{formatSize(a.size)}</span>
+            </li>
+          ))
+        }
+      </ul>
+    </div>
+  </section>
+
+  <section class="section">
+    <div class="wrap trio">
+      <div class="card mini"><span class="eyebrow">First run</span><span>A short guided tour and a sample board. Skip it now, replay it any time.</span></div>
+      <div class="card mini"><span class="eyebrow">Updates</span><span>heap. tells you when a new release is out. It never installs anything behind your back.</span></div>
+      <div class="card mini"><span class="eyebrow">Uninstall</span><span>Remove the app; your data folder stays until you delete it. <span class="code-inline">install.sh --uninstall</span> on Linux.</span></div>
+    </div>
+  </section>
+</Base>
+
+<script>
+  import '../scripts/os-ui';
+</script>
+
+<style>
+  .dl-card {
+    padding: clamp(20px, 3vw, 32px);
+    border-radius: 18px;
+  }
+
+  .mobile-note {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 12px;
+    margin: 0;
+    color: var(--text2);
+  }
+
+  .mobile-note[hidden] {
+    display: none;
+  }
+
+  .ways {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .way {
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+  }
+
+  .way__text {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    padding: 22px 22px 16px;
+  }
+
+  .way__text p {
+    margin: 0;
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text3);
+  }
+
+  .way pre {
+    flex-grow: 1;
+    margin: 0;
+    padding: 16px 22px;
+    border-top: 1px solid var(--hair);
+    background: var(--code);
+    font-size: 13px;
+    line-height: 1.7;
+    color: var(--text2);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 900px) {
+    .ways {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  .qt {
+    margin-top: 24px;
+    font-size: 15px;
+  }
+
+  .qt summary {
+    cursor: pointer;
+    color: var(--text2);
+  }
+
+  .qt__list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    margin-top: 14px;
+  }
+
+  .qt__list div {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 12px;
+  }
+
+  .qt__list code {
+    font-size: 13px;
+    color: var(--text2);
+    overflow-wrap: anywhere;
+  }
+
+  @media (max-width: 640px) {
+    .qt__list div {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 2px;
+    }
+  }
+
+  .files {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+  }
+
+  .files li {
+    display: grid;
+    grid-template-columns: 90px minmax(0, 1fr) 80px;
+    gap: 16px;
+    align-items: center;
+    padding: 15px 20px;
+    border-bottom: 1px solid var(--hair);
+    font-size: 14px;
+  }
+
+  .files li:last-child {
+    border-bottom: 0;
+  }
+
+  .files a {
+    font-size: 13px;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .files__size {
+    text-align: right;
+    font-size: 13px;
+    color: var(--text4);
+  }
+
+  @media (max-width: 640px) {
+    .files li {
+      grid-template-columns: minmax(0, 1fr) auto;
+    }
+    .files li > .muted {
+      display: none;
+    }
+  }
+
+  .trio {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .mini {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    padding: 24px;
+    font-size: 15px;
+    line-height: 1.6;
+    color: var(--text2);
+  }
+
+  @media (max-width: 900px) {
+    .trio {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>

@@ -1,0 +1,20 @@
+---
+import Base from '../layouts/Base.astro';
+import { url } from '../lib/site';
+---
+
+<Base title="Not found">
+  <section class="section">
+    <div class="wrap stack" style="gap: 20px; align-items: flex-start; min-height: 50vh">
+      <span class="eyebrow">404</span>
+      <h1 class="h1">This page isn’t on the board.</h1>
+      <p class="lead">It may have moved when the site was rebuilt. Search for it, or start from one of these.</p>
+      <div style="display: flex; flex-wrap: wrap; gap: 12px">
+        <button type="button" class="btn btn--primary" data-open-palette>Search the site</button>
+        <a class="btn" href={url()}>Home</a>
+        <a class="btn" href={url('docs')}>Docs</a>
+        <a class="btn" href={url('download')}>Download</a>
+      </div>
+    </div>
+  </section>
+</Base>
