@@ -201,7 +201,7 @@ jobs:
       # it only needs the cache directory carried between runs (below).
       - name: Setup ccache (linux, macos)
         if: runner.os != 'Windows'
-        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
+        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
         with:
           key: ${{ runner.os }}-ccache
 
@@ -403,7 +403,7 @@ jobs:
 
       - name: Render test report
         if: always()
-        uses: dorny/test-reporter@3eeb9fc888e82e8be2fb356bbeec2750231672bc # v1
+        uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
         with:
           name: tests (${{ matrix.os }})
           path: build/tests/ctest-${{ matrix.os }}.xml
@@ -480,7 +480,7 @@ jobs:
           modules: qtnetworkauth
 
       - name: Setup ccache
-        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
+        uses: hendrikmuhs/ccache-action@f09c25b45002a07be2955cbe52e8cee55643f89d # v1.2.24
         with:
           key: ${{ runner.os }}-asan-ccache
           # -g + sanitizer objects are several times larger than Release ones.
