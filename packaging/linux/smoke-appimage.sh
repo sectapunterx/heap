@@ -18,7 +18,7 @@ export DEBIAN_FRONTEND=noninteractive
 echo "::group::desktop base (X server, GL, fonts, session bus)"
 apt-get update -q
 apt-get install -y --no-install-recommends \
-  xvfb dbus libgl1 libegl1 libfontconfig1 libfreetype6 libglib2.0-0t64 \
+  xvfb dbus libgl1 libegl1 libopengl0 libfontconfig1 libfreetype6 libglib2.0-0t64 \
   libx11-6 libx11-xcb1 libxkbcommon0 libxkbcommon-x11-0 \
   libxcb1 libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
   libxcb-render-util0 libxcb-shape0 libxcb-shm0 libxcb-sync1 libxcb-xfixes0 libxcb-xinerama0 libxcb-xkb1
