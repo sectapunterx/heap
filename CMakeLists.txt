@@ -42,7 +42,32 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_link_options(-fsanitize=address,undefined)
 endif()
 
+# Warnings for heap's own C++ — applied per target (and in tests/ after
+# googletest is fetched) so vendored md4c and googletest keep their own flags.
+# CI turns them into errors; a deprecation stays a warning there, so a Qt
+# upgrade that deprecates an API cannot turn CI red by itself.
+option(HEAP_WARNINGS_AS_ERRORS "Fail the build on a compiler warning in heap's own code" OFF)
+set(HEAP_WARNING_FLAGS "")
+if(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
+    # missing-field-initializers: leaving trailing fields of an aggregate to
+    # their defaults is intended here (OAuthConfig, FakeHttpServer::Response),
+    # and GCC flags it even with designated initializers.
+    set(HEAP_WARNING_FLAGS -Wall -Wextra -Wno-missing-field-initializers)
+    if(HEAP_WARNINGS_AS_ERRORS)
+        list(APPEND HEAP_WARNING_FLAGS -Werror -Wno-error=deprecated-declarations)
+    endif()
+endif()
+set(HEAP_WARNING_OPTIONS "$<$<COMPILE_LANGUAGE:CXX>:${HEAP_WARNING_FLAGS}>")
+
 find_package(Qt6 6.2 REQUIRED COMPONENTS Core Gui Qml Quick QuickControls2 Widgets Network NetworkAuth)
+# CI and every released package build on Qt 6.9+. Older Qt still configures
+# (the clang-tidy job analyses against Ubuntu's 6.4), but the UI does not run on
+# 6.4: its compiled Main.qml bindings hang at startup and the TodoCpp singletons
+# fail to resolve. Say so, rather than let a build that cannot start look fine.
+if(Qt6_VERSION VERSION_LESS 6.9)
+    message(WARNING "heap: Qt ${Qt6_VERSION} is older than 6.9, which CI and the releases use. "
+                    "The app is known not to start on Qt 6.4; use Qt 6.9 or newer.")
+endif()
 # Test is used by the unit suites (QAbstractItemModelTester, QSignalSpy).
 find_package(Qt6 6.2 QUIET OPTIONAL_COMPONENTS Test)
 # DBus is only needed for the Linux native notifications backend.
@@ -146,6 +171,7 @@ target_include_directories(heap_markdown PUBLIC ${CMAKE_SOURCE_DIR}/src)
 target_link_libraries(heap_markdown PUBLIC heap_md4c Qt6::Core Qt6::Gui)
 # MdBlockModel is a QAbstractListModel, so this one does need moc.
 set_target_properties(heap_markdown PROPERTIES AUTOMOC ON)
+target_compile_options(heap_markdown PRIVATE "${HEAP_WARNING_OPTIONS}")
 
 # ── Core library: all app logic + the TodoCpp QML module ──────────
 # Extracted from the heap executable so the Qt Quick Test harness (tests/) can
@@ -183,7 +209,6 @@ qt_add_library(heap_core STATIC
     src/integrations/JiraProvider.cpp
     src/integrations/GitlabProvider.cpp
     src/integrations/RestIssueProvider.cpp
-    src/integrations/ProviderRegistry.cpp
     src/integrations/TrelloProvider.cpp
     src/integrations/SecretStore.cpp
     src/integrations/OAuthManager.cpp
@@ -307,10 +332,7 @@ qt_add_qml_module(heap_core
 # src/markdown too: qt_add_qml_module's generated registration file includes
 # each QML-exposed header by its bare name.
 target_include_directories(heap_core PUBLIC src src/markdown)
-# PRIVATE: only ProviderRegistry.cpp reads the generated credentials header, and
-# the test targets compile their own copy without this directory, so they see
-# the empty defaults from OAuthClients.h.
-target_include_directories(heap_core PRIVATE "${CMAKE_BINARY_DIR}/generated")
+target_compile_options(heap_core PRIVATE "${HEAP_WARNING_OPTIONS}")
 target_link_libraries(heap_core PUBLIC
     heap_markdown
     Qt6::Core
@@ -361,6 +383,20 @@ else()
     message(STATUS "heap: QtKeychain not found — integration tokens use the secrets.json fallback")
 endif()
 
+# ── Provider registry, with the baked OAuth credentials ──────────
+# ProviderRegistry.cpp is the only file that reads the generated credentials
+# header, so it is the only file kept out of heap_core: the app links this
+# copy, and the test suites link one built without the header (tests/), so they
+# see the empty defaults from OAuthClients.h on every machine — including a
+# maintainer's with oauth-clients.local.cmake. Everything else in heap_core is
+# shared by the app and the tests. OBJECT so the objects always reach the link:
+# heap_core calls into the registry, and a static archive listed after it
+# would not be searched again.
+add_library(heap_provider_registry OBJECT src/integrations/ProviderRegistry.cpp)
+target_include_directories(heap_provider_registry PRIVATE "${CMAKE_BINARY_DIR}/generated")
+target_link_libraries(heap_provider_registry PUBLIC heap_core)
+target_compile_options(heap_provider_registry PRIVATE "${HEAP_WARNING_OPTIONS}")
+
 # ── Application executable — thin shell that loads Main.qml from heap_core ──
 # WIN32 → GUI subsystem on Windows (no console); MACOSX_BUNDLE → a .app on macOS
 # so windeployqt/macdeployqt and `install(... BUNDLE ...)` have a bundle to
@@ -373,7 +409,8 @@ qt_add_executable(heap WIN32 MACOSX_BUNDLE
 # carries the type-registration + qmlcache resource init. Linking only the
 # backing library lets the linker drop those symbols, so `import TodoCpp` (and
 # Main.qml) fail to load at runtime. Linking the plugin force-references them.
-target_link_libraries(heap PRIVATE heap_core heap_coreplugin)
+target_link_libraries(heap PRIVATE heap_core heap_coreplugin heap_provider_registry)
+target_compile_options(heap PRIVATE "${HEAP_WARNING_OPTIONS}")
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
 # On heap_core, not the app, so every binary that loads the QML — the test

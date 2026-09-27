@@ -29,6 +29,10 @@ FetchContent_Declare(
 set(gtest_force_shared_crt ON CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
+# heap's warning set (root CMakeLists) for every suite below — added after
+# googletest so its own targets keep their flags. Empty in a standalone build.
+add_compile_options("${HEAP_WARNING_OPTIONS}")
+
 # The query language resolves `deadline:<friday` through the app's own date
 # parser, so every target that compiles TaskQuery.cpp drags the whole chrono
 # chain (both locales included) behind it. Named once so the two suites that
@@ -246,123 +250,30 @@ target_link_libraries(heap_notify_tests PRIVATE
 
 add_test(NAME heap_notify_tests COMMAND heap_notify_tests)
 
-# ─── Integration sources shared by every AppController-linking suite ───
-# AppController pulls in the whole tracker-sync layer, so each suite below
-# compiles it. One list: a new src/integrations/*.cpp is a one-line change
-# here instead of an edit in every target.
-set(HEAP_INTEGRATION_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/StatusMap.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrackerFields.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GithubProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/JiraProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/GitlabProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/RestIssueProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderDescriptor.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/TrelloProvider.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SecretStore.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/OAuthManager.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/MattermostClient.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/MattermostClient.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/IntegrationProvider.h
-)
-
-# ─── Sources every AppController-linking suite compiles ───
-# The same list as the main `heap` target *minus* QML registration (no
-# Qt6::Quick) — AppController's own implementation only needs Core/Gui/
-# Widgets/Qml + Test. A new src/*.cpp that AppController depends on is a
-# one-line change here instead of an edit in each of the nine suites.
-set(HEAP_APPCTRL_DEP_SOURCES
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/AppController.h
-        ${HEAP_QUERY_SOURCES}
-        ${HEAP_INTEGRATION_SOURCES}
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Logger.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/Models.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/RecoveryLog.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/SampleData.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/StateSerializer.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoTokenizer.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_en.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoLocale_ru.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/chrono/ChronoParser.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/GitWatcher.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_tray.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Paths.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/text/TaskTextUtils.cpp
-        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
-)
-if (WIN32)
-    list(APPEND HEAP_APPCTRL_DEP_SOURCES
-            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
-    )
-endif ()
-if (APPLE)
-    list(APPEND HEAP_APPCTRL_DEP_SOURCES
-            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
-    )
-endif ()
-if (UNIX AND NOT APPLE)
-    list(APPEND HEAP_APPCTRL_DEP_SOURCES
-            ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotificationCenter_linux.cpp
-    )
-endif ()
-
 # heap_add_appcontroller_test(<name> <sources…>)
 #
-# Declares one gtest suite that links AppController: the given sources plus
-# HEAP_APPCTRL_DEP_SOURCES, AUTOMOC, the src/ include dir, the Qt/GTest link
-# set, optional D-Bus on Linux, and the add_test() registration.
+# Declares one gtest suite that drives a real AppController: the given sources
+# linked against heap_core — the same library the app ships — plus Qt Test,
+# GTest and the add_test() registration.
+#
+# These suites used to compile AppController and everything behind it
+# themselves, once per suite; linking heap_core means the app and every suite
+# share one compile of it. What heap_core adds over the old test copy is safe
+# here: the OS keychain is bypassed at runtime in Qt's test mode (SecretStore),
+# which every suite's main() turns on. The one file that differs is
+# ProviderRegistry.cpp: the suites link heap_provider_registry_test below,
+# built without the baked OAuth credentials.
 #
 # Each of these suites brings its own main() (offscreen QPA + QStandardPaths
 # test mode), so GTest::gtest_main is deliberately not linked.
+add_library(heap_provider_registry_test OBJECT
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/ProviderRegistry.cpp)
+target_link_libraries(heap_provider_registry_test PUBLIC heap_core)
+
 function(heap_add_appcontroller_test name)
-    add_executable(${name} ${ARGN} ${HEAP_APPCTRL_DEP_SOURCES})
+    add_executable(${name} ${ARGN})
     set_target_properties(${name} PROPERTIES AUTOMOC ON)
-
-    target_include_directories(${name} PRIVATE
-            ${CMAKE_CURRENT_SOURCE_DIR}/../src
-    )
-
-    target_link_libraries(${name} PRIVATE
-            Qt6::Core
-            Qt6::Gui
-            Qt6::Network
-            Qt6::NetworkAuth
-            Qt6::Widgets
-            Qt6::Qml
-            Qt6::Test
-            heap_markdown
-            GTest::gtest
-    )
-    if (UNIX AND NOT APPLE)
-        find_package(Qt6 QUIET COMPONENTS DBus)
-        if (TARGET Qt6::DBus)
-            target_link_libraries(${name} PRIVATE Qt6::DBus)
-        endif ()
-    endif ()
-    # SecretStore wraps the fallback file with DPAPI on Windows.
-    if (WIN32)
-        target_link_libraries(${name} PRIVATE crypt32)
-    endif ()
-
+    target_link_libraries(${name} PRIVATE heap_provider_registry_test Qt6::Test GTest::gtest)
     add_test(NAME ${name} COMMAND ${name})
 endfunction()
 
@@ -539,13 +450,17 @@ set_property(TARGET heap_qml_tests PROPERTY LINK_LIBRARY_OVERRIDE_heap_core WHOL
 target_link_libraries(heap_qml_tests PRIVATE
         heap_core
         "$<LINK_LIBRARY:WHOLE_ARCHIVE,heap_coreplugin>"
+        heap_provider_registry_test
         Qt6::QuickTest
 )
 
 add_test(NAME heap_qml_tests
         COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml)
+# COST: the slowest suite by far; under `ctest --parallel` it starts first so
+# the rest run alongside it instead of after it.
 set_tests_properties(heap_qml_tests PROPERTIES
-        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic")
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic"
+        COST 1000)
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
 # ArchiveView, …) failed to resolve in the Quick Test binary on Linux under
@@ -884,6 +799,20 @@ heap_add_appcontroller_test(heap_statuses_tests test_statuses.cpp)
 foreach (_suite migration fault_injection save_bench)
     heap_add_appcontroller_test(heap_${_suite}_tests test_${_suite}.cpp)
 endforeach ()
+
+# ─── Profiles written by released versions ───
+# Opens the state.json each shipped schema generation wrote (tests/fixtures/
+# state, one file per release that changed the schema) and checks nothing is
+# lost on the way in or on the next save.
+heap_add_appcontroller_test(heap_state_fixture_tests test_state_fixtures.cpp)
+target_compile_definitions(heap_state_fixture_tests PRIVATE
+        HEAP_STATE_FIXTURES_DIR="${CMAKE_CURRENT_SOURCE_DIR}/fixtures/state")
+
+# The two benchmarks assert wall-clock budgets. CI runs ctest with --parallel,
+# and a benchmark sharing the runner's cores with other suites misses its
+# budget for reasons that have nothing to do with the code (seen under ASan).
+# RUN_SERIAL runs each one alone; everything else stays parallel.
+set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
 
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.

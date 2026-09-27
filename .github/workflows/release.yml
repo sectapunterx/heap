@@ -10,9 +10,13 @@ on:
     tags:
       - "v*"
   workflow_dispatch:
+  # The nightly workflow's release dry run. Called from a branch, it builds
+  # like a manual dispatch: a -dev version, nothing tagged or published.
+  workflow_call:
 
+# Read-only by default; the publish job asks for what it needs.
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   # ──────────────────────────────────────────────────────────────────
@@ -27,12 +31,17 @@ jobs:
   meta:
     name: Resolve version
     runs-on: ubuntu-24.04
+    # Covers the wait for CI below (up to 50 minutes) plus the checkout.
+    timeout-minutes: 55
+    permissions:
+      contents: read
+      checks: read
     outputs:
       tag: ${{ steps.tag.outputs.tag }}
       release: ${{ steps.tag.outputs.release }}
       prerelease: ${{ steps.tag.outputs.prerelease }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
       - name: Resolve version & release kind
@@ -76,6 +85,31 @@ jobs:
             echo "prerelease=$prerelease"
           } >> "$GITHUB_OUTPUT"
 
+      # A tag may only ship a commit that passed CI. Master accepts admin
+      # pushes that bypass the ruleset, so a tag can point at a commit whose
+      # `ci` check is red, still running, or was never run. The version bump is
+      # usually pushed moments before its tag, so wait for the check to finish
+      # rather than failing on "in progress". A manual test build skips this.
+      - name: Require a green CI run for the tagged commit
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          sha="${{ github.sha }}"
+          for attempt in $(seq 1 100); do
+            state=$(gh api "repos/${{ github.repository }}/commits/$sha/check-runs?check_name=ci&filter=latest" \
+              --jq '.check_runs | sort_by(.started_at) | last | if . == null then "missing" else "\(.status) \(.conclusion)" end')
+            case "$state" in
+              "completed success") echo "ci passed on $sha"; exit 0 ;;
+              completed*)          echo "::error::ci on $sha finished as '${state#completed }' — fix master and re-tag"; exit 1 ;;
+              *)                   echo "ci on $sha: $state (check $attempt/100)"; sleep 30 ;;
+            esac
+          done
+          echo "::error::no finished ci run for $sha after 50 minutes — was this commit pushed to master?"
+          exit 1
+
   # ──────────────────────────────────────────────────────────────────
   # Windows: portable zip (proven windeployqt bundle) + Inno Setup
   # installer (.exe).
@@ -84,19 +118,23 @@ jobs:
     name: Package (Windows)
     needs: meta
     runs-on: windows-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+      actions: read
     # Job-level env so the optional signing steps' `if:` can read the secret (a
     # step's own env is not reliably visible to its own `if`, and `secrets`
     # cannot be referenced in `if` directly). Mirrors the macOS signing pattern.
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           fetch-depth: 0
 
       - name: Setup MSYS2 (UCRT64)
         id: msys2
-        uses: msys2/setup-msys2@v2
+        uses: msys2/setup-msys2@66cd2cce69caa17b53920067426061ca1de3a884 # v2.32.0
         with:
           msystem: UCRT64
           update: true
@@ -163,6 +201,21 @@ jobs:
           export PATH="$MSYS_BASE_UNIX/ucrt64/bin:$MSYS_BASE_UNIX/ucrt64/share/qt6/libexec:$MSYS_BASE_UNIX/ucrt64/share/qt6/bin:$PATH"
           cmake --build build --target portable
 
+      # Start the bundle exactly as a user would get it — PATH without MSYS2,
+      # so a DLL or plugin windeployqt/copy-deps missed (the v0.4.3 zip shipped
+      # without Qt6Svg and the UCRT) fails the release instead of the user.
+      - name: Smoke-test the portable bundle
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
+          $dataDir = Join-Path $env:RUNNER_TEMP 'smoke'
+          # GUI-subsystem binary: no console, so read the verdict from its log.
+          $p = Start-Process -FilePath build\heap-portable\heap.exe `
+                 -ArgumentList '--smoke', '--data-dir', $dataDir -Wait -PassThru
+          Get-Content (Join-Path $dataDir 'logs\heap.log') -ErrorAction SilentlyContinue
+          if ($p.ExitCode -ne 0) { Write-Error "smoke failed with exit code $($p.ExitCode)"; exit 1 }
+
       # Authenticode-sign heap.exe + the bundled Qt DLLs before they are
       # packaged, so both the portable zip and the installer carry signed
       # binaries. Signing runs via SignPath Foundation (free OSS code signing):
@@ -173,14 +226,14 @@ jobs:
       - name: Upload unsigned portable bundle
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
         id: upload-portable
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-portable
           path: build/heap-portable
 
       - name: Sign portable bundle (SignPath)
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORG_ID }}
@@ -219,14 +272,14 @@ jobs:
       - name: Upload unsigned installer
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
         id: upload-installer
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: unsigned-installer
           path: installer/Output/heap-${{ needs.meta.outputs.tag }}-windows-setup.exe
 
       - name: Sign installer (SignPath)
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
-        uses: signpath/github-action-submit-signing-request@v2
+        uses: signpath/github-action-submit-signing-request@c92b958760219087e01f8d67a1669ed57afe2627 # v2.3
         with:
           api-token: ${{ secrets.SIGNPATH_API_TOKEN }}
           organization-id: ${{ vars.SIGNPATH_ORG_ID }}
@@ -238,7 +291,7 @@ jobs:
           output-artifact-directory: installer/Output
 
       - name: Upload Windows artifacts
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-windows
           path: |
@@ -247,24 +300,45 @@ jobs:
           if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
-  # Linux: .deb (dpkg-deb) + AppImage (linuxdeploy). The AppImage step is
-  # best-effort — if the linuxdeploy toolchain hiccups, the .deb still ships.
+  # Linux: one AppImage, built on Qt 6.9.1 — the Qt CI tests — with Qt bundled.
+  # Earlier releases also shipped a .deb and a tarball built against Ubuntu
+  # 24.04's system Qt 6.4.2; the UI does not run on 6.4 (Main.qml's compiled
+  # bindings hang, and without them the TodoCpp singletons fail to resolve), so
+  # those are gone. The AppImage is no longer best-effort: it is the Linux
+  # artifact, and it has to build and pass its smoke test for the release to
+  # publish.
   # ──────────────────────────────────────────────────────────────────
   package-linux:
     name: Package (Linux)
     needs: meta
     runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    permissions:
+      contents: read
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: Install toolchain
+      # The xcb libraries are here so linuxdeploy finds and bundles what Qt's
+      # xcb platform plugin needs (libxcb-cursor0 among them, required since
+      # Qt 6.5 and missing from many desktops).
+      - name: Install build tools + system libs
         run: |
           sudo apt-get update
           sudo apt-get install -y --no-install-recommends \
             cmake ninja-build g++ file \
-            qt6-base-dev qt6-declarative-dev qt6-tools-dev \
-            qt6-svg-dev qt6-networkauth-dev qtkeychain-qt6-dev \
-            libgl1-mesa-dev libegl1-mesa-dev
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev libxkbcommon-x11-0 \
+            libfontconfig1-dev libfreetype-dev libdbus-1-3 \
+            libxcb-cursor0 libxcb-icccm4 libxcb-image0 libxcb-keysyms1 libxcb-randr0 \
+            libxcb-render-util0 libxcb-shape0 libxcb-xinerama0 libxcb-xkb1
+
+      # Same Qt as CI. QtKeychain is not on aqt, so, as on macOS, SecretStore
+      # keeps tokens in its secrets.json fallback.
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.9.1"
+          cache: true
+          modules: qtnetworkauth
 
       - name: Configure & build
         # Baked-in OAuth app credentials for one-click browser sign-in. CMake reads
@@ -290,49 +364,31 @@ jobs:
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_BUILD_TESTS=OFF
           cmake --build build --parallel --target heap
 
-      - name: Stage install tree
-        run: |
-          set -eu
-          VER="${{ needs.meta.outputs.tag }}"; VER="${VER#v}"
-          DEST="pkgroot"
-          install -Dm755 build/heap                                   "$DEST/usr/bin/heap"
-          install -Dm644 packaging/linux/heap.desktop                 "$DEST/usr/share/applications/heap.desktop"
-          install -Dm644 design/brand-export/icon/heap-icon.svg       "$DEST/usr/share/icons/hicolor/scalable/apps/heap.svg"
-          # Debian control metadata.
-          mkdir -p "$DEST/DEBIAN"
-          sed "s/@VERSION@/${VER}/" packaging/linux/control.in > "$DEST/DEBIAN/control"
-
-      - name: Build .deb
-        run: |
-          set -eu
-          dpkg-deb --build --root-owner-group pkgroot "heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb"
-
-      # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
-      # desktop/icon, laid out flat under a versioned top dir. Depends on system
-      # Qt 6 (Arch/source-install convention); install.sh warns if it is absent.
-      - name: Build tarball
-        run: |
-          set -eu
-          STAGE="heap-${{ needs.meta.outputs.tag }}-linux-x86_64"
-          rm -rf "$STAGE"
-          install -Dm755 build/heap                             "$STAGE/heap"
-          install -m644  packaging/linux/heap.desktop           "$STAGE/heap.desktop"
-          install -m644  design/brand-export/icon/heap-icon.svg "$STAGE/heap.svg"
-          install -m755  packaging/linux/install.sh             "$STAGE/install.sh"
-          tar -czf "$STAGE.tar.gz" "$STAGE"
-
       - name: Build AppImage
-        id: appimage
-        continue-on-error: true
         run: |
           set -eu
-          curl -fsSL -o linuxdeploy https://github.com/linuxdeploy/linuxdeploy/releases/download/continuous/linuxdeploy-x86_64.AppImage
-          curl -fsSL -o linuxdeploy-plugin-qt https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          # Checked against known hashes: `continuous` is rebuilt in place, so
+          # the tool that went into a release could change unseen. linuxdeploy
+          # is pinned to a tagged release; the Qt plugin's last tag is too old,
+          # so it stays on `continuous` but only the build hashed here is used —
+          # when upstream rebuilds it, this step fails until the hash is bumped.
+          curl -fsSL -o linuxdeploy \
+            https://github.com/linuxdeploy/linuxdeploy/releases/download/1-alpha-20251107-1/linuxdeploy-x86_64.AppImage
+          curl -fsSL -o linuxdeploy-plugin-qt \
+            https://github.com/linuxdeploy/linuxdeploy-plugin-qt/releases/download/continuous/linuxdeploy-plugin-qt-x86_64.AppImage
+          sha256sum -c - <<'SUMS'
+          c20cd71e3a4e3b80c3483cef793cda3f4e990aca14014d23c544ca3ce1270b4d  linuxdeploy
+          cfc1055b2b9dbc08412b579f20990b7b41a17b61beaa5847dc9477c96c9e9617  linuxdeploy-plugin-qt
+          SUMS
           chmod +x linuxdeploy linuxdeploy-plugin-qt
           # ubuntu-24.04 has fuse3, not libfuse2 — run the AppImage tools by
           # self-extracting instead of mounting.
           export APPIMAGE_EXTRACT_AND_RUN=1
+          # The Qt to bundle is install-qt-action's, not a system one.
+          export QMAKE="$QT_ROOT_DIR/bin/qmake"
+          export LD_LIBRARY_PATH="$QT_ROOT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
           export QML_SOURCES_PATHS="$PWD/qml"
+          export EXTRA_QT_PLUGINS="svg"
           export OUTPUT="heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage"
           # --icon-filename must match the desktop file's Icon=heap key.
           ./linuxdeploy --appdir AppDir \
@@ -341,16 +397,24 @@ jobs:
             --icon-file design/brand-export/icon/heap-icon.svg \
             --icon-filename heap \
             --plugin qt --output appimage
+          test -f "$OUTPUT"
 
-      - name: Upload Linux artifacts
-        uses: actions/upload-artifact@v7
+      # In a clean ubuntu:24.04 that has only what a desktop has, so anything
+      # the AppImage fails to bundle shows up here rather than on a user's
+      # machine. The script lives in a file: a quoted bash -c string once ran
+      # half of a test on the runner because of one apostrophe.
+      - name: Smoke-test the AppImage in a clean container
+        timeout-minutes: 10
+        env:
+          IMG: heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+        run: docker run --rm -v "$PWD:/w" -w /w ubuntu:24.04 bash packaging/linux/smoke-appimage.sh "$IMG"
+
+      - name: Upload Linux artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-linux
-          path: |
-            heap-${{ needs.meta.outputs.tag }}-linux-amd64.deb
-            heap-${{ needs.meta.outputs.tag }}-linux-x86_64.tar.gz
-            heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
-          if-no-files-found: warn
+          path: heap-${{ needs.meta.outputs.tag }}-linux-x86_64.AppImage
+          if-no-files-found: error
 
   # ──────────────────────────────────────────────────────────────────
   # macOS: .app via macdeployqt + .dmg. Unsigned by default; if the
@@ -364,6 +428,9 @@ jobs:
     # required for the browser-OAuth device flow (QOAuth2DeviceAuthorizationFlow).
     needs: meta
     runs-on: macos-14
+    timeout-minutes: 60
+    permissions:
+      contents: read
     # Job-level env so the optional signing step's `if:` can read it (a step's
     # own env is not reliably visible to its own `if`, and `secrets` cannot be
     # referenced in `if` directly).
@@ -374,7 +441,7 @@ jobs:
       MACOS_NOTARY_PASSWORD: ${{ secrets.MACOS_NOTARY_PASSWORD }}
       MACOS_NOTARY_TEAM_ID: ${{ secrets.MACOS_NOTARY_TEAM_ID }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
       - name: Install Ninja
         run: brew install ninja
@@ -384,7 +451,7 @@ jobs:
         # (passing it to aqt errors). qtnetworkauth is an add-on the browser
         # OAuth flow needs, so it must be requested explicitly. QtKeychain isn't
         # on aqt — SecretStore falls back to secrets.json on macOS.
-        uses: jurplel/install-qt-action@v4
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
         with:
           version: "6.9.1"
           modules: qtnetworkauth
@@ -497,12 +564,16 @@ jobs:
       - name: Build .dmg
         run: |
           set -eu
-          STAGE="$RUNNER_TEMP/dmg"
-          mkdir -p "$STAGE"
-          cp -R build/heap.app "$STAGE/"
-          ln -s /Applications "$STAGE/Applications"
-          hdiutil create -volname "heap" -srcfolder "$STAGE" -fs HFS+ -format UDZO -ov \
-            "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+          bash packaging/macos/make-dmg.sh build/heap.app "heap-${{ needs.meta.outputs.tag }}-macos.dmg"
+
+      # Run the app from the mounted dmg — the bundle a user drags out.
+      - name: Smoke-test the app from the dmg
+        timeout-minutes: 5
+        run: |
+          set -eu
+          hdiutil attach "heap-${{ needs.meta.outputs.tag }}-macos.dmg" -nobrowse -mountpoint /Volumes/heap
+          trap 'hdiutil detach /Volumes/heap' EXIT
+          /Volumes/heap/heap.app/Contents/MacOS/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
 
       # Notarize only when the Apple secrets are configured — the .app is already
       # signed + hardened above. Sign the dmg, submit, staple, accept-check. Do
@@ -520,8 +591,16 @@ jobs:
           xcrun stapler staple "$DMG"
           spctl -a -t open --context context:primary-signature -vv "$DMG"
 
+      # Without Apple's secrets the dmg is ad-hoc signed only, and Gatekeeper
+      # tells users it "can't be checked for malicious software". Not fatal —
+      # no Developer ID is configured yet — but a stable release says so rather
+      # than shipping it silently; publish adds the same note to the release.
+      - name: Flag an un-notarized stable release
+        if: ${{ env.MACOS_CERT_P12 == '' && needs.meta.outputs.prerelease == 'false' }}
+        run: echo "::warning::stable release with an un-notarized macOS dmg — set the MACOS_* secrets to notarize"
+
       - name: Upload macOS artifact
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: dist-macos
           path: heap-${{ needs.meta.outputs.tag }}-macos.dmg
@@ -545,9 +624,16 @@ jobs:
           && needs.package-windows.result == 'success'
           && needs.package-linux.result == 'success' }}
     runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    permissions:
+      contents: write       # create the release
+      id-token: write       # sign the provenance attestation (Sigstore)
+      attestations: write   # store it with the repository
+    env:
+      MACOS_NOTARIZED: ${{ secrets.MACOS_CERT_P12 != '' }}
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
         with:
           path: dist
           # Only the packaged per-platform bundles — NOT the unsigned-* SignPath
@@ -559,11 +645,54 @@ jobs:
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
 
+      # What went into the binaries (Qt frameworks and plugins, md4c,
+      # qtkeychain, …), as catalogued from the packaged artifacts.
+      - name: SBOM
+        uses: anchore/sbom-action@e22c389904149dbc22b58101806040fa8d37a610 # v0.24.0
+        with:
+          path: dist
+          format: spdx-json
+          output-file: dist/heap-${{ needs.meta.outputs.tag }}-sbom.spdx.json
+          upload-artifact: false
+          upload-release-assets: false
+
+      # A verifiable release: SHA256SUMS for a quick integrity check, and a
+      # signed build-provenance attestation per artifact, which ties each file
+      # to this workflow run and commit:
+      #   gh attestation verify <file> --repo ${{ github.repository }}
+      - name: Checksums
+        working-directory: dist
+        run: |
+          set -eu
+          sums=$(find . -maxdepth 1 -type f -printf '%f\n' | sort | xargs sha256sum)
+          printf '%s\n' "$sums" > SHA256SUMS
+          cat SHA256SUMS
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: dist/*
+
+      - name: Release notes preamble
+        env:
+          REPO: ${{ github.repository }}
+        run: |
+          {
+            if [ "$MACOS_NOTARIZED" != "true" ]; then
+              echo "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**."
+              echo
+            fi
+            cat <<EOF
+          Verify a download: \`sha256sum -c SHA256SUMS\`, or \`gh attestation verify <file> --repo $REPO\`.
+          EOF
+          } > notes.md
+
       - name: Publish
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2.6.2
         with:
           tag_name: ${{ needs.meta.outputs.tag }}
           name: "heap ${{ needs.meta.outputs.tag }}"
+          body_path: notes.md
           generate_release_notes: true
           # A full release becomes /releases/latest (the updater's target); a
           # hyphenated tag (rc/beta) is flagged pre-release and stays off latest.

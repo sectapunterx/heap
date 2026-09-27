@@ -1,0 +1,238 @@
+name: Nightly
+
+# What is too slow, too noisy or too early to gate every PR on, run once a day
+# against master: the next Qt, a deep fuzz under ASan, coverage, the benchmark
+# trend, and a full release build that publishes nothing. A red
+# nightly is a lead to follow up, not a blocked merge. Running daily also keeps
+# the ccache and Qt caches warm, which GitHub evicts after seven idle days.
+on:
+  schedule:
+    - cron: "17 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly
+  cancel-in-progress: false
+
+jobs:
+  # ──────────────────────────────────────────────────────────────────
+  # The newest Qt 6 release: an early warning for what the next Qt bump —
+  # or MSYS2 on its own, which Windows follows — will break.
+  # ──────────────────────────────────────────────────────────────────
+  latest-qt:
+    name: latest Qt
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install build tools + system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libfontconfig1-dev libfreetype-dev libdbus-1-3
+
+      - name: Install the newest Qt 6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.*"
+          cache: true
+          modules: qtnetworkauth
+
+      - name: Build
+        run: |
+          qmake6 --version || qmake --version
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DHEAP_WARNINGS_AS_ERRORS=ON
+          cmake --build build --parallel --target heap heap_all_tests
+
+      - name: Test
+        run: ctest --test-dir build/tests --parallel "$(getconf _NPROCESSORS_ONLN)" --timeout 300 --output-on-failure
+
+      - name: Smoke-test the app
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: build/heap --smoke --data-dir "$RUNNER_TEMP/smoke"
+
+  # ──────────────────────────────────────────────────────────────────
+  # The markdown fuzzer, 30x deeper than per PR and on new seeds every night.
+  # A failure prints the HEAP_FUZZ_SEED that reproduces it locally.
+  # ──────────────────────────────────────────────────────────────────
+  deep-fuzz:
+    name: deep fuzz (ASan)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install build tools + system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.9.1"
+          cache: true
+          modules: qtnetworkauth
+
+      - name: Setup ccache
+        uses: hendrikmuhs/ccache-action@5ebbd400eff9e74630f759d94ddd7b6c26299639 # v1.2.20
+        with:
+          key: ${{ runner.os }}-asan-ccache
+          max-size: 1G
+
+      - name: Build the fuzzer under sanitizers
+        run: |
+          cmake -S . -B build-san -G Ninja \
+            -DCMAKE_BUILD_TYPE=Debug \
+            -DHEAP_ENABLE_SANITIZERS=ON \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache \
+            -DCMAKE_CXX_COMPILER_LAUNCHER=ccache
+          cmake --build build-san --parallel --target heap_md_fuzz_tests
+
+      - name: Fuzz
+        env:
+          ASAN_OPTIONS: detect_leaks=1:strict_string_checks=1:halt_on_error=1
+          UBSAN_OPTIONS: print_stacktrace=1:halt_on_error=1
+          HEAP_FUZZ_CASES: "90000"
+          HEAP_FUZZ_SEED: ${{ github.run_number }}
+        run: |
+          echo "HEAP_FUZZ_SEED=$HEAP_FUZZ_SEED"
+          build-san/tests/heap_md_fuzz_tests
+
+  # ──────────────────────────────────────────────────────────────────
+  # Line coverage of src/ by the whole suite, as a trend: the summary goes to
+  # the run page, the lcov file to an artifact for a closer look.
+  # ──────────────────────────────────────────────────────────────────
+  coverage:
+    name: coverage
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install build tools + system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ gcovr \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libfontconfig1-dev libfreetype-dev libdbus-1-3
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.9.1"
+          cache: true
+          modules: qtnetworkauth
+
+      - name: Build with coverage
+        run: |
+          cmake -S . -B build-cov -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHEAP_ENABLE_COVERAGE=ON
+          cmake --build build-cov --parallel --target heap_all_tests
+
+      # Coverage is measured, not gated: a failing suite still shows up red in
+      # CI, and here it would only hide the numbers.
+      - name: Test
+        run: ctest --test-dir build-cov/tests --parallel "$(getconf _NPROCESSORS_ONLN)" --timeout 600 || true
+
+      - name: Report
+        run: |
+          set -eu
+          gcovr --root . --filter 'src/' --exclude '.*_autogen.*' \
+            --lcov coverage.lcov --txt-summary --print-summary > coverage.txt
+          {
+            echo '### Line coverage of src/'
+            echo
+            echo '```'
+            tail -n 3 coverage.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+          tail -n 3 coverage.txt
+
+      - name: Upload lcov
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: coverage-lcov
+          path: coverage.lcov
+          retention-days: 14
+
+  # ──────────────────────────────────────────────────────────────────
+  # Benchmark trend. The suites only assert a categorical budget per run; here
+  # their numbers are kept (in the Actions cache, no branch to push to) and a
+  # night that is 1.5x slower than the stored history fails.
+  # ──────────────────────────────────────────────────────────────────
+  benchmarks:
+    name: benchmarks
+    runs-on: ubuntu-24.04
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Install build tools + system libs
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            cmake ninja-build g++ \
+            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
+            libfontconfig1-dev libfreetype-dev libdbus-1-3
+
+      - name: Install Qt6
+        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
+        with:
+          version: "6.9.1"
+          cache: true
+          modules: qtnetworkauth
+
+      - name: Build the benchmarks (Release)
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel --target heap_md_bench_tests heap_save_bench_tests
+
+      - name: Run
+        env:
+          QT_QPA_PLATFORM: offscreen
+        run: |
+          build/tests/heap_md_bench_tests | tee md-bench.log
+          build/tests/heap_save_bench_tests | tee save-bench.log
+          python3 .github/scripts/bench_to_json.py bench.json md-bench.log save-bench.log
+
+      - name: Restore the history
+        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: bench-history
+          key: bench-history-${{ github.run_id }}
+          restore-keys: bench-history-
+
+      - name: Compare with the history
+        uses: benchmark-action/github-action-benchmark@4322e5726e6334590d251fc4f92bec0efafc45dc # v1.22.2
+        with:
+          tool: customSmallerIsBetter
+          output-file-path: bench.json
+          external-data-json-path: bench-history/benchmark-data.json
+          alert-threshold: "150%"
+          fail-on-alert: true
+          summary-always: true
+
+  # ──────────────────────────────────────────────────────────────────
+  # The whole release pipeline, packages and their smoke tests included, on
+  # master as it is tonight. A manual-style build: nothing is tagged or
+  # published (release.yml gates publishing on a pushed tag). The grants match
+  # what release.yml's jobs declare; its publish job does not run here.
+  # ──────────────────────────────────────────────────────────────────
+  release-dry-run:
+    name: release dry run
+    uses: ./.github/workflows/release.yml
+    permissions:
+      contents: write
+      checks: read
+      actions: read
+      id-token: write
+      attestations: write

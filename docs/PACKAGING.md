@@ -37,8 +37,7 @@ workflow refuses to publish if the two disagree.
 |----------|--------|-----------------|
 | Windows  | `…-windows-portable.zip` | CMake `portable` target (windeployqt bundle) |
 | Windows  | `…-windows-setup.exe`    | Inno Setup ([`installer/heap.iss`](../installer/heap.iss)) wrapping the portable bundle |
-| Linux    | `…-linux-amd64.deb`      | `dpkg-deb` over [`packaging/linux/`](../packaging/linux/) staging |
-| Linux    | `…-linux-x86_64.AppImage`| `linuxdeploy` + the Qt plugin (best-effort; the `.deb` still ships if it fails) |
+| Linux    | `…-linux-x86_64.AppImage`| `linuxdeploy` + the Qt plugin over a Qt 6.9.1 build (install-qt-action), smoke-tested in a clean `ubuntu:24.04` ([`packaging/linux/smoke-appimage.sh`](../packaging/linux/smoke-appimage.sh)) |
 | macOS    | `…-macos.dmg`            | `macdeployqt` → `hdiutil` drag-to-Applications dmg, **ad-hoc codesigned** (Developer ID + notarized when signing secrets are set) |
 
 ## macOS signing & notarization
@@ -128,4 +127,5 @@ proven:
 
 - **Flatpak** — a `org.heap.heap.yaml` manifest built via `flatpak-builder`
   and pushed to a Flathub repo.
-- **`.rpm`** — an `fpm`/`rpmbuild` job mirroring the `.deb` staging.
+- **`.deb` / `.rpm`** — only with Qt bundled or against a distribution whose Qt is 6.9+: until 0.5.1 a
+  `.deb` built on Ubuntu 24.04's Qt 6.4 shipped, and the UI does not run there.

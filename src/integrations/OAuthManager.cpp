@@ -16,9 +16,9 @@
 
 // The device grant still rides on Qt's own class, which only stabilised in Qt
 // 6.9 (QOAuth2DeviceAuthorizationFlow, setNetworkRequestModifier,
-// setRequestedScopeTokens). Distro packaging (e.g. the Ubuntu .deb) builds
-// against the system Qt 6.4, so there it compiles to a stub and the card hides
-// the button — see deviceFlowAvailable(). The authorization-code and fragment
+// setRequestedScopeTokens). A build against an older Qt compiles it to a stub
+// and the card hides the button — see deviceFlowAvailable(). The released
+// packages all use Qt 6.9+. The authorization-code and fragment
 // flows below are hand-rolled and work on every supported Qt.
 #define HEAP_HAVE_DEVICE_OAUTH (QT_VERSION >= QT_VERSION_CHECK(6, 9, 0))
 

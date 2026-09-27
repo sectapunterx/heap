@@ -43,9 +43,9 @@ diff. It's **keyboard-first**: most days you never touch the mouse. And it's a
 
 ### Get it
 
-Downloads for **Windows** (installer + portable), **Linux** (`.deb` + AppImage)
+Downloads for **Windows** (installer + portable), **Linux** (AppImage)
 and **macOS** (`.dmg`) are on the releases page: `<RELEASE_URL>`.
-Build from source (Qt 6.4+, C++20) per the README.
+Build from source (Qt 6.9+, C++20) per the README.
 
 ### Under the hood
 

@@ -6,17 +6,20 @@
 #include <QCommandLineOption>
 #include <QCommandLineParser>
 #include <QIcon>
+#include <QImageReader>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
+#include <QQmlError>
 #include <QQuickStyle>
+#include <QQuickWindow>
 #include <QStringList>
+#include <QTemporaryDir>
+#include <QTimer>
 
 #include <csignal>
 
 #ifdef Q_OS_MACOS
 #include "platform/MacWindow.h"
-
-#include <QQuickWindow>
 #endif
 
 // Injected by CMake from project() VERSION; fallback keeps ad-hoc builds sane.
@@ -34,7 +37,12 @@ void quitOnSignal(int) {
 struct CliOptions {
   QString initialView;
   QString dataDir;
+  bool smoke = false;
 };
+
+// How long --smoke lets the UI settle before judging it: long enough for the
+// deferred loaders and the first frame, short enough for a CI step.
+constexpr int kSmokeSettleMs = 2000;
 
 // Parses heap's own options. Deliberately uses parse() rather than process():
 // unknown arguments are reported and then ignored, so Qt's own platform
@@ -59,6 +67,12 @@ CliOptions parseCommandLine(const QStringList& args) {
                                          QStringLiteral("dir"));
   parser.addOption(dataDirOption);
 
+  const QCommandLineOption smokeOption(
+      QStringLiteral("smoke"),
+      QStringLiteral("Load the whole UI against a throwaway profile, report any QML error, missing plugin or "
+                     "image format, and exit: 0 when healthy. Used to check a packaged build."));
+  parser.addOption(smokeOption);
+
   if(!parser.parse(args)) {
     fputs(qPrintable(parser.errorText() + QLatin1Char('\n')), stderr);
   }
@@ -77,7 +91,37 @@ CliOptions parseCommandLine(const QStringList& args) {
   CliOptions opts;
   opts.initialView = parser.value(viewOption);
   opts.dataDir = parser.value(dataDirOption);
+  opts.smoke = parser.isSet(smokeOption);
   return opts;
+}
+
+// Judges a --smoke run once the UI has settled. Everything goes through the
+// logger, so it reaches stderr and heap.log — the latter is what a CI step can
+// read back from a Windows GUI-subsystem build, which has no console.
+int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qmlWarnings) {
+  QStringList problems;
+
+  const QList<QObject*> roots = engine.rootObjects();
+  if(roots.isEmpty() || qobject_cast<QQuickWindow*>(roots.constFirst()) == nullptr) {
+    problems << QStringLiteral("Main.qml did not create a window");
+  }
+  for(const QQmlError& warning : qmlWarnings) {
+    problems << QStringLiteral("QML: ") + warning.toString();
+  }
+  // The brand icons and logos are SVG; a bundle without the qsvg plugin (the
+  // v0.4.3 Windows zip) starts fine and quietly shows no icons.
+  if(!QImageReader::supportedImageFormats().contains("svg")) {
+    problems << QStringLiteral("no svg image format plugin");
+  }
+  if(QApplication::windowIcon().pixmap(32, 32).isNull()) {
+    problems << QStringLiteral("window icon did not render");
+  }
+
+  for(const QString& problem : problems) {
+    qCritical("smoke: %s", qUtf8Printable(problem));
+  }
+  qInfo("smoke: %s (%lld problem(s))", problems.isEmpty() ? "OK" : "FAILED", static_cast<long long>(problems.size()));
+  return problems.isEmpty() ? 0 : 1;
 }
 }  // namespace
 
@@ -94,8 +138,14 @@ int main(int argc, char* argv[]) {
 
   // Redirect the data directory before the logger opens its file and before
   // AppController resolves state.json. The flag wins over the environment so a
-  // single run can override a shell-wide HEAP_DATA_DIR.
-  heap::paths::setDataDir(cli.dataDir.isEmpty() ? qEnvironmentVariable("HEAP_DATA_DIR") : cli.dataDir);
+  // single run can override a shell-wide HEAP_DATA_DIR. --smoke never touches a
+  // real profile: without --data-dir it gets a temporary one, removed on exit.
+  const QTemporaryDir smokeDataDir;
+  QString dataDir = cli.dataDir.isEmpty() ? qEnvironmentVariable("HEAP_DATA_DIR") : cli.dataDir;
+  if(cli.smoke && cli.dataDir.isEmpty()) {
+    dataDir = smokeDataDir.path();
+  }
+  heap::paths::setDataDir(dataDir);
 
   // Route qDebug/qWarning/… to a rotating log file (must come after the
   // org/app names are set so AppDataLocation resolves to the heap folder).
@@ -112,6 +162,12 @@ int main(int argc, char* argv[]) {
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("INITIAL_VIEW", cli.initialView);
+  QList<QQmlError> smokeWarnings;
+  if(cli.smoke) {
+    QObject::connect(&engine, &QQmlEngine::warnings, &app, [&smokeWarnings](const QList<QQmlError>& warnings) {
+      smokeWarnings += warnings;
+    });
+  }
   QObject::connect(
       &engine,
       &QQmlApplicationEngine::objectCreationFailed,
@@ -130,6 +186,12 @@ int main(int argc, char* argv[]) {
     }
   }
 #endif
+
+  if(cli.smoke) {
+    QTimer::singleShot(kSmokeSettleMs, &app, [&engine, &smokeWarnings]() {
+      QCoreApplication::exit(smokeVerdict(engine, smokeWarnings));
+    });
+  }
 
   return QApplication::exec();
 }
