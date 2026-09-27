@@ -389,7 +389,7 @@ jobs:
           docker run --rm -v "$PWD:/w" -w /w -e DEB -e DEBIAN_FRONTEND=noninteractive ubuntu:24.04 bash -euc '
             echo "::group::apt install ./$DEB (+ Xvfb)"
             apt-get update -q
-            apt-get install -y "./$DEB" xvfb xauth
+            apt-get install -y "./$DEB" xvfb xauth dbus
             echo "::endgroup::"
             # A library the Depends line forgot shows up here by name, rather
             # than as a loader error or a hang further down.
@@ -397,7 +397,12 @@ jobs:
               echo "::error::the .deb does not pull in every library heap links"
               exit 1
             fi
-            timeout 120 xvfb-run -a -s "-screen 0 1280x800x24" heap --smoke --data-dir /tmp/heap-smoke'
+            # A desktop session always has a session bus; without one, Qt
+            # blocks at startup on D-Bus (accessibility, the GTK platform
+            # theme the Depends pull in) and the run only measures the
+            # container. dbus-run-session gives heap the bus a user has.
+            timeout 120 dbus-run-session -- \
+              xvfb-run -a -s "-screen 0 1280x800x24" heap --smoke --data-dir /tmp/heap-smoke'
 
       # Distro-agnostic tarball: the dynamically-linked binary + install.sh +
       # desktop/icon, laid out flat under a versioned top dir. Depends on system

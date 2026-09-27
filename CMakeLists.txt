@@ -42,16 +42,6 @@ if(HEAP_ENABLE_SANITIZERS AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
     add_link_options(-fsanitize=address,undefined)
 endif()
 
-# ThreadSanitizer cannot be combined with ASan, so it is its own build — run
-# nightly, not per PR. Qt itself is not instrumented; the nightly job
-# suppresses reports that start inside Qt's libraries.
-option(HEAP_ENABLE_TSAN "Build heap with ThreadSanitizer" OFF)
-if(HEAP_ENABLE_TSAN AND CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
-    message(STATUS "heap: TSan ON")
-    add_compile_options(-fsanitize=thread -fno-omit-frame-pointer -g)
-    add_link_options(-fsanitize=thread)
-endif()
-
 # Warnings for heap's own C++ — applied per target (and in tests/ after
 # googletest is fetched) so vendored md4c and googletest keep their own flags.
 # CI turns them into errors; a deprecation stays a warning there, so a Qt

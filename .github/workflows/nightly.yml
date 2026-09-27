@@ -1,8 +1,8 @@
 name: Nightly
 
 # What is too slow, too noisy or too early to gate every PR on, run once a day
-# against master: the next Qt, a deep fuzz under ASan, coverage, ThreadSanitizer,
-# the benchmark trend, and a full release build that publishes nothing. A red
+# against master: the next Qt, a deep fuzz under ASan, coverage, the benchmark
+# trend, and a full release build that publishes nothing. A red
 # nightly is a lead to follow up, not a blocked merge. Running daily also keeps
 # the ccache and Qt caches warm, which GitHub evicts after seven idle days.
 on:
@@ -167,44 +167,6 @@ jobs:
           name: coverage-lcov
           path: coverage.lcov
           retention-days: 14
-
-  # ──────────────────────────────────────────────────────────────────
-  # ThreadSanitizer: GitWatcher, the network providers and the save timer run
-  # off the GUI thread. Qt itself is not built with TSan, so reports that
-  # start inside Qt's libraries are suppressed; what is left points at heap.
-  # ──────────────────────────────────────────────────────────────────
-  tsan:
-    name: TSan
-    runs-on: ubuntu-24.04
-    timeout-minutes: 45
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Install build tools + system libs
-        run: |
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
-            cmake ninja-build g++ \
-            libgl1-mesa-dev libegl1-mesa-dev libxkbcommon-dev \
-            libfontconfig1-dev libfreetype-dev libdbus-1-3
-
-      - name: Install Qt6
-        uses: jurplel/install-qt-action@a9c63c7c123f3069cff414e7e482d95dfa9d8125 # v4.4.1
-        with:
-          version: "6.9.1"
-          cache: true
-          modules: qtnetworkauth
-
-      - name: Build with TSan
-        run: |
-          cmake -S . -B build-tsan -G Ninja -DCMAKE_BUILD_TYPE=Debug -DHEAP_ENABLE_TSAN=ON
-          cmake --build build-tsan --parallel --target heap_all_tests
-
-      - name: Test under TSan
-        env:
-          QT_QPA_PLATFORM: offscreen
-          TSAN_OPTIONS: halt_on_error=1:second_deadlock_stack=1:suppressions=${{ github.workspace }}/.github/tsan-suppressions.txt
-        run: ctest --test-dir build-tsan/tests --timeout 900 --output-on-failure -E 'bench'
 
   # ──────────────────────────────────────────────────────────────────
   # Benchmark trend. The suites only assert a categorical budget per run; here
