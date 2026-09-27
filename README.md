@@ -6,6 +6,13 @@
   <b>A local-first desktop workspace for engineers — board, calendar, docs, and notes in one native window.</b>
 </p>
 
+<p align="center">
+  <a href="https://sectapunterx.github.io/heap/"><b>Website</b></a> ·
+  <a href="https://sectapunterx.github.io/heap/demo/">Try it in the browser</a> ·
+  <a href="https://sectapunterx.github.io/heap/download/">Download</a> ·
+  <a href="https://sectapunterx.github.io/heap/docs/">Docs</a>
+</p>
+
 <div align="center">
 
 [![CI](https://github.com/sectapunterx/heap/actions/workflows/ci.yml/badge.svg)](https://github.com/sectapunterx/heap/actions/workflows/ci.yml)
@@ -261,7 +268,8 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 │  └─ update/              ← GitHub-releases update check
 ├─ qml/                    ← all views + singletons (Theme, Brand, I18n) — see below
 ├─ tests/                  ← GoogleTest (C++) + Qt Quick Test (QML) suites
-├─ docs/                   ← single-page site + brandbook (GitHub Pages) + guides
+├─ docs/                   ← guides (also published on the website) + screenshots
+├─ site/                   ← the website: Astro + React islands, deployed to GitHub Pages
 ├─ design/                 ← original React prototype (reference) + brand-export bundle
 └─ README.md
 ```
