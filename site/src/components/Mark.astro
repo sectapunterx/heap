@@ -1,0 +1,14 @@
+---
+// The heap. mark: three bars of a binary heap (design/brand-export/logo/heap-mark.svg),
+// coloured through theme tokens so it follows light and dark.
+interface Props {
+  size?: number;
+}
+const { size = 26 } = Astro.props;
+---
+
+<svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+  <rect x="5" y="20" width="22" height="4.4" rx="2.2" fill="var(--mark-ink)"></rect>
+  <rect x="8" y="13.8" width="16" height="4.4" rx="2.2" fill="var(--mark-ink)"></rect>
+  <rect x="11" y="7.6" width="10" height="4.4" rx="2.2" fill="var(--mark-crown)"></rect>
+</svg>

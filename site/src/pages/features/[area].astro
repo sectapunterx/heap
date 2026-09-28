@@ -1,0 +1,236 @@
+---
+import { Picture } from 'astro:assets';
+import Base from '../../layouts/Base.astro';
+import AreaNav from '../../components/AreaNav.astro';
+import FeatureWidget from '../../islands/FeatureWidget';
+import { FEATURE_AREAS, type FeatureArea } from '../../data/features';
+import { SHOTS } from '../../lib/shots';
+import { url } from '../../lib/site';
+
+export function getStaticPaths() {
+  return FEATURE_AREAS.map((area, i) => ({
+    params: { area: area.slug },
+    props: { area, next: FEATURE_AREAS[(i + 1) % FEATURE_AREAS.length] },
+  }));
+}
+
+interface Props {
+  area: FeatureArea;
+  next: FeatureArea;
+}
+
+const { area, next } = Astro.props;
+---
+
+<Base title={area.label} description={`${area.title} ${area.lead}`} active="features">
+  <section class="section fa-head">
+    <div class="wrap stack" style="gap: 28px">
+      <AreaNav current={area.slug} />
+      <div class="split split--narrow-right" style="align-items: end">
+        <h1 class="h1">{area.title}</h1>
+        <p class="lead">{area.lead}</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="fa-widget">
+    <div class="wrap">
+      <p class="fa-hint"><span class="eyebrow">Try it</span> {area.widgetHint}</p>
+      <div class="fa-slot" data-kind={area.widget}>
+        <FeatureWidget client:only="react" kind={area.widget} />
+      </div>
+      <noscript><p class="muted">This part needs JavaScript — the screenshots below show the real thing.</p></noscript>
+    </div>
+  </section>
+
+  {
+    area.sections.map((s, i) => (
+      <section class="section">
+        <div class:list={['wrap split', i % 2 ? 'split--narrow-right fa-flip' : 'split--narrow-left']}>
+          <div class="stack">
+            <span class="eyebrow">{s.eyebrow}</span>
+            <h2 class="h2" style="font-size: clamp(28px, 3vw, 40px)">
+              {s.title}
+            </h2>
+            <p class="lead">{s.body}</p>
+            {s.points && (
+              <ul class="dash-list">
+                {s.points.map((p) => (
+                  <li>{p}</li>
+                ))}
+              </ul>
+            )}
+          </div>
+          {s.shot ? (
+            <div class:list={['shot', { 'shot--portrait': s.shot === 'calendar-focus' }]}>
+              <Picture src={SHOTS[s.shot]} alt={s.shotAlt ?? ''} widths={[700, 1200, 1700]} sizes="(max-width: 900px) 100vw, 760px" formats={['avif']} fallbackFormat="webp" loading="lazy" />
+            </div>
+          ) : s.snippet ? (
+            <div class="code-block">
+              <div class="code-block__bar">
+                <span>{s.eyebrow.toLowerCase()}</span>
+                <span>example</span>
+              </div>
+              <pre>{s.snippet.join('\n')}</pre>
+            </div>
+          ) : (
+            <div />
+          )}
+        </div>
+      </section>
+    ))
+  }
+
+  {
+    area.keys.length > 0 && (
+      <section class="section">
+        <div class="wrap keys-grid">
+          {area.keys.map((k) => (
+            <div class="card key-card">
+              <span class="key-card__combo">
+                {k.keys.map((key) => (
+                  <kbd class="kbd">{key}</kbd>
+                ))}
+              </span>
+              <span>{k.label}</span>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  }
+
+  <section class="section" style="padding-top: 0; border-top: 0">
+    <div class="wrap">
+      <a class="card next" href={url(`features/${next.slug}`)}>
+        <span class="stack" style="gap: 10px">
+          <span class="eyebrow">Next · {next.num}</span>
+          <span class="next__title">{next.title}</span>
+        </span>
+        <span class="next__arrow" aria-hidden="true">→</span>
+      </a>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .fa-head {
+    padding-bottom: 40px;
+  }
+
+  .fa-widget {
+    padding-bottom: clamp(56px, 8vw, 88px);
+  }
+
+  /* The widget renders in the browser only; hold its space so nothing jumps. */
+  .fa-slot {
+    min-height: 540px;
+  }
+
+  .fa-slot[data-kind='week'],
+  .fa-slot[data-kind='notes'] {
+    min-height: 598px;
+  }
+
+  .fa-slot[data-kind='connect'] {
+    min-height: 578px;
+  }
+
+  .fa-slot[data-kind='flow'] {
+    min-height: 698px;
+  }
+
+  @media (max-width: 900px) {
+    .fa-slot[data-kind='week'],
+    .fa-slot[data-kind='notes'] {
+      min-height: 586px;
+    }
+
+    .fa-slot[data-kind='connect'] {
+      min-height: 540px;
+    }
+
+    .fa-slot[data-kind='flow'] {
+      min-height: 1430px;
+    }
+  }
+
+  .fa-hint {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 6px 12px;
+    margin: 0 0 16px;
+    font-size: 15px;
+    color: var(--text3);
+  }
+
+  .fa-hint .eyebrow {
+    color: var(--accent);
+  }
+
+  @media (min-width: 901px) {
+    .fa-flip > :first-child {
+      order: 2;
+    }
+  }
+
+  .shot--portrait {
+    max-width: 380px;
+    justify-self: center;
+  }
+
+  .keys-grid {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: 16px;
+  }
+
+  .key-card {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    padding: 22px;
+    font-size: 15px;
+    color: var(--text2);
+  }
+
+  .key-card__combo {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+  }
+
+  @media (max-width: 900px) {
+    .keys-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+  }
+
+  .next {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 24px;
+    padding: clamp(28px, 4vw, 48px);
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .next:hover {
+    color: var(--text);
+    border-color: var(--text4);
+  }
+
+  .next__title {
+    font-family: var(--serif);
+    font-weight: 300;
+    font-size: clamp(26px, 3vw, 40px);
+    line-height: 1.15;
+  }
+
+  .next__arrow {
+    font-size: 32px;
+    color: var(--accent);
+  }
+</style>

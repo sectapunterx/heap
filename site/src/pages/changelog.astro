@@ -1,0 +1,225 @@
+---
+import Base from '../layouts/Base.astro';
+import { getReleases } from '../lib/github';
+import { formatDate, parseNotes, summarize, versionOf } from '../lib/releases';
+import { HIGHLIGHTS } from '../data/highlights';
+import { RELEASES_URL } from '../lib/site';
+
+const releases = (await getReleases()).filter((r) => !r.prerelease);
+const entries = releases.map((r, i) => {
+  const groups = parseNotes(r.body);
+  return {
+    release: r,
+    latest: i === 0,
+    headline: HIGHLIGHTS[r.tag]?.headline ?? summarize(groups),
+    groups,
+  };
+});
+---
+
+<Base title="Changelog" description="What changed in each heap. release, straight from GitHub Releases." active="changelog">
+  <section class="section">
+    <div class="wrap cl">
+      <div class="stack cl__intro">
+        <span class="eyebrow">Changelog</span>
+        <h1 class="h1">What changed, release by release.</h1>
+        <p class="lead">Built from GitHub Releases each time a version ships. heap. itself tells you when there is something new.</p>
+        <a class="link-arrow" href={RELEASES_URL}>All releases on GitHub</a>
+      </div>
+      <div class="cl__list">
+        {
+          entries.map(({ release, latest, headline, groups }) => (
+            <article class="rel" id={release.tag}>
+              <div class="rel__meta">
+                <a class="rel__ver mono" href={`#${release.tag}`}>
+                  {versionOf(release.tag)}
+                </a>
+                <time class="mono" datetime={release.date}>
+                  {formatDate(release.date)}
+                </time>
+                {latest && <span class="rel__latest mono">latest</span>}
+              </div>
+              <div class="rel__body">
+                <h2 class="rel__headline">{headline}</h2>
+                {groups.length === 0 && <p class="muted">Maintenance release — see the notes on GitHub.</p>}
+                {groups.map((g, gi) => (
+                  <details class="rel__group" open={gi === 0 || g.items.length <= 4}>
+                    <summary>
+                      <span class="eyebrow">{g.title}</span>
+                      <span class="mono muted">{g.items.length}</span>
+                    </summary>
+                    <ul>
+                      {g.items.map((it) => (
+                        <li>
+                          <span class="rel__scope mono">{it.scope}</span>
+                          <span>
+                            {it.text}
+                            {it.prUrl && (
+                              <>
+                                {' '}
+                                <a class="mono rel__pr" href={it.prUrl}>
+                                  #{it.pr}
+                                </a>
+                              </>
+                            )}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  </details>
+                ))}
+                <a class="rel__link" href={release.url}>
+                  Release page and downloads ↗
+                </a>
+              </div>
+            </article>
+          ))
+        }
+      </div>
+    </div>
+  </section>
+</Base>
+
+<style>
+  .cl {
+    display: grid;
+    grid-template-columns: minmax(0, 340px) minmax(0, 1fr);
+    gap: clamp(32px, 5vw, 64px);
+    align-items: start;
+  }
+
+  .cl__intro {
+    position: sticky;
+    top: calc(var(--nav-h) + 32px);
+  }
+
+  .rel {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr);
+    gap: 32px;
+    padding: 32px 0;
+    border-top: 1px solid var(--border);
+    scroll-margin-top: calc(var(--nav-h) + 16px);
+  }
+
+  .rel__meta {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text4);
+  }
+
+  .rel__ver {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .rel__latest {
+    align-self: flex-start;
+    margin-top: 4px;
+    padding: 3px 8px;
+    border-radius: 6px;
+    background: var(--accent-soft);
+    color: var(--accent);
+    font-size: 11px;
+  }
+
+  .rel__body {
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    min-width: 0;
+  }
+
+  .rel__headline {
+    margin: 0;
+    font-size: 21px;
+    font-weight: 500;
+    line-height: 1.35;
+  }
+
+  .rel__group summary {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    cursor: pointer;
+    list-style: none;
+  }
+
+  .rel__group summary::-webkit-details-marker {
+    display: none;
+  }
+
+  .rel__group summary::after {
+    content: '+';
+    font-family: var(--mono);
+    color: var(--text4);
+  }
+
+  .rel__group[open] summary::after {
+    content: '−';
+  }
+
+  .rel__group ul {
+    margin: 10px 0 0;
+    padding: 0;
+    list-style: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rel__group li {
+    display: flex;
+    gap: 10px;
+    align-items: baseline;
+    font-size: 15px;
+    line-height: 1.55;
+    color: var(--text2);
+  }
+
+  .rel__scope {
+    flex-shrink: 0;
+    min-width: 96px;
+    font-size: 11px;
+    color: var(--text4);
+  }
+
+  .rel__pr {
+    font-size: 12px;
+    text-decoration: none;
+  }
+
+  .rel__link {
+    font-size: 14px;
+    text-decoration: none;
+  }
+
+  @media (max-width: 900px) {
+    .cl {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .cl__intro {
+      position: static;
+    }
+  }
+
+  @media (max-width: 640px) {
+    .rel {
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+    .rel__meta {
+      flex-direction: row;
+      align-items: baseline;
+      flex-wrap: wrap;
+      gap: 10px;
+    }
+    .rel__scope {
+      min-width: 0;
+    }
+  }
+</style>

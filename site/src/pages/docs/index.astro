@@ -1,0 +1,77 @@
+---
+import DocLayout from '../../layouts/DocLayout.astro';
+import { DOC_GROUPS } from '../../data/docs';
+import { url } from '../../lib/site';
+---
+
+<DocLayout title="Documentation" description="heap. documentation: a first-day tutorial, the keyboard reference, tracker integrations, data and backups, packaging.">
+  <div class="stack" style="gap: 16px; margin-bottom: 40px">
+    <span class="eyebrow">Docs</span>
+    <h1 class="h1">Documentation</h1>
+    <p class="lead" style="max-width: 640px">
+      The same Markdown that ships in the repository’s <span class="code-inline">docs/</span> folder, one click away from the app’s source.
+    </p>
+  </div>
+  {
+    DOC_GROUPS.map((g) => (
+      <section class="group">
+        <h2 class="eyebrow">{g.title}</h2>
+        <div class="grid">
+          {g.docs.map((d) => (
+            <a class="card doc" href={url(`docs/${d.slug}`)}>
+              <span class="doc__title">{d.label}</span>
+              <span class="doc__blurb">{d.blurb}</span>
+            </a>
+          ))}
+        </div>
+      </section>
+    ))
+  }
+</DocLayout>
+
+<style>
+  .group {
+    margin-bottom: 36px;
+  }
+
+  .group h2 {
+    margin: 0 0 14px;
+  }
+
+  .grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .doc {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    padding: 20px 22px;
+    color: var(--text);
+    text-decoration: none;
+  }
+
+  .doc:hover {
+    color: var(--text);
+    border-color: var(--text4);
+  }
+
+  .doc__title {
+    font-size: 17px;
+    font-weight: 600;
+  }
+
+  .doc__blurb {
+    font-size: 14px;
+    line-height: 1.55;
+    color: var(--text3);
+  }
+
+  @media (max-width: 640px) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+</style>
