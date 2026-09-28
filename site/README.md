@@ -83,7 +83,5 @@ Release workflow finishes, so the download page and changelog follow each releas
 
 ## Known issues
 
-- The app screenshots in `docs/assets/img/screens` show a real profile name (`eNB-core`) in the breadcrumb and
-  a "NaNd" deadline bug on the Backlog cards (`board-kanban.png`). Re-shoot them on a neutral profile.
 - In `design/brand-export/surfaces/heap-og-card.svg` the wordmark's dot is a separate text element at a fixed
   position, so without IBM Plex Sans installed it renders as "heap .". `public/og.png` is rendered from it.

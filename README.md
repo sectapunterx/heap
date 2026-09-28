@@ -43,9 +43,9 @@ it watches your working copy and matches the current branch to the task you're o
   leaves the machine.
 - **Git-aware.** The active branch is matched to a task by id, the matching card is decorated with its branch, and a
   focused-repo banner surfaces branch + PR state — no manual linking.
-- **Connected, not locked-in.** Sync issues from GitHub, GitLab, Jira, Trello and nine more trackers, and pull the
+- **Connected, not locked-in.** Sync issues from GitHub, GitLab, Jira, Trello and eight more trackers, and pull the
   people you work with out of Mattermost — sign in through the browser or paste a token, credentials kept in the OS
-  keychain, status written back when you move a card. Your data still lives in one local file.
+  keychain, open/closed written back when you move a card. Your data still lives in one local file.
 - **Keyboard-first.** A `Ctrl+K` command palette with full-text search, global quick-capture from anywhere, and a fully
   rebindable shortcut map.
 - **One window, every surface.** Board, timeline, week, month, docs, notes, calendar, people — one process, one
@@ -70,48 +70,59 @@ note; markdown editor with headings, task lists, tables, fenced code with syntax
 with backlinks and an offer to write the note a broken link was asking for · Import and export notes as a folder of
 `.md` files, Obsidian-compatible.
 
-**Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and nine more (Gitea, Forgejo, Redmine, Todoist,
-Asana, ClickUp, Sentry, Bitbucket) — browser sign-in or a token, issues mirrored as cards, status written back on
-column move (GitHub / GitLab / Gitea / Forgejo), tokens in the OS keychain, optional timed auto-sync. Mattermost
+**Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and eight more (Gitea, Forgejo, Redmine, Todoist,
+Asana, ClickUp, Sentry, Bitbucket) — browser sign-in or a token, issues mirrored as cards, your statuses mapped onto
+your columns, open/closed written back on column move (GitHub / GitLab / Gitea / Forgejo, with a repository set),
+tokens in the OS keychain, optional timed auto-sync. Mattermost
 imports the people you talk to as contacts and `@handles` instead. See
 [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md).
 
 **Flow** — Git-aware board · Quick-capture task / note via a global hotkey · `Ctrl+K` command palette (full-text search
 across tasks, notes, docs & snippets) · Profiles (feature-scoped workspaces with JSON import/export) · Automation
 (60-second tick auto-archives, warns on stuck tasks, fires deadline + standup reminders; respects quiet hours) ·
-Interactive first-run guide · In-app update check.
+Undo and redo for every change · Interactive first-run guide · In-app update check.
 
 ## A look inside
 
 <table>
 <tr>
   <td width="50%" valign="top">
-    <a href="docs/assets/img/screens/settings-integrations.png"><img src="docs/assets/img/screens/settings-integrations.png" alt="Tracker integrations — Settings"></a>
-    <sub><b>Integrations</b> — GitHub, GitLab, Jira, Trello + 9 more, one-click connect.</sub>
+    <a href="docs/assets/img/screens/board-week.png"><img src="docs/assets/img/screens/board-week.png" alt="Week view"></a>
+    <sub><b>Week</b> — seven days, overlapping events side by side, a rail of tasks that still need a slot.</sub>
   </td>
   <td width="50%" valign="top">
-    <a href="docs/assets/img/screens/welcome.png"><img src="docs/assets/img/screens/welcome.png" alt="Interactive welcome guide"></a>
-    <sub><b>First run</b> — an interactive, skippable, replayable guided tour.</sub>
+    <a href="docs/assets/img/screens/board-timeline.png"><img src="docs/assets/img/screens/board-timeline.png" alt="Timeline view"></a>
+    <sub><b>Timeline</b> — every task bucketed by deadline.</sub>
   </td>
 </tr>
 <tr>
   <td valign="top">
-    <a href="docs/assets/img/screens/board-timeline.png"><img src="docs/assets/img/screens/board-timeline.png" alt="Timeline view"></a>
-    <sub><b>Timeline</b> — every task bucketed by deadline.</sub>
+    <a href="docs/assets/img/screens/board-notes.png"><img src="docs/assets/img/screens/board-notes.png" alt="Notes view"></a>
+    <sub><b>Notes</b> — Markdown with a live rendered view, <code>[[wiki-links]]</code>, <code>@people</code>, task lists.</sub>
   </td>
+  <td valign="top">
+    <a href="docs/assets/img/screens/board-docs.png"><img src="docs/assets/img/screens/board-docs.png" alt="Docs view"></a>
+    <sub><b>Docs</b> — pages and a reference catalog: sections, snippets, contacts.</sub>
+  </td>
+</tr>
+<tr>
   <td valign="top">
     <a href="docs/assets/img/screens/board-month.png"><img src="docs/assets/img/screens/board-month.png" alt="Month view"></a>
     <sub><b>Month</b> — tasks and events across the whole month.</sub>
   </td>
+  <td valign="top">
+    <a href="docs/assets/img/screens/settings-integrations.png"><img src="docs/assets/img/screens/settings-integrations.png" alt="Tracker integrations — Settings"></a>
+    <sub><b>Integrations</b> — GitHub, GitLab, Jira, Trello + 8 more, and Mattermost.</sub>
+  </td>
 </tr>
 <tr>
   <td valign="top">
-    <a href="docs/assets/img/screens/board-docs.png"><img src="docs/assets/img/screens/board-docs.png" alt="Docs view"></a>
-    <sub><b>Docs</b> — sections, snippets with highlighting, contacts.</sub>
+    <a href="docs/assets/img/screens/hotkeys-tweaks.png"><img src="docs/assets/img/screens/hotkeys-tweaks.png" alt="Hotkeys panel"></a>
+    <sub><b>Hotkeys</b> — every shortcut in one panel, rebindable in place.</sub>
   </td>
   <td valign="top">
-    <a href="docs/assets/img/screens/board-notes.png"><img src="docs/assets/img/screens/board-notes.png" alt="Notes view"></a>
-    <sub><b>Notes</b> — a markdown editor with a live rendered view.</sub>
+    <a href="docs/assets/img/screens/welcome.png"><img src="docs/assets/img/screens/welcome.png" alt="Interactive welcome guide"></a>
+    <sub><b>First run</b> — a sample board and a skippable, replayable guided tour.</sub>
   </td>
 </tr>
 </table>
@@ -152,7 +163,13 @@ cmake --build build -j
 
 ### Linux
 
-Distribution Qt is often too old: Ubuntu 24.04 ships 6.4, on which the UI does not run. Take Qt 6.9 from
+On a rolling distribution with a current Qt (Arch ships 6.11), the system packages are enough:
+
+```sh
+sudo pacman -S --needed qt6-base qt6-declarative qt6-svg qt6-networkauth qtkeychain-qt6 cmake ninja
+```
+
+Elsewhere distribution Qt is often too old: Ubuntu 24.04 ships 6.4, on which the UI does not run. Take Qt 6.9 from
 [aqtinstall](https://github.com/miurahr/aqtinstall) (what CI does) or the Qt online installer:
 
 ```sh
@@ -185,6 +202,8 @@ cmake --build build -j
        mingw-w64-ucrt-x86_64-qt6-declarative \
        mingw-w64-ucrt-x86_64-qt6-svg \
        mingw-w64-ucrt-x86_64-qt6-tools \
+       mingw-w64-ucrt-x86_64-qt6-networkauth \
+       mingw-w64-ucrt-x86_64-qtkeychain \
        git
    ```
 
@@ -209,9 +228,10 @@ Defaults — every entry is rebindable from **Settings → Shortcuts** or the fl
 | Board cursor      | `J` `K` `H` `L` | Move the card     | `Shift`+ the same |
 | Calendar: today   | `T`          | Calendar: go to date | `G`          |
 | Next / prev profile | `Ctrl+]` / `Ctrl+[` | Export profile → Markdown | `Ctrl+Shift+E` |
-| Focus search      | `Ctrl+F`     | Undo last change  | `Ctrl+Z`     |
+| Focus search      | `Ctrl+F`     | Undo / redo       | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Tweaks / Hotkeys  | `Ctrl+,` / `Ctrl+/` | Select all / clear / delete | `Ctrl+A` / `Esc` / `Del` |
-| Archive / Weekly report | `Ctrl+7` / `Ctrl+Shift+W` | Toggle theme | `Ctrl+Shift+T` |
+| Weekly report     | `Ctrl+Shift+W` | Toggle theme    | `Ctrl+Shift+T` |
+| Toggle right panel | `Ctrl+\`   | New person / profile | `Ctrl+Shift+U` / `Ctrl+Shift+P` |
 
 ## Documentation
 
@@ -220,6 +240,8 @@ Defaults — every entry is rebindable from **Settings → Shortcuts** or the fl
 - [**Tracker integrations**](docs/INTEGRATIONS.md) — connecting GitHub / GitLab / Jira / Trello and the rest.
 - [**Data & backups**](docs/DATA.md) — where your data lives, backups, moving a profile between machines.
 - [**Packaging**](docs/PACKAGING.md) — how the installer / AppImage / portable bundles are built.
+
+The same guides are published, with search, at [sectapunterx.github.io/heap/docs](https://sectapunterx.github.io/heap/docs/).
 
 ## Data & backups
 
@@ -236,11 +258,15 @@ Defaults — every entry is rebindable from **Settings → Shortcuts** or the fl
 git clone https://github.com/sectapunterx/heap && cd heap
 cmake -S . -B build && cmake --build build -j        # app
 cmake --build build --target heap_all_tests          # tests
-ctest --test-dir build/tests --output-on-failure     # 27 suites
+ctest --test-dir build/tests --output-on-failure
 ```
 
-CI (`.github/workflows/ci.yml`) runs clang-format + clang-tidy, a Linux + Windows build/test matrix, and an
-ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_<short-desc>`; keep the tree green.
+CI (`.github/workflows/ci.yml`) checks clang-format and clang-tidy on the changed lines, builds and tests on Linux,
+Windows and macOS, runs an ASan/UBSan pass, a qmllint ratchet and actionlint, and smoke-tests the app — the `ci`
+check gates the merge into `master`. A PR that only touches docs or Markdown skips the build. A nightly run
+(`nightly.yml`) adds the next Qt, fuzzing, coverage and a full release build. The website in `site/` has its own
+workflow (`pages.yml`); see [`site/README.md`](site/README.md). Work on a branch off `master` named
+`heap-<ticket>_<short-desc>`; keep the tree green.
 
 ## Project layout
 
@@ -254,7 +280,10 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 │  ├─ Models.{h,cpp}       ← TaskModel / EventModel / PersonModel (QAbstractListModel)
 │  ├─ SampleData.{h,cpp}   ← seed tasks / events / people for first run
 │  ├─ CodeHighlighter.{h,cpp}  ← QSyntaxHighlighter for the docs snippet editor
-│  ├─ markdown/             ← parser, block model and editor ops for Notes
+│  ├─ board/               ← card ranks for the manual board order
+│  ├─ cal/                 ← calendar: recurrence rules, occurrences, reminders, .ics, event clamping
+│  ├─ undo/                ← the undo / redo stack
+│  ├─ markdown/            ← parser, block model and editor ops for Notes
 │  ├─ chrono/              ← natural-language date parser (Quick-capture)
 │  ├─ git/                 ← GitWatcher + branch↔task matcher (git-aware board)
 │  ├─ text/                ← task-text classification / parsing helpers
@@ -263,7 +292,7 @@ ASan/UBSan pass on every PR. Work on a branch off `master` named `heap-<ticket>_
 │  ├─ query/               ← Notes query-language parser
 │  ├─ notify/              ← cross-platform notifications (tray / D-Bus)
 │  ├─ platform/            ← global hotkey backend (Win32 RegisterHotKey)
-│  ├─ integrations/        ← tracker sync: 13 providers + Mattermost contacts, OAuth, keychain
+│  ├─ integrations/        ← tracker sync: 12 trackers + Mattermost contacts, OAuth, keychain
 │  ├─ sync/                ← BYOS serializer + 3-way JSON merge (internal)
 │  └─ update/              ← GitHub-releases update check
 ├─ qml/                    ← all views + singletons (Theme, Brand, I18n) — see below
