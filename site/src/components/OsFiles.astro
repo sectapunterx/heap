@@ -14,7 +14,7 @@ const order: DesktopOS[] = ['windows', 'macos', 'linux'];
 const defaults: Record<DesktopOS, string> = {
   windows: 'Also on Scoop: scoop bucket add heap https://github.com/sectapunterx/heap',
   macos: 'Open the disk image and drag heap. into Applications.',
-  linux: 'The .deb and tarball use your system Qt 6.4+; the AppImage brings its own.',
+  linux: 'chmod +x the AppImage and run it — Qt comes inside, nothing else to install.',
 };
 const uid = Math.random().toString(36).slice(2, 8);
 ---

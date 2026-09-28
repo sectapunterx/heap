@@ -17,33 +17,28 @@ const ways = [
     code: `scoop bucket add heap ${GITHUB_URL}\nscoop install heap`,
   },
   {
-    title: 'Tarball · any Linux',
-    body: 'Installs system-wide as root, into ~/.local otherwise. --prefix and --uninstall work too.',
-    code: 'tar xzf heap-*-linux-x86_64.tar.gz\ncd heap-*-linux-x86_64\n./install.sh',
+    title: 'AppImage · any Linux',
+    body: 'One self-contained file with Qt inside. Make it executable and run it.',
+    code: 'chmod +x heap-*-linux-x86_64.AppImage\n./heap-*-linux-x86_64.AppImage',
   },
   {
     title: 'From source',
-    body: 'Qt 6.4+ and a C++20 compiler, on any platform.',
+    body: 'Qt 6.9+ and a C++20 compiler, on any platform. Distribution Qt is often older — see the README.',
     code: `git clone ${GITHUB_URL} && cd heap\ncmake -S . -B build -DCMAKE_BUILD_TYPE=Release\ncmake --build build -j`,
   },
 ];
 
-const qt = [
-  ['Arch', 'sudo pacman -S qt6-base qt6-declarative qt6-svg qt6-wayland'],
-  ['Debian / Ubuntu', 'sudo apt install libqt6core6 libqt6quick6 libqt6svg6 qml6-module-qtquick'],
-  ['Fedora', 'sudo dnf install qt6-qtbase qt6-qtdeclarative qt6-qtsvg'],
-];
 ---
 
-<Base title="Download" description={`Download heap. ${versionOf(latest.tag)} for Windows, macOS or Linux — installer, portable zip, disk image, AppImage, .deb or tarball.`} active="download">
+<Base title="Download" description={`Download heap. ${versionOf(latest.tag)} for Windows, macOS or Linux — installer, portable zip, disk image or AppImage.`} active="download">
   <section class="section">
     <div class="wrap split" style="align-items: start">
       <div class="stack" style="gap: 22px">
         <span class="eyebrow">Download · v{versionOf(latest.tag)} · {formatDate(latest.date)}</span>
         <h1 class="h1">Get heap.</h1>
         <p class="lead">
-          One download, nothing else to install. On Linux, pick the AppImage if you just want it to run — Qt is inside. The .deb and the
-          tarball are small because they use the Qt 6 your distribution already ships.
+          One download, nothing else to install. On Linux that is a single AppImage with Qt inside — it runs on any distribution, whatever
+          Qt it ships.
         </p>
         <p class="mobile-note" data-mobile-note hidden>
           You’re on a phone — heap. is a desktop app.
@@ -74,19 +69,6 @@ const qt = [
           ))
         }
       </div>
-      <details class="qt">
-        <summary>The .deb or tarball says Qt is missing?</summary>
-        <div class="qt__list">
-          {
-            qt.map(([distro, cmd]) => (
-              <div>
-                <span class="muted">{distro}</span>
-                <code class="mono">{cmd}</code>
-              </div>
-            ))
-          }
-        </div>
-      </details>
     </div>
   </section>
 
@@ -118,7 +100,7 @@ const qt = [
     <div class="wrap trio">
       <div class="card mini"><span class="eyebrow">First run</span><span>A short guided tour and a sample board. Skip it now, replay it any time.</span></div>
       <div class="card mini"><span class="eyebrow">Updates</span><span>heap. tells you when a new release is out. It never installs anything behind your back.</span></div>
-      <div class="card mini"><span class="eyebrow">Uninstall</span><span>Remove the app; your data folder stays until you delete it. <span class="code-inline">install.sh --uninstall</span> on Linux.</span></div>
+      <div class="card mini"><span class="eyebrow">Uninstall</span><span>Remove the app — or just delete the AppImage. Your data folder stays until you delete it.</span></div>
     </div>
   </section>
 </Base>
@@ -191,41 +173,6 @@ const qt = [
     }
   }
 
-  .qt {
-    margin-top: 24px;
-    font-size: 15px;
-  }
-
-  .qt summary {
-    cursor: pointer;
-    color: var(--text2);
-  }
-
-  .qt__list {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
-    margin-top: 14px;
-  }
-
-  .qt__list div {
-    display: grid;
-    grid-template-columns: 150px minmax(0, 1fr);
-    gap: 12px;
-  }
-
-  .qt__list code {
-    font-size: 13px;
-    color: var(--text2);
-    overflow-wrap: anywhere;
-  }
-
-  @media (max-width: 640px) {
-    .qt__list div {
-      grid-template-columns: minmax(0, 1fr);
-      gap: 2px;
-    }
-  }
 
   .files {
     margin: 0;

@@ -26,13 +26,13 @@ export interface ClassifiedAsset extends Asset {
   rank: number;
 }
 
+// Releases up to 0.5.1 also carried a .deb and a tarball built against Qt 6.4,
+// on which the UI does not run; they are deliberately not offered.
 const KINDS: Array<{ test: RegExp; os: DesktopOS; label: string; note: string; rank: number }> = [
   { test: /windows-setup\.exe$/i, os: 'windows', label: 'Installer', note: 'Start-menu entry and uninstaller', rank: 0 },
   { test: /windows-portable\.zip$/i, os: 'windows', label: 'Portable', note: 'Unzip and run from anywhere', rank: 1 },
   { test: /\.dmg$/i, os: 'macos', label: 'Disk image', note: 'Drag heap. into Applications', rank: 0 },
   { test: /\.appimage$/i, os: 'linux', label: 'AppImage', note: 'Qt inside — runs on any distro', rank: 0 },
-  { test: /\.deb$/i, os: 'linux', label: 'Debian / Ubuntu', note: 'Uses your system Qt 6.4+', rank: 1 },
-  { test: /linux.*\.tar\.gz$/i, os: 'linux', label: 'Any distro · install.sh', note: 'Uses your system Qt 6.4+', rank: 2 },
 ];
 
 export function classifyAsset(asset: Asset): ClassifiedAsset | null {

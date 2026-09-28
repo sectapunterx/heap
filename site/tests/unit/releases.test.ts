@@ -10,12 +10,13 @@ describe('classifyAsset', () => {
     expect(classifyAsset(asset('heap-v0.5.1-windows-portable.zip'))).toMatchObject({ os: 'windows', label: 'Portable' });
     expect(classifyAsset(asset('heap-v0.5.1-macos.dmg'))).toMatchObject({ os: 'macos' });
     expect(classifyAsset(asset('heap-v0.5.1-linux-x86_64.AppImage'))).toMatchObject({ os: 'linux', label: 'AppImage', rank: 0 });
-    expect(classifyAsset(asset('heap-v0.5.1-linux-amd64.deb'))).toMatchObject({ os: 'linux', rank: 1 });
-    expect(classifyAsset(asset('heap-v0.5.1-linux-x86_64.tar.gz'))).toMatchObject({ os: 'linux', rank: 2 });
   });
 
   it('ignores files it does not know', () => {
     expect(classifyAsset(asset('checksums.txt'))).toBeNull();
+    // Qt 6.4 builds shipped up to 0.5.1; the UI does not run on them.
+    expect(classifyAsset(asset('heap-v0.5.1-linux-amd64.deb'))).toBeNull();
+    expect(classifyAsset(asset('heap-v0.5.1-linux-x86_64.tar.gz'))).toBeNull();
     expect(classifyAsset(asset('source.tar.gz'))).toBeNull();
   });
 });
@@ -26,7 +27,7 @@ describe('assetsByOS', () => {
     const by = assetsByOS(latest);
     expect(by.windows[0].label).toBe('Installer');
     expect(by.macos).toHaveLength(1);
-    expect(by.linux.map((a) => a.label)).toEqual(['AppImage', 'Debian / Ubuntu', 'Any distro · install.sh']);
+    expect(by.linux.map((a) => a.label)).toEqual(['AppImage']);
   });
 });
 

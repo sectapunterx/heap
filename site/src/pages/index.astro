@@ -9,13 +9,12 @@ import { FEATURE_AREAS, tagline } from '../data/features';
 import { HIGHLIGHTS } from '../data/highlights';
 import { SHOTS } from '../lib/shots';
 import { getLatestRelease, getReleases } from '../lib/github';
-import { assetsByOS, formatSize, versionOf } from '../lib/releases';
+import { versionOf } from '../lib/releases';
 import { url } from '../lib/site';
 
 const latest = await getLatestRelease();
 const releases = await getReleases();
 const badgeRelease = releases.find((r) => HIGHLIGHTS[r.tag]?.badge);
-const deb = assetsByOS(latest).linux.find((a) => a.name.endsWith('.deb'));
 
 const tour = FEATURE_AREAS.map((a) => ({
   ...a,
@@ -115,11 +114,11 @@ const faq = [
         </article>
         <article class="card pillar">
           <div class="pillar__visual">
-            <span class="pillar__big">{deb ? formatSize(deb.size) : 'Qt 6'}</span>
-            {deb && <span class="mono muted" style="font-size: 12px">.deb</span>}
+            <span class="pillar__big">Qt 6</span>
+            <span class="mono muted" style="font-size: 12px">C++20</span>
           </div>
           <h3 class="h3">Native &amp; light</h3>
-          <p>Qt 6 and C++20, not a browser in disguise. The Debian package links your system Qt; the AppImage bundles it.</p>
+          <p>A native binary, not a browser in disguise. Nothing runs in the background, and the Linux AppImage carries its own Qt.</p>
         </article>
       </div>
     </div>

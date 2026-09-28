@@ -3,8 +3,9 @@
 The site at <https://sectapunterx.github.io/heap/>: a product site with a browser demo, feature pages,
 a comparison, privacy notes, downloads, the docs and the changelog.
 
-> The primary copy of this page lives in Confluence (Software Development → heap. — knowledge base →
-> "heap. website"). This file mirrors it for convenience; if the two disagree, Confluence wins.
+> The primary copy of this page lives in Confluence: Software Development → Проекты → «heap. — база знаний» →
+> [«Сайт heap.: устройство, разработка, публикация»](https://luxaeterna666.atlassian.net/wiki/spaces/SD/pages/21364739).
+> This file mirrors it for convenience; if the two disagree, Confluence wins.
 
 ## Stack
 
@@ -79,3 +80,10 @@ Release workflow finishes, so the download page and changelog follow each releas
 - **A doc page** — add the Markdown file to `docs/`, then an entry in `src/data/docs.ts`.
 - **A release one-liner** — add the tag to `src/data/highlights.ts`.
 - **A feature claim** — edit `src/data/features.ts`; keep it verifiable.
+
+## Known issues
+
+- The app screenshots in `docs/assets/img/screens` show a real profile name (`eNB-core`) in the breadcrumb and
+  a "NaNd" deadline bug on the Backlog cards (`board-kanban.png`). Re-shoot them on a neutral profile.
+- In `design/brand-export/surfaces/heap-og-card.svg` the wordmark's dot is a separate text element at a fixed
+  position, so without IBM Plex Sans installed it renders as "heap .". `public/og.png` is rendered from it.
