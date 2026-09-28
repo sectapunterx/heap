@@ -980,8 +980,11 @@ class AppController : public QObject {
   void pushStatusToTracker(const QString& taskId, const QString& status);
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
-  void onTaskPushed(const QString& providerId, const QString& externalId, bool ok, const QString& error);
-  // provider + '\n' + externalId → task id, for pushes still in flight.
+  void onTaskPushed(const QString& providerId, const QString& externalId, const QString& project, bool ok, const QString& error);
+  // Key of m_pendingPushes. `project` is empty unless the issue came from a
+  // cross-project pull, where the number alone is ambiguous.
+  static QString pushKey(const QString& providerId, const QString& project, const QString& externalId);
+  // pushKey → task id, for pushes still in flight.
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;

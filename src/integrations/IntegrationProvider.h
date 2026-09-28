@@ -26,8 +26,10 @@ class IntegrationProvider : public QObject {
   virtual void testConnection() = 0;
   // Pull external tasks matching the configured filter. Emits tasksFetched.
   virtual void pullTasks() = 0;
-  // Push a local status change back to the tracker. Emits taskPushed.
-  virtual void pushStatusChange(const QString& externalId, const QString& newStatus) = 0;
+  // Push a local status change back to the tracker. Emits taskPushed. `project`
+  // is the issue's own repo/project, set when it arrived through a cross-project
+  // pull: it is written back there, not to the configured one.
+  virtual void pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) = 0;
 
   // Read one issue's most recent comments (HEAP-117). `project` is the issue's
   // own repo/project, which in a cross-project pull is not the configured one.
@@ -63,7 +65,9 @@ class IntegrationProvider : public QObject {
   // issue(s)") — failures go to pullFailed with the provider's own message.
   void tasksFetched(const QVector<ExternalTask>& tasks);
   void pullFailed(int httpStatus, const QString& error);
-  void taskPushed(const QString& externalId, bool ok, const QString& error);
+  // `project` echoes the one pushStatusChange was given, so two issues that share
+  // a number in different repos are told apart.
+  void taskPushed(const QString& externalId, const QString& project, bool ok, const QString& error);
   // Newest first. An empty list with an empty error means the issue has none.
   void commentsFetched(const QString& externalId, const QVector<ExternalComment>& comments, const QString& error);
   void statusesFetched(const QStringList& statuses);

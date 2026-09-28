@@ -295,13 +295,13 @@ The tracker owns a task's due date only while you have not touched it. Edit
 or snooze the deadline and it becomes yours: later syncs leave it alone, and
 a due date removed upstream no longer clears it.
 
-## Limitations (v1)
+## Writing back from "my issues" mode
 
-- **Push in self-scope.** When repo/project is blank (my-issues mode), status
-  write-back is skipped — there's no single repo to write to. The same applies
-  to an individual issue that *arrived* through my-issues mode while a repo is
-  now configured: it belongs to some other repo, so moving its card would
-  otherwise close whichever issue shares its number in the configured one.
+With repo/project blank, a sync pulls the issues assigned to you across every
+repo, so there is no single repo to write to. Each such issue remembers the repo
+it came from, and moving its card writes to **that** repo — never to the
+configured one, where the same number is a different issue. An issue whose repo
+the tracker did not name stays read-only.
 
 ## How much a sync pulls
 

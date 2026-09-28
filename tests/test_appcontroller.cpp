@@ -1649,15 +1649,16 @@ TEST_F(AppControllerTest, ThePaletteFindsAMirroredIssueByItsTrackerKey) {
 }
 
 // Moving a card writes the new state back to the tracker. An issue pulled from
-// an "assigned to me" endpoint belongs to some other repo, but the push URL is
-// built from the configured one — the PATCH would close a different issue that
-// happens to share the number. Driven against a local fake Gitea, because its
-// base URL is configurable; github's is hard-coded and a mistake here would
-// reach the real API.
-TEST_F(AppControllerTest, MovingACrossProjectTicketNeverPushesToTheConfiguredRepo) {
+// an "assigned to me" endpoint belongs to some other repo: the push must go to
+// that repo, never to the configured one — there the PATCH would close a
+// different issue that happens to share the number. Driven against a local fake
+// Gitea, because its base URL is configurable; github's is hard-coded and a
+// mistake here would reach the real API.
+TEST_F(AppControllerTest, MovingACrossProjectTicketPushesToItsOwnRepo) {
   heap::testing::FakeHttpServer gitea;
   gitea.route("GET /api/v1/repos/acme/web/issues", {200, "[]", {}});
   gitea.route("PATCH /api/v1/repos/acme/web/issues/5", {200, "{}", {}});
+  gitea.route("PATCH /api/v1/repos/acme/api/issues/5", {200, "{}", {}});
 
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
   writeIntegrationConfig(QStringLiteral("gitea"),
@@ -1679,13 +1680,88 @@ TEST_F(AppControllerTest, MovingACrossProjectTicketNeverPushesToTheConfiguredRep
   app_->tasks()->reset({foreign});
 
   app_->moveTask(QStringLiteral("gitea-api-5"), QStringLiteral("done"));
-  // Give any push that was going to happen a chance to reach the server.
-  heap::testing::waitUntil(
-      [&gitea]() {
-        return !gitea.seen().isEmpty();
-      },
-      500);
+  ASSERT_TRUE(heap::testing::waitUntil([&gitea]() {
+    return gitea.seen().contains("PATCH /api/v1/repos/acme/api/issues/5");
+  })) << "the issue's own repo was never told";
   EXPECT_FALSE(gitea.seen().contains("PATCH /api/v1/repos/acme/web/issues/5")) << "closed an issue in the wrong repo";
+  // The tracker agreed, so the card is not flagged as out of step.
+  EXPECT_TRUE(heap::testing::waitUntil([this]() {
+    return app_->tasks()->items().at(0).externalMeta.unsyncedStatus.isEmpty();
+  }));
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// With no repo configured at all — the default "my issues" connection — a
+// moved card is still written back, to the repo it came from.
+TEST_F(AppControllerTest, MyIssuesModeWritesBackThroughTheIssuesOwnRepo) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("PATCH /api/v1/repos/acme/api/issues/7", {200, "{}", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), gitea.base()},
+                         });
+
+  Task mine;
+  mine.id = QStringLiteral("gitea-api-7");
+  mine.externalId = QStringLiteral("7");
+  mine.externalProvider = QStringLiteral("gitea");
+  mine.status = QStringLiteral("todo");
+  mine.externalMeta.project = QStringLiteral("acme/api");
+  mine.externalMeta.crossProject = true;
+  // Same number, other repo, never moved: must not be confused with the first.
+  Task twin = mine;
+  twin.id = QStringLiteral("gitea-web-7");
+  twin.externalMeta.project = QStringLiteral("acme/web");
+  app_->tasks()->reset({mine, twin});
+
+  app_->moveTask(QStringLiteral("gitea-api-7"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([&gitea]() {
+    return gitea.seen().contains("PATCH /api/v1/repos/acme/api/issues/7");
+  }));
+  const QByteArray body = gitea.lastRequest("PATCH /api/v1/repos/acme/api/issues/7").body;
+  EXPECT_TRUE(body.contains("closed")) << body.toStdString();
+  EXPECT_FALSE(gitea.seen().contains("PATCH /api/v1/repos/acme/web/issues/7"));
+
+  writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());
+}
+
+// A refused write marks the card that was moved, not its same-numbered twin.
+TEST_F(AppControllerTest, AFailedCrossProjectPushFlagsOnlyTheMovedCard) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("PATCH /api/v1/repos/acme/api/issues/7", {403, R"({"message":"forbidden"})", {}});
+
+  app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("gitea"),
+                         QJsonObject{
+                             {QStringLiteral("connected"), true},
+                             {QStringLiteral("host"), gitea.base()},
+                         });
+
+  Task mine;
+  mine.id = QStringLiteral("gitea-api-7");
+  mine.externalId = QStringLiteral("7");
+  mine.externalProvider = QStringLiteral("gitea");
+  mine.status = QStringLiteral("todo");
+  mine.externalMeta.project = QStringLiteral("acme/api");
+  mine.externalMeta.crossProject = true;
+  Task twin = mine;
+  twin.id = QStringLiteral("gitea-web-7");
+  twin.externalMeta.project = QStringLiteral("acme/web");
+  app_->tasks()->reset({twin, mine});
+
+  app_->moveTask(QStringLiteral("gitea-api-7"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    const int row = app_->tasks()->indexOfId(QStringLiteral("gitea-api-7"));
+    return !app_->tasks()->items().at(row).externalMeta.unsyncedStatus.isEmpty();
+  }));
+  const int twinRow = app_->tasks()->indexOfId(QStringLiteral("gitea-web-7"));
+  EXPECT_TRUE(app_->tasks()->items().at(twinRow).externalMeta.unsyncedStatus.isEmpty());
 
   writeIntegrationConfig(QStringLiteral("gitea"), QJsonObject{});
   app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QString());

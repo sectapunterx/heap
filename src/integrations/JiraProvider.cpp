@@ -935,18 +935,18 @@ void JiraProvider::fetchStatuses() {
   });
 }
 
-void JiraProvider::pushStatusChange(const QString& externalId, const QString& newStatus) {
+void JiraProvider::pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) {
   if(!isConfigured() || externalId.isEmpty()) {
-    emit taskPushed(externalId, false, QStringLiteral("not configured"));
+    emit taskPushed(externalId, project, false, QStringLiteral("not configured"));
     return;
   }
   // Jira has no direct "set status" — you POST one of the issue's available
   // workflow transitions. Fetch them, pick the one whose target status maps to
   // the requested heap column, then execute it.
   const QString path = QStringLiteral("/issue/") + externalId + QStringLiteral("/transitions");
-  send("GET", path, {}, [this, path, externalId, newStatus](const ApiResult& r) {
+  send("GET", path, {}, [this, path, externalId, newStatus, project](const ApiResult& r) {
     if(!r.ok) {
-      emit taskPushed(externalId, false, r.error);
+      emit taskPushed(externalId, project, false, r.error);
       return;
     }
     const QJsonDocument doc = QJsonDocument::fromJson(r.body);
@@ -965,6 +965,7 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
     if(transitionId.isEmpty()) {
       emit taskPushed(
           externalId,
+          project,
           false,
           QStringLiteral("this issue has no transition to a status mapped to '%1' — map one in Settings → Integrations").arg(newStatus));
       return;
@@ -973,8 +974,8 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
     QJsonObject tr;
     tr.insert(QStringLiteral("id"), transitionId);
     body.insert(QStringLiteral("transition"), tr);
-    send("POST", path, QJsonDocument(body).toJson(QJsonDocument::Compact), [this, externalId](const ApiResult& post) {
-      emit taskPushed(externalId, post.ok, post.error);
+    send("POST", path, QJsonDocument(body).toJson(QJsonDocument::Compact), [this, externalId, project](const ApiResult& post) {
+      emit taskPushed(externalId, project, post.ok, post.error);
     });
   });
 }
