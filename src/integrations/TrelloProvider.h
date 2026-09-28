@@ -48,7 +48,7 @@ class TrelloProvider : public IntegrationProvider {
 
   void testConnection() override;
   void pullTasks() override;
-  void pushStatusChange(const QString& externalId, const QString& newStatus) override;
+  void pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) override;
 
  private:
   void fetchCards(const QHash<QString, QString>& listNames);

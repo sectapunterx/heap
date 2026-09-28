@@ -124,7 +124,7 @@ class JiraProvider : public IntegrationProvider {
 
   void testConnection() override;
   void pullTasks() override;
-  void pushStatusChange(const QString& externalId, const QString& newStatus) override;
+  void pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) override;
   void fetchComments(const QString& externalId, const QString& project) override;
   void fetchStatuses() override;
 

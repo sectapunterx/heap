@@ -72,7 +72,7 @@ with backlinks and an offer to write the note a broken link was asking for · Im
 
 **Connect** — Tracker integrations for GitHub, GitLab, Jira, Trello and eight more (Gitea, Forgejo, Redmine, Todoist,
 Asana, ClickUp, Sentry, Bitbucket) — browser sign-in or a token, issues mirrored as cards, your statuses mapped onto
-your columns, open/closed written back on column move (GitHub / GitLab / Gitea / Forgejo, with a repository set),
+your columns, open/closed written back on column move (GitHub / GitLab / Gitea / Forgejo, each issue to its own repo),
 tokens in the OS keychain, optional timed auto-sync. Mattermost
 imports the people you talk to as contacts and `@handles` instead. See
 [`docs/INTEGRATIONS.md`](docs/INTEGRATIONS.md).

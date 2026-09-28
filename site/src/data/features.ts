@@ -179,7 +179,7 @@ export const FEATURE_AREAS: FeatureArea[] = [
       {
         eyebrow: 'Write-back',
         title: 'Move a card, update the issue.',
-        body: 'For GitHub, GitLab, Gitea and Forgejo, moving a card writes its state back: drop it in Done and the issue closes, pull it out again and it reopens. This needs a repository or project set — in “my issues” mode heap. only reads.',
+        body: 'For GitHub, GitLab, Gitea and Forgejo, moving a card writes its state back: drop it in Done and the issue closes, pull it out again and it reopens. In “my issues” mode each issue is written back to the repository it came from.',
         snippet: ['APP-108  Review → Done', '  ↳ acme/web#108  open → closed'],
       },
       {

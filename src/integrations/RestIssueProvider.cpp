@@ -471,22 +471,29 @@ void RestIssueProvider::fetchComments(const QString& externalId, const QString& 
   });
 }
 
-void RestIssueProvider::pushStatusChange(const QString& externalId, const QString& newStatus) {
-  if(m_desc.pushPathTemplate.isEmpty() || inSelfScope()) {
-    // Pull-only provider (or a "my issues" pull with no repo to write back to):
-    // report success without touching the remote so moving a linked task never
-    // spams the log with "push failed".
-    emit taskPushed(externalId, true, QStringLiteral("pull-only"));
+void RestIssueProvider::pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) {
+  // A "my issues" pull has no configured repo to write to, but an issue from it
+  // knows its own. Without either there is nowhere the write could go.
+  const bool ownProject = !project.isEmpty() && !m_desc.scopeKey.isEmpty();
+  if(m_desc.pushPathTemplate.isEmpty() || (inSelfScope() && !ownProject)) {
+    // Pull-only provider, or nothing to address: report success without
+    // touching the remote so moving a linked task never spams the log with
+    // "push failed".
+    emit taskPushed(externalId, project, true, QStringLiteral("pull-only"));
     return;
   }
   if(!isConfigured() || externalId.isEmpty()) {
-    emit taskPushed(externalId, false, QStringLiteral("not configured"));
+    emit taskPushed(externalId, project, false, QStringLiteral("not configured"));
     return;
   }
   const QString state = m_desc.pushMap ? m_desc.pushMap(newStatus) : newStatus;
   QVariantMap extra;
   extra.insert(QStringLiteral("externalId"), externalId);
   extra.insert(QStringLiteral("state"), state);
+  // expand() prefers `extra` over the config, so the issue's own repo wins.
+  if(ownProject) {
+    extra.insert(m_desc.scopeKey, project);
+  }
   const QString url = expand(m_desc.baseUrlTemplate) + expand(m_desc.pushPathTemplate, extra);
 
   QNetworkRequest req = buildRequest(url);
@@ -497,10 +504,10 @@ void RestIssueProvider::pushStatusChange(const QString& externalId, const QStrin
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
   }
   QNetworkReply* reply = m_nam->sendCustomRequest(req, m_desc.pushMethod.toUtf8(), body);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId, project]() {
     reply->deleteLater();
     const bool ok = reply->error() == QNetworkReply::NoError;
-    emit taskPushed(externalId, ok, ok ? QString() : describeReplyError(reply));
+    emit taskPushed(externalId, project, ok, ok ? QString() : describeReplyError(reply));
   });
 }
 

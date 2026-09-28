@@ -1195,35 +1195,45 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
     return;
   }
   const Task& t = m_tasks.items().at(row);
+  if(t.externalId.isEmpty() || t.externalProvider.isEmpty()) {
+    return;
+  }
   // An issue pulled from an "assigned to me" endpoint belongs to some other
-  // repo, but the push path is built from the configured one — the PATCH would
-  // land on a different issue that happens to share the number. Its own repo is
-  // known, but writing back through it is HEAP-155's problem; skip it here.
-  if(t.externalId.isEmpty() || t.externalProvider.isEmpty() || t.externalMeta.crossProject) {
+  // repo, and its number means nothing in the configured one — the write goes
+  // to the repo it came from instead. One whose repo is unknown has nowhere to
+  // go; the provider answers that as pull-only.
+  const QString project = t.externalMeta.crossProject ? t.externalMeta.project : QString();
+  if(t.externalMeta.crossProject && project.isEmpty()) {
     return;
   }
   const QString providerId = t.externalProvider;
   const QString externalId = t.externalId;
   // Remembered until the tracker answers, so a failure can name the card and
   // offer to send the same status again.
-  m_pendingPushes.insert(providerId + QChar('\n') + externalId, taskId);
-  ensureFreshToken(providerId, [this, providerId, externalId, status]() {
+  m_pendingPushes.insert(pushKey(providerId, project, externalId), taskId);
+  ensureFreshToken(providerId, [this, providerId, externalId, status, project]() {
     for(const auto& provider : m_syncProviders) {
       if(provider->id() == providerId) {
-        provider->pushStatusChange(externalId, status);
+        provider->pushStatusChange(externalId, status, project);
         return;
       }
     }
   });
 }
 
-void AppController::onTaskPushed(const QString& providerId, const QString& externalId, bool ok, const QString& error) {
-  const QString taskId = m_pendingPushes.take(providerId + QChar('\n') + externalId);
+QString AppController::pushKey(const QString& providerId, const QString& project, const QString& externalId) {
+  return providerId + QChar('\n') + project + QChar('\n') + externalId;
+}
+
+void AppController::onTaskPushed(
+    const QString& providerId, const QString& externalId, const QString& project, bool ok, const QString& error) {
+  const QString taskId = m_pendingPushes.take(pushKey(providerId, project, externalId));
   int row = taskId.isEmpty() ? -1 : m_tasks.indexOfId(taskId);
   if(row < 0) {
     for(int i = 0; i < m_tasks.rowCount(); ++i) {
       const Task& t = m_tasks.items().at(i);
-      if(t.externalProvider == providerId && t.externalId == externalId && !t.externalMeta.crossProject) {
+      const QString taskProject = t.externalMeta.crossProject ? t.externalMeta.project : QString();
+      if(t.externalProvider == providerId && t.externalId == externalId && taskProject == project) {
         row = i;
         break;
       }
@@ -4555,8 +4565,8 @@ void AppController::applyIntegrationSettings() {
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
             this,
-            [this, providerId](const QString& externalId, bool ok, const QString& error) {
-              onTaskPushed(providerId, externalId, ok, error);
+            [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error) {
+              onTaskPushed(providerId, externalId, project, ok, error);
             });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
       emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
