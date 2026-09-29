@@ -282,6 +282,7 @@ QtObject {
             case "oneone":  return mOneone;
             case "sync":    return mSync;
             case "focus":   return mFocus;
+            case "none":    return textMuted;   // a one-off meeting, no routine
         }
         return accent;
     }

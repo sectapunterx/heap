@@ -608,6 +608,11 @@ class AppController : public QObject {
   // `taskId` is the optional task tied to this toast — it is encoded into
   // the notification id so the action handlers can route back.
   Q_INVOKABLE void notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind = QString());
+  // The confirmation for something quick-captured from outside the app (the
+  // global hotkeys' capture window). Unlike notify(), it is shown while a heap
+  // window has focus — the capture window has it — and in quiet hours, since
+  // the user just asked for it. Clicking it opens `taskId` when there is one.
+  Q_INVOKABLE void notifyCapture(const QString& taskId, const QString& title, const QString& body);
   // Slide the deadline of \p taskId forward by \p seconds (no-op if the
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);

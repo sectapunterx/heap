@@ -144,4 +144,65 @@ TestCase {
         ed.close();
         AppController.deleteEvent(ev.id);   // leave the shared profile clean
     }
+
+    // "No type" is offered first, and an event saved with it reopens on it
+    // rather than falling back to the standup the list used to start with.
+    function test_untyped_event_round_trips() {
+        const ed = make('import TodoCpp; EventEditor { }');
+        compare(ed.types[0], "none");
+        compare(ed._typeIndex("sync"), ed.types.indexOf("sync"));
+        compare(ed._typeIndex("imported-kind"), 0, "unknown types read as untyped");
+
+        const day = new Date();
+        day.setDate(day.getDate() + 420);
+        day.setHours(0, 0, 0, 0);
+        const ev = AppController.newEventDraft(10, day);
+        ev.title = "untyped probe";
+        ev.type = "none";
+        ev.end = 10.5;
+        ev.date = day;
+        AppController.saveEvent(ev);
+
+        ed.showForId(ev.id);
+        compare(ed._draft().type, "none");
+        ed.close();
+        AppController.deleteEvent(ev.id);
+    }
+
+    // Typing in the attendee field offers contacts; Enter takes the highlighted
+    // one and leaves the caret ready for the next name. The trailing separator
+    // is not saved.
+    function test_attendee_suggestions_from_contacts() {
+        const draft = AppController.newPersonDraft();
+        draft._isNew = true;
+        draft.id = "";
+        draft.name = "Zeltser Quinn";
+        draft.state = "idle";
+        AppController.savePerson(draft);
+        let pid = "";
+        const cands = AppController.pingCandidates();
+        for (let i = 0; i < cands.length; ++i)
+            if (cands[i].name === "Zeltser Quinn") pid = cands[i].personId;
+        verify(pid.length > 0, "probe person not saved");
+
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForDraft(AppController.newEventDraft(10, new Date()));
+        const att = findChild(ed, "event-attendees");
+        const sug = findChild(ed, "event-attendee-suggest");
+        verify(att !== null && sug !== null);
+
+        att.forceActiveFocus();
+        att.text = "zelt";
+        att.cursorPosition = 4;
+        tryVerify(() => sug.isOpen, 1000, "no suggestions for a contact's name");
+        compare(sug.items[0].name, "Zeltser Quinn");
+
+        keyClick(Qt.Key_Return);
+        compare(att.text, "Zeltser Quinn, ");
+        compare(att.cursorPosition, att.text.length);
+        compare(ed._draft().attendees, "Zeltser Quinn");
+
+        ed.close();
+        AppController.deletePerson(pid);
+    }
 }

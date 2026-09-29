@@ -14,18 +14,29 @@ import TodoCpp
 //      ↳ Esc   → cancel the discard, return focus to the editor
 Popup {
     id: root
-    modal: true
+    // Standalone it is the whole window — there is nothing behind it to
+    // dim or block, so no scrim.
+    modal: !root.standalone
     focus: true
     // We own all key handling (the discard-confirm flow needs to intercept
     // Esc), so the popup must NOT auto-close on Escape.
     closePolicy: Popup.NoAutoClose
     padding: 0
     width: 600
-    anchors.centerIn: Overlay.overlay
+    // Standalone: hosted by CaptureWindow — see QuickCapturePopup.
+    property bool standalone: false
+    anchors.centerIn: root.standalone ? undefined : Overlay.overlay
+    x: root.standalone ? Math.round((root.parent.width - root.width) / 2) : 0
+    y: root.standalone ? Theme.sp2xl : 0
 
     Overlay.modal: Rectangle {
         color: Theme.scrim
     }
+
+    // The note just saved, for the owner's confirmation (see QuickCapturePopup).
+    signal captured(string title, string body, string taskId)
+
+    readonly property bool hasText: editor.text.trim().length > 0
 
     function _submit() {
         const body = editor.text;
@@ -37,6 +48,8 @@ Popup {
         editor.text = "";
         at.dismiss();
         root.close();
+        const flat = body.trim().replace(/\s+/g, " ");
+        root.captured(I18n.t("quickNote.done"), flat.length > 140 ? flat.substring(0, 139) + "…" : flat, "");
     }
 
     function _maybeDiscard() {
@@ -198,7 +211,7 @@ Popup {
     // the activeFocus target so Enter is captured here.
     Popup {
         id: confirmDiscard
-        modal: true
+        modal: !root.standalone
         focus: true
         closePolicy: Popup.CloseOnEscape
         padding: 0

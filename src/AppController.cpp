@@ -8003,6 +8003,21 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
   emit toast(body);
 }
 
+void AppController::notifyCapture(const QString& taskId, const QString& title, const QString& body) {
+  const QVariantMap notif = settingsMap().value("notifications").toMap();
+  if(!notif.value("desktopNotif", true).toBool() || !m_notifier) {
+    emit toast(title + QStringLiteral(" — ") + QString(body).replace(QChar('\n'), QStringLiteral(" · ")));
+    return;
+  }
+  heap::notify::Notification n;
+  n.id = heap::notify::routingId(QStringLiteral("capture"), taskId.isEmpty() ? QStringLiteral("-") : taskId);
+  n.title = title;
+  n.body = body;
+  n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+  n.category = QStringLiteral("capture");
+  m_notifier->post(n);
+}
+
 void AppController::snoozeDeadline(const QString& taskId, int seconds) {
   const int row = m_tasks.indexOfId(taskId);
   if(row < 0) {

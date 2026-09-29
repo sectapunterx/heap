@@ -214,6 +214,46 @@ TestCase {
         compare(evContext, "обсудить релиз", "the // comment must also ride onto the sync event context");
     }
 
+    // Quick capture reports what it made: the task id in the title and the
+    // parsed parameters as lines of the body, for the toast / OS notification
+    // shown after the popup closes.
+    function test_quickcapture_reports_what_it_created() {
+        const qc = make('import TodoCpp; QuickCapturePopup {}');
+        const input = findChild(qc, "qc-input");
+        let got = null;
+        qc.captured.connect(function (title, body, taskId) { got = {title: title, body: body, taskId: taskId}; });
+
+        input.text = "capture-report probe tomorrow at 15:00 // with notes";
+        qc._submit();
+
+        verify(got !== null, "captured() not emitted");
+        verify(got.taskId.length > 0, "no task id");
+        verify(got.title.indexOf(got.taskId) >= 0, "title must name the task: " + got.title);
+        const lines = got.body.split("\n");
+        compare(lines[0], "capture-report probe");
+        verify(got.body.indexOf("15:00") >= 0, "the parsed time must be listed: " + got.body);
+        compare(lines[lines.length - 1], "// with notes");
+        AppController.deleteTask(got.taskId);
+    }
+
+    // The capture window hosts its own popups and hides itself once they close.
+    function test_capture_window_hides_after_close() {
+        const cw = make('import TodoCpp; CaptureWindow {}');
+        cw.summon("task");
+        verify(cw.visible, "summon must show the window");
+        verify(cw.busy);
+        cw.summon("note");   // switches popups, stays up
+        verify(cw.visible);
+        verify(cw.busy);
+        const task = findChild(cw.contentItem, "capture-task");
+        const note = findChild(cw.contentItem, "capture-note");
+        verify(task !== null && note !== null);
+        verify(!task.opened && note.opened, "a second summon switches to the other popup");
+        note.close();
+        tryVerify(() => !cw.visible, 1000, "window must hide once its popup closes");
+        cw.destroy();
+    }
+
     // TaskEditor: ticking "Someday" files the task under Backlog — the status
     // box flips to Backlog immediately as feedback (saveTask enforces it too).
     function test_taskeditor_someday_files_under_backlog() {
