@@ -66,7 +66,7 @@ Item {
         height: width
         radius: width / 2
         gradient: Gradient {
-            GradientStop { position: 0.0; color: Qt.rgba(0.231, 0.800, 0.866, 0.10) }
+            GradientStop { position: 0.0; color: Theme.withAlpha(Theme.accent, 0.10) }
             GradientStop { position: 0.55; color: "transparent" }
         }
     }
@@ -111,9 +111,9 @@ Item {
                 width: parent.width * Math.max(0, Math.min(1, root.progress))
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
-                    GradientStop { position: 0.0; color: Qt.rgba(0.231, 0.800, 0.866, 0) }
+                    GradientStop { position: 0.0; color: Theme.withAlpha(Theme.accent, 0) }
                     GradientStop { position: 0.5; color: Brand.accent }
-                    GradientStop { position: 1.0; color: Qt.rgba(0.231, 0.800, 0.866, 0) }
+                    GradientStop { position: 1.0; color: Theme.withAlpha(Theme.accent, 0) }
                 }
                 Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
             }

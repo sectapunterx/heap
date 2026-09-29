@@ -1,0 +1,473 @@
+// Settings → Appearance → Theme: pick a theme for each slot, make your own,
+// and edit every colour token of it.
+//
+// Two slots, dark and light; AppController.theme (Ctrl+Shift+T) says which is
+// showing, settings.appearance.darkPreset / lightPreset say what sits in
+// each. Built-in themes are read-only: editing a token of one makes a copy
+// and edits that, so a built-in can always be gone back to.
+//
+// Writes go through setKey(key, value) into settings.appearance; SettingsView
+// persists them and Theme repaints from the blob, so every edit is live.
+import QtQuick
+import QtQuick.Controls
+import QtQuick.Layouts
+import TodoCpp
+import "ThemePresets.js" as Presets
+
+ColumnLayout {
+    id: ts
+    objectName: "theme-settings"
+
+    property var appearance: ({})
+    signal setKey(string key, var value)
+
+    spacing: 12
+    Layout.fillWidth: true
+
+    readonly property var customs: Array.isArray(appearance.customThemes) ? appearance.customThemes : []
+    readonly property string slot: Theme.slot
+    readonly property string slotKey: slot === "light" ? "lightPreset" : "darkPreset"
+    readonly property string currentId: Theme.activePresetId
+    readonly property var current: Theme.active
+    readonly property bool currentIsBuiltin: !!Presets.builtin(currentId)
+    // Themes of the slot's base first, the rest after: any theme may sit in
+    // either slot, but the matching ones are what you are looking for.
+    readonly property var themes: {
+        const list = Presets.all(customs);
+        const mine = list.filter((t) => (t.base === "light" ? "light" : "dark") === slot);
+        const other = list.filter((t) => (t.base === "light" ? "light" : "dark") !== slot);
+        return mine.concat(other);
+    }
+
+    property string filter: ""
+    property string importError: ""
+    property bool copied: false
+
+    function pick(id) { setKey(slotKey, id); }
+
+    function _saveCustoms(list) { setKey("customThemes", list); }
+
+    function _custom(id) {
+        for (let i = 0; i < customs.length; i++)
+            if (customs[i].id === id) return customs[i];
+        return null;
+    }
+
+    // Adds `theme` as a new custom theme and puts it in the current slot.
+    function _add(name, base, colors, from) {
+        const id = Presets.newId(customs);
+        const t = { id: id, name: name, base: base, from: from || "", colors: colors };
+        _saveCustoms(customs.concat([t]));
+        pick(id);
+        return id;
+    }
+
+    function duplicate(id) {
+        const t = Presets.resolve(id, customs, slot);
+        return _add(I18n.t("settings.theme.copyName").arg(t.name), t.base,
+                    Object.assign({}, t.colors), Presets.builtin(id) ? id : (_custom(id) && _custom(id).from) || "");
+    }
+
+    function _updateCustom(id, fn) {
+        const next = customs.map((t) => {
+            if (t.id !== id) return t;
+            const copy = Object.assign({}, t);
+            copy.colors = Object.assign({}, t.colors);
+            fn(copy);
+            return copy;
+        });
+        _saveCustoms(next);
+    }
+
+    function setToken(key, hex) {
+        if (!Presets.isHex(hex)) return;
+        if (currentIsBuiltin) {
+            const t = current;
+            const colors = Object.assign({}, t.colors);
+            colors[key] = hex;
+            _add(I18n.t("settings.theme.copyName").arg(t.name), t.base, colors, t.id);
+            return;
+        }
+        _updateCustom(currentId, (t) => { t.colors[key] = hex; });
+    }
+
+    // The value `key` had in the theme this one was copied from.
+    function origin(key) {
+        const c = _custom(currentId);
+        const from = c && c.from ? c.from : (current.base === "light" ? Presets.DEFAULT_LIGHT : Presets.DEFAULT_DARK);
+        return Presets.resolve(from, customs, slot).colors[key];
+    }
+
+    function resetToken(key) {
+        if (currentIsBuiltin) return;
+        const v = origin(key);
+        _updateCustom(currentId, (t) => { t.colors[key] = v; });
+    }
+
+    function rename(name) {
+        const n = String(name || "").trim();
+        if (!n.length || currentIsBuiltin) return;
+        _updateCustom(currentId, (t) => { t.name = n.slice(0, 60); });
+    }
+
+    function setBase(base) {
+        if (currentIsBuiltin) return;
+        _updateCustom(currentId, (t) => { t.base = base; });
+    }
+
+    function remove(id) {
+        if (Presets.builtin(id)) return;
+        _saveCustoms(customs.filter((t) => t.id !== id));
+        // A slot that pointed at it goes back to its default.
+        if (appearance.darkPreset === id) setKey("darkPreset", Presets.DEFAULT_DARK);
+        if (appearance.lightPreset === id) setKey("lightPreset", Presets.DEFAULT_LIGHT);
+    }
+
+    function exportCurrent() {
+        AppController.copyToClipboard(Presets.exportJson(currentId, customs, slot));
+        copied = true;
+        copiedTimer.restart();
+    }
+
+    function importText(text) {
+        let obj = null;
+        try { obj = JSON.parse(text); } catch (e) { obj = null; }
+        const v = Presets.validateTheme(obj);
+        if (!v) {
+            importError = I18n.t("settings.theme.importInvalid");
+            return false;
+        }
+        importError = "";
+        // Tokens the file does not name come from the built-in of its base.
+        const base = Presets.resolve(v.base === "light" ? Presets.DEFAULT_LIGHT : Presets.DEFAULT_DARK, [], v.base);
+        const colors = Object.assign({}, base.colors, v.colors);
+        _add(v.name.length ? v.name : I18n.t("settings.theme.imported"), v.base, colors, "");
+        return true;
+    }
+
+    Timer { id: copiedTimer; interval: 1600; onTriggered: ts.copied = false }
+
+    // ── Slot ─────────────────────────────────────────────────────────
+    Text {
+        text: I18n.t("settings.theme.slotHint")
+        color: Theme.textMuted
+        font.pixelSize: 11
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+    }
+
+    // ── Theme cards ──────────────────────────────────────────────────
+    Flow {
+        id: cards
+        objectName: "theme-cards"
+        Layout.fillWidth: true
+        spacing: 8
+        Repeater {
+            model: ts.themes
+            delegate: Rectangle {
+                id: card
+                required property var modelData
+                readonly property var t: Presets.resolve(modelData.id, ts.customs, ts.slot)
+                readonly property bool selected: modelData.id === ts.currentId
+                objectName: "theme-card-" + modelData.id
+                width: 150; height: 92
+                radius: 8
+                color: t.colors.bg
+                border.color: selected ? Theme.accent : (cardMA.containsMouse ? Theme.borderStrong : Theme.border)
+                border.width: selected ? 2 : 1
+
+                // A miniature of the theme: a panel, a line of text, accent
+                // and the alert / priority colours.
+                Rectangle {
+                    x: 8; y: 8; width: parent.width - 16; height: 44
+                    radius: 5
+                    color: card.t.colors.panel
+                    border.color: card.t.colors.border; border.width: 1
+                    Rectangle { x: 8; y: 8; width: 60; height: 5; radius: 2; color: card.t.colors.text }
+                    Rectangle { x: 8; y: 18; width: 40; height: 4; radius: 2; color: card.t.colors.textMuted }
+                    Rectangle { x: parent.width - 34; y: 8; width: 26; height: 12; radius: 3; color: card.t.colors.accent }
+                    Row {
+                        x: 8; y: 30; spacing: 4
+                        Repeater {
+                            model: ["danger", "warning", "success", "info", "p2", "p3", "stReview"]
+                            Rectangle {
+                                required property string modelData
+                                width: 8; height: 8; radius: 4
+                                color: card.t.colors[modelData]
+                            }
+                        }
+                    }
+                }
+                Text {
+                    x: 10; y: 58
+                    width: parent.width - 20
+                    text: card.t.name
+                    color: card.t.colors.text
+                    elide: Text.ElideRight
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    x: 10; y: 74
+                    text: (card.t.builtin ? I18n.t("settings.theme.builtin") : I18n.t("settings.theme.custom"))
+                          + " · " + I18n.t(card.t.base === "light" ? "settings.appearance.theme.light"
+                                                                  : "settings.appearance.theme.dark")
+                    color: card.t.colors.textMuted
+                    font.pixelSize: 9
+                }
+                MouseArea {
+                    id: cardMA
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: ts.pick(card.modelData.id)
+                }
+            }
+        }
+    }
+
+    // ── Actions on the selected theme ───────────────────────────────
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+
+        TextField {
+            id: nameField
+            objectName: "theme-name"
+            Layout.preferredWidth: 200
+            enabled: !ts.currentIsBuiltin
+            text: ts.current.name
+            color: Theme.text
+            font.pixelSize: 12
+            selectByMouse: true
+            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            onAccepted: ts.rename(text)
+            onActiveFocusChanged: if (!activeFocus && text !== ts.current.name) ts.rename(text)
+        }
+        PillButton {
+            objectName: "theme-duplicate"
+            text: I18n.t("settings.theme.duplicate")
+            onClicked: ts.duplicate(ts.currentId)
+        }
+        PillButton {
+            objectName: "theme-export"
+            text: ts.copied ? I18n.t("settings.theme.copied") : I18n.t("settings.theme.export")
+            onClicked: ts.exportCurrent()
+        }
+        PillButton {
+            id: delBtn
+            objectName: "theme-delete"
+            property bool armed: false
+            visible: !ts.currentIsBuiltin
+            danger: true
+            text: armed ? I18n.t("settings.theme.deleteConfirm") : I18n.t("common.delete")
+            onClicked: {
+                if (!armed) { armed = true; disarm.restart(); return; }
+                armed = false;
+                ts.remove(ts.currentId);
+            }
+            Timer { id: disarm; interval: 3000; onTriggered: delBtn.armed = false }
+        }
+        Item { Layout.fillWidth: true }
+    }
+
+    // Base of a custom theme: which built-in fills tokens it lacks and how
+    // high contrast pushes it.
+    RowLayout {
+        visible: !ts.currentIsBuiltin
+        spacing: 8
+        Text { text: I18n.t("settings.theme.base"); color: Theme.textMuted; font.pixelSize: 11 }
+        Repeater {
+            model: ["dark", "light"]
+            PillButton {
+                required property string modelData
+                primary: ts.current.base === modelData
+                text: I18n.t(modelData === "light" ? "settings.appearance.theme.light" : "settings.appearance.theme.dark")
+                onClicked: ts.setBase(modelData)
+            }
+        }
+    }
+
+    // ── Import ──────────────────────────────────────────────────────
+    ColumnLayout {
+        Layout.fillWidth: true
+        spacing: 4
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: 8
+            TextField {
+                id: importField
+                objectName: "theme-import-field"
+                Layout.fillWidth: true
+                placeholderText: I18n.t("settings.theme.importPh")
+                placeholderTextColor: Theme.textDim
+                color: Theme.text
+                font.family: Theme.fontMono
+                font.pixelSize: 11
+                selectByMouse: true
+                background: Rectangle { radius: 6; color: Theme.panel2; border.color: ts.importError.length ? Theme.danger : Theme.border; border.width: 1 }
+                onAccepted: if (ts.importText(text)) text = ""
+            }
+            PillButton {
+                objectName: "theme-import"
+                text: I18n.t("settings.theme.import")
+                enabled: importField.text.length > 0
+                onClicked: if (ts.importText(importField.text)) importField.text = ""
+            }
+        }
+        Text {
+            visible: ts.importError.length > 0
+            text: ts.importError
+            color: Theme.danger
+            font.pixelSize: 10
+        }
+    }
+
+    // ── Token editor ────────────────────────────────────────────────
+    RowLayout {
+        Layout.fillWidth: true
+        Layout.topMargin: 6
+        spacing: 8
+        Text {
+            text: I18n.t("settings.theme.colors").toUpperCase()
+            color: Theme.textMuted
+            font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+        }
+        Item { Layout.fillWidth: true }
+        TextField {
+            objectName: "theme-token-filter"
+            Layout.preferredWidth: 180
+            placeholderText: I18n.t("settings.theme.filter")
+            placeholderTextColor: Theme.textDim
+            color: Theme.text
+            font.pixelSize: 11
+            selectByMouse: true
+            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            onTextChanged: ts.filter = text.toLowerCase()
+        }
+    }
+    Text {
+        visible: ts.currentIsBuiltin
+        text: I18n.t("settings.theme.builtinHint")
+        color: Theme.textDim
+        font.pixelSize: 10
+        wrapMode: Text.WordWrap
+        Layout.fillWidth: true
+    }
+
+    Repeater {
+        model: Presets.GROUPS
+        delegate: ColumnLayout {
+            id: grp
+            required property string modelData
+            readonly property var tokens: Presets.TOKENS.filter((t) => {
+                if (t.group !== modelData) return false;
+                if (!ts.filter.length) return true;
+                return t.key.toLowerCase().indexOf(ts.filter) >= 0
+                    || I18n.t("theme.token." + t.key).toLowerCase().indexOf(ts.filter) >= 0;
+            })
+            visible: tokens.length > 0
+            Layout.fillWidth: true
+            spacing: 4
+
+            Text {
+                text: I18n.t("theme.group." + grp.modelData)
+                color: Theme.textDim
+                font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                font.capitalization: Font.AllUppercase
+                Layout.topMargin: 6
+            }
+            GridLayout {
+                id: grid
+                Layout.fillWidth: true
+                // Sized off the section, not the grid: the grid's own width
+                // follows its cells, so deriving the cells from it collapses
+                // to one column.
+                columns: Math.max(1, Math.floor(ts.width / 280))
+                // Equal cells, so the swatches line up from group to group.
+                readonly property real cellW: Math.floor((ts.width - columnSpacing * (columns - 1)) / columns)
+                columnSpacing: 12
+                rowSpacing: 4
+                Repeater {
+                    model: grp.tokens
+                    delegate: RowLayout {
+                        id: tokRow
+                        required property var modelData
+                        readonly property string key: modelData.key
+                        readonly property string value: String(ts.current.colors[key] || "")
+                        readonly property bool changed: !ts.currentIsBuiltin
+                                                        && value.toLowerCase() !== String(ts.origin(key)).toLowerCase()
+                        objectName: "theme-token-" + key
+                        Layout.preferredWidth: grid.cellW
+                        Layout.maximumWidth: grid.cellW
+                        spacing: 8
+
+                        Rectangle {
+                            id: sw
+                            objectName: "theme-swatch-" + tokRow.key
+                            Layout.preferredWidth: 26; Layout.preferredHeight: 22
+                            radius: 5
+                            color: tokRow.value
+                            border.color: Theme.borderStrong; border.width: 1
+                            MouseArea {
+                                anchors.fill: parent
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    picker.token = tokRow.key;
+                                    picker.openFor(tokRow.value, sw);
+                                }
+                            }
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: I18n.t("theme.token." + tokRow.key)
+                            color: Theme.text
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                        TextField {
+                            objectName: "theme-hex-" + tokRow.key
+                            Layout.preferredWidth: 92
+                            text: tokRow.value
+                            font.family: Theme.fontMono
+                            font.pixelSize: 11
+                            color: acceptableInput ? Theme.text : Theme.danger
+                            selectByMouse: true
+                            validator: RegularExpressionValidator { regularExpression: /#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})/ }
+                            background: Rectangle { radius: 5; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                            onAccepted: ts.setToken(tokRow.key, text.toLowerCase())
+                            onActiveFocusChanged: {
+                                if (!activeFocus && acceptableInput && text.toLowerCase() !== tokRow.value.toLowerCase())
+                                    ts.setToken(tokRow.key, text.toLowerCase());
+                            }
+                        }
+                        Text {
+                            objectName: "theme-reset-" + tokRow.key
+                            text: "↺"
+                            opacity: tokRow.changed ? 1 : 0
+                            color: resetMA.containsMouse ? Theme.accent : Theme.textMuted
+                            font.pixelSize: 13
+                            Layout.preferredWidth: 14
+                            MouseArea {
+                                id: resetMA
+                                anchors.fill: parent
+                                enabled: tokRow.changed
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: ts.resetToken(tokRow.key)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    ColorPickerPopup {
+        id: picker
+        property string token: ""
+        parent: Overlay.overlay
+        // The first drag on a built-in makes the copy; the rest land on it.
+        onPicked: (hex) => ts.setToken(token, hex)
+    }
+}

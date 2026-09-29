@@ -16,7 +16,7 @@ Popup {
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.55)
+        color: Theme.scrim
     }
 
     property var draft: ({})
@@ -705,7 +705,7 @@ Popup {
                             ? Theme.border
                             : (root._deadlinePreview && root._deadlinePreview.ok
                                 ? Theme.accent
-                                : Theme.p0)
+                                : Theme.danger)
                         border.width: 1
                     }
                     color: Theme.text
@@ -947,18 +947,7 @@ Popup {
         id: descDocument
         text: descField.text
         allowRemoteImages: false
-        palette: ({
-            "text": Theme.text,
-            "dim": Theme.textDim,
-            "link": Theme.accent,
-            "code": Theme.text,
-            "codeBackground": Theme.panel2,
-            "highlightBackground": Theme.accentSoft,
-            "mention": Theme.stProg,
-            "ticket": Theme.accent,
-            "tag": Theme.stReview,
-            "math": Theme.p2
-        })
+        palette: Theme.mdPalette
     }
 
 }

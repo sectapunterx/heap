@@ -20,7 +20,7 @@ Popup {
     width: 460
     anchors.centerIn: Overlay.overlay
 
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+    Overlay.modal: Rectangle { color: Theme.scrim }
 
     // Emitted with a PersonEditor draft — Main hands it straight to the editor.
     signal draftRequested(var draft)
@@ -178,7 +178,7 @@ Popup {
                                 const parts = String(crow.modelData.name || "").split(/\s+/);
                                 return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                             }
-                            color: "#06121a"
+                            color: Theme.textOnAccent
                             font.family: Theme.fontMono
                             font.pixelSize: 10
                             font.weight: Font.DemiBold

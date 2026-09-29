@@ -226,17 +226,6 @@ Item {
         // keeps up while typing instead of lagging by the debounce.
         text: area.text
         allowRemoteImages: false
-        palette: ({
-            "text": Theme.text,
-            "dim": Theme.textDim,
-            "link": Theme.accent,
-            "code": Theme.text,
-            "codeBackground": Theme.panel2,
-            "highlightBackground": Theme.accentSoft,
-            "mention": Theme.stProg,
-            "ticket": Theme.accent,
-            "tag": Theme.stReview,
-            "math": Theme.p2
-        })
+        palette: Theme.mdPalette
     }
 }

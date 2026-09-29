@@ -138,11 +138,9 @@ Item {
             color: "#5cc2dd"
         },
         appearance: {
-            // String, not the colour value type: JSON.stringify turns a colour
-            // into an {r,g,b,a,hsl…} object, and every swatch picker compares
-            // it with String(...) === "#rrggbb", so once this landed in
-            // state.json no accent ever showed up as the selected one.
-            accent: String(Theme._defaultAccent),
+            // No accent / theme defaults here: an absent darkPreset /
+            // lightPreset means the built-in heap. themes (Theme.qml), and
+            // writing a default would pin a profile to it.
             fontUI: "IBM Plex Sans",
             fontMono: "JetBrains Mono",
             reducedMotion: false,
@@ -196,14 +194,6 @@ Item {
         }
     })
 
-    // First chip is the brand accent the app actually ships with, so the
-    // picker can show a selection on a profile that never changed it — the
-    // hardcoded "#5cc2dd" matched nothing (the brand cyan is #3bccdd), which
-    // left every swatch unringed.
-    readonly property var accentSwatches: [
-        String(Theme._defaultAccent), "#6ec18a", "#c07acf", "#dcb86b",
-        "#e6624c", "#7da8d9", "#9aa3b4"
-    ]
     readonly property var avatarSwatches: [
         "#d97a6c", "#dcb86b", "#7cc492", "#6cc4b8",
         "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7", "#e6624c"
@@ -570,8 +560,8 @@ Item {
                             Layout.leftMargin: 24
                             Layout.rightMargin: 24
                             radius: 8
-                            color: Theme.withAlpha(Theme.p1, 0.12)
-                            border.color: Theme.p1
+                            color: Theme.withAlpha(Theme.warning, 0.12)
+                            border.color: Theme.warning
                             border.width: 1
                             implicitHeight: notImplCol.implicitHeight + 16
                             ColumnLayout {
@@ -581,7 +571,7 @@ Item {
                                 spacing: 4
                                 Text {
                                     text: I18n.t("settings.notImpl.title")
-                                    color: Theme.p1
+                                    color: Theme.warning
                                     font.pixelSize: 11
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: 1
@@ -793,7 +783,7 @@ Item {
             border.width: 1
             Rectangle {
                 width: 14; height: 14; radius: 7
-                color: "#fff"
+                color: Theme.knob
                 anchors.verticalCenter: parent.verticalCenter
                 x: switchRow.checked ? parent.width - width - 3 : 3
                 Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
@@ -834,7 +824,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: parent.l
-                            color: parent.v === parent.parent.parent.parent.value ? "#06121a" : Theme.text
+                            color: parent.v === parent.parent.parent.parent.value ? Theme.textOnAccent : Theme.text
                             font.pixelSize: 11
                             font.weight: parent.v === parent.parent.parent.parent.value ? Font.DemiBold : Font.Medium
                         }
@@ -889,7 +879,7 @@ Item {
                 x: parent.leftPadding + parent.visualPosition * (parent.availableWidth - width)
                 y: parent.topPadding + parent.availableHeight / 2 - height / 2
                 width: 14; height: 14; radius: 7
-                color: "#fff"
+                color: Theme.knob
                 border.color: Theme.border; border.width: 1
             }
         }
@@ -935,11 +925,11 @@ Item {
         }
         Rectangle {
             radius: 6
-            color: dangerMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.20) : Theme.withAlpha(Theme.p0, 0.10)
-            border.color: Theme.p0; border.width: 1
+            color: dangerMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10)
+            border.color: Theme.danger; border.width: 1
             implicitWidth: dangerTxt.implicitWidth + 24
             implicitHeight: 28
-            Text { id: dangerTxt; anchors.centerIn: parent; text: parent.parent.buttonText; color: Theme.p0; font.pixelSize: 12; font.weight: Font.Medium }
+            Text { id: dangerTxt; anchors.centerIn: parent; text: parent.parent.buttonText; color: Theme.danger; font.pixelSize: 12; font.weight: Font.Medium }
             MouseArea { id: dangerMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.triggered() }
         }
     }
@@ -967,7 +957,7 @@ Item {
                                     const parts = n.split(/\s+/);
                                     return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                                 }
-                                color: "#06121a"
+                                color: Theme.textOnAccent
                                 font.family: Theme.fontMono
                                 font.pixelSize: 18
                                 font.weight: Font.DemiBold
@@ -1050,12 +1040,14 @@ Item {
                                    ({ value: "comfy",   label: I18n.t("common.density.comfy") }) ]
                         onSelected: (value) => AppController.density = value
                     }
-                    SwatchRow {
-                        label: I18n.t("settings.appearance.accent")
-                        value: String(Theme.accent)
-                        options: root.accentSwatches
-                        onSelected: (color) => root.set("appearance", "accent", String(color))
-                    }
+                }
+            }
+            SectionCard {
+                objectName: "settings-theme-card"
+                ThemeSettings {
+                    Layout.fillWidth: true
+                    appearance: root.settings.appearance || ({})
+                    onSetKey: (key, value) => root.set("appearance", key, value)
                 }
             }
             SectionCard {
@@ -1068,11 +1060,23 @@ Item {
                         checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
                         onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
                     }
-                    SwitchRow {
-                        label: I18n.t("settings.appearance.highContrast")
-                        hint: I18n.t("settings.appearance.highContrast.hint")
-                        checked: !!(root.settings.appearance && root.settings.appearance.highContrast)
-                        onToggled: (checked) => root.set("appearance", "highContrast", checked)
+                    // Soft: hairline borders, closer panels, muted colour —
+                    // over whichever theme is showing. highContrast is kept
+                    // in step for profiles that only know the old switch.
+                    SegRow {
+                        objectName: "settings-contrast"
+                        label: I18n.t("settings.appearance.contrast")
+                        hint: I18n.t("settings.appearance.contrast.hint")
+                        value: Theme.contrast
+                        options: [
+                            ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
+                            ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
+                            ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
+                        ]
+                        onSelected: (value) => {
+                            root.set("appearance", "contrast", value);
+                            root.set("appearance", "highContrast", value === "high");
+                        }
                     }
                     // Only where there is a tray to close into.
                     SwitchRow {
@@ -1591,7 +1595,7 @@ Item {
                 wrapMode: Text.WordWrap
                 text: I18n.t(Qt.platform.os === "windows" ? "settings.integrations.secretsFileWin"
                                                           : "settings.integrations.secretsFile")
-                color: Theme.p1
+                color: Theme.warning
                 font.pixelSize: 11
             }
 
@@ -1622,7 +1626,7 @@ Item {
                             border.color: cur === modelData.v ? Theme.accent : Theme.border; border.width: 1
                             Text {
                                 id: asTxt; anchors.centerIn: parent; text: modelData.label
-                                color: parent.cur === modelData.v ? "#06121a" : Theme.text; font.pixelSize: 11
+                                color: parent.cur === modelData.v ? Theme.textOnAccent : Theme.text; font.pixelSize: 11
                             }
                             MouseArea {
                                 id: asMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -1706,7 +1710,7 @@ Item {
                                 Rectangle {
                                     width: 32; height: 32; radius: 6
                                     color: modelData.color
-                                    Text { anchors.centerIn: parent; text: modelData.icon; color: "#06121a"; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                    Text { anchors.centerIn: parent; text: modelData.icon; color: Theme.textOnAccent; font.pixelSize: 14; font.weight: Font.DemiBold }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
@@ -1772,7 +1776,7 @@ Item {
                                 Layout.fillWidth: true
                                 radius: 6
                                 color: Theme.panel2
-                                border.color: Theme.p1; border.width: 1
+                                border.color: Theme.warning; border.width: 1
                                 implicitHeight: missTxt.implicitHeight + 16
                                 Text {
                                     id: missTxt
@@ -1828,7 +1832,7 @@ Item {
                                 color: oauthMA.containsMouse ? Theme.accentStrong : Theme.accent
                                 border.color: Theme.accent; border.width: 1
                                 implicitHeight: 34
-                                Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: "#06121a"; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: Theme.textOnAccent; font.pixelSize: 12; font.weight: Font.DemiBold }
                                 MouseArea {
                                     id: oauthMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                     onClicked: { intCard.commitFields(); AppController.connectOAuth(intCard.intKey) }
@@ -2049,7 +2053,7 @@ Item {
                                     color: signInMA.containsMouse ? Theme.accentStrong : Theme.accent
                                     border.color: Theme.accent; border.width: 1
                                     implicitHeight: 30
-                                    Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: "#06121a"; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                    Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: Theme.textOnAccent; font.pixelSize: 12; font.weight: Font.DemiBold }
                                     MouseArea {
                                         id: signInMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: {
@@ -2079,7 +2083,7 @@ Item {
                                     color: connMA.containsMouse ? Theme.accentStrong : Theme.accent
                                     border.color: Theme.accent; border.width: 1
                                     implicitWidth: connTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: "#06121a"; font.pixelSize: 11; font.weight: Font.Medium }
+                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: 11; font.weight: Font.Medium }
                                     MouseArea {
                                         id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         // Not a bare `connected = true`: the
@@ -2176,14 +2180,14 @@ Item {
                             Rectangle {
                                 radius: 4
                                 color: rmMA.containsMouse
-                                    ? Theme.withAlpha(Theme.p0, 0.18)
+                                    ? Theme.withAlpha(Theme.danger, 0.18)
                                     : "transparent"
-                                border.color: Theme.p0; border.width: 1
+                                border.color: Theme.danger; border.width: 1
                                 implicitWidth: 22; implicitHeight: 22
                                 Text {
                                     anchors.centerIn: parent
                                     text: "×"
-                                    color: Theme.p0
+                                    color: Theme.danger
                                 }
                                 MouseArea {
                                     id: rmMA
@@ -2355,7 +2359,7 @@ Item {
                                 property bool armed: false
                                 radius: 6
                                 color: restoreMA.containsMouse ? Theme.panel3 : Theme.panel2
-                                border.color: restoreBtn.armed ? Theme.p0 : Theme.border
+                                border.color: restoreBtn.armed ? Theme.danger : Theme.border
                                 border.width: 1
                                 implicitWidth: restoreTxt.implicitWidth + 24
                                 implicitHeight: 28
@@ -2363,7 +2367,7 @@ Item {
                                     id: restoreTxt
                                     anchors.centerIn: parent
                                     text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
-                                    color: restoreBtn.armed ? Theme.p0 : Theme.text
+                                    color: restoreBtn.armed ? Theme.danger : Theme.text
                                     font.pixelSize: 12
                                 }
                                 Timer { id: restoreDisarm; interval: 3500; onTriggered: restoreBtn.armed = false }
@@ -2458,15 +2462,15 @@ Item {
                         }
                         Rectangle {
                             radius: 6
-                            color: wipeRow.armed ? Theme.p0
-                                 : (wipeMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.20) : Theme.withAlpha(Theme.p0, 0.10))
-                            border.color: Theme.p0; border.width: 1
+                            color: wipeRow.armed ? Theme.danger
+                                 : (wipeMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10))
+                            border.color: Theme.danger; border.width: 1
                             implicitWidth: wipeTxt.implicitWidth + 24
                             implicitHeight: 28
                             Text {
                                 id: wipeTxt; anchors.centerIn: parent
                                 text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
-                                color: wipeRow.armed ? "#0b0b0f" : Theme.p0; font.pixelSize: 12; font.weight: Font.Medium
+                                color: wipeRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: 12; font.weight: Font.Medium
                             }
                             MouseArea {
                                 id: wipeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor

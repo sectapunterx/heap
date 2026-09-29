@@ -15,7 +15,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+    Overlay.modal: Rectangle { color: Theme.scrim }
 
     signal navigateToDoc(string sectionId)
     signal navigateToSnippets()

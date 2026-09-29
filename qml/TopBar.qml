@@ -284,13 +284,13 @@ Rectangle {
                     implicitHeight: 18
                     color: {
                         if (ciBadge.ci === "passing") return Theme.withAlpha(Theme.mFocus, 0.20);
-                        if (ciBadge.ci === "failing") return Theme.withAlpha(Theme.p0, 0.20);
+                        if (ciBadge.ci === "failing") return Theme.withAlpha(Theme.danger, 0.20);
                         return Theme.withAlpha(Theme.p2, 0.20);
                     }
                     border.width: 1
                     border.color: {
                         if (ciBadge.ci === "passing") return Theme.mFocus;
-                        if (ciBadge.ci === "failing") return Theme.p0;
+                        if (ciBadge.ci === "failing") return Theme.danger;
                         return Theme.p2;
                     }
                     Text {

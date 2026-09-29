@@ -61,9 +61,9 @@ Item {
 
     readonly property var bucketOrder: ["overdue", "today", "tomorrow", "thisweek", "nextweek", "later", "nodl"]
     readonly property var bucketMeta: ({
-        overdue:  ({ name: I18n.t("timeline.bucket.overdue"),  icon: "!", color: Theme.p0,        tone: "danger"  }),
+        overdue:  ({ name: I18n.t("timeline.bucket.overdue"),  icon: "!", color: Theme.danger,        tone: "danger"  }),
         today:    ({ name: I18n.t("timeline.bucket.today"),    icon: "●", color: Theme.accent,    tone: "today"   }),
-        tomorrow: ({ name: I18n.t("timeline.bucket.tomorrow"), icon: "○", color: Theme.p1,        tone: "soon"    }),
+        tomorrow: ({ name: I18n.t("timeline.bucket.tomorrow"), icon: "○", color: Theme.warning,        tone: "soon"    }),
         thisweek: ({ name: I18n.t("timeline.bucket.thisweek"), icon: "▷", color: Theme.stProg,    tone: "normal"  }),
         nextweek: ({ name: I18n.t("timeline.bucket.nextweek"), icon: "›", color: Theme.textMuted, tone: "normal"  }),
         later:    ({ name: I18n.t("timeline.bucket.later"),    icon: "…", color: Theme.textDim,   tone: "normal"  }),
@@ -296,14 +296,14 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: rowItem.meta ? rowItem.meta.icon : ""
-                                    color: "#06121a"
+                                    color: Theme.textOnAccent
                                     font.weight: Font.DemiBold
                                     font.pixelSize: 13
                                 }
                             }
                             Text {
                                 text: rowItem.meta ? rowItem.meta.name : ""
-                                color: rowItem.rd.bucketId === "overdue" ? Theme.p0
+                                color: rowItem.rd.bucketId === "overdue" ? Theme.danger
                                      : rowItem.rd.bucketId === "today" ? Theme.accentStrong
                                      : Theme.text
                                 font.pixelSize: 14
@@ -414,9 +414,9 @@ Item {
                         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
                         anchors.leftMargin: 0
                         width: 3
-                        color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.withAlpha(Theme.p0, 0.6)
+                        color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.withAlpha(Theme.danger, 0.6)
                              : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accent
-                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.withAlpha(Theme.p1, 0.6)
+                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.withAlpha(Theme.warning, 0.6)
                              : "transparent"
                         radius: 1
                     }
@@ -514,9 +514,9 @@ Item {
                         }
                         Text {
                             text: (I18n.lang, AppController.deadlineDiffLabel(tlRow.t.deadline))
-                            color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.p0
+                            color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.danger
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
-                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.p1
+                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
                                  : Theme.textMuted
                             font.family: Theme.fontMono
                             font.pixelSize: 11

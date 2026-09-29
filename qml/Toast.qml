@@ -6,10 +6,14 @@ Rectangle {
     property string message: ""
     property string actionLabel: ""
     property var    onAction: null
+    // "info" | "success" | "warning" | "error" — tints the dot and the
+    // border with the theme's alert colour. Plain notices stay "info".
+    property string kind: "info"
+    readonly property color kindColor: Theme.alertColor(kind)
 
     radius: 8
-    color: Theme.panel3
-    border.color: Theme.borderStrong
+    color: Theme.toastBg
+    border.color: kind === "info" ? Theme.toastBorder : Theme.withAlpha(kindColor, 0.6)
     border.width: 1
     opacity: 0
     visible: opacity > 0.02
@@ -20,10 +24,16 @@ Rectangle {
         id: rowL
         anchors.centerIn: parent
         spacing: 12
+        Rectangle {
+            objectName: "toast-kind-dot"
+            anchors.verticalCenter: parent.verticalCenter
+            width: 8; height: 8; radius: 4
+            color: root.kindColor
+        }
         Text {
             anchors.verticalCenter: parent.verticalCenter
             text: root.message
-            color: Theme.text
+            color: Theme.toastText
             font.pixelSize: 12
         }
         Rectangle {
@@ -58,14 +68,16 @@ Rectangle {
         }
     }
 
-    function show(s) {
+    function show(s, k) {
         message = s; actionLabel = ""; onAction = null;
+        kind = k || "info";
         opacity = 1;
         hideTimer.interval = 2400;
         hideTimer.restart();
     }
-    function showWithAction(s, label, seconds, fn) {
+    function showWithAction(s, label, seconds, fn, k) {
         message = s; actionLabel = label; onAction = fn;
+        kind = k || "info";
         opacity = 1;
         hideTimer.interval = (seconds && seconds > 0 ? seconds : 5) * 1000;
         hideTimer.restart();

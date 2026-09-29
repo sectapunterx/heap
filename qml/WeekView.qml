@@ -523,7 +523,7 @@ Item {
                                     radius: 4
                                     color: Theme.accent
                                     implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: "#06121a"; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
                                 }
                             }
                             Text {
@@ -870,12 +870,12 @@ Item {
                                 anchors.left: parent.left; anchors.right: parent.right
                                 y: (root.now.getHours() + root.now.getMinutes() / 60 - root.hoursStart) * root.hourH
                                 height: 2
-                                color: Theme.p0
+                                color: Theme.nowLine
                                 z: 9
                                 Rectangle {
                                     x: -3; y: -2
                                     width: 6; height: 6; radius: 3
-                                    color: Theme.p0
+                                    color: Theme.nowLine
                                 }
                             }
                         }

@@ -1,5 +1,5 @@
 // Tests for qml/TweaksPanel.qml — the compact Tweaks popup.
-// Surface: readonly accentSwatches, and the settings-shadow functions
+// Surface: readonly themeChoices, and the settings-shadow functions
 // (_reload / _setAppearance / _appearanceValue) that round-trip through the
 // live AppController.appSettingsJson. No objectName / root signal exists, so
 // there are no click- or signal-contract layers here.
@@ -38,15 +38,42 @@ TestCase {
         verify(p !== null);
     }
 
-    // accentSwatches is the chip palette mirrored from the Settings accent
-    // picker: exactly 7 colors, stable order. The first one is the theme's own
-    // default accent so an untouched profile still shows a selected chip.
-    function test_accent_swatches() {
+    // One chip per theme, built-ins included, the showing slot's base first;
+    // a click puts that theme into the slot that is showing.
+    function test_theme_chips_pick_for_the_showing_slot() {
         const p = make('import TodoCpp; TweaksPanel { }');
-        compare(p.accentSwatches.length, 7);
-        compare(String(p.accentSwatches[0]).toLowerCase(),
-                String(Theme._defaultAccent).toLowerCase());
-        compare(String(p.accentSwatches[6]).toLowerCase(), "#9aa3b4");
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        const ids = p.themeChoices.map((t) => t.id);
+        const first = p.themeChoices[0].base;
+        p._setAppearance("darkPreset", "heap-light");
+        const active = Theme.activePresetId;
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        verify(ids.indexOf("heap-dark") >= 0, "heap-dark missing");
+        verify(ids.indexOf("heap-light") >= 0, "heap-light missing");
+        compare(first, "dark");
+        compare(active, "heap-light");
+    }
+
+    // The three-way contrast writes itself and keeps highContrast in step.
+    function test_set_contrast_writes_both_keys() {
+        const p = make('import TodoCpp; TweaksPanel { }');
+        const saved = AppController.appSettingsJson;
+        p.setContrast("soft");
+        const a = JSON.parse(AppController.appSettingsJson).appearance;
+        const soft = Theme.softContrast;
+        p.setContrast("high");
+        const b = JSON.parse(AppController.appSettingsJson).appearance;
+        AppController.appSettingsJson = saved;
+
+        compare(a.contrast, "soft");
+        compare(a.highContrast, false);
+        compare(soft, true);
+        compare(b.contrast, "high");
+        compare(b.highContrast, true);
     }
 
     // _appearanceValue(key, fallback): reads settings.appearance[key], falling

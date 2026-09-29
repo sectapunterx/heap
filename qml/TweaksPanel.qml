@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "ThemePresets.js" as Presets
 
 Popup {
     id: root
@@ -15,14 +16,14 @@ Popup {
     // rail handler, which toggles.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
-    // First chip is the brand accent the app actually ships with, so the
-    // picker can show a selection on a profile that never changed it — the
-    // hardcoded "#5cc2dd" matched nothing (the brand cyan is #3bccdd), which
-    // left every swatch unringed.
-    readonly property var accentSwatches: [
-        String(Theme._defaultAccent), "#6ec18a", "#c07acf", "#dcb86b",
-        "#e6624c", "#7da8d9", "#9aa3b4"
-    ]
+    // Themes for the slot that is showing, its own base first — the quick
+    // version of Settings → Appearance → Theme.
+    readonly property var themeChoices: {
+        const list = Presets.all(Theme.customThemes);
+        const mine = list.filter((t) => (t.base === "light" ? "light" : "dark") === Theme.slot);
+        const other = list.filter((t) => (t.base === "light" ? "light" : "dark") !== Theme.slot);
+        return mine.concat(other);
+    }
 
     // ── Settings JSON shadow ──────────────────────────────────────────
     property var settings: ({})
@@ -35,6 +36,13 @@ Popup {
     function _setAppearance(key, val) {
         const next = Object.assign({}, settings);
         next.appearance = Object.assign({}, next.appearance || {}, { [key]: val });
+        settings = next;
+        AppController.appSettingsJson = JSON.stringify(next);
+    }
+    // highContrast is written alongside for profiles that only know it.
+    function setContrast(v) {
+        const next = Object.assign({}, settings);
+        next.appearance = Object.assign({}, next.appearance || {}, { contrast: v, highContrast: v === "high" });
         settings = next;
         AppController.appSettingsJson = JSON.stringify(next);
     }
@@ -134,37 +142,47 @@ Popup {
                 }
             }
 
-            // Акцент: chip row mirroring SettingsView accent picker
+            // Тема: one chip per theme; picks it for the slot that is showing
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
                 SectLabel {
-                    text: I18n.t("tweaks.accent")
+                    text: I18n.t("tweaks.themePreset")
                 }
                 Flow {
                     Layout.fillWidth: true
                     spacing: 6
                     Repeater {
-                        model: root.accentSwatches
+                        model: root.themeChoices
                         delegate: Rectangle {
-                            required property string modelData
+                            id: chip
+                            required property var modelData
+                            readonly property var t: Presets.resolve(modelData.id, Theme.customThemes, Theme.slot)
+                            objectName: "tweaks-theme-" + modelData.id
                             width: 26; height: 26; radius: 13
-                            color: modelData
+                            color: t.colors.bg
                             border.width: 2
-                            border.color: String(root._appearanceValue("accent", Theme._defaultAccent)).toLowerCase() === modelData.toLowerCase()
-                                ? Theme.text
-                                : "transparent"
+                            border.color: modelData.id === Theme.activePresetId ? Theme.text : Theme.border
+                            Rectangle {
+                                anchors.centerIn: parent
+                                width: 12; height: 12; radius: 6
+                                color: chip.t.colors.accent
+                            }
+                            ToolTip.visible: chipHover.hovered
+                            ToolTip.text: chip.t.name
+                            HoverHandler { id: chipHover }
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
-                                onClicked: root._setAppearance("accent", parent.modelData)
+                                onClicked: root._setAppearance(Theme.slot === "light" ? "lightPreset" : "darkPreset",
+                                                               chip.modelData.id)
                             }
                         }
                     }
                 }
             }
 
-            // Доступность: reducedMotion + highContrast toggles
+            // Доступность: reducedMotion + contrast (soft / normal / high)
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
@@ -176,10 +194,22 @@ Popup {
                     checked: !!root._appearanceValue("reducedMotion", false)
                     onToggled: (v) => root._setAppearance("reducedMotion", v)
                 }
-                ToggleRow {
-                    label: I18n.t("settings.appearance.highContrast")
-                    checked: !!root._appearanceValue("highContrast", false)
-                    onToggled: (v) => root._setAppearance("highContrast", v)
+                FieldLabel {
+                    text: I18n.t("settings.appearance.contrast"); topPadding: 6
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Repeater {
+                        model: ["soft", "normal", "high"]
+                        SegButton {
+                            required property string modelData
+                            objectName: "tweaks-contrast-" + modelData
+                            text: I18n.t("settings.appearance.contrast." + modelData)
+                            active: Theme.contrast === modelData
+                            onClicked: root.setContrast(modelData)
+                        }
+                    }
                 }
             }
 
@@ -222,7 +252,7 @@ Popup {
         Text {
             anchors.centerIn: parent
             text: parent.text
-            color: parent.active ? "#06121a" : Theme.text
+            color: parent.active ? Theme.textOnAccent : Theme.text
             font.pixelSize: 12
             font.weight: parent.active ? Font.DemiBold : Font.Medium
         }
@@ -264,7 +294,7 @@ Popup {
                 width: 14; height: 14; radius: 7
                 y: 2
                 x: toggleRow.checked ? parent.width - width - 2 : 2
-                color: "#ffffff"
+                color: Theme.knob
                 border.color: Qt.rgba(0, 0, 0, 0.18)
                 border.width: 1
                 Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }

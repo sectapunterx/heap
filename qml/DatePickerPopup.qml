@@ -55,7 +55,7 @@ Popup {
     dim: true
     focus: true
     padding: 10
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.35) }
+    Overlay.modal: Rectangle { color: Theme.withAlpha(Theme.scrim, 0.35) }
     background: Rectangle {
         color: Theme.panel
         border.color: Theme.border
@@ -127,7 +127,7 @@ Popup {
                 Text {
                     anchors.centerIn: parent
                     text: model.day
-                    color: parent._isSel ? "#0b0b0f" : Theme.text
+                    color: parent._isSel ? Theme.textOnAccent : Theme.text
                     font.pixelSize: 11
                     font.weight: parent._isSel ? Font.DemiBold : Font.Normal
                 }

@@ -7,6 +7,7 @@ import QtQuick
 import QtQuick.Controls
 import QtTest
 import TodoCpp
+import "../../qml/ThemePresets.js" as Presets
 
 TestCase {
     id: tc
@@ -232,16 +233,281 @@ TestCase {
         return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
     }
 
-    // The small dim text must be readable (audit B10): WCAG AA asks 4.5:1.
+    // The small dim text must be readable (audit B10): WCAG AA asks 4.5:1 —
+    // in every built-in theme.
     function test_text_dim_meets_wcag_aa_on_every_surface() {
-        const saved = AppController.theme;
-        for (const mode of ["dark", "light"]) {
-            AppController.theme = mode;
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        const fails = [];
+        for (const t of Presets.PRESETS) {
+            AppController.theme = t.base;
+            AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: t.id, lightPreset: t.id } });
             for (const surface of [Theme.bg, Theme.panel, Theme.panel2]) {
                 const ratio = _contrast(Theme.textDim, surface);
-                verify(ratio >= 4.5, mode + ": textDim on " + surface + " is " + ratio.toFixed(2) + ":1");
+                if (ratio < 4.5) fails.push(t.id + ": textDim on " + surface + " is " + ratio.toFixed(2) + ":1");
             }
         }
-        AppController.theme = saved;
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // ── Themes ──────────────────────────────────────────────────────────
+
+    // Every built-in fills every token with a colour — a missing one would
+    // fall back silently, a typo would paint nothing.
+    function test_every_preset_defines_every_token() {
+        const ids = {};
+        for (const t of Presets.PRESETS) {
+            verify(!ids[t.id], "duplicate preset id " + t.id);
+            ids[t.id] = true;
+            verify(t.base === "dark" || t.base === "light", t.id + " base");
+            for (const tok of Presets.TOKENS)
+                verify(Presets.isHex(t.colors[tok.key]), t.id + "." + tok.key + " = " + t.colors[tok.key]);
+            for (const k in t.colors)
+                verify(Presets.isToken(k), t.id + " has unknown token " + k);
+        }
+        for (const tok of Presets.TOKENS)
+            verify(Presets.GROUPS.indexOf(tok.group) >= 0, tok.key + " in unknown group " + tok.group);
+    }
+
+    // Theme has a property for every token the editor offers, and it carries
+    // the theme's value. Checking only that it exists let `onAccent` through:
+    // QML reads an `on` + capital name as a signal handler, and the property
+    // sat at black.
+    function test_theme_exposes_every_token() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        const fails = [];
+        for (const mode of ["dark", "light"]) {
+            AppController.theme = mode;
+            AppController.appSettingsJson = "";
+            for (const tok of Presets.TOKENS) {
+                verify(!/^on[A-Z]/.test(tok.key), tok.key + " reads as a signal handler in QML");
+                if (!Qt.colorEqual(Theme[tok.key], Theme.active.colors[tok.key]))
+                    fails.push(mode + " Theme." + tok.key + " = " + Theme[tok.key] + ", token " + Theme.active.colors[tok.key]);
+            }
+        }
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // "The current theme" is preserved: the built-in heap. themes give the
+    // colours the app shipped with before themes were editable.
+    function test_heap_presets_match_the_shipped_palette() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.appSettingsJson = "";
+        AppController.theme = "dark";
+        const d = { bg: String(Theme.bg), panel3: String(Theme.panel3), borderStrong: String(Theme.borderStrong),
+                    accent: String(Theme.accent), accentStrong: String(Theme.accentStrong),
+                    p0: String(Theme.p0), stDone: String(Theme.stDone), textDim: String(Theme.textDim) };
+        AppController.theme = "light";
+        const l = { bg: String(Theme.bg), bg2: String(Theme.bg2), panel2: String(Theme.panel2),
+                    accent: String(Theme.accent), accentStrong: String(Theme.accentStrong), p0: String(Theme.p0) };
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        compare(d.bg, "#0b0e13");
+        compare(d.panel3, String(Qt.lighter(Brand.panel2, 1.18)));
+        compare(d.borderStrong, String(Qt.lighter(Brand.border, 1.3)));
+        compare(d.accent, String(Brand.accent));
+        compare(d.accentStrong, String(Qt.lighter(Brand.accent, 1.18)));
+        compare(d.p0, "#e6624c");
+        compare(d.stDone, String(Brand.statusDone));
+        compare(d.textDim, "#808a9a");
+        compare(l.bg, String(Brand.lightBg));
+        compare(l.bg2, String(Qt.darker(Brand.lightBg, 1.04)));
+        compare(l.panel2, String(Qt.darker(Brand.lightPanel, 1.03)));
+        compare(l.accent, String(Brand.lightAccent));
+        compare(l.accentStrong, String(Qt.darker(Brand.lightAccent, 1.18)));
+        compare(l.p0, "#c34a36");
+    }
+
+    // Each slot shows its own theme; flipping AppController.theme flips slot.
+    function test_slots_pick_their_own_theme() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.appSettingsJson = JSON.stringify({ appearance: {
+            darkPreset: "heap-light", lightPreset: "heap-dark" } });
+        AppController.theme = "dark";
+        const inDark = Theme.activePresetId, darkBg = String(Theme.bg), darkFlag = Theme.dark;
+        AppController.theme = "light";
+        const inLight = Theme.activePresetId, lightBg = String(Theme.bg), lightFlag = Theme.dark;
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        compare(inDark, "heap-light");
+        compare(darkBg, "#f3f5f8");
+        // `dark` follows the colours, not the slot
+        compare(darkFlag, false);
+        compare(inLight, "heap-dark");
+        compare(lightBg, "#0b0e13");
+        compare(lightFlag, true);
+    }
+
+    function test_unknown_theme_falls_back_to_the_slot_default() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "light";
+        AppController.appSettingsJson = JSON.stringify({ appearance: { lightPreset: "gone-theme" } });
+        const bg = String(Theme.bg);
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        compare(bg, "#f3f5f8");
+    }
+
+    // A custom theme paints its own colours; a token it lacks or spells
+    // wrong comes from the built-in of its base.
+    function test_custom_theme_applies_with_fallbacks() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        AppController.appSettingsJson = JSON.stringify({ appearance: {
+            darkPreset: "custom-1",
+            customThemes: [{ id: "custom-1", name: "Mine", base: "dark",
+                             colors: { bg: "#101010", danger: "#ff0000", warning: "orange", accentSoft: "#40112233" } }]
+        } });
+        const bg = String(Theme.bg), danger = String(Theme.danger), warning = String(Theme.warning);
+        // .a read now: a colour read off a property is a live reference and
+        // would see the restored theme below.
+        const softA = Theme.accentSoft.a, panel = String(Theme.panel), err = String(Theme.alertColor("error"));
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        compare(bg, "#101010");
+        compare(danger, "#ff0000");
+        compare(err, "#ff0000");
+        compare(warning, "#fe9c3a");      // "orange" is not a hex token value
+        compare(panel, "#14181f");        // absent → heap. dark
+        fuzzyCompare(softA, 0x40 / 255, 0.01);
+    }
+
+    // A profile from before themes were editable keeps its accent until a
+    // theme is picked for either slot.
+    function test_legacy_accent_until_a_theme_is_picked() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        AppController.appSettingsJson = JSON.stringify({ appearance: { accent: "#6ec18a" } });
+        const legacy = String(Theme.accent);
+        AppController.appSettingsJson = JSON.stringify({ appearance: { accent: "#6ec18a", darkPreset: "heap-dark" } });
+        const picked = String(Theme.accent);
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        compare(legacy, "#6ec18a");
+        compare(picked, "#3bccdd");
+    }
+
+    function test_validate_theme() {
+        compare(Presets.validateTheme(null), null);
+        compare(Presets.validateTheme("x"), null);
+        compare(Presets.validateTheme({ colors: { bg: "red", nope: "#123456" } }), null);
+        const v = Presets.validateTheme({ name: "  X  ", base: "light",
+                                          colors: { bg: "#ABCDEF", nope: "#123456", text: "#11223344" } });
+        compare(v.name, "X");
+        compare(v.base, "light");
+        compare(v.colors.bg, "#abcdef");
+        compare(v.colors.text, "#11223344");
+        compare(v.colors.nope, undefined);
+        // a bare token map works too, and an unknown base means dark
+        const bare = Presets.validateTheme({ accent: "#00ff00", base: "sepia" });
+        compare(bare.colors.accent, "#00ff00");
+        compare(bare.base, "dark");
+    }
+
+    // Export → import gives back the same palette.
+    function test_export_round_trips() {
+        const json = Presets.exportJson("heap-light", [], "light");
+        const v = Presets.validateTheme(JSON.parse(json));
+        const want = Presets.resolve("heap-light", [], "light").colors;
+        compare(v.base, "light");
+        for (const tok of Presets.TOKENS)
+            compare(v.colors[tok.key], want[tok.key].toLowerCase(), tok.key);
+    }
+
+    // ── Contrast ────────────────────────────────────────────────────────
+
+    // A profile that only has the old switch still means "high"; the
+    // three-way setting wins once it is written.
+    function test_contrast_reads_the_legacy_switch() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { highContrast: true } });
+        const legacy = Theme.contrast, legacyHigh = Theme.highContrast;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { highContrast: true, contrast: "soft" } });
+        const soft = Theme.contrast, softHigh = Theme.highContrast, softFlag = Theme.softContrast;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { contrast: "bogus" } });
+        const bogus = Theme.contrast;
+        AppController.appSettingsJson = saved;
+
+        compare(legacy, "high");
+        compare(legacyHigh, true);
+        compare(soft, "soft");
+        compare(softHigh, false);
+        compare(softFlag, true);
+        compare(bogus, "normal");
+    }
+
+    // Soft fades lines and colour but never text.
+    function test_soft_contrast_quiets_chrome_not_text() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark" } });
+        const n = { border: Theme.border, danger: Theme.danger, text: String(Theme.text),
+                    textDim: String(Theme.textDim), radius: Theme.radius, bg: String(Theme.bg) };
+        const nBorderContrast = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        const nDangerSat = Theme.danger.hslSaturation;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark", contrast: "soft" } });
+        const sBorderContrast = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        const sDangerSat = Theme.danger.hslSaturation;
+        const s = { text: String(Theme.text), textDim: String(Theme.textDim), radius: Theme.radius, bg: String(Theme.bg) };
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        verify(sBorderContrast < nBorderContrast, "border must fade: " + sBorderContrast + " vs " + nBorderContrast);
+        verify(sDangerSat < nDangerSat * 0.8, "danger must lose saturation: " + sDangerSat + " vs " + nDangerSat);
+        compare(s.text, n.text);
+        compare(s.textDim, n.textDim);
+        compare(s.bg, n.bg);
+        compare(s.radius, n.radius + 2);
+    }
+
+    // soften() keeps every token a valid colour, in every built-in.
+    function test_soften_keeps_every_token_valid() {
+        for (const t of Presets.PRESETS) {
+            const c = Presets.soften(t.colors);
+            for (const tok of Presets.TOKENS)
+                verify(Presets.isHex(c[tok.key]), t.id + "." + tok.key + " = " + c[tok.key]);
+        }
+        // a translucent border fades by alpha, not by turning opaque
+        const b = Presets.soften(Presets.builtin("minimal-dark").colors).border;
+        verify(parseInt(b.slice(1, 3), 16) < 0x0f, "translucent border got " + b);
+    }
+
+    // High contrast must still strengthen a theme whose borders are
+    // translucent hairlines (Minimal): lightening a 6% white changes nothing.
+    function test_high_contrast_strengthens_translucent_borders() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "minimal-dark" } });
+        const normal = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "minimal-dark", contrast: "high" } });
+        const high = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        const alpha = Theme.border.a;
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        compare(alpha, 1);
+        verify(high > normal * 1.2, "high " + high + " vs normal " + normal);
+    }
+
+    function test_new_id_is_unused() {
+        compare(Presets.newId([]), "custom-1");
+        compare(Presets.newId([{ id: "custom-1" }, { id: "custom-2" }]), "custom-3");
+        compare(Presets.newId([{ id: "custom-2" }]), "custom-1");
     }
 }

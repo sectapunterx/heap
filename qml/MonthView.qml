@@ -212,7 +212,7 @@ Item {
                         radius: 6
                         color: sel ? Theme.accent : (modeMA.containsMouse ? Theme.panel3 : Theme.panel2)
                         border.color: Theme.border; border.width: 1
-                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? "#0b0b0f" : Theme.text; font.pixelSize: 11; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
+                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.textOnAccent : Theme.text; font.pixelSize: 11; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
                         MouseArea { id: modeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.mode = parent.modelData.id }
                     }
                 }

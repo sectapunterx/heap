@@ -24,7 +24,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.55)
+        color: Theme.scrim
     }
 
     function _submit() {
@@ -206,7 +206,7 @@ Popup {
         anchors.centerIn: Overlay.overlay
 
         Overlay.modal: Rectangle {
-            color: Qt.rgba(0, 0, 0, 0.55)
+            color: Theme.scrim
         }
 
         background: Rectangle {

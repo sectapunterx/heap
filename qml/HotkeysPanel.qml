@@ -289,7 +289,7 @@ Popup {
                 color: chip.capturing ? Theme.accentSoft : Theme.panel2
                 border.color: chip.capturing
                     ? Theme.accent
-                    : (chip.conflictName.length > 0 ? Theme.p0 : Theme.border)
+                    : (chip.conflictName.length > 0 ? Theme.danger : Theme.border)
                 border.width: 1
 
                 Text {
@@ -393,7 +393,7 @@ Popup {
             anchors.bottomMargin: -2
             visible: chip.capturing && chip.conflictName.length > 0
             text: I18n.t("hotkeys.conflict.body").arg(chip.conflictName)
-            color: Theme.p0
+            color: Theme.danger
             font.pixelSize: 9
             elide: Text.ElideRight
             width: parent.width

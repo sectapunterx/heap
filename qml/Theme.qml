@@ -1,14 +1,13 @@
 pragma Singleton
 import QtQuick
 import TodoCpp
+import "ThemePresets.js" as Presets
 
-// Theme adapts the heap. brand palette (`Brand` singleton) for the runtime
-// app. Dark mode pulls straight from Brand. Light mode uses Brand's light*
-// tokens plus a few derived shades. User settings (Settings → Appearance) and
-// the Tweaks panel override `accent`, `reducedMotion`, `highContrast`, and
-// font names at runtime.
+// Theme is the runtime palette, geometry and settings reads. Colours come
+// from the theme in the active slot (ThemePresets.js + the user's own themes
+// in settings.appearance.customThemes); Settings → Appearance edits them.
+// Geometry and fonts still come from the `Brand` singleton.
 QtObject {
-    readonly property bool dark: AppController.theme === "dark"
     readonly property bool compact: AppController.density === "compact"
 
     // ── Settings JSON shadow (re-parsed when appSettingsJson changes) ──
@@ -37,67 +36,166 @@ QtObject {
     // save then rounded away.
     readonly property real   minEventHours: Math.max(1, snapMinutes) / 60
 
+    // ── Palette — the theme in the active slot (Settings → Appearance) ──
+    // AppController.theme picks the slot ("dark" / "light", Ctrl+Shift+T
+    // flips it); appearance.darkPreset / lightPreset say which theme sits in
+    // each. Every colour below is a token of that theme — ThemePresets.js
+    // lists them and holds the built-ins.
+    readonly property string slot: AppController.theme === "light" ? "light" : "dark"
+    readonly property var customThemes: Array.isArray(_appearance.customThemes) ? _appearance.customThemes : []
+    readonly property string darkPresetId:  typeof _appearance.darkPreset === "string" && _appearance.darkPreset.length
+                                            ? _appearance.darkPreset : Presets.DEFAULT_DARK
+    readonly property string lightPresetId: typeof _appearance.lightPreset === "string" && _appearance.lightPreset.length
+                                            ? _appearance.lightPreset : Presets.DEFAULT_LIGHT
+    readonly property string activePresetId: slot === "light" ? lightPresetId : darkPresetId
+    readonly property var active: Presets.resolve(activePresetId, customThemes, slot)
+    // Contrast: "soft" | "normal" | "high". A profile from before the
+    // three-way setting only has highContrast, which still means "high".
+    readonly property string contrast: _appearance.contrast === "soft" || _appearance.contrast === "normal"
+                                       || _appearance.contrast === "high"
+                                       ? _appearance.contrast
+                                       : (_appearance.highContrast ? "high" : "normal")
+    readonly property bool softContrast: contrast === "soft"
+    readonly property var _c: softContrast ? Presets.soften(active.colors) : active.colors
+    // A translucent border laid over the background, so high contrast has
+    // something opaque to push on.
+    readonly property color _solidBorder: Qt.tint(_c.bg, _c.border)
+    // The theme's own base, not the slot: a light theme in the dark slot is
+    // still light, and components that tint by `dark` must follow the colours.
+    readonly property bool dark: active.base === "dark"
+
+    // A profile from before themes were editable may carry appearance.accent.
+    // It keeps working until the user picks a theme for either slot, then the
+    // theme's own accent takes over.
+    readonly property bool _legacyAccent: typeof _appearance.accent === "string"
+                                          && /^#[0-9a-fA-F]{6}$/.test(_appearance.accent)
+                                          && _appearance.darkPreset === undefined
+                                          && _appearance.lightPreset === undefined
+                                          && _appearance.accent.toLowerCase() !== String(_c.accent).toLowerCase()
+
     // ── Surfaces ──────────────────────────────────────────────────────
-    readonly property color bg:           dark ? Brand.bg      : Brand.lightBg
-    readonly property color bg2:          dark ? Brand.bg2     : Qt.darker(Brand.lightBg, 1.04)
-    readonly property color panel:        dark ? Brand.panel   : Brand.lightPanel
-    readonly property color panel2:       dark ? Brand.panel2  : Qt.darker(Brand.lightPanel, 1.03)
-    readonly property color panel3:       dark ? Qt.lighter(Brand.panel2, 1.18) : Qt.darker(Brand.lightPanel, 1.06)
+    readonly property color bg:     _c.bg
+    readonly property color bg2:    _c.bg2
+    readonly property color panel:  _c.panel
+    readonly property color panel2: _c.panel2
+    readonly property color panel3: _c.panel3
 
     // ── Lines + text — highContrast strengthens both ──────────────────
-    readonly property color border:       highContrast ? (dark ? Qt.lighter(Brand.border, 1.6) : Qt.darker(Brand.lightBorder, 1.4))
-                                                       : (dark ? Brand.border : Brand.lightBorder)
-    readonly property color borderStrong: highContrast ? (dark ? Qt.lighter(Brand.border, 2.2) : Qt.darker(Brand.lightBorder, 1.8))
-                                                       : (dark ? Qt.lighter(Brand.border, 1.3) : Qt.darker(Brand.lightBorder, 1.2))
-    readonly property color text:         highContrast ? (dark ? "#ffffff" : "#000000")
-                                                       : (dark ? Brand.text : Brand.lightText)
-    readonly property color textMuted:    dark ? Brand.text3 : Brand.lightText3
-    // The smallest text in the app uses this, so it has to clear WCAG AA
-    // (4.5:1) on every surface it sits on. Brand.text4 gave 3.2–3.4:1.
-    readonly property color textDim:      dark ? "#808a9a" : "#656e7d"
+    readonly property color border:       highContrast ? (dark ? Qt.lighter(_solidBorder, 1.6) : Qt.darker(_solidBorder, 1.4)) : _c.border
+    readonly property color borderStrong: highContrast ? (dark ? Qt.lighter(_solidBorder, 2.2) : Qt.darker(_solidBorder, 1.8)) : _c.borderStrong
+    readonly property color text:         highContrast ? (dark ? "#ffffff" : "#000000") : _c.text
+    readonly property color textMuted:    _c.textMuted
+    // The smallest text in the app uses this; every built-in theme keeps it
+    // at WCAG AA (4.5:1) on bg, panel and panel2 (tst_Theme checks).
+    readonly property color textDim:      _c.textDim
+    // Text drawn on an accent / danger fill (primary buttons, badges).
+    readonly property color textOnAccent: _c.textOnAccent
+    readonly property color textOnDanger: _c.textOnDanger
+    // Count badges on the side rail.
+    readonly property color textOnBadge:  _c.textOnBadge
 
-    // ── Accent — Brand cyan by default, settings overrides win ───────
-    readonly property color _defaultAccent: dark ? Brand.accent : Brand.lightAccent
-    // Only a "#rrggbb" string counts. Older builds persisted the colour value
-    // type, which JSON turns into an {r,g,b,a,…} object; those profiles fall
-    // back to the default instead of carrying a broken accent around.
-    readonly property color accent: (typeof _appearance.accent === "string"
-                                     && _appearance.accent.length > 0)
-                                    ? _appearance.accent : _defaultAccent
-    readonly property color accentStrong:  dark ? Qt.lighter(accent, 1.18) : Qt.darker(accent, 1.18)
-    readonly property color accentSoft:    Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.12)
+    // ── Accent ────────────────────────────────────────────────────────
+    readonly property color accent:       _legacyAccent ? _appearance.accent : _c.accent
+    readonly property color accentStrong: _legacyAccent ? (dark ? Qt.lighter(accent, 1.18) : Qt.darker(accent, 1.18)) : _c.accentStrong
+    readonly property color accentSoft:   _legacyAccent ? Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.12) : _c.accentSoft
+    // Switch and slider handles.
+    readonly property color knob:         _c.knob
 
-    // ── Priority swatches — kept as warm/cool ramp distinct from brand ──
-    readonly property color p0: dark ? "#e6624c" : "#c34a36"
-    readonly property color p1: dark ? Brand.statusWarn : "#bd7530"
-    readonly property color p2: dark ? "#d8c277" : "#9a8237"
-    readonly property color p3: dark ? "#7d9bc7" : "#496a91"
+    // ── Alerts ────────────────────────────────────────────────────────
+    readonly property color danger:      _c.danger
+    readonly property color warning:     _c.warning
+    readonly property color success:     _c.success
+    readonly property color info:        _c.info
+    readonly property color toastBg:     _c.toastBg
+    readonly property color toastBorder: _c.toastBorder
+    readonly property color toastText:   _c.toastText
+    // Dim layer behind modal popups.
+    readonly property color scrim:       _c.scrim
 
-    // ── Status — sourced from Brand semantic tokens ──────────────────
-    readonly property color stBacklog: dark ? "#8a8e98" : "#7a808c"
-    readonly property color stTodo:    dark ? Brand.statusTodo       : "#5a6371"
-    readonly property color stProg:    dark ? Brand.statusInProgress : "#1f6fb0"
-    readonly property color stHalf:    dark ? "#dcb86b" : "#9a7a2b"
-    readonly property color stBlocked: dark ? "#e6624c" : "#c34a36"
-    readonly property color stReview:  dark ? Brand.statusReview     : "#7a3e91"
-    readonly property color stDone:    dark ? Brand.statusDone       : "#3e8a5d"
+    // ── Priority ──────────────────────────────────────────────────────
+    readonly property color p0: _c.p0
+    readonly property color p1: _c.p1
+    readonly property color p2: _c.p2
+    readonly property color p3: _c.p3
+
+    // ── Status ────────────────────────────────────────────────────────
+    readonly property color stBacklog: _c.stBacklog
+    readonly property color stTodo:    _c.stTodo
+    readonly property color stProg:    _c.stProg
+    readonly property color stHalf:    _c.stHalf
+    readonly property color stBlocked: _c.stBlocked
+    readonly property color stReview:  _c.stReview
+    readonly property color stDone:    _c.stDone
 
     // ── Event-type swatches ──────────────────────────────────────────
-    readonly property color mStandup: dark ? "#5aa3e6" : "#1f6fb0"
-    readonly property color mOneone:  dark ? "#c07acf" : "#7a3e91"
-    readonly property color mSync:    dark ? "#6cc4b8" : "#317e74"
-    readonly property color mFocus:   dark ? "#7cc492" : "#3e8a5d"
+    readonly property color mStandup: _c.mStandup
+    readonly property color mOneone:  _c.mOneone
+    readonly property color mSync:    _c.mSync
+    readonly property color mFocus:   _c.mFocus
+    // The "now" line across today in the day / week grids.
+    readonly property color nowLine:  _c.nowLine
+
+    // ── Syntax (code blocks and snippets) + markdown source editor ──
+    readonly property color codeBg:      _c.codeBg
+    readonly property color code:        _c.code
+    readonly property color synKeyword:  _c.synKeyword
+    readonly property color synString:   _c.synString
+    readonly property color synNumber:   _c.synNumber
+    readonly property color synComment:  _c.synComment
+    readonly property color synType:     _c.synType
+    readonly property color synBuiltin:  _c.synBuiltin
+    readonly property color mention:     _c.mention
+    readonly property color ticket:      _c.ticket
+    readonly property color tag:         _c.tag
+    readonly property color math:        _c.math
+    readonly property color heading:     _c.heading
+    readonly property color highlightBg: _c.highlightBg
+
+    // ── Rendered markdown (MdDocument palette) ──────────────────────
+    readonly property color mdLink:      _c.mdLink
+    readonly property color mdCode:      _c.mdCode
+    readonly property color mdCodeBg:    _c.mdCodeBg
+    readonly property color mdMention:   _c.mdMention
+    readonly property color mdTicket:    _c.mdTicket
+    readonly property color mdTag:       _c.mdTag
+    readonly property color mdMath:      _c.mdMath
+    readonly property color mdHighlight: _c.mdHighlight
+
+    // What every CodeHighlighter and MdDocument is handed, so a view cannot
+    // drift from the theme by wiring its own mix of tokens.
+    readonly property var codePalette: ({
+        keyword: synKeyword, string: synString, comment: synComment,
+        number: synNumber, type: synType, builtin: synBuiltin
+    })
+    readonly property var mdPalette: ({
+        "text": text, "dim": textDim, "link": mdLink, "code": mdCode,
+        "codeBackground": mdCodeBg, "highlightBackground": mdHighlight,
+        "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath
+    })
+
+    // Token by key, for the theme editor and alert kinds.
+    function token(key) { return _c[key]; }
+    function alertColor(kind) {
+        switch (kind) {
+            case "error":   return danger;
+            case "warning": return warning;
+            case "success": return success;
+        }
+        return info;
+    }
 
     // ── Geometry — pulled from Brand spacing/radius scale ────────────
     readonly property int rowH:   compact ? 32 : 44
     readonly property int pad:    compact ? Brand.spacing2 : Brand.spacing4
     readonly property int gap:    compact ? Brand.spacing2 : Brand.spacing3
-    readonly property int radius: Brand.radiusMd
+    // Soft contrast rounds a little further; hairline borders read as
+    // harsh on tight corners.
+    readonly property int radius: softContrast ? Brand.radiusMd + 2 : Brand.radiusMd
     readonly property int hourH:  compact ? 44 : 56
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
-    readonly property bool highContrast:  !!_appearance.highContrast
+    readonly property bool highContrast:  contrast === "high"
     readonly property int animMs: reducedMotion ? 0 : 160
     function scaledMs(n) { return reducedMotion ? 0 : n; }
 

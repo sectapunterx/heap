@@ -105,7 +105,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: "?"
-                        color: "#06121a"
+                        color: Theme.textOnAccent
                         font.pixelSize: 20
                         font.weight: Font.Bold
                     }

@@ -12,7 +12,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+    Overlay.modal: Rectangle { color: Theme.scrim }
 
     property string kind: "doc"          // doc | snippet | contact | section
     property bool   isNew: false
@@ -232,14 +232,7 @@ Popup {
             CodeHighlighter {
                 target: codeArea.textDocument
                 language: root.draft.lang || "text"
-                palette: ({
-                    keyword: Theme.accent,
-                    string:  Theme.p2,
-                    comment: Theme.textDim,
-                    number:  Theme.mFocus,
-                    type:    Theme.mSync,
-                    builtin: Theme.mOneone
-                })
+                palette: Theme.codePalette
             }
         }
 
@@ -371,9 +364,9 @@ Popup {
                         }
                         Rectangle {
                             width: 26; height: 26; radius: 5
-                            color: delFMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
-                            border.color: delFMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
-                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 13 }
+                            color: delFMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
+                            border.color: delFMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 13 }
                             MouseArea {
                                 id: delFMA
                                 anchors.fill: parent
