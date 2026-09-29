@@ -146,7 +146,101 @@ var HEAP_LIGHT = {
     }
 };
 
-var PRESETS = [HEAP_DARK, HEAP_LIGHT];
+// The author's desktop and editor themes (Confluence, space SD): Muted
+// Mauve, and the Neovim themes Graphite («Графит»), moss-mono and nocturne.
+// Palette values are theirs; tokens the palettes have no role for are mixed
+// from neighbouring ones. textDim is lifted just enough toward the text
+// colour to clear WCAG AA on bg / panel / panel2 — each palette's own "dim"
+// sat at 3–4.5:1 on the raised panels.
+var MUTED_MAUVE = {
+    id: "muted-mauve", name: "Muted Mauve", base: "dark", builtin: true,
+    colors: {
+        bg: "#17141f", bg2: "#131019", panel: "#1e1a29", panel2: "#262035",
+        panel3: "#3a3050", border: "#332b45", borderStrong: "#4a425b", text: "#c0b9cc",
+        textMuted: "#a79fb5", textDim: "#8e879e", textOnAccent: "#17141f", textOnDanger: "#17141f",
+        textOnBadge: "#17141f", accent: "#b49bd0", accentStrong: "#c2add8", accentSoft: "#2eb49bd0",
+        knob: "#c0b9cc", danger: "#b98a95", warning: "#d8c19c", success: "#93ab97",
+        info: "#9aa7cf", toastBg: "#262035", toastBorder: "#5cb49bd0", toastText: "#c0b9cc",
+        scrim: "#8c0c0a10", p0: "#b98a95", p1: "#d8c19c", p2: "#93a8ad",
+        p3: "#78718a", stBacklog: "#78718a", stTodo: "#a79fb5", stProg: "#9aa7cf",
+        stHalf: "#d8c19c", stBlocked: "#b98a95", stReview: "#b49bd0", stDone: "#93ab97",
+        mStandup: "#9aa7cf", mOneone: "#b49bd0", mSync: "#93a8ad", mFocus: "#93ab97",
+        nowLine: "#d8c19c", synKeyword: "#b49bd0", synString: "#93ab97", synNumber: "#93a8ad",
+        synComment: "#655e75", synType: "#8f7aa8", synBuiltin: "#9aa7cf", codeBg: "#1e1a29",
+        code: "#93a8ad", mention: "#9aa7cf", ticket: "#93a8ad", tag: "#b49bd0",
+        math: "#8f7aa8", heading: "#b49bd0", highlightBg: "#3a3050", mdLink: "#9aa7cf",
+        mdCode: "#c0b9cc", mdCodeBg: "#262035", mdMention: "#9aa7cf", mdTicket: "#b49bd0",
+        mdTag: "#b49bd0", mdMath: "#93a8ad", mdHighlight: "#3a3050"
+    }
+};
+
+var GRAPHITE = {
+    id: "graphite", name: "Graphite", base: "dark", builtin: true,
+    colors: {
+        bg: "#1a1b20", bg2: "#15161a", panel: "#212329", panel2: "#31313a",
+        panel3: "#36383e", border: "#3e4147", borderStrong: "#44454b", text: "#c3c5cc",
+        textMuted: "#9fa1a9", textDim: "#9799a2", textOnAccent: "#1a1b20", textOnDanger: "#1a1b20",
+        textOnBadge: "#1a1b20", accent: "#93c088", accentStrong: "#a3d197", accentSoft: "#2e93c088",
+        knob: "#c3c5cc", danger: "#e08f8d", warning: "#d9bf8f", success: "#93c088",
+        info: "#86b5dd", toastBg: "#31313a", toastBorder: "#44454b", toastText: "#c3c5cc",
+        scrim: "#8c000000", p0: "#e08f8d", p1: "#d9bf8f", p2: "#bfa0cf",
+        p3: "#86b5dd", stBacklog: "#8a8c96", stTodo: "#9fa1a9", stProg: "#86b5dd",
+        stHalf: "#d9bf8f", stBlocked: "#e08f8d", stReview: "#bfa0cf", stDone: "#93c088",
+        mStandup: "#86b5dd", mOneone: "#bfa0cf", mSync: "#d9bf8f", mFocus: "#93c088",
+        nowLine: "#e08f8d", synKeyword: "#93c088", synString: "#9fa1a9", synNumber: "#d9bf8f",
+        synComment: "#8a8c96", synType: "#86b5dd", synBuiltin: "#ffffff", codeBg: "#212329",
+        code: "#d9bf8f", mention: "#86b5dd", ticket: "#d9bf8f", tag: "#bfa0cf",
+        math: "#d9bf8f", heading: "#86b5dd", highlightBg: "#3393c088", mdLink: "#86b5dd",
+        mdCode: "#c3c5cc", mdCodeBg: "#31313a", mdMention: "#86b5dd", mdTicket: "#93c088",
+        mdTag: "#bfa0cf", mdMath: "#d9bf8f", mdHighlight: "#3393c088"
+    }
+};
+
+var MOSS_MONO = {
+    id: "moss-mono", name: "moss-mono", base: "dark", builtin: true,
+    colors: {
+        bg: "#212121", bg2: "#1c1c1c", panel: "#1d1d1d", panel2: "#2a2a2a",
+        panel3: "#373737", border: "#2f2f2f", borderStrong: "#4c4c4c", text: "#d9d9d9",
+        textMuted: "#a6a6a6", textDim: "#969696", textOnAccent: "#212121", textOnDanger: "#212121",
+        textOnBadge: "#212121", accent: "#7db07a", accentStrong: "#94be92", accentSoft: "#2e7db07a",
+        knob: "#e6e6e6", danger: "#c07a70", warning: "#c2a97a", success: "#7db07a",
+        info: "#a5a5a5", toastBg: "#2a2a2a", toastBorder: "#4c4c4c", toastText: "#d9d9d9",
+        scrim: "#8c000000", p0: "#c07a70", p1: "#c2a97a", p2: "#b0a377",
+        p3: "#969696", stBacklog: "#818181", stTodo: "#aeaeae", stProg: "#e6e6e6",
+        stHalf: "#c2a97a", stBlocked: "#c07a70", stReview: "#b9b9b9", stDone: "#7db07a",
+        mStandup: "#c6c6c6", mOneone: "#aeaeae", mSync: "#bdbdbd", mFocus: "#7db07a",
+        nowLine: "#7db07a", synKeyword: "#7db07a", synString: "#a6a6a6", synNumber: "#bdbdbd",
+        synComment: "#777777", synType: "#c6c6c6", synBuiltin: "#e6e6e6", codeBg: "#1c1c1c",
+        code: "#bdbdbd", mention: "#d0d0d0", ticket: "#c6c6c6", tag: "#aeaeae",
+        math: "#b9b9b9", heading: "#7db07a", highlightBg: "#373737", mdLink: "#7db07a",
+        mdCode: "#d9d9d9", mdCodeBg: "#2a2a2a", mdMention: "#d0d0d0", mdTicket: "#7db07a",
+        mdTag: "#aeaeae", mdMath: "#bdbdbd", mdHighlight: "#373737"
+    }
+};
+
+var NOCTURNE = {
+    id: "nocturne", name: "nocturne", base: "dark", builtin: true,
+    colors: {
+        bg: "#15181d", bg2: "#111418", panel: "#1a1e24", panel2: "#1f262d",
+        panel3: "#253039", border: "#2b353e", borderStrong: "#39414a", text: "#a8b2bd",
+        textMuted: "#929da8", textDim: "#828d99", textOnAccent: "#15181d", textOnDanger: "#15181d",
+        textOnBadge: "#15181d", accent: "#7d9cc0", accentStrong: "#9cb4ce", accentSoft: "#2e7d9cc0",
+        knob: "#e6ebf0", danger: "#b57f7f", warning: "#b5a67f", success: "#7fa8a0",
+        info: "#7d9cc0", toastBg: "#1f262d", toastBorder: "#39414a", toastText: "#a8b2bd",
+        scrim: "#8c000000", p0: "#b57f7f", p1: "#b5a67f", p2: "#a89ab8",
+        p3: "#7d9cc0", stBacklog: "#7d8894", stTodo: "#a8b2bd", stProg: "#7d9cc0",
+        stHalf: "#b5a67f", stBlocked: "#b57f7f", stReview: "#a89ab8", stDone: "#7fa8a0",
+        mStandup: "#7d9cc0", mOneone: "#a89ab8", mSync: "#7fa8a0", mFocus: "#e6ebf0",
+        nowLine: "#b57f7f", synKeyword: "#7d9cc0", synString: "#7fa8a0", synNumber: "#a89ab8",
+        synComment: "#5a646f", synType: "#7fa8a0", synBuiltin: "#e6ebf0", codeBg: "#1a1e24",
+        code: "#a89ab8", mention: "#7d9cc0", ticket: "#a89ab8", tag: "#7fa8a0",
+        math: "#a89ab8", heading: "#7d9cc0", highlightBg: "#253039", mdLink: "#7d9cc0",
+        mdCode: "#e6ebf0", mdCodeBg: "#1a1e24", mdMention: "#7d9cc0", mdTicket: "#a89ab8",
+        mdTag: "#7fa8a0", mdMath: "#a89ab8", mdHighlight: "#253039"
+    }
+};
+
+var PRESETS = [HEAP_DARK, HEAP_LIGHT, MUTED_MAUVE, GRAPHITE, MOSS_MONO, NOCTURNE];
 
 var DEFAULT_DARK = "heap-dark";
 var DEFAULT_LIGHT = "heap-light";
