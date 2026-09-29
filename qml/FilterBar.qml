@@ -6,7 +6,10 @@ import TodoCpp
 Rectangle {
     id: root
     color: Theme.panel
-    implicitHeight: 44
+    // One row when both groups fit; otherwise sort / archived / counts drop
+    // to a second row instead of running off the right edge.
+    readonly property bool _wrapped: filtersRow.implicitWidth + 24 + actionsRow.implicitWidth > width - 32
+    implicitHeight: _wrapped ? 44 + 34 : 44
     height: implicitHeight
     property var priorities: ({})  // map P0..P3 -> bool
     property int totalCount: 0
@@ -31,8 +34,10 @@ Rectangle {
     }
 
     RowLayout {
-        anchors.fill: parent
-        anchors.leftMargin: 16; anchors.rightMargin: 16
+        id: filtersRow
+        x: 16
+        y: (44 - height) / 2
+        width: Math.min(implicitWidth, root.width - 32)
         spacing: 8
 
         Text {
@@ -110,7 +115,14 @@ Rectangle {
             }
         }
 
-        Item { Layout.fillWidth: true }
+    }
+
+    RowLayout {
+        id: actionsRow
+        x: root._wrapped ? 16 : root.width - 16 - width
+        y: root._wrapped ? 44 + (34 - height) / 2 - 6 : (44 - height) / 2
+        width: Math.min(implicitWidth, root.width - 32)
+        spacing: 8
 
         // Sort. Manual is the board's own order — the one a drag writes — so
         // it is first and is what the board starts on.
@@ -195,6 +207,10 @@ Rectangle {
             font.family: Theme.fontMono
             font.pixelSize: 11
             elide: Text.ElideRight
+            // Shrinks (and elides) instead of running off the bar's edge
+            // when the board column is narrow.
+            Layout.fillWidth: true
+            Layout.minimumWidth: 0
             Layout.maximumWidth: implicitWidth
         }
     }
