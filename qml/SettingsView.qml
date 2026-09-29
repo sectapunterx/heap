@@ -206,6 +206,13 @@ Item {
     })
 
     readonly property var avatarSwatches: Theme.swatches
+    // Integration cards whose status mapping is unfolded, by integration id.
+    property var _openStatusMaps: ({})
+    function toggleStatusMap(key) {
+        const m = Object.assign({}, root._openStatusMaps);
+        m[key] = !(m[key] === true);
+        root._openStatusMaps = m;
+    }
 
     // A stored number, or `fallback` when there is none. `v || fallback` was
     // the old shape and turned a stored 0 into the default; `??` is the
@@ -1735,6 +1742,10 @@ Item {
                         spacing: Theme.spLg
                         Layout.fillWidth: true
                         readonly property string intKey: modelData.id
+                        // The status mapping folds away; which cards have it
+                        // open is kept on the view, so it survives the card
+                        // being rebuilt while Settings is open.
+                        readonly property bool mapOpen: root._openStatusMaps[intKey] === true
                         readonly property var conf: (root.settings.integrations && root.settings.integrations[intKey]) || ({})
                         readonly property bool isConn: intCard.conf.connected === true
                         readonly property bool isOAuth: modelData.oauth === true
@@ -2016,18 +2027,51 @@ Item {
                                 spacing: Theme.spSm
                                 visible: intCard.isConn && !modelData.directory === true && statusMapRep.count > 0
 
-                                RowLayout {
+                                // Folded by default: once a tracker's statuses
+                                // land where they should, the rows are only in
+                                // the way. The closed header says how many there
+                                // are and how many the user has set.
+                                Item {
+                                    objectName: "status-map-toggle"
                                     Layout.fillWidth: true
-                                    spacing: Theme.spSm
-                                    Text {
-                                        text: I18n.t("settings.integrations.statusMap")
-                                        color: Theme.text
-                                        font.pixelSize: Theme.fsMd
-                                        font.weight: Font.DemiBold
+                                    implicitHeight: mapHead.implicitHeight + Theme.spXs
+                                    RowLayout {
+                                        id: mapHead
+                                        anchors.left: parent.left; anchors.right: parent.right
+                                        anchors.verticalCenter: parent.verticalCenter
+                                        spacing: Theme.spMd
+                                        Text {
+                                            text: (intCard.mapOpen ? "▾  " : "▸  ") + I18n.t("settings.integrations.statusMap")
+                                            color: mapToggleMA.containsMouse ? Theme.accentStrong : Theme.text
+                                            font.pixelSize: Theme.fsMd
+                                            font.weight: Font.DemiBold
+                                        }
+                                        Text {
+                                            visible: !intCard.mapOpen
+                                            Layout.fillWidth: true
+                                            elide: Text.ElideRight
+                                            text: {
+                                                const rows = statusMapRep.model || [];
+                                                let own = 0;
+                                                for (let i = 0; i < rows.length; i++) if (rows[i].overridden) own++;
+                                                return I18n.t("settings.integrations.statusMapSummary").arg(rows.length).arg(own);
+                                            }
+                                            color: Theme.textDim
+                                            font.pixelSize: Theme.fsSm
+                                        }
+                                        Item { Layout.fillWidth: true; visible: intCard.mapOpen }
                                     }
-                                    Item { Layout.fillWidth: true }
+                                    MouseArea {
+                                        id: mapToggleMA
+                                        objectName: "status-map-toggle-area"
+                                        anchors.fill: parent
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: root.toggleStatusMap(intCard.intKey)
+                                    }
                                 }
                                 Text {
+                                    visible: intCard.mapOpen
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
                                     text: I18n.t("settings.integrations.statusMapHint")
@@ -2041,6 +2085,7 @@ Item {
                                     delegate: RowLayout {
                                         id: mapRow
                                         required property var modelData
+                                        visible: intCard.mapOpen
                                         Layout.fillWidth: true
                                         spacing: Theme.spLg
 
