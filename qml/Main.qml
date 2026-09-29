@@ -411,7 +411,10 @@ ApplicationWindow {
         // Top bar spans all columns
         TopBar {
             id: topBar
-            Layout.row: 0; Layout.column: 0; Layout.columnSpan: 3
+            // Spans the right panel's column only while it is shown: an
+            // empty spanned column still took its share of the spare width,
+            // so hiding the panel left the board at half the window.
+            Layout.row: 0; Layout.column: 0; Layout.columnSpan: win.rightPanelShown ? 3 : 2
             Layout.fillWidth: true
             searchText: win.searchText
             onSearchTextChanged: win.searchText = searchText
@@ -462,6 +465,7 @@ ApplicationWindow {
 
         // Main column: filter bar + active view
         Item {
+            objectName: "main-column"
             Layout.row: 1; Layout.column: 1
             Layout.fillWidth: true
             Layout.fillHeight: true

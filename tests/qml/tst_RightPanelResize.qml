@@ -78,6 +78,19 @@ TestCase {
         compare(tc.win.rightPanelWidth, tc.win.rightPanelDefaultWidth);
     }
 
+    // Hiding the panel gives its width to the main column. The top bar
+    // spanned the panel's empty column, which kept half the spare width.
+    function test_hidden_panel_gives_main_column_the_room() {
+        const main = findChild(tc.win.contentItem, "main-column");
+        verify(main !== null);
+        tc.win.toggleRightPanel();
+        verify(!tc.win.rightPanelShown);
+        tryVerify(function () { return main.x + main.width === tc.win.width; }, 2000,
+                  "main column ends at " + (main.x + main.width) + ", window is " + tc.win.width);
+        tc.win.toggleRightPanel();
+        verify(tc.win.rightPanelShown);
+    }
+
     function test_side_rail_toggle_persists() {
         const before = tc.win.sideRailExpanded;
         tc.win.toggleSideRail();

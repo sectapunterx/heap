@@ -312,9 +312,15 @@ Item {
                     font.pixelSize: 16
                 }
                 Text {
-                    text: I18n.t("settings.groups")
-                        .arg(Object.keys(root.settings).length)
-                        .arg(root.settings.profile ? root.settings.profile.handle : "")
+                    // The number of sections in the nav — it used to count
+                    // the settings blob's top-level keys, which grew with
+                    // every stored UI preference. The handle is dropped with
+                    // its separator when there is none.
+                    text: {
+                        const handle = root.settings.profile ? (root.settings.profile.handle || "") : "";
+                        const s = I18n.t("settings.groups").arg(root.sections.length).arg(handle);
+                        return handle ? s : s.replace(/\s*·\s*$/, "");
+                    }
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: 10
@@ -1686,7 +1692,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: 1
                         Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
-                        Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: 11 }
+                        Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                     }
                     Repeater {
                         model: [
@@ -1700,6 +1706,7 @@ Item {
                             readonly property int cur: (root.settings.integrations && root.settings.integrations.autoSyncMinutes) || 0
                             radius: 6
                             implicitWidth: asTxt.implicitWidth + 20; implicitHeight: 26
+                            Layout.minimumWidth: implicitWidth
                             color: cur === modelData.v ? Theme.accent : (asMA.containsMouse ? Theme.panel3 : Theme.panel2)
                             border.color: cur === modelData.v ? Theme.accent : Theme.border; border.width: 1
                             Text {
@@ -1808,7 +1815,7 @@ Item {
                                     Layout.fillWidth: true
                                     spacing: 1
                                     Text { text: modelData.name; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
-                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                 }
                                 Text {
                                     text: intCard.isConn ? I18n.t("common.connected") : I18n.t("common.disconnected")
@@ -2047,6 +2054,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.preferredWidth: 140
                                             Layout.maximumWidth: 140
+                                            Layout.minimumWidth: Math.min(implicitWidth, 140)
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                             text: mapRow.modelData.status
@@ -2099,6 +2107,7 @@ Item {
                                             Layout.fillWidth: true
                                             Layout.preferredWidth: 130
                                             Layout.maximumWidth: 130
+                                            Layout.minimumWidth: 0
                                             // Faded rather than removed, so the
                                             // row keeps its layout either way.
                                             opacity: mapRow.modelData.overridden ? 0 : 1
