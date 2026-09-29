@@ -95,7 +95,7 @@ ProviderDescriptor github() {
   d.id = QStringLiteral("github");
   d.displayName = QStringLiteral("GitHub");
   d.color = QStringLiteral("#5a6371");
-  d.icon = QStringLiteral("◯");
+  d.icon = QStringLiteral("GH");
   d.descKey = QStringLiteral("settings.int.github.desc");
   d.uiFields = {plain(QStringLiteral("repo"), QStringLiteral("Repo"), QStringLiteral("org/name"), true),
                 secret(QStringLiteral("token"), QStringLiteral("Access token")),

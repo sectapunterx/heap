@@ -356,7 +356,7 @@ Item {
                                     Layout.preferredHeight: 20
                                     Rectangle {
                                         anchors.fill: parent
-                                        radius: 5
+                                        radius: Theme.radiusSm
                                         color: swatchMA.containsMouse ? Theme.panel3 : "transparent"
                                     }
                                     Rectangle {

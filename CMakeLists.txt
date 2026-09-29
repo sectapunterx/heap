@@ -453,6 +453,19 @@ qt_add_resources(heap_core "brand"
         design/brand-export/icons/heap-20-data.svg
         design/brand-export/icons/heap-21-help.svg
         design/brand-export/icons/heap-22-about.svg
+        design/brand-export/icons/heap-23-github.svg
+        design/brand-export/icons/heap-24-gitlab.svg
+        design/brand-export/icons/heap-25-gitea.svg
+        design/brand-export/icons/heap-26-forgejo.svg
+        design/brand-export/icons/heap-27-redmine.svg
+        design/brand-export/icons/heap-28-todoist.svg
+        design/brand-export/icons/heap-29-asana.svg
+        design/brand-export/icons/heap-30-clickup.svg
+        design/brand-export/icons/heap-31-sentry.svg
+        design/brand-export/icons/heap-32-bitbucket.svg
+        design/brand-export/icons/heap-33-jira.svg
+        design/brand-export/icons/heap-34-trello.svg
+        design/brand-export/icons/heap-35-mattermost.svg
         design/brand-export/surfaces/heap-splash.svg
         design/brand-export/surfaces/heap-readme-banner.svg
         design/brand-export/surfaces/heap-marketing-hero.svg
