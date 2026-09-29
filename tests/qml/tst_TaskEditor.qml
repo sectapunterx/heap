@@ -178,10 +178,9 @@ TestCase {
     // taller than the window, whatever the text or Details hold.
     function test_long_description_grows_to_a_cap_and_the_dialog_fits() {
         const te = make('import TodoCpp; TaskEditor { }');
-        let long = "";
-        for (let i = 0; i < 80; i++) long += "line " + i + " of a long description
-";
-        te.showFor({ id: "LTE-3100", title: "long", desc: long, _isNew: false, ticket: ({}) });
+        const lines = [];
+        for (let i = 0; i < 80; i++) lines.push("line " + i + " of a long description");
+        te.showFor({ id: "LTE-3100", title: "long", desc: lines.join("\n"), _isNew: false, ticket: ({}) });
         const field = findChild(te, "te-desc");
         verify(field !== null, "te-desc not found");
         const box = field.parent.parent;   // the ScrollView around the field
