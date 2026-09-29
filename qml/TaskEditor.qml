@@ -452,7 +452,7 @@ Popup {
 
                 Text {
                     Layout.fillWidth: true
-                    text: "⚠ " + I18n.t("ticket.overwriteHint")
+                    text: "△ " + I18n.t("ticket.overwriteHint")
                     textFormat: Text.PlainText
                     color: Theme.textDim
                     font.pixelSize: Theme.fsXs
@@ -464,7 +464,7 @@ Popup {
                 Button {
                     objectName: "te-ticket-load-comments"
                     visible: !root._commentsRequested
-                    text: "💬 " + I18n.t("ticket.loadComments")
+                    text: "❝ " + I18n.t("ticket.loadComments")
                     font.pixelSize: Theme.fsXs
                     onClicked: {
                         root._commentsRequested = true;
@@ -785,7 +785,7 @@ Popup {
                                 const hh = String(d.getHours()).padStart(2, "0");
                                 const mm = String(d.getMinutes()).padStart(2, "0");
                                 // ⏱ hint: a focus block will be created
-                                return "↑ " + iso + " " + hh + ":" + mm + (root.isNew ? " ⏱" : "");
+                                return "↑ " + iso + " " + hh + ":" + mm + (root.isNew ? " ◷" : "");
                             }
                             return "↑ " + iso;
                         }

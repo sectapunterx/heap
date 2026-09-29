@@ -676,7 +676,7 @@ QtObject {
             "settings.crumb": "Settings / %1",
             "settings.debug.label": "DEBUG",
             "settings.debug.showUnimpl": "Show unimplemented",
-            "settings.notImpl.title": "⚠ Not implemented",
+            "settings.notImpl.title": "△ Not implemented",
             "settings.notImpl.body": "Settings in this section have no effect yet. They are shown for preview — switches are disabled in every build.",
 
             "settings.section.profile.title": "Profile",
@@ -1618,7 +1618,7 @@ QtObject {
             "settings.crumb": "Настройки / %1",
             "settings.debug.label": "DEBUG",
             "settings.debug.showUnimpl": "Показать нереализованные",
-            "settings.notImpl.title": "⚠ Не реализовано",
+            "settings.notImpl.title": "△ Не реализовано",
             "settings.notImpl.body": "Настройки этой секции пока без эффекта. Они отображены для предварительного просмотра — переключатели заблокированы во всех сборках.",
 
             "settings.section.profile.title": "Профиль",

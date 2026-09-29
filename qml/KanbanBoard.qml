@@ -361,7 +361,7 @@ Item {
                                     }
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 10; height: 10; radius: Theme.radiusXs
+                                        width: 8; height: 8; radius: 4
                                         color: col.statusColor
                                     }
                                     MouseArea {
@@ -382,11 +382,13 @@ Item {
                                         id: colName
                                         visible: !col.renaming
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: col.statusName.toUpperCase()
-                                        color: Theme.textMuted
+                                        // The name as the user wrote it. Uppercase with
+                                        // tracking shouted across seven columns and cut
+                                        // "In progress" to "IN PROGR…" on a 1680px window.
+                                        text: col.statusName
+                                        color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: Theme.fsSm
-                                        font.letterSpacing: 1
+                                        font.pixelSize: Theme.fsMd
                                         font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                         width: parent.width
@@ -805,10 +807,7 @@ Item {
         // Control inside the popup resolves its colours through. Shadowing it
         // with an array of hex strings hands those controls an array where
         // they expect a palette.
-        readonly property var swatches: [
-            "#5cc2dd", "#8a8e98", "#9aa3b4", "#5aa9e6", "#dcb86b",
-            "#e6624c", "#c07acf", "#6ec18a", "#6cc4b8", "#7da8d9"
-        ]
+        readonly property var swatches: Theme.swatches
         property color picked: swatches[0]
 
         function reset() { nameField.text = ""; picked = swatches[0] }

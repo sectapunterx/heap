@@ -506,7 +506,7 @@ Item {
                             Text {
                                 id: schT
                                 anchors.centerIn: parent
-                                text: "⏰ " + (root.scheduleMap[tlRow.t.id] || "")
+                                text: "▸ " + (root.scheduleMap[tlRow.t.id] || "")
                                 color: Theme.accentStrong
                                 font.family: Theme.fontMono
                                 font.pixelSize: Theme.fsXs

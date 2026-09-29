@@ -60,7 +60,7 @@ Popup {
           highlights: [
               { glyph: "▦", title: "welcome.board.title", desc: "welcome.board.desc" },
               { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.desc" },
-              { glyph: "⚡", title: "welcome.capture.title", desc: "welcome.capture.desc" },
+              { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.desc" },
               { glyph: "⌘", title: "welcome.palette.title", desc: "welcome.palette.desc" }
           ],
           note: "welcome.demoNote" },
@@ -70,7 +70,7 @@ Popup {
         { glyph: "✎", title: "welcome.tasks.title", desc: "welcome.tasks.desc",
           keys: ["task.new"],
           action: { label: "welcome.act.task", kind: "action", arg: "task-new" }, help: "help-tasks" },
-        { glyph: "⚡", title: "welcome.capture.title", desc: "welcome.capture.body",
+        { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.body",
           keys: ["quick-capture", "quick-capture-notes"],
           action: { label: "welcome.act.capture", kind: "action", arg: "quick-capture" }, help: "help-capture" },
         { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.body",

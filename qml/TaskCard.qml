@@ -103,6 +103,11 @@ Rectangle {
     property real homeX: 0
     property real homeY: 0
 
+    // What sits on a card, top to bottom: who it is (key, priority, and any
+    // alert that needs the user), the title, how far along it is, the
+    // description, then one quiet line of facts. Only alerts and urgent dates
+    // get a box or a colour; everything else is dim text, so a synced ticket
+    // with a dozen facts still reads title-first.
     ColumnLayout {
         id: contentCol
         anchors.fill: parent
@@ -110,26 +115,18 @@ Rectangle {
         spacing: Theme.spSm
 
         RowLayout {
+            Layout.fillWidth: true
             spacing: Theme.spSm
-            // Provider badge: which tracker this card mirrors (HEAP-117).
-            Rectangle {
+            // Provider badge: which tracker this card mirrors (HEAP-117). The
+            // provider's own colour is on the glyph only.
+            Text {
                 objectName: "tc-badge"
                 visible: card._isTicket
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(card._badge.color || Theme.textMuted, 0.18)
-                border.color: card._badge.color || Theme.border
-                border.width: 1
-                implicitWidth: badgeT.implicitWidth + 8
-                implicitHeight: badgeT.implicitHeight + 2
-                Text {
-                    id: badgeT
-                    anchors.centerIn: parent
-                    text: card._badge.icon || "◍"
-                    textFormat: Text.PlainText
-                    color: card._badge.color || Theme.textMuted
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                }
+                text: card._badge.icon || "◍"
+                textFormat: Text.PlainText
+                color: card._badge.color || Theme.textMuted
+                font.pixelSize: Theme.fsXs
+                font.weight: Font.DemiBold
                 QQC.ToolTip.visible: badgeHover.hovered
                 QQC.ToolTip.text: (card._badge.name || card._ticket.provider || "")
                     + (card._ticket.project ? " · " + card._ticket.project : "")
@@ -143,25 +140,31 @@ Rectangle {
                 textFormat: Text.PlainText
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
-                font.pixelSize: Theme.fsSm
+                font.pixelSize: Theme.fsXs
                 font.weight: Font.Medium
             }
+            // P0 and P1 are the priorities worth a glance, so they get the
+            // coloured chip; P2 and P3 are plain dim text.
             Rectangle {
+                id: priChip
+                objectName: "tc-priority"
+                readonly property string pri: card.task ? String(card.task.priority || "") : ""
+                readonly property bool loud: pri === "P0" || pri === "P1"
+                visible: pri.length > 0
                 radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.priorityColor(card.task ? card.task.priority : "P3"), 0.12)
-                implicitWidth: priT.implicitWidth + 10
+                color: loud ? Theme.withAlpha(Theme.priorityColor(pri), 0.14) : "transparent"
+                implicitWidth: priT.implicitWidth + (loud ? 10 : 0)
                 implicitHeight: priT.implicitHeight + 2
                 Text {
                     id: priT
                     anchors.centerIn: parent
-                    text: card.task ? card.task.priority : ""
-                    color: Theme.priorityColor(card.task ? card.task.priority : "P3")
+                    text: priChip.pri
+                    color: priChip.loud ? Theme.priorityColor(priChip.pri) : Theme.textDim
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: priChip.loud ? Font.DemiBold : Font.Normal
                 }
             }
-            Item { Layout.fillWidth: true }
             // The tracker refused the last status change, or the issue is no
             // longer in the tracker. Either way the card is out of step with it.
             Rectangle {
@@ -169,8 +172,6 @@ Rectangle {
                 visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
                 radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.warning, 0.14)
-                border.color: Theme.warning
-                border.width: 1
                 implicitWidth: syncStateT.implicitWidth + 10
                 implicitHeight: syncStateT.implicitHeight + 2
                 Text {
@@ -191,11 +192,10 @@ Rectangle {
                 }
             }
             Rectangle {
+                objectName: "tc-stuck"
                 visible: card._isStuck
                 radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.danger, 0.14)
-                border.color: Theme.danger
-                border.width: 1
                 implicitWidth: stuckT.implicitWidth + 10
                 implicitHeight: stuckT.implicitHeight + 2
                 Text {
@@ -206,119 +206,17 @@ Rectangle {
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
-                    font.letterSpacing: 0.6
-                }
-            }
-            Rectangle {
-                visible: card._isArchived
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.textDim, 0.18)
-                implicitWidth: archT.implicitWidth + 10
-                implicitHeight: archT.implicitHeight + 2
-                Text {
-                    id: archT
-                    anchors.centerIn: parent
-                    text: I18n.t("task.chip.arch")
-                    color: Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 0.6
                 }
             }
             Text {
-                visible: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
-                text: card.task && card.task.branch
-                      ? "⎇ " + String(card.task.branch).split("/").pop().substring(0, 18)
-                      : ""
+                visible: card._isArchived
+                text: I18n.t("task.chip.arch")
                 color: Theme.textDim
-                font.family: Theme.fontMono
+                font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
-                elide: Text.ElideRight
+                font.weight: Font.DemiBold
             }
-            // ── Git live-status chips — fed by GitWatcher via TaskModel ──
-            Rectangle {
-                visible: !!(card.task && (card.task.gitAhead || 0) > 0)
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.accent, 0.14)
-                border.color: Theme.accent
-                border.width: 1
-                implicitWidth: aheadT.implicitWidth + 10
-                implicitHeight: aheadT.implicitHeight + 2
-                Text {
-                    id: aheadT
-                    anchors.centerIn: parent
-                    text: "↑" + (card.task ? (card.task.gitAhead || 0) : 0)
-                    color: Theme.accentStrong
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                }
-            }
-            Rectangle {
-                visible: !!(card.task && String(card.task.prState || "").length > 0)
-                radius: Theme.radiusSm
-                color: {
-                    const s = card.task ? String(card.task.prState || "") : "";
-                    if (s === "merged") return Theme.withAlpha(Theme.mFocus, 0.18);
-                    if (s === "closed") return Theme.withAlpha(Theme.textDim, 0.18);
-                    return Theme.withAlpha(Theme.p1, 0.18);
-                }
-                border.color: {
-                    const s = card.task ? String(card.task.prState || "") : "";
-                    if (s === "merged") return Theme.mFocus;
-                    if (s === "closed") return Theme.textDim;
-                    return Theme.p1;
-                }
-                border.width: 1
-                implicitWidth: prT.implicitWidth + 10
-                implicitHeight: prT.implicitHeight + 2
-                Text {
-                    id: prT
-                    anchors.centerIn: parent
-                    text: {
-                        if (!card.task) return "";
-                        const n = card.task.prNumber || 0;
-                        const s = String(card.task.prState || "");
-                        return (n > 0 ? "PR #" + n + " " : "PR ") + s;
-                    }
-                    color: Theme.text
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                }
-            }
-            // Recent commits mentioning this task id — fed by GitWatcher git-log
-            // parsing. Tooltip shows the most recent subject.
-            Rectangle {
-                id: commitChip
-                visible: !!(card.task && card.task.recentCommits && card.task.recentCommits.length > 0)
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.textDim, 0.14)
-                border.color: Theme.border
-                border.width: 1
-                implicitWidth: commitT.implicitWidth + 10
-                implicitHeight: commitT.implicitHeight + 2
-                Text {
-                    id: commitT
-                    anchors.centerIn: parent
-                    text: "◇ " + (card.task && card.task.recentCommits ? card.task.recentCommits.length : 0)
-                    color: Theme.textMuted
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                }
-                QQC.ToolTip.visible: commitMA.containsMouse && commitChip.visible
-                QQC.ToolTip.text: (card.task && card.task.recentCommits && card.task.recentCommits.length > 0)
-                    ? (card.task.recentCommits[0].sha + "  " + card.task.recentCommits[0].subject)
-                    : ""
-                MouseArea {
-                    id: commitMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    acceptedButtons: Qt.NoButton
-                }
-            }
+            Item { Layout.fillWidth: true }
         }
 
         Text {
@@ -339,6 +237,7 @@ Rectangle {
         // items, and until now a card could not say how far along it was
         // without being opened.
         RowLayout {
+            id: checklistRow
             readonly property var _cl: (card.task && card.task.checklist) ? card.task.checklist : ({})
             readonly property int _total: _cl.total || 0
             readonly property int _done: _cl.done || 0
@@ -346,21 +245,12 @@ Rectangle {
             Layout.fillWidth: true
             spacing: Theme.spSm
 
-            Rectangle {
+            Text {
                 objectName: "tc-checklist"
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(parent._done === parent._total ? Theme.stDone : Theme.textMuted, 0.16)
-                implicitWidth: clT.implicitWidth + 10
-                implicitHeight: clT.implicitHeight + 2
-                Text {
-                    id: clT
-                    anchors.centerIn: parent
-                    text: parent.parent._done + "/" + parent.parent._total
-                    color: parent.parent._done === parent.parent._total ? Theme.stDone : Theme.textMuted
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                }
+                text: checklistRow._done + "/" + checklistRow._total
+                color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textMuted
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
             }
             // A bar rather than only a number: the ratio is the thing being
             // read, and a number has to be compared against its own second
@@ -371,10 +261,10 @@ Rectangle {
                 radius: Theme.radiusXs
                 color: Theme.panel3
                 Rectangle {
-                    width: parent.width * (parent.parent._total > 0 ? parent.parent._done / parent.parent._total : 0)
+                    width: parent.width * (checklistRow._total > 0 ? checklistRow._done / checklistRow._total : 0)
                     height: parent.height
                     radius: parent.radius
-                    color: parent.parent._done === parent.parent._total ? Theme.stDone : Theme.accent
+                    color: checklistRow._done === checklistRow._total ? Theme.success : Theme.accent
                 }
             }
         }
@@ -391,140 +281,120 @@ Rectangle {
             elide: Text.ElideRight
         }
 
-        RowLayout {
-            spacing: Theme.spMd
+        // One line of facts. Flow, not a row: on a narrow column the line
+        // wraps instead of pushing facts out past the card's edge.
+        Flow {
+            id: metaFlow
+            Layout.fillWidth: true
+            visible: dueT.visible || schedT.visible || timerT.visible || recurT.visible
+                     || assigneeT.visible || commentsT.visible || labelRep.count > 0
+                     || gitLine.visible || prT.visible
+            spacing: Theme.spLg
+
             Text {
-                property string dlText: {
-                    if (!card.task || !card.task.deadline) return "";
+                id: dueT
+                objectName: "tc-due"
+                readonly property int days: {
+                    if (!card.task || !card.task.deadline) return 99999;
                     const dl = card.task.deadline;
                     // An unset date arrives as an Invalid Date — truthy, but its
-                    // time is NaN, which used to render as "⏱ NaNd".
-                    if (!dl.getTime || isNaN(dl.getTime())) return "";
+                    // time is NaN, which used to render as "NaNd".
+                    if (!dl.getTime || isNaN(dl.getTime())) return 99999;
                     const t = AppController.today;
                     const ms = dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
-                    const days = Math.round(ms / 86400000);
+                    return Math.round(ms / 86400000);
+                }
+                readonly property string dlText: {
+                    if (days === 99999) return "";
                     // A task due at a clock time shows it; a bare date does not.
                     let clock = "";
                     if (card.task.hasTime && card.task.dueAt && card.task.dueAt.getHours) {
                         clock = " " + String(card.task.dueAt.getHours()).padStart(2, "0")
                               + ":" + String(card.task.dueAt.getMinutes()).padStart(2, "0");
                     }
-                    if (days < 0) return "⏱ " + I18n.t("task.due.overdue").arg(-days) + clock;
-                    if (days === 0) return "⏱ " + I18n.t("task.due.today") + clock;
-                    if (days === 1) return "⏱ " + I18n.t("task.due.tomorrow") + clock;
-                    return "⏱ " + I18n.t("task.due.inDays").arg(days) + clock;
+                    if (days < 0) return I18n.t("task.due.overdue").arg(-days) + clock;
+                    if (days === 0) return I18n.t("task.due.today") + clock;
+                    if (days === 1) return I18n.t("task.due.tomorrow") + clock;
+                    return I18n.t("task.due.inDays").arg(days) + clock;
                 }
                 visible: dlText.length > 0
-                text: dlText
-                color: {
-                    if (!card.task || !card.task.deadline || !card.task.deadline.getTime
-                        || isNaN(card.task.deadline.getTime())) return Theme.textDim;
-                    const dl = card.task.deadline;
-                    const t = AppController.today;
-                    const days = Math.round((dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime()) / 86400000);
-                    if (days <= 0) return Theme.danger;
-                    if (days <= 3) return Theme.warning;
-                    return Theme.textDim;
-                }
+                text: "◷ " + dlText
+                color: days <= 0 ? Theme.danger : days <= 3 ? Theme.warning : Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
             }
-            // Who owns the issue upstream (HEAP-117).
-            Rectangle {
-                objectName: "tc-assignee"
-                visible: card._isTicket && String(card._ticket.assignee || "").length > 0
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.textMuted, 0.12)
-                implicitWidth: assigneeT.implicitWidth + 10
-                implicitHeight: assigneeT.implicitHeight + 2
-                Text {
-                    id: assigneeT
-                    anchors.centerIn: parent
-                    text: "@" + String(card._ticket.assignee || "")
-                    textFormat: Text.PlainText
-                    color: Theme.textMuted
-                    font.pixelSize: Theme.fsXs
-                    elide: Text.ElideRight
-                }
-            }
-            // Comment count. -1 means the provider never said, which is not the
-            // same as "no comments" — the chip stays away for both, but a zero
-            // from a provider that does report is still worth nothing to show.
             Text {
-                objectName: "tc-comments"
-                visible: card._isTicket && (card._ticket.commentCount || 0) > 0
-                text: "💬 " + (card._ticket.commentCount || 0)
-                textFormat: Text.PlainText
-                color: Theme.textDim
+                id: schedT
+                visible: !!(card.scheduled && card.scheduled.length > 0)
+                text: "▸ " + (card.scheduled || "")
+                color: Theme.accentStrong
+                font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
             }
-            // Label chips (HEAP-124). A tracker-pulled label keeps whatever
-            // colour the project gave it, else the muted chip style.
-            Repeater {
-                model: card.task && card.task.labels ? card.task.labels : []
-                delegate: Rectangle {
-                    required property var modelData
-                    radius: Theme.radiusSm
-                    color: Theme.withAlpha(modelData.color || Theme.textMuted, 0.14)
-                    border.color: modelData.color || Theme.border
-                    border.width: 1
-                    implicitWidth: labelT.implicitWidth + 10
-                    implicitHeight: labelT.implicitHeight + 2
-                    Text {
-                        id: labelT
-                        anchors.centerIn: parent
-                        text: modelData.id
-                        color: modelData.color || Theme.textMuted
-                        font.pixelSize: Theme.fsXs
-                    }
+            // Where the code for it lives: branch, commits ahead, commits that
+            // mention it — one dim line, elided to the card's width.
+            Text {
+                id: gitLine
+                objectName: "tc-git"
+                readonly property string branch: card.task && card.task.branch ? String(card.task.branch) : ""
+                readonly property int ahead: card.task ? (card.task.gitAhead || 0) : 0
+                readonly property int commits: card.task && card.task.recentCommits ? card.task.recentCommits.length : 0
+                visible: branch.length > 0 || ahead > 0 || commits > 0
+                width: Math.min(implicitWidth, metaFlow.width)
+                text: {
+                    const parts = [];
+                    if (branch.length > 0) parts.push("⎇ " + branch.split("/").pop());
+                    if (ahead > 0) parts.push("↑" + ahead);
+                    if (commits > 0) parts.push("◇ " + commits);
+                    return parts.join("  ");
                 }
+                textFormat: Text.PlainText
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                elide: Text.ElideRight
+                QQC.ToolTip.visible: gitHover.hovered && commits > 0
+                QQC.ToolTip.text: commits > 0
+                    ? (card.task.recentCommits[0].sha + "  " + card.task.recentCommits[0].subject)
+                    : ""
+                HoverHandler { id: gitHover }
             }
-            // Recurrence chip (HEAP-77).
-            Rectangle {
-                visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
-                radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.mOneone, 0.14)
-                border.color: Theme.mOneone
-                border.width: 1
-                implicitWidth: recurT.implicitWidth + 10
-                implicitHeight: recurT.implicitHeight + 2
-                Text {
-                    id: recurT
-                    anchors.centerIn: parent
-                    text: "🔁 " + card._recurLabel(card.task ? card.task.recurrence : "")
-                    color: Theme.mOneone
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+            // The pull request's state is the one git fact with a colour: open
+            // is info, merged is success, closed is dim.
+            Text {
+                id: prT
+                objectName: "tc-pr"
+                readonly property string state: card.task ? String(card.task.prState || "") : ""
+                visible: state.length > 0
+                text: {
+                    const n = card.task ? (card.task.prNumber || 0) : 0;
+                    return (n > 0 ? "PR #" + n + " " : "PR ") + state;
                 }
+                textFormat: Text.PlainText
+                color: state === "merged" ? Theme.success : state === "closed" ? Theme.textDim : Theme.info
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                font.weight: Font.Medium
             }
-            Item { Layout.fillWidth: true }
-            // Time-tracking chip — click to start/stop; live while running.
-            Rectangle {
+            // Time tracking — click to start/stop; live while running.
+            Text {
+                id: timerT
+                objectName: "tc-timer"
                 visible: !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
-                radius: Theme.radiusSm
-                color: card.task && card.task.isTiming ? Theme.withAlpha(Theme.p1, 0.18) : Theme.withAlpha(Theme.textDim, 0.14)
-                border.color: card.task && card.task.isTiming ? Theme.p1 : Theme.border
-                border.width: 1
-                implicitWidth: timerT.implicitWidth + 10
-                implicitHeight: timerT.implicitHeight + 2
-                Text {
-                    id: timerT
-                    anchors.centerIn: parent
-                    text: {
-                        card._timerTick;  // re-evaluate each tick while running
-                        if (!card.task) return "";
-                        const s = card.task.isTiming ? AppController.elapsedSecondsFor(card.task.id)
-                                                     : (card.task.trackedSeconds || 0);
-                        return (card.task.isTiming ? "▶ " : "⏱ ") + card._fmtElapsed(s);
-                    }
-                    color: card.task && card.task.isTiming ? Theme.p1 : Theme.textMuted
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                text: {
+                    card._timerTick;  // re-evaluate each tick while running
+                    if (!card.task) return "";
+                    const s = card.task.isTiming ? AppController.elapsedSecondsFor(card.task.id)
+                                                 : (card.task.trackedSeconds || 0);
+                    return (card.task.isTiming ? "● " : "⧗ ") + card._fmtElapsed(s);
                 }
+                color: card.task && card.task.isTiming ? Theme.accent : Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                font.weight: card.task && card.task.isTiming ? Font.DemiBold : Font.Normal
                 MouseArea {
                     anchors.fill: parent
+                    anchors.margins: -4
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
                     onClicked: {
@@ -534,20 +404,68 @@ Rectangle {
                     }
                 }
             }
-            Rectangle {
-                visible: !!(card.scheduled && card.scheduled.length > 0)
-                radius: Theme.radiusSm
-                color: Theme.accentSoft
-                implicitWidth: schedT.implicitWidth + 10
-                implicitHeight: schedT.implicitHeight + 2
-                Text {
-                    id: schedT
-                    anchors.centerIn: parent
-                    text: "⏰ " + (card.scheduled || "")
-                    color: Theme.accentStrong
-                    font.family: Theme.fontMono
-                    font.pixelSize: Theme.fsXs
+            // Recurrence (HEAP-77).
+            Text {
+                id: recurT
+                visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
+                text: "↻ " + card._recurLabel(card.task ? card.task.recurrence : "")
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+            }
+            // Who owns the issue upstream (HEAP-117).
+            Text {
+                id: assigneeT
+                objectName: "tc-assignee"
+                visible: card._isTicket && String(card._ticket.assignee || "").length > 0
+                text: "@" + String(card._ticket.assignee || "")
+                textFormat: Text.PlainText
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
+            // Comment count. -1 means the provider never said, which is not the
+            // same as "no comments" — the count stays away for both, but a zero
+            // from a provider that does report is still worth nothing to show.
+            Text {
+                id: commentsT
+                objectName: "tc-comments"
+                visible: card._isTicket && (card._ticket.commentCount || 0) > 0
+                text: "❝ " + (card._ticket.commentCount || 0)
+                textFormat: Text.PlainText
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
+            // Labels (HEAP-124): a dot in the colour the tracker gave it and
+            // the name in muted text. Two fit; the rest are counted.
+            Repeater {
+                id: labelRep
+                model: card.task && card.task.labels ? card.task.labels.slice(0, 2) : []
+                delegate: Row {
+                    required property var modelData
+                    spacing: Theme.spXs
+                    Rectangle {
+                        anchors.verticalCenter: parent.verticalCenter
+                        width: 6; height: 6; radius: 3
+                        color: modelData.color || Theme.textDim
+                    }
+                    Text {
+                        text: modelData.id
+                        textFormat: Text.PlainText
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fsXs
+                    }
                 }
+            }
+            Text {
+                readonly property int more: card.task && card.task.labels ? card.task.labels.length - 2 : 0
+                visible: more > 0
+                text: "+" + more
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+                QQC.ToolTip.visible: moreHover.hovered
+                QQC.ToolTip.text: card.task && card.task.labels
+                    ? card.task.labels.slice(2).map(l => l.id).join(", ") : ""
+                HoverHandler { id: moreHover }
             }
         }
     }
@@ -634,8 +552,8 @@ Rectangle {
             text: "✎  " + I18n.t("taskcard.edit"); onTriggered: card.clicked()
         }
         QQC.MenuItem {
-            text: card.task && card.task.isTiming ? ("⏹  " + I18n.t("taskcard.stopTimer"))
-                                                  : ("▶  " + I18n.t("taskcard.startTimer"))
+            text: card.task && card.task.isTiming ? ("■  " + I18n.t("taskcard.stopTimer"))
+                                                  : ("▸  " + I18n.t("taskcard.startTimer"))
             onTriggered: {
                 if (!card.task) return;
                 if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
@@ -659,7 +577,7 @@ Rectangle {
         }
         QQC.MenuSeparator {}
         QQC.MenuItem {
-            text: "⏰  " + I18n.t("taskcard.schedule")
+            text: "◷  " + I18n.t("taskcard.schedule")
             onTriggered: {
                 if (!card.task) return;
                 // 14:00 used to be hardcoded here, so every task scheduled from
