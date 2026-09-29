@@ -6,6 +6,10 @@ Button {
     id: root
     property bool primary: false
     property bool danger: false
+    // A toggle that is on. Not `primary`: a filled accent pill is the one
+    // action a screen offers, and a toggle painted the same way competed
+    // with "+ Task" for it.
+    property bool selected: false
 
     padding: Theme.spMd
     leftPadding: Theme.spXl
@@ -32,10 +36,12 @@ Button {
         radius: Theme.radiusMd
         color: primary ? Theme.accent
               : danger  ? Theme.withAlpha(Theme.danger, 0.12)
+              : selected ? Theme.accentSoft
               : root.hovered ? Theme.panel3 : Theme.panel2
         border.color: root.visualFocus ? Theme.accentStrong
                    : primary ? "transparent"
                    : danger  ? Theme.withAlpha(Theme.danger, 0.4)
+                   : selected ? Theme.withAlpha(Theme.accent, 0.5)
                    : (root.hovered ? Theme.borderStrong : Theme.border)
         border.width: root.visualFocus ? 2 : 1
     }
@@ -44,7 +50,7 @@ Button {
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
         font.weight: primary ? Font.DemiBold : Font.Medium
-        color: primary ? Theme.textOnAccent : danger ? Theme.danger : Theme.text
+        color: primary ? Theme.textOnAccent : danger ? Theme.danger : selected ? Theme.accentStrong : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }

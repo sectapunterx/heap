@@ -246,13 +246,13 @@ Popup {
         Layout.fillWidth: true
         Layout.preferredHeight: 26
         radius: Theme.radiusMd
-        color: active ? Theme.accent : (segMA.containsMouse ? Theme.panel3 : Theme.panel2)
-        border.color: active ? "transparent" : Theme.border
+        color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : Theme.panel2)
+        border.color: active ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border
         border.width: 1
         Text {
             anchors.centerIn: parent
             text: parent.text
-            color: parent.active ? Theme.textOnAccent : Theme.text
+            color: parent.active ? Theme.accentStrong : Theme.text
             font.pixelSize: Theme.fsMd
             font.weight: parent.active ? Font.DemiBold : Font.Medium
         }

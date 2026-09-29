@@ -20,10 +20,7 @@ Popup {
     // Control inside this dialog resolves its colours through. Shadowing
     // it with an array of hex strings hands those controls an array where
     // they expect a palette.
-    readonly property var swatches: [
-        "#5cc2dd", "#6cc4b8", "#7cc492", "#dcb86b",
-        "#e6984c", "#c07acf", "#7da8d9", "#e6624c"
-    ]
+    readonly property var swatches: Theme.swatches
 
     property string mode: "create"      // "create" | "rename" | "duplicate"
     property string profileId: ""       // for rename / duplicate

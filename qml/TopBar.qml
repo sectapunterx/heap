@@ -36,7 +36,7 @@ Rectangle {
         const list = AppController.profiles;
         const id = AppController.activeProfileId;
         for (let i = 0; i < list.length; i++) if (list[i].id === id) return list[i];
-        return ({ name: "—", color: "#5cc2dd" });
+        return ({ name: "—", color: Theme.accent });
     }
 
     Rectangle {
@@ -237,16 +237,16 @@ Rectangle {
                     implicitHeight: 18
                     color: {
                         const s = prBadge.pr ? String(prBadge.pr.state || "") : "";
-                        if (s === "merged") return Theme.withAlpha(Theme.mFocus, 0.20);
-                        if (s === "closed") return Theme.withAlpha(Theme.textDim, 0.20);
-                        return Theme.withAlpha(Theme.p1, 0.20);
+                        if (s === "merged") return Theme.withAlpha(Theme.success, 0.16);
+                        if (s === "closed") return Theme.withAlpha(Theme.textDim, 0.16);
+                        return Theme.withAlpha(Theme.info, 0.16);
                     }
                     border.width: 1
                     border.color: {
                         const s = prBadge.pr ? String(prBadge.pr.state || "") : "";
-                        if (s === "merged") return Theme.mFocus;
+                        if (s === "merged") return Theme.success;
                         if (s === "closed") return Theme.textDim;
-                        return Theme.p1;
+                        return Theme.info;
                     }
                     Text {
                         id: prBadgeT
@@ -283,15 +283,15 @@ Rectangle {
                     implicitWidth: ciT.implicitWidth + 12
                     implicitHeight: 18
                     color: {
-                        if (ciBadge.ci === "passing") return Theme.withAlpha(Theme.mFocus, 0.20);
-                        if (ciBadge.ci === "failing") return Theme.withAlpha(Theme.danger, 0.20);
-                        return Theme.withAlpha(Theme.p2, 0.20);
+                        if (ciBadge.ci === "passing") return Theme.withAlpha(Theme.success, 0.16);
+                        if (ciBadge.ci === "failing") return Theme.withAlpha(Theme.danger, 0.16);
+                        return Theme.withAlpha(Theme.warning, 0.16);
                     }
                     border.width: 1
                     border.color: {
-                        if (ciBadge.ci === "passing") return Theme.mFocus;
+                        if (ciBadge.ci === "passing") return Theme.success;
                         if (ciBadge.ci === "failing") return Theme.danger;
-                        return Theme.p2;
+                        return Theme.warning;
                     }
                     Text {
                         id: ciT

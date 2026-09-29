@@ -135,7 +135,7 @@ Item {
             handle: "",
             role: "",
             team: "",
-            color: "#5cc2dd"
+            color: Theme.swatches[0]
         },
         appearance: {
             // No accent / theme defaults here: an absent darkPreset /
@@ -194,10 +194,7 @@ Item {
         }
     })
 
-    readonly property var avatarSwatches: [
-        "#d97a6c", "#dcb86b", "#7cc492", "#6cc4b8",
-        "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7", "#e6624c"
-    ]
+    readonly property var avatarSwatches: Theme.swatches
 
     // A stored number, or `fallback` when there is none. `v || fallback` was
     // the old shape and turned a stored 0 into the default; `??` is the
@@ -428,7 +425,7 @@ Item {
                             spacing: 0
                             Text {
                                 text: I18n.t("settings.debug.label")
-                                color: Theme.p1
+                                color: Theme.warning
                                 font.pixelSize: Theme.fsXs
                                 font.weight: Font.DemiBold
                                 font.letterSpacing: 1
@@ -1720,7 +1717,7 @@ Item {
                                 }
                                 Text {
                                     text: intCard.isConn ? I18n.t("common.connected") : I18n.t("common.disconnected")
-                                    color: intCard.isConn ? Theme.mFocus : Theme.textDim
+                                    color: intCard.isConn ? Theme.success : Theme.textDim
                                     font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                                 }
                                 Text {
@@ -1817,7 +1814,7 @@ Item {
                                     }
                                     Text {
                                         text: intSection.dcUri
-                                        color: Theme.mFocus; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
+                                        color: Theme.accentStrong; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                                     }
                                 }
                             }

@@ -171,7 +171,7 @@ Popup {
 
                     Rectangle {
                         width: 26; height: 26; radius: 13
-                        color: crow.modelData.color && crow.modelData.color.length ? crow.modelData.color : Theme.p1
+                        color: crow.modelData.color && crow.modelData.color.length ? crow.modelData.color : Theme.accent
                         Text {
                             anchors.centerIn: parent
                             text: {

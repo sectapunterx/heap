@@ -382,12 +382,12 @@ Item {
                                 width: 64
                                 height: parent.height
                                 radius: Theme.radiusSm
-                                color: active ? Theme.accent
+                                color: active ? Theme.accentSoft
                                      : (segMA.containsMouse ? Theme.panel3 : "transparent")
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.label
-                                    color: parent.active ? Theme.textOnAccent : Theme.text
+                                    color: parent.active ? Theme.accentStrong : Theme.text
                                     font.pixelSize: Theme.fsSm
                                     font.weight: parent.active ? Font.DemiBold : Font.Medium
                                 }
@@ -707,8 +707,8 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: Theme.spSm
                                 Text {
-                                    text: (modelData.resolved ? "⌗ " : "⚠ ") + modelData.target
-                                    color: modelData.resolved ? Theme.mOneone : Theme.warning
+                                    text: (modelData.resolved ? "⌗ " : "△ ") + modelData.target
+                                    color: modelData.resolved ? Theme.mdTicket : Theme.warning
                                     font.pixelSize: Theme.fsSm
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight

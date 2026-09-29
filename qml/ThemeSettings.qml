@@ -281,7 +281,7 @@ ColumnLayout {
             model: ["dark", "light"]
             PillButton {
                 required property string modelData
-                primary: ts.current.base === modelData
+                selected: ts.current.base === modelData
                 text: I18n.t(modelData === "light" ? "settings.appearance.theme.light" : "settings.appearance.theme.dark")
                 onClicked: ts.setBase(modelData)
             }

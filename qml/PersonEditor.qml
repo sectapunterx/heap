@@ -22,10 +22,7 @@ Popup {
     // Control inside this dialog resolves its colours through. Shadowing
     // it with an array of hex strings hands those controls an array where
     // they expect a palette.
-    readonly property var swatches: [
-        "#d97a6c", "#c87fc7", "#6cc4b8", "#7da8d9",
-        "#dcc06a", "#7cc492", "#e69854", "#a4a4d6"
-    ]
+    readonly property var swatches: Theme.swatches
     readonly property var states: ["idle", "todo", "pinged", "replied"]
     readonly property var stateLabels: ({
         idle: I18n.t("editor.person.state.idle"),

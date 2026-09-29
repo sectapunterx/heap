@@ -151,9 +151,9 @@ ListView {
     // speaks, so a warning in a note is the same red as a blocked task.
     function _calloutColor(kind) {
         switch (kind) {
-        case "warning": case "caution": case "attention": return Theme.p1;
-        case "danger": case "error": case "bug": return Theme.stBlocked;
-        case "tip": case "success": case "done": case "check": return Theme.stDone;
+        case "warning": case "caution": case "attention": return Theme.warning;
+        case "danger": case "error": case "bug": return Theme.danger;
+        case "tip": case "success": case "done": case "check": return Theme.success;
         default: return Theme.accent;
         }
     }
@@ -668,7 +668,7 @@ ListView {
                 Text {
                     text: {
                         switch (rowItem.model.calloutKind) {
-                        case "warning": case "caution": case "attention": return "⚠";
+                        case "warning": case "caution": case "attention": return "△";
                         case "danger": case "error": case "bug": return "✕";
                         case "tip": case "success": case "done": case "check": return "✓";
                         case "question": case "help": case "faq": return "?";

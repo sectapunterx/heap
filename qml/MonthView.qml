@@ -210,9 +210,11 @@ Item {
                         readonly property bool sel: root.mode === modelData.id
                         width: 76; height: 28
                         radius: Theme.radiusMd
-                        color: sel ? Theme.accent : (modeMA.containsMouse ? Theme.panel3 : Theme.panel2)
-                        border.color: Theme.border; border.width: 1
-                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
+                        // A selected segment is tinted, not filled: a filled
+                        // accent is the screen's one action ("+ Task").
+                        color: sel ? Theme.accentSoft : (modeMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                        border.color: sel ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border; border.width: 1
+                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
                         MouseArea { id: modeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.mode = parent.modelData.id }
                     }
                 }

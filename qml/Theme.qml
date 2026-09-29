@@ -173,6 +173,10 @@ QtObject {
         "mention": mdMention, "ticket": mdTicket, "tag": mdTag, "math": mdMath
     })
 
+    // What every colour picker offers for columns, labels, people and
+    // profiles (ThemePresets.SWATCHES).
+    readonly property var swatches: Presets.SWATCHES
+
     // Token by key, for the theme editor and alert kinds.
     function token(key) { return _c[key]; }
     function alertColor(kind) {

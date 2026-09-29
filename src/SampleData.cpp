@@ -26,9 +26,9 @@ QVector<QVariantMap> statuses(Lang lang) {
         {{"id", "backlog"}, {"name", "Бэклог"}, {"color", QColor("#8a8e98")}},
         {{"id", "todo"}, {"name", "К выполнению"}, {"color", QColor("#9aa3b4")}},
         {{"id", "prog"}, {"name", "В работе"}, {"color", QColor("#5aa9e6")}},
-        {{"id", "half"}, {"name", "50/50"}, {"color", QColor("#dcb86b")}},
+        {{"id", "half"}, {"name", "50/50"}, {"color", QColor("#5aa9e6")}},
         {{"id", "blocked"}, {"name", "Заблокировано"}, {"color", QColor("#e6624c")}},
-        {{"id", "review"}, {"name", "Ревью кода"}, {"color", QColor("#c07acf")}},
+        {{"id", "review"}, {"name", "Ревью кода"}, {"color", QColor("#9aa3b4")}},
         {{"id", "done"}, {"name", "Готово"}, {"color", QColor("#6ec18a")}},
     };
   }
@@ -36,9 +36,9 @@ QVector<QVariantMap> statuses(Lang lang) {
       {{"id", "backlog"}, {"name", "Backlog"}, {"color", QColor("#8a8e98")}},
       {{"id", "todo"}, {"name", "To Do"}, {"color", QColor("#9aa3b4")}},
       {{"id", "prog"}, {"name", "In Progress"}, {"color", QColor("#5aa9e6")}},
-      {{"id", "half"}, {"name", "50/50"}, {"color", QColor("#dcb86b")}},
+      {{"id", "half"}, {"name", "50/50"}, {"color", QColor("#5aa9e6")}},
       {{"id", "blocked"}, {"name", "Blocked"}, {"color", QColor("#e6624c")}},
-      {{"id", "review"}, {"name", "Code Review"}, {"color", QColor("#c07acf")}},
+      {{"id", "review"}, {"name", "Code Review"}, {"color", QColor("#9aa3b4")}},
       {{"id", "done"}, {"name", "Done"}, {"color", QColor("#6ec18a")}},
   };
 }

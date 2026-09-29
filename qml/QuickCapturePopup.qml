@@ -127,10 +127,7 @@ Popup {
             const question = String(_meta.title || "")
                 .replace(/(^|[\s,;(])@[A-Za-zА-Яа-яЁё0-9_.\-]+/g, "$1")
                 .replace(/\s+/g, " ").trim();
-            const palette = [
-                "#d97a6c", "#c87fc7", "#6cc4b8", "#7da8d9",
-                "#dcc06a", "#7cc492", "#e69854", "#a4a4d6"
-            ];
+            const palette = Theme.swatches;
             for (let i = 0; i < _meta.handles.length; ++i) {
                 const h = _meta.handles[i];
                 const existing = AppController.personById(h) || {};

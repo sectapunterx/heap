@@ -27,10 +27,7 @@ Item {
     property var _sampleSections: []
     property var _sampleSnippets: []
 
-    readonly property var contactPalette: [
-        "#d97a6c", "#dcb86b", "#dcc06a", "#7cc492",
-        "#6cc4b8", "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7"
-    ]
+    readonly property var contactPalette: Theme.swatches
 
     readonly property var accentPalette: [
         Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus,

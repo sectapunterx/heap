@@ -252,6 +252,28 @@ TestCase {
         compare(fails.length, 0, fails.join("; "));
     }
 
+    // heap.'s own themes keep three text levels apart: textMuted used to sit
+    // within a few points of textDim, so secondary and tertiary text looked
+    // the same.
+    function test_heap_themes_have_three_text_levels() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        const fails = [];
+        for (const id of ["heap-dark", "heap-light"]) {
+            const t = Presets.builtin(id);
+            AppController.theme = t.base;
+            AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: id, lightPreset: id } });
+            const text = _contrast(Theme.text, Theme.bg);
+            const muted = _contrast(Theme.textMuted, Theme.bg);
+            const dim = _contrast(Theme.textDim, Theme.bg);
+            if (!(text - muted >= 1.5 && muted - dim >= 1.5))
+                fails.push(id + ": text " + text.toFixed(2) + ", muted " + muted.toFixed(2) + ", dim " + dim.toFixed(2));
+        }
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        compare(fails.length, 0, fails.join("; "));
+    }
+
     // ── Scales ──────────────────────────────────────────────────────────
 
     // The type scale ascends and nothing the user reads is under 11px.
