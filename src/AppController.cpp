@@ -354,6 +354,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.panel.right.desc",
        {"Fold the calendar and people column away to give the board the room.",
         "Спрятать колонку календаря и людей, чтобы доске хватило места."}},
+      {"shortcut.rail.toggle.label", {"Expand / collapse sidebar", "Развернуть/свернуть боковую панель"}},
+      {"shortcut.rail.toggle.desc",
+       {"Switch the left sidebar between labels and the icon-only rail.",
+        "Переключить левую панель между подписями и узкой полосой иконок."}},
       {"shortcut.theme.toggle.label", {"Toggle light / dark", "Переключить светлую/тёмную"}},
       {"shortcut.theme.toggle.desc", {"Flip the app theme between dark and light.", "Переключить тему приложения между тёмной и светлой."}},
       {"shortcut.person.new.label", {"New contact", "Новый контакт"}},
@@ -6976,6 +6980,7 @@ void AppController::seedShortcutCatalog() {
   add("quick-capture-notes", "Ctrl+Shift+N");
   add("theme.toggle", "Ctrl+Shift+T");
   add("panel.right", "Ctrl+\\");
+  add("rail.toggle", "Ctrl+Shift+B");
   add("person.new", "Ctrl+Shift+U");
   add("profile.new", "Ctrl+Shift+P");
   add("selection.selectAll", "Ctrl+A");

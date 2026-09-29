@@ -134,6 +134,46 @@ ApplicationWindow {
         s.rightPanel = _rightPanelWanted;
         AppController.appSettingsJson = JSON.stringify(s);
     }
+
+    // Right panel width, dragged from its left edge. Clamped so the main
+    // column keeps room for at least a couple of board columns; the stored
+    // value is what the user dragged to, the clamp applies per window size.
+    readonly property int rightPanelDefaultWidth: 420
+    readonly property int rightPanelMinWidth: 300
+    readonly property int rightPanelMaxWidth: Math.max(rightPanelMinWidth,
+        Math.min(720, win.width - rail.width - 520))
+    property int _rightPanelWidthWanted: {
+        const w = Number(_settingsObject().rightPanelWidth);
+        return isFinite(w) && w > 0 ? Math.round(w) : rightPanelDefaultWidth;
+    }
+    readonly property int rightPanelWidth: Math.max(rightPanelMinWidth,
+        Math.min(rightPanelMaxWidth, _rightPanelWidthWanted))
+    function setRightPanelWidth(w, persist) {
+        _rightPanelWidthWanted = Math.max(rightPanelMinWidth, Math.min(rightPanelMaxWidth, Math.round(w)));
+        if (persist) {
+            const s = _settingsObject();
+            s.rightPanelWidth = _rightPanelWidthWanted;
+            AppController.appSettingsJson = JSON.stringify(s);
+        }
+    }
+
+    // Left sidebar: labelled (expanded) or the 56px icon rail. The choice is
+    // remembered; below _sideRailMinWidth it folds to the rail on its own
+    // without overwriting what was chosen, same as the right panel.
+    readonly property int _sideRailMinWidth: 1200
+    property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
+    property bool _sideRailOnNarrow: false
+    readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
+    function toggleSideRail() {
+        if (win.width < _sideRailMinWidth) {
+            _sideRailOnNarrow = !_sideRailOnNarrow;
+            return;
+        }
+        _sideRailWanted = !_sideRailWanted;
+        const s = _settingsObject();
+        s.sideRailExpanded = _sideRailWanted;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
     property bool showDoneTimeline: false
     property bool showArchived: false
     // Board column order. Lives on the window so it survives the board being
@@ -414,6 +454,8 @@ ApplicationWindow {
             id: rail
             Layout.row: 1; Layout.column: 0
             Layout.fillHeight: true
+            expanded: win.sideRailExpanded
+            onToggleRequested: win.toggleSideRail()
             onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
         }
@@ -677,13 +719,48 @@ ApplicationWindow {
             objectName: "right-panel"
             visible: win.rightPanelShown
             Layout.row: 1; Layout.column: 2
-            Layout.preferredWidth: 420
-            Layout.minimumWidth: 360
+            Layout.preferredWidth: win.rightPanelWidth
+            Layout.minimumWidth: win.rightPanelMinWidth
+            Layout.maximumWidth: win.rightPanelMaxWidth
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
                 anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                width: 1; color: Theme.border
+                width: 1
+                color: rightResize.pressed ? Theme.accent
+                     : rightResize.containsMouse ? Theme.borderStrong : Theme.border
+            }
+            // Drag handle on the left edge. Width follows the pointer live;
+            // settings are written once, on release.
+            MouseArea {
+                id: rightResize
+                objectName: "right-panel-resize"
+                anchors.left: parent.left; anchors.leftMargin: -3
+                anchors.top: parent.top; anchors.bottom: parent.bottom
+                width: 7
+                z: 10
+                hoverEnabled: true
+                cursorShape: Qt.SplitHCursor
+                property real _startX: 0
+                property int _startW: 0
+                onPressed: (m) => {
+                    _startX = mapToGlobal(m.x, 0).x;
+                    _startW = win.rightPanelWidth;
+                }
+                onPositionChanged: (m) => {
+                    if (pressed) win.setRightPanelWidth(_startW - (mapToGlobal(m.x, 0).x - _startX), false);
+                }
+                onReleased: win.setRightPanelWidth(win.rightPanelWidth, true)
+                onDoubleClicked: win.setRightPanelWidth(win.rightPanelDefaultWidth, true)
+                ToolTip.visible: containsMouse && !pressed
+                ToolTip.delay: 800
+                ToolTip.text: I18n.t("rightpanel.resizeTip")
+                Rectangle {
+                    anchors.centerIn: parent
+                    width: 2; height: 32; radius: 1
+                    color: Theme.text
+                    opacity: rightResize.containsMouse || rightResize.pressed ? 0.5 : 0
+                }
             }
             ColumnLayout {
                 anchors.fill: parent
@@ -694,6 +771,12 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     orientation: Qt.Vertical
+                    // Remember where the calendar / people split was left.
+                    onResizingChanged: if (!resizing) {
+                        const s = win._settingsObject();
+                        s.peopleListHeight = Math.round(peopleList.height);
+                        AppController.appSettingsJson = JSON.stringify(s);
+                    }
 
                     handle: Rectangle {
                         implicitHeight: 6
@@ -715,7 +798,11 @@ ApplicationWindow {
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                     }
                     PeopleList {
-                        SplitView.preferredHeight: 220
+                        id: peopleList
+                        SplitView.preferredHeight: {
+                            const h = Number(win._settingsObject().peopleListHeight);
+                            return isFinite(h) && h >= 64 ? h : 220;
+                        }
                         SplitView.minimumHeight: 64
                         onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
                         onPickPersonRequested: personPicker.open_()
@@ -903,6 +990,12 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
         onActivated: win.toggleRightPanel()
+    }
+    Shortcut {
+        sequence: _kbd("rail.toggle")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        onActivated: win.toggleSideRail()
     }
     Shortcut {
         sequence: _kbd("task.new")
@@ -1325,6 +1418,7 @@ ApplicationWindow {
     // Honours reduced motion (no bar animation, no fade, dismissed promptly).
     SplashScreen {
         id: splash
+        objectName: "splash"
         anchors.fill: parent
         z: 9999
         autoAnimate: !Theme.reducedMotion
