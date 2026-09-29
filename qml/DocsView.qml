@@ -2,7 +2,6 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
-import QtQuick.Controls as QQC
 import TodoCpp
 import "DocsStarter.js" as Starter
 

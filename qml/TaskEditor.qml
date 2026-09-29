@@ -637,7 +637,7 @@ Popup {
                                 onClicked: root.descMode = modelData.id
                             }
                         }
-                        Rectangle { width: 1; height: 14; color: Theme.border; Layout.leftMargin: Theme.spXs; Layout.rightMargin: Theme.spXs }
+                        Rectangle { implicitWidth: 1; implicitHeight: 14; color: Theme.border; Layout.leftMargin: Theme.spXs; Layout.rightMargin: Theme.spXs }
                         SegChip {
                             objectName: "desc-expand"
                             text: root.descExpanded ? "⤡  " + I18n.t("editor.desc.collapse")
