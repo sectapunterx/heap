@@ -965,6 +965,40 @@
   animation: d-toast 0.18s ease-out;
 }
 
+/* The OS notification heap. posts after a quick capture. */
+.d-notice {
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 26;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  width: min(320px, calc(100% - 32px));
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--panel2);
+  box-shadow: var(--shadow-sm);
+  font-size: 12px;
+  color: var(--text2);
+  animation: d-notice 0.2s ease-out;
+}
+
+.d-notice strong {
+  margin-bottom: 2px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text);
+}
+
+@keyframes d-notice {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+}
+
 @keyframes d-toast {
   from {
     opacity: 0;

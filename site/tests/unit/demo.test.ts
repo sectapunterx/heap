@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCapture } from '../../src/demo/capture';
+import { captureNotice, parseCapture } from '../../src/demo/capture';
 import { renderNote, wikiTargets } from '../../src/demo/markdown';
 import { runCommand } from '../../src/demo/terminal';
 import { reducer } from '../../src/demo/store';
@@ -26,6 +26,32 @@ describe('parseCapture', () => {
     expect(parseCapture('focus refactor parser 10:00', WED)).toMatchObject({ kind: 'focus', title: 'Refactor parser', start: 600, end: 690 });
     expect(parseCapture('standup 10:00', WED)).toMatchObject({ kind: 'meeting', title: 'Standup', start: 600, end: 630 });
     expect(parseCapture('sync 15:00-15:30', WED)).toMatchObject({ kind: 'meeting', start: 900, end: 930 });
+  });
+
+  it('reads priorities, ticket keys, parts of the day and repeats', () => {
+    expect(parseCapture('APP-231 urgent fix login by friday', WED)).toMatchObject({ kind: 'task', title: 'Fix login', ticket: 'APP-231', prio: 'P1', due: 2 });
+    expect(parseCapture('ship v1 tomorrow morning', WED)).toMatchObject({ title: 'Ship v1', due: 1, start: 540 });
+    expect(parseCapture('standup every weekday 10:00', WED)).toMatchObject({ kind: 'meeting', meeting: 'standup', repeat: 'weekdays' });
+    expect(parseCapture('call with @lena tomorrow 4pm', WED)).toMatchObject({ kind: 'meeting', meeting: 'none', due: 1, start: 960, end: 990 });
+    // "1:1" is a meeting, not the time 01:01.
+    expect(parseCapture('1:1 with @anna thursday 12:00', WED)).toMatchObject({ kind: 'meeting', meeting: 'oneone', start: 720, due: 1 });
+  });
+
+  it('keeps untimed meetings and bugs off the calendar, and routes pings', () => {
+    expect(parseCapture('meeting with the designer', WED)).toMatchObject({ kind: 'task', untimedMeeting: true });
+    expect(parseCapture('bug in sync 15:00', WED)).toMatchObject({ kind: 'task' });
+    expect(parseCapture('ping @andrey about the release', WED)).toMatchObject({ kind: 'ping', mentions: ['andrey'] });
+  });
+
+  it('writes the confirmation the app shows', () => {
+    expect(captureNotice(parseCapture('call with @lena tomorrow 4pm // pricing', WED)!, WED)).toEqual({
+      headline: 'Meeting added to the calendar',
+      lines: ['“Call with @lena”', 'Tomorrow, 16:00–16:30', 'With: @lena', 'Note: pricing', 'Also a task in “To do”'],
+    });
+    expect(captureNotice(parseCapture('APP-231 urgent fix login by friday', WED)!, WED)).toEqual({
+      headline: 'Task added to “To do”',
+      lines: ['“Fix login”', 'Due: in 2 days', 'Priority: P1', 'Ticket: APP-231'],
+    });
   });
 
   it('rejects empty input', () => {
@@ -104,6 +130,11 @@ describe('reducer', () => {
     expect(tasksIn(s.tasks, 'todo')[0].title).toBe('Ship v1');
     s = reducer(s, { type: 'capture', item: parseCapture('focus parser 16:00', WED)!, todayIndex: WED });
     expect(s.events.at(-1)).toMatchObject({ kind: 'focus', day: WED, start: 960, end: 1050 });
+    s = reducer(s, { type: 'capture', item: parseCapture('APP-231 fix login p1', WED)!, todayIndex: WED });
+    expect(tasksIn(s.tasks, 'todo')[0]).toMatchObject({ id: 'APP-231', prio: 'P1' });
+    s = reducer(s, { type: 'capture', item: parseCapture('call with @lena tomorrow 4pm', WED)!, todayIndex: WED });
+    expect(s.events.at(-1)).toMatchObject({ kind: 'meeting', day: WED + 1, start: 960 });
+    expect(s.tasks.find((t) => t.id === s.events.at(-1)!.taskId)?.title).toBe('Call with @lena');
   });
 
   it('opens an existing note by title or creates the missing one', () => {

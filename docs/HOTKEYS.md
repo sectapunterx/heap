@@ -117,5 +117,7 @@ Every one of these is a single undo step.
 ## Notes
 
 - **Quick-capture** opens a single-field popup that parses your line as you type
-  — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax.
+  — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax. From
+  another app it comes up on its own, without the main window, and a
+  notification confirms what was created.
 - `Esc` also closes any open modal or popup before it clears a selection.

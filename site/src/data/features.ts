@@ -196,9 +196,9 @@ export const FEATURE_AREAS: FeatureArea[] = [
     label: 'Flow',
     title: 'Flow — small things that save the day.',
     lead: 'A palette over everything, capture from anywhere, and a board that follows your git branch.',
-    summary: 'Ctrl+K over everything, quick capture from any app, a git-aware board, profiles and quiet automation.',
+    summary: 'Ctrl+K over everything, one-line quick capture from any app that books meetings and focus blocks, a git-aware board and profiles.',
     widget: 'flow',
-    widgetHint: 'Type into quick capture, search with the palette, or run a git command.',
+    widgetHint: 'Type into quick capture — try a meeting with a time — search with the palette, or run a git command.',
     sections: [
       {
         eyebrow: 'Command palette',
@@ -208,9 +208,23 @@ export const FEATURE_AREAS: FeatureArea[] = [
       },
       {
         eyebrow: 'Quick capture',
-        title: 'From any app, in one line.',
-        body: 'A global hotkey opens a one-line capture. Dates, times, @mentions and a // description are understood — “focus refactor parser 10:00” books a focus block, “standup 10:00” a meeting.',
-        snippet: ['ship v1 tomorrow', 'pay invoice // net-30, portal is slow', 'review PR @andrey @lena', 'focus refactor parser 10:00'],
+        title: 'From any app, without opening heap.',
+        body: 'Ctrl+Shift+Space brings up one line over whatever you are working in — the main window stays minimized, in the tray or behind your editor. Type, press Enter, and a notification tells you exactly what was made and where it went. Ctrl+Shift+N does the same for a note.',
+        points: ['A live preview of what was understood, before you commit', 'Esc puts it away; a half-written note waits for you', 'Click the notification to open the task'],
+        snippet: ['Meeting added to the calendar', '“Call with @lena”', 'Tomorrow, Thu 1 Oct, 16:00–16:30', 'Note: pricing', 'Also a task in “To do”'],
+      },
+      {
+        eyebrow: 'Capture grammar',
+        title: 'It reads the way you write.',
+        body: 'Everything is optional and in any order, in English or Russian. Days, times and ranges, parts of the day and repeats become the schedule; a tracker key becomes the task’s id; “p1” or “urgent” sets the priority; @mentions stay linked to people and text after // becomes the note.',
+        points: ['tomorrow · by friday · in 2 days · every weekday', '4pm · 16:00–16:45 · tomorrow morning · tonight', 'завтра утром · к пятнице · по будням', 'p0–p3 · !! · urgent · срочно'],
+        snippet: ['ship v1 tomorrow morning         → due tomorrow, 09:00', 'APP-231 urgent fix login by fri  → APP-231 · P1 · due Friday', 'pay invoice // net-30            → note: net-30', 'созвон завтра в 16:00-16:45      → a meeting, tomorrow'],
+      },
+      {
+        eyebrow: 'Meetings, focus, to-dos',
+        title: 'It knows where each line belongs.',
+        body: 'The words decide. A standup, a 1:1 or a team sync is booked as that kind of event; a call, a retro, a demo or an interview is a one-off meeting — on the calendar with its attendees and a linked task when you give a time, a plain task when you don’t. “focus” plus a time books a focus block, “bug” or “task” keeps a line off the calendar, and “ping @someone” lands in the people you still have to message.',
+        snippet: ['standup every weekday 10:00    → Standup, repeats on weekdays', '1:1 with @anna thursday 12:00  → 1:1 · With: @anna', 'focus write the RFC 9:00       → Focus block scheduled', 'ping @andrey about the release → Reminder to message @andrey'],
       },
       {
         eyebrow: 'Git-aware',
