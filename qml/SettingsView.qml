@@ -119,6 +119,17 @@ Item {
     }
 
     property string activeSection: "profile"
+
+    // Monochrome provider marks from the brand icon set, by catalogue id.
+    readonly property var providerLogos: ({
+        "github": "heap-23-github", "gitlab": "heap-24-gitlab",
+        "gitea": "heap-25-gitea", "forgejo": "heap-26-forgejo",
+        "redmine": "heap-27-redmine", "todoist": "heap-28-todoist",
+        "asana": "heap-29-asana", "clickup": "heap-30-clickup",
+        "sentry": "heap-31-sentry", "bitbucket": "heap-32-bitbucket",
+        "jira": "heap-33-jira", "trello": "heap-34-trello",
+        "mattermost": "heap-35-mattermost"
+    })
     property string searchText: ""
 
     // ── Settings state — single source of truth, persisted via JSON blob ──
@@ -1777,7 +1788,21 @@ Item {
                                 Rectangle {
                                     width: 32; height: 32; radius: 6
                                     color: modelData.color
-                                    Text { anchors.centerIn: parent; text: modelData.icon; color: Theme.textOnAccent; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                    readonly property string logo: root.providerLogos[modelData.id] || ""
+                                    IconImage {
+                                        visible: parent.logo !== ""
+                                        anchors.centerIn: parent
+                                        width: 18; height: 18
+                                        sourceSize.width: 36; sourceSize.height: 36
+                                        source: parent.logo !== "" ? "qrc:/brand/icons/" + parent.logo + ".svg" : ""
+                                        color: Theme.textOnAccent
+                                    }
+                                    // A provider without a drawn mark keeps
+                                    // its catalogue glyph.
+                                    Text {
+                                        visible: parent.logo === ""
+                                        anchors.centerIn: parent; text: modelData.icon; color: Theme.textOnAccent; font.pixelSize: 14; font.weight: Font.DemiBold
+                                    }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
