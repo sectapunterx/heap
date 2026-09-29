@@ -12,12 +12,19 @@ struct TaskMeta {
     QString     title;     // raw input with "// …" and "@handles" stripped
     QString     desc;      // text after "// "
     QStringList handles;   // raw identifiers (without leading '@')
+    QString ticketKey;     // "LTE-2398" when the text names a tracker ticket
+    QString priority;      // "P0".."P3" from "p1" / "!!" / "срочно"; "" if none
 };
 
 // Classify free-form input against three keyword lists. Order of precedence:
 //   ticket > focus > sync > none. "ticket" wins because it is an explicit
 //   "todo only, never put on the calendar" hint.
 TaskKind classifyKind(QStringView text);
+
+// For text classifyKind calls a Sync, the calendar type the meeting books:
+// "standup" (дейли, планёрка), "oneone" (1:1), "sync" (синк with the team) or
+// "none" for a one-off call or meeting (созвон, встреча, демо, интервью).
+QString meetingType(QStringView text);
 
 // Strip "// comment" tail (→ desc) and "@handle" tokens (→ handles) from a
 // title. "//" must be exact two-slash sequence (URLs like "https://" are NOT

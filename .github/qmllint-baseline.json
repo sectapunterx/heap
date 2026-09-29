@@ -37,7 +37,7 @@
   "qml/PillButton.qml": 33,
   "qml/ProfileEditor.qml": 51,
   "qml/QuickCaptureNotesPopup.qml": 54,
-  "qml/QuickCapturePopup.qml": 62,
+  "qml/QuickCapturePopup.qml": 74,
   "qml/Search.js": 0,
   "qml/Segments.js": 0,
   "qml/SelectionBar.qml": 26,

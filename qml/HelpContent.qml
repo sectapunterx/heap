@@ -395,7 +395,7 @@ Item {
                     + "The type affects the color coding of the event if the task becomes a focus block."
             }
             Hint {
-                text: "The placeholder id will look like TODO-N until you save — then a real ID with the profile prefix is generated."
+                text: "A captured task gets the profile's id prefix, or the ticket key when the text names one (\"LTE-2398 fix login\")."
             }
         }
 

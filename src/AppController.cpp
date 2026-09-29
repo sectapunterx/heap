@@ -1431,16 +1431,16 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   return m;
 }
 
-QVariantMap AppController::newQuickTaskDraft() const {
+QVariantMap AppController::newQuickTaskDraft(const QString& ticketKey) const {
   QVariantMap m = newTaskDraft(QStringLiteral("todo"));
-  // Replace the project-prefixed auto-id with a placeholder. The user can
-  // rename it later via TaskEditor — saveTask handles the rename safely.
-  int n = 1;
-  QString candidate;
-  do {
-    candidate = QStringLiteral("TODO-") + QString::number(n++);
-  } while(m_tasks.indexOfId(candidate) >= 0);
-  m["id"] = candidate;
+  // A captured task used to get a "TODO-N" placeholder, which then showed up
+  // as the task's name in the notification and on the card. It gets a real id
+  // now: the ticket the text names, or the profile prefix. A taken key must not
+  // be reused — saveTask upserts, and upserting a taken id replaces that task.
+  const QString key = ticketKey.trimmed();
+  if(!key.isEmpty() && m_tasks.indexOfId(key) < 0) {
+    m["id"] = key;
+  }
   return m;
 }
 
@@ -3794,12 +3794,18 @@ QString AppController::classifyTaskKind(const QString& text) const {
   return QStringLiteral("none");
 }
 
+QString AppController::meetingType(const QString& text) const {
+  return heap::text::meetingType(text);
+}
+
 QVariantMap AppController::extractTaskMeta(const QString& text) const {
   const auto m = heap::text::extractMeta(text);
   QVariantMap out;
   out["title"] = m.title;
   out["desc"] = m.desc;
   out["handles"] = QVariant::fromValue(m.handles);
+  out["ticketKey"] = m.ticketKey;
+  out["priority"] = m.priority;
   return out;
 }
 

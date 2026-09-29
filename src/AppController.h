@@ -387,10 +387,11 @@ class AppController : public QObject {
   // another.
   Q_INVOKABLE void moveSelectedTasksTo(const QString& statusId, const QString& beforeTaskId);
   Q_INVOKABLE QVariantMap newTaskDraft(const QString& statusId) const;
-  // Like newTaskDraft, but the id is a placeholder ("TODO-N") instead of
-  // the project prefix — used by QuickCapture so the user is reminded to
-  // assign a real ticket id later.
-  Q_INVOKABLE QVariantMap newQuickTaskDraft() const;
+  // The draft QuickCapture saves: newTaskDraft in the To Do column, with the
+  // profile's id prefix like any other task. \p ticketKey, when the text named
+  // a tracker ticket ("LTE-2398 fix login") and no task has that id yet, is
+  // the id instead.
+  Q_INVOKABLE QVariantMap newQuickTaskDraft(const QString& ticketKey = QString()) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.
@@ -752,9 +753,12 @@ class AppController : public QObject {
   Q_INVOKABLE void copyToClipboard(const QString& text);
 
   // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
-  // Returns one of "focus" | "sync" | "ticket" | "none".
+  // Returns one of "focus" | "sync" | "ticket" | "contact" | "none".
   Q_INVOKABLE QString classifyTaskKind(const QString& text) const;
-  // Returns { title, desc, handles: [..] } — same shape as the JS helper.
+  // For a "sync": the event type it books — "standup" | "oneone" | "sync" |
+  // "none" (a one-off call or meeting).
+  Q_INVOKABLE QString meetingType(const QString& text) const;
+  // Returns { title, desc, handles: [..], ticketKey, priority }.
   Q_INVOKABLE QVariantMap extractTaskMeta(const QString& text) const;
   // Suggest a slug-style person id ("e.zaharov") from a free-form name.
   // Avoids collisions with already-existing ids in the active profile

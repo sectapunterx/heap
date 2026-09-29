@@ -214,25 +214,78 @@ TestCase {
         compare(evContext, "обсудить релиз", "the // comment must also ride onto the sync event context");
     }
 
-    // Quick capture reports what it made: the task id in the title and the
-    // parsed parameters as lines of the body, for the toast / OS notification
-    // shown after the popup closes.
-    function test_quickcapture_reports_what_it_created() {
+    // Quick capture reports what it made, readably: the headline says what it
+    // is and where it went, the body quotes the title and lists only what was
+    // set. A task no longer gets a "TODO-N" placeholder id.
+    function _capture(text) {
         const qc = make('import TodoCpp; QuickCapturePopup {}');
-        const input = findChild(qc, "qc-input");
         let got = null;
         qc.captured.connect(function (title, body, taskId) { got = {title: title, body: body, taskId: taskId}; });
-
-        input.text = "capture-report probe tomorrow at 15:00 // with notes";
+        findChild(qc, "qc-input").text = text;
         qc._submit();
+        verify(got !== null, "captured() not emitted for " + text);
+        return got;
+    }
+    function _todoName() {
+        const sts = AppController.statuses;
+        for (let i = 0; i < sts.length; ++i) if (sts[i].id === "todo") return sts[i].name;
+        return "todo";
+    }
+    function _eventOf(taskId) {
+        const evs = AppController.events;
+        for (let i = 0; i < evs.rowCount(); ++i) {
+            const idx = evs.index(i, 0);
+            if (String(evs.data(idx, Qt.UserRole + 8)) === taskId)
+                return { id: String(evs.data(idx, Qt.UserRole + 1)), type: String(evs.data(idx, Qt.UserRole + 3)) };
+        }
+        return null;
+    }
 
-        verify(got !== null, "captured() not emitted");
-        verify(got.taskId.length > 0, "no task id");
-        verify(got.title.indexOf(got.taskId) >= 0, "title must name the task: " + got.title);
+    function test_quickcapture_reports_a_task() {
+        const got = tc._capture("capture-report probe tomorrow at 15:00 p1 // with notes");
+        verify(got.taskId.indexOf("TODO-") !== 0, "placeholder id: " + got.taskId);
+        compare(got.title, I18n.t("quick.done.task").arg(tc._todoName()));
         const lines = got.body.split("\n");
-        compare(lines[0], "capture-report probe");
-        verify(got.body.indexOf("15:00") >= 0, "the parsed time must be listed: " + got.body);
-        compare(lines[lines.length - 1], "// with notes");
+        compare(lines[0], "«capture-report probe»");
+        verify(lines[1].indexOf(I18n.t("quick.day.tomorrow")) >= 0 && lines[1].indexOf("15:00") > 0,
+               "relative day and time: " + lines[1]);
+        verify(lines.indexOf(I18n.t("quick.done.priority").arg("P1")) > 0, got.body);
+        compare(lines[lines.length - 1], I18n.t("quick.done.note").arg("with notes"));
+        compare(AppController.taskById(got.taskId).priority, "P1");
+        AppController.deleteTask(got.taskId);
+    }
+
+    function test_quickcapture_ticket_key_becomes_the_id() {
+        AppController.deleteTask("QCP-4242");
+        const got = tc._capture("QCP-4242 fix the capture probe");
+        compare(got.taskId, "QCP-4242");
+        compare(AppController.taskById("QCP-4242").title, "fix the capture probe");
+        verify(got.body.indexOf(I18n.t("quick.done.ticket").arg("QCP-4242")) >= 0, got.body);
+        AppController.deleteTask("QCP-4242");
+    }
+
+    function test_quickcapture_reports_a_meeting_with_its_type() {
+        const got = tc._capture("созвон с заказчиком завтра в 16:00-16:45");
+        compare(got.title, I18n.t("quick.done.meeting.none"));
+        verify(got.body.indexOf("16:00–16:45") >= 0, got.body);
+        const ev = tc._eventOf(got.taskId);
+        verify(ev !== null, "no event booked");
+        compare(ev.type, "none", "a one-off call is untyped");
+        AppController.deleteEvent(ev.id);
+        AppController.deleteTask(got.taskId);
+
+        const d = tc._capture("дейли завтра в 10:00");
+        compare(d.title, I18n.t("quick.done.meeting.standup"));
+        const dev = tc._eventOf(d.taskId);
+        compare(dev.type, "standup");
+        AppController.deleteEvent(dev.id);
+        AppController.deleteTask(d.taskId);
+    }
+
+    function test_quickcapture_untimed_meeting_says_so() {
+        const got = tc._capture("встреча с дизайнером по онбордингу");
+        verify(got.body.indexOf(I18n.t("quick.done.noTime")) >= 0, got.body);
+        compare(tc._eventOf(got.taskId), null);
         AppController.deleteTask(got.taskId);
     }
 
