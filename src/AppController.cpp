@@ -3623,6 +3623,14 @@ void AppController::replayWelcome() {
 void AppController::seedExampleProfile() {
   // Seed a single "Example" profile from SampleData + turn on the first-run
   // onboarding. Called on a genuine fresh install and by resetToFirstRun().
+
+  // A new user starts on the Minimal pair with soft contrast. Written into
+  // the settings rather than made the built-in fallback, so someone who has
+  // been on heap. dark without ever opening Appearance keeps it.
+  if(m_appSettingsJson.isEmpty()) {
+    m_appSettingsJson = QStringLiteral(R"({"appearance":{"darkPreset":"minimal-dark","lightPreset":"minimal-light","contrast":"soft"}})");
+    emit appSettingsJsonChanged();
+  }
   Profile p;
   p.id = "default";
   p.name = "Example";

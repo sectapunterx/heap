@@ -14,6 +14,8 @@
 #include <QDate>
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
+#include <QJsonObject>
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -47,6 +49,31 @@ TEST_F(OnboardingTest, FreshInstallShowsWelcomeAndFlagsDemo) {
   AppController app;
   EXPECT_FALSE(app.welcomeSeen());
   EXPECT_TRUE(app.demoActive());
+}
+
+// A new user starts on the Minimal pair with soft contrast, written into the
+// settings so the built-in fallback (heap. dark) still holds for everyone who
+// has never opened Appearance.
+TEST_F(OnboardingTest, FreshInstallStartsOnMinimalWithSoftContrast) {
+  AppController app;
+  const QJsonObject appearance = QJsonDocument::fromJson(app.appSettingsJson().toUtf8()).object()["appearance"].toObject();
+  EXPECT_EQ(appearance["darkPreset"].toString(), QStringLiteral("minimal-dark"));
+  EXPECT_EQ(appearance["lightPreset"].toString(), QStringLiteral("minimal-light"));
+  EXPECT_EQ(appearance["contrast"].toString(), QStringLiteral("soft"));
+}
+
+// ...and an install that already has settings keeps its own.
+TEST_F(OnboardingTest, ExistingSettingsKeepTheirTheme) {
+  {
+    AppController a;
+    a.setAppSettingsJson(QStringLiteral(R"({"appearance":{"darkPreset":"graphite"}})"));
+    a.markWelcomeSeen();
+    a.flushSave();
+  }
+  AppController b;
+  const QJsonObject appearance = QJsonDocument::fromJson(b.appSettingsJson().toUtf8()).object()["appearance"].toObject();
+  EXPECT_EQ(appearance["darkPreset"].toString(), QStringLiteral("graphite"));
+  EXPECT_FALSE(appearance.contains(QStringLiteral("contrast")));
 }
 
 TEST_F(OnboardingTest, MarkWelcomeSeenPersists) {
