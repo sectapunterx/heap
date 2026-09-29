@@ -60,18 +60,18 @@ Rectangle {
     ColumnLayout {
         id: col
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 8
+        anchors.margins: Theme.spXl
+        spacing: Theme.spMd
 
         RowLayout {
-            spacing: 4
+            spacing: Theme.spXs
             Text {
                 // Was pinned to ru_RU regardless of the app language, so an
                 // English UI still read "сентябрь" — and next to MonthView,
                 // which uses the system locale, the two calendars disagreed.
                 text: I18n.monthName(root.refDate.getMonth())
                 color: Theme.text
-                font.pixelSize: 13
+                font.pixelSize: Theme.fsMd
                 font.weight: Font.DemiBold
                 font.capitalization: Font.MixedCase
             }
@@ -79,7 +79,7 @@ Rectangle {
                 text: root.refDate.getFullYear()
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
             Item { Layout.fillWidth: true }
             NavButton {
@@ -101,7 +101,7 @@ Rectangle {
         }
 
         RowLayout {
-            spacing: 4
+            spacing: Theme.spXs
             Repeater {
                 model: root._days
                 Rectangle {
@@ -111,7 +111,7 @@ Rectangle {
                     readonly property bool isSelected: root.isSameDay(modelData, AppController.selectedDate)
                     Layout.fillWidth: true
                     Layout.preferredHeight: 46
-                    radius: 8
+                    radius: Theme.radius
                     color: isSelected ? Theme.accentSoft : (dayMA.containsMouse ? Theme.panel2 : "transparent")
                     border.color: isSelected ? Theme.accent : "transparent"
                     border.width: 1
@@ -122,7 +122,7 @@ Rectangle {
                         Text {
                             text: root.dowLabelsByJsDow[parent.parent.modelData.getDay()]
                             color: Theme.textDim
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.letterSpacing: 1
                             horizontalAlignment: Text.AlignHCenter
                             width: parent.parent.width
@@ -131,7 +131,7 @@ Rectangle {
                             text: parent.parent.modelData.getDate()
                             color: parent.parent.isToday ? Theme.accentStrong : Theme.text
                             font.family: Theme.fontMono
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.fsLg
                             font.weight: Font.Medium
                             horizontalAlignment: Text.AlignHCenter
                             width: parent.parent.width
@@ -178,13 +178,13 @@ Rectangle {
         property bool accent: false
         signal clicked()
         implicitWidth: 24; implicitHeight: 24
-        radius: 5
+        radius: Theme.radiusSm
         color: navMA.containsMouse ? Theme.panel2 : "transparent"
         Text {
             anchors.centerIn: parent
             text: nav.text
             color: nav.accent ? Theme.accentStrong : Theme.textMuted
-            font.pixelSize: 13
+            font.pixelSize: Theme.fsMd
         }
         MouseArea {
             id: navMA

@@ -202,10 +202,10 @@ ApplicationWindow {
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: 440
-        padding: 18
+        padding: Theme.inset
         title: I18n.t("close.ask.title")
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -213,11 +213,11 @@ ApplicationWindow {
         contentItem: Text {
             text: I18n.t("close.ask.body")
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
                 objectName: "close-ask-quit"
@@ -437,13 +437,13 @@ ApplicationWindow {
                     border.width: 1
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 10
-                        spacing: 10
+                        anchors.leftMargin: Theme.sp2xl
+                        anchors.rightMargin: Theme.spLg
+                        spacing: Theme.spLg
                         Text {
                             text: "✦  " + I18n.t("demo.banner.text")
                             color: Theme.text
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -567,7 +567,7 @@ ApplicationWindow {
                     SelectionBar {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 16
+                        anchors.bottomMargin: Theme.sp2xl
                         z: 50
                     }
                 }
@@ -801,11 +801,11 @@ ApplicationWindow {
         RowLayout {
             id: pillRow
             anchors.centerIn: parent
-            spacing: 12
+            spacing: Theme.spXl
             Text {
                 text: I18n.t("welcome.resume")
                 color: Theme.text
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 font.weight: Font.DemiBold
             }
             Rectangle { width: 1; height: 18; color: Theme.border }
@@ -815,13 +815,13 @@ ApplicationWindow {
             Rectangle {
                 Layout.preferredWidth: 22
                 Layout.preferredHeight: 22
-                radius: 5
+                radius: Theme.radiusSm
                 color: giveUpMA.containsMouse ? Theme.panel3 : "transparent"
                 Text {
                     anchors.centerIn: parent
                     text: "✕"
                     color: giveUpMA.containsMouse ? Theme.text : Theme.textMuted
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
                 MouseArea {
                     id: giveUpMA

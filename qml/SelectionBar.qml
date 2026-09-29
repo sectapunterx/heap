@@ -13,7 +13,7 @@ Rectangle {
             duration: Theme.scaledMs(160); easing.type: Easing.OutCubic
         }
     }
-    radius: 10
+    radius: Theme.radiusLg
     color: Theme.panel2
     border.color: Theme.borderStrong
     border.width: 1
@@ -23,14 +23,14 @@ Rectangle {
     RowLayout {
         id: row
         anchors.fill: parent
-        anchors.leftMargin: 12; anchors.rightMargin: 12
-        spacing: 10
+        anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spXl
+        spacing: Theme.spLg
 
         Text {
             text: I18n.t("selection.bar.count").replace("%1", AppController.selectionCount)
             color: Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             font.weight: Font.DemiBold
         }
         Rectangle {

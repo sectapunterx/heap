@@ -241,7 +241,7 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
@@ -257,7 +257,7 @@ Popup {
         modal: true
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         // Explicit, because the contentItem wraps: without a width of its own
         // it sizes from the dialog, which is sizing from it.
         width: 420
@@ -269,7 +269,7 @@ Popup {
         }
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -278,13 +278,13 @@ Popup {
         contentItem: Text {
             text: I18n.t("repeat.scope.body")
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
 
         footer: RowLayout {
-            spacing: 8
-            Layout.margins: 14
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
             Item { Layout.fillWidth: true }
             PillButton {
                 objectName: "series-scope-this"
@@ -315,36 +315,36 @@ Popup {
     }
 
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: Theme.spXl
         Item { Layout.preferredHeight: 4 }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("editor.label.eventTitle")
             color: Theme.text
-            font.pixelSize: 14
+            font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("common.title").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
         }
         TextField {
             id: titleField
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
         }
 
         GridLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            columns: 2; columnSpacing: 10; rowSpacing: 4
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs
 
             Text {
-                text: I18n.t("editor.label.eventType").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.eventType").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Text {
-                text: I18n.t("editor.label.attendees").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.attendees").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
 
             ComboBox {
@@ -352,13 +352,13 @@ Popup {
                 Layout.fillWidth: true
                 model: [I18n.t("event.type.standup"), I18n.t("event.type.oneone"),
                         I18n.t("event.type.sync"), I18n.t("event.type.focus")]
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
             TextField {
                 id: attField
                 Layout.fillWidth: true
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
             }
 
@@ -371,7 +371,7 @@ Popup {
                 RowLayout {
                     id: allDayRow
                     anchors.left: parent.left; anchors.right: parent.right
-                    spacing: 8
+                    spacing: Theme.spMd
                     Switch {
                         id: allDaySwitch
                         objectName: "event-allday"
@@ -381,7 +381,7 @@ Popup {
                     Text {
                         text: I18n.t("editor.label.allDay")
                         color: Theme.text
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                         Layout.fillWidth: true
                     }
                 }
@@ -389,7 +389,7 @@ Popup {
 
             Text {
                 Layout.columnSpan: 2
-                text: I18n.t("editor.label.repeat").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.repeat").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             ComboBox {
                 id: repeatBox
@@ -402,17 +402,17 @@ Popup {
                 model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekly"),
                         I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
                         I18n.t("repeat.custom")]
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
 
             Text {
                 visible: !root.allDay
-                text: I18n.t("editor.label.start").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.start").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Text {
                 visible: !root.allDay
-                text: I18n.t("editor.label.end").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.end").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
 
             TextField {
@@ -421,7 +421,7 @@ Popup {
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
                 placeholderText: I18n.t("editor.ph.timeRange")
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
                 onEditingFinished: root._maybeExpandRange(startField, endField)
             }
@@ -431,34 +431,34 @@ Popup {
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
                 placeholderText: "11:00"
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
             }
 
             // DATE — the day this event lands on, and the last day it covers.
             Text {
-                text: I18n.t("editor.label.date").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.date").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Text {
-                text: I18n.t("editor.label.endDate").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.endDate").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Rectangle {
                 id: dateBtn
                 Layout.fillWidth: true
                 implicitHeight: 34
-                radius: 6
+                radius: Theme.radiusMd
                 color: dateMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8
-                    spacing: 6
+                    anchors.fill: parent; anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
+                    spacing: Theme.spSm
                     Text {
                         Layout.fillWidth: true
                         text: root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
-                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 12
+                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {   // mini calendar glyph
-                        width: 15; height: 14; radius: 2; color: "transparent"
+                        width: 15; height: 14; radius: Theme.radiusXs; color: "transparent"
                         border.color: Theme.textMuted; border.width: 1
                         Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
                     }
@@ -489,21 +489,21 @@ Popup {
                 objectName: "event-enddate"
                 Layout.fillWidth: true
                 implicitHeight: 34
-                radius: 6
+                radius: Theme.radiusMd
                 color: endDateMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 RowLayout {
-                    anchors.fill: parent; anchors.leftMargin: 10; anchors.rightMargin: 8
-                    spacing: 6
+                    anchors.fill: parent; anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
+                    spacing: Theme.spSm
                     Text {
                         Layout.fillWidth: true
                         text: root.pickedEndDate && root.pickedEndDate.getFullYear
                             ? root.pickedEndDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
                             : ""
-                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 12
+                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {
-                        width: 15; height: 14; radius: 2; color: "transparent"
+                        width: 15; height: 14; radius: Theme.radiusXs; color: "transparent"
                         border.color: Theme.textMuted; border.width: 1
                         Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
                     }
@@ -528,16 +528,16 @@ Popup {
         // calendar so the same profile can mean different things per event
         // (sprint name, feature, on-call rotation, …).
         ColumnLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            spacing: 4
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            spacing: Theme.spXs
             Text {
-                text: I18n.t("editor.label.context").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                text: I18n.t("editor.label.context").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             TextField {
                 id: contextField
                 Layout.fillWidth: true
                 placeholderText: I18n.t("event.ph.context")
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
                 selectByMouse: true
@@ -545,8 +545,8 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 8; Layout.bottomMargin: 16
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spMd; Layout.bottomMargin: Theme.sp2xl
+            spacing: Theme.spMd
             PillButton {
                 text: I18n.t("common.delete"); danger: true; onClicked: root._delete()
             }

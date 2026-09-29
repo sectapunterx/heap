@@ -145,12 +145,12 @@ Item {
                 }
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 14
+                    anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.sp2xl
                     Column {
                         Text {
                             text: (I18n.lang, AppController.humanDate(AppController.selectedDate))
                             color: Theme.text
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsMd
                             font.weight: Font.DemiBold
                             font.capitalization: Font.MixedCase
                         }
@@ -165,7 +165,7 @@ Item {
                             }
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                         }
                     }
                     Item { Layout.fillWidth: true }
@@ -177,7 +177,7 @@ Item {
                         text: I18n.t("day.dragHint.short")
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
@@ -209,9 +209,9 @@ Item {
                 Column {
                     anchors.fill: parent
                     anchors.leftMargin: 14 + 44   // clear of the hour labels, so bars line up with the grid
-                    anchors.rightMargin: 14
-                    anchors.topMargin: 5
-                    spacing: 2
+                    anchors.rightMargin: Theme.sp2xl
+                    anchors.topMargin: Theme.spXs
+                    spacing: Theme.sp2xs
 
                     Repeater {
                         model: root._stripEvents
@@ -221,7 +221,7 @@ Item {
                             objectName: "allday-" + bar.modelData.id
                             width: parent.width
                             height: 24
-                            radius: 4
+                            radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.eventColor(bar.modelData.type || "sync"), 0.16)
 
                             Rectangle {
@@ -232,12 +232,12 @@ Item {
 
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 10; anchors.rightMargin: 8
-                                spacing: 6
+                                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
+                                spacing: Theme.spSm
                                 Text {
                                     text: bar.modelData.title || ""
                                     color: Theme.text
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fsMd
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
                                 }
@@ -250,7 +250,7 @@ Item {
                                           + "/" + Seg.dayCount(bar.modelData)
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                 }
                             }
 
@@ -329,7 +329,7 @@ Item {
                                 text: Theme.fmtHour(root.hoursStart + parent.index)
                                 color: Theme.textDim
                                 font.family: Theme.fontMono
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                             }
                             Rectangle {
                                 x: grid.labelW; y: parent.height / 2
@@ -455,7 +455,7 @@ Item {
                             color: Theme.withAlpha(Theme.accent, 0.18)
                             border.color: Theme.accent
                             border.width: 1
-                            radius: 6
+                            radius: Theme.radiusMd
                             z: 10
                             Text {
                                 anchors.centerIn: parent
@@ -466,7 +466,7 @@ Item {
                                 }
                                 color: Theme.text
                                 font.family: Theme.fontMono
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                             }
                         }
 
@@ -538,7 +538,7 @@ Item {
                                 y: (effStart - root.hoursStart) * Theme.hourH + dragDy
                                 width: Math.max(20, colW - colGap)
                                 height: Math.max(20, (effEnd - effStart) * Theme.hourH - 2)
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: Theme.withAlpha(Theme.eventColor(type), 0.16)
                                 z: 5
 
@@ -553,7 +553,7 @@ Item {
                                 Rectangle {
                                     visible: evRect.profileInfo !== null
                                     anchors.top: parent.top; anchors.right: parent.right
-                                    anchors.topMargin: 6; anchors.rightMargin: 6
+                                    anchors.topMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
                                     width: 8; height: 8; radius: 4
                                     color: evRect.profileInfo ? evRect.profileInfo.color : Theme.accent
                                     border.color: Theme.bg
@@ -566,19 +566,19 @@ Item {
                                 readonly property bool compactRow: evRect.height < 38
                                 Column {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 10; anchors.rightMargin: 20
+                                    anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.inset
                                     anchors.topMargin: evRect.compactRow ? 2 : 6
                                     anchors.bottomMargin: evRect.compactRow ? 2 : 6
-                                    spacing: 2
+                                    spacing: Theme.sp2xs
                                     clip: true
                                     RowLayout {
                                         width: parent.width
-                                        spacing: 6
+                                        spacing: Theme.spSm
                                         Text {
                                             visible: evRect.context.length > 0
                                             text: evRect.context
                                             color: Theme.textMuted
-                                            font.pixelSize: 12
+                                            font.pixelSize: Theme.fsMd
                                             font.weight: Font.DemiBold
                                             elide: Text.ElideRight
                                             Layout.maximumWidth: parent.width * 0.45
@@ -597,7 +597,7 @@ Item {
                                             text: evRect.title + (evRect.taskId ? "  " + evRect.taskId : "")
                                                   + (evRect.compactRow ? "  " + Theme.fmtHour(evRect.effStart) : "")
                                             color: Theme.text
-                                            font.pixelSize: 12
+                                            font.pixelSize: Theme.fsMd
                                             font.weight: Font.DemiBold
                                             elide: Text.ElideRight
                                         }
@@ -607,13 +607,13 @@ Item {
                                         text: Theme.fmtHour(evRect.effStart) + " – " + Theme.fmtHour(evRect.effEnd)
                                         color: Theme.textMuted
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fsXs
                                     }
                                     Text {
                                         visible: evRect.attendees.length > 0 && evRect.height > 50
                                         text: "· " + evRect.attendees
                                         color: Theme.textMuted
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fsSm
                                         elide: Text.ElideRight
                                         width: parent.width
                                     }
@@ -622,7 +622,7 @@ Item {
                                         text: evRect.profileInfo ? evRect.profileInfo.name : ""
                                         color: evRect.profileInfo ? evRect.profileInfo.color : Theme.textDim
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fsXs
                                         elide: Text.ElideRight
                                         width: parent.width
                                     }
@@ -632,8 +632,8 @@ Item {
                                 MouseArea {
                                     id: moveArea
                                     anchors.fill: parent
-                                    anchors.topMargin: 6
-                                    anchors.bottomMargin: 6
+                                    anchors.topMargin: Theme.spSm
+                                    anchors.bottomMargin: Theme.spSm
                                     cursorShape: didDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                                     preventStealing: true
                                     property real grabY: 0
@@ -763,7 +763,7 @@ Item {
                                 y: (startHour - root.hoursStart) * Theme.hourH
                                 width: Math.max(20, parent.width * 0.5 - 3)
                                 height: Theme.hourH - 2
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.18 : 0.10)
                                 border.color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.9 : 0.5)
                                 border.width: 1
@@ -771,10 +771,10 @@ Item {
 
                                 Text {
                                     anchors.fill: parent
-                                    anchors.margins: 6
+                                    anchors.margins: Theme.spSm
                                     text: "▸ " + taskBlock.title
                                     color: Theme.text
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                     elide: Text.ElideRight
                                 }
 
@@ -824,6 +824,6 @@ Item {
         wrapMode: Text.WordWrap
         text: I18n.t("day.noEvents")
         color: Theme.textDim
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsSm
     }
 }

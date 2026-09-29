@@ -328,26 +328,26 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
     }
 
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: Theme.spXl
         // padding via Item margins
         Item {
             Layout.preferredHeight: 4
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spMd
             Text {
                 text: root.isNew ? I18n.t("editor.new.task") : I18n.t("editor.edit.task")
                 color: Theme.text
-                font.pixelSize: 14
+                font.pixelSize: Theme.fsLg
                 font.weight: Font.DemiBold
             }
             Text {
@@ -358,7 +358,7 @@ Popup {
                 textFormat: Text.PlainText
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 font.weight: Font.Medium
             }
             Item {
@@ -372,10 +372,10 @@ Popup {
         Rectangle {
             objectName: "te-ticket-strip"
             visible: root._isTicket
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 10
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spLg
             Layout.fillWidth: true
             implicitHeight: ticketCol.implicitHeight + 20
-            radius: 8
+            radius: Theme.radius
             color: Theme.withAlpha(Theme.panel2, 0.6)
             border.color: Theme.border
             border.width: 1
@@ -383,13 +383,13 @@ Popup {
             ColumnLayout {
                 id: ticketCol
                 anchors.fill: parent
-                anchors.margins: 10
-                spacing: 6
+                anchors.margins: Theme.spLg
+                spacing: Theme.spSm
 
                 RowLayout {
-                    spacing: 6
+                    spacing: Theme.spSm
                     Rectangle {
-                        radius: 4
+                        radius: Theme.radiusSm
                         color: Theme.withAlpha(root._badge.color || Theme.textMuted, 0.18)
                         border.color: root._badge.color || Theme.border
                         border.width: 1
@@ -401,7 +401,7 @@ Popup {
                             text: root._badge.icon || "◍"
                             textFormat: Text.PlainText
                             color: root._badge.color || Theme.textMuted
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }
                     }
@@ -410,7 +410,7 @@ Popup {
                               + (root._ticket.project ? " · " + root._ticket.project : "")
                         textFormat: Text.PlainText
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
@@ -418,7 +418,7 @@ Popup {
                         objectName: "te-ticket-open"
                         visible: String(root._ticket.url || "").length > 0
                         text: "↗ " + I18n.t("ticket.open")
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                         onClicked: AppController.openTaskExternal(root._originalId || (root.draft.id || ""))
                     }
                 }
@@ -426,24 +426,24 @@ Popup {
                 // One "label: value" row per field the tracker actually gave.
                 Flow {
                     Layout.fillWidth: true
-                    spacing: 14
+                    spacing: Theme.sp2xl
                     Repeater {
                         model: root._ticketFacts
                         delegate: Row {
                             required property var modelData
-                            spacing: 5
+                            spacing: Theme.spXs
                             Text {
                                 text: modelData.label
                                 textFormat: Text.PlainText
                                 color: Theme.textDim
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                                 font.letterSpacing: 0.4
                             }
                             Text {
                                 text: modelData.value
                                 textFormat: Text.PlainText
                                 color: Theme.text
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                                 font.weight: Font.Medium
                             }
                         }
@@ -455,7 +455,7 @@ Popup {
                     text: "⚠ " + I18n.t("ticket.overwriteHint")
                     textFormat: Text.PlainText
                     color: Theme.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     wrapMode: Text.WordWrap
                 }
 
@@ -465,7 +465,7 @@ Popup {
                     objectName: "te-ticket-load-comments"
                     visible: !root._commentsRequested
                     text: "💬 " + I18n.t("ticket.loadComments")
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     onClicked: {
                         root._commentsRequested = true;
                         AppController.fetchTicketComments(root._originalId || (root.draft.id || ""));
@@ -478,7 +478,7 @@ Popup {
                     text: root._commentsError.length > 0 ? root._commentsError : I18n.t("ticket.noComments")
                     textFormat: Text.PlainText
                     color: Theme.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
@@ -489,7 +489,7 @@ Popup {
                         Layout.fillWidth: true
                         spacing: 1
                         RowLayout {
-                            spacing: 6
+                            spacing: Theme.spSm
                             Text {
                                 text: "@" + String(modelData.author || "")
                                       + (modelData.createdAt && modelData.createdAt.getTime
@@ -497,7 +497,7 @@ Popup {
                                          ? " · " + AppController.shortDate(modelData.createdAt) : "")
                                 textFormat: Text.PlainText
                                 color: Theme.textDim
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fsXs
                             }
                             // Every tracker's comments can be opened where
                             // they live; Jira and GitLab had no link at all.
@@ -506,7 +506,7 @@ Popup {
                                 visible: String(modelData.url || "").length > 0
                                 text: "↗ " + I18n.t("ticket.openComment")
                                 color: commentLinkMA.containsMouse ? Theme.accent : Theme.accentStrong
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fsXs
                                 MouseArea {
                                     id: commentLinkMA
                                     anchors.fill: parent
@@ -526,7 +526,7 @@ Popup {
                             // Written by whoever commented upstream.
                             textFormat: Text.PlainText
                             color: Theme.text
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             wrapMode: Text.WordWrap
                             maximumLineCount: 4
                             elide: Text.ElideRight
@@ -537,12 +537,12 @@ Popup {
         }
 
         FieldLabel {
-            text: I18n.t("editor.label.ticketId").toUpperCase(); Layout.leftMargin: 18; Layout.rightMargin: 18
+            text: I18n.t("editor.label.ticketId").toUpperCase(); Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
         }
         TextField {
             id: idField
             objectName: "te-id"
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             // New tasks: TODO placeholder — final id is generated on save.
             // Edit: pre-filled with the current id (still editable).
@@ -567,11 +567,11 @@ Popup {
         }
 
         FieldLabel {
-            text: I18n.t("editor.label.title").toUpperCase(); Layout.leftMargin: 18; Layout.rightMargin: 18
+            text: I18n.t("editor.label.title").toUpperCase(); Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
         }
         TextField {
             id: titleField
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             placeholderText: I18n.t("editor.ph.titleShort")
             background: FieldBg {
@@ -581,7 +581,7 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             FieldLabel { text: I18n.t("editor.label.desc").toUpperCase() }
             Item { Layout.fillWidth: true }
@@ -595,7 +595,7 @@ Popup {
                     required property var modelData
                     objectName: "desc-mode-" + modelData.id
                     readonly property bool active: root.descMode === modelData.id
-                    radius: 999
+                    radius: Theme.radiusPill
                     color: active ? Theme.accentSoft : (dmMA.containsMouse ? Theme.panel3 : "transparent")
                     border.color: active ? Theme.accent : "transparent"
                     border.width: 1
@@ -606,7 +606,7 @@ Popup {
                         anchors.centerIn: parent
                         text: modelData.label
                         color: parent.active ? Theme.accentStrong : Theme.textDim
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                     }
                     MouseArea {
                         id: dmMA
@@ -619,7 +619,7 @@ Popup {
             }
         }
         ScrollView {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             Layout.preferredHeight: 70
             visible: root.descMode === "edit"
@@ -638,7 +638,7 @@ Popup {
         // store — and does it as one undo step.
         MdView {
             visible: root.descMode === "preview"
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             Layout.preferredHeight: 70
             document: descDocument
@@ -646,11 +646,11 @@ Popup {
         }
 
         GridLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
             columns: 2
-            columnSpacing: 10
-            rowSpacing: 4
+            columnSpacing: Theme.spLg
+            rowSpacing: Theme.spXs
             FieldLabel {
                 text: I18n.t("editor.label.status").toUpperCase()
             }
@@ -667,7 +667,7 @@ Popup {
                 contentItem: Text {
                     text: statusBox.displayText
                     color: Theme.text
-                    leftPadding: 10
+                    leftPadding: Theme.spLg
                     verticalAlignment: Text.AlignVCenter
                 }
             }
@@ -680,7 +680,7 @@ Popup {
                 contentItem: Text {
                     text: priBox.displayText
                     color: Theme.text
-                    leftPadding: 10
+                    leftPadding: Theme.spLg
                     verticalAlignment: Text.AlignVCenter
                 }
             }
@@ -692,14 +692,14 @@ Popup {
             }
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: Theme.spSm
                 TextField {
                     id: deadlineField
                     Layout.fillWidth: true
                     placeholderText: I18n.t("editor.ph.deadline")
                     font.family: Theme.fontMono
                     background: Rectangle {
-                        radius: 6
+                        radius: Theme.radiusMd
                         color: Theme.panel2
                         border.color: deadlineField.text.length === 0
                             ? Theme.border
@@ -733,12 +733,12 @@ Popup {
                     id: deadlineCalBtn
                     Layout.preferredWidth: 32
                     Layout.preferredHeight: 32
-                    radius: 6
+                    radius: Theme.radiusMd
                     color: deadlineCalMA.containsMouse ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border; border.width: 1
                     Rectangle {   // mini calendar glyph
                         anchors.centerIn: parent
-                        width: 15; height: 14; radius: 2
+                        width: 15; height: 14; radius: Theme.radiusXs
                         color: "transparent"
                         border.color: Theme.textMuted; border.width: 1
                         Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
@@ -763,7 +763,7 @@ Popup {
                 }
                 Rectangle {
                     visible: root._deadlinePreview && root._deadlinePreview.ok
-                    radius: 10
+                    radius: Theme.radiusLg
                     color: Theme.panel2
                     border.color: Theme.accent
                     border.width: 1
@@ -772,7 +772,7 @@ Popup {
                     Text {
                         id: chipLabel
                         anchors.centerIn: parent
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                         color: Theme.text
                         text: {
                             if (!root._deadlinePreview || !root._deadlinePreview.ok ||
@@ -823,7 +823,7 @@ Popup {
                 contentItem: Text {
                     text: recurBox.displayText
                     color: Theme.text
-                    leftPadding: 10
+                    leftPadding: Theme.spLg
                     verticalAlignment: Text.AlignVCenter
                 }
             }
@@ -884,7 +884,7 @@ Popup {
                     contentItem: Text {
                         text: somedayBox.text
                         color: Theme.text
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                         leftPadding: somedayBox.indicator.width + 6
                         verticalAlignment: Text.AlignVCenter
                     }
@@ -898,8 +898,8 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 8; Layout.bottomMargin: 16
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spMd; Layout.bottomMargin: Theme.sp2xl
+            spacing: Theme.spMd
             PillButton {
                 objectName: "te-delete"
                 visible: !root.isNew
@@ -930,13 +930,13 @@ Popup {
 
     component FieldLabel: Text {
         color: Theme.textMuted
-        font.pixelSize: 10
+        font.pixelSize: Theme.fsXs
         font.weight: Font.DemiBold
         font.letterSpacing: 1
-        topPadding: 2
+        topPadding: Theme.sp2xs
     }
     component FieldBg: Rectangle {
-        radius: 6
+        radius: Theme.radiusMd
         color: Theme.panel2
         border.color: Theme.border
         border.width: 1

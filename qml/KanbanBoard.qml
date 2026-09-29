@@ -253,10 +253,10 @@ Item {
     Flickable {
         id: hscroll
         anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
-        anchors.topMargin: 12
-        anchors.bottomMargin: 16
+        anchors.leftMargin: Theme.sp2xl
+        anchors.rightMargin: Theme.sp2xl
+        anchors.topMargin: Theme.spXl
+        anchors.bottomMargin: Theme.sp2xl
         contentWidth: rowL.implicitWidth
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
@@ -283,7 +283,7 @@ Item {
         Row {
             id: rowL
             height: hscroll.height
-            spacing: 12
+            spacing: Theme.spXl
 
             Repeater {
                 id: colRepeater
@@ -344,8 +344,8 @@ Item {
                             }
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 8
-                                spacing: 8
+                                anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spMd
+                                spacing: Theme.spMd
                                 // The swatch itself stays 10px, but it opens the
                                 // colour picker, so the thing you click is a
                                 // 20px box around it — a 10x10 target was barely
@@ -361,7 +361,7 @@ Item {
                                     }
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 10; height: 10; radius: 3
+                                        width: 10; height: 10; radius: Theme.radiusXs
                                         color: col.statusColor
                                     }
                                     MouseArea {
@@ -385,7 +385,7 @@ Item {
                                         text: col.statusName.toUpperCase()
                                         color: Theme.textMuted
                                         font.family: Theme.fontUi
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fsSm
                                         font.letterSpacing: 1
                                         font.weight: Font.DemiBold
                                         elide: Text.ElideRight
@@ -412,9 +412,9 @@ Item {
                                         // the blur handler on the next rename.
                                         onVisibleChanged: if (visible) text = col.statusName
                                         color: Theme.text
-                                        background: Rectangle { radius: 4; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
+                                        background: Rectangle { radius: Theme.radiusSm; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
                                         font.family: Theme.fontUi
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fsMd
                                         font.weight: Font.DemiBold
                                         selectByMouse: true
                                         onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
@@ -423,7 +423,7 @@ Item {
                                     }
                                 }
                                 Rectangle {
-                                    radius: 999
+                                    radius: Theme.radiusPill
                                     color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
                                     border.color: col.overWip ? Theme.danger : "transparent"
                                     border.width: 1
@@ -436,7 +436,7 @@ Item {
                                             : col.visibleCount
                                         color: col.overWip ? Theme.danger : Theme.textDim
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fsSm
                                         font.weight: col.overWip ? Font.DemiBold : Font.Normal
                                     }
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
@@ -470,13 +470,13 @@ Item {
                                 }
 
                                 Rectangle {
-                                    width: 22; height: 22; radius: 5
+                                    width: 22; height: 22; radius: Theme.radiusSm
                                     color: addMA.containsMouse ? Theme.panel3 : "transparent"
                                     Text {
                                         anchors.centerIn: parent
                                         text: "+"
                                         color: addMA.containsMouse ? Theme.text : Theme.textDim
-                                        font.pixelSize: 14
+                                        font.pixelSize: Theme.fsLg
                                     }
                                     MouseArea {
                                         id: addMA
@@ -520,9 +520,9 @@ Item {
                                 id: bodyFlick
                                 objectName: "column-list"
                                 anchors.fill: parent
-                                anchors.margins: 8
+                                anchors.margins: Theme.spMd
                                 clip: true
-                                spacing: 8
+                                spacing: Theme.spMd
                                 cacheBuffer: 600
                                 boundsBehavior: Flickable.StopAtBounds
                                 flickableDirection: Flickable.VerticalFlick
@@ -633,11 +633,11 @@ Item {
                                 Text {
                                     visible: col.visibleCount === 0
                                     width: bodyFlick.width
-                                    topPadding: 12
+                                    topPadding: Theme.spXl
                                     text: I18n.t("kanban.empty")
                                     color: Theme.textDim
                                     font.italic: true
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
@@ -761,18 +761,18 @@ Item {
 
                 Column {
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: Theme.spSm
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "+"
                         color: addColMA.containsMouse ? Theme.text : Theme.textDim
-                        font.pixelSize: 20
+                        font.pixelSize: Theme.fsXl
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: I18n.t("kanban.newColumn")
                         color: addColMA.containsMouse ? Theme.text : Theme.textDim
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                     }
                 }
                 MouseArea {
@@ -796,7 +796,7 @@ Item {
         padding: 0
         width: 360
         anchors.centerIn: Overlay.overlay
-        background: Rectangle { radius: 12; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        background: Rectangle { radius: Theme.radiusXl; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
 
         // Dimmed backdrop so the board stays visible behind the dialog.
         Overlay.modal: Rectangle { color: Theme.scrim }
@@ -815,29 +815,29 @@ Item {
         onOpened: { reset(); nameField.forceActiveFocus() }
 
         contentItem: ColumnLayout {
-            spacing: 10
+            spacing: Theme.spLg
             Item { Layout.preferredHeight: 4 }
             Text {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
             }
             Text {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             TextField {
                 id: nameField
-                Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
                 placeholderText: "Review · QA · Stalled…"
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: saveBtn.activate()
             }
             Text {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Row {
-                Layout.leftMargin: 18; Layout.rightMargin: 18
-                spacing: 6
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                spacing: Theme.spSm
                 Repeater {
                     model: addColumnPopup.swatches
                     delegate: Rectangle {
@@ -852,7 +852,7 @@ Item {
                 }
             }
             RowLayout {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 16; Layout.topMargin: 8
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl; Layout.topMargin: Theme.spMd
                 Item { Layout.fillWidth: true }
                 PillButton {
                     text: I18n.t("common.cancel"); onClicked: addColumnPopup.close()
@@ -881,8 +881,8 @@ Item {
         // else closes it, while a press on the swatch falls through to openFor,
         // which toggles.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-        padding: 8
-        background: Rectangle { radius: 10; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        padding: Theme.spMd
+        background: Rectangle { radius: Theme.radiusLg; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
         property string forStatusId: ""
 
         readonly property var swatches: addColumnPopup.swatches
@@ -905,7 +905,7 @@ Item {
 
         contentItem: Grid {
             columns: 5
-            spacing: 6
+            spacing: Theme.spSm
             Repeater {
                 model: colorPopup.swatches
                 delegate: Rectangle {
@@ -942,7 +942,7 @@ Item {
         signal activated()
         Layout.preferredWidth: 20
         Layout.preferredHeight: 20
-        radius: 4
+        radius: Theme.radiusSm
         opacity: revealed ? 1 : 0
         enabled: revealed
         Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
@@ -954,7 +954,7 @@ Item {
             anchors.centerIn: parent
             text: hoverIcon.glyph
             color: hoverIconMA.containsMouse ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
-            font.pixelSize: hoverIcon.glyph === "×" ? 13 : 12
+            font.pixelSize: Theme.fsMd
             font.weight: Font.DemiBold
         }
         MouseArea {
@@ -982,13 +982,13 @@ Item {
     Column {
         anchors.centerIn: parent
         width: Math.min(parent.width - 48, 360)
-        spacing: 8
+        spacing: Theme.spMd
         visible: root._boardTotal === 0
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: I18n.t("board.empty.title")
             color: Theme.text
-            font.pixelSize: 15
+            font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
         }
         Text {
@@ -997,7 +997,7 @@ Item {
             wrapMode: Text.WordWrap
             text: I18n.t("board.empty.hint")
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
     }
     // ── Column delete: confirm when it is not empty ───────────────────
@@ -1026,7 +1026,7 @@ Item {
         modal: true
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         // Explicit, because the contentItem is a wrapping Text: without a width
         // of its own it sizes itself from the dialog, which is sizing itself
         // from the text. Qt reports that as a binding loop on implicitWidth and
@@ -1035,7 +1035,7 @@ Item {
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -1044,12 +1044,12 @@ Item {
         contentItem: Text {
             text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
 
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
                 text: I18n.t("common.cancel")
@@ -1087,11 +1087,11 @@ Item {
         modal: true
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -1103,7 +1103,7 @@ Item {
         }
 
         contentItem: ColumnLayout {
-            spacing: 8
+            spacing: Theme.spMd
             TextField {
                 id: wipField
                 objectName: "wip-field"
@@ -1114,20 +1114,20 @@ Item {
                 placeholderText: "0"
                 color: Theme.text
                 font.family: Theme.fontMono
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: wipPopup.commit()
             }
             Text {
                 Layout.preferredWidth: 220
                 text: I18n.t("kanban.wip.hint")
                 color: Theme.textDim
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 wrapMode: Text.Wrap
             }
         }
 
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: wipPopup.close() }
             PillButton { text: I18n.t("common.save"); onClicked: wipPopup.commit() }

@@ -98,21 +98,21 @@ ListView {
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(460, (parent ? parent.width : 460) - 32)
-        padding: 18
+        padding: Theme.inset
         title: I18n.t("md.link.confirm.title")
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
         }
         contentItem: ColumnLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Text {
                 Layout.fillWidth: true
                 text: I18n.t("md.link.confirm.body")
                 color: Theme.textMuted
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 wrapMode: Text.Wrap
             }
             Text {
@@ -120,12 +120,12 @@ ListView {
                 text: linkConfirm.link
                 color: Theme.text
                 font.family: Theme.fontMono
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 wrapMode: Text.WrapAnywhere
             }
         }
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
                 text: I18n.t("common.cancel")
@@ -231,12 +231,12 @@ ListView {
         Component {
             id: paragraphRow
             RowLayout {
-                spacing: 8
+                spacing: Theme.spMd
                 // List marker or checkbox, drawn beside the text rather than in it
                 // so wrapped lines line up under the first word.
                 Loader {
                     Layout.alignment: Qt.AlignTop
-                    Layout.topMargin: 2
+                    Layout.topMargin: Theme.sp2xs
                     active: rowItem.model.marker !== "" || rowItem.model.taskState >= 0
                     sourceComponent: rowItem.model.taskState >= 0 ? taskBox : bulletLabel
                 }
@@ -251,7 +251,7 @@ ListView {
                     text: rowItem.model.html
                     color: Theme.text
                     font.family: Theme.fontUi
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fsLg
                     onLinkActivated: (link) => view._handleLink(link, rowItem.model.firstLine)
                 }
             }
@@ -264,7 +264,7 @@ ListView {
                 text: rowItem.model.marker
                 color: Theme.textDim
                 font.family: Theme.fontUi
-                font.pixelSize: 14
+                font.pixelSize: Theme.fsLg
             }
         }
 
@@ -274,7 +274,7 @@ ListView {
                 objectName: "mdTaskBox"
                 width: 14
                 height: 14
-                radius: 3
+                radius: Theme.radiusXs
                 border.width: 1.5
                 border.color: rowItem.model.taskState === 1 ? Theme.stDone : Theme.border
                 color: rowItem.model.taskState === 1 ? Theme.stDone : "transparent"
@@ -283,7 +283,7 @@ ListView {
                     visible: rowItem.model.taskState === 1
                     text: "✓"
                     color: Theme.bg
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.bold: true
                 }
 
@@ -309,7 +309,7 @@ ListView {
         Component {
             id: headingRow
             ColumnLayout {
-                spacing: 4
+                spacing: Theme.spXs
                 TextEdit {
                     objectName: "mdHeading"
                     Layout.fillWidth: true
@@ -331,7 +331,7 @@ ListView {
                 Rectangle {
                     visible: rowItem.model.level <= 2
                     Layout.fillWidth: true
-                    Layout.topMargin: 2
+                    Layout.topMargin: Theme.sp2xs
                     height: 1
                     color: Theme.border
                 }
@@ -344,7 +344,7 @@ ListView {
                 objectName: "mdCode"
                 implicitHeight: codeColumn.implicitHeight
                 color: Theme.panel
-                radius: 6
+                radius: Theme.radiusMd
                 border.width: 1
                 border.color: Theme.border
 
@@ -356,10 +356,10 @@ ListView {
                     // Header appears only when there is something to say.
                     RowLayout {
                         Layout.fillWidth: true
-                        Layout.margins: 8
+                        Layout.margins: Theme.spMd
                         Layout.bottomMargin: 0
                         visible: rowItem.model.language !== "" || codeHover.hovered
-                        spacing: 8
+                        spacing: Theme.spMd
                         Text {
                             objectName: "mdCodeLanguage"
                             text: rowItem.model.isDiagram
@@ -367,7 +367,7 @@ ListView {
                                   : rowItem.model.language
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                         }
                         Item { Layout.fillWidth: true }
                         Text {
@@ -375,7 +375,7 @@ ListView {
                             text: copyArea.copied ? I18n.t("notes.code.copied") : I18n.t("notes.code.copy")
                             color: copyArea.containsMouse ? Theme.accent : Theme.textDim
                             font.family: Theme.fontUi
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             MouseArea {
                                 id: copyArea
                                 anchors.fill: parent
@@ -402,8 +402,8 @@ ListView {
                     // about its own indentation.
                     Flickable {
                         Layout.fillWidth: true
-                        Layout.margins: 8
-                        Layout.topMargin: 4
+                        Layout.margins: Theme.spMd
+                        Layout.topMargin: Theme.spXs
                         implicitHeight: codeText.implicitHeight
                         contentWidth: codeText.implicitWidth
                         contentHeight: codeText.implicitHeight
@@ -420,7 +420,7 @@ ListView {
                             text: rowItem.model.code
                             color: Theme.text
                             font.family: Theme.fontMono
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsMd
                             CodeHighlighter {
                                 target: codeText.textDocument
                                 language: rowItem.model.language
@@ -471,14 +471,14 @@ ListView {
                             TextEdit {
                                 id: cellText
                                 anchors.fill: parent
-                                anchors.margins: 7
+                                anchors.margins: Theme.spSm
                                 readOnly: true
                                 selectByMouse: true
                                 textFormat: TextEdit.RichText
                                 text: parent.modelData
                                 color: Theme.text
                                 font.family: Theme.fontUi
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.fsMd
                                 font.bold: parent.isHeader
                                 // 0 default, 1 left, 2 centre, 3 right.
                                 horizontalAlignment: {
@@ -512,7 +512,7 @@ ListView {
         Component {
             id: imageRow
             ColumnLayout {
-                spacing: 4
+                spacing: Theme.spXs
                 Loader {
                     Layout.fillWidth: true
                     // A remote image is not loaded until the reader asks. heap
@@ -545,7 +545,7 @@ ListView {
                     text: I18n.t("notes.image.missing")
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
             }
         }
@@ -556,26 +556,26 @@ ListView {
                 objectName: "mdRemoteImage"
                 implicitHeight: 44
                 color: Theme.panel
-                radius: 6
+                radius: Theme.radiusMd
                 border.width: 1
                 border.color: Theme.border
                 RowLayout {
                     anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 8
+                    anchors.margins: Theme.spLg
+                    spacing: Theme.spMd
                     Text {
                         Layout.fillWidth: true
                         elide: Text.ElideMiddle
                         text: I18n.t("notes.image.remote").arg(rowItem.model.imageSource)
                         color: Theme.textDim
                         font.family: Theme.fontUi
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                     }
                     Text {
                         text: I18n.t("notes.image.open")
                         color: openArea.containsMouse ? Theme.accent : Theme.textDim
                         font.family: Theme.fontUi
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                         MouseArea {
                             id: openArea
                             anchors.fill: parent
@@ -594,13 +594,13 @@ ListView {
                 objectName: "mdMath"
                 implicitHeight: mathText.implicitHeight + 20
                 color: Theme.panel
-                radius: 6
+                radius: Theme.radiusMd
                 border.width: 1
                 border.color: Theme.border
                 Text {
                     id: mathText
                     anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.margins: Theme.spLg
                     horizontalAlignment: Text.AlignHCenter
                     wrapMode: Text.Wrap
                     // Nothing typesets maths in this build, so the source is shown
@@ -608,7 +608,7 @@ ListView {
                     text: rowItem.model.code
                     color: Theme.text
                     font.family: Theme.fontMono
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fsMd
                 }
             }
         }
@@ -619,20 +619,20 @@ ListView {
                 objectName: "mdHtml"
                 implicitHeight: rawText.implicitHeight + 16
                 color: Theme.panel
-                radius: 6
+                radius: Theme.radiusMd
                 border.width: 1
                 border.color: Theme.border
                 Text {
                     id: rawText
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: Theme.spMd
                     wrapMode: Text.Wrap
                     // Shown as source, never interpreted: a note is not a web page.
                     textFormat: Text.PlainText
                     text: rowItem.model.code
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
             }
         }
@@ -643,19 +643,19 @@ ListView {
                 objectName: "mdFrontmatter"
                 implicitHeight: fmText.implicitHeight + 16
                 color: "transparent"
-                radius: 6
+                radius: Theme.radiusMd
                 border.width: 1
                 border.color: Theme.border
                 Text {
                     id: fmText
                     anchors.fill: parent
-                    anchors.margins: 8
+                    anchors.margins: Theme.spMd
                     wrapMode: Text.Wrap
                     textFormat: Text.PlainText
                     text: rowItem.model.code
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
             }
         }
@@ -664,7 +664,7 @@ ListView {
             id: calloutHeaderRow
             RowLayout {
                 objectName: "mdCallout"
-                spacing: 8
+                spacing: Theme.spMd
                 Text {
                     text: {
                         switch (rowItem.model.calloutKind) {
@@ -676,7 +676,7 @@ ListView {
                         }
                     }
                     color: view._calloutColor(rowItem.model.calloutKind)
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fsLg
                     font.bold: true
                 }
                 Text {
@@ -684,7 +684,7 @@ ListView {
                     text: rowItem.model.calloutTitle
                     color: view._calloutColor(rowItem.model.calloutKind)
                     font.family: Theme.fontUi
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fsLg
                     font.bold: true
                     elide: Text.ElideRight
                 }
@@ -694,14 +694,14 @@ ListView {
         Component {
             id: footnoteHeadingRow
             ColumnLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border }
                 Text {
                     objectName: "mdFootnoteHeading"
                     text: I18n.t("notes.footnotes")
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     font.bold: true
                 }
             }
@@ -711,7 +711,7 @@ ListView {
             id: footnoteDefRow
             RowLayout {
                 objectName: "mdFootnoteDef"
-                spacing: 8
+                spacing: Theme.spMd
                 Text {
                     Layout.alignment: Qt.AlignTop
                     text: rowItem.model.footnoteNumber > 0
@@ -719,7 +719,7 @@ ListView {
                           : rowItem.model.footnoteId + "."
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
                 TextEdit {
                     Layout.fillWidth: true
@@ -730,7 +730,7 @@ ListView {
                     text: rowItem.model.html
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fsMd
                     onLinkActivated: (link) => view._handleLink(link, rowItem.model.firstLine)
                 }
             }

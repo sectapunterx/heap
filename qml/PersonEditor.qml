@@ -97,32 +97,32 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
     }
 
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: Theme.spXl
         Item { Layout.preferredHeight: 4 }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: root.isNew ? I18n.t("editor.person.new") : I18n.t("editor.person.edit")
             color: Theme.text
-            font.pixelSize: 14
+            font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.name").toUpperCase()
-               color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.name").toUpperCase()
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: nameField
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("editor.ph.fullName")
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             // Re-derive idField while the user has not taken control of it.
@@ -134,55 +134,55 @@ Popup {
             }
         }
 
-        Text { Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.id")
-               color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+        Text { Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.id")
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: idField
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "e.zaharov"
             font.family: Theme.fontMono
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onActiveFocusChanged: if (activeFocus) root._idAutoDerived = false
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.role").toUpperCase()
-               color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.role").toUpperCase()
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: roleField
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "Tech Lead / QA / PHY team…"
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("editor.label.question").toUpperCase()
-               color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.question").toUpperCase()
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         ScrollView {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             Layout.preferredHeight: 64
             TextArea {
                 id: questionField
                 placeholderText: I18n.t("editor.ph.question")
                 wrapMode: TextEdit.Wrap
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            spacing: 12
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            spacing: Theme.spXl
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 4
+                spacing: Theme.spXs
                 Text {
-                    text: I18n.t("editor.label.status").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                    text: I18n.t("editor.label.status").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
                 }
                 ComboBox {
                     id: stateBox
@@ -194,20 +194,20 @@ Popup {
                     // how someone leaves the People rail without being deleted.
                     model: [I18n.t("editor.person.state.idle"), I18n.t("editor.person.state.todo"),
                             I18n.t("editor.person.state.pinged"), I18n.t("editor.person.state.replied")]
-                    background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                    contentItem: Text { text: stateBox.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    contentItem: Text { text: stateBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                 }
             }
             ColumnLayout {
                 Layout.fillWidth: true
-                spacing: 4
+                spacing: Theme.spXs
                 Text {
-                    text: I18n.t("editor.label.avatar").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                    text: I18n.t("editor.label.avatar").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
                 }
                 Row {
                     id: colorSwatch
                     property int selectedIndex: 0
-                    spacing: 4
+                    spacing: Theme.spXs
                     Repeater {
                         model: root.swatches
                         delegate: Rectangle {
@@ -229,8 +229,8 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 8; Layout.bottomMargin: 16
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spMd; Layout.bottomMargin: Theme.sp2xl
+            spacing: Theme.spMd
             PillButton {
                 visible: !root.isNew
                 text: I18n.t("common.delete"); danger: true

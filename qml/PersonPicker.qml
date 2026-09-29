@@ -88,7 +88,7 @@ Popup {
     onMatchesChanged: if (current >= rowCount) current = Math.max(0, rowCount - 1)
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
@@ -98,19 +98,19 @@ Popup {
         spacing: 0
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 16
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.sp2xl
             text: I18n.t("people.pick.title")
             color: Theme.text
-            font.pixelSize: 14
+            font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
         }
 
         TextField {
             id: searchField
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 12
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spXl
             Layout.fillWidth: true
             placeholderText: I18n.t("people.pick.ph")
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onTextChanged: { root.query = text; root.current = 0; }
@@ -123,16 +123,16 @@ Popup {
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.topMargin: 14
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.sp2xl
             visible: root.rowCount === 0
             text: I18n.t("people.pick.none")
             color: Theme.textDim
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
 
         ListView {
             id: list
-            Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 10
+            Layout.leftMargin: Theme.spLg; Layout.rightMargin: Theme.spLg; Layout.topMargin: Theme.spLg
             Layout.fillWidth: true
             Layout.preferredHeight: Math.min(contentHeight, 260)
             visible: count > 0
@@ -150,8 +150,8 @@ Popup {
 
                 Rectangle {
                     anchors.fill: parent
-                    anchors.margins: 2
-                    radius: 8
+                    anchors.margins: Theme.sp2xs
+                    radius: Theme.radius
                     color: Theme.panel3
                     opacity: root.current === crow.index ? 1.0 : 0.0
                 }
@@ -166,8 +166,8 @@ Popup {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 10; anchors.rightMargin: 10
-                    spacing: 10
+                    anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                    spacing: Theme.spLg
 
                     Rectangle {
                         width: 26; height: 26; radius: 13
@@ -180,7 +180,7 @@ Popup {
                             }
                             color: Theme.textOnAccent
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }
                     }
@@ -192,7 +192,7 @@ Popup {
                             Layout.fillWidth: true
                             text: crow.modelData.name || ""
                             color: Theme.text
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             font.weight: Font.Medium
                             elide: Text.ElideRight
                         }
@@ -207,7 +207,7 @@ Popup {
                                 return bits.join(" · ");
                             }
                             color: Theme.textMuted
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                         }
                     }
@@ -217,7 +217,7 @@ Popup {
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         visible: !!crow.modelData.active
-                        radius: 999
+                        radius: Theme.radiusPill
                         color: Theme.bg2
                         border.color: Theme.border
                         border.width: 1
@@ -229,7 +229,7 @@ Popup {
                             text: I18n.t("people.pick.inrail")
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fsXs
                             font.letterSpacing: 1
                         }
                     }
@@ -238,7 +238,7 @@ Popup {
         }
 
         Item {
-            Layout.leftMargin: 10; Layout.rightMargin: 10; Layout.topMargin: 2
+            Layout.leftMargin: Theme.spLg; Layout.rightMargin: Theme.spLg; Layout.topMargin: Theme.sp2xs
             Layout.fillWidth: true
             Layout.preferredHeight: 40
             visible: root.canCreate
@@ -247,8 +247,8 @@ Popup {
 
             Rectangle {
                 anchors.fill: parent
-                anchors.margins: 2
-                radius: 8
+                anchors.margins: Theme.sp2xs
+                radius: Theme.radius
                 color: Theme.panel3
                 opacity: parent.selected ? 1.0 : 0.0
             }
@@ -261,8 +261,8 @@ Popup {
             }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10; anchors.rightMargin: 10
-                spacing: 10
+                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                spacing: Theme.spLg
                 Rectangle {
                     width: 26; height: 26; radius: 13
                     color: "transparent"
@@ -272,14 +272,14 @@ Popup {
                         anchors.centerIn: parent
                         text: "+"
                         color: Theme.textMuted
-                        font.pixelSize: 13
+                        font.pixelSize: Theme.fsMd
                     }
                 }
                 Text {
                     Layout.fillWidth: true
                     text: I18n.t("people.pick.create").arg(root.query.trim())
                     color: Theme.text
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     elide: Text.ElideRight
                 }
             }

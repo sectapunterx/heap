@@ -49,8 +49,8 @@ Rectangle {
         // On macOS the window uses a full-size content view, so the traffic-light
         // buttons overlay the top-left of this bar — inset the content to clear them.
         anchors.leftMargin: 16 + (Qt.platform.os === "osx" ? 62 : 0)
-        anchors.rightMargin: 16
-        spacing: 14
+        anchors.rightMargin: Theme.sp2xl
+        spacing: Theme.sp2xl
 
         // Brand
         BrandLogo {
@@ -63,7 +63,7 @@ Rectangle {
         // Breadcrumbs — editable in place
         RowLayout {
             id: crumbs
-            spacing: 4
+            spacing: Theme.spXs
             EditableCrumb {
                 value: AppController.crumbProject
                 placeholder: "project"
@@ -76,7 +76,7 @@ Rectangle {
                 text: AppController.sprintLabel()
                 color: Theme.textMuted
                 font.family: Theme.fontMono
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
             }
             CrumbSep {}
             EditableCrumb {
@@ -92,7 +92,7 @@ Rectangle {
                 id: profilePill
                 Layout.preferredHeight: 24
                 Layout.alignment: Qt.AlignVCenter
-                radius: 6
+                radius: Theme.radiusMd
                 color: profileMA.containsMouse ? Theme.panel2 : Theme.panel3
                 border.color: profileMA.containsMouse ? Theme.borderStrong : Theme.border
                 border.width: 1
@@ -103,8 +103,8 @@ Rectangle {
                 RowLayout {
                     id: pillRow
                     anchors.fill: parent
-                    anchors.leftMargin: 8; anchors.rightMargin: 8
-                    spacing: 6
+                    anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                    spacing: Theme.spSm
                     Rectangle {
                         width: 8; height: 8; radius: 4
                         color: profilePill.active.color || Theme.accent
@@ -113,13 +113,13 @@ Rectangle {
                         text: profilePill.active.name || "Profile"
                         color: Theme.text
                         font.family: Theme.fontMono
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                         font.weight: Font.Medium
                     }
                     Text {
                         text: "▾"
                         color: Theme.textDim
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                     }
                 }
                 MouseArea {
@@ -200,7 +200,7 @@ Rectangle {
                   && !AppController.focusedBannerDismissed
             Layout.preferredHeight: 26
             Layout.alignment: Qt.AlignVCenter
-            radius: 6
+            radius: Theme.radiusMd
             color: Theme.accentSoft
             border.color: Theme.accent
             border.width: 1
@@ -208,19 +208,19 @@ Rectangle {
             RowLayout {
                 id: bannerRow
                 anchors.fill: parent
-                anchors.leftMargin: 8; anchors.rightMargin: 6
-                spacing: 8
+                anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm
+                spacing: Theme.spMd
                 Text {
                     text: "⎇"
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
                 Text {
                     text: I18n.t("topbar.git.workingOn").arg(AppController.focusedTaskId)
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     font.weight: Font.DemiBold
                 }
                 // ── Live PR state on the focused repo (HEAP-76) ──
@@ -232,7 +232,7 @@ Rectangle {
                     // logs "Unable to assign [undefined] to bool" on every start.
                     visible: !!(pr && String(pr.state || "").length > 0
                                    && Number(pr.number || 0) > 0)
-                    radius: 4
+                    radius: Theme.radiusSm
                     implicitWidth: prBadgeT.implicitWidth + 12
                     implicitHeight: 18
                     color: {
@@ -260,7 +260,7 @@ Rectangle {
                         }
                         color: Theme.accentStrong
                         font.family: Theme.fontMono
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                     }
                     MouseArea {
@@ -279,7 +279,7 @@ Rectangle {
                                          && AppController.focusedRepoState.pr)
                         ? String(AppController.focusedRepoState.pr.checks || "") : ""
                     visible: ci.length > 0
-                    radius: 4
+                    radius: Theme.radiusSm
                     implicitWidth: ciT.implicitWidth + 12
                     implicitHeight: 18
                     color: {
@@ -303,12 +303,12 @@ Rectangle {
                         }
                         color: Theme.text
                         font.family: Theme.fontMono
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                     }
                 }
                 Rectangle {
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: openMA.containsMouse ? Theme.accentStrong : "transparent"
                     border.color: Theme.accentStrong
                     border.width: 1
@@ -319,7 +319,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: I18n.t("topbar.git.open")
                         color: openMA.containsMouse ? Theme.bg : Theme.accentStrong
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                         font.weight: Font.Medium
                     }
                     MouseArea {
@@ -335,14 +335,14 @@ Rectangle {
                 Rectangle {
                     Layout.preferredWidth: 20
                     Layout.preferredHeight: 20
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: dismissMA.containsMouse ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "×"
                         color: dismissMA.containsMouse ? Theme.accentStrong : Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.fsLg
                     }
                     MouseArea {
                         id: dismissMA
@@ -362,22 +362,22 @@ Rectangle {
         Rectangle {
             Layout.preferredWidth: 280
             Layout.preferredHeight: 28
-            radius: 6
+            radius: Theme.radiusMd
             color: Theme.panel2
             border.color: searchField.activeFocus ? Theme.accent : Theme.border
             border.width: searchField.activeFocus ? 2 : 1
             Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 10; anchors.rightMargin: 6
-                spacing: 4
+                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
+                spacing: Theme.spXs
                 // Lights up when the text holds a clause, so it is obvious that
                 // `status:blocked` narrowed the board structurally rather than
                 // failing to find the literal string anywhere.
                 Text {
                     text: "⌕"
                     color: root.searchIsQuery ? Theme.accent : Theme.textDim
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     Behavior on color { ColorAnimation { duration: Theme.scaledMs(120) } }
                 }
                 TextField {
@@ -387,7 +387,7 @@ Rectangle {
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     background: Item {}
                     selectByMouse: true
                     // The syntax is only discoverable if something says it out
@@ -399,7 +399,7 @@ Rectangle {
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {
                     visible: root.searchIsQuery
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: Theme.accentSoft
                     border.color: Theme.accent
                     border.width: 1
@@ -409,7 +409,7 @@ Rectangle {
                         anchors.centerIn: parent
                         text: I18n.t("topbar.searchQueryBadge")
                         color: Theme.accent
-                        font.family: Theme.fontMono; font.pixelSize: 9
+                        font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }
                 }
                 // Shortcut hint. It used to read "⌘K" — a macOS glyph on every
@@ -418,7 +418,7 @@ Rectangle {
                 // shows the live binding and clicking it does what it says.
                 Rectangle {
                     visible: kbd.text.length > 0
-                    radius: 4
+                    radius: Theme.radiusSm
                     border.color: kbdMA.containsMouse ? Theme.borderStrong : Theme.border
                     border.width: 1
                     color: kbdMA.containsMouse ? Theme.panel3 : "transparent"
@@ -427,7 +427,7 @@ Rectangle {
                         id: kbd; anchors.centerIn: parent
                         text: AppController.shortcutFor("search.focus")
                         color: kbdMA.containsMouse ? Theme.text : Theme.textDim
-                        font.family: Theme.fontMono; font.pixelSize: 10
+                        font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }
                     MouseArea {
                         id: kbdMA
@@ -463,7 +463,7 @@ Rectangle {
         text: "/"
         color: Theme.textMuted
         font.family: Theme.fontMono
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsMd
     }
 
     component EditableCrumb: Item {
@@ -479,7 +479,7 @@ Rectangle {
 
         Rectangle {
             anchors.fill: parent
-            radius: 4
+            radius: Theme.radiusSm
             color: hoverMA.containsMouse && !ec.editing ? Theme.panel2 : (ec.editing ? Theme.panel2 : "transparent")
             border.color: ec.editing ? Theme.accent : "transparent"
             border.width: ec.editing ? 1 : 0
@@ -492,14 +492,14 @@ Rectangle {
             text: ec.value.length > 0 ? ec.value : ec.placeholder
             color: ec.value.length > 0 ? Theme.text : Theme.textDim
             font.family: Theme.fontMono
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             font.weight: ec.bold ? Font.Medium : Font.Normal
         }
 
         TextField {
             id: edit
             anchors.fill: parent
-            anchors.leftMargin: 4; anchors.rightMargin: 4
+            anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs
             visible: ec.editing
             text: ec.value
             placeholderText: ec.placeholder
@@ -508,7 +508,7 @@ Rectangle {
             background: Item {}
             verticalAlignment: Text.AlignVCenter
             font.family: Theme.fontMono
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             font.weight: ec.bold ? Font.Medium : Font.Normal
             selectByMouse: true
             onAccepted: { ec.committed(edit.text.trim()); ec.editing = false }

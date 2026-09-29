@@ -171,30 +171,30 @@ Item {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 14
-        spacing: 10
+        anchors.margins: Theme.sp2xl
+        spacing: Theme.spLg
 
         // ── Header ────────────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spMd
 
             // prev / next
             Repeater {
                 model: [{ g: "‹", d: -1 }, { g: "›", d: 1 }]
                 delegate: Rectangle {
                     required property var modelData
-                    width: 28; height: 28; radius: 6
+                    width: 28; height: 28; radius: Theme.radiusMd
                     color: navMA.containsMouse ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: parent.modelData.g; color: Theme.text; font.pixelSize: 15 }
+                    Text { anchors.centerIn: parent; text: parent.modelData.g; color: Theme.text; font.pixelSize: Theme.fsLg }
                     MouseArea { id: navMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.step(parent.modelData.d) }
                 }
             }
 
             Text {
                 text: root.rangeTitle()
-                color: Theme.text; font.pixelSize: 15; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
                 Layout.preferredWidth: 240
             }
 
@@ -209,10 +209,10 @@ Item {
                         required property var modelData
                         readonly property bool sel: root.mode === modelData.id
                         width: 76; height: 28
-                        radius: 6
+                        radius: Theme.radiusMd
                         color: sel ? Theme.accent : (modeMA.containsMouse ? Theme.panel3 : Theme.panel2)
                         border.color: Theme.border; border.width: 1
-                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.textOnAccent : Theme.text; font.pixelSize: 11; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
+                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
                         MouseArea { id: modeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.mode = parent.modelData.id }
                     }
                 }
@@ -220,29 +220,29 @@ Item {
 
             // Weeks stepper (custom range) — only in "weeks" mode.
             Row {
-                spacing: 4
+                spacing: Theme.spXs
                 visible: root.mode === "weeks"
                 Rectangle {
-                    width: 24; height: 28; radius: 6; color: decMA.containsMouse ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "−"; color: Theme.text; font.pixelSize: 14 }
+                    width: 24; height: 28; radius: Theme.radiusMd; color: decMA.containsMouse ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
+                    Text { anchors.centerIn: parent; text: "−"; color: Theme.text; font.pixelSize: Theme.fsLg }
                     MouseArea { id: decMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.weeksCount = Math.max(1, root.weeksCount - 1) }
                 }
                 Rectangle {
-                    width: 52; height: 28; radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: root.weeksCount + " " + I18n.t("cal.wk"); color: Theme.text; font.pixelSize: 11; font.family: Theme.fontMono }
+                    width: 52; height: 28; radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1
+                    Text { anchors.centerIn: parent; text: root.weeksCount + " " + I18n.t("cal.wk"); color: Theme.text; font.pixelSize: Theme.fsSm; font.family: Theme.fontMono }
                 }
                 Rectangle {
-                    width: 24; height: 28; radius: 6; color: incMA.containsMouse ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "+"; color: Theme.text; font.pixelSize: 14 }
+                    width: 24; height: 28; radius: Theme.radiusMd; color: incMA.containsMouse ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
+                    Text { anchors.centerIn: parent; text: "+"; color: Theme.text; font.pixelSize: Theme.fsLg }
                     MouseArea { id: incMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.weeksCount = Math.min(8, root.weeksCount + 1) }
                 }
             }
 
             Rectangle {
-                width: 60; height: 28; radius: 6
+                width: 60; height: 28; radius: Theme.radiusMd
                 color: todayMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: Theme.fsSm }
                 // AppController.today, like every other "today" in the app —
                 // a raw new Date() carries a time-of-day with it.
                 MouseArea { id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.selectedDate = AppController.today }
@@ -252,7 +252,7 @@ Item {
         // ── Weekday header ────────────────────────────────────────
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spSm
             Repeater {
                 model: 7
                 delegate: Text {
@@ -264,7 +264,7 @@ Item {
                     text: I18n.dayName(new Date(root.gridStart.getFullYear(),
                                                 root.gridStart.getMonth(),
                                                 root.gridStart.getDate() + index).getDay())
-                    color: Theme.textDim; font.pixelSize: 10; font.weight: Font.DemiBold
+                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold
                 }
             }
         }
@@ -274,8 +274,8 @@ Item {
             Layout.fillWidth: true
             Layout.fillHeight: true
             columns: 7
-            rowSpacing: 6
-            columnSpacing: 6
+            rowSpacing: Theme.spSm
+            columnSpacing: Theme.spSm
             Repeater {
                 model: root.cells
                 delegate: Rectangle {
@@ -288,7 +288,7 @@ Item {
                     readonly property bool _sel: root.isSameDay(modelData.date, AppController.selectedDate)
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    radius: 8
+                    radius: Theme.radius
                     color: _inMonth ? Theme.panel : Theme.panel2
                     opacity: _inMonth ? 1.0 : 0.55
                     border.color: _sel ? Theme.accent : (_today ? Theme.accentStrong : Theme.border)
@@ -302,14 +302,14 @@ Item {
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.margins: 5
-                        spacing: 3
+                        anchors.margins: Theme.spXs
+                        spacing: Theme.sp2xs
 
                         // Day number.
                         Text {
                             text: cell.date.getDate()
                             color: _today ? Theme.accent : Theme.text
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.weight: _today ? Font.DemiBold : Font.Normal
                         }
 
@@ -320,12 +320,12 @@ Item {
                                 required property int index
                                 Layout.fillWidth: true
                                 implicitHeight: 15
-                                radius: 3
+                                radius: Theme.radiusXs
                                 color: Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22)
                                 Row {
-                                    anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; spacing: 4
+                                    anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: root.priColor(cell.tasks[index].priority) }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.tasks[index].title; color: Theme.text; font.pixelSize: 9 }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.taskClicked(cell.tasks[index].id) }
                             }
@@ -336,12 +336,12 @@ Item {
                                 required property int index
                                 Layout.fillWidth: true
                                 implicitHeight: 15
-                                radius: 3
+                                radius: Theme.radiusXs
                                 color: Theme.accentSoft
                                 Row {
-                                    anchors.fill: parent; anchors.leftMargin: 4; anchors.rightMargin: 4; spacing: 4
+                                    anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: Theme.accent }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.events[index].title; color: Theme.text; font.pixelSize: 9 }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.events[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.eventClicked(cell.events[index].id, cell.events[index]) }
                             }
@@ -354,7 +354,7 @@ Item {
                             visible: _extra > 0
                             text: "+" + _extra
                             color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fsXs
                             MouseArea {
                                 id: moreMA
                                 anchors.fill: parent

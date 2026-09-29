@@ -21,7 +21,7 @@ ColumnLayout {
     property var appearance: ({})
     signal setKey(string key, var value)
 
-    spacing: 12
+    spacing: Theme.spXl
     Layout.fillWidth: true
 
     readonly property var customs: Array.isArray(appearance.customThemes) ? appearance.customThemes : []
@@ -151,7 +151,7 @@ ColumnLayout {
     Text {
         text: I18n.t("settings.theme.slotHint")
         color: Theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsSm
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
     }
@@ -161,7 +161,7 @@ ColumnLayout {
         id: cards
         objectName: "theme-cards"
         Layout.fillWidth: true
-        spacing: 8
+        spacing: Theme.spMd
         Repeater {
             model: ts.themes
             delegate: Rectangle {
@@ -171,7 +171,7 @@ ColumnLayout {
                 readonly property bool selected: modelData.id === ts.currentId
                 objectName: "theme-card-" + modelData.id
                 width: 150; height: 92
-                radius: 8
+                radius: Theme.radius
                 color: t.colors.bg
                 border.color: selected ? Theme.accent : (cardMA.containsMouse ? Theme.borderStrong : Theme.border)
                 border.width: selected ? 2 : 1
@@ -180,14 +180,14 @@ ColumnLayout {
                 // and the alert / priority colours.
                 Rectangle {
                     x: 8; y: 8; width: parent.width - 16; height: 44
-                    radius: 5
+                    radius: Theme.radiusSm
                     color: card.t.colors.panel
                     border.color: card.t.colors.border; border.width: 1
                     Rectangle { x: 8; y: 8; width: 60; height: 5; radius: 2; color: card.t.colors.text }
                     Rectangle { x: 8; y: 18; width: 40; height: 4; radius: 2; color: card.t.colors.textMuted }
-                    Rectangle { x: parent.width - 34; y: 8; width: 26; height: 12; radius: 3; color: card.t.colors.accent }
+                    Rectangle { x: parent.width - 34; y: 8; width: 26; height: 12; radius: Theme.radiusXs; color: card.t.colors.accent }
                     Row {
-                        x: 8; y: 30; spacing: 4
+                        x: 8; y: 30; spacing: Theme.spXs
                         Repeater {
                             model: ["danger", "warning", "success", "info", "p2", "p3", "stReview"]
                             Rectangle {
@@ -204,7 +204,7 @@ ColumnLayout {
                     text: card.t.name
                     color: card.t.colors.text
                     elide: Text.ElideRight
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     font.weight: Font.DemiBold
                 }
                 Text {
@@ -213,7 +213,7 @@ ColumnLayout {
                           + " · " + I18n.t(card.t.base === "light" ? "settings.appearance.theme.light"
                                                                   : "settings.appearance.theme.dark")
                     color: card.t.colors.textMuted
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fsXs
                 }
                 MouseArea {
                     id: cardMA
@@ -229,7 +229,7 @@ ColumnLayout {
     // ── Actions on the selected theme ───────────────────────────────
     RowLayout {
         Layout.fillWidth: true
-        spacing: 8
+        spacing: Theme.spMd
 
         TextField {
             id: nameField
@@ -238,9 +238,9 @@ ColumnLayout {
             enabled: !ts.currentIsBuiltin
             text: ts.current.name
             color: Theme.text
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             selectByMouse: true
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             onAccepted: ts.rename(text)
             onActiveFocusChanged: if (!activeFocus && text !== ts.current.name) ts.rename(text)
         }
@@ -275,8 +275,8 @@ ColumnLayout {
     // high contrast pushes it.
     RowLayout {
         visible: !ts.currentIsBuiltin
-        spacing: 8
-        Text { text: I18n.t("settings.theme.base"); color: Theme.textMuted; font.pixelSize: 11 }
+        spacing: Theme.spMd
+        Text { text: I18n.t("settings.theme.base"); color: Theme.textMuted; font.pixelSize: Theme.fsSm }
         Repeater {
             model: ["dark", "light"]
             PillButton {
@@ -291,10 +291,10 @@ ColumnLayout {
     // ── Import ──────────────────────────────────────────────────────
     ColumnLayout {
         Layout.fillWidth: true
-        spacing: 4
+        spacing: Theme.spXs
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spMd
             TextField {
                 id: importField
                 objectName: "theme-import-field"
@@ -303,9 +303,9 @@ ColumnLayout {
                 placeholderTextColor: Theme.textDim
                 color: Theme.text
                 font.family: Theme.fontMono
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 selectByMouse: true
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: ts.importError.length ? Theme.danger : Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: ts.importError.length ? Theme.danger : Theme.border; border.width: 1 }
                 onAccepted: if (ts.importText(text)) text = ""
             }
             PillButton {
@@ -319,19 +319,19 @@ ColumnLayout {
             visible: ts.importError.length > 0
             text: ts.importError
             color: Theme.danger
-            font.pixelSize: 10
+            font.pixelSize: Theme.fsXs
         }
     }
 
     // ── Token editor ────────────────────────────────────────────────
     RowLayout {
         Layout.fillWidth: true
-        Layout.topMargin: 6
-        spacing: 8
+        Layout.topMargin: Theme.spSm
+        spacing: Theme.spMd
         Text {
             text: I18n.t("settings.theme.colors").toUpperCase()
             color: Theme.textMuted
-            font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+            font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
         }
         Item { Layout.fillWidth: true }
         TextField {
@@ -340,9 +340,9 @@ ColumnLayout {
             placeholderText: I18n.t("settings.theme.filter")
             placeholderTextColor: Theme.textDim
             color: Theme.text
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             selectByMouse: true
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             onTextChanged: ts.filter = text.toLowerCase()
         }
     }
@@ -350,7 +350,7 @@ ColumnLayout {
         visible: ts.currentIsBuiltin
         text: I18n.t("settings.theme.builtinHint")
         color: Theme.textDim
-        font.pixelSize: 10
+        font.pixelSize: Theme.fsXs
         wrapMode: Text.WordWrap
         Layout.fillWidth: true
     }
@@ -368,14 +368,14 @@ ColumnLayout {
             })
             visible: tokens.length > 0
             Layout.fillWidth: true
-            spacing: 4
+            spacing: Theme.spXs
 
             Text {
                 text: I18n.t("theme.group." + grp.modelData)
                 color: Theme.textDim
-                font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
                 font.capitalization: Font.AllUppercase
-                Layout.topMargin: 6
+                Layout.topMargin: Theme.spSm
             }
             GridLayout {
                 id: grid
@@ -386,8 +386,8 @@ ColumnLayout {
                 columns: Math.max(1, Math.floor(ts.width / 280))
                 // Equal cells, so the swatches line up from group to group.
                 readonly property real cellW: Math.floor((ts.width - columnSpacing * (columns - 1)) / columns)
-                columnSpacing: 12
-                rowSpacing: 4
+                columnSpacing: Theme.spXl
+                rowSpacing: Theme.spXs
                 Repeater {
                     model: grp.tokens
                     delegate: RowLayout {
@@ -400,13 +400,13 @@ ColumnLayout {
                         objectName: "theme-token-" + key
                         Layout.preferredWidth: grid.cellW
                         Layout.maximumWidth: grid.cellW
-                        spacing: 8
+                        spacing: Theme.spMd
 
                         Rectangle {
                             id: sw
                             objectName: "theme-swatch-" + tokRow.key
                             Layout.preferredWidth: 26; Layout.preferredHeight: 22
-                            radius: 5
+                            radius: Theme.radiusSm
                             color: tokRow.value
                             border.color: Theme.borderStrong; border.width: 1
                             MouseArea {
@@ -422,7 +422,7 @@ ColumnLayout {
                             Layout.fillWidth: true
                             text: I18n.t("theme.token." + tokRow.key)
                             color: Theme.text
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             elide: Text.ElideRight
                         }
                         TextField {
@@ -430,11 +430,11 @@ ColumnLayout {
                             Layout.preferredWidth: 92
                             text: tokRow.value
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             color: acceptableInput ? Theme.text : Theme.danger
                             selectByMouse: true
                             validator: RegularExpressionValidator { regularExpression: /#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})/ }
-                            background: Rectangle { radius: 5; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                            background: Rectangle { radius: Theme.radiusSm; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                             onAccepted: ts.setToken(tokRow.key, text.toLowerCase())
                             onActiveFocusChanged: {
                                 if (!activeFocus && acceptableInput && text.toLowerCase() !== tokRow.value.toLowerCase())
@@ -446,7 +446,7 @@ ColumnLayout {
                             text: "↺"
                             opacity: tokRow.changed ? 1 : 0
                             color: resetMA.containsMouse ? Theme.accent : Theme.textMuted
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsMd
                             Layout.preferredWidth: 14
                             MouseArea {
                                 id: resetMA

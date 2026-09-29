@@ -291,14 +291,14 @@ Item {
             }
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 14
-                spacing: 6
+                anchors.margins: Theme.sp2xl
+                spacing: Theme.spSm
 
                 Text {
                     text: I18n.t("settings.title")
                     color: Theme.text
                     font.weight: Font.DemiBold
-                    font.pixelSize: 16
+                    font.pixelSize: Theme.fsLg
                 }
                 Text {
                     text: I18n.t("settings.groups")
@@ -306,28 +306,28 @@ Item {
                         .arg(root.settings.profile ? root.settings.profile.handle : "")
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
 
                 Rectangle {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
-                    Layout.topMargin: 6
-                    radius: 6
+                    Layout.topMargin: Theme.spSm
+                    radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border; border.width: 1
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10; anchors.rightMargin: 8
-                        spacing: 6
-                        Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
+                        anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
+                        spacing: Theme.spSm
+                        Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             background: Item {}
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             text: root.searchText
                             onTextChanged: root.searchText = text
                         }
@@ -341,7 +341,7 @@ Item {
                     id: navScroll
                     Layout.fillWidth: true
                     Layout.fillHeight: true
-                    Layout.topMargin: 4
+                    Layout.topMargin: Theme.spXs
                     clip: true
                     contentWidth: width
                     contentHeight: navCol.implicitHeight
@@ -351,7 +351,7 @@ Item {
                     ColumnLayout {
                         id: navCol
                         width: navScroll.width
-                        spacing: 2
+                        spacing: Theme.sp2xs
                         Repeater {
                             model: root.sections
                             delegate: Rectangle {
@@ -365,7 +365,7 @@ Item {
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 44
                                 Layout.minimumHeight: 44
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: root.activeSection === modelData.id
                                        ? Theme.accentSoft
                                        : (navMA.containsMouse ? Theme.panel2 : "transparent")
@@ -373,8 +373,8 @@ Item {
                                 border.width: 1
                                 RowLayout {
                                     anchors.fill: parent
-                                    anchors.leftMargin: 10; anchors.rightMargin: 10
-                                    spacing: 10
+                                    anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                                    spacing: Theme.spLg
                                     // One drawn icon set, the same as the side
                                     // rail's; the unicode glyphs came from
                                     // whatever font had them, in any size.
@@ -389,8 +389,8 @@ Item {
                                     ColumnLayout {
                                         Layout.fillWidth: true
                                         spacing: 0
-                                        Text { text: modelData.title; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-                                        Text { text: modelData.sub;   color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true }
+                                        Text { text: modelData.title; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
+                                        Text { text: modelData.sub;   color: Theme.textMuted; font.pixelSize: Theme.fsXs; elide: Text.ElideRight; Layout.fillWidth: true }
                                     }
                                 }
                                 MouseArea {
@@ -411,8 +411,8 @@ Item {
                 Rectangle {
                     visible: root._debugBuild
                     Layout.fillWidth: true
-                    Layout.topMargin: 4
-                    radius: 6
+                    Layout.topMargin: Theme.spXs
+                    radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
                     border.width: 1
@@ -420,23 +420,23 @@ Item {
                     RowLayout {
                         id: devToggleRow
                         anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 8
-                        spacing: 8
+                        anchors.leftMargin: Theme.spLg
+                        anchors.rightMargin: Theme.spMd
+                        spacing: Theme.spMd
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 0
                             Text {
                                 text: I18n.t("settings.debug.label")
                                 color: Theme.p1
-                                font.pixelSize: 9
+                                font.pixelSize: Theme.fsXs
                                 font.weight: Font.DemiBold
                                 font.letterSpacing: 1
                             }
                             Text {
                                 text: I18n.t("settings.debug.showUnimpl")
                                 color: Theme.text
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                                 wrapMode: Text.Wrap
                                 Layout.fillWidth: true
                             }
@@ -453,7 +453,7 @@ Item {
                     text: I18n.t("settings.footer.stable").arg(AppController.appVersion)
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
             }
         }
@@ -475,18 +475,18 @@ Item {
                     Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 24; anchors.rightMargin: 24
-                        spacing: 2
+                        anchors.leftMargin: Theme.sp3xl; anchors.rightMargin: Theme.sp3xl
+                        spacing: Theme.sp2xs
                         Layout.alignment: Qt.AlignVCenter
                         Text {
                             text: I18n.t("settings.crumb").arg(root._activeMeta().title || "")
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
-                            Layout.topMargin: 12
+                            font.pixelSize: Theme.fsSm
+                            Layout.topMargin: Theme.spXl
                         }
                         RowLayout {
-                            spacing: 10
+                            spacing: Theme.spLg
                             IconImage {
                                 source: root._activeMeta().icon || ""
                                 Layout.preferredWidth: 20
@@ -498,14 +498,14 @@ Item {
                             Text {
                                 text: root._activeMeta().title || ""
                                 color: Theme.text
-                                font.pixelSize: 18
+                                font.pixelSize: Theme.fsXl
                                 font.weight: Font.DemiBold
                             }
                         }
                         Text {
                             text: root._activeMeta().sub || ""
                             color: Theme.textMuted
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                         }
                     }
                 }
@@ -547,7 +547,7 @@ Item {
                     ColumnLayout {
                         id: bodyCol
                         width: bodyScroll.width
-                        spacing: 16
+                        spacing: Theme.sp2xl
                         // Padding via wrapper
                         Item { Layout.preferredHeight: 8 }
 
@@ -557,9 +557,9 @@ Item {
                         Rectangle {
                             visible: root._isUnimplemented(root.activeSection)
                             Layout.fillWidth: true
-                            Layout.leftMargin: 24
-                            Layout.rightMargin: 24
-                            radius: 8
+                            Layout.leftMargin: Theme.sp3xl
+                            Layout.rightMargin: Theme.sp3xl
+                            radius: Theme.radius
                             color: Theme.withAlpha(Theme.warning, 0.12)
                             border.color: Theme.warning
                             border.width: 1
@@ -567,19 +567,19 @@ Item {
                             ColumnLayout {
                                 id: notImplCol
                                 anchors.fill: parent
-                                anchors.margins: 12
-                                spacing: 4
+                                anchors.margins: Theme.spXl
+                                spacing: Theme.spXs
                                 Text {
                                     text: I18n.t("settings.notImpl.title")
                                     color: Theme.warning
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: 1
                                 }
                                 Text {
                                     text: I18n.t("settings.notImpl.body")
                                     color: Theme.text
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                     wrapMode: Text.WordWrap
                                     Layout.fillWidth: true
                                 }
@@ -593,8 +593,8 @@ Item {
                         // включения".
                         Item {
                             Layout.fillWidth: true
-                            Layout.leftMargin: 24
-                            Layout.rightMargin: 24
+                            Layout.leftMargin: Theme.sp3xl
+                            Layout.rightMargin: Theme.sp3xl
                             implicitHeight: sectionLoader.implicitHeight
                             enabled: !root._isUnimplemented(root.activeSection)
                             opacity: enabled ? 1.0 : 0.55
@@ -670,7 +670,7 @@ Item {
 
     component SectionCard: Rectangle {
         Layout.fillWidth: true
-        radius: 10
+        radius: Theme.radiusLg
         color: Theme.panel
         border.color: Theme.border; border.width: 1
         default property alias content: inner.data
@@ -678,8 +678,8 @@ Item {
         ColumnLayout {
             id: inner
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 12
+            anchors.margins: Theme.spXl
+            spacing: Theme.spXl
         }
     }
 
@@ -687,19 +687,19 @@ Item {
         property string label: ""
         text: label
         color: Theme.textDim
-        font.pixelSize: 10
+        font.pixelSize: Theme.fsXs
         font.weight: Font.DemiBold
         font.letterSpacing: 1
         font.capitalization: Font.AllUppercase
-        Layout.topMargin: 4
+        Layout.topMargin: Theme.spXs
     }
 
     component FieldLabel: ColumnLayout {
         property string label: ""
         property string hint: ""
-        spacing: 2
-        Text { text: label.toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
-        Text { visible: hint.length > 0; text: hint; color: Theme.textDim; font.pixelSize: 10 }
+        spacing: Theme.sp2xs
+        Text { text: label.toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+        Text { visible: hint.length > 0; text: hint; color: Theme.textDim; font.pixelSize: Theme.fsXs }
     }
 
     component TextRow: ColumnLayout {
@@ -729,7 +729,7 @@ Item {
             const t = pendingText();
             if (t !== null) textRow.committed(t);
         }
-        spacing: 4
+        spacing: Theme.spXs
         Layout.fillWidth: true
         FieldLabel { label: textRow.label; hint: textRow.hint }
         TextField {
@@ -742,7 +742,7 @@ Item {
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
             // mid-edit text (no two-way binding → no loop, no per-keystroke
@@ -762,7 +762,7 @@ Item {
         property bool checked: false
         signal toggled(bool checked)
         Layout.fillWidth: true
-        spacing: 12
+        spacing: Theme.spXl
 
         // The whole row toggles, not just the 36x20 switch — aiming at the
         // switch was the only way to flip a setting. Handlers rather than a
@@ -773,8 +773,8 @@ Item {
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
-            Text { text: switchRow.label; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-            Text { visible: switchRow.hint.length > 0; text: switchRow.hint; color: Theme.textMuted; font.pixelSize: 10; Layout.fillWidth: true; wrapMode: Text.WordWrap }
+            Text { text: switchRow.label; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
+            Text { visible: switchRow.hint.length > 0; text: switchRow.hint; color: Theme.textMuted; font.pixelSize: Theme.fsXs; Layout.fillWidth: true; wrapMode: Text.WordWrap }
         }
         Rectangle {
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
@@ -797,18 +797,18 @@ Item {
         property var options: []        // [{value,label}] or [string]
         property string value: ""
         signal selected(string value)
-        spacing: 4
+        spacing: Theme.spXs
         Layout.fillWidth: true
         FieldLabel { label: parent.label; hint: parent.hint }
         Rectangle {
             Layout.fillWidth: true
             Layout.preferredHeight: 32
-            radius: 6
+            radius: Theme.radiusMd
             color: Theme.panel2
             border.color: Theme.border; border.width: 1
             RowLayout {
                 anchors.fill: parent
-                anchors.margins: 3
+                anchors.margins: Theme.sp2xs
                 spacing: 0
                 Repeater {
                     model: parent.parent.parent.options
@@ -818,14 +818,14 @@ Item {
                         readonly property string l: typeof modelData === "string" ? modelData : modelData.label
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        radius: 4
+                        radius: Theme.radiusSm
                         color: v === parent.parent.parent.value ? Theme.accent
                              : segMA.containsMouse ? Theme.panel3 : "transparent"
                         Text {
                             anchors.centerIn: parent
                             text: parent.l
                             color: parent.v === parent.parent.parent.parent.value ? Theme.textOnAccent : Theme.text
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.weight: parent.v === parent.parent.parent.parent.value ? Font.DemiBold : Font.Medium
                         }
                         MouseArea {
@@ -850,15 +850,15 @@ Item {
         property real step: 1
         property real value: 0
         signal moved(real value)
-        spacing: 4
+        spacing: Theme.spXs
         Layout.fillWidth: true
         RowLayout {
             Layout.fillWidth: true
-            Text { text: parent.parent.label.toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+            Text { text: parent.parent.label.toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
             Item { Layout.fillWidth: true }
-            Text { text: Math.round(parent.parent.value) + parent.parent.unit; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 11 }
+            Text { text: Math.round(parent.parent.value) + parent.parent.unit; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm }
         }
-        Text { visible: parent.hint.length > 0; text: parent.hint; color: Theme.textDim; font.pixelSize: 10 }
+        Text { visible: parent.hint.length > 0; text: parent.hint; color: Theme.textDim; font.pixelSize: Theme.fsXs }
         Slider {
             Layout.fillWidth: true
             from: parent.min; to: parent.max; stepSize: parent.step
@@ -891,11 +891,11 @@ Item {
         property string value: ""
         property var options: []
         signal selected(string color)
-        spacing: 4
+        spacing: Theme.spXs
         Layout.fillWidth: true
         FieldLabel { label: swRoot.label }
         Row {
-            spacing: 6
+            spacing: Theme.spSm
             Repeater {
                 model: swRoot.options
                 delegate: Rectangle {
@@ -916,20 +916,20 @@ Item {
         property string buttonText: ""
         signal triggered()
         Layout.fillWidth: true
-        spacing: 12
+        spacing: Theme.spXl
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
-            Text { text: parent.parent.title; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-            Text { text: parent.parent.hint; color: Theme.textMuted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+            Text { text: parent.parent.title; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
+            Text { text: parent.parent.hint; color: Theme.textMuted; font.pixelSize: Theme.fsXs; wrapMode: Text.WordWrap; Layout.fillWidth: true }
         }
         Rectangle {
-            radius: 6
+            radius: Theme.radiusMd
             color: dangerMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10)
             border.color: Theme.danger; border.width: 1
             implicitWidth: dangerTxt.implicitWidth + 24
             implicitHeight: 28
-            Text { id: dangerTxt; anchors.centerIn: parent; text: parent.parent.buttonText; color: Theme.danger; font.pixelSize: 12; font.weight: Font.Medium }
+            Text { id: dangerTxt; anchors.centerIn: parent; text: parent.parent.buttonText; color: Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
             MouseArea { id: dangerMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.triggered() }
         }
     }
@@ -939,14 +939,14 @@ Item {
     Component {
         id: sectionProfile
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 14
+                        spacing: Theme.sp2xl
                         Rectangle {
                             width: 56; height: 56; radius: 28
                             color: root.settings.profile ? root.settings.profile.color : Theme.accent
@@ -959,13 +959,13 @@ Item {
                                 }
                                 color: Theme.textOnAccent
                                 font.family: Theme.fontMono
-                                font.pixelSize: 18
+                                font.pixelSize: Theme.fsXl
                                 font.weight: Font.DemiBold
                             }
                         }
                         ColumnLayout {
                             Layout.fillWidth: true
-                            spacing: 10
+                            spacing: Theme.spLg
                             TextRow {
                                 label: I18n.t("settings.profile.fullName")
                                 value: (root.settings.profile && root.settings.profile.name) || ""
@@ -973,7 +973,7 @@ Item {
                             }
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 10
+                                spacing: Theme.spLg
                                 TextRow {
                                     Layout.fillWidth: true
                                     label: I18n.t("settings.profile.handle"); mono: true; placeholder: "alex.t"
@@ -993,11 +993,11 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 10
+                        spacing: Theme.spLg
                         TextRow {
                             Layout.fillWidth: true
                             label: I18n.t("settings.profile.team")
@@ -1019,10 +1019,10 @@ Item {
     Component {
         id: sectionAppearance
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     SegRow {
                         label: I18n.t("settings.appearance.theme")
@@ -1052,7 +1052,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     SwitchRow {
                         label: I18n.t("settings.appearance.reducedMotion")
@@ -1095,10 +1095,10 @@ Item {
     Component {
         id: sectionLanguage
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     SegRow {
                         label: I18n.t("settings.language.label")
@@ -1112,7 +1112,7 @@ Item {
                     Text {
                         text: I18n.t("settings.language.hint")
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -1124,10 +1124,10 @@ Item {
     Component {
         id: sectionNotifications
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.notif.sub.deadlines")
@@ -1170,7 +1170,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.notif.sub.channels")
@@ -1194,7 +1194,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.notif.sub.quiet")
@@ -1206,7 +1206,7 @@ Item {
                         onToggled: (checked) => root.set("notifications", "quietHours", checked)
                     }
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Theme.spLg
                         visible: !!(root.settings.notifications && root.settings.notifications.quietHours)
                         TextRow {
                             Layout.fillWidth: true
@@ -1229,13 +1229,13 @@ Item {
     Component {
         id: sectionCalendar
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Theme.spLg
                         SegRow {
                             Layout.fillWidth: true
                             label: I18n.t("settings.cal.weekStart")
@@ -1258,7 +1258,7 @@ Item {
                         label: I18n.t("settings.cal.workHours")
                     }
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Theme.spLg
                         SliderRow {
                             Layout.fillWidth: true
                             label: I18n.t("settings.cal.workStart"); unit: ":00"; min: 6; max: 12; step: 1
@@ -1287,7 +1287,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.cal.focus")
@@ -1323,13 +1323,13 @@ Item {
             // existing task ids (LTE-123 → HEAP-123). Not persisted across
             // sessions — it's a one-shot intent.
             property bool renameExistingOnCommit: false
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Theme.spLg
                         TextRow {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
@@ -1377,7 +1377,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.tasks.automations")
@@ -1410,10 +1410,10 @@ Item {
     Component {
         id: sectionShortcuts
         ColumnLayout {
-            spacing: 12
+            spacing: Theme.spXl
             SectionCard {
                 ColumnLayout {
-                    spacing: 8
+                    spacing: Theme.spMd
                     Layout.fillWidth: true
                     RowLayout {
                         Layout.fillWidth: true
@@ -1422,12 +1422,12 @@ Item {
                         }
                         Item { Layout.fillWidth: true }
                         Rectangle {
-                            radius: 6; implicitWidth: openTxt.implicitWidth + 18; implicitHeight: 26
+                            radius: Theme.radiusMd; implicitWidth: openTxt.implicitWidth + 18; implicitHeight: 26
                             color: openMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             Text {
                                 id:
-                                    openTxt; anchors.centerIn: parent; text: I18n.t("settings.shortcuts.open"); color: Theme.text; font.pixelSize: 11
+                                    openTxt; anchors.centerIn: parent; text: I18n.t("settings.shortcuts.open"); color: Theme.text; font.pixelSize: Theme.fsSm
                             }
                             MouseArea { id: openMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.openHotkeysRequested() }
                         }
@@ -1435,7 +1435,7 @@ Item {
                     Text {
                         text: I18n.t("settings.shortcuts.intro")
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -1443,27 +1443,27 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 6
+                    spacing: Theme.spSm
                     Layout.fillWidth: true
                     Repeater {
                         model: AppController.shortcuts
                         delegate: RowLayout {
                             required property var modelData
                             Layout.fillWidth: true
-                            spacing: 10
+                            spacing: Theme.spLg
                             ColumnLayout {
                                 Layout.fillWidth: true; spacing: 0
-                                Text { text: modelData.label; color: Theme.text; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-                                Text { text: modelData.description; color: Theme.textMuted; font.pixelSize: 10; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: modelData.label; color: Theme.text; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; elide: Text.ElideRight }
+                                Text { text: modelData.description; color: Theme.textMuted; font.pixelSize: Theme.fsXs; Layout.fillWidth: true; elide: Text.ElideRight }
                             }
                             Rectangle {
-                                radius: 5
+                                radius: Theme.radiusSm
                                 color: Theme.panel2
                                 border.color: Theme.border; border.width: 1
                                 implicitWidth: seqText.implicitWidth + 14; implicitHeight: 22
                                 Text {
                                     id:
-                                        seqText; anchors.centerIn: parent; text: modelData.sequence || I18n.t("settings.shortcuts.notSet"); color: modelData.sequence ? Theme.text : Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 11
+                                        seqText; anchors.centerIn: parent; text: modelData.sequence || I18n.t("settings.shortcuts.notSet"); color: modelData.sequence ? Theme.text : Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm
                                 }
                             }
                         }
@@ -1476,13 +1476,13 @@ Item {
     Component {
         id: sectionCpp
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Theme.spLg
                         SegRow {
                             Layout.fillWidth: true
                             label: I18n.t("settings.cpp.compiler")
@@ -1499,7 +1499,7 @@ Item {
                         }
                     }
                     RowLayout {
-                        Layout.fillWidth: true; spacing: 10
+                        Layout.fillWidth: true; spacing: Theme.spLg
                         SegRow {
                             Layout.fillWidth: true
                             label: I18n.t("settings.cpp.sanitizer")
@@ -1519,7 +1519,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     TextRow {
                         label: I18n.t("settings.cpp.bazelArgs"); mono: true; placeholder: "--jobs=12 --keep_going"
@@ -1546,7 +1546,7 @@ Item {
         id: sectionIntegrations
         ColumnLayout {
             id: intSection
-            spacing: 12
+            spacing: Theme.spXl
 
             // Device-flow OAuth banner state (GitHub): the code the user types in
             // the browser. Set from AppController.oauthDeviceCode; empty = hidden.
@@ -1596,19 +1596,19 @@ Item {
                 text: I18n.t(Qt.platform.os === "windows" ? "settings.integrations.secretsFileWin"
                                                           : "settings.integrations.secretsFile")
                 color: Theme.warning
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
 
             // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
             SectionCard {
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 12
+                    spacing: Theme.spXl
                     ColumnLayout {
                         Layout.fillWidth: true
                         spacing: 1
-                        Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
-                        Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: 11 }
+                        Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                        Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: Theme.fsSm }
                     }
                     Repeater {
                         model: [
@@ -1620,13 +1620,13 @@ Item {
                         delegate: Rectangle {
                             required property var modelData
                             readonly property int cur: (root.settings.integrations && root.settings.integrations.autoSyncMinutes) || 0
-                            radius: 6
+                            radius: Theme.radiusMd
                             implicitWidth: asTxt.implicitWidth + 20; implicitHeight: 26
                             color: cur === modelData.v ? Theme.accent : (asMA.containsMouse ? Theme.panel3 : Theme.panel2)
                             border.color: cur === modelData.v ? Theme.accent : Theme.border; border.width: 1
                             Text {
                                 id: asTxt; anchors.centerIn: parent; text: modelData.label
-                                color: parent.cur === modelData.v ? Theme.textOnAccent : Theme.text; font.pixelSize: 11
+                                color: parent.cur === modelData.v ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsSm
                             }
                             MouseArea {
                                 id: asMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -1647,7 +1647,7 @@ Item {
                     ColumnLayout {
                         id: intCard
                         objectName: "int-card-" + intCard.intKey
-                        spacing: 10
+                        spacing: Theme.spLg
                         Layout.fillWidth: true
                         readonly property string intKey: modelData.id
                         readonly property var conf: (root.settings.integrations && root.settings.integrations[intKey]) || ({})
@@ -1706,26 +1706,26 @@ Item {
                                 id: hdrRow
                                 anchors.left: parent.left; anchors.right: parent.right
                                 anchors.verticalCenter: parent.verticalCenter
-                                spacing: 12
+                                spacing: Theme.spXl
                                 Rectangle {
-                                    width: 32; height: 32; radius: 6
+                                    width: 32; height: 32; radius: Theme.radiusMd
                                     color: modelData.color
-                                    Text { anchors.centerIn: parent; text: modelData.icon; color: Theme.textOnAccent; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                    Text { anchors.centerIn: parent; text: modelData.icon; color: Theme.textOnAccent; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
-                                    Text { text: modelData.name; color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: Theme.fsSm; Layout.fillWidth: true; elide: Text.ElideRight }
                                 }
                                 Text {
                                     text: intCard.isConn ? I18n.t("common.connected") : I18n.t("common.disconnected")
                                     color: intCard.isConn ? Theme.mFocus : Theme.textDim
-                                    font.family: Theme.fontMono; font.pixelSize: 10
+                                    font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                                 }
                                 Text {
                                     text: intCard.open ? "▾" : "▸"   // ▾ / ▸
-                                    color: Theme.textDim; font.pixelSize: 12
+                                    color: Theme.textDim; font.pixelSize: Theme.fsMd
                                 }
                             }
                             MouseArea {
@@ -1741,7 +1741,7 @@ Item {
                             visible: intCard.open
                             Layout.fillWidth: true
                             Layout.leftMargin: 44
-                            spacing: 8
+                            spacing: Theme.spMd
 
                             // How this card is signed in. A browser session
                             // expires, so say when — otherwise a card that had
@@ -1751,7 +1751,7 @@ Item {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 color: Theme.textDim
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                                 text: {
                                     // With a refresh token heap renews the
                                     // session itself; an expiry time then only
@@ -1774,7 +1774,7 @@ Item {
                             Rectangle {
                                 visible: intCard.missingFields.length > 0
                                 Layout.fillWidth: true
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: Theme.panel2
                                 border.color: Theme.warning; border.width: 1
                                 implicitHeight: missTxt.implicitHeight + 16
@@ -1782,9 +1782,9 @@ Item {
                                     id: missTxt
                                     anchors.left: parent.left; anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    anchors.margins: 10
+                                    anchors.margins: Theme.spLg
                                     wrapMode: Text.WordWrap
-                                    color: Theme.text; font.pixelSize: 11
+                                    color: Theme.text; font.pixelSize: Theme.fsSm
                                     text: I18n.t("settings.integrations.needsFields").replace("%1", intCard.missingFields.join(", "))
                                 }
                             }
@@ -1794,7 +1794,7 @@ Item {
                             Rectangle {
                                 visible: intSection.dcCode !== "" && intSection.dcProvider === intCard.intKey
                                 Layout.fillWidth: true
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: Theme.panel2
                                 border.color: Theme.accent; border.width: 1
                                 implicitHeight: dcCol.implicitHeight + 16
@@ -1802,22 +1802,22 @@ Item {
                                     id: dcCol
                                     anchors.left: parent.left; anchors.right: parent.right
                                     anchors.verticalCenter: parent.verticalCenter
-                                    anchors.margins: 10
-                                    spacing: 4
+                                    anchors.margins: Theme.spLg
+                                    spacing: Theme.spXs
                                     Text {
                                         text: I18n.t("settings.integrations.deviceCodePrompt")
-                                        color: Theme.textMuted; font.pixelSize: 11
+                                        color: Theme.textMuted; font.pixelSize: Theme.fsSm
                                         Layout.fillWidth: true; wrapMode: Text.WordWrap
                                     }
                                     TextEdit {
                                         text: intSection.dcCode
                                         readOnly: true; selectByMouse: true
                                         color: Theme.text; font.family: Theme.fontMono
-                                        font.pixelSize: 20; font.weight: Font.DemiBold
+                                        font.pixelSize: Theme.fsXl; font.weight: Font.DemiBold
                                     }
                                     Text {
                                         text: intSection.dcUri
-                                        color: Theme.mFocus; font.family: Theme.fontMono; font.pixelSize: 10
+                                        color: Theme.mFocus; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                                     }
                                 }
                             }
@@ -1828,11 +1828,11 @@ Item {
                             Rectangle {
                                 visible: intCard.canOneClick && !intCard.isConn
                                 Layout.fillWidth: true
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: oauthMA.containsMouse ? Theme.accentStrong : Theme.accent
                                 border.color: Theme.accent; border.width: 1
                                 implicitHeight: 34
-                                Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: Theme.textOnAccent; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
                                 MouseArea {
                                     id: oauthMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                     onClicked: { intCard.commitFields(); AppController.connectOAuth(intCard.intKey) }
@@ -1843,7 +1843,7 @@ Item {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 text: I18n.t("settings.integrations.connectBrowserHint")
-                                color: Theme.textDim; font.pixelSize: 10
+                                color: Theme.textDim; font.pixelSize: Theme.fsXs
                             }
                             // The browser is not the only way in, and on a
                             // self-hosted instance it is not a way in at all —
@@ -1853,7 +1853,7 @@ Item {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 text: I18n.t("settings.integrations.manualHint")
-                                color: Theme.textDim; font.pixelSize: 10
+                                color: Theme.textDim; font.pixelSize: Theme.fsXs
                             }
                             // OAuth-capable but no client ID yet (self-hosted gitea/
                             // forgejo): tell the user to add one under Advanced.
@@ -1862,7 +1862,7 @@ Item {
                                 Layout.fillWidth: true
                                 wrapMode: Text.WordWrap
                                 text: I18n.t("settings.integrations.oauthNeedsId")
-                                color: Theme.textDim; font.pixelSize: 10
+                                color: Theme.textDim; font.pixelSize: Theme.fsXs
                             }
 
                             // Advanced disclosure — hides the credential/scope
@@ -1873,7 +1873,7 @@ Item {
                             Text {
                                 visible: intCard.canOneClick || intCard.isConn
                                 text: (intCard.advanced ? "▾  " : "▸  ") + I18n.t("settings.integrations.advanced")
-                                color: Theme.textMuted; font.pixelSize: 11
+                                color: Theme.textMuted; font.pixelSize: Theme.fsSm
                                 MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: intCard.advanced = !intCard.advanced }
                             }
 
@@ -1883,7 +1883,7 @@ Item {
                             ColumnLayout {
                                 visible: intCard.advanced || (!intCard.canOneClick && !intCard.isConn)
                                 Layout.fillWidth: true
-                                spacing: 6
+                                spacing: Theme.spSm
                                 Repeater {
                                     id: fieldsRep
                                     model: modelData.fields
@@ -1913,17 +1913,17 @@ Item {
                             ColumnLayout {
                                 id: statusMapBlock
                                 Layout.fillWidth: true
-                                Layout.topMargin: 4
-                                spacing: 6
+                                Layout.topMargin: Theme.spXs
+                                spacing: Theme.spSm
                                 visible: intCard.isConn && !modelData.directory === true && statusMapRep.count > 0
 
                                 RowLayout {
                                     Layout.fillWidth: true
-                                    spacing: 6
+                                    spacing: Theme.spSm
                                     Text {
                                         text: I18n.t("settings.integrations.statusMap")
                                         color: Theme.text
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fsSm
                                         font.weight: Font.DemiBold
                                     }
                                     Item { Layout.fillWidth: true }
@@ -1933,7 +1933,7 @@ Item {
                                     wrapMode: Text.WordWrap
                                     text: I18n.t("settings.integrations.statusMapHint")
                                     color: Theme.textDim
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fsXs
                                 }
 
                                 Repeater {
@@ -1943,7 +1943,7 @@ Item {
                                         id: mapRow
                                         required property var modelData
                                         Layout.fillWidth: true
-                                        spacing: 8
+                                        spacing: Theme.spMd
 
                                         Text {
                                             Layout.preferredWidth: 150
@@ -1952,18 +1952,18 @@ Item {
                                             text: mapRow.modelData.status
                                             color: Theme.text
                                             font.family: Theme.fontMono
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fsSm
                                         }
                                         Text {
                                             text: "→"
                                             color: Theme.textDim
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fsSm
                                         }
                                         ComboBox {
                                             id: columnPick
                                             Layout.fillWidth: true
                                             implicitHeight: 28
-                                            font.pixelSize: 11
+                                            font.pixelSize: Theme.fsSm
                                             // "Auto" first, so clearing a choice
                                             // is a pick rather than a hidden
                                             // gesture. Its value is the empty
@@ -2001,7 +2001,7 @@ Item {
                                             textFormat: Text.PlainText
                                             text: I18n.t("settings.integrations.statusMapGuess").arg(intCard.columnName(mapRow.modelData.column))
                                             color: Theme.textDim
-                                            font.pixelSize: 10
+                                            font.pixelSize: Theme.fsXs
                                         }
                                     }
                                 }
@@ -2015,7 +2015,7 @@ Item {
                                 id: loginBlock
                                 visible: (modelData.loginFields || []).length > 0 && !intCard.isConn
                                 Layout.fillWidth: true
-                                spacing: 6
+                                spacing: Theme.spSm
                                 function credentials() {
                                     const out = ({})
                                     for (let i = 0; i < loginRep.count; ++i) {
@@ -2028,7 +2028,7 @@ Item {
                                     Layout.fillWidth: true
                                     wrapMode: Text.WordWrap
                                     text: I18n.t("settings.integrations.passwordSignInHint")
-                                    color: Theme.textDim; font.pixelSize: 10
+                                    color: Theme.textDim; font.pixelSize: Theme.fsXs
                                 }
                                 Repeater {
                                     id: loginRep
@@ -2049,11 +2049,11 @@ Item {
                                 }
                                 Rectangle {
                                     Layout.fillWidth: true
-                                    radius: 6
+                                    radius: Theme.radiusMd
                                     color: signInMA.containsMouse ? Theme.accentStrong : Theme.accent
                                     border.color: Theme.accent; border.width: 1
                                     implicitHeight: 30
-                                    Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: Theme.textOnAccent; font.pixelSize: 12; font.weight: Font.DemiBold }
+                                    Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
                                     MouseArea {
                                         id: signInMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: {
@@ -2066,8 +2066,8 @@ Item {
 
                             // Actions: manual connect (non-OAuth) / test / sync / disconnect.
                             RowLayout {
-                                Layout.topMargin: 2
-                                spacing: 8
+                                Layout.topMargin: Theme.sp2xs
+                                spacing: Theme.spMd
                                 // Connect with whatever is typed into the card.
                                 // Offered whenever those fields are on screen —
                                 // an OAuth card with Advanced open is a card
@@ -2079,11 +2079,11 @@ Item {
                                 Rectangle {
                                     objectName: "int-connect-" + intCard.intKey
                                     visible: !intCard.isConn && (!intCard.canOneClick || intCard.advanced)
-                                    radius: 6
+                                    radius: Theme.radiusMd
                                     color: connMA.containsMouse ? Theme.accentStrong : Theme.accent
                                     border.color: Theme.accent; border.width: 1
                                     implicitWidth: connTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: 11; font.weight: Font.Medium }
+                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: Theme.fsSm; font.weight: Font.Medium }
                                     MouseArea {
                                         id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         // Not a bare `connected = true`: the
@@ -2096,11 +2096,11 @@ Item {
                                 }
                                 Rectangle {
                                     visible: intCard.advanced || intCard.isConn || !intCard.canOneClick
-                                    radius: 6
+                                    radius: Theme.radiusMd
                                     color: testMA.containsMouse ? Theme.panel3 : Theme.panel2
                                     border.color: Theme.border; border.width: 1
                                     implicitWidth: testTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: 11 }
+                                    Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: Theme.fsSm }
                                     MouseArea {
                                         id: testMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: { intCard.commitFields(); AppController.testIntegration(intCard.intKey) }
@@ -2108,11 +2108,11 @@ Item {
                                 }
                                 Rectangle {
                                     visible: intCard.isConn
-                                    radius: 6
+                                    radius: Theme.radiusMd
                                     color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2
                                     border.color: Theme.border; border.width: 1
                                     implicitWidth: syncTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 11 }
+                                    Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: Theme.fsSm }
                                     MouseArea {
                                         id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: { intCard.commitFields(); AppController.syncProvider(intCard.intKey) }
@@ -2121,11 +2121,11 @@ Item {
                                 Item { Layout.fillWidth: true }
                                 Rectangle {
                                     visible: intCard.isConn
-                                    radius: 6
+                                    radius: Theme.radiusMd
                                     color: discMA.containsMouse ? Theme.panel3 : Theme.panel2
                                     border.color: Theme.border; border.width: 1
                                     implicitWidth: discTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: 11 }
+                                    Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: Theme.fsSm }
                                     MouseArea { id: discMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.disconnectIntegration(intCard.intKey) }
                                 }
                             }
@@ -2139,10 +2139,10 @@ Item {
     Component {
         id: sectionGit
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.git.repos")
@@ -2151,7 +2151,7 @@ Item {
                         Layout.fillWidth: true
                         text: I18n.t("settings.git.repos.hint")
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                     }
                     Text {
@@ -2159,7 +2159,7 @@ Item {
                         text: I18n.t("settings.git.match.hint")
                                 .arg(((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK").toUpperCase())
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                     }
                     Repeater {
@@ -2168,17 +2168,17 @@ Item {
                             required property string modelData
                             required property int    index
                             Layout.fillWidth: true
-                            spacing: 8
+                            spacing: Theme.spMd
                             Text {
                                 Layout.fillWidth: true
                                 text: modelData
                                 elide: Text.ElideMiddle
                                 color: Theme.text
                                 font.family: Theme.fontMono
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                             }
                             Rectangle {
-                                radius: 4
+                                radius: Theme.radiusSm
                                 color: rmMA.containsMouse
                                     ? Theme.withAlpha(Theme.danger, 0.18)
                                     : "transparent"
@@ -2206,7 +2206,7 @@ Item {
                     }
                     RowLayout {
                         Layout.fillWidth: true
-                        spacing: 8
+                        spacing: Theme.spMd
                         TextField {
                             id: newRepoField
                             Layout.fillWidth: true
@@ -2214,9 +2214,9 @@ Item {
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             background: Rectangle {
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: Theme.panel2
                                 border.color: Theme.border
                                 border.width: 1
@@ -2224,7 +2224,7 @@ Item {
                             selectByMouse: true
                         }
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             implicitHeight: 30
                             implicitWidth: addT.implicitWidth + 22
                             color: addMA.containsMouse ? Theme.accentStrong : Theme.accent
@@ -2256,7 +2256,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.git.autoOn")
@@ -2288,7 +2288,7 @@ Item {
         id: sectionData
         ColumnLayout {
             id: dataRoot
-            spacing: 16
+            spacing: Theme.sp2xl
             // Backups are read on demand (listBackups() is a plain invokable,
             // not a notifying property). The Data section is rebuilt whenever
             // the user opens it, so refreshing on completion keeps it current.
@@ -2297,7 +2297,7 @@ Item {
             Component.onCompleted: dataRoot.refreshBackups()
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.data.backups")
@@ -2323,7 +2323,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.data.restore")
@@ -2332,7 +2332,7 @@ Item {
                         visible: dataRoot.backups.length === 0
                         text: I18n.t("settings.data.restore.empty")
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -2341,14 +2341,14 @@ Item {
                         delegate: RowLayout {
                             required property var modelData
                             Layout.fillWidth: true
-                            spacing: 12
+                            spacing: Theme.spXl
                             ColumnLayout {
                                 Layout.fillWidth: true
                                 spacing: 1
-                                Text { text: modelData.mtime; color: Theme.text; font.pixelSize: 12; font.family: Theme.fontMono }
+                                Text { text: modelData.mtime; color: Theme.text; font.pixelSize: Theme.fsMd; font.family: Theme.fontMono }
                                 Text {
                                     text: modelData.fileName + "  ·  " + modelData.sizeKb + " KB"
-                                    color: Theme.textMuted; font.pixelSize: 10; elide: Text.ElideRight; Layout.fillWidth: true
+                                    color: Theme.textMuted; font.pixelSize: Theme.fsXs; elide: Text.ElideRight; Layout.fillWidth: true
                                 }
                             }
                             // Two-step confirm: first click arms (restore
@@ -2357,7 +2357,7 @@ Item {
                             Rectangle {
                                 id: restoreBtn
                                 property bool armed: false
-                                radius: 6
+                                radius: Theme.radiusMd
                                 color: restoreMA.containsMouse ? Theme.panel3 : Theme.panel2
                                 border.color: restoreBtn.armed ? Theme.danger : Theme.border
                                 border.width: 1
@@ -2368,7 +2368,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
                                     color: restoreBtn.armed ? Theme.danger : Theme.text
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fsMd
                                 }
                                 Timer { id: restoreDisarm; interval: 3500; onTriggered: restoreBtn.armed = false }
                                 MouseArea {
@@ -2395,7 +2395,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.data.importExport")
@@ -2403,31 +2403,31 @@ Item {
                     Text {
                         text: I18n.t("settings.data.importExport.hint")
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
                     RowLayout {
-                        spacing: 8
+                        spacing: Theme.spMd
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: expMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: expTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
                                 id:
-                                    expTxt; anchors.centerIn: parent; text: I18n.t("settings.data.exportJson"); color: Theme.text; font.pixelSize: 12
+                                    expTxt; anchors.centerIn: parent; text: I18n.t("settings.data.exportJson"); color: Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: expMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.exportJsonRequested() }
                         }
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: impMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: impTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
                                 id:
-                                    impTxt; anchors.centerIn: parent; text: I18n.t("settings.data.importJson"); color: Theme.text; font.pixelSize: 12
+                                    impTxt; anchors.centerIn: parent; text: I18n.t("settings.data.importJson"); color: Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: impMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.importJsonRequested() }
                         }
@@ -2436,7 +2436,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.data.danger")
@@ -2453,15 +2453,15 @@ Item {
                         id: wipeRow
                         property bool armed: false
                         Layout.fillWidth: true
-                        spacing: 12
+                        spacing: Theme.spXl
                         ColumnLayout {
                             Layout.fillWidth: true
                             spacing: 1
-                            Text { text: I18n.t("settings.data.wipe"); color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium }
-                            Text { text: I18n.t("settings.data.wipe.hint"); color: Theme.textMuted; font.pixelSize: 10; wrapMode: Text.WordWrap; Layout.fillWidth: true }
+                            Text { text: I18n.t("settings.data.wipe"); color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
+                            Text { text: I18n.t("settings.data.wipe.hint"); color: Theme.textMuted; font.pixelSize: Theme.fsXs; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: wipeRow.armed ? Theme.danger
                                  : (wipeMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10))
                             border.color: Theme.danger; border.width: 1
@@ -2470,7 +2470,7 @@ Item {
                             Text {
                                 id: wipeTxt; anchors.centerIn: parent
                                 text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
-                                color: wipeRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: 12; font.weight: Font.Medium
+                                color: wipeRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium
                             }
                             MouseArea {
                                 id: wipeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
@@ -2497,13 +2497,13 @@ Item {
     Component {
         id: sectionAbout
         ColumnLayout {
-            spacing: 16
+            spacing: Theme.sp2xl
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     RowLayout {
-                        spacing: 12
+                        spacing: Theme.spXl
                         BrandLogo {
                             variant: "mark"
                             theme: Theme.dark ? "dark" : "light"
@@ -2513,16 +2513,16 @@ Item {
                         ColumnLayout {
                             spacing: 1
                             Text {
-                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: 16; font.weight: Font.DemiBold
+                                text: "heap."; color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
                             }
                             Text {
-                                text: Brand.tagline; color: Theme.textMuted; font.pixelSize: 11
+                                text: Brand.tagline; color: Theme.textMuted; font.pixelSize: Theme.fsSm
                             }
                         }
                     }
                     ColumnLayout {
-                        spacing: 6
-                        Layout.topMargin: 4
+                        spacing: Theme.spSm
+                        Layout.topMargin: Theme.spXs
                         Layout.fillWidth: true
                         AboutRow {
                             label: I18n.t("settings.about.version"); value: AppController.appVersion
@@ -2541,7 +2541,7 @@ Item {
             }
             SectionCard {
                 ColumnLayout {
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Sub {
                         label: I18n.t("settings.about.diagnostics")
@@ -2549,29 +2549,29 @@ Item {
                     Text {
                         text: I18n.t("settings.about.diagnostics.hint")
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
                     RowLayout {
-                        spacing: 8
+                        spacing: Theme.spMd
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: reportMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: reportTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
-                                id: reportTxt; anchors.centerIn: parent; text: I18n.t("settings.about.reportIssue"); color: Theme.text; font.pixelSize: 12
+                                id: reportTxt; anchors.centerIn: parent; text: I18n.t("settings.about.reportIssue"); color: Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: reportMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.reportAnIssue() }
                         }
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: logsMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: logsTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
-                                id: logsTxt; anchors.centerIn: parent; text: I18n.t("settings.about.openLogs"); color: Theme.text; font.pixelSize: 12
+                                id: logsTxt; anchors.centerIn: parent; text: I18n.t("settings.about.openLogs"); color: Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: logsMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLogsFolder() }
                         }
@@ -2582,7 +2582,7 @@ Item {
                 ColumnLayout {
                     id: updatesCol
                     property bool updateReady: false
-                    spacing: 12
+                    spacing: Theme.spXl
                     Layout.fillWidth: true
                     Connections {
                         target: AppController
@@ -2594,30 +2594,30 @@ Item {
                     Text {
                         text: AppController.updateStatus === "" ? I18n.t("settings.about.updates.hint") : AppController.updateStatus
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
                     RowLayout {
-                        spacing: 8
+                        spacing: Theme.spMd
                         Rectangle {
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: checkMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: checkTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
-                                id: checkTxt; anchors.centerIn: parent; text: I18n.t("settings.about.checkUpdates"); color: Theme.text; font.pixelSize: 12
+                                id: checkTxt; anchors.centerIn: parent; text: I18n.t("settings.about.checkUpdates"); color: Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: checkMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.checkForUpdates() }
                         }
                         Rectangle {
                             visible: updatesCol.updateReady
-                            radius: 6
+                            radius: Theme.radiusMd
                             color: dlMA.containsMouse ? Theme.accent : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             implicitWidth: dlTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
-                                id: dlTxt; anchors.centerIn: parent; text: I18n.t("settings.about.download"); color: Theme.text; font.pixelSize: 12
+                                id: dlTxt; anchors.centerIn: parent; text: I18n.t("settings.about.download"); color: Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: dlMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLatestRelease() }
                         }
@@ -2637,15 +2637,15 @@ Item {
         property string label: ""
         property string value: ""
         Layout.fillWidth: true
-        spacing: 16
-        Text { text: aboutRow.label; color: Theme.textMuted; font.pixelSize: 11; Layout.preferredWidth: 80 }
+        spacing: Theme.sp2xl
+        Text { text: aboutRow.label; color: Theme.textMuted; font.pixelSize: Theme.fsSm; Layout.preferredWidth: 80 }
         // Elided: the storage path is long enough to stretch the card past the
         // panel. The full value is on the tooltip.
         Text {
             text: aboutRow.value
             color: Theme.text
             font.family: Theme.fontMono
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             Layout.fillWidth: true
             elide: Text.ElideMiddle
             HoverHandler { id: aboutHover }

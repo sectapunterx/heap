@@ -19,21 +19,21 @@ Rectangle {
     ColumnLayout {
         id: col
         anchors.fill: parent
-        anchors.margins: 12
-        spacing: 8
+        anchors.margins: Theme.spXl
+        spacing: Theme.spMd
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spSm
             Text {
                 text: I18n.t("people.label.title")
                 color: Theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 font.letterSpacing: 1
                 font.weight: Font.DemiBold
             }
             Rectangle {
-                radius: 999
+                radius: Theme.radiusPill
                 color: Theme.panel3
                 implicitWidth: badge.implicitWidth + 12
                 implicitHeight: 18
@@ -43,7 +43,7 @@ Rectangle {
                     text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
                 Connections {
                     target: AppController.activePeople
@@ -55,13 +55,13 @@ Rectangle {
             }
             Item { Layout.fillWidth: true }
             Rectangle {
-                width: 22; height: 22; radius: 5
+                width: 22; height: 22; radius: Theme.radiusSm
                 color: addMA.containsMouse ? Theme.panel3 : "transparent"
                 Text {
                     anchors.centerIn: parent
                     text: "+"
                     color: addMA.containsMouse ? Theme.text : Theme.textDim
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fsLg
                 }
                 MouseArea {
                     id: addMA
@@ -81,7 +81,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: 6
+            spacing: Theme.spSm
             // Not `people`: the rail carries the people something is pending
             // on, and a Mattermost sync imports every colleague ever DM'd as
             // "idle". See ActivePeopleModel.
@@ -98,7 +98,7 @@ Rectangle {
                 wrapMode: Text.WordWrap
                 text: I18n.t("people.empty")
                 color: Theme.textDim
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
 
             delegate: Item {
@@ -154,7 +154,7 @@ Rectangle {
                 //    the "transparent string" rendering quirk on Windows.
                 Rectangle {
                     anchors.fill: parent
-                    radius: 8
+                    radius: Theme.radius
                     color: Theme.panel3
                     border.color: Theme.border
                     border.width: 1
@@ -166,8 +166,8 @@ Rectangle {
                     id: layout
                     anchors.left: parent.left; anchors.right: parent.right
                     anchors.verticalCenter: parent.verticalCenter
-                    anchors.leftMargin: 8; anchors.rightMargin: 8
-                    spacing: 10
+                    anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                    spacing: Theme.spLg
 
                     Rectangle {
                         width: 28; height: 28; radius: 14
@@ -180,7 +180,7 @@ Rectangle {
                             }
                             color: Theme.textOnAccent
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.weight: Font.DemiBold
                         }
                     }
@@ -192,7 +192,7 @@ Rectangle {
                             width: parent.width
                             text: prow.name + (prow.role.length ? "  · " + prow.role : "")
                             color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             font.weight: Font.Medium
                             elide: Text.ElideRight
                         }
@@ -200,7 +200,7 @@ Rectangle {
                             width: parent.width
                             text: prow.question
                             color: Theme.textMuted
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             wrapMode: Text.WordWrap
                             maximumLineCount: 2
                             elide: Text.ElideRight
@@ -217,13 +217,13 @@ Rectangle {
                         Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
                         Rectangle {
                             anchors.fill: parent
-                            radius: 5
+                            radius: Theme.radiusSm
                             color: editMA.containsMouse ? Theme.panel : "transparent"
                             Text {
                                 anchors.centerIn: parent
                                 text: "✎"
                                 color: Theme.textMuted
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fsMd
                             }
                             MouseArea {
                                 id: editMA
@@ -240,7 +240,7 @@ Rectangle {
 
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
-                        radius: 999
+                        radius: Theme.radiusPill
                         color: prow.personState === "pinged" ? Theme.withAlpha(Theme.warning, 0.10)
                              : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)
                              : Theme.bg2
@@ -261,7 +261,7 @@ Rectangle {
                                  : prow.personState === "replied" ? Theme.stDone
                                  : Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.letterSpacing: 1
                             font.weight: Font.DemiBold
                         }

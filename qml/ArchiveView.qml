@@ -174,21 +174,21 @@ Item {
             }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18; anchors.rightMargin: 18
-                spacing: 12
+                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
+                spacing: Theme.spXl
                 Column {
                     spacing: 1
                     Text {
                         text: I18n.t("archive.title")
                         color: Theme.text
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.fsLg
                         font.weight: Font.DemiBold
                     }
                     Text {
                         text: root.items.length + " " + I18n.t("archive.count")
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                     }
                 }
                 Item {
@@ -232,35 +232,35 @@ Item {
                     Layout.preferredHeight: 220
                     Column {
                         anchors.centerIn: parent
-                        spacing: 8
+                        spacing: Theme.spMd
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: "▤"
                             color: Theme.textDim
-                            font.pixelSize: 32
+                            font.pixelSize: Theme.fs2xl
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: I18n.t("archive.empty.title")
                             color: Theme.text
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsMd
                         }
                         Text {
                             anchors.horizontalCenter: parent.horizontalCenter
                             text: I18n.t("archive.empty.hint")
                             color: Theme.textDim
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                         }
                     }
                 }
 
                 ColumnLayout {
                     Layout.fillWidth: true
-                    Layout.leftMargin: 18
-                    Layout.rightMargin: 18
-                    Layout.topMargin: 12
-                    Layout.bottomMargin: 18
-                    spacing: 8
+                    Layout.leftMargin: Theme.inset
+                    Layout.rightMargin: Theme.inset
+                    Layout.topMargin: Theme.spXl
+                    Layout.bottomMargin: Theme.inset
+                    spacing: Theme.spMd
 
                     Repeater {
                         model: root.items
@@ -284,7 +284,7 @@ Item {
                                 height: 24
                                 y: (archCard.implicitHeight - height) / 2
                                 anchors.left: parent.left
-                                radius: 999
+                                radius: Theme.radiusPill
                                 color: "transparent"
                                 border.color: Theme.withAlpha(row.st.color, 0.45)
                                 border.width: 1
@@ -292,7 +292,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: row.st.name
                                     color: row.st.color
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fsXs
                                     font.weight: Font.DemiBold
                                 }
                             }
@@ -300,7 +300,7 @@ Item {
                             TaskCard {
                                 id: archCard
                                 anchors.left: statusPill.right
-                                anchors.leftMargin: 10
+                                anchors.leftMargin: Theme.spLg
                                 anchors.right: parent.right
                                 anchors.top: parent.top
                                 task: row.modelData

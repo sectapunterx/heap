@@ -193,6 +193,38 @@ QtObject {
     readonly property int radius: softContrast ? Brand.radiusMd + 2 : Brand.radiusMd
     readonly property int hourH:  compact ? 44 : 56
 
+    // ── Spacing scale ────────────────────────────────────────────────
+    // Every `spacing`, margin and padding in the app picks one of these, so
+    // Tweaks → Density moves the whole layout, not just the hour height.
+    // Compact steps each one down a notch. 0 and 1px hairlines stay literal.
+    readonly property int sp2xs: compact ? 1 : 2
+    readonly property int spXs:  compact ? 3 : 4
+    readonly property int spSm:  compact ? 4 : 6
+    readonly property int spMd:  compact ? 6 : 8
+    readonly property int spLg:  compact ? 8 : 10
+    readonly property int spXl:  compact ? 10 : 12
+    readonly property int sp2xl: compact ? 12 : 16
+    // The inset dialogs, popups and settings cards keep from their edge.
+    readonly property int inset: compact ? 14 : 18
+    readonly property int sp3xl: compact ? 18 : 24
+
+    // ── Radius scale ─────────────────────────────────────────────────
+    readonly property int radiusXs: 2   // bars, hairline tracks
+    readonly property int radiusSm: 4   // chips, badges, small buttons
+    readonly property int radiusMd: 6   // inputs, pills, cards in lists
+    readonly property int radiusLg: 10  // popups, menus
+    readonly property int radiusXl: 12  // dialogs, large panels
+    readonly property int radiusPill: 999
+
+    // ── Type scale (px) ──────────────────────────────────────────────
+    // Six steps. The floor is 11px: nothing the user has to read is smaller.
+    readonly property int fsXs:  11  // chips, badges, uppercase section labels
+    readonly property int fsSm:  12  // meta, descriptions, secondary text
+    readonly property int fsMd:  13  // body, card titles, inputs
+    readonly property int fsLg:  15  // dialog and section titles
+    readonly property int fsXl:  20  // page headings
+    readonly property int fs2xl: 28  // display (welcome, empty hero)
+
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
     readonly property bool highContrast:  contrast === "high"

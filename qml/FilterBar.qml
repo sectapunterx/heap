@@ -32,8 +32,8 @@ Rectangle {
 
     RowLayout {
         anchors.fill: parent
-        anchors.leftMargin: 16; anchors.rightMargin: 16
-        spacing: 8
+        anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.sp2xl
+        spacing: Theme.spMd
 
         Text {
             text: "<b><font color=\"" + Theme.text + "\">" + root.viewLabel + "</font></b> · "
@@ -41,7 +41,7 @@ Rectangle {
             textFormat: Text.RichText
             color: Theme.textMuted
             font.family: Theme.fontUi
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
 
         Repeater {
@@ -51,7 +51,7 @@ Rectangle {
                 required property string modelData
                 objectName: "pri-" + modelData
                 property bool active: root.priorities[modelData] === true
-                radius: 999
+                radius: Theme.radiusPill
                 color: active ? Theme.accentSoft : (priMA.containsMouse ? Theme.panel3 : Theme.panel2)
                 border.color: active ? Theme.accent : (priMA.containsMouse ? Theme.borderStrong : Theme.border)
                 border.width: 1
@@ -60,16 +60,16 @@ Rectangle {
                 RowLayout {
                     id: chRow
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: Theme.spSm
                     Rectangle {
-                        width: 8; height: 8; radius: 2
+                        width: 8; height: 8; radius: Theme.radiusXs
                         color: Theme.priorityColor(modelData)
                     }
                     Text {
                         text: modelData
                         color: priChip.active ? Theme.accentStrong : Theme.textMuted
                         font.family: Theme.fontUi
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                     }
                 }
                 MouseArea {
@@ -88,7 +88,7 @@ Rectangle {
                 for (const k in root.priorities) if (root.priorities[k]) any = true;
                 return any;
             }
-            radius: 999
+            radius: Theme.radiusPill
             border.color: clrMA.containsMouse ? Theme.borderStrong : Theme.border
             border.width: 1
             color: clrMA.containsMouse ? Theme.panel3 : Theme.panel2
@@ -99,7 +99,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: I18n.t("filter.clear")
                 color: clrMA.containsMouse ? Theme.text : Theme.textDim
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
             MouseArea {
                 id: clrMA
@@ -118,7 +118,7 @@ Rectangle {
             visible: root.showSort
             text: I18n.t("filter.sortBy")
             color: Theme.textDim
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
         }
         Repeater {
             model: root.showSort
@@ -132,7 +132,7 @@ Rectangle {
                 required property var modelData
                 objectName: "sort-" + modelData.id
                 readonly property bool active: root.sortMode === modelData.id
-                radius: 999
+                radius: Theme.radiusPill
                 color: active ? Theme.accentSoft : (sortMA.containsMouse ? Theme.panel3 : Theme.panel2)
                 border.color: active ? Theme.accent : (sortMA.containsMouse ? Theme.borderStrong : Theme.border)
                 border.width: 1
@@ -143,7 +143,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: modelData.label
                     color: parent.active ? Theme.accentStrong : Theme.textMuted
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
                 MouseArea {
                     id: sortMA
@@ -157,7 +157,7 @@ Rectangle {
 
         Rectangle {
             objectName: "archived-toggle"
-            radius: 999
+            radius: Theme.radiusPill
             color: root.showArchived ? Theme.accentSoft : (archMA.containsMouse ? Theme.panel3 : Theme.panel2)
             border.color: root.showArchived ? Theme.accent : (archMA.containsMouse ? Theme.borderStrong : Theme.border)
             border.width: 1
@@ -166,16 +166,16 @@ Rectangle {
             RowLayout {
                 id: archRow
                 anchors.centerIn: parent
-                spacing: 6
+                spacing: Theme.spSm
                 Text {
                     text: "▤"
                     color: root.showArchived ? Theme.accentStrong : Theme.textDim
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
                 Text {
                     text: I18n.t("filter.archived")
                     color: root.showArchived ? Theme.accentStrong : Theme.textMuted
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
             }
             MouseArea {
@@ -193,7 +193,7 @@ Rectangle {
                     .arg(root.blockedCount).arg(root.reviewCount)
             color: Theme.textDim
             font.family: Theme.fontMono
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             elide: Text.ElideRight
             Layout.maximumWidth: implicitWidth
         }

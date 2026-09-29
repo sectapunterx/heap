@@ -64,7 +64,7 @@ Rectangle {
         return r ? String(r).replace("every:", "") : "";
     }
 
-    radius: 8
+    radius: Theme.radius
     color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
         : _selected ? Theme.withAlpha(Theme.accent, 0.10)
             : Theme.panel2
@@ -84,7 +84,7 @@ Rectangle {
     Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
 
     implicitWidth: parent ? parent.width : 260
-    implicitHeight: contentCol.implicitHeight + 20
+    implicitHeight: contentCol.implicitHeight + 2 * Theme.spLg
 
     // A card is a button to assistive tech and to the Tab key.
     activeFocusOnTab: true
@@ -106,16 +106,16 @@ Rectangle {
     ColumnLayout {
         id: contentCol
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 6
+        anchors.margins: Theme.spLg
+        spacing: Theme.spSm
 
         RowLayout {
-            spacing: 6
+            spacing: Theme.spSm
             // Provider badge: which tracker this card mirrors (HEAP-117).
             Rectangle {
                 objectName: "tc-badge"
                 visible: card._isTicket
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(card._badge.color || Theme.textMuted, 0.18)
                 border.color: card._badge.color || Theme.border
                 border.width: 1
@@ -127,7 +127,7 @@ Rectangle {
                     text: card._badge.icon || "◍"
                     textFormat: Text.PlainText
                     color: card._badge.color || Theme.textMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
                 QQC.ToolTip.visible: badgeHover.hovered
@@ -143,11 +143,11 @@ Rectangle {
                 textFormat: Text.PlainText
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 font.weight: Font.Medium
             }
             Rectangle {
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.priorityColor(card.task ? card.task.priority : "P3"), 0.12)
                 implicitWidth: priT.implicitWidth + 10
                 implicitHeight: priT.implicitHeight + 2
@@ -157,7 +157,7 @@ Rectangle {
                     text: card.task ? card.task.priority : ""
                     color: Theme.priorityColor(card.task ? card.task.priority : "P3")
                     font.family: Theme.fontUi
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
             }
@@ -167,7 +167,7 @@ Rectangle {
             Rectangle {
                 objectName: "tc-sync-state"
                 visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.warning, 0.14)
                 border.color: Theme.warning
                 border.width: 1
@@ -179,7 +179,7 @@ Rectangle {
                     text: card._ticket.gone ? I18n.t("taskcard.gone") : I18n.t("taskcard.unsynced")
                     textFormat: Text.PlainText
                     color: Theme.warning
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
                 QQC.ToolTip.visible: syncStateHover.hovered
@@ -192,7 +192,7 @@ Rectangle {
             }
             Rectangle {
                 visible: card._isStuck
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.danger, 0.14)
                 border.color: Theme.danger
                 border.width: 1
@@ -204,14 +204,14 @@ Rectangle {
                     text: I18n.t("task.chip.stuck")
                     color: Theme.danger
                     font.family: Theme.fontUi
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                     font.letterSpacing: 0.6
                 }
             }
             Rectangle {
                 visible: card._isArchived
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.textDim, 0.18)
                 implicitWidth: archT.implicitWidth + 10
                 implicitHeight: archT.implicitHeight + 2
@@ -221,7 +221,7 @@ Rectangle {
                     text: I18n.t("task.chip.arch")
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                     font.letterSpacing: 0.6
                 }
@@ -233,13 +233,13 @@ Rectangle {
                       : ""
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
                 elide: Text.ElideRight
             }
             // ── Git live-status chips — fed by GitWatcher via TaskModel ──
             Rectangle {
                 visible: !!(card.task && (card.task.gitAhead || 0) > 0)
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.accent, 0.14)
                 border.color: Theme.accent
                 border.width: 1
@@ -251,13 +251,13 @@ Rectangle {
                     text: "↑" + (card.task ? (card.task.gitAhead || 0) : 0)
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
             }
             Rectangle {
                 visible: !!(card.task && String(card.task.prState || "").length > 0)
-                radius: 4
+                radius: Theme.radiusSm
                 color: {
                     const s = card.task ? String(card.task.prState || "") : "";
                     if (s === "merged") return Theme.withAlpha(Theme.mFocus, 0.18);
@@ -284,7 +284,7 @@ Rectangle {
                     }
                     color: Theme.text
                     font.family: Theme.fontMono
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
             }
@@ -293,7 +293,7 @@ Rectangle {
             Rectangle {
                 id: commitChip
                 visible: !!(card.task && card.task.recentCommits && card.task.recentCommits.length > 0)
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.textDim, 0.14)
                 border.color: Theme.border
                 border.width: 1
@@ -305,7 +305,7 @@ Rectangle {
                     text: "◇ " + (card.task && card.task.recentCommits ? card.task.recentCommits.length : 0)
                     color: Theme.textMuted
                     font.family: Theme.fontMono
-                    font.pixelSize: 9
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
                 QQC.ToolTip.visible: commitMA.containsMouse && commitChip.visible
@@ -330,7 +330,7 @@ Rectangle {
             textFormat: Text.PlainText
             color: Theme.text
             font.family: Theme.fontUi
-            font.pixelSize: 13
+            font.pixelSize: Theme.fsMd
             font.weight: Font.Medium
             wrapMode: Text.WordWrap
         }
@@ -344,11 +344,11 @@ Rectangle {
             readonly property int _done: _cl.done || 0
             visible: _total > 0
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spSm
 
             Rectangle {
                 objectName: "tc-checklist"
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(parent._done === parent._total ? Theme.stDone : Theme.textMuted, 0.16)
                 implicitWidth: clT.implicitWidth + 10
                 implicitHeight: clT.implicitHeight + 2
@@ -358,7 +358,7 @@ Rectangle {
                     text: parent.parent._done + "/" + parent.parent._total
                     color: parent.parent._done === parent.parent._total ? Theme.stDone : Theme.textMuted
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
             }
@@ -368,7 +368,7 @@ Rectangle {
             Rectangle {
                 Layout.fillWidth: true
                 implicitHeight: 3
-                radius: 2
+                radius: Theme.radiusXs
                 color: Theme.panel3
                 Rectangle {
                     width: parent.width * (parent.parent._total > 0 ? parent.parent._done / parent.parent._total : 0)
@@ -385,14 +385,14 @@ Rectangle {
             text: card.task ? card.task.desc : ""
             textFormat: Text.PlainText
             color: Theme.textMuted
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             wrapMode: Text.WordWrap
             maximumLineCount: 2
             elide: Text.ElideRight
         }
 
         RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Text {
                 property string dlText: {
                     if (!card.task || !card.task.deadline) return "";
@@ -427,13 +427,13 @@ Rectangle {
                     return Theme.textDim;
                 }
                 font.family: Theme.fontMono
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
             }
             // Who owns the issue upstream (HEAP-117).
             Rectangle {
                 objectName: "tc-assignee"
                 visible: card._isTicket && String(card._ticket.assignee || "").length > 0
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.textMuted, 0.12)
                 implicitWidth: assigneeT.implicitWidth + 10
                 implicitHeight: assigneeT.implicitHeight + 2
@@ -443,7 +443,7 @@ Rectangle {
                     text: "@" + String(card._ticket.assignee || "")
                     textFormat: Text.PlainText
                     color: Theme.textMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     elide: Text.ElideRight
                 }
             }
@@ -456,7 +456,7 @@ Rectangle {
                 text: "💬 " + (card._ticket.commentCount || 0)
                 textFormat: Text.PlainText
                 color: Theme.textDim
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
             }
             // Label chips (HEAP-124). A tracker-pulled label keeps whatever
             // colour the project gave it, else the muted chip style.
@@ -464,7 +464,7 @@ Rectangle {
                 model: card.task && card.task.labels ? card.task.labels : []
                 delegate: Rectangle {
                     required property var modelData
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: Theme.withAlpha(modelData.color || Theme.textMuted, 0.14)
                     border.color: modelData.color || Theme.border
                     border.width: 1
@@ -475,14 +475,14 @@ Rectangle {
                         anchors.centerIn: parent
                         text: modelData.id
                         color: modelData.color || Theme.textMuted
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                     }
                 }
             }
             // Recurrence chip (HEAP-77).
             Rectangle {
                 visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.withAlpha(Theme.mOneone, 0.14)
                 border.color: Theme.mOneone
                 border.width: 1
@@ -494,7 +494,7 @@ Rectangle {
                     text: "🔁 " + card._recurLabel(card.task ? card.task.recurrence : "")
                     color: Theme.mOneone
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
             }
@@ -502,7 +502,7 @@ Rectangle {
             // Time-tracking chip — click to start/stop; live while running.
             Rectangle {
                 visible: !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
-                radius: 4
+                radius: Theme.radiusSm
                 color: card.task && card.task.isTiming ? Theme.withAlpha(Theme.p1, 0.18) : Theme.withAlpha(Theme.textDim, 0.14)
                 border.color: card.task && card.task.isTiming ? Theme.p1 : Theme.border
                 border.width: 1
@@ -520,7 +520,7 @@ Rectangle {
                     }
                     color: card.task && card.task.isTiming ? Theme.p1 : Theme.textMuted
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     font.weight: Font.DemiBold
                 }
                 MouseArea {
@@ -536,7 +536,7 @@ Rectangle {
             }
             Rectangle {
                 visible: !!(card.scheduled && card.scheduled.length > 0)
-                radius: 4
+                radius: Theme.radiusSm
                 color: Theme.accentSoft
                 implicitWidth: schedT.implicitWidth + 10
                 implicitHeight: schedT.implicitHeight + 2
@@ -546,7 +546,7 @@ Rectangle {
                     text: "⏰ " + (card.scheduled || "")
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
             }
         }
@@ -570,7 +570,7 @@ Rectangle {
             text: "+" + (AppController.selectionCount - 1)
             color: Theme.textOnAccent
             font.family: Theme.fontMono
-            font.pixelSize: 10
+            font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold
         }
     }
@@ -623,11 +623,11 @@ Rectangle {
                 text: card.task ? (card.task.id + " · " + card.task.priority) : ""
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
                 font.letterSpacing: 1
-                leftPadding: 12
-                rightPadding: 12
+                leftPadding: Theme.spXl
+                rightPadding: Theme.spXl
             }
         }
         QQC.MenuItem {

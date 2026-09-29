@@ -54,44 +54,44 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
     }
 
     contentItem: ColumnLayout {
-        spacing: 10
+        spacing: Theme.spLg
 
         Item {
             Layout.preferredHeight: 6
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("quickNote.title")
             color: Theme.textMuted
-            font.pixelSize: 10
+            font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold
             font.letterSpacing: 1
         }
 
         ScrollView {
             id: editorScroll
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             Layout.preferredHeight: 240
             clip: true
 
             TextArea {
                 id: editor
                 wrapMode: TextEdit.Wrap
-                font.pixelSize: 14
+                font.pixelSize: Theme.fsLg
                 color: Theme.text
                 placeholderText: I18n.t("quickNote.placeholder")
                 placeholderTextColor: Theme.textDim
                 selectByMouse: true
                 background: Rectangle {
-                    radius: 6
+                    radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
                     border.width: 1
@@ -157,15 +157,15 @@ Popup {
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("quickNote.hint")
             color: Theme.textDim
-            font.pixelSize: 10
+            font.pixelSize: Theme.fsXs
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 14
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
+            spacing: Theme.spMd
             Item {
                 Layout.fillWidth: true
             }
@@ -210,7 +210,7 @@ Popup {
         }
 
         background: Rectangle {
-            radius: 10
+            radius: Theme.radiusLg
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -233,32 +233,32 @@ Popup {
             ColumnLayout {
                 id: confirmCol
                 anchors.fill: parent
-                spacing: 10
+                spacing: Theme.spLg
 
                 Item {
                     Layout.preferredHeight: 6
                 }
 
                 Text {
-                    Layout.leftMargin: 18; Layout.rightMargin: 18
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     text: I18n.t("quickNote.discard.title")
                     color: Theme.text
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fsMd
                     font.weight: Font.DemiBold
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }
 
                 Text {
-                    Layout.leftMargin: 18; Layout.rightMargin: 18
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     text: I18n.t("quickNote.discard.hint")
                     color: Theme.textDim
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
 
                 RowLayout {
-                    Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 14
-                    spacing: 8
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
+                    spacing: Theme.spMd
                     Item {
                         Layout.fillWidth: true
                     }

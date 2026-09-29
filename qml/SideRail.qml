@@ -30,8 +30,8 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.topMargin: 14
-        spacing: 6
+        anchors.topMargin: Theme.sp2xl
+        spacing: Theme.spSm
 
         // View switcher
         RailBtn {
@@ -57,7 +57,7 @@ Rectangle {
             onActivated: AppController.currentView = "archive"
         }
 
-        Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
+        Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: Theme.spSm; Layout.bottomMargin: Theme.spSm }
 
         RailBtn {
             objectName: "rail-blocked"
@@ -74,7 +74,7 @@ Rectangle {
                    active: AppController.currentView === "board" && AppController.focusedStatus === "review"
                    onActivated: AppController.focusStatusColumn("review") }
 
-        Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: 6; Layout.bottomMargin: 6 }
+        Rectangle { Layout.alignment: Qt.AlignHCenter; width: 24; height: 1; color: Theme.border; Layout.topMargin: Theme.spSm; Layout.bottomMargin: Theme.spSm }
 
         RailBtn {
             objectName: "rail-docs"
@@ -105,7 +105,7 @@ Rectangle {
             tooltipText: I18n.t("siderail.tip.settings")
             active: AppController.currentView === "settings"
             onActivated: AppController.currentView = "settings"
-            Layout.bottomMargin: 14
+            Layout.bottomMargin: Theme.sp2xl
         }
     }
 
@@ -129,7 +129,7 @@ Rectangle {
         Layout.preferredHeight: 36
         Rectangle {
             anchors.fill: parent
-            radius: 8
+            radius: Theme.radius
             color: btn.active ? Theme.accentSoft
                  : ma.containsMouse ? Theme.panel2 : "transparent"
             border.color: Theme.accentStrong
@@ -147,8 +147,8 @@ Rectangle {
         Rectangle {
             visible: btn.countText !== ""
             anchors.top: parent.top; anchors.right: parent.right
-            anchors.topMargin: 2; anchors.rightMargin: 2
-            radius: 6
+            anchors.topMargin: Theme.sp2xs; anchors.rightMargin: Theme.sp2xs
+            radius: Theme.radiusMd
             color: btn.countColor
             implicitWidth: cntT.implicitWidth + 8
             implicitHeight: cntT.implicitHeight + 2
@@ -158,7 +158,7 @@ Rectangle {
                 text: btn.countText
                 color: Theme.textOnBadge
                 font.family: Theme.fontMono
-                font.pixelSize: 9
+                font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
             }
         }

@@ -231,23 +231,23 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
     }
 
     contentItem: ColumnLayout {
-        spacing: 10
+        spacing: Theme.spLg
         Item {
             Layout.preferredHeight: 6
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("quick.title")
             color: Theme.textMuted
-            font.pixelSize: 10
+            font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold
             font.letterSpacing: 1
         }
@@ -255,11 +255,11 @@ Popup {
         TextField {
             id: inputField
             objectName: "qc-input"
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("quick.fieldPh")
-            font.pixelSize: 14
+            font.pixelSize: Theme.fsLg
             background: Rectangle {
-                radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1
+                radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1
             }
             color: Theme.text
             placeholderTextColor: Theme.textDim
@@ -316,19 +316,19 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            spacing: Theme.spMd
             Text {
                 visible: root._title.length > 0
                 text: "" + root._title
                 color: Theme.text
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 Layout.fillWidth: true
                 elide: Text.ElideRight
             }
             Rectangle {
                 visible: root._preview && root._preview.ok
-                radius: 10
+                radius: Theme.radiusLg
                 color: Theme.panel2
                 border.color: Theme.accent
                 border.width: 1
@@ -338,7 +338,7 @@ Popup {
                     id: previewChip
                     anchors.centerIn: parent
                     color: Theme.text
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     text: {
                         if (!root._preview || !root._preview.ok) return "";
                         const d = root._preview.start;
@@ -359,8 +359,8 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 14
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
+            spacing: Theme.spMd
             Item {
                 Layout.fillWidth: true
             }

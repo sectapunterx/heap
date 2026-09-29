@@ -7,15 +7,15 @@ Button {
     property bool primary: false
     property bool danger: false
 
-    padding: 8
-    leftPadding: 12
+    padding: Theme.spMd
+    leftPadding: Theme.spXl
 
     // Reachable with Tab and named for screen readers; the focus ring below
     // is the only sign of where the keyboard is.
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.Button
     Accessible.name: root.text
-    rightPadding: 12
+    rightPadding: Theme.spXl
 
     // Every hand-rolled button in the app switches the cursor; this one is a
     // Controls Button, which doesn't, so pills were the only clickable things
@@ -29,7 +29,7 @@ Button {
     opacity: enabled ? 1 : 0.45
 
     background: Rectangle {
-        radius: 6
+        radius: Theme.radiusMd
         color: primary ? Theme.accent
               : danger  ? Theme.withAlpha(Theme.danger, 0.12)
               : root.hovered ? Theme.panel3 : Theme.panel2
@@ -42,7 +42,7 @@ Button {
     contentItem: Text {
         text: root.text
         font.family: Theme.fontUi
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsMd
         font.weight: primary ? Font.DemiBold : Font.Medium
         color: primary ? Theme.textOnAccent : danger ? Theme.danger : Theme.text
         horizontalAlignment: Text.AlignHCenter

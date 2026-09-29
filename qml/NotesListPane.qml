@@ -120,31 +120,31 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        anchors.rightMargin: 11
-        spacing: 8
+        anchors.margins: Theme.spLg
+        anchors.rightMargin: Theme.spLg
+        spacing: Theme.spMd
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spSm
             Text {
                 text: I18n.t("notes.all").toUpperCase()
                 color: Theme.textMuted
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
                 font.letterSpacing: 1
                 Layout.fillWidth: true
             }
             Rectangle {
                 objectName: "note-new"
-                width: 22; height: 22; radius: 5
+                width: 22; height: 22; radius: Theme.radiusSm
                 color: newMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "+"
                     color: Theme.text
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fsLg
                 }
                 MouseArea {
                     id: newMA
@@ -166,8 +166,8 @@ Rectangle {
             placeholderText: I18n.t("notes.filter")
             placeholderTextColor: Theme.textDim
             color: Theme.text
-            font.pixelSize: 11
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            font.pixelSize: Theme.fsSm
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             onTextChanged: root.filter = text
         }
 
@@ -176,7 +176,7 @@ Rectangle {
             Layout.fillWidth: true
             text: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
             color: Theme.textDim
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             wrapMode: Text.Wrap
         }
 
@@ -186,7 +186,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: 2
+            spacing: Theme.sp2xs
             model: root.rows
             QQC.ScrollBar.vertical: QQC.ScrollBar { policy: QQC.ScrollBar.AsNeeded }
 
@@ -205,10 +205,10 @@ Rectangle {
                     Text {
                         anchors.left: parent.left
                         anchors.verticalCenter: parent.verticalCenter
-                        anchors.bottomMargin: 2
+                        anchors.bottomMargin: Theme.sp2xs
                         text: (rowData.label || "").toUpperCase()
                         color: Theme.textDim
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                         font.letterSpacing: 1
                         elide: Text.ElideRight
@@ -224,7 +224,7 @@ Rectangle {
                     readonly property var note: rowData.note || ({})
                     objectName: "note-row-" + (row.note.id || "")
                     height: 40
-                    radius: 6
+                    radius: Theme.radiusMd
                     readonly property bool current: row.note.id === AppController.activeNoteId
                     color: row.current ? Theme.withAlpha(Theme.accent, 0.14)
                          : rowMA.containsMouse ? Theme.panel2 : "transparent"
@@ -232,23 +232,23 @@ Rectangle {
                     Rectangle {
                         visible: row.current
                         anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                        anchors.margins: 6
+                        anchors.margins: Theme.spSm
                         width: 2; radius: 1
                         color: Theme.accent
                     }
 
                     ColumnLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 12; anchors.rightMargin: 8
-                        anchors.topMargin: 4; anchors.bottomMargin: 4
+                        anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spMd
+                        anchors.topMargin: Theme.spXs; anchors.bottomMargin: Theme.spXs
                         spacing: 0
                         RowLayout {
                             Layout.fillWidth: true
-                            spacing: 4
+                            spacing: Theme.spXs
                             Text {
                                 text: row.note.title || ""
                                 color: Theme.text
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                                 font.weight: row.current ? Font.DemiBold : Font.Normal
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -259,13 +259,13 @@ Rectangle {
                                 visible: row.note.pinned && row.rowData.inPinnedSection !== true
                                 text: "•"
                                 color: Theme.accent
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fsMd
                             }
                         }
                         Text {
                             text: row.note.excerpt || ""
                             color: Theme.textDim
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                             visible: (row.note.excerpt || "").length > 0
@@ -314,7 +314,7 @@ Rectangle {
         modal: true
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         width: 380
         title: I18n.t("notes.rename")
 
@@ -334,21 +334,21 @@ Rectangle {
         }
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
         }
 
         contentItem: ColumnLayout {
-            spacing: 8
+            spacing: Theme.spMd
             QQC.TextField {
                 id: titleField
                 objectName: "note-rename-title"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320
                 color: Theme.text
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: renamePopup.commit()
             }
             QQC.TextField {
@@ -360,15 +360,15 @@ Rectangle {
                 placeholderTextColor: Theme.textDim
                 color: Theme.text
                 font.family: Theme.fontMono
-                font.pixelSize: 11
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                font.pixelSize: Theme.fsSm
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: renamePopup.commit()
             }
         }
 
         footer: RowLayout {
-            spacing: 8
-            Layout.margins: 14
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: renamePopup.close() }
             PillButton { text: I18n.t("editor.btn.save"); primary: true; onClicked: renamePopup.commit() }

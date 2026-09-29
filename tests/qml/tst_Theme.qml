@@ -252,6 +252,32 @@ TestCase {
         compare(fails.length, 0, fails.join("; "));
     }
 
+    // ── Scales ──────────────────────────────────────────────────────────
+
+    // The type scale ascends and nothing the user reads is under 11px.
+    function test_type_scale_ascends_from_eleven() {
+        const s = [Theme.fsXs, Theme.fsSm, Theme.fsMd, Theme.fsLg, Theme.fsXl, Theme.fs2xl];
+        verify(s[0] >= 11, "fsXs is " + s[0] + "px");
+        for (let i = 1; i < s.length; i++) verify(s[i] > s[i - 1], "type scale step " + i + " does not ascend");
+    }
+
+    // Density moves the spacing scale, not just the hour height: compact
+    // makes every step at least as tight and the common ones tighter.
+    function test_compact_density_tightens_spacing() {
+        const keys = ["sp2xs", "spXs", "spSm", "spMd", "spLg", "spXl", "sp2xl", "inset", "sp3xl"];
+        const saved = AppController.density;
+        AppController.density = "comfy";
+        const roomy = keys.map(k => Theme[k]);
+        AppController.density = "compact";
+        const tight = keys.map(k => Theme[k]);
+        AppController.density = saved;
+        for (let i = 0; i < keys.length; i++) {
+            verify(tight[i] <= roomy[i], keys[i] + " grows in compact");
+            if (i > 0) verify(roomy[i] > roomy[i - 1], keys[i] + " does not ascend");
+        }
+        verify(tight[3] < roomy[3] && tight[5] < roomy[5], "compact left spMd / spXl as they were");
+    }
+
     // ── Themes ──────────────────────────────────────────────────────────
 
     // Every built-in fills every token with a colour — a missing one would
