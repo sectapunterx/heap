@@ -171,4 +171,32 @@ TestCase {
         verify(te._isTicket);
         te.close();
     }
+
+    // A long description used to sit in a fixed 70px box; now the field grows
+    // with the text up to a cap and scrolls past it, and the dialog never gets
+    // taller than the window, whatever the text or Details hold.
+    function test_long_description_grows_to_a_cap_and_the_dialog_fits() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        let long = "";
+        for (let i = 0; i < 80; i++) long += "line " + i + " of a long description
+";
+        te.showFor({ id: "LTE-3100", title: "long", desc: long, _isNew: false, ticket: ({}) });
+        const field = findChild(te, "te-desc");
+        verify(field !== null, "te-desc not found");
+        const box = field.parent.parent;   // the ScrollView around the field
+        tryVerify(() => field.implicitHeight > te._descMaxH, 2000, "the probe text is not long enough");
+        tryCompare(box, "height", te._descMaxH, 2000, "the description box did not stop at its cap");
+        verify(te.height <= te._maxH + 0.5, "the dialog grew past the window");
+
+        te.detailsOpen = true;
+        wait(0);
+        verify(te.height <= te._maxH + 0.5, "Details pushed the dialog past the window");
+
+        const shortCap = te._descMaxH;
+        te.descExpanded = true;
+        verify(te._descMaxH >= shortCap, "expanding lowered the description's cap");
+        te.descExpanded = false;
+        te.detailsOpen = false;
+        te.close();
+    }
 }

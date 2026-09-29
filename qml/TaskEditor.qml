@@ -12,7 +12,13 @@ Popup {
     // dimmed backdrop did nothing.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
-    width: 480
+    // Wide enough for a description to be read, wider still while it is
+    // expanded for writing; never taller than the window, with the body
+    // scrolling between a fixed header and footer.
+    width: Math.min(descExpanded ? 880 : 640, _maxW)
+    height: Math.min(implicitHeight, _maxH)
+    readonly property real _maxW: (Overlay.overlay ? Overlay.overlay.width : 1200) - 48
+    readonly property real _maxH: (Overlay.overlay ? Overlay.overlay.height : 900) - 48
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: Rectangle {
@@ -24,6 +30,24 @@ Popup {
     // "edit" | "preview" for the description. Starts on edit — the editor is
     // where you go to change things.
     property string descMode: "edit"
+    // Both kept across opens: whoever likes Details open, or writes long
+    // descriptions, should not have to ask again for every task.
+    property bool detailsOpen: false
+    property bool descExpanded: false
+    readonly property real _descMinH: 120
+    readonly property real _descMaxH: descExpanded ? Math.max(280, _maxH - 360) : 280
+    // A closed Details says what it holds.
+    readonly property string _detailsSummary: {
+        const parts = [];
+        if (branchField.text.length) parts.push("⎇ " + branchField.text);
+        if (recurBox.currentIndex > 0) parts.push("↻ " + recurBox.currentText);
+        if (scheduledField.text.length) parts.push("▸ " + scheduledField.text);
+        if (estimateField.text.length) parts.push(estimateField.text + " min");
+        const labels = root.labelsFromText(labelsField.text);
+        if (labels.length) parts.push(labels.join(", "));
+        if (somedayBox.checked) parts.push(I18n.t("editor.someday"));
+        return parts.join("  ·  ");
+    }
     // Original id at the moment of opening the editor. Used so that even if
     // the user edits idField, AppController can find and rename the existing
     // row instead of inserting a duplicate.
@@ -334,15 +358,18 @@ Popup {
         border.width: 1
     }
 
+    // What the dialog is for comes first — title, status, priority, when it
+    // is due and what it says — then everything else behind "Details". It
+    // used to be one 480px column of every field at once, with a 70px box for
+    // the description, so a real ticket's text was read through a slot.
     contentItem: ColumnLayout {
-        spacing: Theme.spXl
-        // padding via Item margins
-        Item {
-            Layout.preferredHeight: 4
-        }
+        spacing: 0
 
+        // ── Header: what this is, and where it lives ──
         RowLayout {
+            Layout.fillWidth: true
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.topMargin: Theme.inset; Layout.bottomMargin: Theme.spXl
             spacing: Theme.spMd
             Text {
                 text: root.isNew ? I18n.t("editor.new.task") : I18n.t("editor.edit.task")
@@ -361,419 +388,219 @@ Popup {
                 font.pixelSize: Theme.fsMd
                 font.weight: Font.Medium
             }
-            Item {
-                Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            PillButton {
+                objectName: "te-ticket-open"
+                visible: root._isTicket && String(root._ticket.url || "").length > 0
+                text: "↗  " + I18n.t("ticket.open")
+                onClicked: AppController.openTaskExternal(root._originalId || (root.draft.id || ""))
             }
         }
 
-        // ── Mirrored tracker issue: read-only context (HEAP-117) ──
-        // Everything here is the tracker's, not heap's: it cannot be edited
-        // from this dialog, and the next sync overwrites the fields that are.
-        Rectangle {
-            objectName: "te-ticket-strip"
-            visible: root._isTicket
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spLg
+        ScrollView {
+            id: bodyScroll
             Layout.fillWidth: true
-            implicitHeight: ticketCol.implicitHeight + 20
-            radius: Theme.radius
-            color: Theme.withAlpha(Theme.panel2, 0.6)
-            border.color: Theme.border
-            border.width: 1
+            Layout.fillHeight: true
+            Layout.preferredHeight: bodyCol.implicitHeight
+            contentWidth: availableWidth
+            clip: true
 
             ColumnLayout {
-                id: ticketCol
-                anchors.fill: parent
-                anchors.margins: Theme.spLg
-                spacing: Theme.spSm
+                id: bodyCol
+                width: bodyScroll.availableWidth
+                spacing: Theme.spXl
 
-                RowLayout {
-                    spacing: Theme.spSm
-                    Rectangle {
-                        radius: Theme.radiusSm
-                        color: Theme.withAlpha(root._badge.color || Theme.textMuted, 0.18)
-                        border.color: root._badge.color || Theme.border
-                        border.width: 1
-                        implicitWidth: teBadgeT.implicitWidth + 8
-                        implicitHeight: teBadgeT.implicitHeight + 2
-                        Text {
-                            id: teBadgeT
-                            anchors.centerIn: parent
-                            text: root._badge.icon || "◍"
-                            textFormat: Text.PlainText
-                            color: root._badge.color || Theme.textMuted
-                            font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
-                        }
-                    }
-                    Text {
-                        text: (root._badge.name || root._ticket.provider || "")
-                              + (root._ticket.project ? " · " + root._ticket.project : "")
-                        textFormat: Text.PlainText
-                        color: Theme.textMuted
-                        font.pixelSize: Theme.fsSm
-                        elide: Text.ElideRight
-                        Layout.fillWidth: true
-                    }
-                    Button {
-                        objectName: "te-ticket-open"
-                        visible: String(root._ticket.url || "").length > 0
-                        text: "↗ " + I18n.t("ticket.open")
-                        font.pixelSize: Theme.fsXs
-                        onClicked: AppController.openTaskExternal(root._originalId || (root.draft.id || ""))
-                    }
-                }
-
-                // One "label: value" row per field the tracker actually gave.
-                Flow {
+                // ── Mirrored tracker issue: one line of whose it is (HEAP-117) ──
+                // The rest of what the tracker says sits under Details.
+                Rectangle {
+                    objectName: "te-ticket-strip"
+                    visible: root._isTicket
                     Layout.fillWidth: true
-                    spacing: Theme.sp2xl
-                    Repeater {
-                        model: root._ticketFacts
-                        delegate: Row {
-                            required property var modelData
-                            spacing: Theme.spXs
-                            Text {
-                                text: modelData.label
-                                textFormat: Text.PlainText
-                                color: Theme.textDim
-                                font.pixelSize: Theme.fsXs
-                                font.letterSpacing: 0.4
-                            }
-                            Text {
-                                text: modelData.value
-                                textFormat: Text.PlainText
-                                color: Theme.text
-                                font.pixelSize: Theme.fsXs
-                                font.weight: Font.Medium
-                            }
-                        }
-                    }
-                }
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    implicitHeight: stripCol.implicitHeight + 2 * Theme.spLg
+                    radius: Theme.radius
+                    color: Theme.withAlpha(Theme.panel2, 0.6)
+                    border.color: Theme.border
+                    border.width: 1
 
-                Text {
-                    Layout.fillWidth: true
-                    text: "△ " + I18n.t("ticket.overwriteHint")
-                    textFormat: Text.PlainText
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fsXs
-                    wrapMode: Text.WordWrap
-                }
-
-                // Comments are read on demand and kept only while this dialog
-                // is open — heap stores none of them.
-                Button {
-                    objectName: "te-ticket-load-comments"
-                    visible: !root._commentsRequested
-                    text: "❝ " + I18n.t("ticket.loadComments")
-                    font.pixelSize: Theme.fsXs
-                    onClicked: {
-                        root._commentsRequested = true;
-                        AppController.fetchTicketComments(root._originalId || (root.draft.id || ""));
-                    }
-                }
-                Text {
-                    objectName: "te-ticket-comments-status"
-                    visible: root._commentsRequested
-                             && (root._commentsError.length > 0 || root._comments.length === 0)
-                    text: root._commentsError.length > 0 ? root._commentsError : I18n.t("ticket.noComments")
-                    textFormat: Text.PlainText
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fsXs
-                    wrapMode: Text.WordWrap
-                    Layout.fillWidth: true
-                }
-                Repeater {
-                    model: root._comments
-                    delegate: ColumnLayout {
-                        required property var modelData
-                        Layout.fillWidth: true
-                        spacing: 1
+                    ColumnLayout {
+                        id: stripCol
+                        anchors.fill: parent
+                        anchors.margins: Theme.spLg
+                        spacing: Theme.spXs
                         RowLayout {
+                            Layout.fillWidth: true
                             spacing: Theme.spSm
                             Text {
-                                text: "@" + String(modelData.author || "")
-                                      + (modelData.createdAt && modelData.createdAt.getTime
-                                         && !isNaN(modelData.createdAt.getTime())
-                                         ? " · " + AppController.shortDate(modelData.createdAt) : "")
+                                text: root._badge.icon || "◍"
                                 textFormat: Text.PlainText
-                                color: Theme.textDim
+                                color: root._badge.color || Theme.textMuted
                                 font.pixelSize: Theme.fsXs
+                                font.weight: Font.DemiBold
                             }
-                            // Every tracker's comments can be opened where
-                            // they live; Jira and GitLab had no link at all.
                             Text {
-                                objectName: "te-comment-link"
-                                visible: String(modelData.url || "").length > 0
-                                text: "↗ " + I18n.t("ticket.openComment")
-                                color: commentLinkMA.containsMouse ? Theme.accent : Theme.accentStrong
-                                font.pixelSize: Theme.fsXs
-                                MouseArea {
-                                    id: commentLinkMA
-                                    anchors.fill: parent
-                                    anchors.margins: -3
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        const url = String(modelData.url || "");
-                                        if (AppController.isSafeLink(url)) Qt.openUrlExternally(url);
-                                    }
-                                }
+                                text: (root._badge.name || root._ticket.provider || "")
+                                      + (root._ticket.project ? " · " + root._ticket.project : "")
+                                textFormat: Text.PlainText
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                                Layout.fillWidth: true
+                            }
+                            Text {
+                                visible: String(root._ticket.assignee || "").length > 0
+                                text: "@" + String(root._ticket.assignee || "")
+                                textFormat: Text.PlainText
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsSm
                             }
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: String(modelData.body || "")
-                            // Written by whoever commented upstream.
+                            text: I18n.t("ticket.overwriteHint")
                             textFormat: Text.PlainText
-                            color: Theme.text
+                            color: Theme.textDim
                             font.pixelSize: Theme.fsXs
                             wrapMode: Text.WordWrap
-                            maximumLineCount: 4
+                        }
+                    }
+                }
+
+                // ── Title ──
+                TextField {
+                    id: titleField
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    placeholderText: I18n.t("editor.ph.titleShort")
+                    font.pixelSize: Theme.fsLg
+                    font.weight: Font.Medium
+                    background: FieldBg {}
+                    color: Theme.text
+                    placeholderTextColor: Theme.textDim
+                }
+
+                // ── Status · priority · deadline: what a developer reads first ──
+                GridLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    columns: 3
+                    columnSpacing: Theme.spLg
+                    rowSpacing: Theme.spXs
+                    FieldLabel { text: I18n.t("editor.label.status").toUpperCase() }
+                    FieldLabel { text: I18n.t("editor.label.priority").toUpperCase() }
+                    FieldLabel { text: I18n.t("editor.label.deadline").toUpperCase() }
+                    ComboBox {
+                        id: statusBox
+                        objectName: "te-status"
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        model: root.statusNames()
+                        background: FieldBg {}
+                        contentItem: Text {
+                            text: statusBox.displayText
+                            color: Theme.text
+                            font.pixelSize: Theme.fsMd
+                            leftPadding: Theme.spLg
+                            verticalAlignment: Text.AlignVCenter
                             elide: Text.ElideRight
                         }
                     }
-                }
-            }
-        }
-
-        FieldLabel {
-            text: I18n.t("editor.label.ticketId").toUpperCase(); Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-        }
-        TextField {
-            id: idField
-            objectName: "te-id"
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            // New tasks: TODO placeholder — final id is generated on save.
-            // Edit: pre-filled with the current id (still editable).
-            placeholderText: root.isNew ? I18n.t("editor.ph.ticketId")
-                                        : I18n.t("editor.ph.ticketIdEdit")
-            font.family: Theme.fontMono
-            background: FieldBg {
-            }
-            color: Theme.text
-            placeholderTextColor: Theme.textDim
-            // Auto-uppercase so a hand-typed id stays canonical (matches
-            // newTaskDraft) — but only while composing a NEW one. A synced
-            // ticket's id is lowercase by construction ("github-1234", from the
-            // provider id), and uppercasing it on open made a plain Save look
-            // like a rename to saveTask: the row was silently re-keyed to
-            // GITHUB-1234, and if that id was taken, the other task was lost.
-            onTextChanged: {
-                if (!root.isNew) return;
-                const up = text.toUpperCase();
-                if (up !== text) text = up;
-            }
-        }
-
-        FieldLabel {
-            text: I18n.t("editor.label.title").toUpperCase(); Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-        }
-        TextField {
-            id: titleField
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            placeholderText: I18n.t("editor.ph.titleShort")
-            background: FieldBg {
-            }
-            color: Theme.text
-            placeholderTextColor: Theme.textDim
-        }
-
-        RowLayout {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            FieldLabel { text: I18n.t("editor.label.desc").toUpperCase() }
-            Item { Layout.fillWidth: true }
-            // The description is markdown and always has been — it was just
-            // never rendered, so a template's checklist was inert text the
-            // user could not tick.
-            Repeater {
-                model: [ ({ id: "edit", label: I18n.t("notes.mode.edit") }),
-                         ({ id: "preview", label: I18n.t("notes.mode.preview") }) ]
-                delegate: Rectangle {
-                    required property var modelData
-                    objectName: "desc-mode-" + modelData.id
-                    readonly property bool active: root.descMode === modelData.id
-                    radius: Theme.radiusPill
-                    color: active ? Theme.accentSoft : (dmMA.containsMouse ? Theme.panel3 : "transparent")
-                    border.color: active ? Theme.accent : "transparent"
-                    border.width: 1
-                    implicitWidth: dmT.implicitWidth + 14
-                    implicitHeight: 20
-                    Text {
-                        id: dmT
-                        anchors.centerIn: parent
-                        text: modelData.label
-                        color: parent.active ? Theme.accentStrong : Theme.textDim
-                        font.pixelSize: Theme.fsSm
-                    }
-                    MouseArea {
-                        id: dmMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.descMode = modelData.id
-                    }
-                }
-            }
-        }
-        ScrollView {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            Layout.preferredHeight: 70
-            visible: root.descMode === "edit"
-            TextArea {
-                id: descField
-                placeholderText: I18n.t("editor.ph.desc")
-                wrapMode: TextEdit.Wrap
-                background: FieldBg {
-                }
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-            }
-        }
-        // The checkbox write goes through the editor's own document, so
-        // ticking an item in the preview edits the text the Save button will
-        // store — and does it as one undo step.
-        MdView {
-            visible: root.descMode === "preview"
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            Layout.preferredHeight: 70
-            document: descDocument
-            editorDocument: descField.textDocument
-        }
-
-        GridLayout {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            Layout.fillWidth: true
-            columns: 2
-            columnSpacing: Theme.spLg
-            rowSpacing: Theme.spXs
-            FieldLabel {
-                text: I18n.t("editor.label.status").toUpperCase()
-            }
-            FieldLabel {
-                text: I18n.t("editor.label.priority").toUpperCase()
-            }
-            ComboBox {
-                id: statusBox
-                objectName: "te-status"
-                Layout.fillWidth: true
-                model: root.statusNames()
-                background: FieldBg {
-                }
-                contentItem: Text {
-                    text: statusBox.displayText
-                    color: Theme.text
-                    leftPadding: Theme.spLg
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-            ComboBox {
-                id: priBox
-                Layout.fillWidth: true
-                model: ["P0", "P1", "P2", "P3"]
-                background: FieldBg {
-                }
-                contentItem: Text {
-                    text: priBox.displayText
-                    color: Theme.text
-                    leftPadding: Theme.spLg
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-            FieldLabel {
-                text: I18n.t("editor.label.deadline").toUpperCase()
-            }
-            FieldLabel {
-                text: I18n.t("editor.label.branch").toUpperCase()
-            }
-            RowLayout {
-                Layout.fillWidth: true
-                spacing: Theme.spSm
-                TextField {
-                    id: deadlineField
-                    Layout.fillWidth: true
-                    placeholderText: I18n.t("editor.ph.deadline")
-                    font.family: Theme.fontMono
-                    background: Rectangle {
-                        radius: Theme.radiusMd
-                        color: Theme.panel2
-                        border.color: deadlineField.text.length === 0
-                            ? Theme.border
-                            : (root._deadlinePreview && root._deadlinePreview.ok
-                                ? Theme.accent
-                                : Theme.danger)
-                        border.width: 1
-                    }
-                    color: Theme.text
-                    placeholderTextColor: Theme.textDim
-                    onTextChanged: deadlinePreviewTimer.restart()
-                    onEditingFinished: {
-                        if (root._deadlinePreview && root._deadlinePreview.ok &&
-                            root._deadlinePreview.start) {
-                            text = root.formatWhen(root._deadlinePreview.start,
-                                                   root._deadlinePreview.hasTime);
+                    ComboBox {
+                        id: priBox
+                        Layout.preferredWidth: 88
+                        model: ["P0", "P1", "P2", "P3"]
+                        background: FieldBg {}
+                        contentItem: Text {
+                            text: priBox.displayText
+                            color: Theme.priorityColor(priBox.displayText)
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Font.DemiBold
+                            leftPadding: Theme.spLg
+                            verticalAlignment: Text.AlignVCenter
                         }
                     }
-                    ToolTip.visible: hovered && text.length > 0 &&
-                        root._deadlinePreview && !root._deadlinePreview.ok
-                    ToolTip.text: I18n.t("editor.tip.unrecognized")
-                }
-                Timer {
-                    id: deadlinePreviewTimer
-                    interval: 80
-                    repeat: false
-                    onTriggered: root._refreshDeadlinePreview()
-                }
-                // Calendar picker — fills the deadline field with a chosen date.
-                Rectangle {
-                    id: deadlineCalBtn
-                    Layout.preferredWidth: 32
-                    Layout.preferredHeight: 32
-                    radius: Theme.radiusMd
-                    color: deadlineCalMA.containsMouse ? Theme.panel3 : Theme.panel2
-                    border.color: Theme.border; border.width: 1
-                    Rectangle {   // mini calendar glyph
-                        anchors.centerIn: parent
-                        width: 15; height: 14; radius: Theme.radiusXs
-                        color: "transparent"
-                        border.color: Theme.textMuted; border.width: 1
-                        Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
-                    }
-                    MouseArea {
-                        id: deadlineCalMA
-                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            const seed = (root._deadlinePreview && root._deadlinePreview.ok && root._deadlinePreview.start)
-                                ? root._deadlinePreview.start : null;
-                            deadlinePicker.openAt(seed, deadlineCalBtn);
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 2
+                        spacing: Theme.spSm
+                        TextField {
+                            id: deadlineField
+                            Layout.fillWidth: true
+                            placeholderText: I18n.t("editor.ph.deadline")
+                            font.family: Theme.fontMono
+                            background: Rectangle {
+                                radius: Theme.radiusMd
+                                color: Theme.panel2
+                                border.color: deadlineField.text.length === 0
+                                    ? Theme.border
+                                    : (root._deadlinePreview && root._deadlinePreview.ok
+                                        ? Theme.accent
+                                        : Theme.danger)
+                                border.width: 1
+                            }
+                            color: Theme.text
+                            placeholderTextColor: Theme.textDim
+                            onTextChanged: deadlinePreviewTimer.restart()
+                            onEditingFinished: {
+                                if (root._deadlinePreview && root._deadlinePreview.ok &&
+                                    root._deadlinePreview.start) {
+                                    text = root.formatWhen(root._deadlinePreview.start,
+                                                           root._deadlinePreview.hasTime);
+                                }
+                            }
+                            ToolTip.visible: hovered && text.length > 0 &&
+                                root._deadlinePreview && !root._deadlinePreview.ok
+                            ToolTip.text: I18n.t("editor.tip.unrecognized")
+                        }
+                        Timer {
+                            id: deadlinePreviewTimer
+                            interval: 80
+                            repeat: false
+                            onTriggered: root._refreshDeadlinePreview()
+                        }
+                        // Calendar picker — fills the deadline field with a chosen date.
+                        Rectangle {
+                            id: deadlineCalBtn
+                            Layout.preferredWidth: 32
+                            Layout.preferredHeight: 32
+                            radius: Theme.radiusMd
+                            color: deadlineCalMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            border.color: Theme.border; border.width: 1
+                            Rectangle {   // mini calendar glyph
+                                anchors.centerIn: parent
+                                width: 15; height: 14; radius: Theme.radiusXs
+                                color: "transparent"
+                                border.color: Theme.textMuted; border.width: 1
+                                Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
+                            }
+                            MouseArea {
+                                id: deadlineCalMA
+                                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    const seed = (root._deadlinePreview && root._deadlinePreview.ok && root._deadlinePreview.start)
+                                        ? root._deadlinePreview.start : null;
+                                    deadlinePicker.openAt(seed, deadlineCalBtn);
+                                }
+                            }
+                            DatePickerPopup {
+                                id: deadlinePicker
+                                y: parent.height + 4
+                                onPicked: (value) => {
+                                    deadlineField.text = root.formatDate(value);
+                                    root._refreshDeadlinePreview();
+                                }
+                            }
                         }
                     }
-                    DatePickerPopup {
-                        id: deadlinePicker
-                        y: parent.height + 4
-                        onPicked: (value) => {
-                            deadlineField.text = root.formatDate(value);
-                            root._refreshDeadlinePreview();
-                        }
-                    }
-                }
-                Rectangle {
-                    visible: root._deadlinePreview && root._deadlinePreview.ok
-                    radius: Theme.radiusLg
-                    color: Theme.panel2
-                    border.color: Theme.accent
-                    border.width: 1
-                    implicitHeight: chipLabel.implicitHeight + 6
-                    implicitWidth: chipLabel.implicitWidth + 14
+                    Item { Layout.columnSpan: 2; implicitHeight: 1 }
+                    // What the deadline field was read as.
                     Text {
                         id: chipLabel
-                        anchors.centerIn: parent
+                        visible: text.length > 0
+                        Layout.fillWidth: true
+                        font.family: Theme.fontMono
                         font.pixelSize: Theme.fsXs
-                        color: Theme.text
+                        color: Theme.textMuted
                         text: {
                             if (!root._deadlinePreview || !root._deadlinePreview.ok ||
                                 !root._deadlinePreview.start) return "";
@@ -784,121 +611,383 @@ Popup {
                             if (root._deadlinePreview.hasTime) {
                                 const hh = String(d.getHours()).padStart(2, "0");
                                 const mm = String(d.getMinutes()).padStart(2, "0");
-                                // ⏱ hint: a focus block will be created
+                                // ◷: a focus block will be created
                                 return "↑ " + iso + " " + hh + ":" + mm + (root.isNew ? " ◷" : "");
                             }
                             return "↑ " + iso;
                         }
                     }
                 }
-            }
-            TextField {
-                id: branchField
-                Layout.fillWidth: true
-                placeholderText: "fix/..."
-                font.family: Theme.fontMono
-                background: FieldBg {
-                }
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-            }
 
-            FieldLabel { text: I18n.t("editor.label.recurrence").toUpperCase() }
-            FieldLabel { text: "" }
-            ComboBox {
-                id: recurBox
-                objectName: "te-recurrence"
-                Layout.fillWidth: true
-                readonly property var _vals: ["", "every:day", "every:week", "every:weekday",
-                                              "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
-                                              "every:sat", "every:sun"]
-                model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
-                        I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
-                        I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),
-                        I18n.t("editor.recur.everyWed"), I18n.t("editor.recur.everyThu"),
-                        I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
-                        I18n.t("editor.recur.everySun")]
-                background: FieldBg {
-                }
-                contentItem: Text {
-                    text: recurBox.displayText
-                    color: Theme.text
-                    leftPadding: Theme.spLg
-                    verticalAlignment: Text.AlignVCenter
-                }
-            }
-            Item {}
-
-            FieldLabel { text: I18n.t("editor.label.scheduled").toUpperCase() }
-            FieldLabel { text: I18n.t("editor.label.estimate").toUpperCase() }
-            TextField {
-                id: scheduledField
-                Layout.fillWidth: true
-                placeholderText: I18n.t("editor.ph.deadline")
-                font.family: Theme.fontMono
-                background: FieldBg {}
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-            }
-            TextField {
-                id: estimateField
-                Layout.fillWidth: true
-                placeholderText: "45"
-                font.family: Theme.fontMono
-                validator: IntValidator { bottom: 0; top: 100000 }
-                background: FieldBg {}
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-            }
-
-            FieldLabel { text: I18n.t("editor.label.labels").toUpperCase() }
-            FieldLabel { text: "" }
-            TextField {
-                id: labelsField
-                Layout.fillWidth: true
-                placeholderText: "backlog, infra"
-                background: FieldBg {}
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-            }
-            // Wrapper carries the hint across the whole cell so the meaning is
-            // discoverable on hover, not just over the tiny box.
-            Item {
-                id: somedayWrap
-                Layout.fillWidth: true
-                implicitWidth: somedayBox.implicitWidth
-                implicitHeight: somedayBox.implicitHeight
-
-                CheckBox {
-                    id: somedayBox
-                    objectName: "te-someday"
-                    anchors.left: parent.left
-                    anchors.verticalCenter: parent.verticalCenter
-                    text: I18n.t("editor.someday")
-                    // Parking a task as "someday" files it under Backlog. Reflect
-                    // that in the status box immediately; saveTask enforces it too.
-                    onCheckedChanged: if (checked) {
-                        const bi = root.statusList().indexOf("backlog");
-                        if (bi >= 0) statusBox.currentIndex = bi;
+                // ── Description ──
+                ColumnLayout {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    spacing: Theme.spSm
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spXs
+                        FieldLabel { text: I18n.t("editor.label.desc").toUpperCase() }
+                        Item { Layout.fillWidth: true }
+                        // The description is markdown and always has been — it
+                        // was just never rendered, so a template's checklist was
+                        // inert text the user could not tick.
+                        Repeater {
+                            model: [ ({ id: "edit", label: I18n.t("notes.mode.edit") }),
+                                     ({ id: "preview", label: I18n.t("notes.mode.preview") }) ]
+                            delegate: SegChip {
+                                required property var modelData
+                                objectName: "desc-mode-" + modelData.id
+                                text: modelData.label
+                                active: root.descMode === modelData.id
+                                onClicked: root.descMode = modelData.id
+                            }
+                        }
+                        Rectangle { width: 1; height: 14; color: Theme.border; Layout.leftMargin: Theme.spXs; Layout.rightMargin: Theme.spXs }
+                        SegChip {
+                            objectName: "desc-expand"
+                            text: root.descExpanded ? "⤡  " + I18n.t("editor.desc.collapse")
+                                                    : "⤢  " + I18n.t("editor.desc.expand")
+                            active: false
+                            onClicked: root.descExpanded = !root.descExpanded
+                        }
                     }
-                    contentItem: Text {
-                        text: somedayBox.text
+                    // Grows with the text, from a few lines up to a cap; past
+                    // the cap it scrolls inside itself. Expand widens the dialog
+                    // and lifts the cap for writing at length.
+                    ScrollView {
+                        id: descScroll
+                        visible: root.descMode === "edit"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.max(root._descMinH,
+                                                         Math.min(root._descMaxH, descField.implicitHeight))
+                        clip: true
+                        TextArea {
+                            id: descField
+                            objectName: "te-desc"
+                            placeholderText: I18n.t("editor.ph.desc")
+                            wrapMode: TextEdit.Wrap
+                            font.pixelSize: Theme.fsMd
+                            topPadding: Theme.spLg; bottomPadding: Theme.spLg
+                            leftPadding: Theme.spLg; rightPadding: Theme.spLg
+                            background: FieldBg {}
+                            color: Theme.text
+                            placeholderTextColor: Theme.textDim
+                            selectByMouse: true
+                        }
+                    }
+                    // The checkbox write goes through the editor's own document,
+                    // so ticking an item in the preview edits the text the Save
+                    // button will store — and does it as one undo step.
+                    Rectangle {
+                        visible: root.descMode === "preview"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: descScroll.Layout.preferredHeight
+                        radius: Theme.radiusMd
+                        color: Theme.panel2
+                        border.color: Theme.border
+                        border.width: 1
+                        MdView {
+                            anchors.fill: parent
+                            anchors.margins: Theme.spSm
+                            document: descDocument
+                            editorDocument: descField.textDocument
+                        }
+                    }
+                }
+
+                // ── Details: everything that is not needed to pick the task up ──
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    implicitHeight: 1
+                    color: Theme.border
+                }
+                Item {
+                    objectName: "te-details-toggle"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    implicitHeight: detailsRow.implicitHeight + Theme.spSm
+                    RowLayout {
+                        id: detailsRow
+                        anchors.left: parent.left; anchors.right: parent.right
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: Theme.spMd
+                        Text {
+                            text: (root.detailsOpen ? "▾  " : "▸  ") + I18n.t("editor.details")
+                            color: detailsMA.containsMouse ? Theme.text : Theme.textMuted
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Font.DemiBold
+                        }
+                        // What is filled in behind the fold, so a closed Details
+                        // still says whether there is anything to look at.
+                        Text {
+                            visible: !root.detailsOpen
+                            Layout.fillWidth: true
+                            text: root._detailsSummary
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsSm
+                            elide: Text.ElideRight
+                        }
+                    }
+                    MouseArea {
+                        id: detailsMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.detailsOpen = !root.detailsOpen
+                    }
+                }
+
+                GridLayout {
+                    id: detailsGrid
+                    visible: root.detailsOpen
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    columns: 2
+                    columnSpacing: Theme.spLg
+                    rowSpacing: Theme.spXs
+
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.ticketId").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.branch").toUpperCase() }
+                    TextField {
+                        id: idField
+                        objectName: "te-id"
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        // New tasks: TODO placeholder — final id is generated on save.
+                        // Edit: pre-filled with the current id (still editable).
+                        placeholderText: root.isNew ? I18n.t("editor.ph.ticketId")
+                                                    : I18n.t("editor.ph.ticketIdEdit")
+                        font.family: Theme.fontMono
+                        background: FieldBg {}
                         color: Theme.text
-                        font.pixelSize: Theme.fsMd
-                        leftPadding: somedayBox.indicator.width + 6
-                        verticalAlignment: Text.AlignVCenter
+                        placeholderTextColor: Theme.textDim
+                        // Auto-uppercase so a hand-typed id stays canonical (matches
+                        // newTaskDraft) — but only while composing a NEW one. A synced
+                        // ticket's id is lowercase by construction ("github-1234", from the
+                        // provider id), and uppercasing it on open made a plain Save look
+                        // like a rename to saveTask: the row was silently re-keyed to
+                        // GITHUB-1234, and if that id was taken, the other task was lost.
+                        onTextChanged: {
+                            if (!root.isNew) return;
+                            const up = text.toUpperCase();
+                            if (up !== text) text = up;
+                        }
+                    }
+                    TextField {
+                        id: branchField
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        placeholderText: "fix/..."
+                        font.family: Theme.fontMono
+                        background: FieldBg {}
+                        color: Theme.text
+                        placeholderTextColor: Theme.textDim
+                    }
+
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.scheduled").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.recurrence").toUpperCase() }
+                    TextField {
+                        id: scheduledField
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        placeholderText: I18n.t("editor.ph.deadline")
+                        font.family: Theme.fontMono
+                        background: FieldBg {}
+                        color: Theme.text
+                        placeholderTextColor: Theme.textDim
+                    }
+                    ComboBox {
+                        id: recurBox
+                        objectName: "te-recurrence"
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        readonly property var _vals: ["", "every:day", "every:week", "every:weekday",
+                                                      "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
+                                                      "every:sat", "every:sun"]
+                        model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
+                                I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
+                                I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),
+                                I18n.t("editor.recur.everyWed"), I18n.t("editor.recur.everyThu"),
+                                I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
+                                I18n.t("editor.recur.everySun")]
+                        background: FieldBg {}
+                        contentItem: Text {
+                            text: recurBox.displayText
+                            color: Theme.text
+                            font.pixelSize: Theme.fsMd
+                            leftPadding: Theme.spLg
+                            verticalAlignment: Text.AlignVCenter
+                        }
+                    }
+
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.labels").toUpperCase() }
+                    FieldLabel { Layout.fillWidth: true; Layout.preferredWidth: 1; text: I18n.t("editor.label.estimate").toUpperCase() }
+                    TextField {
+                        id: labelsField
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        placeholderText: "backlog, infra"
+                        background: FieldBg {}
+                        color: Theme.text
+                        placeholderTextColor: Theme.textDim
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.preferredWidth: 1
+                        spacing: Theme.spMd
+                        TextField {
+                            id: estimateField
+                            Layout.fillWidth: true
+                            placeholderText: "45"
+                            font.family: Theme.fontMono
+                            validator: IntValidator { bottom: 0; top: 100000 }
+                            background: FieldBg {}
+                            color: Theme.text
+                            placeholderTextColor: Theme.textDim
+                        }
+                        // A toggle in the same pill style as every other button
+                        // here; the stock CheckBox was a black square.
+                        PillButton {
+                            id: somedayBox
+                            objectName: "te-someday"
+                            checkable: true
+                            selected: checked
+                            text: (checked ? "☾  " : "☽  ") + I18n.t("editor.someday")
+                            // Parking a task as "someday" files it under Backlog. Reflect
+                            // that in the status box immediately; saveTask enforces it too.
+                            onCheckedChanged: if (checked) {
+                                const bi = root.statusList().indexOf("backlog");
+                                if (bi >= 0) statusBox.currentIndex = bi;
+                            }
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 400
+                            ToolTip.text: I18n.t("editor.someday.hint")
+                        }
                     }
                 }
 
-                HoverHandler { id: somedayHover }
-                ToolTip.visible: somedayHover.hovered
-                ToolTip.delay: 400
-                ToolTip.text: I18n.t("editor.someday.hint")
+                // What the tracker says about the issue, and its comments.
+                ColumnLayout {
+                    visible: root.detailsOpen && root._isTicket
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    spacing: Theme.spSm
+                    FieldLabel { text: I18n.t("editor.details.tracker").toUpperCase() }
+                    // One "label value" pair per field the tracker actually gave.
+                    Flow {
+                        Layout.fillWidth: true
+                        spacing: Theme.sp2xl
+                        Repeater {
+                            model: root._ticketFacts
+                            delegate: Row {
+                                required property var modelData
+                                spacing: Theme.spXs
+                                Text {
+                                    text: modelData.label
+                                    textFormat: Text.PlainText
+                                    color: Theme.textDim
+                                    font.pixelSize: Theme.fsSm
+                                }
+                                Text {
+                                    text: modelData.value
+                                    textFormat: Text.PlainText
+                                    color: Theme.text
+                                    font.pixelSize: Theme.fsSm
+                                }
+                            }
+                        }
+                    }
+                    // Comments are read on demand and kept only while this
+                    // dialog is open — heap stores none of them.
+                    PillButton {
+                        objectName: "te-ticket-load-comments"
+                        visible: !root._commentsRequested
+                        text: "❝  " + I18n.t("ticket.loadComments")
+                        onClicked: {
+                            root._commentsRequested = true;
+                            AppController.fetchTicketComments(root._originalId || (root.draft.id || ""));
+                        }
+                    }
+                    Text {
+                        objectName: "te-ticket-comments-status"
+                        visible: root._commentsRequested
+                                 && (root._commentsError.length > 0 || root._comments.length === 0)
+                        text: root._commentsError.length > 0 ? root._commentsError : I18n.t("ticket.noComments")
+                        textFormat: Text.PlainText
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsSm
+                        wrapMode: Text.WordWrap
+                        Layout.fillWidth: true
+                    }
+                    Repeater {
+                        model: root._comments
+                        delegate: ColumnLayout {
+                            required property var modelData
+                            Layout.fillWidth: true
+                            spacing: Theme.sp2xs
+                            RowLayout {
+                                spacing: Theme.spSm
+                                Text {
+                                    text: "@" + String(modelData.author || "")
+                                          + (modelData.createdAt && modelData.createdAt.getTime
+                                             && !isNaN(modelData.createdAt.getTime())
+                                             ? " · " + AppController.shortDate(modelData.createdAt) : "")
+                                    textFormat: Text.PlainText
+                                    color: Theme.textDim
+                                    font.pixelSize: Theme.fsXs
+                                }
+                                // Every tracker's comments can be opened where
+                                // they live; Jira and GitLab had no link at all.
+                                Text {
+                                    objectName: "te-comment-link"
+                                    visible: String(modelData.url || "").length > 0
+                                    text: "↗ " + I18n.t("ticket.openComment")
+                                    color: commentLinkMA.containsMouse ? Theme.accent : Theme.accentStrong
+                                    font.pixelSize: Theme.fsXs
+                                    MouseArea {
+                                        id: commentLinkMA
+                                        anchors.fill: parent
+                                        anchors.margins: -3
+                                        hoverEnabled: true
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            const url = String(modelData.url || "");
+                                            if (AppController.isSafeLink(url)) Qt.openUrlExternally(url);
+                                        }
+                                    }
+                                }
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: String(modelData.body || "")
+                                // Written by whoever commented upstream.
+                                textFormat: Text.PlainText
+                                color: Theme.text
+                                font.pixelSize: Theme.fsSm
+                                wrapMode: Text.WordWrap
+                                maximumLineCount: 6
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                }
+
+                Item { implicitHeight: 1 }
             }
         }
 
+        // ── Footer: always on screen, however long the body gets ──
+        Rectangle {
+            Layout.fillWidth: true
+            implicitHeight: 1
+            color: Theme.border
+        }
         RowLayout {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spMd; Layout.bottomMargin: Theme.sp2xl
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.topMargin: Theme.spXl; Layout.bottomMargin: Theme.spXl
             spacing: Theme.spMd
             PillButton {
                 objectName: "te-delete"
@@ -913,8 +1002,12 @@ Popup {
                     root.close();
                 }
             }
-            Item {
-                Layout.fillWidth: true
+            Item { Layout.fillWidth: true }
+            Text {
+                text: "Ctrl+Enter"
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
             }
             PillButton {
                 text: I18n.t("common.cancel")
@@ -925,6 +1018,34 @@ Popup {
                 primary: true
                 onClicked: root._save()
             }
+        }
+    }
+
+    // A small toggle chip for the description's mode row.
+    component SegChip: Rectangle {
+        id: seg
+        property string text
+        property bool active: false
+        signal clicked()
+        radius: Theme.radiusPill
+        color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : "transparent")
+        border.color: active ? Theme.withAlpha(Theme.accent, 0.5) : "transparent"
+        border.width: 1
+        implicitWidth: segT.implicitWidth + 16
+        implicitHeight: segT.implicitHeight + 6
+        Text {
+            id: segT
+            anchors.centerIn: parent
+            text: seg.text
+            color: seg.active ? Theme.accentStrong : (segMA.containsMouse ? Theme.text : Theme.textMuted)
+            font.pixelSize: Theme.fsSm
+        }
+        MouseArea {
+            id: segMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: seg.clicked()
         }
     }
 
