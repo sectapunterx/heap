@@ -553,6 +553,18 @@ TestCase {
         verify(high > normal * 1.2, "high " + high + " vs normal " + normal);
     }
 
+    // A built-in that was retired resolves to its replacement, so a user who
+    // had picked it keeps a theme of the same kind instead of the slot default.
+    function test_retired_presets_resolve_to_their_replacement() {
+        const cases = { "minimal-light": "heap-light", "muted-mauve": "stone", "graphite": "ash",
+                        "moss-mono": "sage", "nocturne": "slate" };
+        for (const old in cases) {
+            verify(!Presets.builtin(old), old + " is still a built-in");
+            compare(Presets.resolve(old, [], "dark").id, cases[old], old);
+        }
+        compare(Presets.resolve("no-such-theme", [], "dark").id, Presets.DEFAULT_DARK);
+    }
+
     function test_new_id_is_unused() {
         compare(Presets.newId([]), "custom-1");
         compare(Presets.newId([{ id: "custom-1" }, { id: "custom-2" }]), "custom-3");

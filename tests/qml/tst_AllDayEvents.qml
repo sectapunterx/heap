@@ -273,8 +273,12 @@ TestCase {
     // several columns, and keying by event id let one day's piece overwrite
     // another's.
     function test_a_cross_midnight_event_appears_in_two_week_columns() {
-        const first = probeDay(550);
-        const second = probeDay(551);
+        // Both halves must sit in one week: a probe day that lands on the
+        // week's last day sends the second half into the next one.
+        let offset = 550;
+        while (probeDay(offset).getDay() !== 3) offset++;
+        const first = probeDay(offset);
+        const second = probeDay(offset + 1);
         clearDay(first);
         clearDay(second);
         const id = addEvent(first, { start: 22, end: 2, endDate: second, title: "night call" });
