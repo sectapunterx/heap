@@ -36,23 +36,23 @@ Rectangle {
         // View switcher
         RailBtn {
             objectName: "rail-board"
-            iconSource: "qrc:/brand/icons/heap-01-board.svg"; tooltipText: I18n.t("siderail.tip.board")
+            iconSource: "qrc:/brand/icons/heap-01-board.svg"; tooltipText: I18n.t("siderail.tip.board"); shortcutId: "view.board"
                    active: AppController.currentView === "board"
                    onActivated: AppController.currentView = "board" }
         RailBtn {
-            iconSource: "qrc:/brand/icons/heap-02-timeline.svg"; tooltipText: I18n.t("siderail.tip.timeline")
+            iconSource: "qrc:/brand/icons/heap-02-timeline.svg"; tooltipText: I18n.t("siderail.tip.timeline"); shortcutId: "view.timeline"
                    active: AppController.currentView === "timeline"
                    onActivated: AppController.currentView = "timeline" }
         RailBtn {
-            iconSource: "qrc:/brand/icons/heap-03-week.svg"; tooltipText: I18n.t("siderail.tip.week")
+            iconSource: "qrc:/brand/icons/heap-03-week.svg"; tooltipText: I18n.t("siderail.tip.week"); shortcutId: "view.week"
                    active: AppController.currentView === "week"
                    onActivated: AppController.currentView = "week" }
         RailBtn {
-            iconSource: "qrc:/brand/icons/heap-04-month.svg"; tooltipText: I18n.t("siderail.tip.month")
+            iconSource: "qrc:/brand/icons/heap-04-month.svg"; tooltipText: I18n.t("siderail.tip.month"); shortcutId: "view.month"
                    active: AppController.currentView === "month"
                    onActivated: AppController.currentView = "month" }
         RailBtn {
-            iconSource: "qrc:/brand/icons/heap-05-archive.svg"; tooltipText: I18n.t("siderail.tip.archive")
+            iconSource: "qrc:/brand/icons/heap-05-archive.svg"; tooltipText: I18n.t("siderail.tip.archive"); shortcutId: "view.archive"
             active: AppController.currentView === "archive"
             onActivated: AppController.currentView = "archive"
         }
@@ -70,7 +70,7 @@ Rectangle {
             objectName: "rail-review"
             iconSource: "qrc:/brand/icons/heap-07-code-review.svg"; tooltipText: I18n.t("siderail.tip.review")
                    countText: root._reviewCount > 0 ? root._reviewCount : ""
-                   countColor: Theme.stReview
+                   countColor: Theme.accent
                    active: AppController.currentView === "board" && AppController.focusedStatus === "review"
                    onActivated: AppController.focusStatusColumn("review") }
 
@@ -78,11 +78,11 @@ Rectangle {
 
         RailBtn {
             objectName: "rail-docs"
-            iconSource: "qrc:/brand/icons/heap-08-docs.svg"; tooltipText: I18n.t("siderail.tip.docs")
+            iconSource: "qrc:/brand/icons/heap-08-docs.svg"; tooltipText: I18n.t("siderail.tip.docs"); shortcutId: "view.docs"
                    active: AppController.currentView === "docs"
                    onActivated: AppController.currentView = "docs" }
         RailBtn {
-            iconSource: "qrc:/brand/icons/heap-09-notes.svg"; tooltipText: I18n.t("siderail.tip.notes")
+            iconSource: "qrc:/brand/icons/heap-09-notes.svg"; tooltipText: I18n.t("siderail.tip.notes"); shortcutId: "view.notes"
                    active: AppController.currentView === "notes"
                    onActivated: AppController.currentView = "notes" }
 
@@ -92,17 +92,20 @@ Rectangle {
             id: hotkeysBtn
             iconSource: "qrc:/brand/icons/heap-10-hotkeys.svg"
             tooltipText: I18n.t("siderail.tip.hotkeys")
+            shortcutId: "hotkeys.open"
             onActivated: root.openHotkeys(hotkeysBtn)
         }
         RailBtn {
             id: tweaksBtn
             iconSource: "qrc:/brand/icons/heap-11-tweaks.svg"
             tooltipText: I18n.t("siderail.tip.tweaks")
+            shortcutId: "tweaks.open"
             onActivated: root.openTweaks(tweaksBtn)
         }
         RailBtn {
             iconSource: "qrc:/brand/icons/heap-12-settings.svg"
             tooltipText: I18n.t("siderail.tip.settings")
+            shortcutId: "view.settings"
             active: AppController.currentView === "settings"
             onActivated: AppController.currentView = "settings"
             Layout.bottomMargin: Theme.sp2xl
@@ -113,6 +116,12 @@ Rectangle {
         id: btn
         property url iconSource
         property string tooltipText: ""
+        // The action's id in the shortcut catalog. The tooltip shows whatever
+        // it is bound to now, so a rebind shows up here too, and the rail
+        // teaches the keys instead of hiding them in the Hotkeys panel.
+        property string shortcutId: ""
+        readonly property string _combo: shortcutId.length && AppController.shortcuts.length >= 0
+            ? AppController.shortcutFor(shortcutId) : ""
         property bool active: false
         property string countText: ""
         property color countColor: Theme.danger
@@ -169,7 +178,7 @@ Rectangle {
             cursorShape: Qt.PointingHandCursor
             onClicked: btn.activated()
             ToolTip.visible: containsMouse && btn.tooltipText !== ""
-            ToolTip.text: btn.tooltipText
+            ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }
     }

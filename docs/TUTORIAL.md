@@ -14,8 +14,9 @@ has three regions: the **side rail** (view switcher, left), the **main view**
 
 ![The board with the calendar column](assets/img/screens/board-kanban.png)
 
-Switch views with `Ctrl+1…6`: **Board**, **Timeline**, **Week**, **Docs**,
-**Notes**, **Settings**.
+Switch views with `Ctrl+1…8`, in side-rail order: **Board**, **Timeline**,
+**Week**, **Month**, **Archive**, **Docs**, **Notes**, **Settings**. Hover a
+rail icon to see its shortcut.
 
 ## 2. Capture a task in under two seconds
 
@@ -63,15 +64,17 @@ Prefer a full form? `Ctrl+N` opens the task editor with every field.
   ![Week](assets/img/screens/board-week.png)
 - The **day calendar** (right column) lets you drag on empty space to create an
   event, resize from either edge, and **drop a task onto it to schedule a focus
-  block**. Overlapping events sit side-by-side.
+  block**. Overlapping events sit side-by-side. Week, Month and Settings open
+  with the column folded, since they are a calendar or have nothing to plan
+  against; `Ctrl+\` brings it back.
   ![Day calendar with a focus block](assets/img/screens/calendar-focus.png)
 
 ## 5. Docs & Notes
 
-- **Docs** (`Ctrl+4`): sections, custom fields, a syntax-highlighted snippet
+- **Docs** (`Ctrl+6`): sections, custom fields, a syntax-highlighted snippet
   editor, and contact cards.
   ![Docs](assets/img/screens/board-docs.png)
-- **Notes** (`Ctrl+5`): a per-profile markdown canvas with `@people` and
+- **Notes** (`Ctrl+7`): a per-profile markdown canvas with `@people` and
   `#ticket` autocomplete. `Ctrl+Shift+N` appends a quick note from anywhere.
   ![Notes](assets/img/screens/board-notes.png)
 

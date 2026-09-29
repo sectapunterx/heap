@@ -543,7 +543,10 @@ Item {
 
                     ColumnLayout {
                         id: bodyCol
-                        width: bodyScroll.width
+                        // A reading width. With the right panel folded on
+                        // Settings the pane can be 1300px wide, and a name
+                        // field that long is harder to use, not easier.
+                        width: Math.min(bodyScroll.width, 960)
                         spacing: Theme.sp2xl
                         // Padding via wrapper
                         Item { Layout.preferredHeight: 8 }

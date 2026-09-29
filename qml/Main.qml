@@ -123,10 +123,24 @@ ApplicationWindow {
     readonly property bool _narrow: win.width < _rightPanelMinWidth
     property bool _rightPanelWanted: _settingsObject().rightPanel !== false
     property bool _rightPanelOnNarrow: false
-    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow : _rightPanelWanted
+    // Week and month are a calendar already, and settings has nothing to plan
+    // against: the panel's day grid next to them was a second calendar and
+    // 420px less of the first. It stays folded there unless asked for, and
+    // asking lasts until the app closes.
+    readonly property bool _panelFoldedView: AppController.currentView === "week"
+                                             || AppController.currentView === "month"
+                                             || AppController.currentView === "settings"
+    property bool _rightPanelInFoldedView: false
+    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow
+                                          : _panelFoldedView ? _rightPanelInFoldedView
+                                          : _rightPanelWanted
     function toggleRightPanel() {
         if (_narrow) {
             _rightPanelOnNarrow = !_rightPanelOnNarrow;
+            return;
+        }
+        if (_panelFoldedView) {
+            _rightPanelInFoldedView = !_rightPanelInFoldedView;
             return;
         }
         _rightPanelWanted = !_rightPanelWanted;
@@ -371,7 +385,10 @@ ApplicationWindow {
         // Top bar spans all columns
         TopBar {
             id: topBar
-            Layout.row: 0; Layout.column: 0; Layout.columnSpan: 3
+            // Two columns while the right panel is folded: spanning an empty
+            // third column handed it a share of the window's width, and the
+            // view next to it stopped short of the edge.
+            Layout.row: 0; Layout.column: 0; Layout.columnSpan: win.rightPanelShown ? 3 : 2
             Layout.fillWidth: true
             searchText: win.searchText
             onSearchTextChanged: win.searchText = searchText

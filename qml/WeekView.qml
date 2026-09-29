@@ -94,13 +94,26 @@ Item {
 
     property date now: new Date()
 
+    // Returns false while the grid has no height to scroll yet.
     function scrollToWorkday() {
         const flick = hourScroll.contentItem;
-        if (!flick) return;
+        if (!flick || flick.height <= 0 || flick.contentHeight <= flick.height) return false;
         const nowHour = new Date().getHours();
         const first = Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
         const maxY = Math.max(0, flick.contentHeight - flick.height);
         flick.contentY = Math.min(maxY, first * root.hourH);
+        return true;
+    }
+    // Component.onCompleted runs before the ScrollView has been laid out, so
+    // the scroll used to land on a zero-height grid and the week opened on
+    // 00:00–09:00, empty. Try again each frame until there is something to
+    // scroll, for at most a second.
+    Timer {
+        id: workdayScroll
+        interval: 16
+        repeat: true
+        property int tries: 0
+        onTriggered: if (root.scrollToWorkday() || ++tries > 60) stop()
     }
 
     // The "Needs a slot" rail, when the window has room for it. The header
@@ -414,7 +427,7 @@ Item {
                     objectName: "week-rail-toggle"
                     visible: gridHost.railFits
                     text: I18n.t("week.rail.toggle")
-                    primary: root.railWanted
+                    selected: root.railWanted
                     onClicked: root.railWanted = !root.railWanted
                 }
                 PillButton {
@@ -736,12 +749,17 @@ Item {
                 objectName: "week-hour-scroll"
                 // Open on the working day (or the current hour, if that is
                 // earlier), not on midnight.
-                Component.onCompleted: Qt.callLater(root.scrollToWorkday)
+                Component.onCompleted: workdayScroll.start()
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
                 anchors.top: weekStrip.bottom; anchors.bottom: parent.bottom
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                // Said outright: the grid has a height but no implicit one,
+                // so the ScrollView's own guess was 0 and the first scroll to
+                // the working day had nothing to scroll.
+                contentWidth: gridContent.width
+                contentHeight: gridContent.height
 
                 Item {
                     id: gridContent
