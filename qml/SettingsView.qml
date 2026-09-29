@@ -674,12 +674,79 @@ Item {
         color: Theme.panel
         border.color: Theme.border; border.width: 1
         default property alias content: inner.data
-        implicitHeight: inner.implicitHeight + 24
+        implicitHeight: inner.implicitHeight + 32
         ColumnLayout {
             id: inner
             anchors.fill: parent
-            anchors.margins: 12
+            anchors.margins: 16
             spacing: 12
+        }
+    }
+
+    // Themed ComboBox. Basic's stock one draws an up/down spinner glyph and a
+    // flat grey slab that matches nothing else in Settings.
+    component SettingsCombo: ComboBox {
+        id: sc
+        implicitHeight: 30
+        font.pixelSize: 13
+        background: Rectangle {
+            radius: 6
+            color: sc.hovered || sc.popup.visible ? Theme.panel3 : Theme.panel2
+            border.width: 1
+            border.color: sc.activeFocus || sc.popup.visible ? Theme.accent : Theme.border
+        }
+        contentItem: Text {
+            leftPadding: 10
+            rightPadding: sc.indicator.width + 6
+            text: sc.displayText
+            font: sc.font
+            color: sc.currentIndex === 0 ? Theme.textMuted : Theme.text
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+        }
+        indicator: Text {
+            x: sc.width - width - 10
+            y: (sc.height - height) / 2
+            text: "\u25BE"
+            color: Theme.textDim
+            font.pixelSize: 12
+        }
+        delegate: ItemDelegate {
+            id: scRow
+            required property var modelData
+            required property int index
+            width: sc.width - 8
+            height: 28
+            highlighted: sc.highlightedIndex === scRow.index
+            contentItem: Text {
+                text: scRow.modelData[sc.textRole]
+                color: sc.currentIndex === scRow.index ? Theme.accentStrong : Theme.text
+                font.pixelSize: 13
+                verticalAlignment: Text.AlignVCenter
+                elide: Text.ElideRight
+            }
+            background: Rectangle {
+                radius: 4
+                color: scRow.highlighted ? Theme.panel3 : "transparent"
+            }
+        }
+        popup: Popup {
+            y: sc.height + 2
+            width: sc.width
+            padding: 4
+            implicitHeight: Math.min(contentItem.implicitHeight + 8, 320)
+            contentItem: ListView {
+                clip: true
+                implicitHeight: contentHeight
+                model: sc.popup.visible ? sc.delegateModel : null
+                currentIndex: sc.highlightedIndex
+            }
+            background: Rectangle {
+                radius: 8
+                color: Theme.panel
+                border.width: 1
+                border.color: Theme.borderStrong
+            }
         }
     }
 
@@ -1715,13 +1782,13 @@ Item {
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
-                                    Text { text: modelData.name; color: Theme.text; font.pixelSize: 13; font.weight: Font.DemiBold }
-                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: 11; Layout.fillWidth: true; elide: Text.ElideRight }
+                                    Text { text: modelData.name; color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
                                 }
                                 Text {
                                     text: intCard.isConn ? I18n.t("common.connected") : I18n.t("common.disconnected")
                                     color: intCard.isConn ? Theme.mFocus : Theme.textDim
-                                    font.family: Theme.fontMono; font.pixelSize: 10
+                                    font.family: Theme.fontMono; font.pixelSize: 11
                                 }
                                 Text {
                                     text: intCard.open ? "▾" : "▸"   // ▾ / ▸
@@ -1923,7 +1990,7 @@ Item {
                                     Text {
                                         text: I18n.t("settings.integrations.statusMap")
                                         color: Theme.text
-                                        font.pixelSize: 11
+                                        font.pixelSize: 13
                                         font.weight: Font.DemiBold
                                     }
                                     Item { Layout.fillWidth: true }
@@ -1933,7 +2000,7 @@ Item {
                                     wrapMode: Text.WordWrap
                                     text: I18n.t("settings.integrations.statusMapHint")
                                     color: Theme.textDim
-                                    font.pixelSize: 10
+                                    font.pixelSize: 12
                                 }
 
                                 Repeater {
@@ -1943,27 +2010,38 @@ Item {
                                         id: mapRow
                                         required property var modelData
                                         Layout.fillWidth: true
-                                        spacing: 8
+                                        spacing: 10
 
+                                        // Every cell fills up to a cap rather
+                                        // than sitting at a fixed width: fixed
+                                        // widths are also minimums in a
+                                        // RowLayout, and together they made
+                                        // the row wider than a narrow card.
+                                        // The caps keep the combos aligned.
                                         Text {
-                                            Layout.preferredWidth: 150
+                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: 140
+                                            Layout.maximumWidth: 140
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                             text: mapRow.modelData.status
                                             color: Theme.text
-                                            font.family: Theme.fontMono
-                                            font.pixelSize: 11
+                                            font.pixelSize: 13
                                         }
                                         Text {
                                             text: "→"
                                             color: Theme.textDim
-                                            font.pixelSize: 11
+                                            font.pixelSize: 13
                                         }
-                                        ComboBox {
+                                        // Capped: stretched across the card,
+                                        // the combo pushed its "auto" hint to
+                                        // the far edge of the screen.
+                                        SettingsCombo {
                                             id: columnPick
                                             Layout.fillWidth: true
-                                            implicitHeight: 28
-                                            font.pixelSize: 11
+                                            Layout.preferredWidth: 220
+                                            Layout.maximumWidth: 220
+                                            Layout.minimumWidth: 110
                                             // "Auto" first, so clearing a choice
                                             // is a pick rather than a hidden
                                             // gesture. Its value is the empty
@@ -1993,16 +2071,19 @@ Item {
                                         // only while the user has not decided —
                                         // once they have, the combo says it.
                                         Text {
-                                            Layout.preferredWidth: 96
+                                            Layout.fillWidth: true
+                                            Layout.preferredWidth: 130
+                                            Layout.maximumWidth: 130
                                             // Faded rather than removed, so the
-                                            // combo keeps its width either way.
+                                            // row keeps its layout either way.
                                             opacity: mapRow.modelData.overridden ? 0 : 1
                                             elide: Text.ElideRight
                                             textFormat: Text.PlainText
                                             text: I18n.t("settings.integrations.statusMapGuess").arg(intCard.columnName(mapRow.modelData.column))
                                             color: Theme.textDim
-                                            font.pixelSize: 10
+                                            font.pixelSize: 12
                                         }
+                                        Item { Layout.fillWidth: true }
                                     }
                                 }
                             }
@@ -2082,8 +2163,8 @@ Item {
                                     radius: 6
                                     color: connMA.containsMouse ? Theme.accentStrong : Theme.accent
                                     border.color: Theme.accent; border.width: 1
-                                    implicitWidth: connTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: 11; font.weight: Font.Medium }
+                                    implicitWidth: connTxt.implicitWidth + 28; implicitHeight: 30
+                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: 12; font.weight: Font.Medium }
                                     MouseArea {
                                         id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         // Not a bare `connected = true`: the
@@ -2099,8 +2180,8 @@ Item {
                                     radius: 6
                                     color: testMA.containsMouse ? Theme.panel3 : Theme.panel2
                                     border.color: Theme.border; border.width: 1
-                                    implicitWidth: testTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: 11 }
+                                    implicitWidth: testTxt.implicitWidth + 28; implicitHeight: 30
+                                    Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: 12 }
                                     MouseArea {
                                         id: testMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: { intCard.commitFields(); AppController.testIntegration(intCard.intKey) }
@@ -2111,8 +2192,8 @@ Item {
                                     radius: 6
                                     color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2
                                     border.color: Theme.border; border.width: 1
-                                    implicitWidth: syncTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 11 }
+                                    implicitWidth: syncTxt.implicitWidth + 28; implicitHeight: 30
+                                    Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: 12 }
                                     MouseArea {
                                         id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                                         onClicked: { intCard.commitFields(); AppController.syncProvider(intCard.intKey) }
@@ -2124,8 +2205,8 @@ Item {
                                     radius: 6
                                     color: discMA.containsMouse ? Theme.panel3 : Theme.panel2
                                     border.color: Theme.border; border.width: 1
-                                    implicitWidth: discTxt.implicitWidth + 24; implicitHeight: 28
-                                    Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: 11 }
+                                    implicitWidth: discTxt.implicitWidth + 28; implicitHeight: 30
+                                    Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: 12 }
                                     MouseArea { id: discMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.disconnectIntegration(intCard.intKey) }
                                 }
                             }
