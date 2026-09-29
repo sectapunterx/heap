@@ -300,8 +300,7 @@ Rectangle {
             id: metaFlow
             Layout.fillWidth: true
             visible: dueT.visible || schedT.visible || timerT.visible || recurT.visible
-                     || assigneeT.visible || commentsT.visible || labelRep.count > 0
-                     || gitLine.visible || prT.visible
+                     || commentsT.visible || labelRep.count > 0 || prT.visible
             spacing: Theme.spLg
 
             Text {
@@ -344,36 +343,9 @@ Rectangle {
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
             }
-            // Where the code for it lives: branch, commits ahead, commits that
-            // mention it — one dim line, elided to the card's width.
-            Text {
-                id: gitLine
-                objectName: "tc-git"
-                readonly property string branch: card.task && card.task.branch ? String(card.task.branch) : ""
-                readonly property int ahead: card.task ? (card.task.gitAhead || 0) : 0
-                readonly property int commits: card.task && card.task.recentCommits ? card.task.recentCommits.length : 0
-                visible: branch.length > 0 || ahead > 0 || commits > 0
-                width: Math.min(implicitWidth, metaFlow.width)
-                text: {
-                    const parts = [];
-                    if (branch.length > 0) parts.push("⎇ " + branch.split("/").pop());
-                    if (ahead > 0) parts.push("↑" + ahead);
-                    if (commits > 0) parts.push("◇ " + commits);
-                    return parts.join("  ");
-                }
-                textFormat: Text.PlainText
-                color: Theme.textDim
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                elide: Text.ElideRight
-                QQC.ToolTip.visible: gitHover.hovered && commits > 0
-                QQC.ToolTip.text: commits > 0
-                    ? (card.task.recentCommits[0].sha + "  " + card.task.recentCommits[0].subject)
-                    : ""
-                HoverHandler { id: gitHover }
-            }
-            // The pull request's state is the one git fact with a colour: open
-            // is info, merged is success, closed is dim.
+            // The pull request's state: open is info, merged is success, closed
+            // is dim. The branch itself is the editor's business (Details); on
+            // the card it was a second title nobody reads from across a board.
             Text {
                 id: prT
                 objectName: "tc-pr"
@@ -424,16 +396,6 @@ Rectangle {
                 text: "↻ " + card._recurLabel(card.task ? card.task.recurrence : "")
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-            }
-            // Who owns the issue upstream (HEAP-117).
-            Text {
-                id: assigneeT
-                objectName: "tc-assignee"
-                visible: card._isTicket && String(card._ticket.assignee || "").length > 0
-                text: "@" + String(card._ticket.assignee || "")
-                textFormat: Text.PlainText
-                color: Theme.textDim
                 font.pixelSize: Theme.fsXs
             }
             // Comment count. -1 means the provider never said, which is not the

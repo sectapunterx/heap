@@ -140,7 +140,8 @@ TestCase {
         // Every fact the tracker gave is listed, and nothing it did not.
         const facts = te._ticketFacts;
         const values = facts.map(f => String(f.value));
-        verify(values.indexOf("ada") >= 0, "the assignee is missing");
+        // heap mirrors your own issues, so the assignee is left out.
+        verify(values.indexOf("ada") < 0, "the assignee is listed");
         verify(values.indexOf("grace") >= 0, "the reporter is missing");
         verify(values.indexOf("Bug") >= 0, "the issue type is missing");
         verify(values.indexOf("v2") >= 0, "the milestone is missing");

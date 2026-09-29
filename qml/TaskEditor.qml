@@ -70,7 +70,8 @@ Popup {
                 out.push({ label: I18n.t(key), value: String(value) });
             }
         };
-        add("ticket.assignee", t.assignee);
+        // No assignee: heap mirrors the issues assigned to you, so it would
+        // only ever say your own name.
         add("ticket.author", t.author);
         add("ticket.type", t.issueType);
         add("ticket.milestone", t.milestone);
@@ -446,13 +447,6 @@ Popup {
                                 font.pixelSize: Theme.fsSm
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
-                            }
-                            Text {
-                                visible: String(root._ticket.assignee || "").length > 0
-                                text: "@" + String(root._ticket.assignee || "")
-                                textFormat: Text.PlainText
-                                color: Theme.textMuted
-                                font.pixelSize: Theme.fsSm
                             }
                         }
                         Text {
