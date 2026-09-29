@@ -800,12 +800,12 @@ Item {
                             width: parent.width + 8
                             y: ((root.now.getHours() + root.now.getMinutes()/60) - root.hoursStart) * Theme.hourH
                             height: 2
-                            color: Theme.p0
+                            color: Theme.nowLine
                             z: 3
                             Rectangle {
                                 x: -3
                                 anchors.verticalCenter: parent.verticalCenter
-                                width: 10; height: 10; radius: 5; color: Theme.p0
+                                width: 10; height: 10; radius: 5; color: Theme.nowLine
                             }
                         }
                     }

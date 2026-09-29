@@ -346,7 +346,7 @@ ApplicationWindow {
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
-            });
+            }, "error");
         }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
@@ -1231,9 +1231,9 @@ ApplicationWindow {
         title: I18n.t("dialog.exportProfile.title")
         onAccepted: {
             if (AppController.exportActiveProfileToFile(selectedFile))
-                toast.show(I18n.t("toast.profile.exported"));
+                toast.show(I18n.t("toast.profile.exported"), "success");
             else
-                toast.show(I18n.t("toast.profile.exportFail"));
+                toast.show(I18n.t("toast.profile.exportFail"), "error");
         }
     }
     FileDialog {
@@ -1245,7 +1245,7 @@ ApplicationWindow {
             const err = AppController.importProfileFromJson === undefined
                 ? "" : AppController.importProfileFromFile(selectedFile, true);
             if (err && err.length > 0)
-                toast.show(I18n.t("toast.profile.importFail") + err);
+                toast.show(I18n.t("toast.profile.importFail") + err, "error");
         }
     }
 
@@ -1258,13 +1258,14 @@ ApplicationWindow {
         onAccepted: {
             const r = AppController.importIcs(selectedFile);
             if (r.error) {
-                toast.show(r.error);
+                toast.show(r.error, "error");
                 return;
             }
             // Counts, not a bare "done": a file that brought in nine events
             // and skipped one is neither a success nor a failure.
             toast.show(I18n.t("toast.ics.imported")
-                       .arg(r.imported).arg(r.updated).arg(r.skipped));
+                       .arg(r.imported).arg(r.updated).arg(r.skipped),
+                       r.skipped > 0 ? "warning" : "success");
             for (let i = 0; i < r.warnings.length; i++) console.warn("[ics]", r.warnings[i]);
         }
     }
@@ -1274,9 +1275,11 @@ ApplicationWindow {
         nameFilters: ["Calendar (*.ics)", "All files (*)"]
         defaultSuffix: "ics"
         title: I18n.t("dialog.exportIcs.title")
-        onAccepted: toast.show(AppController.exportIcsToFile(selectedFile)
-                               ? I18n.t("toast.ics.exported")
-                               : I18n.t("toast.ics.exportFail"))
+        onAccepted: {
+            const ok = AppController.exportIcsToFile(selectedFile);
+            toast.show(ok ? I18n.t("toast.ics.exported") : I18n.t("toast.ics.exportFail"),
+                       ok ? "success" : "error");
+        }
     }
 
     // ── Notes as a folder of .md files ─────────────────────────────────
@@ -1290,9 +1293,10 @@ ApplicationWindow {
         title: I18n.t("dialog.importVault.title")
         onAccepted: {
             const r = AppController.importNotesFolder(currentFolder);
-            if (r.error) { toast.show(r.error); return; }
+            if (r.error) { toast.show(r.error, "error"); return; }
             toast.show(I18n.t("toast.notes.imported")
-                       .arg(r.imported).arg(r.updated).arg(r.skipped));
+                       .arg(r.imported).arg(r.updated).arg(r.skipped),
+                       r.skipped > 0 ? "warning" : "success");
             for (let i = 0; i < r.warnings.length; i++) console.warn("[vault]", r.warnings[i]);
         }
     }
@@ -1304,7 +1308,8 @@ ApplicationWindow {
         onAccepted: {
             const r = AppController.exportNotesFolder(currentFolder);
             toast.show(r.error ? r.error
-                               : I18n.t("toast.notes.exported").arg(r.written));
+                               : I18n.t("toast.notes.exported").arg(r.written),
+                       r.error ? "error" : "success");
         }
     }
 

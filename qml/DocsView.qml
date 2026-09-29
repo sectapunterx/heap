@@ -842,11 +842,11 @@ Item {
                                                 enabled: secAnchor.headerHovered
                                                 Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                                                 width: 22; height: 22; radius: 5
-                                                color: secDelMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : "transparent"
-                                                border.color: secDelMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                                                color: secDelMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : "transparent"
+                                                border.color: secDelMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
                                                 Text {
                                                     anchors.centerIn: parent; text: "×"
-                                                    color: secDelMA.containsMouse ? Theme.p0 : Theme.textMuted
+                                                    color: secDelMA.containsMouse ? Theme.danger : Theme.textMuted
                                                     font.pixelSize: 12
                                                 }
                                                 MouseArea {
@@ -1468,9 +1468,9 @@ Item {
             }
             Rectangle {
                 width: 22; height: 22; radius: 5
-                color: delIcoMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
-                border.color: delIcoMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: "×"; color: delIcoMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 12 }
+                color: delIcoMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
+                border.color: delIcoMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
+                Text { anchors.centerIn: parent; text: "×"; color: delIcoMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 12 }
                 MouseArea {
                     id: delIcoMA
                     anchors.fill: parent
@@ -1602,10 +1602,10 @@ Item {
                     enabled: sCard.cardHovered
                     Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                     radius: 4
-                    color: delSnMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
-                    border.color: delSnMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
+                    color: delSnMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
+                    border.color: delSnMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
                     implicitWidth: 26; implicitHeight: 22
-                    Text { anchors.centerIn: parent; text: "×"; color: delSnMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "×"; color: delSnMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 12 }
                     MouseArea { id: delSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteSnippet(sCard.idx) }
                 }
             }
@@ -1631,14 +1631,7 @@ Item {
                 CodeHighlighter {
                     target: codeText.textDocument
                     language: sCard.snip.lang || "text"
-                    palette: ({
-                        keyword: Theme.accent,
-                        string:  Theme.p2,
-                        comment: Theme.textDim,
-                        number:  Theme.mFocus,
-                        type:    Theme.mSync,
-                        builtin: Theme.mOneone
-                    })
+                    palette: Theme.codePalette
                 }
             }
         }
@@ -1685,7 +1678,7 @@ Item {
                 Text {
                     anchors.centerIn: parent
                     text: root.initials(cc.c.name || "")
-                    color: "#06121a"
+                    color: Theme.textOnAccent
                     font.family: Theme.fontMono
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
@@ -1739,9 +1732,9 @@ Item {
                 }
                 Rectangle {
                     width: 22; height: 22; radius: 5
-                    color: delCMA.containsMouse ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel2
-                    border.color: delCMA.containsMouse ? Theme.p0 : Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "×"; color: delCMA.containsMouse ? Theme.p0 : Theme.textMuted; font.pixelSize: 12 }
+                    color: delCMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
+                    border.color: delCMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
+                    Text { anchors.centerIn: parent; text: "×"; color: delCMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 12 }
                     MouseArea { id: delCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteContact(cc.idx) }
                 }
             }

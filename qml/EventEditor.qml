@@ -13,7 +13,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+    Overlay.modal: Rectangle { color: Theme.scrim }
 
     property string eventId: ""
     // The day this event falls on — editable via the calendar picker below.

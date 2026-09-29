@@ -72,7 +72,7 @@ Rectangle {
         : activeFocus ? Theme.accentStrong
         : _selected ? Theme.accent
                 : cursored ? Theme.accentStrong
-                : _isStuck ? Theme.p0
+                : _isStuck ? Theme.danger
                 : hoverArea.containsMouse ? Theme.borderStrong
                 : Theme.border
     border.width: dragArea.drag.active ? 2 : (_selected || cursored || activeFocus ? 2 : (_isStuck ? 2 : 1))
@@ -168,8 +168,8 @@ Rectangle {
                 objectName: "tc-sync-state"
                 visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
                 radius: 4
-                color: Theme.withAlpha(Theme.p1, 0.14)
-                border.color: Theme.p1
+                color: Theme.withAlpha(Theme.warning, 0.14)
+                border.color: Theme.warning
                 border.width: 1
                 implicitWidth: syncStateT.implicitWidth + 10
                 implicitHeight: syncStateT.implicitHeight + 2
@@ -178,7 +178,7 @@ Rectangle {
                     anchors.centerIn: parent
                     text: card._ticket.gone ? I18n.t("taskcard.gone") : I18n.t("taskcard.unsynced")
                     textFormat: Text.PlainText
-                    color: Theme.p1
+                    color: Theme.warning
                     font.pixelSize: 10
                     font.weight: Font.DemiBold
                 }
@@ -193,8 +193,8 @@ Rectangle {
             Rectangle {
                 visible: card._isStuck
                 radius: 4
-                color: Theme.withAlpha(Theme.p0, 0.14)
-                border.color: Theme.p0
+                color: Theme.withAlpha(Theme.danger, 0.14)
+                border.color: Theme.danger
                 border.width: 1
                 implicitWidth: stuckT.implicitWidth + 10
                 implicitHeight: stuckT.implicitHeight + 2
@@ -202,7 +202,7 @@ Rectangle {
                     id: stuckT
                     anchors.centerIn: parent
                     text: I18n.t("task.chip.stuck")
-                    color: Theme.p0
+                    color: Theme.danger
                     font.family: Theme.fontUi
                     font.pixelSize: 9
                     font.weight: Font.DemiBold
@@ -422,8 +422,8 @@ Rectangle {
                     const dl = card.task.deadline;
                     const t = AppController.today;
                     const days = Math.round((dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime()) / 86400000);
-                    if (days <= 0) return Theme.p0;
-                    if (days <= 3) return Theme.p1;
+                    if (days <= 0) return Theme.danger;
+                    if (days <= 3) return Theme.warning;
                     return Theme.textDim;
                 }
                 font.family: Theme.fontMono
@@ -568,7 +568,7 @@ Rectangle {
             id: bulkT
             anchors.centerIn: parent
             text: "+" + (AppController.selectionCount - 1)
-            color: "#06121a"
+            color: Theme.textOnAccent
             font.family: Theme.fontMono
             font.pixelSize: 10
             font.weight: Font.DemiBold

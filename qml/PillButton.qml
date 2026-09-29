@@ -31,11 +31,11 @@ Button {
     background: Rectangle {
         radius: 6
         color: primary ? Theme.accent
-              : danger  ? Theme.withAlpha(Theme.p0, 0.12)
+              : danger  ? Theme.withAlpha(Theme.danger, 0.12)
               : root.hovered ? Theme.panel3 : Theme.panel2
         border.color: root.visualFocus ? Theme.accentStrong
                    : primary ? "transparent"
-                   : danger  ? Theme.withAlpha(Theme.p0, 0.4)
+                   : danger  ? Theme.withAlpha(Theme.danger, 0.4)
                    : (root.hovered ? Theme.borderStrong : Theme.border)
         border.width: root.visualFocus ? 2 : 1
     }
@@ -44,7 +44,7 @@ Button {
         font.family: Theme.fontUi
         font.pixelSize: 12
         font.weight: primary ? Font.DemiBold : Font.Medium
-        color: primary ? "#06121a" : danger ? Theme.p0 : Theme.text
+        color: primary ? Theme.textOnAccent : danger ? Theme.danger : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }

@@ -178,7 +178,7 @@ Rectangle {
                                 const parts = prow.name.split(/\s+/);
                                 return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                             }
-                            color: "#06121a"
+                            color: Theme.textOnAccent
                             font.family: Theme.fontMono
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -241,10 +241,10 @@ Rectangle {
                     Rectangle {
                         Layout.alignment: Qt.AlignVCenter
                         radius: 999
-                        color: prow.personState === "pinged" ? Theme.withAlpha(Theme.p1, 0.10)
+                        color: prow.personState === "pinged" ? Theme.withAlpha(Theme.warning, 0.10)
                              : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.10)
                              : Theme.bg2
-                        border.color: prow.personState === "pinged" ? Theme.withAlpha(Theme.p1, 0.4)
+                        border.color: prow.personState === "pinged" ? Theme.withAlpha(Theme.warning, 0.4)
                                     : prow.personState === "replied" ? Theme.withAlpha(Theme.stDone, 0.4)
                                     : Theme.border
                         border.width: 1
@@ -257,7 +257,7 @@ Rectangle {
                                 : prow.personState === "pinged" ? I18n.t("people.state.pinged.tag")
                                     : prow.personState === "replied" ? I18n.t("people.state.replied.tag")
                                         : I18n.t("people.state.idle.tag")
-                            color: prow.personState === "pinged" ? Theme.p1
+                            color: prow.personState === "pinged" ? Theme.warning
                                  : prow.personState === "replied" ? Theme.stDone
                                  : Theme.textDim
                             font.family: Theme.fontMono

@@ -424,8 +424,8 @@ Item {
                                 }
                                 Rectangle {
                                     radius: 999
-                                    color: col.overWip ? Theme.withAlpha(Theme.p0, 0.18) : Theme.panel3
-                                    border.color: col.overWip ? Theme.p0 : "transparent"
+                                    color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
+                                    border.color: col.overWip ? Theme.danger : "transparent"
                                     border.width: 1
                                     implicitWidth: cntT.implicitWidth + 14
                                     implicitHeight: 18
@@ -434,7 +434,7 @@ Item {
                                         text: col.wipLimit > 0
                                             ? col.visibleCount + "/" + col.wipLimit
                                             : col.visibleCount
-                                        color: col.overWip ? Theme.p0 : Theme.textDim
+                                        color: col.overWip ? Theme.danger : Theme.textDim
                                         font.family: Theme.fontMono
                                         font.pixelSize: 11
                                         font.weight: col.overWip ? Font.DemiBold : Font.Normal
@@ -799,7 +799,7 @@ Item {
         background: Rectangle { radius: 12; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
 
         // Dimmed backdrop so the board stays visible behind the dialog.
-        Overlay.modal: Rectangle { color: Qt.rgba(0, 0, 0, 0.55) }
+        Overlay.modal: Rectangle { color: Theme.scrim }
 
         // Not `palette`: that is QQuickPopup's own property, which every
         // Control inside the popup resolves its colours through. Shadowing it
@@ -946,14 +946,14 @@ Item {
         opacity: revealed ? 1 : 0
         enabled: revealed
         Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-        color: hoverIconMA.containsMouse ? (danger ? Theme.withAlpha(Theme.p0, 0.16) : Theme.panel3)
+        color: hoverIconMA.containsMouse ? (danger ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel3)
                                          : "transparent"
-        border.color: hoverIconMA.containsMouse ? (danger ? Theme.p0 : Theme.border) : "transparent"
+        border.color: hoverIconMA.containsMouse ? (danger ? Theme.danger : Theme.border) : "transparent"
         border.width: 1
         Text {
             anchors.centerIn: parent
             text: hoverIcon.glyph
-            color: hoverIconMA.containsMouse ? (hoverIcon.danger ? Theme.p0 : Theme.text) : Theme.textMuted
+            color: hoverIconMA.containsMouse ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
             font.pixelSize: hoverIcon.glyph === "×" ? 13 : 12
             font.weight: Font.DemiBold
         }

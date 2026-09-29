@@ -63,7 +63,7 @@ Rectangle {
             objectName: "rail-blocked"
             iconSource: "qrc:/brand/icons/heap-06-blocked.svg"; tooltipText: I18n.t("siderail.tip.blocked")
                    countText: root._blockedCount > 0 ? root._blockedCount : ""
-                   countColor: Theme.p0
+                   countColor: Theme.danger
                    active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
                    onActivated: AppController.focusStatusColumn("blocked") }
         RailBtn {
@@ -115,7 +115,7 @@ Rectangle {
         property string tooltipText: ""
         property bool active: false
         property string countText: ""
-        property color countColor: Theme.p0
+        property color countColor: Theme.danger
         property int iconSize: 20
         signal activated()
         activeFocusOnTab: true
@@ -156,7 +156,7 @@ Rectangle {
                 id: cntT
                 anchors.centerIn: parent
                 text: btn.countText
-                color: "white"
+                color: Theme.textOnBadge
                 font.family: Theme.fontMono
                 font.pixelSize: 9
                 font.weight: Font.DemiBold

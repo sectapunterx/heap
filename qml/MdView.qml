@@ -424,6 +424,7 @@ ListView {
                             CodeHighlighter {
                                 target: codeText.textDocument
                                 language: rowItem.model.language
+                                palette: Theme.codePalette
                             }
                         }
                     }

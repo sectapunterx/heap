@@ -235,6 +235,7 @@ qt_add_qml_module(heap_core
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
+        qml/ThemePresets.js
         qml/I18n.qml
         qml/TopBar.qml
         qml/SideRail.qml
@@ -258,6 +259,8 @@ qt_add_qml_module(heap_core
         qml/PersonPicker.qml
         qml/TweaksPanel.qml
         qml/Toast.qml
+        qml/ThemeSettings.qml
+        qml/ColorPickerPopup.qml
         qml/PillButton.qml
         qml/ProfileEditor.qml
         qml/CommandPalette.qml

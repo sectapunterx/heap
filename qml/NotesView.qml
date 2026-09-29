@@ -343,7 +343,7 @@ Item {
                         id: blToggleTxt
                         anchors.centerIn: parent
                         text: I18n.t("notes.links")
-                        color: root.showBacklinks ? "#06121a" : Theme.textMuted
+                        color: root.showBacklinks ? Theme.textOnAccent : Theme.textMuted
                         font.pixelSize: 11
                         font.weight: Font.Medium
                     }
@@ -387,7 +387,7 @@ Item {
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.label
-                                    color: parent.active ? "#06121a" : Theme.text
+                                    color: parent.active ? Theme.textOnAccent : Theme.text
                                     font.pixelSize: 11
                                     font.weight: parent.active ? Font.DemiBold : Font.Medium
                                 }
@@ -708,7 +708,7 @@ Item {
                                 spacing: 6
                                 Text {
                                     text: (modelData.resolved ? "⌗ " : "⚠ ") + modelData.target
-                                    color: modelData.resolved ? Theme.mOneone : Theme.p1
+                                    color: modelData.resolved ? Theme.mOneone : Theme.warning
                                     font.pixelSize: 11
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight
@@ -776,16 +776,16 @@ Item {
             text:          Theme.text,
             dim:           Theme.textMuted,
             accent:        Theme.accent,
-            code:          Theme.p2,
-            codeBg:        Theme.bg2,
-            mention:       Theme.mStandup,
-            ticket:        Theme.p2,
-            tag:           Theme.mOneone,
-            math:          Theme.mOneone,
-            highlightBg:   Theme.accentSoft,
-            keyword:       Theme.accentStrong,
-            string:        Theme.stDone,
-            number:        Theme.p2
+            code:          Theme.code,
+            codeBg:        Theme.codeBg,
+            mention:       Theme.mention,
+            ticket:        Theme.ticket,
+            tag:           Theme.tag,
+            math:          Theme.math,
+            highlightBg:   Theme.highlightBg,
+            keyword:       Theme.synKeyword,
+            string:        Theme.synString,
+            number:        Theme.synNumber
         })
     }
 
@@ -837,7 +837,7 @@ Item {
                                 const parts = (modelData.label || "").split(/\s+/);
                                 return (parts[0] ? parts[0][0] : "") + (parts[1] ? parts[1][0] : "");
                             }
-                            color: "#06121a"
+                            color: Theme.textOnAccent
                             font.family: Theme.fontMono
                             font.pixelSize: 10
                             font.weight: Font.DemiBold
@@ -861,11 +861,11 @@ Item {
                         visible: modelData.kind === "heading"
                         width: 22; height: 18; radius: 4
                         color: "transparent"
-                        border.color: "#b58ad7"; border.width: 1
+                        border.color: Theme.heading; border.width: 1
                         Text {
                             anchors.centerIn: parent
                             text: "⌗"
-                            color: "#b58ad7"
+                            color: Theme.heading
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
                         }
@@ -992,18 +992,7 @@ Item {
         id: mdDocument
         text: editor.text
         allowRemoteImages: false
-        palette: ({
-            "text": Theme.text,
-            "dim": Theme.textDim,
-            "link": Theme.accent,
-            "code": Theme.text,
-            "codeBackground": Theme.panel2,
-            "highlightBackground": Theme.accentSoft,
-            "mention": Theme.stProg,
-            "ticket": Theme.accent,
-            "tag": Theme.stReview,
-            "math": Theme.p2
-        })
+        palette: Theme.mdPalette
     }
 
     // A pending edit is only in the editor until the 250 ms debounce fires.

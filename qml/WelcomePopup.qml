@@ -36,7 +36,7 @@ Popup {
     onAboutToShow: paused = false
 
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.6)
+        color: Theme.scrim
     }
 
     background: Rectangle {

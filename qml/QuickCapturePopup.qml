@@ -13,7 +13,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     Overlay.modal: Rectangle {
-        color: Qt.rgba(0, 0, 0, 0.55)
+        color: Theme.scrim
     }
 
     property var _preview: ({ok: false})
