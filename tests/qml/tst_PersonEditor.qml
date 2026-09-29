@@ -38,8 +38,8 @@ TestCase {
         compare(pe.states[1], "todo");
         compare(pe.states[2], "pinged");
         compare(pe.states[3], "replied");
-        compare(pe.swatches.length, 8);
-        compare(pe.swatches[0], "#d97a6c");
+        compare(pe.swatches.length, Theme.swatches.length);
+        compare(pe.swatches[0], "#5cc2dd");
     }
 
     // The swatch list used to be called `palette`, which is QQuickPopup's own

@@ -176,7 +176,7 @@ Popup {
     onVisibleChanged: if (visible) _reposition()
 
     background: Rectangle {
-        radius: 6
+        radius: Theme.radiusMd
         color: Theme.panel2
         border.color: Theme.border
         border.width: 1
@@ -196,21 +196,21 @@ Popup {
                 : (rowMA.containsMouse ? Theme.withAlpha(Theme.accent, 0.08) : "transparent")
             Row {
                 anchors.fill: parent
-                anchors.leftMargin: 10
-                anchors.rightMargin: 10
-                spacing: 8
+                anchors.leftMargin: Theme.spLg
+                anchors.rightMargin: Theme.spLg
+                spacing: Theme.spMd
                 Text {
                     text: ac._trigger + modelData.id
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     anchors.verticalCenter: parent.verticalCenter
                 }
                 Text {
                     visible: (modelData.name || "").length > 0
                     text: "· " + modelData.name
                     color: Theme.textMuted
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     anchors.verticalCenter: parent.verticalCenter
                     elide: Text.ElideRight
                 }

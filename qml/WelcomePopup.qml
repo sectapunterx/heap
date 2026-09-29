@@ -40,7 +40,7 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 14
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
@@ -60,7 +60,7 @@ Popup {
           highlights: [
               { glyph: "▦", title: "welcome.board.title", desc: "welcome.board.desc" },
               { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.desc" },
-              { glyph: "⚡", title: "welcome.capture.title", desc: "welcome.capture.desc" },
+              { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.desc" },
               { glyph: "⌘", title: "welcome.palette.title", desc: "welcome.palette.desc" }
           ],
           note: "welcome.demoNote" },
@@ -70,7 +70,7 @@ Popup {
         { glyph: "✎", title: "welcome.tasks.title", desc: "welcome.tasks.desc",
           keys: ["task.new"],
           action: { label: "welcome.act.task", kind: "action", arg: "task-new" }, help: "help-tasks" },
-        { glyph: "⚡", title: "welcome.capture.title", desc: "welcome.capture.body",
+        { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.body",
           keys: ["quick-capture", "quick-capture-notes"],
           action: { label: "welcome.act.capture", kind: "action", arg: "quick-capture" }, help: "help-capture" },
         { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.body",
@@ -131,7 +131,7 @@ Popup {
         property string sid: ""
         readonly property string combo: AppController.shortcutFor(sid)
         visible: combo !== ""
-        radius: 6
+        radius: Theme.radiusMd
         color: Theme.panel2
         border.color: Theme.border
         border.width: 1
@@ -140,18 +140,18 @@ Popup {
         RowLayout {
             id: chipRow
             anchors.centerIn: parent
-            spacing: 6
+            spacing: Theme.spSm
             Text {
                 text: chip.combo
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 font.weight: Font.DemiBold
             }
             Text {
                 text: AppController.shortcutLabel(chip.sid)
                 color: Theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
         }
     }
@@ -171,25 +171,25 @@ Popup {
 
         // ── Header: glyph + title + progress dots + close ──
         RowLayout {
-            Layout.topMargin: 20
-            Layout.leftMargin: 22
-            Layout.rightMargin: 18
+            Layout.topMargin: Theme.inset
+            Layout.leftMargin: Theme.sp3xl
+            Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
-            spacing: 12
+            spacing: Theme.spXl
 
             Rectangle {
                 Layout.alignment: Qt.AlignVCenter
-                width: 38; height: 38; radius: 9
+                width: 38; height: 38; radius: Theme.radiusLg
                 color: Theme.panel2
                 border.color: Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: root.cur.glyph; color: Theme.accentStrong; font.pixelSize: 19 }
+                Text { anchors.centerIn: parent; text: root.cur.glyph; color: Theme.accentStrong; font.pixelSize: Theme.fsXl }
             }
 
             Text {
                 Layout.fillWidth: true
                 text: I18n.t(root.cur.title)
                 color: Theme.text
-                font.pixelSize: 18
+                font.pixelSize: Theme.fsXl
                 font.weight: Font.Bold
                 elide: Text.ElideRight
             }
@@ -197,7 +197,7 @@ Popup {
             // Progress dots.
             Row {
                 Layout.alignment: Qt.AlignVCenter
-                spacing: 5
+                spacing: Theme.spXs
                 Repeater {
                     model: root.steps.length
                     delegate: Rectangle {
@@ -214,9 +214,9 @@ Popup {
             // Close = opt out (marks welcome seen).
             Rectangle {
                 Layout.alignment: Qt.AlignVCenter
-                width: 26; height: 26; radius: 6
+                width: 26; height: 26; radius: Theme.radiusMd
                 color: closeMa.containsMouse ? Theme.panel2 : "transparent"
-                Text { anchors.centerIn: parent; text: "✕"; color: Theme.textMuted; font.pixelSize: 13 }
+                Text { anchors.centerIn: parent; text: "✕"; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
                 MouseArea {
                     id: closeMa
                     anchors.fill: parent
@@ -230,7 +230,7 @@ Popup {
         // ── Body (fixed height so the frame doesn't jump between steps) ──
         Item {
             Layout.fillWidth: true
-            Layout.topMargin: 16
+            Layout.topMargin: Theme.sp2xl
             Layout.preferredHeight: 232
             clip: true
 
@@ -238,15 +238,15 @@ Popup {
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top
-                anchors.leftMargin: 22
-                anchors.rightMargin: 22
-                spacing: 14
+                anchors.leftMargin: Theme.sp3xl
+                anchors.rightMargin: Theme.sp3xl
+                spacing: Theme.sp2xl
 
                 Text {
                     Layout.fillWidth: true
                     text: I18n.t(root.cur.desc)
                     color: Theme.textMuted
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fsMd
                     lineHeight: 1.35
                     wrapMode: Text.WordWrap
                 }
@@ -257,8 +257,8 @@ Popup {
                     Layout.fillWidth: true
                     visible: !!root.cur.highlights
                     columns: 2
-                    columnSpacing: 14
-                    rowSpacing: 10
+                    columnSpacing: Theme.sp2xl
+                    rowSpacing: Theme.spLg
                     Repeater {
                         model: root.cur.highlights || []
                         delegate: RowLayout {
@@ -266,28 +266,28 @@ Popup {
                             Layout.fillWidth: true
                             Layout.preferredWidth: 1
                             Layout.alignment: Qt.AlignTop
-                            spacing: 8
+                            spacing: Theme.spMd
                             Text {
                                 Layout.alignment: Qt.AlignTop
                                 text: modelData.glyph
                                 color: Theme.accentStrong
-                                font.pixelSize: 14
+                                font.pixelSize: Theme.fsLg
                             }
                             ColumnLayout {
                                 Layout.fillWidth: true
-                                spacing: 2
+                                spacing: Theme.sp2xs
                                 Text {
                                     Layout.fillWidth: true
                                     text: I18n.t(modelData.title)
                                     color: Theme.text
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fsMd
                                     font.weight: Font.DemiBold
                                 }
                                 Text {
                                     Layout.fillWidth: true
                                     text: I18n.t(modelData.desc)
                                     color: Theme.textMuted
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                     wrapMode: Text.WordWrap
                                 }
                             }
@@ -299,14 +299,14 @@ Popup {
                     visible: !!root.cur.note
                     text: root.cur.note ? I18n.t(root.cur.note) : ""
                     color: Theme.textDim
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     wrapMode: Text.WordWrap
                 }
 
                 // Live, rebindable hotkey chips for this step.
                 Flow {
                     Layout.fillWidth: true
-                    spacing: 8
+                    spacing: Theme.spMd
                     visible: root.cur.keys.length > 0
                     Repeater {
                         model: root.cur.keys
@@ -320,8 +320,8 @@ Popup {
                 // Actions row: optional "open →" and "Learn more →".
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: 2
-                    spacing: 14
+                    Layout.topMargin: Theme.sp2xs
+                    spacing: Theme.sp2xl
 
                     PillButton {
                         visible: root.cur.action !== null
@@ -333,7 +333,7 @@ Popup {
                         visible: root.cur.help !== ""
                         text: I18n.t("welcome.learnMore")
                         color: learnMa.containsMouse ? Theme.accent : Theme.accentStrong
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                         font.weight: Font.DemiBold
                         MouseArea {
                             id: learnMa
@@ -357,8 +357,8 @@ Popup {
         }
         RowLayout {
             Layout.fillWidth: true
-            Layout.margins: 16
-            spacing: 8
+            Layout.margins: Theme.sp2xl
+            spacing: Theme.spMd
 
             PillButton {
                 text: I18n.t("welcome.skip")

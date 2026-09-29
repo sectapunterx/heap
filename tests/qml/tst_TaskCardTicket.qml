@@ -1,6 +1,6 @@
 // TaskCard, ticket half (HEAP-117). A mirrored issue has to look like one:
-// provider badge, tracker key in place of the synthetic heap id, the upstream
-// assignee, and open-in-browser. A locally-created task shows none of it.
+// provider badge, tracker key in place of the synthetic heap id, and
+// open-in-browser. A locally-created task shows none of it.
 //
 // The card is instantiated directly with a `task` object rather than driven
 // through a sync, so nothing here touches a provider or the task model.
@@ -76,9 +76,6 @@ TestCase {
         verify(key !== null);
         compare(key.text, "#1234", "the card shows the heap id instead of the tracker key");
 
-        const assignee = find(card, "tc-assignee");
-        verify(assignee !== null && assignee.visible, "no assignee chip");
-
         const comments = find(card, "tc-comments");
         verify(comments !== null && comments.visible, "no comment count");
         card.destroy();
@@ -88,7 +85,6 @@ TestCase {
     function test_local_card_shows_no_ticket_chrome() {
         const card = make(localTask());
         verify(!find(card, "tc-badge").visible, "a local card grew a provider badge");
-        verify(!find(card, "tc-assignee").visible);
         verify(!find(card, "tc-comments").visible);
         // The heap id is what a local card is known by.
         compare(find(card, "tc-key").text, "LTE-2700");
@@ -111,11 +107,11 @@ TestCase {
         b.destroy();
     }
 
-    function test_assignee_chip_hidden_when_unassigned() {
-        const t = ghTicket();
-        t.ticket.assignee = "";
-        const card = make(t);
-        verify(!find(card, "tc-assignee").visible);
+    // heap mirrors the issues assigned to you, so the assignee would only
+    // ever be your own name: the card does not show it.
+    function test_card_does_not_show_the_assignee() {
+        const card = make(ghTicket());
+        compare(find(card, "tc-assignee"), null, "the card grew an assignee chip again");
         card.destroy();
     }
 

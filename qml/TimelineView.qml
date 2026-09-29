@@ -206,12 +206,12 @@ Item {
             }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18; anchors.rightMargin: 18
-                spacing: 12
+                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
+                spacing: Theme.spXl
                 Column {
                     spacing: 1
                     Text {
-                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
+                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
                     }
                     Text {
                         text: I18n.t("timeline.subtitle")
@@ -219,12 +219,12 @@ Item {
                                 .arg(AppController.today.toLocaleDateString(I18n.locale, "yyyy-MM-dd"))
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                     }
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    radius: 999
+                    radius: Theme.radiusPill
                     color: root.showDone ? Theme.accentSoft : Theme.panel2
                     border.color: root.showDone ? Theme.accent : Theme.border
                     border.width: 1
@@ -233,9 +233,9 @@ Item {
                     RowLayout {
                         id: showDoneRow
                         anchors.centerIn: parent
-                        spacing: 6
-                        Rectangle { width: 8; height: 8; radius: 2; color: Theme.stDone }
-                        Text { text: I18n.t("timeline.showDone"); color: root.showDone ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 12 }
+                        spacing: Theme.spSm
+                        Rectangle { width: 8; height: 8; radius: Theme.radiusXs; color: Theme.stDone }
+                        Text { text: I18n.t("timeline.showDone"); color: root.showDone ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsMd }
                     }
                     MouseArea {
                         anchors.fill: parent
@@ -276,20 +276,20 @@ Item {
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 18; anchors.rightMargin: 18
+                    anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
                     anchors.topMargin: rowItem.first ? 14 : 0
-                    anchors.bottomMargin: 6
-                    spacing: 14
+                    anchors.bottomMargin: Theme.spSm
+                    spacing: Theme.sp2xl
 
                     // Left side — label / marker, on the bucket's first row only
                     ColumnLayout {
                         id: labelCol
                         Layout.preferredWidth: 160
                         Layout.alignment: Qt.AlignTop
-                        spacing: 4
+                        spacing: Theme.spXs
                         opacity: rowItem.first ? 1 : 0
                         RowLayout {
-                            spacing: 8
+                            spacing: Theme.spMd
                             Rectangle {
                                 width: 26; height: 26; radius: 13
                                 color: rowItem.meta ? rowItem.meta.color : "transparent"
@@ -298,7 +298,7 @@ Item {
                                     text: rowItem.meta ? rowItem.meta.icon : ""
                                     color: Theme.textOnAccent
                                     font.weight: Font.DemiBold
-                                    font.pixelSize: 13
+                                    font.pixelSize: Theme.fsMd
                                 }
                             }
                             Text {
@@ -306,7 +306,7 @@ Item {
                                 color: rowItem.rd.bucketId === "overdue" ? Theme.danger
                                      : rowItem.rd.bucketId === "today" ? Theme.accentStrong
                                      : Theme.text
-                                font.pixelSize: 14
+                                font.pixelSize: Theme.fsLg
                                 font.weight: Font.DemiBold
                             }
                         }
@@ -317,7 +317,7 @@ Item {
                             text: rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
                                   ? (I18n.lang, AppController.shortDate(rowItem.list[0].deadline)) : ""
                             color: Theme.textMuted
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             leftPadding: 34
                         }
                         Text {
@@ -325,7 +325,7 @@ Item {
                             text: I18n.tasks(rowItem.list.length)
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             leftPadding: 34
                         }
                     }
@@ -343,17 +343,17 @@ Item {
             Item {
                 visible: root.totalShown() === 0
                 anchors.left: parent.left; anchors.right: parent.right
-                anchors.top: parent.top; anchors.topMargin: 14
+                anchors.top: parent.top; anchors.topMargin: Theme.sp2xl
                 height: 200
                 Column {
                     anchors.centerIn: parent
-                    spacing: 6
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: 26 }
+                    spacing: Theme.spSm
+                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: Theme.fs2xl }
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: 13
+                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: Theme.fsMd
                     }
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: 12
+                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: Theme.fsMd
                     }
                 }
             }
@@ -366,7 +366,7 @@ Item {
                     id: hdr
                     readonly property var rd: parent && parent.rowData ? parent.rowData : null
                     width: parent ? parent.width : 0
-                    spacing: 8
+                    spacing: Theme.spMd
                     Rectangle {
                         Layout.preferredWidth: 3
                         Layout.preferredHeight: 12
@@ -377,7 +377,7 @@ Item {
                         text: hdr.rd ? hdr.rd.label : ""
                         color: Theme.textMuted
                         font.family: Theme.fontMono
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         font.weight: Font.DemiBold
                         font.capitalization: Font.MixedCase
                     }
@@ -401,7 +401,7 @@ Item {
                     readonly property bool _selected: t && AppController.selectionCount >= 0
                         && AppController.isTaskSelected(t.id)
                     width: parent ? parent.width : 0
-                    radius: 8
+                    radius: Theme.radius
                     color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
                         : rowMA.containsMouse ? Theme.panel2 : Theme.panel
                     border.color: _selected ? Theme.accent
@@ -424,15 +424,15 @@ Item {
                     RowLayout {
                         id: rowContent
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 12
-                        anchors.topMargin: 8
-                        anchors.bottomMargin: 8
-                        spacing: 10
+                        anchors.leftMargin: Theme.sp2xl
+                        anchors.rightMargin: Theme.spXl
+                        anchors.topMargin: Theme.spMd
+                        anchors.bottomMargin: Theme.spMd
+                        spacing: Theme.spLg
 
-                        Rectangle { width: 10; height: 10; radius: 3; color: tlRow.st.color }
+                        Rectangle { width: 10; height: 10; radius: Theme.radiusXs; color: tlRow.st.color }
                         Rectangle {
-                            radius: 4
+                            radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.priorityColor(tlRow.t.priority), 0.14)
                             implicitWidth: priT.implicitWidth + 10; implicitHeight: 18
                             Text {
@@ -440,7 +440,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: tlRow.t.priority
                                 color: Theme.priorityColor(tlRow.t.priority)
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                                 font.weight: Font.DemiBold
                             }
                         }
@@ -452,7 +452,7 @@ Item {
                             textFormat: Text.PlainText
                             color: Theme.accentStrong
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.weight: Font.Medium
                         }
                         ColumnLayout {
@@ -463,7 +463,7 @@ Item {
                                 text: tlRow.t.title
                                 textFormat: Text.PlainText
                                 color: Theme.text
-                                font.pixelSize: 13
+                                font.pixelSize: Theme.fsMd
                                 font.weight: Font.Medium
                                 elide: Text.ElideRight
                             }
@@ -472,12 +472,12 @@ Item {
                                 visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
                                 text: String(tlRow.t.desc || "").substring(0, 90) + (String(tlRow.t.desc || "").length > 90 ? "…" : "")
                                 color: Theme.textMuted
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                                 elide: Text.ElideRight
                             }
                         }
                         Rectangle {
-                            radius: 999
+                            radius: Theme.radiusPill
                             color: "transparent"
                             border.color: Theme.withAlpha(tlRow.st.color, 0.4)
                             border.width: 1
@@ -487,7 +487,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: tlRow.st.name
                                 color: tlRow.st.color
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                                 font.weight: Font.DemiBold
                             }
                         }
@@ -496,20 +496,20 @@ Item {
                             text: tlRow.t.branch ? "⎇ " + String(tlRow.t.branch).split("/").pop() : ""
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                         }
                         Rectangle {
                             visible: root.scheduleMap[tlRow.t.id] !== undefined && String(root.scheduleMap[tlRow.t.id]).length > 0
-                            radius: 4
+                            radius: Theme.radiusSm
                             color: Theme.accentSoft
                             implicitWidth: schT.implicitWidth + 10; implicitHeight: 18
                             Text {
                                 id: schT
                                 anchors.centerIn: parent
-                                text: "⏰ " + (root.scheduleMap[tlRow.t.id] || "")
+                                text: "▸ " + (root.scheduleMap[tlRow.t.id] || "")
                                 color: Theme.accentStrong
                                 font.family: Theme.fontMono
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                             }
                         }
                         Text {
@@ -519,7 +519,7 @@ Item {
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
                                  : Theme.textMuted
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.weight: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" || (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Font.DemiBold : Font.Normal
                         }
                     }

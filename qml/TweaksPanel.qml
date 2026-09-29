@@ -58,7 +58,7 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
@@ -73,23 +73,23 @@ Popup {
             Layout.preferredHeight: 38
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14; anchors.rightMargin: 8
+                anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
                 Text {
                     text: I18n.t("tweaks.title").toUpperCase()
                     color: Theme.textMuted
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     font.weight: Font.DemiBold
                     font.letterSpacing: 1
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    width: 22; height: 22; radius: 5
+                    width: 22; height: 22; radius: Theme.radiusSm
                     color: closeMA.containsMouse ? Theme.panel3 : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "✕"
                         color: Theme.textDim
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                     }
                     MouseArea {
                         id: closeMA
@@ -107,13 +107,13 @@ Popup {
         // ── Body ──────────────────────────────────────────────────────
         ColumnLayout {
             Layout.fillWidth: true
-            Layout.leftMargin: 14; Layout.rightMargin: 14
-            Layout.topMargin: 12; Layout.bottomMargin: 14
-            spacing: 14
+            Layout.leftMargin: Theme.sp2xl; Layout.rightMargin: Theme.sp2xl
+            Layout.topMargin: Theme.spXl; Layout.bottomMargin: Theme.sp2xl
+            spacing: Theme.sp2xl
 
             // Внешний вид: theme + density
             ColumnLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Layout.fillWidth: true
                 SectLabel {
                     text: I18n.t("tweaks.section.appearance")
@@ -123,7 +123,7 @@ Popup {
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 4
+                    spacing: Theme.spXs
                     SegButton {
                         text: I18n.t("settings.appearance.theme.dark"); active: AppController.theme === "dark"; onClicked: AppController.theme = "dark"
                     }
@@ -132,11 +132,11 @@ Popup {
                     }
                 }
                 FieldLabel {
-                    text: I18n.t("tweaks.density.label"); topPadding: 6
+                    text: I18n.t("tweaks.density.label"); topPadding: Theme.spSm
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 4
+                    spacing: Theme.spXs
                     SegButton { text: I18n.t("common.density.compact"); active: AppController.density === "compact"; onClicked: AppController.density = "compact" }
                     SegButton { text: I18n.t("common.density.comfy");   active: AppController.density === "comfy";   onClicked: AppController.density = "comfy" }
                 }
@@ -144,14 +144,14 @@ Popup {
 
             // Тема: one chip per theme; picks it for the slot that is showing
             ColumnLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Layout.fillWidth: true
                 SectLabel {
                     text: I18n.t("tweaks.themePreset")
                 }
                 Flow {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: Theme.spSm
                     Repeater {
                         model: root.themeChoices
                         delegate: Rectangle {
@@ -184,7 +184,7 @@ Popup {
 
             // Доступность: reducedMotion + contrast (soft / normal / high)
             ColumnLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Layout.fillWidth: true
                 SectLabel {
                     text: I18n.t("tweaks.section.access")
@@ -195,11 +195,11 @@ Popup {
                     onToggled: (v) => root._setAppearance("reducedMotion", v)
                 }
                 FieldLabel {
-                    text: I18n.t("settings.appearance.contrast"); topPadding: 6
+                    text: I18n.t("settings.appearance.contrast"); topPadding: Theme.spSm
                 }
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 4
+                    spacing: Theme.spXs
                     Repeater {
                         model: ["soft", "normal", "high"]
                         SegButton {
@@ -219,7 +219,7 @@ Popup {
                 text: I18n.t("tweaks.allInSettings")
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
                 wrapMode: Text.WordWrap
             }
         }
@@ -229,14 +229,14 @@ Popup {
 
     component SectLabel: Text {
         color: Theme.textDim
-        font.pixelSize: 10
+        font.pixelSize: Theme.fsXs
         font.letterSpacing: 1
         font.weight: Font.DemiBold
     }
 
     component FieldLabel: Text {
         color: Theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsSm
     }
 
     component SegButton: Rectangle {
@@ -245,15 +245,15 @@ Popup {
         signal clicked()
         Layout.fillWidth: true
         Layout.preferredHeight: 26
-        radius: 6
-        color: active ? Theme.accent : (segMA.containsMouse ? Theme.panel3 : Theme.panel2)
-        border.color: active ? "transparent" : Theme.border
+        radius: Theme.radiusMd
+        color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : Theme.panel2)
+        border.color: active ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border
         border.width: 1
         Text {
             anchors.centerIn: parent
             text: parent.text
-            color: parent.active ? Theme.textOnAccent : Theme.text
-            font.pixelSize: 12
+            color: parent.active ? Theme.accentStrong : Theme.text
+            font.pixelSize: Theme.fsMd
             font.weight: parent.active ? Font.DemiBold : Font.Medium
         }
         MouseArea {
@@ -271,7 +271,7 @@ Popup {
         property bool checked: false
         signal toggled(bool v)
         Layout.fillWidth: true
-        spacing: 10
+        spacing: Theme.spLg
 
         // Label included in the hit area — the 32x18 switch alone was a fiddly
         // target. Handlers, not a MouseArea: an Item here would become a cell.
@@ -282,7 +282,7 @@ Popup {
             Layout.fillWidth: true
             text: toggleRow.label
             color: Theme.text
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
         Rectangle {
             width: 32; height: 18; radius: 9

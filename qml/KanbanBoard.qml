@@ -88,6 +88,19 @@ Item {
     // a filter change, a drag, or the card moving column — all of which
     // renumber the rows underneath it.
     property string cursorTaskId: ""
+    // The ring is drawn only once the keyboard has moved the cursor. A click
+    // still puts the cursor on the card (so J/K carry on from there), but a
+    // ring left behind by a mouse click read as the card being stuck
+    // selected after its editor closed.
+    property bool cursorVisible: false
+    function clearCursor() {
+        root.cursorTaskId = "";
+        root.cursorVisible = false;
+    }
+    function clearSelectionAndCursor() {
+        if (AppController.selectionCount > 0) AppController.clearSelection();
+        root.clearCursor();
+    }
 
     // Visible ids per column, in board order. The same walk _flatVisibleIds()
     // does, but keeping the column structure that left/right needs.
@@ -119,6 +132,7 @@ Item {
     }
 
     function moveCursor(dx, dy) {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) {
@@ -145,12 +159,14 @@ Item {
     }
 
     function openCursor() {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
         if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
     }
 
     function toggleCursorSelection() {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
         if (root.cursorTaskId) AppController.toggleTaskSelection(root.cursorTaskId);
@@ -159,6 +175,7 @@ Item {
     // Move the card under the cursor. Vertically it swaps with its neighbour;
     // horizontally it changes column, landing at the same depth.
     function moveCursorCard(dx, dy) {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
@@ -252,11 +269,12 @@ Item {
 
     Flickable {
         id: hscroll
+        objectName: "board-hscroll"
         anchors.fill: parent
-        anchors.leftMargin: 16
-        anchors.rightMargin: 16
-        anchors.topMargin: 12
-        anchors.bottomMargin: 16
+        anchors.leftMargin: Theme.sp2xl
+        anchors.rightMargin: Theme.sp2xl
+        anchors.topMargin: Theme.spXl
+        anchors.bottomMargin: Theme.sp2xl
         contentWidth: rowL.implicitWidth
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
@@ -279,11 +297,17 @@ Item {
                 root._scrollOuter(event.angleDelta.y || event.angleDelta.x);
             }
         }
+        // A click on empty board (between or below the columns) lets go of
+        // the selection and the keyboard cursor. Cards take their own clicks
+        // first, so this only sees the empty space.
+        TapHandler {
+            onTapped: root.clearSelectionAndCursor()
+        }
 
         Row {
             id: rowL
             height: hscroll.height
-            spacing: 12
+            spacing: Theme.spXl
 
             Repeater {
                 id: colRepeater
@@ -344,8 +368,8 @@ Item {
                             }
                             RowLayout {
                                 anchors.fill: parent
-                                anchors.leftMargin: 12; anchors.rightMargin: 8
-                                spacing: 8
+                                anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spMd
+                                spacing: Theme.spMd
                                 // The swatch itself stays 10px, but it opens the
                                 // colour picker, so the thing you click is a
                                 // 20px box around it — a 10x10 target was barely
@@ -356,12 +380,12 @@ Item {
                                     Layout.preferredHeight: 20
                                     Rectangle {
                                         anchors.fill: parent
-                                        radius: 5
+                                        radius: Theme.radiusSm
                                         color: swatchMA.containsMouse ? Theme.panel3 : "transparent"
                                     }
                                     Rectangle {
                                         anchors.centerIn: parent
-                                        width: 10; height: 10; radius: 3
+                                        width: 8; height: 8; radius: 4
                                         color: col.statusColor
                                     }
                                     MouseArea {
@@ -382,11 +406,13 @@ Item {
                                         id: colName
                                         visible: !col.renaming
                                         anchors.verticalCenter: parent.verticalCenter
-                                        text: col.statusName.toUpperCase()
-                                        color: Theme.textMuted
+                                        // The name as the user wrote it. Uppercase with
+                                        // tracking shouted across seven columns and cut
+                                        // "In progress" to "IN PROGR…" on a 1680px window.
+                                        text: col.statusName
+                                        color: Theme.text
                                         font.family: Theme.fontUi
-                                        font.pixelSize: 11
-                                        font.letterSpacing: 1
+                                        font.pixelSize: Theme.fsMd
                                         font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                         width: parent.width
@@ -412,9 +438,9 @@ Item {
                                         // the blur handler on the next rename.
                                         onVisibleChanged: if (visible) text = col.statusName
                                         color: Theme.text
-                                        background: Rectangle { radius: 4; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
+                                        background: Rectangle { radius: Theme.radiusSm; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
                                         font.family: Theme.fontUi
-                                        font.pixelSize: 12
+                                        font.pixelSize: Theme.fsMd
                                         font.weight: Font.DemiBold
                                         selectByMouse: true
                                         onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
@@ -423,7 +449,7 @@ Item {
                                     }
                                 }
                                 Rectangle {
-                                    radius: 999
+                                    radius: Theme.radiusPill
                                     color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
                                     border.color: col.overWip ? Theme.danger : "transparent"
                                     border.width: 1
@@ -436,7 +462,7 @@ Item {
                                             : col.visibleCount
                                         color: col.overWip ? Theme.danger : Theme.textDim
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fsSm
                                         font.weight: col.overWip ? Font.DemiBold : Font.Normal
                                     }
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
@@ -470,13 +496,13 @@ Item {
                                 }
 
                                 Rectangle {
-                                    width: 22; height: 22; radius: 5
+                                    width: 22; height: 22; radius: Theme.radiusSm
                                     color: addMA.containsMouse ? Theme.panel3 : "transparent"
                                     Text {
                                         anchors.centerIn: parent
                                         text: "+"
                                         color: addMA.containsMouse ? Theme.text : Theme.textDim
-                                        font.pixelSize: 14
+                                        font.pixelSize: Theme.fsLg
                                     }
                                     MouseArea {
                                         id: addMA
@@ -495,17 +521,17 @@ Item {
                                 z: -1
                             }
 
-                            QQC.Menu {
+                            AppMenu {
                                 id: colHeaderMenu
-                                QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
-                                QQC.MenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
-                                QQC.MenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
-                                QQC.MenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
-                                QQC.MenuSeparator {}
-                                QQC.MenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
-                                QQC.MenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
-                                QQC.MenuSeparator {}
-                                QQC.MenuItem { text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount) }
+                                AppMenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
+                                AppMenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
+                                AppMenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
+                                AppMenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
+                                AppMenuSeparator {}
+                                AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
+                                AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
+                                AppMenuSeparator {}
+                                AppMenuItem { danger: true; text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount) }
                             }
                         }
 
@@ -520,9 +546,9 @@ Item {
                                 id: bodyFlick
                                 objectName: "column-list"
                                 anchors.fill: parent
-                                anchors.margins: 8
+                                anchors.margins: Theme.spMd
                                 clip: true
-                                spacing: 8
+                                spacing: Theme.spMd
                                 cacheBuffer: 600
                                 boundsBehavior: Flickable.StopAtBounds
                                 flickableDirection: Flickable.VerticalFlick
@@ -538,10 +564,17 @@ Item {
                                 // a grabbable bar when a column overflows.
                                 ScrollBar.vertical: ThinScrollBar {}
 
-                                // Wheel scrolls this column vertically. When the column
-                                // has no overflow or is already at the top/bottom edge,
-                                // event.accepted = false lets the outer board scroll
-                                // horizontally instead.
+                                // The empty part of a column, like the empty
+                                // board around it.
+                                TapHandler {
+                                    onTapped: root.clearSelectionAndCursor()
+                                }
+
+                                // Wheel scrolls this column vertically. Only a column
+                                // with nothing to scroll hands the wheel to the board,
+                                // which scrolls sideways. At the top or bottom edge the
+                                // column keeps it: passing it on there sent the whole
+                                // board sliding the moment a long column ran out.
                                 NumberAnimation {
                                     id: bodyAnim
                                     target: bodyFlick
@@ -554,20 +587,19 @@ Item {
                                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                                     onWheel: (event) => {
                                         const dy = event.angleDelta.y;
+                                        // A sideways swipe, or Shift+wheel, is for the board.
+                                        const sideways = event.angleDelta.x !== 0
+                                                         || (event.modifiers & Qt.ShiftModifier);
+                                        if (sideways) { root._scrollOuter(event.angleDelta.x || dy); return; }
                                         if (dy === 0) return;
                                         const maxY = Math.max(0, bodyFlick.contentHeight - bodyFlick.height);
-                                        if (maxY > 0) {
-                                            const base = bodyAnim.running ? bodyAnim.to : bodyFlick.contentY;
-                                            const newY = Math.max(0, Math.min(maxY, base - dy));
-                                            if (newY !== base) {
-                                                bodyAnim.from = bodyFlick.contentY;
-                                                bodyAnim.to = newY;
-                                                bodyAnim.restart();
-                                                return;
-                                            }
-                                        }
-                                        // No overflow or already at edge → pass through.
-                                        root._scrollOuter(dy);
+                                        if (maxY <= 0) { root._scrollOuter(dy); return; }
+                                        const base = bodyAnim.running ? bodyAnim.to : bodyFlick.contentY;
+                                        const newY = Math.max(0, Math.min(maxY, base - dy));
+                                        if (newY === base) return;
+                                        bodyAnim.from = bodyFlick.contentY;
+                                        bodyAnim.to = newY;
+                                        bodyAnim.restart();
                                     }
                                 }
 
@@ -620,24 +652,29 @@ Item {
                                                 else if (root.hoveredTaskId === tc.id) root.hoveredTaskId = "";
                                             }
                                             task: taskData
-                                            cursored: root.cursorTaskId === tc.id
+                                            cursored: root.cursorVisible && root.cursorTaskId === tc.id
+                                            dragLayer: boardDragLayer
                                             scheduled: root.scheduleMap[tc.id] || ""
                                             // Clicking a card also puts the
                                             // keyboard cursor on it, so mouse
                                             // and keyboard never disagree about
                                             // where "here" is.
-                                            onClicked: { root.cursorTaskId = tc.id; root.taskClicked(tc.id); }
+                                            onClicked: {
+                                                root.cursorTaskId = tc.id;
+                                                root.cursorVisible = false;
+                                                root.taskClicked(tc.id);
+                                            }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                                         }
 
                                 Text {
                                     visible: col.visibleCount === 0
                                     width: bodyFlick.width
-                                    topPadding: 12
+                                    topPadding: Theme.spXl
                                     text: I18n.t("kanban.empty")
                                     color: Theme.textDim
                                     font.italic: true
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                     horizontalAlignment: Text.AlignHCenter
                                 }
                             }
@@ -727,9 +764,9 @@ Item {
                                 onClicked: (mouse) => { if (mouse.button === Qt.RightButton) bodyMenu.popup() }
                                 z: -2
                             }
-                            QQC.Menu {
+                            AppMenu {
                                 id: bodyMenu
-                                QQC.MenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
+                                AppMenuItem { text: I18n.t("kanban.addTask"); onTriggered: root.createInStatus(col.statusId) }
                             }
                         }
                     }
@@ -761,18 +798,18 @@ Item {
 
                 Column {
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: Theme.spSm
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "+"
                         color: addColMA.containsMouse ? Theme.text : Theme.textDim
-                        font.pixelSize: 20
+                        font.pixelSize: Theme.fsXl
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: I18n.t("kanban.newColumn")
                         color: addColMA.containsMouse ? Theme.text : Theme.textDim
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                     }
                 }
                 MouseArea {
@@ -796,7 +833,7 @@ Item {
         padding: 0
         width: 360
         anchors.centerIn: Overlay.overlay
-        background: Rectangle { radius: 12; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        background: Rectangle { radius: Theme.radiusXl; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
 
         // Dimmed backdrop so the board stays visible behind the dialog.
         Overlay.modal: Rectangle { color: Theme.scrim }
@@ -805,39 +842,36 @@ Item {
         // Control inside the popup resolves its colours through. Shadowing it
         // with an array of hex strings hands those controls an array where
         // they expect a palette.
-        readonly property var swatches: [
-            "#5cc2dd", "#8a8e98", "#9aa3b4", "#5aa9e6", "#dcb86b",
-            "#e6624c", "#c07acf", "#6ec18a", "#6cc4b8", "#7da8d9"
-        ]
+        readonly property var swatches: Theme.swatches
         property color picked: swatches[0]
 
         function reset() { nameField.text = ""; picked = swatches[0] }
         onOpened: { reset(); nameField.forceActiveFocus() }
 
         contentItem: ColumnLayout {
-            spacing: 10
+            spacing: Theme.spLg
             Item { Layout.preferredHeight: 4 }
             Text {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
             }
             Text {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             TextField {
                 id: nameField
-                Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
                 placeholderText: "Review · QA · Stalled…"
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: saveBtn.activate()
             }
             Text {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: 10; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
             }
             Row {
-                Layout.leftMargin: 18; Layout.rightMargin: 18
-                spacing: 6
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                spacing: Theme.spSm
                 Repeater {
                     model: addColumnPopup.swatches
                     delegate: Rectangle {
@@ -852,7 +886,7 @@ Item {
                 }
             }
             RowLayout {
-                Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.bottomMargin: 16; Layout.topMargin: 8
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl; Layout.topMargin: Theme.spMd
                 Item { Layout.fillWidth: true }
                 PillButton {
                     text: I18n.t("common.cancel"); onClicked: addColumnPopup.close()
@@ -881,8 +915,8 @@ Item {
         // else closes it, while a press on the swatch falls through to openFor,
         // which toggles.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
-        padding: 8
-        background: Rectangle { radius: 10; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        padding: Theme.spMd
+        background: Rectangle { radius: Theme.radiusLg; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
         property string forStatusId: ""
 
         readonly property var swatches: addColumnPopup.swatches
@@ -905,7 +939,7 @@ Item {
 
         contentItem: Grid {
             columns: 5
-            spacing: 6
+            spacing: Theme.spSm
             Repeater {
                 model: colorPopup.swatches
                 delegate: Rectangle {
@@ -927,6 +961,16 @@ Item {
         }
     }
 
+    // A card being dragged is lifted in here, above every column. In its own
+    // column it was clipped by the column and drawn under the columns to its
+    // right, so it looked like it slid underneath them.
+    Item {
+        id: boardDragLayer
+        objectName: "board-drag-layer"
+        anchors.fill: parent
+        z: 1000
+    }
+
     // ── Inline components ───────────────────────────────────────────────────
 
     component HoverIcon: Rectangle {
@@ -942,7 +986,7 @@ Item {
         signal activated()
         Layout.preferredWidth: 20
         Layout.preferredHeight: 20
-        radius: 4
+        radius: Theme.radiusSm
         opacity: revealed ? 1 : 0
         enabled: revealed
         Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
@@ -954,7 +998,7 @@ Item {
             anchors.centerIn: parent
             text: hoverIcon.glyph
             color: hoverIconMA.containsMouse ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
-            font.pixelSize: hoverIcon.glyph === "×" ? 13 : 12
+            font.pixelSize: Theme.fsMd
             font.weight: Font.DemiBold
         }
         MouseArea {
@@ -982,13 +1026,13 @@ Item {
     Column {
         anchors.centerIn: parent
         width: Math.min(parent.width - 48, 360)
-        spacing: 8
+        spacing: Theme.spMd
         visible: root._boardTotal === 0
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: I18n.t("board.empty.title")
             color: Theme.text
-            font.pixelSize: 15
+            font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
         }
         Text {
@@ -997,7 +1041,7 @@ Item {
             wrapMode: Text.WordWrap
             text: I18n.t("board.empty.hint")
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
     }
     // ── Column delete: confirm when it is not empty ───────────────────
@@ -1026,7 +1070,7 @@ Item {
         modal: true
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         // Explicit, because the contentItem is a wrapping Text: without a width
         // of its own it sizes itself from the dialog, which is sizing itself
         // from the text. Qt reports that as a binding loop on implicitWidth and
@@ -1035,7 +1079,7 @@ Item {
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -1044,12 +1088,12 @@ Item {
         contentItem: Text {
             text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
 
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
                 text: I18n.t("common.cancel")
@@ -1087,11 +1131,11 @@ Item {
         modal: true
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -1103,7 +1147,7 @@ Item {
         }
 
         contentItem: ColumnLayout {
-            spacing: 8
+            spacing: Theme.spMd
             TextField {
                 id: wipField
                 objectName: "wip-field"
@@ -1114,20 +1158,20 @@ Item {
                 placeholderText: "0"
                 color: Theme.text
                 font.family: Theme.fontMono
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: wipPopup.commit()
             }
             Text {
                 Layout.preferredWidth: 220
                 text: I18n.t("kanban.wip.hint")
                 color: Theme.textDim
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 wrapMode: Text.Wrap
             }
         }
 
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: wipPopup.close() }
             PillButton { text: I18n.t("common.save"); onClicked: wipPopup.commit() }

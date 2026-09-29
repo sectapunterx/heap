@@ -21,14 +21,14 @@ Popup {
     readonly property color current: Qt.hsva(hue, sat, val, alpha)
     readonly property string hex: _hex(current)
 
-    padding: 12
+    padding: Theme.spXl
     modal: false
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     width: 252
 
     background: Rectangle {
-        radius: 8
+        radius: Theme.radius
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
@@ -66,10 +66,10 @@ Popup {
     }
 
     contentItem: ColumnLayout {
-        spacing: 10
+        spacing: Theme.spLg
 
         RowLayout {
-            spacing: 10
+            spacing: Theme.spLg
             Layout.fillWidth: true
 
             // Saturation left → right, value bottom → top, at the chosen hue.
@@ -78,7 +78,7 @@ Popup {
                 objectName: "cp-sv"
                 Layout.preferredWidth: 196
                 Layout.preferredHeight: 150
-                radius: 4
+                radius: Theme.radiusSm
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop { position: 0; color: "#ffffff" }
@@ -86,7 +86,7 @@ Popup {
                 }
                 Rectangle {
                     anchors.fill: parent
-                    radius: 4
+                    radius: Theme.radiusSm
                     gradient: Gradient {
                         GradientStop { position: 0; color: "#00000000" }
                         GradientStop { position: 1; color: "#ff000000" }
@@ -119,7 +119,7 @@ Popup {
                 objectName: "cp-hue"
                 Layout.preferredWidth: 18
                 Layout.preferredHeight: 150
-                radius: 4
+                radius: Theme.radiusSm
                 gradient: Gradient {
                     GradientStop { position: 0/6; color: "#ff0000" }
                     GradientStop { position: 1/6; color: "#ffff00" }
@@ -169,7 +169,7 @@ Popup {
             }
             Rectangle {
                 anchors.fill: parent
-                radius: 3
+                radius: Theme.radiusXs
                 border.color: Theme.border; border.width: 1
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
@@ -196,10 +196,10 @@ Popup {
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spMd
             Rectangle {
                 Layout.preferredWidth: 28; Layout.preferredHeight: 28
-                radius: 6
+                radius: Theme.radiusMd
                 color: root.current
                 border.color: Theme.border; border.width: 1
             }
@@ -208,11 +208,11 @@ Popup {
                 objectName: "cp-hex"
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 color: acceptableInput ? Theme.text : Theme.danger
                 selectByMouse: true
                 validator: RegularExpressionValidator { regularExpression: /#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})/ }
-                background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 onAccepted: {
                     // Emit what was typed, not the HSV round trip, which can
                     // move a channel by one.

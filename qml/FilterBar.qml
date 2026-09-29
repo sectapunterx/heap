@@ -22,6 +22,13 @@ Rectangle {
     // ordering, so the control hides rather than lying about what it does.
     property bool showSort: false
     property string sortMode: "manual"
+    readonly property var _sortModes: [
+        ({ id: "manual", label: I18n.t("filter.sort.manual") }),
+        ({ id: "priority", label: I18n.t("filter.sort.priority") }),
+        ({ id: "due", label: I18n.t("filter.sort.due") }),
+        ({ id: "updated", label: I18n.t("filter.sort.updated") }),
+        ({ id: "title", label: I18n.t("filter.sort.title") })
+    ]
 
     signal togglePriority(string p)
     signal clearPriorities()
@@ -38,7 +45,7 @@ Rectangle {
         x: 16
         y: (44 - height) / 2
         width: Math.min(implicitWidth, root.width - 32)
-        spacing: 8
+        spacing: Theme.spMd
 
         Text {
             text: "<b><font color=\"" + Theme.text + "\">" + root.viewLabel + "</font></b> · "
@@ -46,7 +53,7 @@ Rectangle {
             textFormat: Text.RichText
             color: Theme.textMuted
             font.family: Theme.fontUi
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
 
         Repeater {
@@ -56,7 +63,7 @@ Rectangle {
                 required property string modelData
                 objectName: "pri-" + modelData
                 property bool active: root.priorities[modelData] === true
-                radius: 999
+                radius: Theme.radiusPill
                 color: active ? Theme.accentSoft : (priMA.containsMouse ? Theme.panel3 : Theme.panel2)
                 border.color: active ? Theme.accent : (priMA.containsMouse ? Theme.borderStrong : Theme.border)
                 border.width: 1
@@ -65,16 +72,16 @@ Rectangle {
                 RowLayout {
                     id: chRow
                     anchors.centerIn: parent
-                    spacing: 6
+                    spacing: Theme.spSm
                     Rectangle {
-                        width: 8; height: 8; radius: 2
+                        width: 8; height: 8; radius: Theme.radiusXs
                         color: Theme.priorityColor(modelData)
                     }
                     Text {
                         text: modelData
                         color: priChip.active ? Theme.accentStrong : Theme.textMuted
                         font.family: Theme.fontUi
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                     }
                 }
                 MouseArea {
@@ -93,7 +100,7 @@ Rectangle {
                 for (const k in root.priorities) if (root.priorities[k]) any = true;
                 return any;
             }
-            radius: 999
+            radius: Theme.radiusPill
             border.color: clrMA.containsMouse ? Theme.borderStrong : Theme.border
             border.width: 1
             color: clrMA.containsMouse ? Theme.panel3 : Theme.panel2
@@ -104,7 +111,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: I18n.t("filter.clear")
                 color: clrMA.containsMouse ? Theme.text : Theme.textDim
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
             MouseArea {
                 id: clrMA
@@ -122,54 +129,76 @@ Rectangle {
         x: root._wrapped ? 16 : root.width - 16 - width
         y: root._wrapped ? 44 + (34 - height) / 2 - 6 : (44 - height) / 2
         width: Math.min(implicitWidth, root.width - 32)
-        spacing: 8
+        spacing: Theme.spMd
 
         // Sort. Manual is the board's own order — the one a drag writes — so
-        // it is first and is what the board starts on.
-        Text {
+        // it is first and is what the board starts on. One button and a menu:
+        // five pills in a row were the busiest thing in the bar and the one
+        // least often touched.
+        Rectangle {
+            id: sortBtn
+            objectName: "sort-button"
             visible: root.showSort
-            text: I18n.t("filter.sortBy")
-            color: Theme.textDim
-            font.pixelSize: 11
-        }
-        Repeater {
-            model: root.showSort
-                ? [ ({ id: "manual", label: I18n.t("filter.sort.manual") }),
-                    ({ id: "priority", label: I18n.t("filter.sort.priority") }),
-                    ({ id: "due", label: I18n.t("filter.sort.due") }),
-                    ({ id: "updated", label: I18n.t("filter.sort.updated") }),
-                    ({ id: "title", label: I18n.t("filter.sort.title") }) ]
-                : []
-            delegate: Rectangle {
-                required property var modelData
-                objectName: "sort-" + modelData.id
-                readonly property bool active: root.sortMode === modelData.id
-                radius: 999
-                color: active ? Theme.accentSoft : (sortMA.containsMouse ? Theme.panel3 : Theme.panel2)
-                border.color: active ? Theme.accent : (sortMA.containsMouse ? Theme.borderStrong : Theme.border)
-                border.width: 1
-                implicitWidth: sortT.implicitWidth + 16
-                implicitHeight: 24
+            readonly property string label: {
+                const modes = root._sortModes;
+                for (let i = 0; i < modes.length; i++)
+                    if (modes[i].id === root.sortMode) return modes[i].label;
+                return modes[0].label;
+            }
+            radius: Theme.radiusPill
+            color: sortMenu.visible ? Theme.panel3 : (sortMA.containsMouse ? Theme.panel3 : Theme.panel2)
+            border.color: sortMA.containsMouse || sortMenu.visible ? Theme.borderStrong : Theme.border
+            border.width: 1
+            implicitWidth: sortRow.implicitWidth + 20
+            implicitHeight: 24
+            RowLayout {
+                id: sortRow
+                anchors.centerIn: parent
+                spacing: Theme.spXs
                 Text {
-                    id: sortT
-                    anchors.centerIn: parent
-                    text: modelData.label
-                    color: parent.active ? Theme.accentStrong : Theme.textMuted
-                    font.pixelSize: 12
+                    text: I18n.t("filter.sortBy")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsSm
                 }
-                MouseArea {
-                    id: sortMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.sortModeRequested(modelData.id)
+                Text {
+                    text: sortBtn.label
+                    color: root.sortMode === "manual" ? Theme.textMuted : Theme.accentStrong
+                    font.pixelSize: Theme.fsMd
+                }
+                Text {
+                    text: "▾"
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsXs
+                }
+            }
+            MouseArea {
+                id: sortMA
+                anchors.fill: parent
+                hoverEnabled: true
+                cursorShape: Qt.PointingHandCursor
+                onClicked: sortMenu.popup(sortBtn, 0, sortBtn.height + 4)
+            }
+            AppMenu {
+                id: sortMenu
+                Instantiator {
+                    model: root._sortModes
+                    delegate: AppMenuItem {
+                        required property var modelData
+                        objectName: "sort-" + modelData.id
+                        text: modelData.label
+                        checkable: true
+                        checked: root.sortMode === modelData.id
+                        onTriggered: root.sortModeRequested(modelData.id)
+                    }
+                    onObjectAdded: (index, object) => sortMenu.insertItem(index, object)
+                    onObjectRemoved: (index, object) => sortMenu.removeItem(object)
                 }
             }
         }
 
         Rectangle {
             objectName: "archived-toggle"
-            radius: 999
+            radius: Theme.radiusPill
             color: root.showArchived ? Theme.accentSoft : (archMA.containsMouse ? Theme.panel3 : Theme.panel2)
             border.color: root.showArchived ? Theme.accent : (archMA.containsMouse ? Theme.borderStrong : Theme.border)
             border.width: 1
@@ -178,16 +207,16 @@ Rectangle {
             RowLayout {
                 id: archRow
                 anchors.centerIn: parent
-                spacing: 6
+                spacing: Theme.spSm
                 Text {
                     text: "▤"
                     color: root.showArchived ? Theme.accentStrong : Theme.textDim
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
                 Text {
                     text: I18n.t("filter.archived")
                     color: root.showArchived ? Theme.accentStrong : Theme.textMuted
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
             }
             MouseArea {
@@ -205,7 +234,7 @@ Rectangle {
                     .arg(root.blockedCount).arg(root.reviewCount)
             color: Theme.textDim
             font.family: Theme.fontMono
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             elide: Text.ElideRight
             // Shrinks (and elides) instead of running off the bar's edge
             // when the board column is narrow.

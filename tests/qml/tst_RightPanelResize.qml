@@ -15,6 +15,11 @@ TestCase {
 
     function initTestCase() {
         tc.savedSettings = AppController.appSettingsJson;
+        // On a fresh profile Main opens the first-run welcome guide, which is
+        // modal and swallowed every press on the resize handle: the drag and
+        // double-click cases failed on CI's first run and only passed on the
+        // retry, once the profile was no longer fresh.
+        AppController.markWelcomeSeen();
         const comp = Qt.createComponent("qrc:/qt/qml/TodoCpp/qml/Main.qml");
         tryCompare(comp, "status", Component.Ready, 5000);
         verify(comp.status === Component.Ready, comp.errorString());

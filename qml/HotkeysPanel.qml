@@ -24,7 +24,7 @@ Popup {
     onClosed: _activeCaptures = 0
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
@@ -45,22 +45,22 @@ Popup {
             Layout.preferredHeight: 38
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14; anchors.rightMargin: 8
-                spacing: 8
+                anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
+                spacing: Theme.spMd
                 Text {
                     text: I18n.t("hotkeys.title").toUpperCase()
                     color: Theme.textMuted
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     font.weight: Font.DemiBold
                     font.letterSpacing: 1
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
-                    radius: 5; height: 22; implicitWidth: resetAllT.implicitWidth + 14
+                    radius: Theme.radiusSm; height: 22; implicitWidth: resetAllT.implicitWidth + 14
                     color: resetAllMA.containsMouse ? Theme.panel3 : "transparent"
                     border.color: Theme.border; border.width: 1
                     Text { id: resetAllT; anchors.centerIn: parent
-                        text: I18n.t("hotkeys.allClear"); color: Theme.textMuted; font.pixelSize: 11
+                        text: I18n.t("hotkeys.allClear"); color: Theme.textMuted; font.pixelSize: Theme.fsSm
                     }
                     MouseArea {
                         id: resetAllMA
@@ -71,9 +71,9 @@ Popup {
                     }
                 }
                 Rectangle {
-                    width: 22; height: 22; radius: 5
+                    width: 22; height: 22; radius: Theme.radiusSm
                     color: closeMA.containsMouse ? Theme.panel3 : "transparent"
-                    Text { anchors.centerIn: parent; text: "✕"; color: Theme.textDim; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "✕"; color: Theme.textDim; font.pixelSize: Theme.fsMd }
                     MouseArea {
                         id: closeMA
                         anchors.fill: parent
@@ -119,7 +119,7 @@ Popup {
                 text: I18n.t("hotkeys.recordHelp")
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
             }
         }
     }
@@ -146,8 +146,8 @@ Popup {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 14; anchors.rightMargin: 12
-            spacing: 10
+            anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spXl
+            spacing: Theme.spLg
 
             ColumnLayout {
                 Layout.fillWidth: true
@@ -155,7 +155,7 @@ Popup {
                 Text {
                     text: row.actionLabel
                     color: Theme.text
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     font.weight: Font.Medium
                     elide: Text.ElideRight
                     Layout.fillWidth: true
@@ -163,7 +163,7 @@ Popup {
                 Text {
                     text: row.actionDescription
                     color: Theme.textMuted
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }
@@ -278,14 +278,14 @@ Popup {
 
         RowLayout {
             anchors.fill: parent
-            spacing: 4
+            spacing: Theme.spXs
 
             // ── chip (or capture field) ──────────────────
             Rectangle {
                 id: chipBox
                 Layout.fillWidth: true
                 height: 26
-                radius: 6
+                radius: Theme.radiusMd
                 color: chip.capturing ? Theme.accentSoft : Theme.panel2
                 border.color: chip.capturing
                     ? Theme.accent
@@ -301,7 +301,7 @@ Popup {
                         ? (chip.candidate.length > 0 ? Theme.text : Theme.textDim)
                         : (chip.sequence.length > 0 ? Theme.text : Theme.textDim)
                     font.family: Theme.fontMono
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
 
                 // Invisible focus receiver for Keys.onPressed during capture.
@@ -349,14 +349,14 @@ Popup {
             }
 
             Rectangle {
-                width: 22; height: 22; radius: 4
+                width: 22; height: 22; radius: Theme.radiusSm
                 color: editMA.containsMouse ? Theme.panel3 : "transparent"
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: chip.capturing ? "✓" : "✎"
                     color: chip.capturing ? Theme.accentStrong : Theme.textMuted
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
                 MouseArea {
                     id: editMA
@@ -368,13 +368,13 @@ Popup {
             }
 
             Rectangle {
-                width: 22; height: 22; radius: 4
+                width: 22; height: 22; radius: Theme.radiusSm
                 visible: chip.sequence !== chip.defaultSequence
                 color: resetMA.containsMouse ? Theme.panel3 : "transparent"
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
-                    text: "↺"; color: Theme.textMuted; font.pixelSize: 11
+                    text: "↺"; color: Theme.textMuted; font.pixelSize: Theme.fsSm
                 }
                 MouseArea {
                     id: resetMA
@@ -394,7 +394,7 @@ Popup {
             visible: chip.capturing && chip.conflictName.length > 0
             text: I18n.t("hotkeys.conflict.body").arg(chip.conflictName)
             color: Theme.danger
-            font.pixelSize: 9
+            font.pixelSize: Theme.fsXs
             elide: Text.ElideRight
             width: parent.width
         }

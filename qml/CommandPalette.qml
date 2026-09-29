@@ -156,7 +156,7 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12; color: Theme.panel
+        radius: Theme.radiusXl; color: Theme.panel
         border.color: Theme.borderStrong; border.width: 1
     }
 
@@ -174,9 +174,9 @@ Popup {
             }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 16; anchors.rightMargin: 16
-                spacing: 10
-                Text { text: "⌕"; color: Theme.textMuted; font.pixelSize: 18 }
+                anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.sp2xl
+                spacing: Theme.spLg
+                Text { text: "⌕"; color: Theme.textMuted; font.pixelSize: Theme.fsXl }
                 TextField {
                     id: searchField
                     Layout.fillWidth: true
@@ -184,7 +184,7 @@ Popup {
                     background: Item {}
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
-                    font.pixelSize: 14
+                    font.pixelSize: Theme.fsLg
                     selectByMouse: true
                     onTextChanged: {
                         root._matches = root._filterAndScore(text);
@@ -200,7 +200,7 @@ Popup {
                     text: (root._selectedIdx + 1) + " / " + root._matches.length
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
             }
         }
@@ -215,7 +215,7 @@ Popup {
             highlightFollowsCurrentItem: true
             onCurrentIndexChanged: positionViewAtIndex(currentIndex, ListView.Contain)
             model: root._matches
-            spacing: 2
+            spacing: Theme.sp2xs
 
             delegate: Rectangle {
                 required property var modelData
@@ -223,15 +223,15 @@ Popup {
                 width: ListView.view.width
                 height: (modelData._snippet && modelData._snippet.length > 0) ? 58 : 42
                 color: index === root._selectedIdx ? Theme.panel2 : "transparent"
-                radius: 4
+                radius: Theme.radiusSm
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 12; anchors.rightMargin: 12
-                    spacing: 10
+                    anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spXl
+                    spacing: Theme.spLg
 
                     Rectangle {
-                        width: 18; height: 18; radius: 4
+                        width: 18; height: 18; radius: Theme.radiusSm
                         color: "transparent"
                         border.color: modelData.color || Theme.accent
                         border.width: 1
@@ -252,7 +252,7 @@ Popup {
                             }
                             color: modelData.color || Theme.accent
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }
                     }
@@ -263,7 +263,7 @@ Popup {
                         Text {
                             text: modelData.label
                             color: Theme.text
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsMd
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -272,7 +272,7 @@ Popup {
                             text: modelData.sub
                             color: Theme.textMuted
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -284,7 +284,7 @@ Popup {
                             text: modelData._snippet || ""
                             textFormat: Text.StyledText
                             color: Theme.textMuted
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -294,7 +294,7 @@ Popup {
                         text: modelData.kind
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                     }
                 }
 
@@ -313,7 +313,7 @@ Popup {
                 anchors.centerIn: parent
                 text: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
                 color: Theme.textDim
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
             }
         }
 
@@ -328,7 +328,7 @@ Popup {
                 text: I18n.t("palette.kbdHint")
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
             }
         }
     }

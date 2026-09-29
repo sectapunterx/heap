@@ -140,7 +140,8 @@ TestCase {
         // Every fact the tracker gave is listed, and nothing it did not.
         const facts = te._ticketFacts;
         const values = facts.map(f => String(f.value));
-        verify(values.indexOf("ada") >= 0, "the assignee is missing");
+        // heap mirrors your own issues, so the assignee is left out.
+        verify(values.indexOf("ada") < 0, "the assignee is listed");
         verify(values.indexOf("grace") >= 0, "the reporter is missing");
         verify(values.indexOf("Bug") >= 0, "the issue type is missing");
         verify(values.indexOf("v2") >= 0, "the milestone is missing");
@@ -169,6 +170,33 @@ TestCase {
         });
         compare(te._ticket.key, "#1234");
         verify(te._isTicket);
+        te.close();
+    }
+
+    // A long description used to sit in a fixed 70px box; now the field grows
+    // with the text up to a cap and scrolls past it, and the dialog never gets
+    // taller than the window, whatever the text or Details hold.
+    function test_long_description_grows_to_a_cap_and_the_dialog_fits() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        const lines = [];
+        for (let i = 0; i < 80; i++) lines.push("line " + i + " of a long description");
+        te.showFor({ id: "LTE-3100", title: "long", desc: lines.join("\n"), _isNew: false, ticket: ({}) });
+        const field = findChild(te, "te-desc");
+        verify(field !== null, "te-desc not found");
+        const box = field.parent.parent;   // the ScrollView around the field
+        tryVerify(() => field.implicitHeight > te._descMaxH, 2000, "the probe text is not long enough");
+        tryCompare(box, "height", te._descMaxH, 2000, "the description box did not stop at its cap");
+        verify(te.height <= te._maxH + 0.5, "the dialog grew past the window");
+
+        te.detailsOpen = true;
+        wait(0);
+        verify(te.height <= te._maxH + 0.5, "Details pushed the dialog past the window");
+
+        const shortCap = te._descMaxH;
+        te.descExpanded = true;
+        verify(te._descMaxH >= shortCap, "expanding lowered the description's cap");
+        te.descExpanded = false;
+        te.detailsOpen = false;
         te.close();
     }
 }

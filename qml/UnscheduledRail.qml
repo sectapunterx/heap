@@ -102,16 +102,16 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.margins: 10
-        spacing: 8
+        anchors.margins: Theme.spLg
+        spacing: Theme.spMd
 
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spSm
             Text {
                 text: I18n.t("rail.unscheduled").toUpperCase()
                 color: Theme.textMuted
-                font.pixelSize: 10
+                font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
                 font.letterSpacing: 1
                 Layout.fillWidth: true
@@ -120,7 +120,7 @@ Rectangle {
                 text: root.items.length
                 color: Theme.textDim
                 font.family: Theme.fontMono
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
             }
         }
 
@@ -131,7 +131,7 @@ Rectangle {
             Layout.fillWidth: true
             text: I18n.t("rail.allBlocked")
             color: Theme.textDim
-            font.pixelSize: 11
+            font.pixelSize: Theme.fsSm
             wrapMode: Text.Wrap
         }
 
@@ -141,7 +141,7 @@ Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            spacing: 6
+            spacing: Theme.spSm
             model: root.items
             ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
@@ -151,7 +151,7 @@ Rectangle {
                 objectName: "unscheduled-" + chip.modelData.id
                 width: list.width
                 height: 44
-                radius: 6
+                radius: Theme.radiusMd
                 color: dragArea.drag.active ? Theme.panel3 : Theme.panel2
                 border.color: dragArea.containsMouse ? Theme.borderStrong : Theme.border
                 border.width: 1
@@ -170,7 +170,7 @@ Rectangle {
 
                 Rectangle {
                     anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                    anchors.margins: 6
+                    anchors.margins: Theme.spSm
                     width: 3
                     radius: 1.5
                     color: chip.modelData.priority === "P0" ? Theme.p0
@@ -180,13 +180,13 @@ Rectangle {
 
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 14; anchors.rightMargin: 8
-                    anchors.topMargin: 5; anchors.bottomMargin: 5
+                    anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spMd
+                    anchors.topMargin: Theme.spXs; anchors.bottomMargin: Theme.spXs
                     spacing: 1
                     Text {
                         text: chip.modelData.title
                         color: Theme.text
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
@@ -194,7 +194,7 @@ Rectangle {
                         text: chip.modelData.id + " · " + Qt.formatDate(chip.modelData.deadline, "ddd d MMM")
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 9
+                        font.pixelSize: Theme.fsXs
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }

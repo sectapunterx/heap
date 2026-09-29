@@ -94,24 +94,31 @@ var TOKENS = [
 ];
 
 // heap. as it shipped before themes were editable. Derived shades
-// (Qt.lighter/darker of the Brand tokens) are baked in byte for byte. The one
-// deliberate change: code was coloured three different ways (snippets, the
-// notes editor, rendered code blocks); all three now use the syn* tokens,
-// which follow what snippets used.
+// (Qt.lighter/darker of the Brand tokens) are baked in byte for byte, with
+// these deliberate changes:
+// - code was coloured three different ways (snippets, the notes editor,
+//   rendered code blocks); all three now use the syn* tokens, which follow
+//   what snippets used;
+// - colour is kept for what needs attention. P0/P1 keep their red and
+//   orange, P2/P3 are greys; statuses are greys except work in progress
+//   (blue), blocked (red) and done (green). Seven hues on a board of seven
+//   columns told the eye nothing.
+// - textMuted sits between text and textDim; it used to be within a few
+//   points of textDim, so the app had two text levels, not three.
 var HEAP_DARK = {
     id: "heap-dark", name: "heap. dark", base: "dark", builtin: true,
     colors: {
         bg: "#0b0e13", bg2: "#11151c", panel: "#14181f", panel2: "#1a1f29", panel3: "#1f2530",
         border: "#262d39", borderStrong: "#313a4a",
-        text: "#e5ecf3", textMuted: "#8a94a3", textDim: "#808a9a",
+        text: "#e5ecf3", textMuted: "#a0aab8", textDim: "#808a9a",
         textOnAccent: "#06121a", textOnDanger: "#0b0b0f", textOnBadge: "#ffffff",
         accent: "#3bccdd", accentStrong: "#4aecff", accentSoft: "#2e3bccdd", knob: "#ffffff",
         danger: "#e6624c", warning: "#fe9c3a", success: "#78be7a", info: "#5aa3e6",
         toastBg: "#1f2530", toastBorder: "#313a4a", toastText: "#e5ecf3",
         scrim: "#8c000000",
-        p0: "#e6624c", p1: "#fe9c3a", p2: "#d8c277", p3: "#7d9bc7",
-        stBacklog: "#8a8e98", stTodo: "#86a0bd", stProg: "#32b2e7", stHalf: "#dcb86b",
-        stBlocked: "#e6624c", stReview: "#bf94ec", stDone: "#78be7a",
+        p0: "#e6624c", p1: "#fe9c3a", p2: "#a0aab8", p3: "#808a9a",
+        stBacklog: "#6f7888", stTodo: "#8a94a3", stProg: "#5aa3e6", stHalf: "#5aa3e6",
+        stBlocked: "#e6624c", stReview: "#a0aab8", stDone: "#78be7a",
         mStandup: "#5aa3e6", mOneone: "#c07acf", mSync: "#6cc4b8", mFocus: "#7cc492", nowLine: "#e6624c",
         codeBg: "#11151c", code: "#d8c277", synKeyword: "#3bccdd", synString: "#d8c277",
         synNumber: "#7cc492", synComment: "#808a9a", synType: "#6cc4b8", synBuiltin: "#c07acf",
@@ -127,15 +134,15 @@ var HEAP_LIGHT = {
     colors: {
         bg: "#f3f5f8", bg2: "#eaecee", panel: "#ffffff", panel2: "#f8f8f8", panel3: "#f1f1f1",
         border: "#dde3ec", borderStrong: "#b8bdc5",
-        text: "#11151c", textMuted: "#5f6878", textDim: "#656e7d",
+        text: "#11151c", textMuted: "#4b5463", textDim: "#656e7d",
         textOnAccent: "#06121a", textOnDanger: "#0b0b0f", textOnBadge: "#ffffff",
         accent: "#178ea0", accentStrong: "#137888", accentSoft: "#1f178ea0", knob: "#ffffff",
         danger: "#c34a36", warning: "#bd7530", success: "#3e8a5d", info: "#1f6fb0",
         toastBg: "#f1f1f1", toastBorder: "#b8bdc5", toastText: "#11151c",
         scrim: "#8c000000",
-        p0: "#c34a36", p1: "#bd7530", p2: "#9a8237", p3: "#496a91",
-        stBacklog: "#7a808c", stTodo: "#5a6371", stProg: "#1f6fb0", stHalf: "#9a7a2b",
-        stBlocked: "#c34a36", stReview: "#7a3e91", stDone: "#3e8a5d",
+        p0: "#c34a36", p1: "#bd7530", p2: "#5f6878", p3: "#7a808c",
+        stBacklog: "#8a909a", stTodo: "#6b7382", stProg: "#1f6fb0", stHalf: "#1f6fb0",
+        stBlocked: "#c34a36", stReview: "#4b5463", stDone: "#3e8a5d",
         mStandup: "#1f6fb0", mOneone: "#7a3e91", mSync: "#317e74", mFocus: "#3e8a5d", nowLine: "#c34a36",
         codeBg: "#eaecee", code: "#9a8237", synKeyword: "#178ea0", synString: "#9a8237",
         synNumber: "#3e8a5d", synComment: "#656e7d", synType: "#317e74", synBuiltin: "#7a3e91",
@@ -286,6 +293,13 @@ var MINIMAL_LIGHT = {
         mdTag: "#7c3aed", mdMath: "#b45309", mdHighlight: "#12000000"
     }
 };
+
+// The colours the user can give a column, a label, a person or a profile.
+// They are stored as data (a column keeps its colour whatever the theme), so
+// every picker offers the same ten: one hue per family, then two greys. The
+// first is what a new column, person or profile starts with.
+var SWATCHES = ["#5cc2dd", "#5aa9e6", "#a4a4d6", "#c07acf", "#e6624c",
+                "#e69854", "#dcb86b", "#6ec18a", "#9aa3b4", "#8a8e98"];
 
 var PRESETS = [HEAP_DARK, HEAP_LIGHT, MINIMAL_DARK, MINIMAL_LIGHT,
                MUTED_MAUVE, GRAPHITE, MOSS_MONO, NOCTURNE];

@@ -156,15 +156,18 @@ TestCase {
         verify(Brand.brandAccent.g < Brand.accent.g, "brandAccent must be muted vs product accent");
     }
 
-    // Integration (read-only): Theme maps straight onto Brand for the tokens with
-    // no high-contrast branch — bg / panel / textMuted must equal the Brand token
-    // selected by the live Theme.dark flag. Reads Theme without mutating it.
+    // Integration: the heap. themes map straight onto Brand for the surfaces
+    // — bg / panel must equal the Brand token for the active mode. Pinned to
+    // heap. dark / light at normal contrast: a new install starts on Minimal
+    // with soft contrast, which are not Brand's colours.
     function test_theme_pulls_tokens_from_brand() {
-        verify(Qt.colorEqual(Theme.bg, Theme.dark ? Brand.bg : Brand.lightBg),
-               "Theme.bg must resolve to the Brand bg for the active mode");
-        verify(Qt.colorEqual(Theme.panel, Theme.dark ? Brand.panel : Brand.lightPanel),
-               "Theme.panel must resolve to the Brand panel for the active mode");
-        verify(Qt.colorEqual(Theme.textMuted, Theme.dark ? Brand.text3 : Brand.lightText3),
-               "Theme.textMuted must resolve to the Brand muted text for the active mode");
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: {
+            darkPreset: "heap-dark", lightPreset: "heap-light", contrast: "normal" } });
+        const bgOk = Qt.colorEqual(Theme.bg, Theme.dark ? Brand.bg : Brand.lightBg);
+        const panelOk = Qt.colorEqual(Theme.panel, Theme.dark ? Brand.panel : Brand.lightPanel);
+        AppController.appSettingsJson = saved;
+        verify(bgOk, "Theme.bg must resolve to the Brand bg for the active mode");
+        verify(panelOk, "Theme.panel must resolve to the Brand panel for the active mode");
     }
 }

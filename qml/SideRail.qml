@@ -16,7 +16,7 @@ Rectangle {
     // implicitWidth, not width: a Layout writes width itself, which would
     // break a binding on it.
     implicitWidth: expanded ? expandedWidth : collapsedWidth
-    Behavior on implicitWidth { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+    Behavior on implicitWidth { NumberAnimation { duration: Theme.scaledMs(120); easing.type: Easing.OutCubic } }
     clip: true
 
     signal openTweaks(Item anchor)
@@ -41,10 +41,10 @@ Rectangle {
 
     ColumnLayout {
         anchors.fill: parent
-        anchors.topMargin: 10
-        anchors.leftMargin: 10
-        anchors.rightMargin: 10
-        spacing: 2
+        anchors.topMargin: Theme.spLg
+        anchors.leftMargin: Theme.spLg
+        anchors.rightMargin: Theme.spLg
+        spacing: Theme.sp2xs
 
         // Collapse / expand toggle
         RailBtn {
@@ -54,7 +54,7 @@ Rectangle {
             tooltipText: I18n.t("siderail.expand") + "  " + AppController.shortcutFor("rail.toggle")
             glyph: root.expanded ? "«" : "»"
             onActivated: root.toggleRequested()
-            Layout.bottomMargin: 6
+            Layout.bottomMargin: Theme.spSm
         }
 
         SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.views") }
@@ -64,35 +64,35 @@ Rectangle {
             expanded: root.expanded
             objectName: "rail-board"
             iconSource: "qrc:/brand/icons/heap-01-board.svg"
-            label: I18n.t("siderail.board"); tooltipText: I18n.t("siderail.tip.board")
+            label: I18n.t("siderail.board"); tooltipText: I18n.t("siderail.tip.board"); shortcutId: "view.board"
             active: AppController.currentView === "board"
             onActivated: AppController.currentView = "board" }
         RailBtn {
             expanded: root.expanded
             objectName: "rail-timeline"
             iconSource: "qrc:/brand/icons/heap-02-timeline.svg"
-            label: I18n.t("siderail.timeline"); tooltipText: I18n.t("siderail.tip.timeline")
+            label: I18n.t("siderail.timeline"); tooltipText: I18n.t("siderail.tip.timeline"); shortcutId: "view.timeline"
             active: AppController.currentView === "timeline"
             onActivated: AppController.currentView = "timeline" }
         RailBtn {
             expanded: root.expanded
             objectName: "rail-week"
             iconSource: "qrc:/brand/icons/heap-03-week.svg"
-            label: I18n.t("siderail.week"); tooltipText: I18n.t("siderail.tip.week")
+            label: I18n.t("siderail.week"); tooltipText: I18n.t("siderail.tip.week"); shortcutId: "view.week"
             active: AppController.currentView === "week"
             onActivated: AppController.currentView = "week" }
         RailBtn {
             expanded: root.expanded
             objectName: "rail-month"
             iconSource: "qrc:/brand/icons/heap-04-month.svg"
-            label: I18n.t("siderail.month"); tooltipText: I18n.t("siderail.tip.month")
+            label: I18n.t("siderail.month"); tooltipText: I18n.t("siderail.tip.month"); shortcutId: "view.month"
             active: AppController.currentView === "month"
             onActivated: AppController.currentView = "month" }
         RailBtn {
             expanded: root.expanded
             objectName: "rail-archive"
             iconSource: "qrc:/brand/icons/heap-05-archive.svg"
-            label: I18n.t("siderail.archive"); tooltipText: I18n.t("siderail.tip.archive")
+            label: I18n.t("siderail.archive"); tooltipText: I18n.t("siderail.tip.archive"); shortcutId: "view.archive"
             active: AppController.currentView === "archive"
             onActivated: AppController.currentView = "archive"
         }
@@ -115,7 +115,7 @@ Rectangle {
             iconSource: "qrc:/brand/icons/heap-07-code-review.svg"
             label: I18n.t("siderail.review"); tooltipText: I18n.t("siderail.tip.review")
             countText: root._reviewCount > 0 ? root._reviewCount : ""
-            countColor: Theme.stReview
+            countColor: Theme.accent
             active: AppController.currentView === "board" && AppController.focusedStatus === "review"
             onActivated: AppController.focusStatusColumn("review") }
 
@@ -126,14 +126,14 @@ Rectangle {
             expanded: root.expanded
             objectName: "rail-docs"
             iconSource: "qrc:/brand/icons/heap-08-docs.svg"
-            label: I18n.t("siderail.docs"); tooltipText: I18n.t("siderail.tip.docs")
+            label: I18n.t("siderail.docs"); tooltipText: I18n.t("siderail.tip.docs"); shortcutId: "view.docs"
             active: AppController.currentView === "docs"
             onActivated: AppController.currentView = "docs" }
         RailBtn {
             expanded: root.expanded
             objectName: "rail-notes"
             iconSource: "qrc:/brand/icons/heap-09-notes.svg"
-            label: I18n.t("siderail.notes"); tooltipText: I18n.t("siderail.tip.notes")
+            label: I18n.t("siderail.notes"); tooltipText: I18n.t("siderail.tip.notes"); shortcutId: "view.notes"
             active: AppController.currentView === "notes"
             onActivated: AppController.currentView = "notes" }
 
@@ -145,7 +145,7 @@ Rectangle {
             id: hotkeysBtn
             objectName: "rail-hotkeys"
             iconSource: "qrc:/brand/icons/heap-10-hotkeys.svg"
-            label: I18n.t("siderail.hotkeys"); tooltipText: I18n.t("siderail.tip.hotkeys")
+            label: I18n.t("siderail.hotkeys"); tooltipText: I18n.t("siderail.tip.hotkeys"); shortcutId: "hotkeys.open"
             onActivated: root.openHotkeys(hotkeysBtn)
         }
         RailBtn {
@@ -153,17 +153,17 @@ Rectangle {
             id: tweaksBtn
             objectName: "rail-tweaks"
             iconSource: "qrc:/brand/icons/heap-11-tweaks.svg"
-            label: I18n.t("siderail.tweaks"); tooltipText: I18n.t("siderail.tip.tweaks")
+            label: I18n.t("siderail.tweaks"); tooltipText: I18n.t("siderail.tip.tweaks"); shortcutId: "tweaks.open"
             onActivated: root.openTweaks(tweaksBtn)
         }
         RailBtn {
             expanded: root.expanded
             objectName: "rail-settings"
             iconSource: "qrc:/brand/icons/heap-12-settings.svg"
-            label: I18n.t("siderail.settings"); tooltipText: I18n.t("siderail.tip.settings")
+            label: I18n.t("siderail.settings"); tooltipText: I18n.t("siderail.tip.settings"); shortcutId: "view.settings"
             active: AppController.currentView === "settings"
             onActivated: AppController.currentView = "settings"
-            Layout.bottomMargin: 10
+            Layout.bottomMargin: Theme.spLg
         }
     }
 
@@ -174,18 +174,18 @@ Rectangle {
         property string text
         property bool expanded: true
         Layout.fillWidth: true
-        Layout.topMargin: 8
+        Layout.topMargin: Theme.spMd
         Layout.preferredHeight: sh.expanded ? 22 : 13
         Text {
             visible: sh.expanded
-            anchors.left: parent.left; anchors.leftMargin: 8
+            anchors.left: parent.left; anchors.leftMargin: Theme.spMd
             anchors.right: parent.right
             anchors.verticalCenter: parent.verticalCenter
             text: sh.text.toUpperCase()
             elide: Text.ElideRight
             color: Theme.textDim
             font.family: Theme.fontUi
-            font.pixelSize: 10
+            font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold
             font.letterSpacing: 0.8
         }
@@ -202,6 +202,12 @@ Rectangle {
         property url iconSource
         property string label: ""
         property string tooltipText: ""
+        // The action's id in the shortcut catalog. Whatever it is bound to
+        // now shows in the tooltip, and next to the label on hover, so the
+        // rail teaches the keys instead of hiding them in the Hotkeys panel.
+        property string shortcutId: ""
+        readonly property string _combo: shortcutId.length && AppController.shortcuts.length >= 0
+            ? AppController.shortcutFor(shortcutId) : ""
         // A text glyph in place of the icon (the collapse chevron).
         property string glyph: ""
         property bool active: false
@@ -223,7 +229,7 @@ Rectangle {
 
         Rectangle {
             anchors.fill: parent
-            radius: 7
+            radius: Theme.radiusMd
             color: btn.active ? Theme.accentSoft
                  : ma.containsMouse ? Theme.panel2 : "transparent"
             border.color: Theme.accentStrong
@@ -252,24 +258,35 @@ Rectangle {
                 text: btn.glyph
                 color: btn._fg
                 font.family: Theme.fontUi
-                font.pixelSize: 16
+                font.pixelSize: Theme.fsLg
             }
         }
         Text {
             objectName: "rail-label"
             visible: btn.expanded
             opacity: btn.width > 96 ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: 90 } }
+            Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
             anchors.left: iconCell.right
-            anchors.right: countBox.visible && btn.expanded ? countBox.left : parent.right
-            anchors.rightMargin: 8
+            anchors.right: countBox.visible && btn.expanded ? countBox.left
+                         : comboT.visible ? comboT.left : parent.right
+            anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             text: btn.label
             elide: Text.ElideRight
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
             font.family: Theme.fontUi
-            font.pixelSize: 13
+            font.pixelSize: Theme.fsMd
             font.weight: btn.active ? Font.DemiBold : Font.Normal
+        }
+        Text {
+            id: comboT
+            visible: btn.expanded && !countBox.visible && ma.containsMouse && btn._combo.length > 0
+            anchors.right: parent.right; anchors.rightMargin: Theme.spMd
+            anchors.verticalCenter: parent.verticalCenter
+            text: btn._combo
+            color: Theme.textDim
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsXs
         }
         // Count badge: a pill at the row's right edge when expanded, the
         // corner dot over the icon when collapsed.
@@ -288,7 +305,7 @@ Rectangle {
                 text: btn.countText
                 color: Theme.textOnBadge
                 font.family: Theme.fontMono
-                font.pixelSize: btn.expanded ? 10 : 9
+                font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
             }
         }
@@ -301,7 +318,7 @@ Rectangle {
             // Labels are on screen when expanded; the tooltip is only for
             // the icon-only rail.
             ToolTip.visible: containsMouse && !btn.expanded && btn.tooltipText !== ""
-            ToolTip.text: btn.tooltipText
+            ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }
     }

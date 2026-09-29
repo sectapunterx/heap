@@ -2,7 +2,6 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
-import QtQuick.Controls as QQC
 import TodoCpp
 import "DocsStarter.js" as Starter
 
@@ -27,10 +26,7 @@ Item {
     property var _sampleSections: []
     property var _sampleSnippets: []
 
-    readonly property var contactPalette: [
-        "#d97a6c", "#dcb86b", "#dcc06a", "#7cc492",
-        "#6cc4b8", "#5cc2dd", "#7da8d9", "#a4a4d6", "#c87fc7"
-    ]
+    readonly property var contactPalette: Theme.swatches
 
     readonly property var accentPalette: [
         Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus,
@@ -512,18 +508,18 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18; anchors.rightMargin: 18
-                spacing: 14
+                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
+                spacing: Theme.sp2xl
 
                 ColumnLayout {
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
-                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold }
+                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
                     Text {
                         text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                     }
                 }
 
@@ -544,7 +540,7 @@ Item {
                                 anchors.centerIn: parent
                                 text: I18n.t("docs.tab." + modelData)
                                 color: root.tab === modelData ? Theme.text : Theme.textDim
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                                 font.weight: root.tab === modelData ? Font.DemiBold : Font.Normal
                             }
                             MouseArea {
@@ -564,15 +560,15 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 320
                     Layout.preferredHeight: 28
-                    radius: 6
+                    radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
                     border.width: 1
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10; anchors.rightMargin: 6
-                        spacing: 6
-                        Text { text: "⌕"; color: Theme.textDim; font.pixelSize: 11 }
+                        anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
+                        spacing: Theme.spSm
+                        Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
                             id: docsSearch
                             objectName: "docsSearchField"
@@ -581,7 +577,7 @@ Item {
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             font.family: Theme.fontUi
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             background: Item {}
                             selectByMouse: true
                             text: root.searchText
@@ -591,7 +587,7 @@ Item {
                             visible: root.searchText.length > 0
                             width: 18; height: 18; radius: 9
                             color: clearMA.containsMouse ? Theme.panel3 : "transparent"
-                            Text { anchors.centerIn: parent; text: "×"; color: Theme.textDim; font.pixelSize: 14 }
+                            Text { anchors.centerIn: parent; text: "×"; color: Theme.textDim; font.pixelSize: Theme.fsLg }
                             MouseArea {
                                 id: clearMA
                                 anchors.fill: parent
@@ -631,8 +627,8 @@ Item {
                 Column {
                     id: navCol
                     anchors.fill: parent
-                    anchors.margins: 10
-                    spacing: 2
+                    anchors.margins: Theme.spLg
+                    spacing: Theme.sp2xs
 
                     Repeater {
                         model: root.sections
@@ -673,24 +669,24 @@ Item {
                     Rectangle {
                         width: navCol.width
                         height: 28
-                        radius: 6
+                        radius: Theme.radiusMd
                         color: addSecMA.containsMouse ? Theme.accentSoft : Theme.panel2
                         border.color: Theme.border
                         border.width: 1
                         RowLayout {
                             anchors.fill: parent
-                            anchors.leftMargin: 8; anchors.rightMargin: 8
-                            spacing: 6
+                            anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                            spacing: Theme.spSm
                             Text {
                                 text: "+"
                                 color: addSecMA.containsMouse ? Theme.accentStrong : Theme.textDim
-                                font.pixelSize: 14
+                                font.pixelSize: Theme.fsLg
                             }
                             Text {
                                 Layout.fillWidth: true
                                 text: I18n.t("docs.newSection")
                                 color: addSecMA.containsMouse ? Theme.accentStrong : Theme.text
-                                font.pixelSize: 12
+                                font.pixelSize: Theme.fsMd
                             }
                         }
                         MouseArea {
@@ -748,7 +744,7 @@ Item {
                 ColumnLayout {
                     id: bodyCol
                     width: bodyScroll.width
-                    spacing: 24
+                    spacing: Theme.sp3xl
 
                     // Doc sections
                     Repeater {
@@ -761,10 +757,10 @@ Item {
                             property var filtered: root._sortedItems(section).filter(root.passesSearch)
                             visible: !(root.searchText.length > 0 && filtered.length === 0)
                             Layout.fillWidth: true
-                            Layout.leftMargin: 24
-                            Layout.rightMargin: 24
+                            Layout.leftMargin: Theme.sp3xl
+                            Layout.rightMargin: Theme.sp3xl
                             Layout.topMargin: index === 0 ? 20 : 0
-                            spacing: 12
+                            spacing: Theme.spXl
 
                             Item {
                                 Layout.fillWidth: true
@@ -788,47 +784,47 @@ Item {
                                     }
                                 }
 
-                                QQC.Menu {
+                                AppMenu {
                                     id: sectionMenu
-                                    QQC.MenuItem { text: I18n.t("docs.addEntry");       onTriggered: root.openDocCreate(secCol.section.id) }
-                                    QQC.MenuItem { text: I18n.t("docs.menu.renameFields"); onTriggered: root.openSectionEdit(secCol.section) }
-                                    QQC.Menu {
+                                    AppMenuItem { text: I18n.t("docs.addEntry");       onTriggered: root.openDocCreate(secCol.section.id) }
+                                    AppMenuItem { text: I18n.t("docs.menu.renameFields"); onTriggered: root.openSectionEdit(secCol.section) }
+                                    AppMenu {
                                         title: I18n.t("docs.menu.sortBy")
-                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
-                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
-                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
-                                        QQC.MenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
+                                        AppMenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(secCol.section.id, "manual", false) }
+                                        AppMenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(secCol.section.id, "ref", false) }
+                                        AppMenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(secCol.section.id, "title", false) }
+                                        AppMenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(secCol.section.id, "updated", true) }
                                     }
-                                    QQC.MenuSeparator {}
-                                    QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
-                                    QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
-                                    QQC.MenuSeparator {}
-                                    QQC.MenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(secCol.section.id) }
+                                    AppMenuSeparator {}
+                                    AppMenuItem { text: I18n.t("docs.menu.moveUp");   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
+                                    AppMenuItem { text: I18n.t("docs.menu.moveDown"); enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
+                                    AppMenuSeparator {}
+                                    AppMenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(secCol.section.id) }
                                 }
 
                                 RowLayout {
                                     anchors.fill: parent
-                                    spacing: 12
+                                    spacing: Theme.spXl
                                     Rectangle { width: 4; height: 32; radius: 2; color: secCol.section.accent }
                                     ColumnLayout {
                                         spacing: 0
                                         Layout.fillWidth: true
                                         RowLayout {
-                                            spacing: 6
+                                            spacing: Theme.spSm
                                             Text {
                                                 text: secCol.section.title
                                                 color: Theme.text
-                                                font.pixelSize: 16
+                                                font.pixelSize: Theme.fsLg
                                                 font.weight: Font.DemiBold
                                             }
                                             Rectangle {
                                                 opacity: secAnchor.headerHovered ? 1 : 0
                                                 enabled: secAnchor.headerHovered
                                                 Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                                                width: 22; height: 22; radius: 5
+                                                width: 22; height: 22; radius: Theme.radiusSm
                                                 color: secEditMA.containsMouse ? Theme.panel2 : "transparent"
                                                 border.color: Theme.border; border.width: 1
-                                                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: 11 }
+                                                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: Theme.fsSm }
                                                 MouseArea {
                                                     id: secEditMA
                                                     anchors.fill: parent
@@ -841,13 +837,13 @@ Item {
                                                 opacity: secAnchor.headerHovered ? 1 : 0
                                                 enabled: secAnchor.headerHovered
                                                 Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                                                width: 22; height: 22; radius: 5
+                                                width: 22; height: 22; radius: Theme.radiusSm
                                                 color: secDelMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : "transparent"
                                                 border.color: secDelMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
                                                 Text {
                                                     anchors.centerIn: parent; text: "×"
                                                     color: secDelMA.containsMouse ? Theme.danger : Theme.textMuted
-                                                    font.pixelSize: 12
+                                                    font.pixelSize: Theme.fsMd
                                                 }
                                                 MouseArea {
                                                     id: secDelMA
@@ -858,7 +854,7 @@ Item {
                                                 }
                                             }
                                         }
-                                        Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: 12 }
+                                        Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
                                     }
                                     Item { Layout.fillWidth: true }
                                     Text {
@@ -870,13 +866,13 @@ Item {
                                         }
                                         color: Theme.accentStrong
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fsXs
                                     }
                                     Text {
                                         text: secCol.filtered.length + " / " + secCol.section.items.length
                                         color: Theme.textDim
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 11
+                                        font.pixelSize: Theme.fsSm
                                     }
                                     PillButton {
                                         text: I18n.t("docs.add")
@@ -891,8 +887,8 @@ Item {
                                 id: cardGrid
                                 Layout.fillWidth: true
                                 columns: Math.max(1, Math.floor(width / 340))
-                                columnSpacing: 12
-                                rowSpacing: 12
+                                columnSpacing: Theme.spXl
+                                rowSpacing: Theme.spXl
 
                                 Repeater {
                                     model: secCol.filtered
@@ -913,15 +909,15 @@ Item {
                                            ? ((cardGrid.width - (cardGrid.columns - 1) * cardGrid.columnSpacing) / cardGrid.columns)
                                            : cardGrid.width
                                     height: 100
-                                    radius: 10
+                                    radius: Theme.radiusLg
                                     color: addCardMA.containsMouse ? Theme.panel2 : "transparent"
                                     border.color: Theme.border
                                     border.width: 1
                                     Column {
                                         anchors.centerIn: parent
-                                        spacing: 4
-                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "+"; color: Theme.textDim; font.pixelSize: 22 }
-                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("docs.addEntry"); color: Theme.textDim; font.pixelSize: 11 }
+                                        spacing: Theme.spXs
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: "+"; color: Theme.textDim; font.pixelSize: Theme.fsXl }
+                                        Text { anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("docs.addEntry"); color: Theme.textDim; font.pixelSize: Theme.fsSm }
                                     }
                                     MouseArea {
                                         id: addCardMA
@@ -938,21 +934,21 @@ Item {
                     // Snippets
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 24
-                        Layout.rightMargin: 24
-                        spacing: 12
+                        Layout.leftMargin: Theme.sp3xl
+                        Layout.rightMargin: Theme.sp3xl
+                        spacing: Theme.spXl
                         Item {
                             Layout.fillWidth: true; Layout.preferredHeight: 44
                             objectName: "sec-snippets"
                             RowLayout {
                                 anchors.fill: parent
-                                spacing: 12
+                                spacing: Theme.spXl
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.accent }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
                                     Text {
-                                        text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: 12
+                                        text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: Theme.fsMd
                                     }
                                 }
                                 Item { Layout.fillWidth: true }
@@ -962,7 +958,7 @@ Item {
                                     text: root.matchingSnippetCount + ""
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                 }
                                 PillButton {
                                     text: I18n.t("docs.add")
@@ -992,22 +988,22 @@ Item {
                     // Contacts
                     ColumnLayout {
                         Layout.fillWidth: true
-                        Layout.leftMargin: 24
-                        Layout.rightMargin: 24
+                        Layout.leftMargin: Theme.sp3xl
+                        Layout.rightMargin: Theme.sp3xl
                         Layout.bottomMargin: 32
-                        spacing: 12
+                        spacing: Theme.spXl
                         Item {
                             Layout.fillWidth: true; Layout.preferredHeight: 44
                             objectName: "sec-contacts"
                             RowLayout {
                                 anchors.fill: parent
-                                spacing: 12
+                                spacing: Theme.spXl
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.textMuted }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: 16; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
                                     Text {
-                                        text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: 12
+                                        text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: Theme.fsMd
                                     }
                                 }
                                 Item { Layout.fillWidth: true }
@@ -1015,7 +1011,7 @@ Item {
                                     text: root.matchingContactCount + ""
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
-                                    font.pixelSize: 11
+                                    font.pixelSize: Theme.fsSm
                                 }
                                 PillButton {
                                     text: I18n.t("docs.add")
@@ -1027,8 +1023,8 @@ Item {
                         Grid {
                             Layout.fillWidth: true
                             columns: Math.max(1, Math.floor(width / 280))
-                            columnSpacing: 10
-                            rowSpacing: 8
+                            columnSpacing: Theme.spLg
+                            rowSpacing: Theme.spMd
                             Repeater {
                                 // Same as the snippets above: `idx` indexes
                                 // root.contacts, so filter by visibility.
@@ -1052,7 +1048,7 @@ Item {
     Toast {
         id: toast
         anchors.bottom: parent.bottom
-        anchors.bottomMargin: 24
+        anchors.bottomMargin: Theme.sp3xl
         anchors.horizontalCenter: parent.horizontalCenter
         z: 80
     }
@@ -1158,7 +1154,7 @@ Item {
         property int    sectionIndex: -1
         readonly property bool draggable: sectionId.length > 0
         height: 30
-        radius: 6
+        radius: Theme.radiusMd
         color: navMA.containsMouse ? Theme.panel2 : "transparent"
         opacity: navDragMA.drag.active ? 0.5 : 1.0
 
@@ -1172,11 +1168,11 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 8; anchors.rightMargin: 8
-            spacing: 8
+            anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+            spacing: Theme.spMd
             Rectangle { width: 4; height: 16; radius: 2; color: nav.barColor }
-            Text { text: nav.label; color: Theme.text; font.pixelSize: 12; Layout.fillWidth: true; elide: Text.ElideRight }
-            Text { text: nav.count + ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 11 }
+            Text { text: nav.label; color: Theme.text; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; elide: Text.ElideRight }
+            Text { text: nav.count + ""; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm }
         }
         MouseArea {
             id: navMA
@@ -1236,27 +1232,27 @@ Item {
             }
         }
 
-        QQC.Menu {
+        AppMenu {
             id: navMenu
-            QQC.MenuItem {
+            AppMenuItem {
                 text: I18n.t("docs.menu.renameFields")
                 onTriggered: {
                     const s = root.sections.find(function (x) { return x.id === nav.sectionId; });
                     if (s) root.openSectionEdit(s);
                 }
             }
-            QQC.Menu {
+            AppMenu {
                 title: I18n.t("docs.menu.sortBy")
-                QQC.MenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
-                QQC.MenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
-                QQC.MenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
-                QQC.MenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
+                AppMenuItem { text: I18n.t("docs.menu.sort.manual");  onTriggered: root.setSortBy(nav.sectionId, "manual", false) }
+                AppMenuItem { text: I18n.t("docs.menu.sort.ref");     onTriggered: root.setSortBy(nav.sectionId, "ref", false) }
+                AppMenuItem { text: I18n.t("docs.menu.sort.title");   onTriggered: root.setSortBy(nav.sectionId, "title", false) }
+                AppMenuItem { text: I18n.t("docs.menu.sort.updated"); onTriggered: root.setSortBy(nav.sectionId, "updated", true) }
             }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
-            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(nav.sectionId) }
+            AppMenuSeparator {}
+            AppMenuItem { text: I18n.t("docs.menu.moveUp");   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
+            AppMenuItem { text: I18n.t("docs.menu.moveDown"); enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
+            AppMenuSeparator {}
+            AppMenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(nav.sectionId) }
         }
     }
 
@@ -1292,7 +1288,7 @@ Item {
         property string docRef: item.ref || ""
         property string docSectionId: sectionId
         height: cardCol.implicitHeight + 24
-        radius: 10
+        radius: Theme.radiusLg
         // Hover state comes from a handler, not from cardMA: the card-wide
         // MouseArea swallowed the hover of the overlay buttons on top of it, so
         // they blinked out as the pointer approached.
@@ -1315,13 +1311,13 @@ Item {
         ColumnLayout {
             id: cardCol
             anchors.fill: parent
-            anchors.margins: 12
-            spacing: 6
+            anchors.margins: Theme.spXl
+            spacing: Theme.spSm
 
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Rectangle {
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: "transparent"
                     border.color: card.accent
                     border.width: 1
@@ -1331,7 +1327,7 @@ Item {
                            text: card.item.ref || ""
                            color: card.accent
                            font.family: Theme.fontMono
-                           font.pixelSize: 11
+                           font.pixelSize: Theme.fsSm
                            font.weight: Font.DemiBold }
                 }
                 Item { Layout.fillWidth: true }
@@ -1340,19 +1336,19 @@ Item {
                     text: card.item.version || ""
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
                 Text {
                     text: card.isInternal ? "→" : "↗"
                     color: card.cardHovered ? Theme.accentStrong : Theme.textDim
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
             }
             Text {
                 Layout.fillWidth: true
                 text: card.item.title || ""
                 color: Theme.text
-                font.pixelSize: 13
+                font.pixelSize: Theme.fsMd
                 font.weight: Font.Medium
                 wrapMode: Text.WordWrap
             }
@@ -1360,7 +1356,7 @@ Item {
                 Layout.fillWidth: true
                 text: card.item.desc || ""
                 color: Theme.textMuted
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 wrapMode: Text.WordWrap
                 maximumLineCount: 3
                 elide: Text.ElideRight
@@ -1372,19 +1368,19 @@ Item {
                 delegate: RowLayout {
                     required property var modelData
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: Theme.spSm
                     visible: (card.item && card.item.extra && String(card.item.extra[modelData.key] || "").length > 0)
                     Text {
                         text: (modelData.label || modelData.key) + ":"
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                     }
                     Text {
                         Layout.fillWidth: true
                         text: card.item && card.item.extra ? String(card.item.extra[modelData.key] || "") : ""
                         color: Theme.text
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         elide: Text.ElideRight
                     }
                 }
@@ -1392,12 +1388,12 @@ Item {
 
             RowLayout {
                 Layout.fillWidth: true
-                Layout.topMargin: 4
+                Layout.topMargin: Theme.spXs
                 Text {
                     text: card.item.source || ""
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
                 Item { Layout.fillWidth: true }
                 Text {
@@ -1405,7 +1401,7 @@ Item {
                     text: I18n.t("docs.updatedPrefix").arg(card.item.updated || "")
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
             }
         }
@@ -1434,13 +1430,13 @@ Item {
             enabled: card.cardHovered
             Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
             anchors.top: parent.top; anchors.right: parent.right
-            anchors.margins: 6
-            spacing: 4
+            anchors.margins: Theme.spSm
+            spacing: Theme.spXs
             Rectangle {
-                width: 18; height: 22; radius: 4
+                width: 18; height: 22; radius: Theme.radiusSm
                 color: handleMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: "⋮⋮"; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: "⋮⋮"; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm }
                 MouseArea {
                     id: handleMA
                     anchors.fill: parent
@@ -1454,10 +1450,10 @@ Item {
                 }
             }
             Rectangle {
-                width: 22; height: 22; radius: 5
+                width: 22; height: 22; radius: Theme.radiusSm
                 color: editIcoMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: 11 }
+                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: Theme.fsSm }
                 MouseArea {
                     id: editIcoMA
                     anchors.fill: parent
@@ -1467,10 +1463,10 @@ Item {
                 }
             }
             Rectangle {
-                width: 22; height: 22; radius: 5
+                width: 22; height: 22; radius: Theme.radiusSm
                 color: delIcoMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
                 border.color: delIcoMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: "×"; color: delIcoMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 12 }
+                Text { anchors.centerIn: parent; text: "×"; color: delIcoMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
                 MouseArea {
                     id: delIcoMA
                     anchors.fill: parent
@@ -1502,28 +1498,28 @@ Item {
             Rectangle {
                 visible: cardDrop.over && cardDrop.insertBefore
                 anchors.top: parent.top; anchors.left: parent.left; anchors.right: parent.right
-                height: 3; radius: 2; color: Theme.accent
+                height: 3; radius: Theme.radiusXs; color: Theme.accent
             }
             Rectangle {
                 visible: cardDrop.over && !cardDrop.insertBefore
                 anchors.bottom: parent.bottom; anchors.left: parent.left; anchors.right: parent.right
-                height: 3; radius: 2; color: Theme.accent
+                height: 3; radius: Theme.radiusXs; color: Theme.accent
             }
         }
 
-        QQC.Menu {
+        AppMenu {
             id: docCardMenu
-            QQC.MenuItem {
+            AppMenuItem {
                 text: card.isInternal ? I18n.t("docs.menu.openWiki") : I18n.t("docs.menu.openUrl")
                 enabled: (card.item.url || "").length > 0
                 onTriggered: root.openExternal(card.item.url)
             }
-            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openDocEdit(card.sectionId, card.item) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
-            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
+            AppMenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openDocEdit(card.sectionId, card.item) }
+            AppMenuSeparator {}
+            AppMenuItem { text: I18n.t("docs.menu.moveUp");   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
+            AppMenuItem { text: I18n.t("docs.menu.moveDown"); onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
+            AppMenuSeparator {}
+            AppMenuItem { danger: true; text: I18n.t("common.delete"); onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
         }
     }
 
@@ -1531,7 +1527,7 @@ Item {
         id: sCard
         property var snip: ({})
         property int idx: -1
-        radius: 10
+        radius: Theme.radiusLg
         color: Theme.panel
         // See DocCard: a handler, so the ✎ / × on top don't steal the hover that
         // reveals them.
@@ -1551,29 +1547,29 @@ Item {
         ColumnLayout {
             id: sCol
             anchors.fill: parent
-            anchors.margins: 10
-            spacing: 8
+            anchors.margins: Theme.spLg
+            spacing: Theme.spMd
 
             RowLayout {
                 Layout.fillWidth: true
-                spacing: 6
-                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
+                spacing: Theme.spSm
+                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
                 Rectangle {
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: Theme.panel2
                     border.color: Theme.border; border.width: 1
                     implicitWidth: lngT.implicitWidth + 12
                     implicitHeight: 18
-                    Text { id: lngT; anchors.centerIn: parent; text: sCard.snip.lang || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
+                    Text { id: lngT; anchors.centerIn: parent; text: sCard.snip.lang || ""; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
                 }
                 Rectangle {
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: copySnMA.containsMouse ? Theme.accentSoft : Theme.panel2
                     border.color: copySnMA.containsMouse ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: copyT.implicitWidth + 14
                     implicitHeight: 22
-                    Text { id: copyT; anchors.centerIn: parent; text: I18n.t("docs.copyShort"); color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    Text { id: copyT; anchors.centerIn: parent; text: I18n.t("docs.copyShort"); color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsSm }
                     MouseArea {
                         id: copySnMA
                         anchors.fill: parent
@@ -1589,41 +1585,41 @@ Item {
                     opacity: sCard.cardHovered ? 1 : 0
                     enabled: sCard.cardHovered
                     Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
                     border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: 26; implicitHeight: 22
-                    Text { anchors.centerIn: parent; text: "✎"; color: editSnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: "✎"; color: editSnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsSm }
                     MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
                 }
                 Rectangle {
                     opacity: sCard.cardHovered ? 1 : 0
                     enabled: sCard.cardHovered
                     Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                    radius: 4
+                    radius: Theme.radiusSm
                     color: delSnMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
                     border.color: delSnMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
                     implicitWidth: 26; implicitHeight: 22
-                    Text { anchors.centerIn: parent; text: "×"; color: delSnMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "×"; color: delSnMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
                     MouseArea { id: delSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteSnippet(sCard.idx) }
                 }
             }
             Rectangle {
                 Layout.fillWidth: true
                 color: Theme.bg2
-                radius: 6
+                radius: Theme.radiusMd
                 border.color: Theme.border
                 border.width: 1
                 implicitHeight: codeText.implicitHeight + 18
                 TextEdit {
                     id: codeText
                     anchors.fill: parent
-                    anchors.margins: 10
+                    anchors.margins: Theme.spLg
                     text: sCard.snip.code || ""
                     color: Theme.text
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     readOnly: true
                     selectByMouse: true
                     wrapMode: TextEdit.NoWrap
@@ -1636,21 +1632,21 @@ Item {
             }
         }
 
-        QQC.Menu {
+        AppMenu {
             id: snipMenu
-            QQC.MenuItem {
+            AppMenuItem {
                 text: I18n.t("docs.copy")
                 onTriggered: {
                     AppController.copyToClipboard(sCard.snip.code || "");
                     root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
                 }
             }
-            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openSnippetEdit(sCard.idx) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
-            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteSnippet(sCard.idx) }
+            AppMenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openSnippetEdit(sCard.idx) }
+            AppMenuSeparator {}
+            AppMenuItem { text: I18n.t("docs.menu.moveUp");   enabled: sCard.idx > 0;                        onTriggered: root._moveListItemByDelta("snippets", sCard.idx, -1) }
+            AppMenuItem { text: I18n.t("docs.menu.moveDown"); enabled: sCard.idx < root.snippets.length - 1; onTriggered: root._moveListItemByDelta("snippets", sCard.idx, +1) }
+            AppMenuSeparator {}
+            AppMenuItem { danger: true; text: I18n.t("common.delete"); onTriggered: root.deleteSnippet(sCard.idx) }
         }
     }
 
@@ -1660,7 +1656,7 @@ Item {
         property int idx: -1
         width: parent ? ((parent.width - (parent.columns - 1) * parent.columnSpacing) / parent.columns) : 240
         height: 56
-        radius: 10
+        radius: Theme.radiusLg
         // See DocCard — handler-driven hover so the row buttons stay put.
         property bool cardHovered: false
         HoverHandler { onHoveredChanged: cc.cardHovered = hovered }
@@ -1670,8 +1666,8 @@ Item {
 
         RowLayout {
             anchors.fill: parent
-            anchors.leftMargin: 10; anchors.rightMargin: 10
-            spacing: 10
+            anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+            spacing: Theme.spLg
             Rectangle {
                 width: 32; height: 32; radius: 16
                 color: cc.c.color || Theme.accent
@@ -1680,7 +1676,7 @@ Item {
                     text: root.initials(cc.c.name || "")
                     color: Theme.textOnAccent
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     font.weight: Font.DemiBold
                 }
             }
@@ -1689,16 +1685,16 @@ Item {
                 spacing: 0
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: Theme.spSm
                     // PlainText, not the AutoText default: these strings come
                     // from the Mattermost server, and a first_name of
                     // "<img src=…>" would otherwise be fetched on render.
-                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: 12; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
                     // Says where the card came from, so an edit that a later
                     // sync may overwrite is not a surprise.
                     Rectangle {
                         visible: !!cc.c.source
-                        radius: 3
+                        radius: Theme.radiusXs
                         color: Theme.panel3
                         implicitWidth: srcT.implicitWidth + 8
                         implicitHeight: 14
@@ -1707,34 +1703,34 @@ Item {
                             anchors.centerIn: parent
                             text: "MM"
                             color: Theme.textDim
-                            font.family: Theme.fontMono; font.pixelSize: 8; font.letterSpacing: 0.5
+                            font.family: Theme.fontMono; font.pixelSize: Theme.fsXs; font.letterSpacing: 0.5
                         }
                     }
                 }
-                Text { text: cc.c.role || ""; textFormat: Text.PlainText; color: Theme.textMuted; font.pixelSize: 11; elide: Text.ElideRight; Layout.fillWidth: true }
+                Text { text: cc.c.role || ""; textFormat: Text.PlainText; color: Theme.textMuted; font.pixelSize: Theme.fsSm; elide: Text.ElideRight; Layout.fillWidth: true }
             }
             ColumnLayout {
                 spacing: 0
-                Text { text: cc.c.channel || ""; textFormat: Text.PlainText; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: 10 }
-                Text { text: cc.c.mattermost || ""; textFormat: Text.PlainText; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: 10 }
+                Text { text: cc.c.channel || ""; textFormat: Text.PlainText; color: Theme.textMuted; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
+                Text { text: cc.c.mattermost || ""; textFormat: Text.PlainText; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
             }
             Row {
                 opacity: cc.cardHovered ? 1 : 0
                 enabled: cc.cardHovered
                 Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                spacing: 4
+                spacing: Theme.spXs
                 Rectangle {
-                    width: 22; height: 22; radius: 5
+                    width: 22; height: 22; radius: Theme.radiusSm
                     color: editCMA.containsMouse ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: 11 }
+                    Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: Theme.fsSm }
                     MouseArea { id: editCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openContactEdit(cc.idx) }
                 }
                 Rectangle {
-                    width: 22; height: 22; radius: 5
+                    width: 22; height: 22; radius: Theme.radiusSm
                     color: delCMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
                     border.color: delCMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "×"; color: delCMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 12 }
+                    Text { anchors.centerIn: parent; text: "×"; color: delCMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
                     MouseArea { id: delCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteContact(cc.idx) }
                 }
             }
@@ -1751,14 +1747,14 @@ Item {
             z: -1
         }
 
-        QQC.Menu {
+        AppMenu {
             id: ccMenu
-            QQC.MenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openContactEdit(cc.idx) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("docs.menu.moveUp");   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
-            QQC.MenuItem { text: I18n.t("docs.menu.moveDown"); enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
-            QQC.MenuSeparator {}
-            QQC.MenuItem { text: I18n.t("common.delete"); onTriggered: root.deleteContact(cc.idx) }
+            AppMenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openContactEdit(cc.idx) }
+            AppMenuSeparator {}
+            AppMenuItem { text: I18n.t("docs.menu.moveUp");   enabled: cc.idx > 0;                          onTriggered: root._moveListItemByDelta("contacts", cc.idx, -1) }
+            AppMenuItem { text: I18n.t("docs.menu.moveDown"); enabled: cc.idx < root.contacts.length - 1;   onTriggered: root._moveListItemByDelta("contacts", cc.idx, +1) }
+            AppMenuSeparator {}
+            AppMenuItem { danger: true; text: I18n.t("common.delete"); onTriggered: root.deleteContact(cc.idx) }
         }
     }
 }

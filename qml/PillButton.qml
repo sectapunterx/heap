@@ -6,16 +6,20 @@ Button {
     id: root
     property bool primary: false
     property bool danger: false
+    // A toggle that is on. Not `primary`: a filled accent pill is the one
+    // action a screen offers, and a toggle painted the same way competed
+    // with "+ Task" for it.
+    property bool selected: false
 
-    padding: 8
-    leftPadding: 12
+    padding: Theme.spMd
+    leftPadding: Theme.spXl
 
     // Reachable with Tab and named for screen readers; the focus ring below
     // is the only sign of where the keyboard is.
     focusPolicy: Qt.StrongFocus
     Accessible.role: Accessible.Button
     Accessible.name: root.text
-    rightPadding: 12
+    rightPadding: Theme.spXl
 
     // Every hand-rolled button in the app switches the cursor; this one is a
     // Controls Button, which doesn't, so pills were the only clickable things
@@ -29,22 +33,24 @@ Button {
     opacity: enabled ? 1 : 0.45
 
     background: Rectangle {
-        radius: 6
+        radius: Theme.radiusMd
         color: primary ? Theme.accent
               : danger  ? Theme.withAlpha(Theme.danger, 0.12)
+              : selected ? Theme.accentSoft
               : root.hovered ? Theme.panel3 : Theme.panel2
         border.color: root.visualFocus ? Theme.accentStrong
                    : primary ? "transparent"
                    : danger  ? Theme.withAlpha(Theme.danger, 0.4)
+                   : selected ? Theme.withAlpha(Theme.accent, 0.5)
                    : (root.hovered ? Theme.borderStrong : Theme.border)
         border.width: root.visualFocus ? 2 : 1
     }
     contentItem: Text {
         text: root.text
         font.family: Theme.fontUi
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsMd
         font.weight: primary ? Font.DemiBold : Font.Medium
-        color: primary ? Theme.textOnAccent : danger ? Theme.danger : Theme.text
+        color: primary ? Theme.textOnAccent : danger ? Theme.danger : selected ? Theme.accentStrong : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter
     }

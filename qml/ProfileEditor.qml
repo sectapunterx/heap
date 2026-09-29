@@ -20,10 +20,7 @@ Popup {
     // Control inside this dialog resolves its colours through. Shadowing
     // it with an array of hex strings hands those controls an array where
     // they expect a palette.
-    readonly property var swatches: [
-        "#5cc2dd", "#6cc4b8", "#7cc492", "#dcb86b",
-        "#e6984c", "#c07acf", "#7da8d9", "#e6624c"
-    ]
+    readonly property var swatches: Theme.swatches
 
     property string mode: "create"      // "create" | "rename" | "duplicate"
     property string profileId: ""       // for rename / duplicate
@@ -63,35 +60,35 @@ Popup {
     }
 
     background: Rectangle {
-        radius: 12; color: Theme.panel
+        radius: Theme.radiusXl; color: Theme.panel
         border.color: Theme.borderStrong; border.width: 1
     }
 
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: Theme.spXl
         Item { Layout.preferredHeight: 4 }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: root.mode === "create" ? I18n.t("editor.profile.new")
                 : root.mode === "rename" ? I18n.t("editor.profile.rename")
                     : I18n.t("editor.profile.dup")
             color: Theme.text
-            font.pixelSize: 14
+            font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("common.title").toUpperCase()
-            color: Theme.textMuted; font.pixelSize: 10
+            color: Theme.textMuted; font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold; font.letterSpacing: 1
         }
         TextField {
             id: nameField
-            Layout.leftMargin: 18; Layout.rightMargin: 18; Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("profile.ph.name")
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             selectByMouse: true
@@ -99,16 +96,16 @@ Popup {
         }
 
         Text {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("common.color").toUpperCase()
-            color: Theme.textMuted; font.pixelSize: 10
+            color: Theme.textMuted; font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold; font.letterSpacing: 1
         }
         Row {
             id: colorSwatch
-            Layout.leftMargin: 18; Layout.rightMargin: 18
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             property int selectedIndex: 0
-            spacing: 6
+            spacing: Theme.spSm
             Repeater {
                 model: root.swatches
                 delegate: Rectangle {
@@ -128,8 +125,8 @@ Popup {
         }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            Layout.topMargin: 8; Layout.bottomMargin: 16
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.topMargin: Theme.spMd; Layout.bottomMargin: Theme.sp2xl
             Item { Layout.fillWidth: true }
             PillButton {
                 text: I18n.t("common.cancel"); onClicked: root.close()

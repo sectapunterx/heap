@@ -54,26 +54,26 @@ Popup {
     modal: true
     dim: true
     focus: true
-    padding: 10
+    padding: Theme.spLg
     Overlay.modal: Rectangle { color: Theme.withAlpha(Theme.scrim, 0.35) }
     background: Rectangle {
         color: Theme.panel
         border.color: Theme.border
         border.width: 1
-        radius: 10
+        radius: Theme.radiusLg
     }
 
     contentItem: ColumnLayout {
-        spacing: 6
+        spacing: Theme.spSm
 
         // ── Header: ‹  Month YYYY  › ──────────────────────────────
         RowLayout {
             Layout.fillWidth: true
-            spacing: 6
+            spacing: Theme.spSm
             Rectangle {
-                width: 24; height: 24; radius: 6
+                width: 24; height: 24; radius: Theme.radiusMd
                 color: prevMA.containsMouse ? Theme.panel3 : "transparent"
-                Text { anchors.centerIn: parent; text: "‹"; color: Theme.text; font.pixelSize: 15 }
+                Text { anchors.centerIn: parent; text: "‹"; color: Theme.text; font.pixelSize: Theme.fsLg }
                 MouseArea { id: prevMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pop._step(-1) }
             }
             Text {
@@ -83,12 +83,12 @@ Popup {
                 // language the same way MonthView's title does, rather than
                 // whatever the host is set to.
                 text: I18n.monthName(pop._month) + " " + pop._year
-                color: Theme.text; font.pixelSize: 12; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold
             }
             Rectangle {
-                width: 24; height: 24; radius: 6
+                width: 24; height: 24; radius: Theme.radiusMd
                 color: nextMA.containsMouse ? Theme.panel3 : "transparent"
-                Text { anchors.centerIn: parent; text: "›"; color: Theme.text; font.pixelSize: 15 }
+                Text { anchors.centerIn: parent; text: "›"; color: Theme.text; font.pixelSize: Theme.fsLg }
                 MouseArea { id: nextMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pop._step(1) }
             }
         }
@@ -104,7 +104,7 @@ Popup {
                 // — the version CI builds with — segfault while AOT-compiling
                 // every file that instantiates this popup.
                 text: I18n.dayName(model.day)
-                color: Theme.textDim; font.pixelSize: 9; font.weight: Font.DemiBold
+                color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold
             }
         }
 
@@ -119,7 +119,7 @@ Popup {
                 required property var model
                 readonly property bool _inMonth: model.month === pop._month
                 readonly property bool _isSel: pop._sameDay(model.date, pop.selected)
-                width: 32; height: 26; radius: 6
+                width: 32; height: 26; radius: Theme.radiusMd
                 color: _isSel ? Theme.accent
                      : model.today ? Theme.accentSoft
                      : (dayMA.containsMouse ? Theme.panel3 : "transparent")
@@ -128,7 +128,7 @@ Popup {
                     anchors.centerIn: parent
                     text: model.day
                     color: parent._isSel ? Theme.textOnAccent : Theme.text
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     font.weight: parent._isSel ? Font.DemiBold : Font.Normal
                 }
                 MouseArea {
@@ -142,10 +142,10 @@ Popup {
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 26
-            radius: 6
+            radius: Theme.radiusMd
             color: todayMA.containsMouse ? Theme.panel3 : Theme.panel2
             border.color: Theme.border; border.width: 1
-            Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: 11 }
+            Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: Theme.fsSm }
             MouseArea {
                 id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
                 onClicked: { pop.picked(new Date()); pop.close(); }

@@ -61,10 +61,10 @@ TestCase {
         verify(Qt.colorEqual(b.background.color, Theme.panel2), "neutral fill must be panel2");
         verify(Qt.colorEqual(b.background.border.color, Theme.border), "neutral border must be Theme.border");
         compare(b.background.border.width, 1);
-        compare(b.background.radius, 6);
+        compare(b.background.radius, Theme.radiusMd);
         verify(Qt.colorEqual(b.contentItem.color, Theme.text), "neutral label must be Theme.text");
         compare(b.contentItem.font.weight, Font.Medium);
-        compare(b.contentItem.font.pixelSize, 12);
+        compare(b.contentItem.font.pixelSize, Theme.fsMd);
     }
 
     // Primary variant: accent fill, no border, text-on-accent label at DemiBold —

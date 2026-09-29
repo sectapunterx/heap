@@ -11,7 +11,7 @@ Rectangle {
     property string kind: "info"
     readonly property color kindColor: Theme.alertColor(kind)
 
-    radius: 8
+    radius: Theme.radius
     color: Theme.toastBg
     border.color: kind === "info" ? Theme.toastBorder : Theme.withAlpha(kindColor, 0.6)
     border.width: 1
@@ -23,7 +23,7 @@ Rectangle {
     Row {
         id: rowL
         anchors.centerIn: parent
-        spacing: 12
+        spacing: Theme.spXl
         Rectangle {
             objectName: "toast-kind-dot"
             anchors.verticalCenter: parent.verticalCenter
@@ -34,12 +34,12 @@ Rectangle {
             anchors.verticalCenter: parent.verticalCenter
             text: root.message
             color: Theme.toastText
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
         }
         Rectangle {
             visible: root.actionLabel.length > 0
             anchors.verticalCenter: parent.verticalCenter
-            radius: 5
+            radius: Theme.radiusSm
             color: actionMA.containsMouse ? Theme.accentSoft : "transparent"
             border.color: Theme.accent
             border.width: 1
@@ -50,7 +50,7 @@ Rectangle {
                 anchors.centerIn: parent
                 text: root.actionLabel
                 color: Theme.accentStrong
-                font.pixelSize: 11
+                font.pixelSize: Theme.fsSm
                 font.weight: Font.DemiBold
             }
             MouseArea {

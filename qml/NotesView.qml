@@ -295,15 +295,15 @@ Item {
 
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 18; anchors.rightMargin: 18
-                spacing: 14
+                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
+                spacing: Theme.sp2xl
                 Rectangle { width: 4; height: 28; radius: 2; color: Theme.accent }
                 ColumnLayout {
                     spacing: 1
                     Text {
                         text: I18n.t("notes.header")
                         color: Theme.text
-                        font.pixelSize: 14
+                        font.pixelSize: Theme.fsLg
                         font.weight: Font.DemiBold
                     }
                     Text {
@@ -319,7 +319,7 @@ Item {
                         }
                         color: Theme.textDim
                         font.family: Theme.fontMono
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                     }
                 }
                 Item { Layout.fillWidth: true }
@@ -328,13 +328,13 @@ Item {
                     text: I18n.t("notes.legend")
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
 
                 // ── Backlinks pane toggle (HEAP-79) ────────────────────
                 Rectangle {
                     Layout.preferredHeight: 24
-                    radius: 6
+                    radius: Theme.radiusMd
                     color: root.showBacklinks ? Theme.accent : (blToggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
                     border.color: root.showBacklinks ? Theme.accent : Theme.border
                     border.width: 1
@@ -344,7 +344,7 @@ Item {
                         anchors.centerIn: parent
                         text: I18n.t("notes.links")
                         color: root.showBacklinks ? Theme.textOnAccent : Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         font.weight: Font.Medium
                     }
                     MouseArea {
@@ -362,13 +362,13 @@ Item {
                 Rectangle {
                     Layout.preferredWidth: 3 * 64 + 6
                     Layout.preferredHeight: 26
-                    radius: 6
+                    radius: Theme.radiusMd
                     color: Theme.panel2
                     border.color: Theme.border
                     border.width: 1
                     Row {
                         anchors.fill: parent
-                        anchors.margins: 3
+                        anchors.margins: Theme.sp2xs
                         spacing: 0
                         Repeater {
                             model: [
@@ -381,14 +381,14 @@ Item {
                                 readonly property bool active: root.viewMode === modelData.id
                                 width: 64
                                 height: parent.height
-                                radius: 4
-                                color: active ? Theme.accent
+                                radius: Theme.radiusSm
+                                color: active ? Theme.accentSoft
                                      : (segMA.containsMouse ? Theme.panel3 : "transparent")
                                 Text {
                                     anchors.centerIn: parent
                                     text: modelData.label
-                                    color: parent.active ? Theme.textOnAccent : Theme.text
-                                    font.pixelSize: 11
+                                    color: parent.active ? Theme.accentStrong : Theme.text
+                                    font.pixelSize: Theme.fsSm
                                     font.weight: parent.active ? Font.DemiBold : Font.Medium
                                 }
                                 MouseArea {
@@ -481,7 +481,7 @@ Item {
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
                     font.family: Theme.fontMono
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fsMd
                     background: Item {}
                     onTextChanged: { root._scheduleSave(); root._detectAutocomplete(); }
                     onCursorPositionChanged: root._detectAutocomplete()
@@ -656,7 +656,7 @@ Item {
                     text: I18n.t("notes.preview.empty")
                     color: Theme.textDim
                     font.family: Theme.fontUi
-                    font.pixelSize: 13
+                    font.pixelSize: Theme.fsMd
                 }
 
                 // ── Scroll sync (split mode) ──────────────────────────
@@ -676,19 +676,19 @@ Item {
                 Rectangle { anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left; width: 1; color: Theme.border }
                 ColumnLayout {
                     anchors.fill: parent
-                    anchors.margins: 12
-                    spacing: 8
+                    anchors.margins: Theme.spXl
+                    spacing: Theme.spMd
                     Text {
                         text: I18n.t("notes.backlinks")
                         color: Theme.text
-                        font.pixelSize: 12
+                        font.pixelSize: Theme.fsMd
                         font.weight: Font.DemiBold
                     }
                     Text {
                         visible: root._backlinks.length === 0
                         text: I18n.t("notes.backlinks.empty")
                         color: Theme.textDim
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
@@ -697,19 +697,19 @@ Item {
                         Layout.fillHeight: true
                         clip: true
                         model: root._backlinks
-                        spacing: 8
+                        spacing: Theme.spMd
                         ScrollBar.vertical: ThinScrollBar {}
                         delegate: ColumnLayout {
                             required property var modelData
                             width: ListView.view.width
-                            spacing: 2
+                            spacing: Theme.sp2xs
                             RowLayout {
                                 Layout.fillWidth: true
-                                spacing: 6
+                                spacing: Theme.spSm
                                 Text {
-                                    text: (modelData.resolved ? "⌗ " : "⚠ ") + modelData.target
-                                    color: modelData.resolved ? Theme.mOneone : Theme.warning
-                                    font.pixelSize: 11
+                                    text: (modelData.resolved ? "⌗ " : "△ ") + modelData.target
+                                    color: modelData.resolved ? Theme.mdTicket : Theme.warning
+                                    font.pixelSize: Theme.fsSm
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight
                                     Layout.fillWidth: true
@@ -723,7 +723,7 @@ Item {
                                     text: modelData.refs.length
                                     color: Theme.textDim
                                     font.family: Theme.fontMono
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fsXs
                                 }
                             }
                             Repeater {
@@ -731,10 +731,10 @@ Item {
                                 delegate: Text {
                                     required property var modelData
                                     Layout.fillWidth: true
-                                    Layout.leftMargin: 10
+                                    Layout.leftMargin: Theme.spLg
                                     text: "└ " + modelData.text
                                     color: Theme.textMuted
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fsXs
                                     elide: Text.ElideRight
                                     MouseArea {
                                         anchors.fill: parent
@@ -800,7 +800,7 @@ Item {
         height: Math.min(8, Math.max(1, acMatches.length)) * 38 + 8
 
         background: Rectangle {
-            radius: 8
+            radius: Theme.radius
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -809,7 +809,7 @@ Item {
         contentItem: ListView {
             id: acList
             anchors.fill: parent
-            anchors.margins: 4
+            anchors.margins: Theme.spXs
             clip: true
             interactive: false
             model: acMatches
@@ -819,13 +819,13 @@ Item {
                 required property int index
                 width: ListView.view.width
                 height: 36
-                radius: 4
+                radius: Theme.radiusSm
                 color: index === root.acSelected ? Theme.panel2 : "transparent"
 
                 RowLayout {
                     anchors.fill: parent
-                    anchors.leftMargin: 8; anchors.rightMargin: 8
-                    spacing: 8
+                    anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                    spacing: Theme.spMd
 
                     Rectangle {
                         visible: modelData.kind === "person"
@@ -839,13 +839,13 @@ Item {
                             }
                             color: Theme.textOnAccent
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }
                     }
                     Rectangle {
                         visible: modelData.kind === "task"
-                        width: 50; height: 18; radius: 4
+                        width: 50; height: 18; radius: Theme.radiusSm
                         color: "transparent"
                         border.color: Theme.accent; border.width: 1
                         Text {
@@ -853,20 +853,20 @@ Item {
                             text: modelData.id
                             color: Theme.accent
                             font.family: Theme.fontMono
-                            font.pixelSize: 10
+                            font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold
                         }
                     }
                     Rectangle {
                         visible: modelData.kind === "heading"
-                        width: 22; height: 18; radius: 4
+                        width: 22; height: 18; radius: Theme.radiusSm
                         color: "transparent"
                         border.color: Theme.heading; border.width: 1
                         Text {
                             anchors.centerIn: parent
                             text: "⌗"
                             color: Theme.heading
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.weight: Font.DemiBold
                         }
                     }
@@ -877,7 +877,7 @@ Item {
                         Text {
                             text: modelData.label
                             color: Theme.text
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -886,7 +886,7 @@ Item {
                             text: modelData.sub || ""
                             color: Theme.textMuted
                             font.family: Theme.fontMono
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }
@@ -1031,7 +1031,7 @@ Item {
         modal: true
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         width: 400
         title: I18n.t("notes.link.missingTitle")
 
@@ -1041,7 +1041,7 @@ Item {
         }
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -1050,13 +1050,13 @@ Item {
         contentItem: Text {
             text: I18n.t("notes.link.missingBody").arg(missingLinkPopup.wanted)
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
 
         footer: RowLayout {
-            spacing: 8
-            Layout.margins: 14
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: missingLinkPopup.close() }
             PillButton {

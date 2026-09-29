@@ -117,27 +117,27 @@ Item {
 
             ColumnLayout {
                 anchors.fill: parent
-                anchors.margins: 10
-                anchors.rightMargin: 11
-                spacing: 8
+                anchors.margins: Theme.spLg
+                anchors.rightMargin: Theme.spLg
+                spacing: Theme.spMd
 
                 RowLayout {
                     Layout.fillWidth: true
-                    spacing: 6
+                    spacing: Theme.spSm
                     Text {
                         text: I18n.t("docs.pages").toUpperCase()
                         color: Theme.textMuted
-                        font.pixelSize: 10
+                        font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                         font.letterSpacing: 1
                         Layout.fillWidth: true
                     }
                     Rectangle {
                         objectName: "docpage-new"
-                        width: 22; height: 22; radius: 5
+                        width: 22; height: 22; radius: Theme.radiusSm
                         color: newMA.containsMouse ? Theme.panel3 : Theme.panel2
                         border.color: Theme.border; border.width: 1
-                        Text { anchors.centerIn: parent; text: "+"; color: Theme.text; font.pixelSize: 14 }
+                        Text { anchors.centerIn: parent; text: "+"; color: Theme.text; font.pixelSize: Theme.fsLg }
                         MouseArea {
                             id: newMA
                             anchors.fill: parent
@@ -157,8 +157,8 @@ Item {
                     placeholderText: I18n.t("docs.filterPages")
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
-                    font.pixelSize: 11
-                    background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    font.pixelSize: Theme.fsSm
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                     onTextChanged: root.filter = text
                 }
 
@@ -167,7 +167,7 @@ Item {
                     Layout.fillWidth: true
                     text: root.filter.length > 0 ? I18n.t("docs.noPageMatches") : I18n.t("docs.noPages")
                     color: Theme.textDim
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                     wrapMode: Text.Wrap
                 }
 
@@ -187,7 +187,7 @@ Item {
                         objectName: "docpage-row-" + pageRow.modelData.id
                         width: tree.width
                         height: 30
-                        radius: 6
+                        radius: Theme.radiusMd
                         readonly property bool current: pageRow.modelData.id === AppController.activeDocPageId
                         color: pageRow.current ? Theme.withAlpha(Theme.accent, 0.14)
                              : rowMA.containsMouse ? Theme.panel2 : "transparent"
@@ -195,8 +195,8 @@ Item {
                         RowLayout {
                             anchors.fill: parent
                             anchors.leftMargin: 6 + (pageRow.modelData.depth * 14)
-                            anchors.rightMargin: 8
-                            spacing: 4
+                            anchors.rightMargin: Theme.spMd
+                            spacing: Theme.spXs
 
                             // The disclosure triangle only where there is
                             // something to disclose; an empty slot keeps the
@@ -209,7 +209,7 @@ Item {
                                     visible: pageRow.modelData.hasChildren
                                     text: root.isExpanded(pageRow.modelData.id) ? "▾" : "▸"
                                     color: Theme.textDim
-                                    font.pixelSize: 9
+                                    font.pixelSize: Theme.fsXs
                                 }
                                 MouseArea {
                                     anchors.fill: parent
@@ -223,7 +223,7 @@ Item {
                             Text {
                                 text: pageRow.modelData.title || ""
                                 color: Theme.text
-                                font.pixelSize: 11
+                                font.pixelSize: Theme.fsSm
                                 font.weight: pageRow.current ? Font.DemiBold : Font.Normal
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
@@ -243,9 +243,9 @@ Item {
                             }
                         }
 
-                        QQC.Menu {
+                        AppMenu {
                             id: pageMenu
-                            QQC.MenuItem {
+                            AppMenuItem {
                                 text: I18n.t("docs.newSubpage")
                                 onTriggered: {
                                     // Opening the parent, or the new page lands
@@ -254,12 +254,12 @@ Item {
                                     AppController.newDocPage("", pageRow.modelData.id);
                                 }
                             }
-                            QQC.MenuItem {
+                            AppMenuItem {
                                 text: I18n.t("docs.renamePage")
                                 onTriggered: renamePagePopup.openFor(pageRow.modelData.id, pageRow.modelData.title)
                             }
-                            QQC.MenuSeparator {}
-                            QQC.MenuItem {
+                            AppMenuSeparator {}
+                            AppMenuItem {
                                 text: pageRow.modelData.hasChildren ? I18n.t("docs.deletePageTree")
                                                                     : I18n.t("common.delete")
                                 onTriggered: AppController.deleteDocPage(pageRow.modelData.id)
@@ -288,7 +288,7 @@ Item {
         modal: true
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
-        padding: 18
+        padding: Theme.inset
         width: 380
         title: I18n.t("docs.renamePage")
 
@@ -306,7 +306,7 @@ Item {
         }
 
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -317,13 +317,13 @@ Item {
             objectName: "docpage-rename-title"
             implicitWidth: 320
             color: Theme.text
-            background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
             onAccepted: renamePagePopup.commit()
         }
 
         footer: RowLayout {
-            spacing: 8
-            Layout.margins: 14
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: renamePagePopup.close() }
             PillButton { text: I18n.t("editor.btn.save"); primary: true; onClicked: renamePagePopup.commit() }

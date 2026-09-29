@@ -167,4 +167,29 @@ TestCase {
         tryCompare(combo, "currentValue", "blocked");
         verify(combo.currentIndex > 0);
     }
+
+    // The mapping folds away: closed by default, the header says what is
+    // behind it, and a click opens it.
+    function test_status_map_folds_and_unfolds() {
+        const sv = make();
+        const card = _card(sv, "jira", {
+            clientId: "cid", connected: true,
+            seenStatuses: ["In Progress", "To Do", "Done"],
+            statusMap: { "In Progress": "blocked" }
+        });
+        tryVerify(function () { return findChild(card, "status-map-toggle-area") !== null; }, 2000);
+        // The card sits below the fold of the settings page, out of reach of
+        // a synthetic click; the header's own handler is what a click runs.
+        const toggle = findChild(card, "status-map-toggle-area");
+        verify(!card.mapOpen, "the status mapping must start folded");
+        const combo = findChild(card, "status-map-combo");
+        verify(!combo.parent.visible, "a folded mapping still shows its rows");
+
+        toggle.clicked(null);
+        tryVerify(function () { return card.mapOpen; }, 1000, "a click did not unfold the mapping");
+        verify(combo.parent.visible);
+
+        toggle.clicked(null);
+        tryVerify(function () { return !card.mapOpen; }, 1000, "a second click did not fold it again");
+    }
 }

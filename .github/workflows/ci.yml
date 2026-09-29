@@ -102,6 +102,17 @@ jobs:
         with:
           files: ".github/workflows/*.yml"
 
+  # QML paints with the design tokens in qml/Theme.qml: no literal font
+  # sizes, spacings or colours (see .github/scripts/ui_tokens_check.py).
+  ui-tokens:
+    name: ui tokens
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - name: Check QML against the design tokens
+        run: python3 .github/scripts/ui_tokens_check.py qml
+
   # ──────────────────────────────────────────────────────────────────
   # 3. clang-tidy on the changed lines (PR only).
   # Fails on any finding in a line the PR changed; the rest of a touched file
@@ -540,6 +551,7 @@ jobs:
     needs:
       - changes
       - lint-actions
+      - ui-tokens
       - format-cpp
       - tidy
       - build

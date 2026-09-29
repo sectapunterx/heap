@@ -37,32 +37,32 @@ Popup {
     width: kind === "snippet" ? 700 : 500
 
     background: Rectangle {
-        radius: 12
+        radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
     }
 
     contentItem: ColumnLayout {
-        spacing: 12
+        spacing: Theme.spXl
         Item { Layout.preferredHeight: 4 }
 
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            spacing: 8
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spMd
             Text {
                 text: root.kind === "doc" ? I18n.t(root.isNew ? "docs.editor.title.new.doc" : "docs.editor.title.edit.doc")
                     : root.kind === "snippet" ? I18n.t(root.isNew ? "docs.editor.title.new.snip" : "docs.editor.title.edit.snip")
                         : root.kind === "section" ? I18n.t(root.isNew ? "docs.editor.title.new.section" : "docs.editor.title.edit.section")
                             : I18n.t(root.isNew ? "docs.editor.title.new.contact" : "docs.editor.title.edit.contact")
-                color: Theme.text; font.pixelSize: 14; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
             }
             Text {
                 visible: !root.isNew && root.kind === "doc" && (root.draft.ref || "").length > 0
                 text: root.draft.ref || ""
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 font.weight: Font.Medium
             }
             Item { Layout.fillWidth: true }
@@ -72,11 +72,11 @@ Popup {
         ColumnLayout {
             visible: root.kind === "doc"
             Layout.fillWidth: true
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            spacing: 10
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spLg
 
             GridLayout {
-                columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
+                columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.ref").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.version").toUpperCase() }
                 FormField { id: docRef     ; mono: true; placeholderText: I18n.t("docsEditor.ph.ref")
@@ -101,7 +101,7 @@ Popup {
                     color: Theme.text
                     placeholderText: "…"
                     placeholderTextColor: Theme.textDim
-                    background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 }
             }
 
@@ -112,7 +112,7 @@ Popup {
                         Layout.fillWidth: true }
 
             GridLayout {
-                columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
+                columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.source").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.updated").toUpperCase() }
                 FormField { placeholderText: I18n.t("docsEditor.ph.source")
@@ -125,19 +125,19 @@ Popup {
             ColumnLayout {
                 visible: root.docCustomFields && root.docCustomFields.length > 0
                 Layout.fillWidth: true
-                spacing: 4
+                spacing: Theme.spXs
                 FieldLabel { text: I18n.t("docs.field.customFields").toUpperCase() }
                 Repeater {
                     model: root.docCustomFields
                     delegate: RowLayout {
                         required property var modelData
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: Theme.spSm
                         Text {
                             Layout.preferredWidth: 110
                             text: modelData.label || modelData.key
                             color: Theme.textMuted
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             elide: Text.ElideRight
                         }
                         FormField {
@@ -154,15 +154,15 @@ Popup {
 
             ColumnLayout {
                 visible: root.isNew
-                spacing: 4
+                spacing: Theme.spXs
                 Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.section").toUpperCase() }
                 ComboBox {
                     id: docSection
                     Layout.fillWidth: true
                     model: root.sections.map(s => s.title)
-                    background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                    contentItem: Text { text: docSection.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    contentItem: Text { text: docSection.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                     onCurrentIndexChanged: {
                         if (currentIndex >= 0 && currentIndex < root.sections.length)
                             root.draft._sectionId = root.sections[currentIndex].id;
@@ -180,11 +180,11 @@ Popup {
         ColumnLayout {
             visible: root.kind === "snippet"
             Layout.fillWidth: true
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            spacing: 10
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spLg
 
             GridLayout {
-                columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
+                columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.language").toUpperCase() }
                 FormField {
@@ -195,8 +195,8 @@ Popup {
                 ComboBox {
                     Layout.fillWidth: true
                     model: ["sh", "cpp", "py", "js", "yaml", "text"]
-                    background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                    contentItem: Text { text: parent.displayText; color: Theme.text; leftPadding: 10; verticalAlignment: Text.AlignVCenter }
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    contentItem: Text { text: parent.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                     currentIndex: {
                         const idx = ["sh","cpp","py","js","yaml","text"].indexOf(root.draft.lang || "sh");
                         return Math.max(0, idx);
@@ -225,8 +225,8 @@ Popup {
                     placeholderText: I18n.t("docsEditor.ph.snippet")
                     placeholderTextColor: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
-                    background: Rectangle { radius: 6; color: Theme.bg2; border.color: Theme.border; border.width: 1 }
+                    font.pixelSize: Theme.fsMd
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.bg2; border.color: Theme.border; border.width: 1 }
                 }
             }
             CodeHighlighter {
@@ -240,8 +240,8 @@ Popup {
         ColumnLayout {
             visible: root.kind === "section"
             Layout.fillWidth: true
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            spacing: 10
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spLg
 
             FieldLabel { text: I18n.t("docs.field.title").toUpperCase() }
             FormField {
@@ -259,7 +259,7 @@ Popup {
 
             FieldLabel { text: I18n.t("docs.field.accent").toUpperCase() }
             Row {
-                spacing: 6
+                spacing: Theme.spSm
                 Repeater {
                     model: root.accentPalette
                     delegate: Rectangle {
@@ -280,7 +280,7 @@ Popup {
             }
 
             // ── Custom fields list ──────────────────────────────────────
-            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: 10 }
+            Rectangle { Layout.fillWidth: true; height: 1; color: Theme.border; Layout.topMargin: Theme.spLg }
             FieldLabel {
                 text: I18n.t("docs.editor.fields.label")
             }
@@ -288,7 +288,7 @@ Popup {
             ColumnLayout {
                 id: fieldsList
                 Layout.fillWidth: true
-                spacing: 6
+                spacing: Theme.spSm
                 property int rev: 0
                 function notify() { rev++; root.draft.customFields = (root.draft.customFields || []).slice() }
                 Repeater {
@@ -296,7 +296,7 @@ Popup {
                     delegate: RowLayout {
                         required property int index
                         Layout.fillWidth: true
-                        spacing: 6
+                        spacing: Theme.spSm
                         property var fld: (root.draft.customFields || [])[index] || ({ key: "", label: "" })
                         FormField {
                             Layout.fillWidth: true
@@ -324,10 +324,10 @@ Popup {
                             }
                         }
                         Rectangle {
-                            width: 26; height: 26; radius: 5
+                            width: 26; height: 26; radius: Theme.radiusSm
                             color: upMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
-                            Text { anchors.centerIn: parent; text: "↑"; color: Theme.textMuted; font.pixelSize: 12 }
+                            Text { anchors.centerIn: parent; text: "↑"; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
                             MouseArea {
                                 id: upMA
                                 anchors.fill: parent
@@ -343,10 +343,10 @@ Popup {
                             }
                         }
                         Rectangle {
-                            width: 26; height: 26; radius: 5
+                            width: 26; height: 26; radius: Theme.radiusSm
                             color: dnMA.containsMouse ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
-                            Text { anchors.centerIn: parent; text: "↓"; color: Theme.textMuted; font.pixelSize: 12 }
+                            Text { anchors.centerIn: parent; text: "↓"; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
                             MouseArea {
                                 id: dnMA
                                 anchors.fill: parent
@@ -363,10 +363,10 @@ Popup {
                             }
                         }
                         Rectangle {
-                            width: 26; height: 26; radius: 5
+                            width: 26; height: 26; radius: Theme.radiusSm
                             color: delFMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
                             border.color: delFMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: 13 }
+                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
                             MouseArea {
                                 id: delFMA
                                 anchors.fill: parent
@@ -400,11 +400,11 @@ Popup {
         ColumnLayout {
             visible: root.kind === "contact"
             Layout.fillWidth: true
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            spacing: 10
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            spacing: Theme.spLg
 
             GridLayout {
-                columns: 2; columnSpacing: 10; rowSpacing: 4; Layout.fillWidth: true
+                columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs; Layout.fillWidth: true
                 FieldLabel { text: I18n.t("docs.field.name").toUpperCase() }
                 FieldLabel { text: I18n.t("docs.field.role").toUpperCase() }
                 FormField {
@@ -422,7 +422,7 @@ Popup {
 
             FieldLabel { text: I18n.t("docs.field.avatar").toUpperCase() }
             Row {
-                spacing: 6
+                spacing: Theme.spSm
                 Repeater {
                     model: root.contactPalette
                     delegate: Rectangle {
@@ -444,10 +444,10 @@ Popup {
 
         // ── Actions ──────────────────────────────────────────────────────
         RowLayout {
-            Layout.leftMargin: 18; Layout.rightMargin: 18
-            Layout.topMargin: 6; Layout.bottomMargin: 16
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.topMargin: Theme.spSm; Layout.bottomMargin: Theme.sp2xl
             Layout.fillWidth: true
-            spacing: 8
+            spacing: Theme.spMd
             PillButton {
                 visible: !root.isNew
                 text: I18n.t("common.delete"); danger: true
@@ -486,10 +486,10 @@ Popup {
 
     component FieldLabel: Text {
         color: Theme.textMuted
-        font.pixelSize: 10
+        font.pixelSize: Theme.fsXs
         font.weight: Font.DemiBold
         font.letterSpacing: 1
-        topPadding: 2
+        topPadding: Theme.sp2xs
     }
 
     component FormField: TextField {
@@ -498,6 +498,6 @@ Popup {
         color: Theme.text
         placeholderTextColor: Theme.textDim
         font.family: mono ? Theme.fontMono : Theme.fontUi
-        background: Rectangle { radius: 6; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
     }
 }

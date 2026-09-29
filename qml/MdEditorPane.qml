@@ -95,7 +95,7 @@ Item {
         visible: root.pageId.length === 0
         text: root.emptyText
         color: Theme.textDim
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsMd
     }
 
     ColumnLayout {
@@ -114,8 +114,8 @@ Item {
             }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14; anchors.rightMargin: 10
-                spacing: 8
+                anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spLg
+                spacing: Theme.spMd
                 Text {
                     text: {
                         const m = AppController.docPages;
@@ -124,7 +124,7 @@ Item {
                         return (at >= 0 && r >= 0) ? String(m.data(m.index(at, 0), r)) : "";
                     }
                     color: Theme.text
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                     font.weight: Font.DemiBold
                     elide: Text.ElideRight
                     Layout.fillWidth: true
@@ -137,7 +137,7 @@ Item {
                                                    : area.text.trim().split(/\s+/).length)
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 10
+                    font.pixelSize: Theme.fsXs
                 }
                 Repeater {
                     model: ["edit", "split"]
@@ -145,7 +145,7 @@ Item {
                         required property var modelData
                         objectName: "docpage-mode-" + modelData
                         implicitWidth: 44; implicitHeight: 22
-                        radius: 5
+                        radius: Theme.radiusSm
                         color: root.mode === modelData ? Theme.withAlpha(Theme.accent, 0.18)
                              : modeMA.containsMouse ? Theme.panel3 : "transparent"
                         border.color: root.mode === modelData ? Theme.accent : Theme.border
@@ -154,7 +154,7 @@ Item {
                             anchors.centerIn: parent
                             text: I18n.t("docs.mode." + modelData)
                             color: root.mode === modelData ? Theme.text : Theme.textDim
-                            font.pixelSize: 9
+                            font.pixelSize: Theme.fsXs
                         }
                         MouseArea {
                             id: modeMA
@@ -190,8 +190,8 @@ Item {
                     selectByMouse: true
                     color: Theme.text
                     font.family: Theme.fontMono
-                    font.pixelSize: 12
-                    leftPadding: 16; rightPadding: 16; topPadding: 12
+                    font.pixelSize: Theme.fsMd
+                    leftPadding: Theme.sp2xl; rightPadding: Theme.sp2xl; topPadding: Theme.spXl
                     background: Rectangle { color: Theme.bg }
                     onTextChanged: {
                         if (root._loading) return;

@@ -94,13 +94,26 @@ Item {
 
     property date now: new Date()
 
+    // Returns false while the grid has no height to scroll yet.
     function scrollToWorkday() {
         const flick = hourScroll.contentItem;
-        if (!flick) return;
+        if (!flick || flick.height <= 0 || flick.contentHeight <= flick.height) return false;
         const nowHour = new Date().getHours();
         const first = Math.max(0, Math.min(root.workStart, nowHour - 1) - root.hoursStart);
         const maxY = Math.max(0, flick.contentHeight - flick.height);
         flick.contentY = Math.min(maxY, first * root.hourH);
+        return true;
+    }
+    // Component.onCompleted runs before the ScrollView has been laid out, so
+    // the scroll used to land on a zero-height grid and the week opened on
+    // 00:00–09:00, empty. Try again each frame until there is something to
+    // scroll, for at most a second.
+    Timer {
+        id: workdayScroll
+        interval: 16
+        repeat: true
+        property int tries: 0
+        onTriggered: if (root.scrollToWorkday() || ++tries > 60) stop()
     }
 
     // The "Needs a slot" rail, when the window has room for it. The header
@@ -376,8 +389,8 @@ Item {
             }
             RowLayout {
                 anchors.fill: parent
-                anchors.leftMargin: 14; anchors.rightMargin: 14
-                spacing: 8
+                anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.sp2xl
+                spacing: Theme.spMd
 
                 PillButton {
                     text: "←"
@@ -387,18 +400,18 @@ Item {
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
                     RowLayout {
-                        spacing: 10
+                        spacing: Theme.spLg
                         Text {
                             text: I18n.t("week.number").arg(AppController.isoWeekNumber(weekStart))
                             color: Theme.textDim
                             font.family: Theme.fontMono
-                            font.pixelSize: 11
+                            font.pixelSize: Theme.fsSm
                             font.letterSpacing: 1
                         }
                         Text {
                             text: (I18n.lang, AppController.shortDate(weekStart)) + " — " + AppController.shortDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
                             color: Theme.text
-                            font.pixelSize: 14
+                            font.pixelSize: Theme.fsLg
                             font.weight: Font.DemiBold
                         }
                     }
@@ -408,13 +421,13 @@ Item {
                     text: I18n.t("week.summary").arg(I18n.deadlines(root.totalTasks())).arg(I18n.events(root.totalEvents()))
                     color: Theme.textDim
                     font.family: Theme.fontMono
-                    font.pixelSize: 11
+                    font.pixelSize: Theme.fsSm
                 }
                 PillButton {
                     objectName: "week-rail-toggle"
                     visible: gridHost.railFits
                     text: I18n.t("week.rail.toggle")
-                    primary: root.railWanted
+                    selected: root.railWanted
                     onClicked: root.railWanted = !root.railWanted
                 }
                 PillButton {
@@ -509,30 +522,30 @@ Item {
                             }
                             RowLayout {
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
-                                anchors.margins: 10
-                                spacing: 6
+                                anchors.margins: Theme.spLg
+                                spacing: Theme.spSm
                                 Text {
                                     text: root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
                                     color: headCol.isToday ? Theme.accentStrong : Theme.textMuted
-                                    font.pixelSize: 12
+                                    font.pixelSize: Theme.fsMd
                                     font.weight: Font.DemiBold
                                     font.letterSpacing: 1
                                 }
                                 Rectangle {
                                     visible: headCol.isToday
-                                    radius: 4
+                                    radius: Theme.radiusSm
                                     color: Theme.accent
                                     implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: 9; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
                                 }
                             }
                             Text {
                                 anchors.left: parent.left; anchors.bottom: parent.bottom
-                                anchors.leftMargin: 10; anchors.bottomMargin: 6
+                                anchors.leftMargin: Theme.spLg; anchors.bottomMargin: Theme.spSm
                                 text: headCol.modelData.date.getDate()
                                 color: headCol.isToday ? Theme.accentStrong : Theme.text
                                 font.family: Theme.fontMono
-                                font.pixelSize: 22
+                                font.pixelSize: Theme.fsXl
                                 font.weight: Font.DemiBold
                             }
                         }
@@ -545,8 +558,8 @@ Item {
 
                             ColumnLayout {
                                 anchors.fill: parent
-                                anchors.margins: 6
-                                spacing: 4
+                                anchors.margins: Theme.spSm
+                                spacing: Theme.spXs
 
                                 Repeater {
                                     model: headCol.modelData.tasks.slice(0, 4)
@@ -556,7 +569,7 @@ Item {
                                             && AppController.isTaskSelected(modelData.id)
                                         Layout.fillWidth: true
                                         Layout.preferredHeight: 22
-                                        radius: 4
+                                        radius: Theme.radiusSm
                                         color: _selected ? Theme.withAlpha(Theme.accent, 0.18)
                                             : chipMA.containsMouse ? Theme.panel2 : Theme.panel3
                                         border.color: _selected ? Theme.accent
@@ -565,8 +578,8 @@ Item {
 
                                         RowLayout {
                                             anchors.fill: parent
-                                            anchors.leftMargin: 6; anchors.rightMargin: 6
-                                            spacing: 4
+                                            anchors.leftMargin: Theme.spSm; anchors.rightMargin: Theme.spSm
+                                            spacing: Theme.spXs
                                             Text {
                                                 // A mirrored issue reads by its
                                                 // tracker key, not the synthetic
@@ -576,14 +589,14 @@ Item {
                                                 textFormat: Text.PlainText
                                                 color: Theme.accentStrong
                                                 font.family: Theme.fontMono
-                                                font.pixelSize: 9
+                                                font.pixelSize: Theme.fsXs
                                             }
                                             Text {
                                                 Layout.fillWidth: true
                                                 text: modelData.title
                                                 textFormat: Text.PlainText
                                                 color: Theme.text
-                                                font.pixelSize: 10
+                                                font.pixelSize: Theme.fsXs
                                                 elide: Text.ElideRight
                                             }
                                             Rectangle {
@@ -624,7 +637,7 @@ Item {
                                     text: I18n.t("week.more").arg(headCol.modelData.tasks.length - 4)
                                     color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
                                     font.family: Theme.fontMono
-                                    font.pixelSize: 10
+                                    font.pixelSize: Theme.fsXs
                                     MouseArea {
                                         id: moreMA
                                         anchors.fill: parent
@@ -638,7 +651,7 @@ Item {
                                     visible: headCol.modelData.tasks.length === 0
                                     text: "·"
                                     color: Theme.textDim
-                                    font.pixelSize: 14
+                                    font.pixelSize: Theme.fsLg
                                     horizontalAlignment: Text.AlignHCenter
                                     Layout.alignment: Qt.AlignHCenter
                                 }
@@ -680,7 +693,7 @@ Item {
                         height: 22
                         // Square off the clipped end so a bar that runs past
                         // the week reads as continuing rather than ending here.
-                        radius: 4
+                        radius: Theme.radiusSm
                         color: Theme.withAlpha(Theme.eventColor(weekBar.modelData.type || "sync"), 0.16)
 
                         Rectangle {
@@ -693,7 +706,7 @@ Item {
                         Text {
                             anchors.fill: parent
                             anchors.leftMargin: weekBar.modelData.clippedStart ? 16 : 10
-                            anchors.rightMargin: 8
+                            anchors.rightMargin: Theme.spMd
                             verticalAlignment: Text.AlignVCenter
                             // A bar continued from last week says so, so the
                             // title is not read as starting on Monday.
@@ -701,7 +714,7 @@ Item {
                                   + (weekBar.modelData.title || "")
                                   + (weekBar.modelData.clippedEnd ? " ›" : "")
                             color: Theme.text
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             elide: Text.ElideRight
                         }
 
@@ -736,12 +749,17 @@ Item {
                 objectName: "week-hour-scroll"
                 // Open on the working day (or the current hour, if that is
                 // earlier), not on midnight.
-                Component.onCompleted: Qt.callLater(root.scrollToWorkday)
+                Component.onCompleted: workdayScroll.start()
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.rightMargin: gridHost.railW
                 anchors.top: weekStrip.bottom; anchors.bottom: parent.bottom
                 clip: true
                 ScrollBar.horizontal.policy: ScrollBar.AlwaysOff
+                // Said outright: the grid has a height but no implicit one,
+                // so the ScrollView's own guess was 0 and the first scroll to
+                // the working day had nothing to scroll.
+                contentWidth: gridContent.width
+                contentHeight: gridContent.height
 
                 Item {
                     id: gridContent
@@ -767,7 +785,7 @@ Item {
                                 text: Theme.fmtHour(root.hoursStart + index)
                                 color: Theme.textDim
                                 font.family: Theme.fontMono
-                                font.pixelSize: 10
+                                font.pixelSize: Theme.fsXs
                             }
                         }
                         Rectangle { anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom; width: 1; color: Theme.border }
@@ -920,7 +938,7 @@ Item {
                             // of blocks labelled only "09:30". Short blocks put
                             // the time and the title on one line instead.
                             readonly property bool compact: height < 30
-                            radius: 4
+                            radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
                             border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
                             border.width: 1
@@ -934,7 +952,7 @@ Item {
                             }
                             Column {
                                 anchors.fill: parent
-                                anchors.leftMargin: 8; anchors.rightMargin: 6; anchors.topMargin: 3
+                                anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs
                                 spacing: 0
                                 clip: true
                                 Text {
@@ -942,23 +960,23 @@ Item {
                                     text: Theme.fmtHour(weEv.effStart)
                                     color: Theme.textMuted
                                     font.family: Theme.fontMono
-                                    font.pixelSize: 9
+                                    font.pixelSize: Theme.fsXs
                                 }
                                 RowLayout {
                                     width: parent.width
-                                    spacing: 4
+                                    spacing: Theme.spXs
                                     Text {
                                         visible: weEv.compact
                                         text: Theme.fmtHour(weEv.effStart)
                                         color: Theme.textMuted
                                         font.family: Theme.fontMono
-                                        font.pixelSize: 9
+                                        font.pixelSize: Theme.fsXs
                                     }
                                     Text {
                                         visible: (weEv.modelData.context || "").length > 0
                                         text: weEv.modelData.context
                                         color: Theme.textMuted
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fsXs
                                         font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                         Layout.maximumWidth: parent.width * 0.5
@@ -973,7 +991,7 @@ Item {
                                         Layout.fillWidth: true
                                         text: weEv.modelData.title
                                         color: Theme.text
-                                        font.pixelSize: 10
+                                        font.pixelSize: Theme.fsXs
                                         font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                     }
@@ -984,8 +1002,8 @@ Item {
                             MouseArea {
                                 id: weMove
                                 anchors.fill: parent
-                                anchors.topMargin: 6
-                                anchors.bottomMargin: 6
+                                anchors.topMargin: Theme.spSm
+                                anchors.bottomMargin: Theme.spSm
                                 cursorShape: didDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                                 property real grabX: 0
                                 property real grabY: 0
@@ -1098,6 +1116,6 @@ Item {
         wrapMode: Text.WordWrap
         text: I18n.t("week.noEvents")
         color: Theme.textDim
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsMd
     }
 }

@@ -111,6 +111,31 @@ ApplicationWindow {
     onVisibilityChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     title: "heap. — Work, in one place."
     color: Theme.bg
+    // The stock Basic controls (combo box lists, tooltips, scroll bars, and
+    // anything not drawn by hand) take their colours from the palette. Left
+    // alone it was the OS palette, which on Windows meant black popups with
+    // white rows whatever the theme; this feeds it the theme's tokens.
+    palette {
+        window: Theme.panel
+        windowText: Theme.text
+        base: Theme.panel2
+        alternateBase: Theme.panel3
+        text: Theme.text
+        button: Theme.panel2
+        buttonText: Theme.text
+        brightText: Theme.text
+        highlight: Theme.accentSoft
+        highlightedText: Theme.accentStrong
+        light: Theme.panel2
+        midlight: Theme.panel3
+        mid: Theme.border
+        dark: Theme.borderStrong
+        shadow: Theme.scrim
+        placeholderText: Theme.textDim
+        link: Theme.mdLink
+        toolTipBase: Theme.toastBg
+        toolTipText: Theme.toastText
+    }
 
     property string searchText: ""
     property var prioritiesFilter: ({})
@@ -123,10 +148,24 @@ ApplicationWindow {
     readonly property bool _narrow: win.width < _rightPanelMinWidth
     property bool _rightPanelWanted: _settingsObject().rightPanel !== false
     property bool _rightPanelOnNarrow: false
-    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow : _rightPanelWanted
+    // Week and month are a calendar already, and settings has nothing to plan
+    // against: the panel's day grid next to them was a second calendar and
+    // 420px less of the first. It stays folded there unless asked for, and
+    // asking lasts until the app closes.
+    readonly property bool _panelFoldedView: AppController.currentView === "week"
+                                             || AppController.currentView === "month"
+                                             || AppController.currentView === "settings"
+    property bool _rightPanelInFoldedView: false
+    readonly property bool rightPanelShown: _narrow ? _rightPanelOnNarrow
+                                          : _panelFoldedView ? _rightPanelInFoldedView
+                                          : _rightPanelWanted
     function toggleRightPanel() {
         if (_narrow) {
             _rightPanelOnNarrow = !_rightPanelOnNarrow;
+            return;
+        }
+        if (_panelFoldedView) {
+            _rightPanelInFoldedView = !_rightPanelInFoldedView;
             return;
         }
         _rightPanelWanted = !_rightPanelWanted;
@@ -242,10 +281,10 @@ ApplicationWindow {
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: 440
-        padding: 18
+        padding: Theme.inset
         title: I18n.t("close.ask.title")
         background: Rectangle {
-            radius: 12
+            radius: Theme.radiusXl
             color: Theme.panel
             border.color: Theme.borderStrong
             border.width: 1
@@ -253,11 +292,11 @@ ApplicationWindow {
         contentItem: Text {
             text: I18n.t("close.ask.body")
             color: Theme.textMuted
-            font.pixelSize: 12
+            font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
         footer: RowLayout {
-            spacing: 8
+            spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
                 objectName: "close-ask-quit"
@@ -483,13 +522,13 @@ ApplicationWindow {
                     border.width: 1
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 14
-                        anchors.rightMargin: 10
-                        spacing: 10
+                        anchors.leftMargin: Theme.sp2xl
+                        anchors.rightMargin: Theme.spLg
+                        spacing: Theme.spLg
                         Text {
                             text: "✦  " + I18n.t("demo.banner.text")
                             color: Theme.text
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -613,7 +652,7 @@ ApplicationWindow {
                     SelectionBar {
                         anchors.horizontalCenter: parent.horizontalCenter
                         anchors.bottom: parent.bottom
-                        anchors.bottomMargin: 16
+                        anchors.bottomMargin: Theme.sp2xl
                         z: 50
                     }
                 }
@@ -892,11 +931,11 @@ ApplicationWindow {
         RowLayout {
             id: pillRow
             anchors.centerIn: parent
-            spacing: 12
+            spacing: Theme.spXl
             Text {
                 text: I18n.t("welcome.resume")
                 color: Theme.text
-                font.pixelSize: 12
+                font.pixelSize: Theme.fsMd
                 font.weight: Font.DemiBold
             }
             Rectangle { width: 1; height: 18; color: Theme.border }
@@ -906,13 +945,13 @@ ApplicationWindow {
             Rectangle {
                 Layout.preferredWidth: 22
                 Layout.preferredHeight: 22
-                radius: 5
+                radius: Theme.radiusSm
                 color: giveUpMA.containsMouse ? Theme.panel3 : "transparent"
                 Text {
                     anchors.centerIn: parent
                     text: "✕"
                     color: giveUpMA.containsMouse ? Theme.text : Theme.textMuted
-                    font.pixelSize: 12
+                    font.pixelSize: Theme.fsMd
                 }
                 MouseArea {
                     id: giveUpMA
@@ -1177,12 +1216,20 @@ ApplicationWindow {
             if (v && v.selectAllVisible) v.selectAllVisible();
         }
     }
+    // Esc lets go of the selection and, on the board, of the keyboard
+    // cursor. It stays out of the way (enabled only when there is something
+    // to let go of) so Esc still reaches popups and fields otherwise.
     Shortcut {
         sequence: _kbd("selection.clearSel")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
-            && AppController.selectionCount > 0
-        onActivated: AppController.clearSelection()
+            && (AppController.selectionCount > 0
+                || (AppController.currentView === "board" && !win._overlayOpen
+                    && !!boardLoader.item && boardLoader.item.cursorVisible === true))
+        onActivated: {
+            AppController.clearSelection();
+            if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
+        }
     }
     Shortcut {
         sequence: _kbd("selection.deleteSel")

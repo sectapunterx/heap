@@ -31,7 +31,7 @@ Item {
 
     component HelpCard: Rectangle {
         Layout.fillWidth: true
-        radius: 10
+        radius: Theme.radiusLg
         color: Theme.panel
         border.color: Theme.border
         border.width: 1
@@ -40,14 +40,14 @@ Item {
         ColumnLayout {
             id: inner
             anchors.fill: parent
-            anchors.margins: 14
-            spacing: 10
+            anchors.margins: Theme.sp2xl
+            spacing: Theme.spLg
         }
     }
 
     component H2: Text {
         color: Theme.text
-        font.pixelSize: 16
+        font.pixelSize: Theme.fsLg
         font.weight: Font.DemiBold
         font.family: Theme.fontMono
         Layout.fillWidth: true
@@ -55,17 +55,17 @@ Item {
 
     component H3: Text {
         color: Theme.accentStrong
-        font.pixelSize: 13
+        font.pixelSize: Theme.fsMd
         font.family: Theme.fontMono
         font.weight: Font.DemiBold
         font.letterSpacing: 0.5
         Layout.fillWidth: true
-        Layout.topMargin: 6
+        Layout.topMargin: Theme.spSm
     }
 
     component Body: Text {
         color: Theme.text
-        font.pixelSize: 12
+        font.pixelSize: Theme.fsMd
         wrapMode: Text.WordWrap
         lineHeight: 1.35
         Layout.fillWidth: true
@@ -73,7 +73,7 @@ Item {
 
     component Hint: Text {
         color: Theme.textMuted
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsSm
         wrapMode: Text.WordWrap
         font.italic: true
         Layout.fillWidth: true
@@ -84,7 +84,7 @@ Item {
         text: keys
         color: Theme.accentStrong
         font.family: Theme.fontMono
-        font.pixelSize: 11
+        font.pixelSize: Theme.fsSm
         font.weight: Font.DemiBold
     }
 
@@ -92,26 +92,26 @@ Item {
         id: col
         anchors.left: parent.left
         anchors.right: parent.right
-        spacing: 14
+        spacing: Theme.sp2xl
 
         // ─────────────────────────────────────────── Intro
         HelpCard {
             RowLayout {
-                spacing: 12
+                spacing: Theme.spXl
                 Layout.fillWidth: true
                 Rectangle {
-                    width: 36; height: 36; radius: 8
+                    width: 36; height: 36; radius: Theme.radius
                     color: Theme.accent
                     Text {
                         anchors.centerIn: parent
                         text: "?"
                         color: Theme.textOnAccent
-                        font.pixelSize: 20
+                        font.pixelSize: Theme.fsXl
                         font.weight: Font.Bold
                     }
                 }
                 ColumnLayout {
-                    spacing: 2
+                    spacing: Theme.sp2xs
                     Layout.fillWidth: true
                     H2 {
                         text: "heap. help."
@@ -119,7 +119,7 @@ Item {
                     Text {
                         text: "Everything the app can do, in one place."
                         color: Theme.textMuted
-                        font.pixelSize: 11
+                        font.pixelSize: Theme.fsSm
                     }
                 }
             }
@@ -130,7 +130,7 @@ Item {
                     + "of contents to jump to the topic you need."
             }
             PillButton {
-                Layout.topMargin: 2
+                Layout.topMargin: Theme.sp2xs
                 text: I18n.t("welcome.replay")
                 onClicked: AppController.replayWelcome()
             }
@@ -147,25 +147,25 @@ Item {
                     required property var modelData
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
-                    radius: 6
+                    radius: Theme.radiusMd
                     color: tocMa.containsMouse ? Theme.panel2 : "transparent"
                     border.color: tocMa.containsMouse ? Theme.border : "transparent"
                     border.width: 1
                     RowLayout {
                         anchors.fill: parent
-                        anchors.leftMargin: 10
-                        anchors.rightMargin: 10
-                        spacing: 8
+                        anchors.leftMargin: Theme.spLg
+                        anchors.rightMargin: Theme.spLg
+                        spacing: Theme.spMd
                         Text {
                             text: "›"
                             color: Theme.accentStrong
                             font.family: Theme.fontMono
-                            font.pixelSize: 13
+                            font.pixelSize: Theme.fsMd
                         }
                         Text {
                             text: modelData.label
                             color: tocMa.containsMouse ? Theme.accentStrong : Theme.text
-                            font.pixelSize: 12
+                            font.pixelSize: Theme.fsMd
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
@@ -300,7 +300,7 @@ Item {
                 text: "Press the '+' button in the TopBar, or the hotkey "
             }
             RowLayout {
-                spacing: 6; Kbd {
+                spacing: Theme.spSm; Kbd {
                     keys: "Ctrl+N"
                 }
                 Body {
@@ -329,7 +329,7 @@ Item {
                     + "itself can be undone with "
             }
             RowLayout {
-                spacing: 6; Kbd {
+                spacing: Theme.spSm; Kbd {
                     keys: "Ctrl+Z"
                 }
                 Body {
@@ -497,7 +497,7 @@ Item {
                 text: "Switching"
             }
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Kbd {
                     keys: "Ctrl+Tab"
                 }
@@ -521,7 +521,7 @@ Item {
                     + "reversible with "
             }
             RowLayout {
-                spacing: 6; Kbd {
+                spacing: Theme.spSm; Kbd {
                     keys: "Ctrl+Z"
                 }
                 Body {
@@ -550,7 +550,7 @@ Item {
                 text: "Command Palette"
             }
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Kbd {
                     keys: "Ctrl+K"
                 }
@@ -567,7 +567,7 @@ Item {
                 text: "Inline search"
             }
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Body {
                     text: "The "
                 }
@@ -631,7 +631,7 @@ Item {
                 text: "Tweaks — appearance"
             }
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Kbd {
                     keys: "Ctrl+T"
                 }
@@ -684,7 +684,7 @@ Item {
                 text: "Hotkeys — keyboard"
             }
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Kbd {
                     keys: "Ctrl+Shift+K"
                 }
@@ -981,7 +981,7 @@ Item {
                 text: "Undo the last deletion"
             }
             RowLayout {
-                spacing: 6
+                spacing: Theme.spSm
                 Kbd {
                     keys: "Ctrl+Z"
                 }
