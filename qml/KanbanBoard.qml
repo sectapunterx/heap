@@ -88,6 +88,19 @@ Item {
     // a filter change, a drag, or the card moving column — all of which
     // renumber the rows underneath it.
     property string cursorTaskId: ""
+    // The ring is drawn only once the keyboard has moved the cursor. A click
+    // still puts the cursor on the card (so J/K carry on from there), but a
+    // ring left behind by a mouse click read as the card being stuck
+    // selected after its editor closed.
+    property bool cursorVisible: false
+    function clearCursor() {
+        root.cursorTaskId = "";
+        root.cursorVisible = false;
+    }
+    function clearSelectionAndCursor() {
+        if (AppController.selectionCount > 0) AppController.clearSelection();
+        root.clearCursor();
+    }
 
     // Visible ids per column, in board order. The same walk _flatVisibleIds()
     // does, but keeping the column structure that left/right needs.
@@ -119,6 +132,7 @@ Item {
     }
 
     function moveCursor(dx, dy) {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) {
@@ -145,12 +159,14 @@ Item {
     }
 
     function openCursor() {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
         if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
     }
 
     function toggleCursorSelection() {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
         if (root.cursorTaskId) AppController.toggleTaskSelection(root.cursorTaskId);
@@ -159,6 +175,7 @@ Item {
     // Move the card under the cursor. Vertically it swaps with its neighbour;
     // horizontally it changes column, landing at the same depth.
     function moveCursorCard(dx, dy) {
+        root.cursorVisible = true;
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
@@ -252,6 +269,7 @@ Item {
 
     Flickable {
         id: hscroll
+        objectName: "board-hscroll"
         anchors.fill: parent
         anchors.leftMargin: Theme.sp2xl
         anchors.rightMargin: Theme.sp2xl
@@ -278,6 +296,12 @@ Item {
             onWheel: (event) => {
                 root._scrollOuter(event.angleDelta.y || event.angleDelta.x);
             }
+        }
+        // A click on empty board (between or below the columns) lets go of
+        // the selection and the keyboard cursor. Cards take their own clicks
+        // first, so this only sees the empty space.
+        TapHandler {
+            onTapped: root.clearSelectionAndCursor()
         }
 
         Row {
@@ -540,10 +564,17 @@ Item {
                                 // a grabbable bar when a column overflows.
                                 ScrollBar.vertical: ThinScrollBar {}
 
-                                // Wheel scrolls this column vertically. When the column
-                                // has no overflow or is already at the top/bottom edge,
-                                // event.accepted = false lets the outer board scroll
-                                // horizontally instead.
+                                // The empty part of a column, like the empty
+                                // board around it.
+                                TapHandler {
+                                    onTapped: root.clearSelectionAndCursor()
+                                }
+
+                                // Wheel scrolls this column vertically. Only a column
+                                // with nothing to scroll hands the wheel to the board,
+                                // which scrolls sideways. At the top or bottom edge the
+                                // column keeps it: passing it on there sent the whole
+                                // board sliding the moment a long column ran out.
                                 NumberAnimation {
                                     id: bodyAnim
                                     target: bodyFlick
@@ -556,20 +587,19 @@ Item {
                                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
                                     onWheel: (event) => {
                                         const dy = event.angleDelta.y;
+                                        // A sideways swipe, or Shift+wheel, is for the board.
+                                        const sideways = event.angleDelta.x !== 0
+                                                         || (event.modifiers & Qt.ShiftModifier);
+                                        if (sideways) { root._scrollOuter(event.angleDelta.x || dy); return; }
                                         if (dy === 0) return;
                                         const maxY = Math.max(0, bodyFlick.contentHeight - bodyFlick.height);
-                                        if (maxY > 0) {
-                                            const base = bodyAnim.running ? bodyAnim.to : bodyFlick.contentY;
-                                            const newY = Math.max(0, Math.min(maxY, base - dy));
-                                            if (newY !== base) {
-                                                bodyAnim.from = bodyFlick.contentY;
-                                                bodyAnim.to = newY;
-                                                bodyAnim.restart();
-                                                return;
-                                            }
-                                        }
-                                        // No overflow or already at edge → pass through.
-                                        root._scrollOuter(dy);
+                                        if (maxY <= 0) { root._scrollOuter(dy); return; }
+                                        const base = bodyAnim.running ? bodyAnim.to : bodyFlick.contentY;
+                                        const newY = Math.max(0, Math.min(maxY, base - dy));
+                                        if (newY === base) return;
+                                        bodyAnim.from = bodyFlick.contentY;
+                                        bodyAnim.to = newY;
+                                        bodyAnim.restart();
                                     }
                                 }
 
@@ -622,13 +652,18 @@ Item {
                                                 else if (root.hoveredTaskId === tc.id) root.hoveredTaskId = "";
                                             }
                                             task: taskData
-                                            cursored: root.cursorTaskId === tc.id
+                                            cursored: root.cursorVisible && root.cursorTaskId === tc.id
+                                            dragLayer: boardDragLayer
                                             scheduled: root.scheduleMap[tc.id] || ""
                                             // Clicking a card also puts the
                                             // keyboard cursor on it, so mouse
                                             // and keyboard never disagree about
                                             // where "here" is.
-                                            onClicked: { root.cursorTaskId = tc.id; root.taskClicked(tc.id); }
+                                            onClicked: {
+                                                root.cursorTaskId = tc.id;
+                                                root.cursorVisible = false;
+                                                root.taskClicked(tc.id);
+                                            }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                                         }
 
@@ -924,6 +959,16 @@ Item {
                 }
             }
         }
+    }
+
+    // A card being dragged is lifted in here, above every column. In its own
+    // column it was clipped by the column and drawn under the columns to its
+    // right, so it looked like it slid underneath them.
+    Item {
+        id: boardDragLayer
+        objectName: "board-drag-layer"
+        anchors.fill: parent
+        z: 1000
     }
 
     // ── Inline components ───────────────────────────────────────────────────

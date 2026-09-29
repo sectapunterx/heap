@@ -102,6 +102,19 @@ Rectangle {
 
     property real homeX: 0
     property real homeY: 0
+    // Where the card goes while it is dragged: an item above everything it
+    // can be dropped on. Without one it drags inside its own parent, which
+    // clips it and draws it under later siblings.
+    property Item dragLayer: null
+    states: State {
+        name: "lifted"
+        when: dragArea.drag.active && card.dragLayer !== null
+        ParentChange { target: card; parent: card.dragLayer }
+    }
+    // Back in the list: the list owns x/y, so put the card where it was
+    // pressed rather than where ParentChange's restore left it (a drag
+    // threshold's worth off).
+    onStateChanged: if (state === "") { card.x = card.homeX; card.y = card.homeY; }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any
     // alert that needs the user), the title, how far along it is, the
@@ -272,7 +285,7 @@ Rectangle {
         Text {
             Layout.fillWidth: true
             visible: !!(card.task && card.task.desc && String(card.task.desc).length > 0)
-            text: card.task ? card.task.desc : ""
+            text: card.task ? (card.task.desc || "") : ""
             textFormat: Text.PlainText
             color: Theme.textMuted
             font.pixelSize: Theme.fsSm
@@ -596,7 +609,7 @@ Rectangle {
         }
         QQC.MenuItem {
             text: "⎇  " + I18n.t("taskcard.copyBranch")
-            enabled: card.task && card.task.branch && String(card.task.branch).length > 0
+            enabled: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
             onTriggered: {
                 if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
             }

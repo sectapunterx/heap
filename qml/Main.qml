@@ -1191,12 +1191,20 @@ ApplicationWindow {
             if (v && v.selectAllVisible) v.selectAllVisible();
         }
     }
+    // Esc lets go of the selection and, on the board, of the keyboard
+    // cursor. It stays out of the way (enabled only when there is something
+    // to let go of) so Esc still reaches popups and fields otherwise.
     Shortcut {
         sequence: _kbd("selection.clearSel")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing
-            && AppController.selectionCount > 0
-        onActivated: AppController.clearSelection()
+            && (AppController.selectionCount > 0
+                || (AppController.currentView === "board" && !win._overlayOpen
+                    && !!boardLoader.item && boardLoader.item.cursorVisible === true))
+        onActivated: {
+            AppController.clearSelection();
+            if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
+        }
     }
     Shortcut {
         sequence: _kbd("selection.deleteSel")
