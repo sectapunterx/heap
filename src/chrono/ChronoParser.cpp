@@ -976,8 +976,19 @@ class ChronoParser::Impl {
     }
     const QString w = toks[i + 1].lower;
 
-    // "every weekday"
-    if(w == QStringLiteral("weekday") || w == QString::fromUtf8("будни")) {
+    // "every weekday" / "по будням" / "каждый будний (рабочий) день"
+    static const QStringList kWeekdayWords = {QStringLiteral("weekday"),
+                                              QStringLiteral("weekdays"),
+                                              QStringLiteral("workday"),
+                                              QStringLiteral("workdays"),
+                                              QString::fromUtf8("будни"),
+                                              QString::fromUtf8("будням"),
+                                              QString::fromUtf8("будний"),
+                                              QString::fromUtf8("будние"),
+                                              QString::fromUtf8("рабочий"),
+                                              QString::fromUtf8("рабочие"),
+                                              QString::fromUtf8("рабочим")};
+    if(kWeekdayWords.contains(w)) {
       const int curIso = ref.date().dayOfWeek();
       QDate d = ref.date();
       if(curIso > 5) {
@@ -987,6 +998,14 @@ class ChronoParser::Impl {
       out.date = d;
       out.firstTok = i;
       out.lastTok = i + 1;
+      // The adjective forms want their noun: "будний день", "рабочим дням".
+      if(i + 2 < toks.size() && toks[i + 2].kind == TokenKind::Word) {
+        bool isUnit = false;
+        const int unitDays = lookupHashAny(toks[i + 2].lower, primary->unitToDays, fallback->unitToDays, &isUnit);
+        if(isUnit && unitDays == 1) {
+          out.lastTok = i + 2;
+        }
+      }
       return true;
     }
     // "every day" / "каждый день"
@@ -1042,8 +1061,8 @@ class ChronoParser::Impl {
     bool hasMer = false;
     bool pm = false;
 
-    // HH:MM
-    if(i + 2 < toks.size() && toks[i + 1].kind == TokenKind::Colon && toks[i + 2].kind == TokenKind::Number) {
+    // HH:MM. The minutes take two digits: "1:1" is a one-on-one, not 01:01.
+    if(i + 2 < toks.size() && toks[i + 1].kind == TokenKind::Colon && toks[i + 2].kind == TokenKind::Number && toks[i + 2].len == 2) {
       minute = toks[i + 2].value;
       if(minute < 0 || minute > 59) {
         return false;

@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "Attendees.js" as Attendees
 
 Popup {
     id: root
@@ -22,6 +23,14 @@ Popup {
     // is what saveEvent() stores as "no end date at all".
     property var pickedEndDate: AppController.selectedDate
     property bool allDay: false
+
+    // Event types, in menu order. "none" is the one-off meeting that fits no
+    // routine — it is first so an unknown type (an import, a future id) reads
+    // as untyped rather than as a standup.
+    readonly property var types: ["none", "standup", "oneone", "sync", "focus"]
+    function _typeIndex(t) {
+        return Math.max(0, root.types.indexOf(t));
+    }
 
     // Recurrence. `masterId` is set on anything the expansion generated, which
     // is what makes an edit a question — this occurrence, this and everything
@@ -53,7 +62,7 @@ Popup {
     function showForDraft(draft) {
         eventId = draft.id;
         titleField.text = draft.title || "";
-        typeBox.currentIndex = Math.max(0, ["standup", "oneone", "sync", "focus"].indexOf(draft.type));
+        typeBox.currentIndex = root._typeIndex(draft.type);
         startField.text = AppController.eventHourLabel(draft.start);
         endField.text = AppController.eventHourLabel(draft.end);
         attField.text = draft.attendees || "";
@@ -76,7 +85,7 @@ Popup {
     function showForOccurrence(occ) {
         eventId = occ.id;
         titleField.text = occ.title || "";
-        typeBox.currentIndex = Math.max(0, ["standup", "oneone", "sync", "focus"].indexOf(occ.type));
+        typeBox.currentIndex = root._typeIndex(occ.type);
         startField.text = AppController.eventHourLabel(occ.start);
         endField.text = AppController.eventHourLabel(occ.end);
         attField.text = occ.attendees || "";
@@ -102,7 +111,7 @@ Popup {
             const idx = m.index(i, 0);
             if (m.data(idx, Qt.UserRole + 1) === id) {
                 titleField.text   = m.data(idx, Qt.UserRole + 2);
-                typeBox.currentIndex = Math.max(0, ["standup","oneone","sync","focus"].indexOf(m.data(idx, Qt.UserRole + 3)));
+                typeBox.currentIndex = root._typeIndex(m.data(idx, Qt.UserRole + 3));
                 startField.text   = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 4));
                 endField.text     = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 5));
                 attField.text     = m.data(idx, Qt.UserRole + 6);
@@ -186,6 +195,12 @@ Popup {
         root.close();
     }
 
+    // "Oleg, Viktor, " → "Oleg, Viktor": a pick leaves a trailing separator
+    // for the next name, which is not part of the list.
+    function _cleanAttendees(s) {
+        return String(s || "").split(",").map(x => x.trim()).filter(x => x.length > 0).join(", ");
+    }
+
     function _draft() {
         const m = AppController.events;
         let curTaskId = "";
@@ -199,10 +214,10 @@ Popup {
         return {
             id: root.eventId,
             title: titleField.text,
-            type: ["standup", "oneone", "sync", "focus"][typeBox.currentIndex],
+            type: root.types[typeBox.currentIndex],
             start: root.parseHour(startField.text),
             end: root.parseHour(endField.text),
-            attendees: attField.text,
+            attendees: root._cleanAttendees(attField.text),
             date: root.pickedDate,
             endDate: root.pickedEndDate,
             allDay: root.allDay,
@@ -350,16 +365,121 @@ Popup {
             ComboBox {
                 id: typeBox
                 Layout.fillWidth: true
-                model: [I18n.t("event.type.standup"), I18n.t("event.type.oneone"),
-                        I18n.t("event.type.sync"), I18n.t("event.type.focus")]
+                model: root.types.map(t => I18n.t("event.type." + t))
                 background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
             TextField {
                 id: attField
+                objectName: "event-attendees"
                 Layout.fillWidth: true
+                placeholderText: I18n.t("event.ph.attendees")
+                placeholderTextColor: Theme.textDim
                 background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 color: Theme.text
+                selectByMouse: true
+                onTextChanged: if (attField.activeFocus) attSuggest.refresh()
+                onCursorPositionChanged: if (attField.activeFocus) attSuggest.refresh()
+                onActiveFocusChanged: attField.activeFocus ? attSuggest.refresh() : attSuggest.dismiss()
+                Keys.onPressed: (e) => {
+                    if (!attSuggest.isOpen) return;
+                    if (e.key === Qt.Key_Down) { attSuggest.move(+1); e.accepted = true; }
+                    else if (e.key === Qt.Key_Up) { attSuggest.move(-1); e.accepted = true; }
+                    else if ((e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_Tab)
+                             && !(e.modifiers & Qt.ControlModifier)) {
+                        attSuggest.accept();
+                        e.accepted = true;
+                    } else if (e.key === Qt.Key_Escape) { attSuggest.dismiss(); e.accepted = true; }
+                }
+
+                // Contacts and People offered for the name under the caret.
+                Popup {
+                    id: attSuggest
+                    objectName: "event-attendee-suggest"
+                    property var items: []
+                    property int sel: 0
+                    readonly property bool isOpen: attSuggest.visible && attSuggest.items.length > 0
+                    y: attField.height + 2
+                    width: Math.max(attField.width, 240)
+                    height: Math.min(attSuggest.items.length, 6) * 30 + 4
+                    padding: Theme.sp2xs
+                    focus: false
+                    modal: false
+                    closePolicy: Popup.NoAutoClose
+                    visible: attSuggest.items.length > 0
+
+                    function refresh() {
+                        const tok = Attendees.tokenAt(attField.text, attField.cursorPosition);
+                        attSuggest.items = Attendees.suggest(AppController.pingCandidates(), tok.query,
+                                                             Attendees.listed(attField.text, tok.start), 6);
+                        attSuggest.sel = 0;
+                    }
+                    function dismiss() { attSuggest.items = []; }
+                    function move(d) {
+                        attSuggest.sel = Math.max(0, Math.min(attSuggest.items.length - 1, attSuggest.sel + d));
+                    }
+                    function accept() {
+                        if (!attSuggest.isOpen) return;
+                        const tok = Attendees.tokenAt(attField.text, attField.cursorPosition);
+                        const r = Attendees.apply(attField.text, tok, String(attSuggest.items[attSuggest.sel].name).trim());
+                        attField.text = r.text;
+                        attField.cursorPosition = r.caret;
+                        dismiss();
+                    }
+
+                    background: Rectangle {
+                        radius: Theme.radiusMd; color: Theme.panel2
+                        border.color: Theme.borderStrong; border.width: 1
+                    }
+                    contentItem: ListView {
+                        clip: true
+                        interactive: false
+                        model: attSuggest.items
+                        delegate: Rectangle {
+                            id: sugRow
+                            required property var modelData
+                            required property int index
+                            width: ListView.view.width
+                            height: 30
+                            radius: Theme.radiusSm
+                            color: sugRow.index === attSuggest.sel ? Theme.withAlpha(Theme.accent, 0.18)
+                                 : (sugMA.containsMouse ? Theme.withAlpha(Theme.accent, 0.08) : "transparent")
+                            RowLayout {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
+                                spacing: Theme.spMd
+                                Rectangle {
+                                    implicitWidth: 8; implicitHeight: 8; radius: Theme.radiusXs
+                                    color: sugRow.modelData.color || Theme.textMuted
+                                }
+                                Text {
+                                    text: sugRow.modelData.name
+                                    color: Theme.text; font.pixelSize: Theme.fsSm
+                                    elide: Text.ElideRight
+                                    Layout.fillWidth: true
+                                }
+                                Text {
+                                    visible: (sugRow.modelData.role || "").length > 0
+                                    text: sugRow.modelData.role || ""
+                                    color: Theme.textMuted; font.pixelSize: Theme.fsXs
+                                    elide: Text.ElideRight
+                                    Layout.maximumWidth: 110
+                                }
+                            }
+                            MouseArea {
+                                id: sugMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: {
+                                    attSuggest.sel = sugRow.index;
+                                    attSuggest.accept();
+                                    attField.forceActiveFocus();
+                                }
+                            }
+                        }
+                    }
+                }
             }
 
             // All-day: the hours below have nothing to describe, so they go

@@ -12,15 +12,20 @@ namespace {
 // "созвон" and "митап" match cleanly. Avoids ES2018 \p{L} (unsupported in
 // Qt6's V4 JS engine, but here we are pure C++ — still cheaper than a Unicode
 // table lookup).
-constexpr const char *kWordRx = "[^a-zA-Zа-яА-ЯёЁ0-9_]";
+constexpr const char* kWordRx = "[^a-zA-Zа-яА-ЯёЁ0-9_]";
 
+// A trailing '*' makes the entry a stem: "встреч*" matches "встреча",
+// "встречу", "встречей" — Russian inflects every noun, and listing each case
+// of each word is how the list used to miss "созвона" and "синке". The stem
+// still has to start a word, so "встреч*" does not fire inside "навстречу".
 bool containsWord(const QString &haystackLowered, const QString &needleLowered) {
     if (needleLowered.isEmpty()) return false;
-    QString escaped = QRegularExpression::escape(needleLowered);
-    // (^|<non-word>)needle(<non-word>|$)
-    const QString pattern = QStringLiteral("(?:^|") + kWordRx + ")"
-                          + escaped + QStringLiteral("(?:") + kWordRx + "|$)";
-    QRegularExpression rx(pattern);
+    const bool stem = needleLowered.endsWith(QChar('*'));
+    const QString escaped = QRegularExpression::escape(stem ? needleLowered.chopped(1) : needleLowered);
+    // (^|<non-word>)needle[<word>*](<non-word>|$)
+    const QString pattern = QStringLiteral("(?:^|") + kWordRx + ")" + escaped + (stem ? QStringLiteral("[a-zа-яё]*") : QString()) +
+                            QStringLiteral("(?:") + kWordRx + "|$)";
+    const QRegularExpression rx(pattern);
     return rx.match(haystackLowered).hasMatch();
 }
 
@@ -31,43 +36,74 @@ bool anyHits(const QString &lowered, const QStringList &words) {
 }
 
 const QStringList &focusWords() {
-    static const QStringList w = {
-        "focus", "focusmode", "focus-mode", "focus mode", "focus_mode",
-        "фокус", "фокус-режим", "фокус режим", "фокус-мод",
-        "deep work", "deepwork", "глубокая работа"
-    };
-    return w;
+  static const QStringList w = {"focus",          "focusmode",   "focus-mode", "focus mode",      "focus_mode",      "focus time",
+                                "focus block",    "deep work",   "deepwork",   "heads down",      "heads-down",      "no meetings",
+                                "фокус",          "фокуса",      "фокусе",     "фокусом",         "фокус-режим",     "фокус режим",
+                                "фокус-мод",      "фокус-время", "фокус-блок", "глубокая работа", "глубокой работы", "глубокую работу",
+                                "без отвлечений", "без созвонов"};
+  return w;
 }
 
-const QStringList &syncWords() {
-    static const QStringList w = {
-        "синк", "sync", "созвон", "созвоны", "созвонимся", "созвониться",
-        "митап", "meetup", "meet", "meeting", "митинг", "митинги",
-        "звонок", "видеозвонок", "call", "conference", "конференция",
-        "standup", "стендап", "дейли", "daily",
-        "ревью", "review", "code review", "код-ревью",
-        "one-on-one", "one on one", "1:1", "1-1", "1on1", "one to one"
-    };
-    return w;
+// Meeting words, grouped by the calendar type they book (see meetingType).
+const QStringList& standupWords() {
+  static const QStringList w = {
+      "standup", "stand-up", "daily", "daily sync", "scrum", "стендап*", "дейли", "дэйли", "планерк*", "планёрк*", "летучк*", "скрам*"};
+  return w;
+}
+
+const QStringList& oneOnOneWords() {
+  static const QStringList w = {
+      "one-on-one", "one on one", "1:1", "1-1", "1on1", "one to one", "1x1", "один на один", "тет-а-тет", "ван-ту-ван"};
+  return w;
+}
+
+const QStringList& teamSyncWords() {
+  static const QStringList w = {"sync", "sync-up", "team sync", "синк*"};
+  return w;
+}
+
+const QStringList& meetingWords() {
+  static const QStringList w = {
+      // one-offs: calls, meetings and the rituals that are not a standup
+      "созвон*",    "созвонимся",    "созвониться", "позвонить",   "позвоним",     "встреч*",     "митап*",        "митинг*",  "звонок",
+      "звонка",     "звонку",        "звонком",     "видеозвонок", "колл*",        "конференци*", "совещани*",     "собрани*", "обсуждени*",
+      "ретро",      "ретроспектив*", "демо",        "груминг*",    "планировани*", "собес*",      "собеседовани*", "интервью", "ревью",
+      "код-ревью",  "зум",           "зуме",        "meetup",      "meet",         "meeting",     "meetings",      "call",     "calls",
+      "conference", "huddle",        "catch up",    "catch-up",    "catchup",      "retro",       "retrospective", "demo",     "grooming",
+      "refinement", "planning",      "interview",   "review",      "code review",  "zoom",        "hangout",       "workshop", "воркшоп*"};
+  return w;
 }
 
 const QStringList &ticketWords() {
-    static const QStringList w = {
-        "тикет", "тикета", "тикеты", "задача", "задачу", "задачи",
-        "task", "tasks", "issue", "issues", "story",
-        "эпик", "epic", "bug", "баг"
-    };
-    return w;
+  static const QStringList w = {"тикет*", "задача", "задачу", "задачи", "задачей", "задач",     "эпик*",  "баг",    "бага",
+                                "багу",   "баги",   "багов",  "фич*",   "фикс",    "пофиксить", "task",   "tasks",  "issue",
+                                "issues", "story",  "epic",   "bug",    "bugs",    "feature",   "bugfix", "hotfix", "todo"};
+  return w;
 }
 
 const QStringList &contactWords() {
-    static const QStringList w = {
-        "написать", "напиши", "пиши", "написал", "пишу", "напомни",
-        "напомнить", "спросить", "спроси", "ответить",
-        "ping", "ask", "remind", "message", "msg", "dm"
-    };
-    return w;
+  static const QStringList w = {
+      "написать", "напиши",    "пиши",      "написал",    "пишу",      "напишу",  "напомни",   "напомнить", "спросить", "спроси", "спрошу",
+      "ответить", "ответь",    "уточнить",  "уточни",     "попросить", "попроси", "пингануть", "пингани",   "пинг",     "пнуть",  "дёрнуть",
+      "дернуть",  "передать",  "передай",   "сказать",    "скажи",     "ping",    "ask",       "remind",    "message",  "msg",    "dm",
+      "tell",     "follow up", "follow-up", "check with", "email",     "text",    "slack",     "nudge"};
+  return w;
 }
+
+// Priority words. A word is taken out of the title the way a
+// date is: "срочно починить прод" is the task "починить прод" at P1.
+struct PriorityWord {
+  const char* word;
+  const char* priority;
+};
+
+// "не срочно" is listed before "срочно", which it contains.
+constexpr PriorityWord kPriorityWords[] = {
+    {"не срочно", "P3"}, {"несрочно", "P3"},     {"критично", "P0"}, {"критичный", "P0"}, {"критичная", "P0"}, {"блокер", "P0"},
+    {"critical", "P0"},  {"blocker", "P0"},      {"p0", "P0"},       {"!!!", "P0"},       {"срочно", "P1"},    {"срочная", "P1"},
+    {"срочный", "P1"},   {"горит", "P1"},        {"urgent", "P1"},   {"asap", "P1"},      {"p1", "P1"},        {"!!", "P1"},
+    {"p2", "P2"},        {"low priority", "P3"}, {"p3", "P3"},
+};
 
 bool hasHandle(QStringView text) {
     // Quick scan for an "@token" outside of e-mail context. Mirrors the
@@ -89,8 +125,24 @@ TaskKind classifyKind(QStringView text) {
     if (anyHits(s, ticketWords())) return TaskKind::Ticket;
     if (hasHandle(text) && anyHits(s, contactWords())) return TaskKind::Contact;
     if (anyHits(s, focusWords()))  return TaskKind::Focus;
-    if (anyHits(s, syncWords()))   return TaskKind::Sync;
+    if(anyHits(s, standupWords()) || anyHits(s, oneOnOneWords()) || anyHits(s, teamSyncWords()) || anyHits(s, meetingWords())) {
+      return TaskKind::Sync;
+    }
     return TaskKind::None;
+}
+
+QString meetingType(QStringView text) {
+  const QString s = text.toString().toLower();
+  if(anyHits(s, standupWords())) {
+    return QStringLiteral("standup");
+  }
+  if(anyHits(s, oneOnOneWords())) {
+    return QStringLiteral("oneone");
+  }
+  if(anyHits(s, teamSyncWords())) {
+    return QStringLiteral("sync");
+  }
+  return QStringLiteral("none");
 }
 
 namespace {
@@ -176,6 +228,32 @@ TaskMeta extractMeta(QStringView raw) {
     while (it.hasNext()) {
         const auto m = it.next();
         out.handles.append(m.captured(1));
+    }
+
+    // 3. A tracker key ("LTE-2398", "HEAP-12") names the ticket the task is
+    //    about; it becomes the task id, so it leaves the title. Upper-case
+    //    only: "covid-19" or "utf-8" in a sentence are not tickets.
+    static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])([A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
+    const auto km = keyRx.match(body);
+    if(km.hasMatch()) {
+      out.ticketKey = km.captured(1);
+      body.remove(km.capturedStart(1), km.capturedLength(1));
+    }
+
+    // 4. Priority: "p1", "!!", "срочно", "urgent". The first one wins and is
+    //    removed from the title; any other stays as typed.
+    const QString lowered = body.toLower();
+    for(const PriorityWord& pw : kPriorityWords) {
+      const QString w = QString::fromUtf8(pw.word);
+      const QString boundary = w.startsWith(QChar('!')) ? QStringLiteral("(?:^|\\s)") : QStringLiteral("(?:^|") + kWordRx + ")";
+      const QString tail = w.startsWith(QChar('!')) ? QStringLiteral("(?=$|\\s)") : QStringLiteral("(?=$|") + kWordRx + ")";
+      const QRegularExpression rx(boundary + QStringLiteral("(") + QRegularExpression::escape(w) + QStringLiteral(")") + tail);
+      const auto pm = rx.match(lowered);
+      if(pm.hasMatch()) {
+        out.priority = QString::fromLatin1(pw.priority);
+        body.remove(pm.capturedStart(1), pm.capturedLength(1));
+        break;
+      }
     }
 
     // Collapse whitespace but otherwise preserve body verbatim.

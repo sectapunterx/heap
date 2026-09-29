@@ -12,9 +12,9 @@ ChronoLocale buildEnglish() {
     const char* name;
     int iso;
   } weekdays[] = {
-      {"monday", 1}, {"mon", 1}, {"mo", 1},       {"tuesday", 2}, {"tue", 2},  {"tues", 2},   {"tu", 2},  {"wednesday", 3},
-      {"wed", 3},    {"we", 3},  {"thursday", 4}, {"thu", 4},     {"thur", 4}, {"thurs", 4},  {"th", 4},  {"friday", 5},
-      {"fri", 5},    {"fr", 5},  {"saturday", 6}, {"sat", 6},     {"sa", 6},   {"sunday", 7}, {"sun", 7}, {"su", 7},
+      {"monday", 1},   {"mon", 1},      {"mo", 1},  {"tuesday", 2}, {"tue", 2},   {"tues", 2}, {"tu", 2},      {"wednesday", 3}, {"wed", 3},
+      {"we", 3},       {"thursday", 4}, {"thu", 4}, {"thur", 4},    {"thurs", 4}, {"th", 4},   {"friday", 5},  {"fri", 5},       {"fr", 5},
+      {"saturday", 6}, {"sat", 6},      {"sa", 6},  {"sunday", 7},  {"sun", 7},   {"su", 7},   {"weekend", 6},
   };
 
   for(const auto& w : weekdays) {
@@ -110,6 +110,11 @@ ChronoLocale buildEnglish() {
   loc.namedTimes.insert(QStringLiteral("midday"), 12 * 60);
   loc.namedTimes.insert(QStringLiteral("eod"), 18 * 60);
   loc.namedTimes.insert(QStringLiteral("cob"), 18 * 60);
+  loc.namedTimes.insert(QStringLiteral("morning"), 9 * 60);
+  loc.namedTimes.insert(QStringLiteral("afternoon"), 15 * 60);
+  loc.namedTimes.insert(QStringLiteral("evening"), 19 * 60);
+  loc.namedTimes.insert(QStringLiteral("tonight"), 20 * 60);
+  loc.namedTimes.insert(QStringLiteral("midnight"), 0);
   loc.endWords << QStringLiteral("end");
   loc.ofWords << QStringLiteral("of");
   loc.leadWords << QStringLiteral("on") << QStringLiteral("by") << QStringLiteral("at") << QStringLiteral("due");

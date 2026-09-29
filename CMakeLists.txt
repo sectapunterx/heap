@@ -277,11 +277,13 @@ qt_add_qml_module(heap_core
         qml/BrandLogo.qml
         qml/SplashScreen.qml
         qml/QuickCapturePopup.qml
+        qml/CaptureWindow.qml
         qml/QuickCaptureNotesPopup.qml
         qml/MentionAutocomplete.qml
         qml/WelcomePopup.qml
         qml/DocsStarter.js
         qml/Mention.js
+        qml/Attendees.js
         qml/NotesListPane.qml
         qml/MdEditorPane.qml
         qml/DocsPagesPane.qml

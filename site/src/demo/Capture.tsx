@@ -1,6 +1,6 @@
 import { useMemo, useState } from 'react';
-import { parseCapture, type Captured } from './capture';
-import { dueLabel, fmtTime } from './model';
+import { captureNotice, fmtClock, parseCapture, type Captured, type MeetingType } from './capture';
+import { dueLabel } from './model';
 
 interface CaptureFieldProps {
   todayIndex: number;
@@ -10,7 +10,30 @@ interface CaptureFieldProps {
   examples?: string[];
 }
 
-export const CAPTURE_EXAMPLES = ['ship v1 tomorrow', 'pay invoice // net-30, portal is slow', 'review PR @andrey @lena', 'focus refactor parser 16:00', 'standup 10:00'];
+export const CAPTURE_EXAMPLES = [
+  'ship v1 tomorrow',
+  'APP-231 urgent fix login by friday',
+  'focus refactor parser 16:00',
+  'call with @lena tomorrow 4pm // pricing',
+  'standup every weekday 10:00',
+  'ping @andrey about the release',
+];
+
+const KIND_LABEL: Record<Captured['kind'], string> = { task: 'task', focus: 'focus block', meeting: 'meeting', ping: 'ping' };
+const MEETING_LABEL: Record<MeetingType, string> = { none: 'one-off', standup: 'standup', oneone: '1:1', sync: 'team sync' };
+
+/** The notification heap. shows once a capture is saved. */
+export function CaptureNotice({ item, todayIndex }: { item: Captured; todayIndex: number }) {
+  const { headline, lines } = captureNotice(item, todayIndex);
+  return (
+    <div className="d-notice" role="status">
+      <strong>{headline}</strong>
+      {lines.map((l, i) => (
+        <span key={i}>{l}</span>
+      ))}
+    </div>
+  );
+}
 
 /** The quick-capture line with a live preview of what heap. understood. */
 export function CaptureField({ todayIndex, onSubmit, onCancel, autoFocus, examples = CAPTURE_EXAMPLES }: CaptureFieldProps) {
@@ -54,23 +77,42 @@ export function CaptureField({ todayIndex, onSubmit, onCancel, autoFocus, exampl
         </button>
       </form>
       <div className="d-parse" aria-live="polite">
-        {!parsed && <span style={{ color: 'var(--text4)' }}>Dates, times, @mentions and a // description are understood. Try one:</span>}
+        {!parsed && <span style={{ color: 'var(--text4)' }}>Dates, times, priorities, ticket keys, @mentions and a // note are understood. Try one:</span>}
         {parsed && (
           <>
             <span className="d-parse__chip">
-              <b>{parsed.kind === 'task' ? 'task' : parsed.kind === 'focus' ? 'focus block' : 'meeting'}</b>
+              <b>{parsed.kind === 'meeting' ? `meeting · ${MEETING_LABEL[parsed.meeting ?? 'none']}` : KIND_LABEL[parsed.kind]}</b>
               {parsed.title}
             </span>
             {parsed.kind === 'task' && (
               <span className="d-parse__chip">
                 <b>deadline</b>
                 {dueLabel(parsed.due)}
+                {parsed.start !== undefined ? ` ${fmtClock(parsed.start)}` : ''}
               </span>
             )}
-            {parsed.start !== undefined && parsed.kind !== 'task' && (
+            {parsed.start !== undefined && (parsed.kind === 'focus' || parsed.kind === 'meeting') && (
               <span className="d-parse__chip">
-                <b>today</b>
-                {fmtTime(parsed.start)}–{fmtTime(parsed.end!)}
+                <b>{parsed.due === 1 ? 'tomorrow' : parsed.due ? `in ${parsed.due} days` : 'today'}</b>
+                {fmtClock(parsed.start)}–{fmtClock(parsed.end!)}
+              </span>
+            )}
+            {parsed.repeat && (
+              <span className="d-parse__chip">
+                <b>repeats</b>
+                {parsed.repeat}
+              </span>
+            )}
+            {parsed.prio && (
+              <span className="d-parse__chip">
+                <b>priority</b>
+                {parsed.prio}
+              </span>
+            )}
+            {parsed.ticket && (
+              <span className="d-parse__chip">
+                <b>ticket</b>
+                {parsed.ticket}
               </span>
             )}
             {parsed.desc && (

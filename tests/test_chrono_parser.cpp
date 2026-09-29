@@ -969,3 +969,67 @@ TEST_F(ChronoParserTest, Parse_InvalidIsoDate_IsNotReadAsTimeRange) {
   auto r = parser.parse("2026-13-01", kRef);
   EXPECT_FALSE(r.ok);
 }
+
+// ── Extended vocabulary: parts of the day, weekday cases, the weekend ─────
+TEST_F(Chrono, RuTomorrowMorning) {
+  auto r = parserRu.parse(QString::fromUtf8("созвон завтра утром"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 9, 0);
+  EXPECT_TRUE(r.hasTime);
+}
+
+TEST_F(Chrono, RuTodayEvening) {
+  auto r = parserRu.parse(QString::fromUtf8("сегодня вечером"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 20);
+  EXPECT_TIME(r, 19, 0);
+}
+
+TEST_F(Chrono, RuDativeWeekday) {
+  // "к пятнице" — the case a deadline is written in.
+  auto r = parserRu.parse(QString::fromUtf8("отчёт к пятнице"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 22);
+}
+
+TEST_F(Chrono, RuGenitiveWeekday) {
+  auto r = parserRu.parse(QString::fromUtf8("до понедельника"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 25);
+}
+
+TEST_F(Chrono, RuWeekend) {
+  auto r = parserRu.parse(QString::fromUtf8("на выходных"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 23);
+}
+
+TEST_F(Chrono, EnTomorrowEvening) {
+  auto r = parserEn.parse("call mom tomorrow evening", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 19, 0);
+}
+
+TEST_F(Chrono, EnWeekend) {
+  auto r = parserEn.parse("clean up on the weekend", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 23);
+}
+
+TEST_F(Chrono, RuEveryWorkingDay) {
+  for(const char* text : {"дейли каждый будний день в 10:00", "по будням в 10:00", "каждый рабочий день в 10:00"}) {
+    auto r = parserRu.parse(QString::fromUtf8(text), kRef);
+    EXPECT_OK(r);
+    EXPECT_EQ(r.recurrence, QStringLiteral("every:weekday")) << text;
+    EXPECT_TIME(r, 10, 0);
+  }
+}
+
+TEST_F(Chrono, OneOnOneIsNotATime) {
+  auto r = parserRu.parse(QString::fromUtf8("1:1 с Анной в четверг в 12:00"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 12, 0);
+}

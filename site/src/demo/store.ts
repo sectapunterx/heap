@@ -66,30 +66,41 @@ export function reducer(state: DemoState, action: Action): DemoState {
     case 'capture': {
       const { item } = action;
       const seq = state.seq + 1;
-      if (item.kind === 'task') {
-        const id = `NEW-${seq}`;
+      // A ping lands in the People column of the app, which the demo leaves out.
+      if (item.kind === 'ping') return achieve({ ...state, seq }, 'capture');
+      let next = state;
+      let taskId: string | undefined;
+      if (item.kind === 'task' || item.kind === 'meeting') {
+        // The ticket the text names is the id, as in the app; else a fresh one.
+        const id = item.ticket && !state.tasks.some((t) => t.id === item.ticket) ? item.ticket : `NEW-${seq}`;
         const task: Task = {
           id,
           title: item.title,
-          prio: 'P2',
+          prio: item.prio ?? 'P2',
           col: 'todo',
           rank: 0,
           due: item.due,
           desc: item.desc,
+          recurring: item.repeat,
           mentions: item.mentions.length ? item.mentions : undefined,
         };
         const tasks = [task, ...state.tasks];
-        return achieve({ ...state, seq, tasks: nextRankBefore(tasks, 'todo', tasksIn(state.tasks, 'todo')[0]?.id ?? null, id), selectedId: id }, 'capture');
+        next = { ...state, tasks: nextRankBefore(tasks, 'todo', tasksIn(state.tasks, 'todo')[0]?.id ?? null, id), selectedId: id };
+        taskId = id;
+        if (item.kind === 'task') return achieve({ ...next, seq }, 'capture');
       }
+      const day = action.todayIndex + (item.due ?? 0);
+      if (day > 6) return achieve({ ...next, seq }, 'capture');
       const event: CalEvent = {
         id: `ev-${seq}`,
         title: item.kind === 'focus' ? `Focus: ${item.title}` : item.title,
-        day: action.todayIndex,
+        day,
         start: item.start!,
         end: Math.min(24 * 60, item.end!),
-        kind: item.kind,
+        kind: item.kind === 'focus' ? 'focus' : 'meeting',
+        taskId,
       };
-      return achieve({ ...state, seq, events: [...state.events, event] }, 'capture');
+      return achieve({ ...next, seq, events: [...next.events, event] }, 'capture');
     }
     case 'event':
       return achieve({ ...state, events: state.events.map((e) => (e.id === action.id ? { ...e, ...action.patch } : e)) }, 'week');

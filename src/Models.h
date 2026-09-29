@@ -124,7 +124,7 @@ struct Task {
 struct CalEvent {
   QString id;
   QString title;
-  QString type;    // standup/oneone/sync/focus
+  QString type;    // none/standup/oneone/sync/focus
   double start{};  // hour 0..24
   double end{};
   QString attendees;

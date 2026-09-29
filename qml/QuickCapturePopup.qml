@@ -5,19 +5,32 @@ import TodoCpp
 
 Popup {
     id: root
-    modal: true
+    // Standalone it is the whole window — there is nothing behind it to
+    // dim or block, so no scrim.
+    modal: !root.standalone
     focus: true
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
     padding: 0
     width: 560
-    anchors.centerIn: Overlay.overlay
+    // Standalone: hosted by CaptureWindow, a small window of its own that the
+    // global hotkey brings up without the main window. The popup sits at the
+    // top of that window so the mention dropdown has room below it.
+    property bool standalone: false
+    anchors.centerIn: root.standalone ? undefined : Overlay.overlay
+    x: root.standalone ? Math.round((root.parent.width - root.width) / 2) : 0
+    y: root.standalone ? Theme.sp2xl : 0
 
     Overlay.modal: Rectangle {
         color: Theme.scrim
     }
 
+    // What was just created, for the confirmation the owner shows: a toast in
+    // the app, an OS notification when captured from outside it. `taskId` is
+    // the task behind it, if any, so clicking the notification can open it.
+    signal captured(string title, string body, string taskId)
+
     property var _preview: ({ok: false})
-    property var _meta: ({title: "", desc: "", handles: []})
+    property var _meta: ({title: "", desc: "", handles: [], ticketKey: "", priority: ""})
     property string _title: ""
 
     // Single source of truth lives in heap::text::extractMeta (C++) and is
@@ -102,6 +115,81 @@ Popup {
         return out;
     }
 
+    // "Tomorrow, Thu 1 Oct, 15:00" — the day named the way people say it when
+    // it is close, then the date so it can be checked at a glance.
+    function _when(d, hasTime) {
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const day = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+        const diff = Math.round((day - today) / 86400000);
+        const rel = ["quick.day.yesterday", "quick.day.today", "quick.day.tomorrow",
+                     "quick.day.afterTomorrow"][diff + 1];
+        let out = rel ? I18n.t(rel) + ", " + d.toLocaleDateString(I18n.locale, "ddd d MMM")
+                      : d.toLocaleDateString(I18n.locale, "dddd, d MMMM");
+        if (hasTime) out += ", " + d.toLocaleTimeString(I18n.locale, "HH:mm");
+        return out;
+    }
+    function _cap(t) { return t.charAt(0).toUpperCase() + t.slice(1); }
+
+    function _recurLabel(r) {
+        const keys = {
+            "every:day": "daily", "every:week": "weekly", "every:weekday": "weekdays",
+            "every:mon": "everyMon", "every:tue": "everyTue", "every:wed": "everyWed",
+            "every:thu": "everyThu", "every:fri": "everyFri", "every:sat": "everySat",
+            "every:sun": "everySun"
+        };
+        // Mid-sentence: "Повтор: по будням", not "Повтор: По будням".
+        const label = keys[r] ? I18n.t("editor.recur." + keys[r]) : r;
+        return label.charAt(0).toLowerCase() + label.slice(1);
+    }
+
+    function _statusName(id) {
+        const sts = AppController.statuses;
+        for (let i = 0; i < sts.length; ++i)
+            if (sts[i].id === id) return sts[i].name;
+        return id;
+    }
+
+    // The confirmation for what a capture made, written to be read in a
+    // notification: the headline says what it is and where it went, the body
+    // gives the title in quotes and then only the things that were set.
+    //   kind  "task" | "focus" | "meeting" | "untimedMeeting"
+    //   ev    the booked event, for a meeting
+    function _summary(kind, draft, ev) {
+        const lines = [I18n.t("quick.quote").arg(draft.title)];
+        let title;
+        if (kind === "meeting") {
+            title = I18n.t("quick.done.meeting." + ev.type);
+            lines.push(root._cap(root._when(draft.dueAt, false)) + ", "
+                       + AppController.eventHourLabel(ev.start) + "–" + AppController.eventHourLabel(ev.end));
+            if (ev.attendees) lines.push(I18n.t("quick.done.with").arg(ev.attendees));
+        } else if (kind === "focus") {
+            title = I18n.t("quick.done.focus");
+            lines.push(root._cap(root._when(draft.dueAt, true)));
+        } else {
+            title = I18n.t("quick.done.task").arg(root._statusName(draft.status));
+            if (draft.dueAt && draft.dueAt.getTime && !isNaN(draft.dueAt.getTime()))
+                lines.push(I18n.t("quick.done.due").arg(root._when(draft.dueAt, draft.hasTime)));
+            if (kind === "untimedMeeting") lines.push(I18n.t("quick.done.noTime"));
+        }
+        if (draft.recurrence)
+            lines.push(I18n.t("quick.done.repeat").arg(root._recurLabel(draft.recurrence)));
+        if (root._meta.priority)
+            lines.push(I18n.t("quick.done.priority").arg(draft.priority));
+        if (root._meta.ticketKey && draft.id === root._meta.ticketKey)
+            lines.push(I18n.t("quick.done.ticket").arg(draft.id));
+        if (draft.desc) lines.push(I18n.t("quick.done.note").arg(draft.desc));
+        if (kind === "meeting")
+            lines.push(I18n.t("quick.done.alsoTask").arg(root._statusName(draft.status)));
+        return { title: title, body: lines.join("\n"), taskId: draft.id };
+    }
+
+    function _finish(summary) {
+        inputField.clear();
+        root.close();
+        if (summary) root.captured(summary.title, summary.body, summary.taskId || "");
+    }
+
     function _submit() {
         // Recompute from the CURRENT text before reading anything. _meta/_title/
         // _preview are otherwise only refreshed on an 80ms debounce, so hitting
@@ -128,6 +216,7 @@ Popup {
                 .replace(/(^|[\s,;(])@[A-Za-zА-Яа-яЁё0-9_.\-]+/g, "$1")
                 .replace(/\s+/g, " ").trim();
             const palette = Theme.swatches;
+            const who = [];
             for (let i = 0; i < _meta.handles.length; ++i) {
                 const h = _meta.handles[i];
                 const existing = AppController.personById(h) || {};
@@ -142,17 +231,21 @@ Popup {
                 draft.question = question;
                 draft.state  = "todo";
                 AppController.savePerson(draft);
+                who.push(draft.name);
             }
-            inputField.clear();
-            root.close();
+            root._finish({
+                title: I18n.t("quick.done.ping").arg(who.join(", ")),
+                body: question.length > 0 ? I18n.t("quick.quote").arg(question) : ""
+            });
             return;
         }
 
-        // QuickCapture tasks: placeholder "TODO-N" id, "To Do" column.
-        // The user assigns the real ticket id later in TaskEditor.
-        const draft = AppController.newQuickTaskDraft();
+        // QuickCapture tasks: the "To Do" column, with the id of the ticket the
+        // text names ("LTE-2398 …") or the profile prefix.
+        const draft = AppController.newQuickTaskDraft(_meta.ticketKey || "");
         draft._isNew = true;
         draft.title = _title;
+        if (_meta.priority) draft.priority = _meta.priority;
         if (_meta && _meta.desc && _meta.desc.length > 0) {
             draft.desc = _meta.desc;
         }
@@ -177,18 +270,23 @@ Popup {
         //  - "sync"/"созвон"   → meeting on calendar (right column with созвоны)
         //  - none of the above → no calendar entry even if a time was parsed
         const noTime = !(_preview && _preview.ok && _preview.hasTime && _preview.start);
-        if (noTime) { inputField.clear(); root.close(); return; }
-
         // Reuse the kind we already computed for the contact-ping check.
         const kind = kindEarly;
-        if (kind === "ticket") { inputField.clear(); root.close(); return; }
+        if (noTime) {
+            root._finish(root._summary(kind === "sync" ? "untimedMeeting" : "task", draft, null));
+            return;
+        }
+        if (kind === "ticket") { root._finish(root._summary("task", draft, null)); return; }
 
         const d         = _preview.start;
         const startHour = d.getHours() + d.getMinutes() / 60.0;
 
         if (kind === "focus") {
             AppController.selectedDate = d;
-        } else if (kind === "sync") {
+            root._finish(root._summary("focus", draft, null));
+            return;
+        }
+        if (kind === "sync") {
             // Honour parsed range "12:00-13:00", else default 30 min.
             let endHour = startHour + 0.5;
             const pe = _preview.end;
@@ -198,7 +296,9 @@ Popup {
             }
             const attendees = _resolvePeopleNames(_meta.handles).join(", ");
             const ev = AppController.newEventDraft(startHour, d);
-            ev.type      = "sync";
+            // Standup, 1:1, team sync — or, for a call or a meeting that is
+            // none of those, an untyped one-off.
+            ev.type      = AppController.meetingType(inputField.text);
             ev.title     = _title.substring(0, 40);
             ev.end       = endHour;
             ev.taskId    = draft.id;
@@ -212,11 +312,12 @@ Popup {
             }
             AppController.saveEvent(ev);
             AppController.selectedDate = d;
+            root._finish(root._summary("meeting", draft, ev));
+            return;
         }
         // kind === "none" → task with deadline only, no calendar entry.
 
-        inputField.clear();
-        root.close();
+        root._finish(root._summary("task", draft, null));
     }
 
     onOpened: {

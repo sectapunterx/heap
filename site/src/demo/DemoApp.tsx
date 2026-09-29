@@ -4,7 +4,8 @@ import Week from './Week';
 import Notes from './Notes';
 import Palette, { type Command } from './Palette';
 import Terminal from './Terminal';
-import { CaptureField } from './Capture';
+import { CaptureField, CaptureNotice } from './Capture';
+import type { Captured } from './capture';
 import { useDemoStore } from './store';
 import { useToast } from './useToast';
 import { COLUMNS, type Achievement, type View } from './model';
@@ -39,6 +40,7 @@ export default function DemoApp() {
   const [capture, setCapture] = useState(false);
   const [term, setTerm] = useState(false);
   const [toast, showToast] = useToast();
+  const [notice, showNotice] = useToast<Captured>(6000);
   const todayIndex = weekdayIndex(new Date());
 
   const openTask = useCallback(
@@ -261,19 +263,16 @@ export default function DemoApp() {
               onSubmit={(item) => {
                 dispatch({ type: 'capture', item, todayIndex });
                 setCapture(false);
-                if (item.kind === 'task') {
-                  dispatch({ type: 'view', view: 'board' });
-                  showToast(`Added “${item.title}” to To do`);
-                } else {
-                  dispatch({ type: 'view', view: 'week' });
-                  showToast(`${item.kind === 'focus' ? 'Focus block' : 'Meeting'} booked for today`);
-                }
+                if (item.kind === 'focus' || item.kind === 'meeting') dispatch({ type: 'view', view: 'week' });
+                else if (item.kind === 'task') dispatch({ type: 'view', view: 'board' });
+                showNotice(item);
               }}
             />
           </div>
         </div>
       )}
 
+      {notice && <CaptureNotice item={notice} todayIndex={todayIndex} />}
       {toast && (
         <div className="d-toast" role="status">
           {toast}

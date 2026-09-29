@@ -4,7 +4,8 @@ import Week from '../demo/Week';
 import Notes from '../demo/Notes';
 import Palette from '../demo/Palette';
 import Terminal from '../demo/Terminal';
-import { CaptureField } from '../demo/Capture';
+import { CaptureField, CaptureNotice } from '../demo/Capture';
+import type { Captured } from '../demo/capture';
 import { useDemoStore } from '../demo/store';
 import { useToast } from '../demo/useToast';
 import { weekdayIndex } from '../demo/calendar';
@@ -115,6 +116,7 @@ function NotesWidget() {
 function FlowWidget() {
   const { state, dispatch } = useDemoStore();
   const [toast, show] = useToast();
+  const [notice, showNotice] = useToast<Captured>(6000);
   const todayIndex = weekdayIndex(new Date());
   const matched = state.focusedBranch ? state.tasks.find((t) => t.branch === state.focusedBranch) : undefined;
   const commands = useMemo(() => [{ id: 'reset', title: 'Reset this example', run: () => dispatch({ type: 'reset' }) }], [dispatch]);
@@ -127,7 +129,7 @@ function FlowWidget() {
             todayIndex={todayIndex}
             onSubmit={(item) => {
               dispatch({ type: 'capture', item, todayIndex });
-              show(item.kind === 'task' ? `Added “${item.title}” to To do` : `${item.kind === 'focus' ? 'Focus block' : 'Meeting'} booked for today at ${String(Math.floor(item.start! / 60)).padStart(2, '0')}:${String(item.start! % 60).padStart(2, '0')}`);
+              showNotice(item);
             }}
           />
         </div>
@@ -164,6 +166,7 @@ function FlowWidget() {
         </span>
         <Terminal lines={state.termLines} dispatch={dispatch} branch={state.focusedBranch} style={{ height: 180 }} suggestion={state.done.git ? 'git switch main' : 'git switch -c APP-112-flaky-sync-test'} />
       </div>
+      {notice && <CaptureNotice item={notice} todayIndex={todayIndex} />}
       <Toast msg={toast} />
     </div>
   );

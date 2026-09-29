@@ -23,23 +23,70 @@ rail icon to see its shortcut.
 Press **`Ctrl+Shift+Space`** for Quick-capture, type a line, hit `Enter`. The
 popup previews what it parsed (date chip, title) before you commit.
 
+It works from **any app**. When heap. is not the focused window, the hotkey
+brings up only the capture line, over whatever you are working in. The main
+window stays minimized, in the tray or behind your editor. `Esc` puts it away.
+Clicking elsewhere does too, except for a quick note that already has text in
+it: that one waits for `Enter` or `Esc`. `Ctrl+Shift+N` does the same for a
+quick note.
+
+After saving, heap. tells you what it made: a system notification when you
+captured from another app, a toast when heap. was in front. For example:
+
+```
+Meeting added to the calendar
+“call with @lena”
+Tomorrow, Thu 1 Oct, 16:00–16:30
+With: Lena
+Note: pricing
+Also a task in “To Do”
+```
+
+Clicking the notification opens the task.
+
 ### Quick-capture syntax
 
-Everything is optional and order-independent:
+Everything is optional and order-independent, in **English and Russian**.
+
+**What it is**
 
 | You type | heap. does |
 |----------|-----------|
-| `fix login race` | task titled "fix login race" in the active profile's To Do |
-| `ship v1 tomorrow` / `ship v1 завтра 14:00` | task with a parsed deadline (date, and time when given) |
+| `fix login race` | task in the active profile's To Do |
+| `APP-231 fix login race` | the ticket key becomes the task's **id** (and leaves the title) |
 | `pay invoice // net-30, portal is slow` | text after `//` becomes the task **description** |
 | `review PR @andrey @lena` | keeps the `@mentions` and links them to matching people |
-| `напиши @viktor про релиз` | routes to a **contact ping** in the People column, not the board |
-| `focus refactor parser 10:00` | schedules a **focus block** on today's calendar |
-| `standup 10:00` / `созвон 15:00-15:30` | schedules a **meeting** event (honours a time range) |
-| `задача: подготовить синк` | stays a pure to-do — never put on the calendar |
+| `urgent fix prod` / `p1 fix prod` / `fix prod !!` | sets the **priority**: `p0`–`p3`, `!!` (P1), `!!!` (P0), `urgent`/`asap`/`срочно` (P1), `critical`/`blocker` (P0), `не срочно` (P3) |
 
-Dates parse in **English and Russian** (`tomorrow`, `friday`, `завтра`,
-`пятница`, `May 22`, `22.05`, `14:00`, `12:00-13:00`).
+**When**
+
+| You type | heap. does |
+|----------|-----------|
+| `ship v1 tomorrow` / `ship v1 завтра 14:00` | a deadline: the date, and the time when given |
+| `report by friday` / `отчёт к пятнице` / `до понедельника` | a deadline on that day |
+| `tomorrow morning`, `tonight`, `завтра утром`, `вечером` | a time from the part of the day (morning 9:00, afternoon 15:00, evening 19:00, tonight 20:00) |
+| `every weekday`, `every monday`, `по будням`, `каждый будний день` | a **repeating** task |
+| `in 2 days`, `через 3 дня`, `end of month` | relative dates |
+
+**Where it lands**
+
+| You type | heap. does |
+|----------|-----------|
+| `standup 10:00` / `дейли в 10:00` / `планёрка 9:30` | a **Standup** event |
+| `1:1 with @anna thursday 12:00` | a **1:1** event, with Anna as an attendee |
+| `sync with the backend 15:00` / `синк` | a **Team sync** event |
+| `call with @lena 4pm` / `созвон 15:00-15:30` / `retro`, `demo`, `interview`, `встреча` | a one-off meeting (**No type**), honouring a time range |
+| `focus refactor parser 10:00` | a **focus block** on the calendar |
+| `встреча с дизайнером` (no time) | a task only; the notification says it is not on the calendar |
+| `bug …`, `task …`, `задача: подготовить синк` | stays a pure to-do, never put on the calendar |
+| `ping @viktor about the release` / `напиши @viktor про релиз` | a **contact ping** in the People column, not the board |
+
+A meeting also creates a task linked to it. Russian words match in any case:
+`созвона`, `встрече` and `синке` work as well as `созвон`, `встреча` and
+`синк`.
+
+Other date forms: `friday`, `пятница`, `May 22`, `22.05`, `14:00`,
+`12:00-13:00`.
 
 Prefer a full form? `Ctrl+N` opens the task editor with every field.
 

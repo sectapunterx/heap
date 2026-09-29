@@ -300,3 +300,62 @@ TEST(Slug, EmptyTransliterationFallbacks) {
   // Single soft-sign token transliterates to empty.
   EXPECT_TRUE(slugifyPersonName(QStringLiteral("ь")).isEmpty());
 }
+
+// ─── Extended vocabulary ─────────────────────────────────────────────
+
+TEST(Classify, RussianInflectionsViaStems) {
+  // The word lists used to hold one case of each noun; these missed.
+  EXPECT_EQ(classifyKind(QStringLiteral("встреча с дизайнером в 15:00")), TaskKind::Sync);
+  EXPECT_EQ(classifyKind(QStringLiteral("подготовиться к встрече")), TaskKind::Sync);
+  EXPECT_EQ(classifyKind(QStringLiteral("после синка с бэкендом")), TaskKind::Sync);
+  EXPECT_EQ(classifyKind(QStringLiteral("планёрка в 10")), TaskKind::Sync);
+  EXPECT_EQ(classifyKind(QStringLiteral("собес с кандидатом")), TaskKind::Sync);
+  // A stem still has to start a word.
+  EXPECT_EQ(classifyKind(QStringLiteral("пойти навстречу клиенту")), TaskKind::None);
+}
+
+TEST(Classify, MoreMeetingAndFocusWords) {
+  EXPECT_EQ(classifyKind(QStringLiteral("retro friday 16:00")), TaskKind::Sync);
+  EXPECT_EQ(classifyKind(QStringLiteral("demo для заказчика")), TaskKind::Sync);
+  EXPECT_EQ(classifyKind(QStringLiteral("heads down on the RFC")), TaskKind::Focus);
+  EXPECT_EQ(classifyKind(QStringLiteral("писать RFC без созвонов")), TaskKind::Focus);
+  EXPECT_EQ(classifyKind(QStringLiteral("пофиксить баги в логине")), TaskKind::Ticket);
+}
+
+TEST(Classify, MoreContactVerbs) {
+  EXPECT_EQ(classifyKind(QStringLiteral("уточнить у @oleg сроки")), TaskKind::Contact);
+  EXPECT_EQ(classifyKind(QStringLiteral("follow up with @anna")), TaskKind::Contact);
+  // No handle, no ping.
+  EXPECT_EQ(classifyKind(QStringLiteral("уточнить сроки")), TaskKind::None);
+}
+
+TEST(MeetingType, PicksTheCalendarType) {
+  using heap::text::meetingType;
+  EXPECT_EQ(meetingType(QStringLiteral("дейли в 10")), QStringLiteral("standup"));
+  EXPECT_EQ(meetingType(QStringLiteral("стендапа не будет")), QStringLiteral("standup"));
+  EXPECT_EQ(meetingType(QStringLiteral("1:1 с Олегом")), QStringLiteral("oneone"));
+  EXPECT_EQ(meetingType(QStringLiteral("синк с командой")), QStringLiteral("sync"));
+  // A call or a meeting that is none of the routines is a one-off.
+  EXPECT_EQ(meetingType(QStringLiteral("созвон с заказчиком")), QStringLiteral("none"));
+  EXPECT_EQ(meetingType(QStringLiteral("встреча с дизайнером")), QStringLiteral("none"));
+}
+
+TEST(ExtractMeta, TicketKeyLeavesTheTitle) {
+  const auto m = extractMeta(QStringLiteral("LTE-2398 починить логин"));
+  EXPECT_EQ(m.ticketKey, QStringLiteral("LTE-2398"));
+  EXPECT_EQ(m.title, QStringLiteral("починить логин"));
+  // Lower-case words with a dash and digits are not tickets.
+  EXPECT_TRUE(extractMeta(QStringLiteral("обновить utf-8 и covid-19")).ticketKey.isEmpty());
+}
+
+TEST(ExtractMeta, Priority) {
+  auto m = extractMeta(QStringLiteral("срочно починить прод"));
+  EXPECT_EQ(m.priority, QStringLiteral("P1"));
+  EXPECT_EQ(m.title, QStringLiteral("починить прод"));
+  EXPECT_EQ(extractMeta(QStringLiteral("fix login p0")).priority, QStringLiteral("P0"));
+  EXPECT_EQ(extractMeta(QStringLiteral("fix login p0")).title, QStringLiteral("fix login"));
+  EXPECT_EQ(extractMeta(QStringLiteral("обновить доку !!")).priority, QStringLiteral("P1"));
+  // "не срочно" is not "срочно".
+  EXPECT_EQ(extractMeta(QStringLiteral("не срочно: почистить логи")).priority, QStringLiteral("P3"));
+  EXPECT_TRUE(extractMeta(QStringLiteral("купить хлеб")).priority.isEmpty());
+}

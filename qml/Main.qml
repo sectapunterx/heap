@@ -408,16 +408,16 @@ ApplicationWindow {
     Connections {
         target: AppController
         function onSelectedDateChanged() { win._scheduleMap = win.scheduleMap() }
-        // OS-level global hotkeys fired while the window may be minimized, in
-        // the background, or hidden to the tray: bring it forward, then open the
-        // matching Quick-capture popup.
+        // OS-level global hotkeys. With heap focused the popup opens in the
+        // app as usual; from anywhere else only the capture window comes up —
+        // the main window stays minimized, in the tray or behind other apps.
         function onQuickCaptureRequested() {
-            win._summon();
-            quickCapture.open();
+            if (win.active) quickCapture.open();
+            else win._capture("task");
         }
         function onQuickCaptureNotesRequested() {
-            win._summon();
-            quickCaptureNotes.open();
+            if (win.active) quickCaptureNotes.open();
+            else win._capture("note");
         }
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
@@ -963,9 +963,31 @@ ApplicationWindow {
             }
         }
     }
-    QuickCapturePopup { id: quickCapture }
+    QuickCapturePopup {
+        id: quickCapture
+        onCaptured: (title, body, taskId) => toast.show(title + " — " + body.replace(/\n/g, " · "))
+    }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes
+        onCaptured: (title, body, taskId) => toast.show(title + " — " + body)
+    }
+
+    // The same two popups, for a capture made from outside heap. Created on
+    // first use: most sessions never need a second window.
+    function _capture(mode) {
+        captureLoader.active = true;
+        const cw = captureLoader.item as CaptureWindow;
+        cw.hostScreen = win.screen;
+        cw.summon(mode);
+    }
+    Loader {
+        id: captureLoader
+        active: false
+        sourceComponent: CaptureWindow {
+            // Nothing of heap is on screen to show it, so the confirmation is
+            // an OS notification; clicking it opens the task.
+            onCaptured: (title, body, taskId) => AppController.notifyCapture(taskId, title, body)
+        }
     }
 
     // GitWatcher → TaskEditor bridge: TopBar "Open" button on the focus
@@ -974,6 +996,8 @@ ApplicationWindow {
     Connections {
         target: AppController
         function onOpenTaskRequested(taskId) {
+            // Also reached from a notification click while heap is in the tray.
+            win._summon();
             taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
         }
     }
