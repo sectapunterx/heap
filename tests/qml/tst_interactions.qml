@@ -246,7 +246,7 @@ TestCase {
         verify(got.taskId.indexOf("TODO-") !== 0, "placeholder id: " + got.taskId);
         compare(got.title, I18n.t("quick.done.task").arg(tc._todoName()));
         const lines = got.body.split("\n");
-        compare(lines[0], "«capture-report probe»");
+        compare(lines[0], I18n.t("quick.quote").arg("capture-report probe"));
         verify(lines[1].indexOf(I18n.t("quick.day.tomorrow")) >= 0 && lines[1].indexOf("15:00") > 0,
                "relative day and time: " + lines[1]);
         verify(lines.indexOf(I18n.t("quick.done.priority").arg("P1")) > 0, got.body);

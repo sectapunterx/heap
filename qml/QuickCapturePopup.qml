@@ -156,7 +156,7 @@ Popup {
     //   kind  "task" | "focus" | "meeting" | "untimedMeeting"
     //   ev    the booked event, for a meeting
     function _summary(kind, draft, ev) {
-        const lines = ["«" + draft.title + "»"];
+        const lines = [I18n.t("quick.quote").arg(draft.title)];
         let title;
         if (kind === "meeting") {
             title = I18n.t("quick.done.meeting." + ev.type);
@@ -235,7 +235,7 @@ Popup {
             }
             root._finish({
                 title: I18n.t("quick.done.ping").arg(who.join(", ")),
-                body: question.length > 0 ? "«" + question + "»" : ""
+                body: question.length > 0 ? I18n.t("quick.quote").arg(question) : ""
             });
             return;
         }
