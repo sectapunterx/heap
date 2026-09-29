@@ -507,10 +507,10 @@ Rectangle {
         }
     }
 
-    QQC.Menu {
+    AppMenu {
         id: taskMenu
         objectName: "tc-menu"
-        QQC.MenuItem {
+        AppMenuItem {
             enabled: false
             contentItem: Text {
                 text: card.task ? (card.task.id + " · " + card.task.priority) : ""
@@ -523,36 +523,39 @@ Rectangle {
                 rightPadding: Theme.spXl
             }
         }
-        QQC.MenuItem {
-            text: "✎  " + I18n.t("taskcard.edit"); onTriggered: card.clicked()
+        AppMenuItem {
+            glyph: "✎"; text: I18n.t("taskcard.edit"); onTriggered: card.clicked()
         }
-        QQC.MenuItem {
-            text: card.task && card.task.isTiming ? ("■  " + I18n.t("taskcard.stopTimer"))
-                                                  : ("▸  " + I18n.t("taskcard.startTimer"))
+        AppMenuItem {
+            glyph: card.task && card.task.isTiming ? "■" : "▸"
+            text: card.task && card.task.isTiming ? I18n.t("taskcard.stopTimer") : I18n.t("taskcard.startTimer")
             onTriggered: {
                 if (!card.task) return;
                 if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
                 else AppController.startTaskTimer(card.task.id);
             }
         }
-        QQC.MenuSeparator { visible: card._isTicket }
-        QQC.MenuItem {
+        AppMenuSeparator { visible: card._isTicket }
+        AppMenuItem {
             objectName: "tc-menu-open"
             visible: card._isTicket && String(card._ticket.url || "").length > 0
             height: visible ? implicitHeight : 0
-            text: "↗  " + I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
+            glyph: "↗"
+            text: I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
             onTriggered: AppController.openTaskExternal(card.taskId)
         }
-        QQC.MenuItem {
+        AppMenuItem {
             objectName: "tc-menu-copylink"
             visible: card._isTicket && String(card._ticket.url || "").length > 0
             height: visible ? implicitHeight : 0
-            text: "⎘  " + I18n.t("taskcard.copyLink")
+            glyph: "⎘"
+            text: I18n.t("taskcard.copyLink")
             onTriggered: AppController.copyToClipboard(String(card._ticket.url || ""))
         }
-        QQC.MenuSeparator {}
-        QQC.MenuItem {
-            text: "◷  " + I18n.t("taskcard.schedule")
+        AppMenuSeparator {}
+        AppMenuItem {
+            glyph: "◷"
+            text: I18n.t("taskcard.schedule")
             onTriggered: {
                 if (!card.task) return;
                 // 14:00 used to be hardcoded here, so every task scheduled from
@@ -563,28 +566,32 @@ Rectangle {
                 AppController.scheduleTask(card.task.id, at, AppController.selectedDate);
             }
         }
-        QQC.MenuItem {
-            text: "⎘  " + I18n.t("taskcard.copyId")
+        AppMenuItem {
+            glyph: "⎘"
+            text: I18n.t("taskcard.copyId")
             onTriggered: {
                 if (card.task && card.task.id) AppController.copyToClipboard(card.task.id);
             }
         }
-        QQC.MenuItem {
-            text: "⎇  " + I18n.t("taskcard.copyBranch")
+        AppMenuItem {
+            glyph: "⎇"
+            text: I18n.t("taskcard.copyBranch")
             enabled: !!(card.task && card.task.branch && String(card.task.branch).length > 0)
             onTriggered: {
                 if (card.task && card.task.branch) AppController.copyToClipboard(card.task.branch);
             }
         }
-        QQC.MenuItem {
-            text: "⎇+  " + I18n.t("taskcard.createBranch")
+        AppMenuItem {
+            glyph: "+"
+            text: I18n.t("taskcard.createBranch")
             onTriggered: {
                 if (card.task && card.task.id) AppController.createBranchForTask(card.task.id);
             }
         }
-        QQC.MenuSeparator {}
-        QQC.MenuItem {
-            text: "×  " + I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
+        AppMenuSeparator {}
+        AppMenuItem {
+            glyph: "×"; danger: true
+            text: I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
         }
     }
 }

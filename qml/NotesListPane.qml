@@ -284,18 +284,18 @@ Rectangle {
                         }
                     }
 
-                    QQC.Menu {
+                    AppMenu {
                         id: rowMenu
-                        QQC.MenuItem {
+                        AppMenuItem {
                             text: row.note.pinned ? I18n.t("notes.unpin") : I18n.t("notes.pin")
                             onTriggered: AppController.setNotePinned(row.note.id, !row.note.pinned)
                         }
-                        QQC.MenuItem {
+                        AppMenuItem {
                             text: I18n.t("notes.rename")
                             onTriggered: renamePopup.openFor(row.note.id, row.note.title, row.note.folder)
                         }
-                        QQC.MenuSeparator {}
-                        QQC.MenuItem {
+                        AppMenuSeparator {}
+                        AppMenuItem {
                             text: I18n.t("common.delete")
                             onTriggered: AppController.deleteNote(row.note.id)
                         }

@@ -131,7 +131,7 @@ Rectangle {
                     onClicked: profileMenu.popup()
                 }
 
-                QQC.Menu {
+                AppMenu {
                     id: profileMenu
 
                     // Profile rows are inserted dynamically at the top of the
@@ -140,49 +140,49 @@ Rectangle {
                     Instantiator {
                         id: profilesInst
                         model: AppController.profiles
-                        delegate: QQC.MenuItem {
+                        delegate: AppMenuItem {
                             required property var modelData
-                            text: (modelData.id === AppController.activeProfileId ? "✓ " : "    ")
-                                  + modelData.name
+                            marked: modelData.id === AppController.activeProfileId
+                            text: modelData.name
                             onTriggered: AppController.activeProfileId = modelData.id
                         }
                         onObjectAdded:   (idx, obj) => profileMenu.insertItem(idx, obj)
                         onObjectRemoved: (idx, obj) => profileMenu.removeItem(obj)
                     }
-                    QQC.MenuSeparator {}
-                    QQC.MenuItem {
+                    AppMenuSeparator {}
+                    AppMenuItem {
                         text: I18n.t("topbar.profile.new"); onTriggered: root.newProfileRequested()
                     }
-                    QQC.MenuItem {
+                    AppMenuItem {
                         text: I18n.t("topbar.profile.rename"); onTriggered: root.renameProfileRequested()
                     }
-                    QQC.MenuItem {
+                    AppMenuItem {
                         text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested()
                     }
-                    QQC.MenuItem {
+                    AppMenuItem {
                         text: I18n.t("topbar.profile.delete")
                         enabled: AppController.profiles.length > 1
                         onTriggered: AppController.deleteProfile(AppController.activeProfileId)
                     }
-                    QQC.MenuSeparator {}
-                    QQC.MenuItem {
+                    AppMenuSeparator {}
+                    AppMenuItem {
                         text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested()
                     }
-                    QQC.MenuItem {
+                    AppMenuItem {
                         text: I18n.t("topbar.profile.export"); onTriggered: root.exportJsonRequested()
                     }
-                    QQC.MenuSeparator {}
-                    QQC.MenuItem {
+                    AppMenuSeparator {}
+                    AppMenuItem {
                         text: I18n.t("topbar.cal.import"); onTriggered: root.importIcsRequested()
                     }
-                    QQC.MenuItem {
+                    AppMenuItem {
                         text: I18n.t("topbar.cal.export"); onTriggered: root.exportIcsRequested()
                     }
-                    QQC.MenuSeparator {}
-                    QQC.MenuItem {
+                    AppMenuSeparator {}
+                    AppMenuItem {
                         text: I18n.t("topbar.notes.import"); onTriggered: root.importVaultRequested()
                     }
-                    QQC.MenuItem {
+                    AppMenuItem {
                         text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested()
                     }
                 }

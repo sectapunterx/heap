@@ -137,15 +137,15 @@ Rectangle {
                     }
                 }
 
-                QQC.Menu {
+                AppMenu {
                     id: personMenu
-                    QQC.MenuItem { text: I18n.t("people.menu.edit"); onTriggered: root.personRequested(prow.id) }
-                    QQC.MenuItem { text: I18n.t("people.menu.cycle"); onTriggered: AppController.cyclePerson(prow.id) }
+                    AppMenuItem { text: I18n.t("people.menu.edit"); onTriggered: root.personRequested(prow.id) }
+                    AppMenuItem { text: I18n.t("people.menu.cycle"); onTriggered: AppController.cyclePerson(prow.id) }
                     // Off the rail without losing the person: they stay in
                     // contacts, @-autocomplete and the picker.
-                    QQC.MenuItem { text: I18n.t("people.menu.dismiss"); onTriggered: AppController.setPersonState(prow.id, "idle") }
-                    QQC.MenuSeparator {}
-                    QQC.MenuItem { text: I18n.t("people.menu.delete"); onTriggered: AppController.deletePerson(prow.id) }
+                    AppMenuItem { text: I18n.t("people.menu.dismiss"); onTriggered: AppController.setPersonState(prow.id, "idle") }
+                    AppMenuSeparator {}
+                    AppMenuItem { danger: true; text: I18n.t("people.menu.delete"); onTriggered: AppController.deletePerson(prow.id) }
                 }
 
                 // 2) Hover indicator — a real Rectangle whose visibility is

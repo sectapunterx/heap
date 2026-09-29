@@ -111,6 +111,31 @@ ApplicationWindow {
     onVisibilityChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     title: "heap. — Work, in one place."
     color: Theme.bg
+    // The stock Basic controls (combo box lists, tooltips, scroll bars, and
+    // anything not drawn by hand) take their colours from the palette. Left
+    // alone it was the OS palette, which on Windows meant black popups with
+    // white rows whatever the theme; this feeds it the theme's tokens.
+    palette {
+        window: Theme.panel
+        windowText: Theme.text
+        base: Theme.panel2
+        alternateBase: Theme.panel3
+        text: Theme.text
+        button: Theme.panel2
+        buttonText: Theme.text
+        brightText: Theme.text
+        highlight: Theme.accentSoft
+        highlightedText: Theme.accentStrong
+        light: Theme.panel2
+        midlight: Theme.panel3
+        mid: Theme.border
+        dark: Theme.borderStrong
+        shadow: Theme.scrim
+        placeholderText: Theme.textDim
+        link: Theme.mdLink
+        toolTipBase: Theme.toastBg
+        toolTipText: Theme.toastText
+    }
 
     property string searchText: ""
     property var prioritiesFilter: ({})

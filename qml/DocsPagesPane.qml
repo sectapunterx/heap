@@ -243,9 +243,9 @@ Item {
                             }
                         }
 
-                        QQC.Menu {
+                        AppMenu {
                             id: pageMenu
-                            QQC.MenuItem {
+                            AppMenuItem {
                                 text: I18n.t("docs.newSubpage")
                                 onTriggered: {
                                     // Opening the parent, or the new page lands
@@ -254,12 +254,12 @@ Item {
                                     AppController.newDocPage("", pageRow.modelData.id);
                                 }
                             }
-                            QQC.MenuItem {
+                            AppMenuItem {
                                 text: I18n.t("docs.renamePage")
                                 onTriggered: renamePagePopup.openFor(pageRow.modelData.id, pageRow.modelData.title)
                             }
-                            QQC.MenuSeparator {}
-                            QQC.MenuItem {
+                            AppMenuSeparator {}
+                            AppMenuItem {
                                 text: pageRow.modelData.hasChildren ? I18n.t("docs.deletePageTree")
                                                                     : I18n.t("common.delete")
                                 onTriggered: AppController.deleteDocPage(pageRow.modelData.id)

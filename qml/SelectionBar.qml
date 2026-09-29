@@ -60,11 +60,11 @@ Rectangle {
         }
     }
 
-    QQC.Menu {
+    AppMenu {
         id: moveMenu
         Repeater {
             model: AppController.statuses
-            QQC.MenuItem {
+            AppMenuItem {
                 required property var modelData
                 text: modelData.name
                 onTriggered: AppController.moveSelectedTasksToStatus(modelData.id)

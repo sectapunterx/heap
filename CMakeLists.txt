@@ -259,6 +259,9 @@ qt_add_qml_module(heap_core
         qml/PersonPicker.qml
         qml/TweaksPanel.qml
         qml/Toast.qml
+        qml/AppMenu.qml
+        qml/AppMenuItem.qml
+        qml/AppMenuSeparator.qml
         qml/ThemeSettings.qml
         qml/ColorPickerPopup.qml
         qml/PillButton.qml

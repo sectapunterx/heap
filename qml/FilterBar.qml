@@ -178,11 +178,11 @@ Rectangle {
                 cursorShape: Qt.PointingHandCursor
                 onClicked: sortMenu.popup(sortBtn, 0, sortBtn.height + 4)
             }
-            Menu {
+            AppMenu {
                 id: sortMenu
                 Instantiator {
                     model: root._sortModes
-                    delegate: MenuItem {
+                    delegate: AppMenuItem {
                         required property var modelData
                         objectName: "sort-" + modelData.id
                         text: modelData.label
