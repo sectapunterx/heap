@@ -1060,11 +1060,23 @@ Item {
                         checked: !!(root.settings.appearance && root.settings.appearance.reducedMotion)
                         onToggled: (checked) => root.set("appearance", "reducedMotion", checked)
                     }
-                    SwitchRow {
-                        label: I18n.t("settings.appearance.highContrast")
-                        hint: I18n.t("settings.appearance.highContrast.hint")
-                        checked: !!(root.settings.appearance && root.settings.appearance.highContrast)
-                        onToggled: (checked) => root.set("appearance", "highContrast", checked)
+                    // Soft: hairline borders, closer panels, muted colour —
+                    // over whichever theme is showing. highContrast is kept
+                    // in step for profiles that only know the old switch.
+                    SegRow {
+                        objectName: "settings-contrast"
+                        label: I18n.t("settings.appearance.contrast")
+                        hint: I18n.t("settings.appearance.contrast.hint")
+                        value: Theme.contrast
+                        options: [
+                            ({ value: "soft",   label: I18n.t("settings.appearance.contrast.soft") }),
+                            ({ value: "normal", label: I18n.t("settings.appearance.contrast.normal") }),
+                            ({ value: "high",   label: I18n.t("settings.appearance.contrast.high") })
+                        ]
+                        onSelected: (value) => {
+                            root.set("appearance", "contrast", value);
+                            root.set("appearance", "highContrast", value === "high");
+                        }
                     }
                     // Only where there is a tray to close into.
                     SwitchRow {

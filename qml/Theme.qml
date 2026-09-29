@@ -49,7 +49,17 @@ QtObject {
                                             ? _appearance.lightPreset : Presets.DEFAULT_LIGHT
     readonly property string activePresetId: slot === "light" ? lightPresetId : darkPresetId
     readonly property var active: Presets.resolve(activePresetId, customThemes, slot)
-    readonly property var _c: active.colors
+    // Contrast: "soft" | "normal" | "high". A profile from before the
+    // three-way setting only has highContrast, which still means "high".
+    readonly property string contrast: _appearance.contrast === "soft" || _appearance.contrast === "normal"
+                                       || _appearance.contrast === "high"
+                                       ? _appearance.contrast
+                                       : (_appearance.highContrast ? "high" : "normal")
+    readonly property bool softContrast: contrast === "soft"
+    readonly property var _c: softContrast ? Presets.soften(active.colors) : active.colors
+    // A translucent border laid over the background, so high contrast has
+    // something opaque to push on.
+    readonly property color _solidBorder: Qt.tint(_c.bg, _c.border)
     // The theme's own base, not the slot: a light theme in the dark slot is
     // still light, and components that tint by `dark` must follow the colours.
     readonly property bool dark: active.base === "dark"
@@ -71,8 +81,8 @@ QtObject {
     readonly property color panel3: _c.panel3
 
     // ── Lines + text — highContrast strengthens both ──────────────────
-    readonly property color border:       highContrast ? (dark ? Qt.lighter(_c.border, 1.6) : Qt.darker(_c.border, 1.4)) : _c.border
-    readonly property color borderStrong: highContrast ? (dark ? Qt.lighter(_c.border, 2.2) : Qt.darker(_c.border, 1.8)) : _c.borderStrong
+    readonly property color border:       highContrast ? (dark ? Qt.lighter(_solidBorder, 1.6) : Qt.darker(_solidBorder, 1.4)) : _c.border
+    readonly property color borderStrong: highContrast ? (dark ? Qt.lighter(_solidBorder, 2.2) : Qt.darker(_solidBorder, 1.8)) : _c.borderStrong
     readonly property color text:         highContrast ? (dark ? "#ffffff" : "#000000") : _c.text
     readonly property color textMuted:    _c.textMuted
     // The smallest text in the app uses this; every built-in theme keeps it
@@ -178,12 +188,14 @@ QtObject {
     readonly property int rowH:   compact ? 32 : 44
     readonly property int pad:    compact ? Brand.spacing2 : Brand.spacing4
     readonly property int gap:    compact ? Brand.spacing2 : Brand.spacing3
-    readonly property int radius: Brand.radiusMd
+    // Soft contrast rounds a little further; hairline borders read as
+    // harsh on tight corners.
+    readonly property int radius: softContrast ? Brand.radiusMd + 2 : Brand.radiusMd
     readonly property int hourH:  compact ? 44 : 56
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
-    readonly property bool highContrast:  !!_appearance.highContrast
+    readonly property bool highContrast:  contrast === "high"
     readonly property int animMs: reducedMotion ? 0 : 160
     function scaledMs(n) { return reducedMotion ? 0 : n; }
 

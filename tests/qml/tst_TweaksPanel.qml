@@ -58,6 +58,24 @@ TestCase {
         compare(active, "heap-light");
     }
 
+    // The three-way contrast writes itself and keeps highContrast in step.
+    function test_set_contrast_writes_both_keys() {
+        const p = make('import TodoCpp; TweaksPanel { }');
+        const saved = AppController.appSettingsJson;
+        p.setContrast("soft");
+        const a = JSON.parse(AppController.appSettingsJson).appearance;
+        const soft = Theme.softContrast;
+        p.setContrast("high");
+        const b = JSON.parse(AppController.appSettingsJson).appearance;
+        AppController.appSettingsJson = saved;
+
+        compare(a.contrast, "soft");
+        compare(a.highContrast, false);
+        compare(soft, true);
+        compare(b.contrast, "high");
+        compare(b.highContrast, true);
+    }
+
     // _appearanceValue(key, fallback): reads settings.appearance[key], falling
     // back when absent — and, crucially, an explicit `false` must survive the
     // `!== undefined` guard rather than collapsing to the fallback.

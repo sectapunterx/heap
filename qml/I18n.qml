@@ -815,8 +815,11 @@ QtObject {
             "theme.token.mdHighlight": "Highlight",
             "settings.appearance.reducedMotion": "Reduced motion",
             "settings.appearance.reducedMotion.hint": "Disable animations and smooth transitions.",
-            "settings.appearance.highContrast": "High contrast",
-            "settings.appearance.highContrast.hint": "Boost text and border contrast.",
+            "settings.appearance.contrast": "Contrast",
+            "settings.appearance.contrast.hint": "Soft: hairline borders, quieter panels and muted colour, over any theme. High: stronger text and borders.",
+            "settings.appearance.contrast.soft": "Soft",
+            "settings.appearance.contrast.normal": "Normal",
+            "settings.appearance.contrast.high": "High",
 
             // Language section
             "settings.language.label": "Interface language",
@@ -1752,8 +1755,11 @@ QtObject {
             "theme.token.mdHighlight": "Выделение",
             "settings.appearance.reducedMotion": "Меньше анимации",
             "settings.appearance.reducedMotion.hint": "Отключить анимации и плавные переходы.",
-            "settings.appearance.highContrast": "Высокий контраст",
-            "settings.appearance.highContrast.hint": "Усилить контраст текста и границ.",
+            "settings.appearance.contrast": "Контраст",
+            "settings.appearance.contrast.hint": "Мягкий: тонкие границы, спокойные панели и приглушённый цвет — поверх любой темы. Высокий: ярче текст и границы.",
+            "settings.appearance.contrast.soft": "Мягкий",
+            "settings.appearance.contrast.normal": "Обычный",
+            "settings.appearance.contrast.high": "Высокий",
 
             "settings.language.label": "Язык интерфейса",
             "settings.language.hint": "Применяется мгновенно. Сохраняется между сессиями.",

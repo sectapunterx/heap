@@ -428,6 +428,83 @@ TestCase {
             compare(v.colors[tok.key], want[tok.key].toLowerCase(), tok.key);
     }
 
+    // ── Contrast ────────────────────────────────────────────────────────
+
+    // A profile that only has the old switch still means "high"; the
+    // three-way setting wins once it is written.
+    function test_contrast_reads_the_legacy_switch() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { highContrast: true } });
+        const legacy = Theme.contrast, legacyHigh = Theme.highContrast;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { highContrast: true, contrast: "soft" } });
+        const soft = Theme.contrast, softHigh = Theme.highContrast, softFlag = Theme.softContrast;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { contrast: "bogus" } });
+        const bogus = Theme.contrast;
+        AppController.appSettingsJson = saved;
+
+        compare(legacy, "high");
+        compare(legacyHigh, true);
+        compare(soft, "soft");
+        compare(softHigh, false);
+        compare(softFlag, true);
+        compare(bogus, "normal");
+    }
+
+    // Soft fades lines and colour but never text.
+    function test_soft_contrast_quiets_chrome_not_text() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark" } });
+        const n = { border: Theme.border, danger: Theme.danger, text: String(Theme.text),
+                    textDim: String(Theme.textDim), radius: Theme.radius, bg: String(Theme.bg) };
+        const nBorderContrast = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        const nDangerSat = Theme.danger.hslSaturation;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-dark", contrast: "soft" } });
+        const sBorderContrast = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        const sDangerSat = Theme.danger.hslSaturation;
+        const s = { text: String(Theme.text), textDim: String(Theme.textDim), radius: Theme.radius, bg: String(Theme.bg) };
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        verify(sBorderContrast < nBorderContrast, "border must fade: " + sBorderContrast + " vs " + nBorderContrast);
+        verify(sDangerSat < nDangerSat * 0.8, "danger must lose saturation: " + sDangerSat + " vs " + nDangerSat);
+        compare(s.text, n.text);
+        compare(s.textDim, n.textDim);
+        compare(s.bg, n.bg);
+        compare(s.radius, n.radius + 2);
+    }
+
+    // soften() keeps every token a valid colour, in every built-in.
+    function test_soften_keeps_every_token_valid() {
+        for (const t of Presets.PRESETS) {
+            const c = Presets.soften(t.colors);
+            for (const tok of Presets.TOKENS)
+                verify(Presets.isHex(c[tok.key]), t.id + "." + tok.key + " = " + c[tok.key]);
+        }
+        // a translucent border fades by alpha, not by turning opaque
+        const b = Presets.soften(Presets.builtin("minimal-dark").colors).border;
+        verify(parseInt(b.slice(1, 3), 16) < 0x0f, "translucent border got " + b);
+    }
+
+    // High contrast must still strengthen a theme whose borders are
+    // translucent hairlines (Minimal): lightening a 6% white changes nothing.
+    function test_high_contrast_strengthens_translucent_borders() {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        AppController.theme = "dark";
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "minimal-dark" } });
+        const normal = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "minimal-dark", contrast: "high" } });
+        const high = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
+        const alpha = Theme.border.a;
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+
+        compare(alpha, 1);
+        verify(high > normal * 1.2, "high " + high + " vs normal " + normal);
+    }
+
     function test_new_id_is_unused() {
         compare(Presets.newId([]), "custom-1");
         compare(Presets.newId([{ id: "custom-1" }, { id: "custom-2" }]), "custom-3");

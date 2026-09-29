@@ -240,7 +240,55 @@ var NOCTURNE = {
     }
 };
 
-var PRESETS = [HEAP_DARK, HEAP_LIGHT, MUTED_MAUVE, GRAPHITE, MOSS_MONO, NOCTURNE];
+// Minimal: neutral surfaces, hairline translucent borders, a monochrome
+// accent, and colour kept to the small things — dots, chips, dates. Tokens
+// read off kaneo.app's stylesheet (its shadcn .dark / :root variables).
+var MINIMAL_DARK = {
+    id: "minimal-dark", name: "Minimal dark", base: "dark", builtin: true,
+    colors: {
+        bg: "#141414", bg2: "#111111", panel: "#171717", panel2: "#1c1c1c",
+        panel3: "#232323", border: "#0fffffff", borderStrong: "#1affffff", text: "#f5f5f5",
+        textMuted: "#a3a3a3", textDim: "#868686", textOnAccent: "#262626", textOnDanger: "#141414",
+        textOnBadge: "#141414", accent: "#f5f5f5", accentStrong: "#ffffff", accentSoft: "#14ffffff",
+        knob: "#a3a3a3", danger: "#fb414a", warning: "#fbbf24", success: "#34d399",
+        info: "#60a5fa", toastBg: "#1c1c1c", toastBorder: "#14ffffff", toastText: "#f5f5f5",
+        scrim: "#99000000", p0: "#fb414a", p1: "#fb923c", p2: "#a3a3a3",
+        p3: "#737373", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
+        stHalf: "#fbbf24", stBlocked: "#f87171", stReview: "#a78bfa", stDone: "#34d399",
+        mStandup: "#60a5fa", mOneone: "#a78bfa", mSync: "#2dd4bf", mFocus: "#34d399",
+        nowLine: "#fb414a", synKeyword: "#a78bfa", synString: "#34d399", synNumber: "#fbbf24",
+        synComment: "#737373", synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111",
+        code: "#d4d4d4", mention: "#60a5fa", ticket: "#a3a3a3", tag: "#a78bfa",
+        math: "#fbbf24", heading: "#737373", highlightBg: "#14ffffff", mdLink: "#60a5fa",
+        mdCode: "#e5e5e5", mdCodeBg: "#1c1c1c", mdMention: "#60a5fa", mdTicket: "#f5f5f5",
+        mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#14ffffff"
+    }
+};
+
+var MINIMAL_LIGHT = {
+    id: "minimal-light", name: "Minimal light", base: "light", builtin: true,
+    colors: {
+        bg: "#ffffff", bg2: "#fafafa", panel: "#fafafa", panel2: "#f5f5f5",
+        panel3: "#ebebeb", border: "#14000000", borderStrong: "#1f000000", text: "#262626",
+        textMuted: "#525252", textDim: "#686868", textOnAccent: "#fafafa", textOnDanger: "#ffffff",
+        textOnBadge: "#ffffff", accent: "#262626", accentStrong: "#0a0a0a", accentSoft: "#12000000",
+        knob: "#ffffff", danger: "#dc2626", warning: "#d97706", success: "#059669",
+        info: "#2563eb", toastBg: "#ffffff", toastBorder: "#14000000", toastText: "#262626",
+        scrim: "#66000000", p0: "#dc2626", p1: "#ea580c", p2: "#737373",
+        p3: "#a3a3a3", stBacklog: "#a3a3a3", stTodo: "#737373", stProg: "#2563eb",
+        stHalf: "#d97706", stBlocked: "#dc2626", stReview: "#7c3aed", stDone: "#059669",
+        mStandup: "#2563eb", mOneone: "#7c3aed", mSync: "#0d9488", mFocus: "#059669",
+        nowLine: "#dc2626", synKeyword: "#7c3aed", synString: "#059669", synNumber: "#b45309",
+        synComment: "#a3a3a3", synType: "#2563eb", synBuiltin: "#262626", codeBg: "#fafafa",
+        code: "#404040", mention: "#2563eb", ticket: "#525252", tag: "#7c3aed",
+        math: "#b45309", heading: "#a3a3a3", highlightBg: "#12000000", mdLink: "#2563eb",
+        mdCode: "#262626", mdCodeBg: "#f5f5f5", mdMention: "#2563eb", mdTicket: "#262626",
+        mdTag: "#7c3aed", mdMath: "#b45309", mdHighlight: "#12000000"
+    }
+};
+
+var PRESETS = [HEAP_DARK, HEAP_LIGHT, MINIMAL_DARK, MINIMAL_LIGHT,
+               MUTED_MAUVE, GRAPHITE, MOSS_MONO, NOCTURNE];
 
 var DEFAULT_DARK = "heap-dark";
 var DEFAULT_LIGHT = "heap-light";
@@ -331,4 +379,88 @@ function newId(customThemes) {
 function exportJson(id, customThemes, slot) {
     var t = resolve(id, customThemes, slot);
     return JSON.stringify({ name: t.name, base: t.base, colors: t.colors }, null, 2);
+}
+
+// ── Soft contrast ───────────────────────────────────────────────────────
+// Settings → Appearance → Contrast → Soft, over any theme: borders fade to
+// hairlines, the raised panels close in on the panel, and every coloured
+// token loses a third of its saturation, so colour still tells things apart
+// but nothing shouts. Text is left alone — its contrast is what keeps the
+// app readable, and textDim stays at WCAG AA.
+
+function _parse(s) {
+    var h = s.charAt(0) === "#" ? s.slice(1) : s;
+    var a = 255;
+    if (h.length === 8) { a = parseInt(h.slice(0, 2), 16); h = h.slice(2); }
+    return { a: a, r: parseInt(h.slice(0, 2), 16), g: parseInt(h.slice(2, 4), 16), b: parseInt(h.slice(4, 6), 16) };
+}
+
+function _fmt(c) {
+    function h2(n) { n = Math.max(0, Math.min(255, Math.round(n))); return (n < 16 ? "0" : "") + n.toString(16); }
+    return "#" + (c.a < 255 ? h2(c.a) : "") + h2(c.r) + h2(c.g) + h2(c.b);
+}
+
+// Toward `to` by t, alpha included.
+function mix(from, to, t) {
+    var a = _parse(from), b = _parse(to);
+    return _fmt({ a: a.a + (b.a - a.a) * t, r: a.r + (b.r - a.r) * t,
+                  g: a.g + (b.g - a.g) * t, b: a.b + (b.b - a.b) * t });
+}
+
+// Scale HSL saturation by k, keeping hue, lightness and alpha.
+function desaturate(s, k) {
+    var c = _parse(s);
+    var r = c.r / 255, g = c.g / 255, b = c.b / 255;
+    var max = Math.max(r, g, b), min = Math.min(r, g, b);
+    var l = (max + min) / 2, d = max - min;
+    if (d === 0) return s;
+    var sat = d / (1 - Math.abs(2 * l - 1));
+    var h;
+    if (max === r) h = ((g - b) / d) % 6;
+    else if (max === g) h = (b - r) / d + 2;
+    else h = (r - g) / d + 4;
+    h *= 60;
+    sat *= k;
+    var C = (1 - Math.abs(2 * l - 1)) * sat, X = C * (1 - Math.abs((h / 60) % 2 - 1)), m = l - C / 2;
+    var rgb = h < 60 ? [C, X, 0] : h < 120 ? [X, C, 0] : h < 180 ? [0, C, X]
+            : h < 240 ? [0, X, C] : h < 300 ? [X, 0, C] : [C, 0, X];
+    return _fmt({ a: c.a, r: (rgb[0] + m) * 255, g: (rgb[1] + m) * 255, b: (rgb[2] + m) * 255 });
+}
+
+function _scaleAlpha(s, k) {
+    var c = _parse(s);
+    c.a = c.a * k;
+    return _fmt(c);
+}
+
+// Tokens that carry a colour for meaning, not structure.
+var _COLOURED = ["accent", "accentStrong", "danger", "warning", "success", "info",
+                 "p0", "p1", "p2", "p3",
+                 "stBacklog", "stTodo", "stProg", "stHalf", "stBlocked", "stReview", "stDone",
+                 "mStandup", "mOneone", "mSync", "mFocus", "nowLine",
+                 "synKeyword", "synString", "synNumber", "synType", "synBuiltin",
+                 "code", "mention", "ticket", "tag", "math", "heading",
+                 "mdLink", "mdMention", "mdTicket", "mdTag", "mdMath"];
+
+// Closer to `bg` by t. A translucent colour already lets the surface through,
+// so it fades by alpha; mixing it with an opaque colour would raise it.
+function _fade(s, bg, t) {
+    return _parse(s).a < 255 ? _scaleAlpha(s, 1 - t) : mix(s, bg, t);
+}
+
+function soften(colors) {
+    var c = {};
+    for (var k in colors) c[k] = colors[k];
+    c.border = _fade(colors.border, colors.bg, 0.5);
+    c.borderStrong = _fade(colors.borderStrong, colors.bg, 0.4);
+    c.toastBorder = _fade(colors.toastBorder, colors.toastBg, 0.5);
+    c.panel2 = _fade(colors.panel2, colors.panel, 0.4);
+    c.panel3 = _fade(colors.panel3, colors.panel, 0.3);
+    c.accentSoft = _scaleAlpha(colors.accentSoft, 0.7);
+    c.highlightBg = _scaleAlpha(colors.highlightBg, 0.7);
+    c.mdHighlight = _scaleAlpha(colors.mdHighlight, 0.7);
+    c.scrim = _scaleAlpha(colors.scrim, 0.8);
+    for (var i = 0; i < _COLOURED.length; i++)
+        c[_COLOURED[i]] = desaturate(colors[_COLOURED[i]], 0.65);
+    return c;
 }

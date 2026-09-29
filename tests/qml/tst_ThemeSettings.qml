@@ -39,6 +39,9 @@ TestCase {
             ts.appearance = a;
             AppController.appSettingsJson = JSON.stringify({ appearance: a });
         });
+        // Theme cards wrap onto more rows than one; the Flow places them on
+        // polish, so a click before that lands on whatever sits there first.
+        waitForRendering(ts);
         return ts;
     }
 

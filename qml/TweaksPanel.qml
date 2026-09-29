@@ -39,6 +39,13 @@ Popup {
         settings = next;
         AppController.appSettingsJson = JSON.stringify(next);
     }
+    // highContrast is written alongside for profiles that only know it.
+    function setContrast(v) {
+        const next = Object.assign({}, settings);
+        next.appearance = Object.assign({}, next.appearance || {}, { contrast: v, highContrast: v === "high" });
+        settings = next;
+        AppController.appSettingsJson = JSON.stringify(next);
+    }
     function _appearanceValue(key, fallback) {
         const a = (settings && settings.appearance) || ({});
         return (a[key] !== undefined) ? a[key] : fallback;
@@ -175,7 +182,7 @@ Popup {
                 }
             }
 
-            // Доступность: reducedMotion + highContrast toggles
+            // Доступность: reducedMotion + contrast (soft / normal / high)
             ColumnLayout {
                 spacing: 6
                 Layout.fillWidth: true
@@ -187,10 +194,22 @@ Popup {
                     checked: !!root._appearanceValue("reducedMotion", false)
                     onToggled: (v) => root._setAppearance("reducedMotion", v)
                 }
-                ToggleRow {
-                    label: I18n.t("settings.appearance.highContrast")
-                    checked: !!root._appearanceValue("highContrast", false)
-                    onToggled: (v) => root._setAppearance("highContrast", v)
+                FieldLabel {
+                    text: I18n.t("settings.appearance.contrast"); topPadding: 6
+                }
+                RowLayout {
+                    Layout.fillWidth: true
+                    spacing: 4
+                    Repeater {
+                        model: ["soft", "normal", "high"]
+                        SegButton {
+                            required property string modelData
+                            objectName: "tweaks-contrast-" + modelData
+                            text: I18n.t("settings.appearance.contrast." + modelData)
+                            active: Theme.contrast === modelData
+                            onClicked: root.setContrast(modelData)
+                        }
+                    }
                 }
             }
 
