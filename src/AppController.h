@@ -66,7 +66,9 @@ class AppController : public QObject {
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
-  Q_PROPERTY(QDate today READ today CONSTANT)
+  // Moves at local midnight, on resume and on a clock or zone change: every
+  // "today" in the UI binds to this, so after midnight T goes to the new day.
+  Q_PROPERTY(QDate today READ today NOTIFY todayChanged)
   // provider id → { name, icon, color } for the badge on a mirrored ticket
   // (HEAP-117). Constant and cheap: a board delegate reads this per card, and
   // integrationCatalog() rebuilds every provider's field list on each call.
@@ -646,6 +648,15 @@ class AppController : public QObject {
   // asks for when a repeating event is edited or deleted.
   Q_INVOKABLE void saveOccurrence(const QVariantMap& draft, const QString& scope);
   Q_INVOKABLE void deleteOccurrence(const QString& masterId, const QDate& occurrenceDate, const QString& scope);
+  // A drag or a resize on the grid, answered with the same scope the editor
+  // asks for. `occurrence` is the map eventOccurrences handed the view.
+  // `deltaHours` moves the whole event (a day is 24), so the piece of an
+  // overnight event after midnight moves the event it belongs to, by as much
+  // as it was dragged. A resize sets a single-day occurrence's own edges.
+  Q_INVOKABLE void moveOccurrence(const QVariantMap& occurrence, double deltaHours, const QString& scope);
+  Q_INVOKABLE void resizeOccurrence(const QVariantMap& occurrence, double start, double end, const QString& scope);
+  // The stored event as the editor reads it: every field, zone included.
+  Q_INVOKABLE QVariantMap eventById(const QString& id) const;
 
   // ── .ics ──
   //
@@ -659,7 +670,22 @@ class AppController : public QObject {
   // of an existing event, starting from the workday (or from now, for today).
   // The "schedule this" menu item used to hardcode 14:00 and stack blocks.
   Q_INVOKABLE double nextFreeSlot(const QDate& date, double durationHours) const;
+  // Books the task into the first gap on `date` that fits the block it will
+  // actually get (its estimate, else the focus-block length).
+  Q_INVOKABLE void scheduleTaskAtNextFreeSlot(const QString& taskId, const QDate& date);
+  // How long a block for this task is, in minutes.
+  Q_INVOKABLE int taskBlockMinutes(const QString& taskId) const;
+  // A "doing" column gets a focus block for a card that enters it and gives
+  // the future ones back when the card leaves. In Progress always is.
+  Q_INVOKABLE bool isDoingStatus(const QString& statusId) const;
+  Q_INVOKABLE void setStatusDoing(const QString& statusId, bool doing);
   Q_INVOKABLE QString scheduledLabelFor(const QString& taskId, const QDate& date) const;
+  // The tasks a calendar range shows, pre-sorted by day, for the week and
+  // month views: those due in [from, to] and those scheduled in it. Each map
+  // carries the fields the views filter and draw with, plus `dueDay` and
+  // `schedDay` — the day's offset from `from`, or -1. Only candidates have
+  // their fields read, which is what keeps a 10k-task profile's week cheap.
+  Q_INVOKABLE QVariantList calendarTasks(const QDate& from, const QDate& to, bool includeArchived) const;
 
   // ---- People ops ----
   Q_INVOKABLE void cyclePerson(const QString& id);
@@ -877,6 +903,7 @@ class AppController : public QObject {
 
  signals:
   void selectedDateChanged();
+  void todayChanged();
   void themeChanged();
   void densityChanged();
   void languageChanged();
@@ -945,6 +972,15 @@ class AppController : public QObject {
   // Raised when the user asks to restore the window from the tray (tray click
   // or the tray menu's "Show" entry). QML un-hides and activates the window.
   void showWindowRequested();
+
+ public:
+  // One automation tick at `now`. The timer calls it with the wall clock;
+  // tests call it with the clock they need.
+  void runAutomationAt(const QDateTime& now);
+  // Re-reads the date. When it moved, `today` changes, and a selection that
+  // was on the old today follows it — the calendar is where the user left it,
+  // "today". Called by the midnight timer, the minute tick and on resume.
+  void refreshToday(const QDate& current = QDate::currentDate());
 
  private slots:
   void runAutomation();
@@ -1057,14 +1093,45 @@ class AppController : public QObject {
   void onNotifierAction(const QString& notificationId, const QString& actionId);
   void onNotifierActivated(const QString& notificationId);
   QSet<QString> m_blockedStuckIds;
-  QMap<QString, QDate> m_lastReminderDay;  // task/sentinel id -> last day notified
+  // Reminders already delivered, by key (see src/cal/Reminders.h), with when.
+  // Persisted to reminders.json so a restart does not announce them again.
+  QHash<QString, QDateTime> m_sentReminders;
+
+  // Notifications that arrived during quiet hours, delivered when they end.
+  struct HeldNotification {
+    QString title;
+    QString body;
+    QString kind;
+    QString taskId;
+  };
+
+  QVector<HeldNotification> m_heldNotifications;
+  QString remindersFilePath() const;
+  void loadSentReminders();
+  void saveSentReminders() const;
+  bool reminderSent(const QString& key) const;
+  QSet<QString> sentReminderKeys() const;
+  void markReminderSent(const QString& key, const QDateTime& at);
+  void flushHeldNotifications();
+  // settings.calendar.workDays, Monday to Friday by default.
+  bool isWorkDay(const QDate& day) const;
+  // Fires at the next local midnight; see refreshToday().
+  QTimer* m_midnightTimer = nullptr;
+  void armMidnightTimer();
   QVariantMap settingsMap() const;
   // The calendar snap grid in hours, from settings.calendar.snapMinutes. Every
   // event write path clamps against the same grid (heap::cal::clampHours).
   double snapStepHours() const;
+  // saveEvent's second half: normalizes the span, checks the rule and stores.
+  // Series edits build a CalEvent themselves and come in here.
+  void storeEvent(CalEvent e);
   bool inQuietHours(const QDateTime& when) const;
   static double nextQuarterHour(const QDateTime& when);
   void scheduleFocusBlockFor(const QString& taskId);
+  void focusBlockOnStatusChange(const QString& taskId, const QString& from, const QString& to);
+  // Keeps a task's scheduledAt on the focus block it came from: moved with
+  // it, cleared when it is deleted (after == nullptr).
+  void followFocusBlock(const CalEvent& before, const CalEvent* after);
 
   // Persistence
   QTimer* m_saveTimer = nullptr;
@@ -1140,9 +1207,14 @@ class AppController : public QObject {
       m_label = std::move(label);
     }
 
+    void setRedoLabel(QString label) {
+      m_redoLabel = std::move(label);
+    }
+
    private:
     AppController* m_owner;
     QString m_label;
+    QString m_redoLabel;
     bool m_armed = true;
     // Scopes nest: an operation built out of other operations records one
     // entry, not one per part. Only the outermost scope snapshots and pushes.

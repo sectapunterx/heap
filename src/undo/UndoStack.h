@@ -149,6 +149,10 @@ void applyForward(Model& model, const Edits<T>& edits) {
 // One undoable operation.
 struct Entry {
   QString label;  // what the toast says, already translated
+  // What the toast says when the entry is redone. Empty = a generic "Redone":
+  // the undo label names the undo's outcome ("Restored: X"), which is the
+  // opposite of what a redo does.
+  QString redoLabel;
   Edits<Task> tasks;
   Edits<CalEvent> events;
   Edits<Person> people;

@@ -783,6 +783,7 @@ Item {
                         searchText: root.searchText
                         priorities: root.activePriorities
                         sortMode: root.sortMode
+                        today: AppController.today
                     }
                 }
             }

@@ -45,6 +45,10 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // whatever the last sort left behind.
   //   manual | priority | due | updated | title
   Q_PROPERTY(QString sortMode READ sortMode WRITE setSortMode NOTIFY sortModeChanged)
+  // The day `deadline:today` and friends are relative to. Bound to
+  // AppController.today, so the board agrees with every other view and moves
+  // at midnight; unset means the system date.
+  Q_PROPERTY(QDate today READ today WRITE setToday NOTIFY filterChanged)
 
  public:
   explicit TaskFilterProxy(QObject* parent = nullptr);
@@ -66,6 +70,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   }
 
   void setSearchText(const QString& v);
+
+  QDate today() const {
+    return m_today;
+  }
+
+  void setToday(const QDate& d);
 
   bool isQuery() const {
     return m_query.isQuery();
@@ -108,6 +118,7 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   QString m_status;
   bool m_showArchived = false;
   QString m_rawSearch;             // exactly what the user typed
+  QDate m_today;                   // invalid = QDate::currentDate()
   QString m_searchText;            // the free-text remainder, lowercased
   heap::query::TaskQuery m_query;  // compiled once per keystroke
   QStringList m_priorities;
