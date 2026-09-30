@@ -15,6 +15,7 @@ struct TaskMeta {
     QString ticketKey;     // "LTE-2398" when the text names a tracker ticket
     QString priority;      // "P0".."P3" from "p1" / "!!" / "срочно"; "" if none
     QStringList labels;    // "#backend" → "backend", removed from the title
+    QString head;          // the input before the "// …" tail, nothing else removed
 };
 
 // Classify free-form input against three keyword lists. Order of precedence:
@@ -28,10 +29,8 @@ TaskKind classifyKind(QStringView text);
 QString meetingType(QStringView text);
 
 // Strip "// comment" tail (→ desc) and "@handle" tokens (→ handles) from a
-// title. "//" must be exact two-slash sequence (URLs like "https://" are NOT
-// stripped because the scheme is followed by non-slash chars on the *left*
-// side, but pure "https://example" still trips this — caller is responsible
-// for picking inputs where "//" denotes a comment).
+// title. A "//" inside a URL ("https://example.com/a") is part of the URL,
+// never the start of a comment.
 TaskMeta extractMeta(QStringView raw);
 
 // Generate a human-readable slug for a person's name, of the form

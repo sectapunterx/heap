@@ -379,6 +379,47 @@ Popup {
         return AppController.extractTaskMeta(raw || "");
     }
 
+    // What the title field turns into on save (TASKS-10). An existing task's
+    // title is saved as typed: "Critical crash on login" or a Jira "Blocker:
+    // …" is a name, not quick-add syntax, and each save used to cut more of it
+    // away. A new task reads the title the way quick-add does — "p0", "#billing",
+    // "APP-104" and a "// note" tail become the priority, labels, id and
+    // description — but only when all of them can be applied: a priority picked
+    // in the box that disagrees, an id typed by hand or a ticket key already
+    // taken leaves the title as typed (minus the "//" tail), so no word is lost.
+    // Dates stay in the title; the editor has its own date fields.
+    function _titleTokens(meta, typedId) {
+        const raw = titleField.text || "";
+        if (!root.isNew)
+            return { title: raw.trim(), priority: "", labels: [], id: "" };
+        const asTyped = { title: String(meta.head || "").trim(), priority: "", labels: [], id: "" };
+        const autoPri = root.draft.priority || "P2";
+        if (meta.priority && meta.priority !== priBox.currentText && priBox.currentText !== autoPri)
+            return asTyped;
+        let id = "";
+        if (meta.ticketKey && meta.ticketKey !== typedId) {
+            const idTyped = idField.text.trim().length > 0;
+            const taken = !!AppController.taskById(meta.ticketKey).id;
+            if (idTyped || taken)
+                return asTyped;
+            id = meta.ticketKey;
+        }
+        // Nothing but tokens ("p0 #ops") is not a title.
+        if (String(meta.title || "").trim().length === 0)
+            return asTyped;
+        return { title: meta.title, priority: meta.priority || "", labels: meta.labels || [], id: id };
+    }
+
+    function _mergeLabels(typed, fromTitle) {
+        const out = typed.slice();
+        for (let i = 0; i < fromTitle.length; ++i) {
+            const l = fromTitle[i];
+            if (!out.some(x => x.toLowerCase() === l.toLowerCase()))
+                out.push(l);
+        }
+        return out;
+    }
+
     // Resolve @handles into display names via PersonModel. Unknown handles
     // are kept as "@handle" so context isn't silently dropped.
     function _resolvePeopleNames(handles) {
@@ -451,13 +492,12 @@ Popup {
         if (finalId.length === 0) {
             finalId = root.isNew ? (root.draft.id || "") : root._originalId;
         }
-        // Extract @handle attendees and "// comment" tail. Handles
-        // remain visible in the title — only the "//" tail is
-        // peeled off into the description.
         const meta = root._extractMeta(titleField.text);
-        const cleanedTitle = meta.title;
-        const inlineDesc   = meta.desc;
-        const handleNames  = root._resolvePeopleNames(meta.handles);
+        const inlineDesc = root.isNew ? meta.desc : "";
+        const handleNames = root._resolvePeopleNames(meta.handles);
+        const parsed = root._titleTokens(meta, finalId);
+        const cleanedTitle = parsed.title;
+        if (parsed.id) finalId = parsed.id;
 
         // Due and scheduled are typed independently; a task with only
         // a due date is scheduled for that day, which is what the
@@ -482,7 +522,7 @@ Popup {
                       ? descField.text.trim() + "\n" + inlineDesc
                       : inlineDesc)
                   : descField.text,
-            priority: priBox.currentText,
+            priority: parsed.priority || priBox.currentText,
             status: root.statusList()[statusBox.currentIndex],
             scheduledAt: scheduledAt,
             dueAt: dueAt,
@@ -491,7 +531,7 @@ Popup {
             branch: branchField.text,
             recurrence: recurBox.value(),
             // Plain names; saveTask keeps each existing label's colour.
-            labels: root.labelsFromText(labelsField.text),
+            labels: root._mergeLabels(root.labelsFromText(labelsField.text), parsed.labels),
             estimateMinutes: parseInt(estimateField.text || "0") || 0,
             someday: somedayBox.checked
         };
@@ -796,6 +836,7 @@ Popup {
                     }
                     ComboBox {
                         id: priBox
+                        objectName: "te-priority"
                         Layout.preferredWidth: 88
                         model: ["P0", "P1", "P2", "P3"]
                         background: FieldBg {}

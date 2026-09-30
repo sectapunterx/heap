@@ -2,8 +2,8 @@
 //
 // Covers standalone instantiation, the showFor() seeding paths (new draft,
 // existing draft, id auto-derive re-arm, null fallback) and the Escape close
-// policy. The component has no objectNames and declares no signals, so there
-// are no click-driven or signal-contract tests — API level only.
+// policy, and the refusal of a taken id (SHELL-24). The component declares no
+// signals, so there are no signal-contract tests — API level only.
 import QtQuick
 import QtQuick.Controls
 import QtTest
@@ -122,5 +122,46 @@ TestCase {
 
         keyClick(Qt.Key_Escape);
         tryCompare(pe, "opened", false);
+    }
+
+    // SHELL-24: a new person typed onto an id someone already has used to
+    // replace that person whole. The editor refuses, says who holds the id and
+    // stays open on the draft; the existing person is unchanged.
+    function test_new_person_on_a_taken_id_is_refused() {
+        const victim = "shell24.victim";
+        AppController.deletePerson(victim);   // the test profile persists
+        verify(AppController.savePerson({ _isNew: true, id: victim, name: "Victim Person",
+                                          role: "Tech Lead", question: "keep me", state: "todo" }));
+        const before = AppController.people.rowCount();
+
+        const pe = make('import TodoCpp; PersonEditor { }');
+        pe.showFor(AppController.newContactDraft("Impostor"));
+        tryCompare(pe, "opened", true);
+        const idField = findChild(pe.contentItem, "pe-id");
+        verify(idField !== null);
+        idField.text = victim;
+        pe._save();
+
+        verify(pe.opened, "the editor stays open on the refused draft");
+        const err = findChild(pe.contentItem, "pe-error");
+        verify(err.visible);
+        verify(err.text.indexOf("Victim Person") >= 0, err.text);
+        const kept = AppController.personById(victim);
+        compare(kept.name, "Victim Person");
+        compare(kept.role, "Tech Lead");
+        compare(kept.question, "keep me");
+        compare(AppController.people.rowCount(), before);
+
+        // A free id goes through, and the message goes away as the id changes.
+        const freeId = "shell24.impostor";
+        AppController.deletePerson(freeId);
+        idField.text = freeId;
+        verify(!err.visible);
+        pe._save();
+        tryCompare(pe, "opened", false);
+        compare(AppController.personById(freeId).name, "Impostor");
+        compare(AppController.personById(victim).name, "Victim Person");
+        AppController.deletePerson(freeId);
+        AppController.deletePerson(victim);
     }
 }

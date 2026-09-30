@@ -104,6 +104,76 @@ TEST_F(UxAuditTest, HotkeysDocCoversTheCatalog) {
   EXPECT_TRUE(doc.contains(QStringLiteral("read-only")));
 }
 
+// SHELL-24: a new person typed onto someone's id used to replace that person
+// whole — name, role, question — with no undo.
+TEST_F(UxAuditTest, ANewPersonCannotTakeAnExistingId) {
+  Person oleg;
+  oleg.id = QStringLiteral("o.t");
+  oleg.name = QStringLiteral("Oleg T.");
+  oleg.role = QStringLiteral("Tech Lead");
+  oleg.question = QStringLiteral("Which metrics?");
+  app_->people()->reset({oleg});
+
+  QVariantMap draft = app_->newContactDraft(QStringLiteral("Impostor"));
+  draft[QStringLiteral("_isNew")] = true;
+  draft[QStringLiteral("id")] = QStringLiteral("o.t");
+  QSignalSpy spy(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->savePerson(draft));
+
+  ASSERT_EQ(app_->people()->rowCount(), 1);
+  const QVariantMap kept = app_->personById(QStringLiteral("o.t"));
+  EXPECT_EQ(kept.value("name").toString(), QStringLiteral("Oleg T."));
+  EXPECT_EQ(kept.value("role").toString(), QStringLiteral("Tech Lead"));
+  EXPECT_EQ(kept.value("question").toString(), QStringLiteral("Which metrics?"));
+  ASSERT_GE(spy.count(), 1);
+  EXPECT_TRUE(spy.last().at(0).toString().contains(QStringLiteral("Oleg T.")));
+  EXPECT_EQ(spy.last().at(1).toString(), QStringLiteral("warning"));
+}
+
+TEST_F(UxAuditTest, AnEditCannotMoveOntoAnotherPersonsId) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  Person b;
+  b.id = QStringLiteral("b.k");
+  b.name = QStringLiteral("Boris K.");
+  app_->people()->reset({a, b});
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("_originalId")] = QStringLiteral("a.s");
+  edit[QStringLiteral("id")] = QStringLiteral("b.k");
+  EXPECT_FALSE(app_->savePerson(edit));
+  EXPECT_EQ(app_->personById(QStringLiteral("b.k")).value("name").toString(), QStringLiteral("Boris K."));
+
+  // Saving under its own id is an ordinary edit.
+  edit[QStringLiteral("id")] = QStringLiteral("a.s");
+  edit[QStringLiteral("question")] = QStringLiteral("release?");
+  EXPECT_TRUE(app_->savePerson(edit));
+  EXPECT_EQ(app_->personById(QStringLiteral("a.s")).value("question").toString(), QStringLiteral("release?"));
+}
+
+TEST_F(UxAuditTest, PersonSavesAreUndoable) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  a.question = QStringLiteral("first");
+  app_->people()->reset({a});
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("question")] = QStringLiteral("second");
+  ASSERT_TRUE(app_->savePerson(edit));
+  EXPECT_TRUE(app_->hasPendingUndo());
+  app_->undo();
+  EXPECT_EQ(app_->personById(QStringLiteral("a.s")).value("question").toString(), QStringLiteral("first"));
+
+  QVariantMap fresh = app_->newContactDraft(QStringLiteral("Ivan Petrov"));
+  fresh[QStringLiteral("_isNew")] = true;
+  ASSERT_TRUE(app_->savePerson(fresh));
+  EXPECT_EQ(app_->people()->rowCount(), 2);
+  app_->undo();
+  EXPECT_EQ(app_->people()->rowCount(), 1);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);
