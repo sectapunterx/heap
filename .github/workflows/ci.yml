@@ -184,7 +184,11 @@ jobs:
         shell: pwsh
         run: Add-MpPreference -ExclusionPath "${{ github.workspace }}", "${{ runner.temp }}"
 
+      # Depth 2: the qmllint ratchet judges findings on the lines this change
+      # wrote, against HEAD^1 (the base of a PR's merge commit).
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 2
 
       # Ubuntu 24.04's apt ships Qt 6.4.2, which has a static-QML-module
       # qmlcachegen bug: file-based .qml components ("SideRail is not a type")
@@ -356,12 +360,13 @@ jobs:
       # image format. Here it checks the build tree; the Windows and macOS steps
       # below run it on the deployed bundle, which is what users get.
       # qmllint over the whole QML module, held to a per-file baseline: a file
-      # may not gain findings (see .github/scripts/qmllint_ratchet.py).
+      # may not gain findings on the lines a change wrote; those are annotated
+      # in the PR (see .github/scripts/qmllint_ratchet.py).
       - name: qmllint ratchet (linux)
         if: runner.os == 'Linux'
         run: |
           cmake --build build --target all_qmllint_json
-          python3 .github/scripts/qmllint_ratchet.py build/heap_core_qmllint.json .github/qmllint-baseline.json
+          python3 .github/scripts/qmllint_ratchet.py build/heap_core_qmllint.json .github/qmllint-baseline.json --diff HEAD^1
 
       - name: Upload qmllint report (linux)
         if: always() && runner.os == 'Linux'

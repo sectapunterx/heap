@@ -253,6 +253,12 @@ qt_add_qml_module(heap_core
     URI TodoCpp
     VERSION 1.0
     RESOURCE_PREFIX "/qt/qml"
+    # qmldir and the .qmltypes must sit under a directory named after the
+    # URI, or qmllint and the QML language server cannot import TodoCpp: every
+    # Theme.x / I18n.t() and every C++ type then read as a finding, and the
+    # qmllint ratchet grew with each line of new QML. The app itself loads the
+    # module from qrc, so only the tooling sees this path.
+    OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/TodoCpp"
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
