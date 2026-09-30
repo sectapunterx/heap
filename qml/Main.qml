@@ -44,6 +44,35 @@ ApplicationWindow {
         return viewLoader.item;
     }
 
+    // A #TICKET clicked in a note or doc page: the heap id, or a tracker key
+    // ("PROJ-123") that a mirrored task carries.
+    function openTaskById(key) {
+        const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
+        if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+        else toast.show(I18n.t("notes.link.noTask").arg(key), "warning");
+    }
+
+    // The same link rules outside Notes: a doc page's [[note]] opens the note.
+    function followMdLink(kind, target) {
+        if (kind === "task") { win.openTaskById(target); return; }
+        if (kind === "person") {
+            const pid = AppController.personIdForHandle(target);
+            if (pid.length > 0) personEditor.showFor(AppController.personById(pid));
+            return;
+        }
+        if (kind === "note") {
+            const hit = AppController.resolveNoteLink(target);
+            if (hit.kind === "note" || hit.kind === "heading") {
+                AppController.activeNoteId = hit.noteId;
+                AppController.currentView = "notes";
+                return;
+            }
+            const t = AppController.taskById(String(target).trim());
+            if (t && t.id) { taskEditor.showFor(Object.assign({}, t)); return; }
+            toast.show(I18n.t("notes.link.noNote").arg(target), "warning");
+        }
+    }
+
     function _settingsObject() {
         const raw = AppController.appSettingsJson || "";
         if (!raw.length) return ({});
@@ -719,6 +748,7 @@ ApplicationWindow {
                     id: docsComp
                     DocsView {
                         id: docsView
+                        onLinkRequested: (kind, target) => win.followMdLink(kind, target)
                         Connections {
                             target: docsBridge
                             function onRequestedAnchorChanged() {
@@ -740,6 +770,8 @@ ApplicationWindow {
                         // same line be requested twice.
                         jumpToLine: notesBridge.requestedLine
                         onJumpConsumed: notesBridge.requestedLine = -1
+                        onTaskRequested: (id) => win.openTaskById(id)
+                        onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
                     }
                 }
                 Component {
@@ -1010,6 +1042,7 @@ ApplicationWindow {
         onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
         onNavigateToContacts: docsBridge.requestedAnchor = "sec-contacts"
         onNavigateToNoteLine: (line) => notesBridge.requestedLine = line
+        onNavigateToDocPage: (pageId) => docsBridge.requestedAnchor = "page:" + pageId
     }
 
     // Anchor bridge — DocsView listens for changes and scrolls to the

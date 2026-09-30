@@ -73,14 +73,18 @@ Item {
     }
 
     // The body may change under us — an undo, a profile switch, an import.
+    property int _titleRev: 0
     Connections {
         target: AppController.docPages
         function onDataChanged() {
+            root._titleRev++;
             if (root._dirty || root.pageId.length === 0) return;
             const fresh = AppController.docPageBody(root.pageId);
             if (fresh !== area.text) root.load();
         }
-        function onModelReset() { root.load() }
+        function onRowsInserted() { root._titleRev++ }
+        function onRowsRemoved() { root._titleRev++ }
+        function onModelReset() { root._titleRev++; root.load() }
     }
 
     Timer {
@@ -122,7 +126,12 @@ Item {
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spLg
                 spacing: Theme.spMd
                 Text {
+                    objectName: "docpage-title"
+                    // Reads `_titleRev` so a rename re-evaluates it: m.data()
+                    // is a call, not a binding QML can watch, and the head
+                    // kept the old title after every rename.
                     text: {
+                        const _r = root._titleRev;
                         const m = AppController.docPages;
                         const r = m.roleOf("title");
                         const at = m.indexOfId(root.pageId);
@@ -203,6 +212,29 @@ Item {
                         root._dirty = true;
                         saveTimer.restart();
                     }
+                    Keys.priority: Keys.BeforeItem
+                    // The same keyboard as the notes editor: list
+                    // continuation, Tab, the formatting keys — and Ctrl+K is a
+                    // link here, not the command palette.
+                    Keys.onShortcutOverride: (event) => {
+                        if (mdEditor.claimsShortcut(event.key, event.modifiers)) event.accepted = true;
+                    }
+                    Keys.onPressed: (event) => {
+                        // Nothing left to undo in the text: the key belongs to
+                        // the app's undo (a deleted page, a move).
+                        if (event.matches(StandardKey.Undo) && !area.canUndo && AppController.hasPendingUndo) {
+                            AppController.undo();
+                            event.accepted = true;
+                            return;
+                        }
+                        if (event.matches(StandardKey.Redo) && !area.canRedo && AppController.canRedo) {
+                            AppController.redo();
+                            event.accepted = true;
+                            return;
+                        }
+                        mdEditor.setSelection(area.selectionStart, area.selectionEnd);
+                        if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
+                    }
                 }
             }
 
@@ -221,7 +253,31 @@ Item {
                 Layout.fillHeight: true
                 Layout.preferredWidth: 1
                 document: previewDoc
+                // Checkboxes write through the editor, so a tick is one undo
+                // step there; links follow the same rules as in notes.
+                editorDocument: area.textDocument
+                onSourceRequested: (line) => {
+                    area.forceActiveFocus();
+                    area.cursorPosition = previewDoc.positionForLine(line);
+                }
+                onInternalLinkActivated: (kind, target) => root.internalLinkActivated(kind, target)
             }
+        }
+    }
+
+    // A [[link]], #TICKET or @person clicked in the preview. The page does not
+    // know what a note or a task is; the view it sits in does.
+    signal internalLinkActivated(string kind, string target)
+
+    MarkdownEditorController {
+        id: mdEditor
+        target: area.textDocument
+        cursorPosition: area.cursorPosition
+        selectionStart: area.selectionStart
+        selectionEnd: area.selectionEnd
+        onSelectionRequested: (start, end) => {
+            if (start === end) area.cursorPosition = start;
+            else area.select(start, end);
         }
     }
 

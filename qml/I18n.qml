@@ -239,9 +239,7 @@ QtObject {
             "filter.showArchived": "Show archived",
             "filter.sortBy": "Sort by",
             "filter.sort.manual": "Manual",
-            "filter.sort.priority": "Priority",
             "filter.sort.due": "Due",
-            "filter.sort.updated": "Updated",
             "filter.sort.title": "Title",
             "filter.sort.deadline": "Deadline",
             "filter.sort.priority": "Priority",
@@ -613,7 +611,6 @@ QtObject {
             "docs.field.mmHandle": "Mattermost handle",
             "docs.field.avatar": "Avatar colour",
             "notes.title": "Notes",
-            "notes.empty": "Notes are empty",
             "notes.placeholder": "Start typing markdown here…",
             "docs.editor.title.placeholder": "Doc title…",
             "docs.editor.body.placeholder": "Content…",
@@ -1013,6 +1010,11 @@ QtObject {
             "notes.vault.import": "Import",
             "toast.notes.importedFull": "Notes: %1 new · %2 updated · %3 kept · %4 conflicts · %5 skipped — Ctrl+Z undoes",
             "toast.notes.exportedTo": "Wrote %1 notes to %2",
+            "notes.link.noTask": "No task %1 in this profile",
+            "notes.link.noNote": "No note called “%1”",
+            "docs.wiki.missing": "No doc page called “%1”",
+            "notes.folder.rename": "Rename folder…",
+            "notes.folder.remove": "Remove folder (keep notes)",
             // ── audit-know: end ──
             // ── audit-ux: begin ──
             // ── audit-ux: end ──
@@ -1251,9 +1253,7 @@ QtObject {
             "filter.showArchived": "Показать архив",
             "filter.sortBy": "Сортировка",
             "filter.sort.manual": "Вручную",
-            "filter.sort.priority": "Приоритет",
             "filter.sort.due": "Срок",
-            "filter.sort.updated": "Обновление",
             "filter.sort.title": "Название",
             "filter.sort.deadline": "По дедлайну",
             "filter.sort.priority": "По приоритету",
@@ -1616,7 +1616,6 @@ QtObject {
             "docs.field.mmHandle": "Ник в Mattermost",
             "docs.field.avatar": "Цвет аватара",
             "notes.title": "Заметки",
-            "notes.empty": "Заметки пусты",
             "notes.placeholder": "Начни писать markdown тут…",
             "docs.editor.title.placeholder": "Название дока…",
             "docs.editor.body.placeholder": "Содержание…",
@@ -2003,6 +2002,11 @@ QtObject {
             "notes.vault.import": "Импортировать",
             "toast.notes.importedFull": "Заметки: новых %1 · обновлено %2 · оставлено %3 · конфликтов %4 · пропущено %5 — Ctrl+Z отменит",
             "toast.notes.exportedTo": "Записано заметок: %1 → %2",
+            "notes.link.noTask": "В этом профиле нет задачи %1",
+            "notes.link.noNote": "Нет заметки «%1»",
+            "docs.wiki.missing": "Нет страницы «%1»",
+            "notes.folder.rename": "Переименовать папку…",
+            "notes.folder.remove": "Убрать папку (заметки останутся)",
             // ── audit-know: end ──
             // ── audit-ux: begin ──
             // ── audit-ux: end ──

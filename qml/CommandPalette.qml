@@ -25,6 +25,7 @@ Popup {
     // A note hit carries the line its section starts on, so opening it lands
     // the reader where the words were rather than at the top of the note.
     signal navigateToNoteLine(int line)
+    signal navigateToDocPage(string pageId)
 
     property var _entries: []           // cached full list
     property var _matches: []           // filtered + scored
@@ -86,6 +87,9 @@ Popup {
         for (let i = 0; i < _entries.length; i++) {
             const e = _entries[i];
             let score = _fuzzyScore(trimmed, e.label + " " + (e.sub || ""));
+            // The words themselves in the label beat a scattered subsequence:
+            // "windows" should rank "Release › Windows" above "Release".
+            if (ql.length >= 2 && score >= 0 && e.label.toLowerCase().indexOf(ql) >= 0) score += 20;
             let snippet = "";
             // Full-text (HEAP-80): match the body too, with a context snippet.
             if (trimmed.length >= 2 && e.body && e.body.toLowerCase().indexOf(ql) >= 0) {
@@ -131,8 +135,14 @@ Popup {
             } else if (entry.kind === "person") {
                 root.openPerson(entry.personId);
             } else if (entry.kind === "note") {
+                // Any note of the profile, not just the open one.
+                if (entry.noteId) AppController.activeNoteId = entry.noteId;
                 AppController.currentView = "notes";
                 root.navigateToNoteLine(entry.line !== undefined ? entry.line : 0);
+            } else if (entry.kind === "docPage") {
+                AppController.activeDocPageId = entry.pageId;
+                AppController.currentView = "docs";
+                root.navigateToDocPage(entry.pageId);
             } else if (entry.kind === "dailyNote") {
                 AppController.currentView = "notes";
                 AppController.openDailyNote();
@@ -246,6 +256,7 @@ Popup {
                                     case "profile": return "●";
                                     case "person":  return "P";
                                     case "note":    return "N";
+                                    case "docPage": return "¶";
                                     case "template": return "✚";
                                 }
                                 return "?";

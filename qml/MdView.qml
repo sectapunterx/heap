@@ -69,80 +69,32 @@ ListView {
             const rest = link.substring(7);
             const slash = rest.indexOf("/");
             if (slash > 0) {
-                view.internalLinkActivated(rest.substring(0, slash),
-                                           decodeURIComponent(rest.substring(slash + 1)));
+                // A hand-written heap:// link can carry a stray "%": decoding
+                // it threw, and the click did nothing but log a URIError.
+                let target = rest.substring(slash + 1);
+                try { target = decodeURIComponent(target); } catch (e) { /* keep it as written */ }
+                const kind = rest.substring(0, slash);
+                // A footnote reference is a jump within this document, which
+                // only the view can make.
+                if (kind === "fn" && view.document) {
+                    const row = view.document.rowForFootnote(target);
+                    if (row >= 0) view.positionViewAtIndex(row, ListView.Beginning);
+                    return;
+                }
+                view.internalLinkActivated(kind, target);
                 return;
             }
         }
         view.openExternal(link);
     }
 
-    // Links in a note or an issue body are written by someone else. http(s),
-    // mailto and heap:// open straight away; anything else (file:, ms-settings:,
-    // a program path) can start a program, so the reader sees it first.
+    // Links in a note or an issue body are written by someone else; see
+    // LinkConfirmDialog for which open straight away and which are asked about.
     function openExternal(link) {
-        if (!link) return;
-        if (AppController.isSafeLink(link)) {
-            Qt.openUrlExternally(link);
-            return;
-        }
-        linkConfirm.link = link;
-        linkConfirm.open();
+        linkConfirm.openLink(link);
     }
 
-    QQC.Dialog {
-        id: linkConfirm
-        objectName: "mdLinkConfirm"
-        property string link: ""
-        modal: true
-        parent: Overlay.overlay
-        anchors.centerIn: parent
-        width: Math.min(460, (parent ? parent.width : 460) - 32)
-        padding: Theme.inset
-        title: I18n.t("md.link.confirm.title")
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
-        contentItem: ColumnLayout {
-            spacing: Theme.spMd
-            Text {
-                Layout.fillWidth: true
-                text: I18n.t("md.link.confirm.body")
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsMd
-                wrapMode: Text.Wrap
-            }
-            Text {
-                Layout.fillWidth: true
-                text: linkConfirm.link
-                color: Theme.text
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsMd
-                wrapMode: Text.WrapAnywhere
-            }
-        }
-        footer: RowLayout {
-            spacing: Theme.spMd
-            Item { Layout.fillWidth: true }
-            PillButton {
-                text: I18n.t("common.cancel")
-                onClicked: linkConfirm.close()
-            }
-            PillButton {
-                objectName: "mdLinkConfirmOpen"
-                text: I18n.t("md.link.confirm.open")
-                danger: true
-                onClicked: {
-                    linkConfirm.close();
-                    Qt.openUrlExternally(linkConfirm.link);
-                }
-            }
-            Item { Layout.preferredWidth: 10 }
-        }
-    }
+    LinkConfirmDialog { id: linkConfirm }
 
     // Colour for a callout kind. Unknown kinds fall back to the accent, so a
     // note using "[!SOMETHING]" still renders as a callout rather than losing

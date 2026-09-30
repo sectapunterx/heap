@@ -40,10 +40,14 @@ Item {
     // caret goes to that line and the property is handed back for clearing.
     property int jumpToLine: -1
     signal jumpConsumed()
-    onJumpToLineChanged: {
+    onJumpToLineChanged: _consumeJump()
+    function _consumeJump() {
         if (jumpToLine < 0) return;
         _jumpToOffset(mdDocument.positionForLine(jumpToLine));
-        jumpConsumed();
+        // Later, not from inside the change handler: the caller clears the
+        // line it bound this to, which re-entered the binding while it was
+        // still being evaluated and logged a binding loop.
+        Qt.callLater(root.jumpConsumed);
     }
 
     // ── State for autocomplete popup ─────────────────────────────────
@@ -258,6 +262,45 @@ Item {
         // the caret stays at the edit point instead of resetting to 0. (HEAP-65)
         Mention.commit(editor, acTriggerPos, pos, insert);
         _hideAutocomplete();
+    }
+
+    // "/today", "/fri" typed as a word of its own becomes an ISO date. Only
+    // as a word of its own: "http://x.com/now" and "src/mon/main.c" are a URL
+    // and a path, and rewriting them on Enter mangled both.
+    function _expandSlashDate() {
+        const pos = editor.cursorPosition;
+        const txt = editor.text;
+        const lineStart = txt.lastIndexOf("\n", pos - 1) + 1;
+        const m = txt.substring(lineStart, pos).match(/(^|[\s(\[{])\/([A-Za-zА-Яа-яЁё]+)$/);
+        if (!m) return false;
+        const word = m[2];
+        const parsed = AppController.parseDateTime(word, new Date());
+        if (!parsed || !parsed.ok || !parsed.start) return false;
+        const d = parsed.start;
+        const iso = d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(d.getDate()).padStart(2, "0");
+        const slashPos = pos - (word.length + 1);
+        editor.remove(slashPos, pos);
+        editor.insert(slashPos, iso);
+        return true;
+    }
+
+    // Ctrl+Z / Ctrl+Shift+Z when the text field has nothing of its own left to
+    // undo: hand the key to the app's undo, which holds note deletes and
+    // imports. Returns true when it did.
+    function _globalUndoFallback(field, event) {
+        if (event.matches(StandardKey.Undo) && !field.canUndo && AppController.hasPendingUndo) {
+            AppController.undo();
+            event.accepted = true;
+            return true;
+        }
+        if (event.matches(StandardKey.Redo) && !field.canRedo && AppController.canRedo) {
+            AppController.redo();
+            event.accepted = true;
+            return true;
+        }
+        return false;
     }
 
     // Move the caret to `off` and scroll the editor so it is visible.
@@ -493,21 +536,7 @@ Item {
                     // editor has focus is what makes them editor-scoped: they
                     // still mean what they always did everywhere else.
                     Keys.onShortcutOverride: (event) => {
-                        const mods = event.modifiers & ~Qt.KeypadModifier;
-                        if (mods === Qt.ControlModifier) {
-                            switch (event.key) {
-                            case Qt.Key_B: case Qt.Key_I: case Qt.Key_E: case Qt.Key_K:
-                                event.accepted = true;
-                                return;
-                            }
-                        }
-                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
-                            switch (event.key) {
-                            case Qt.Key_X: case Qt.Key_H: case Qt.Key_L:
-                                event.accepted = true;
-                                return;
-                            }
-                        }
+                        if (mdEditor.claimsShortcut(event.key, event.modifiers)) event.accepted = true;
                     }
 
                     Keys.onPressed: (event) => {
@@ -533,6 +562,12 @@ Item {
                             }
                         }
 
+                        // Ctrl+Z with nothing left to undo in the text means the
+                        // last thing done to the notes themselves — a delete, an
+                        // import. The field is always focused here, so without
+                        // this the app-wide undo was unreachable from Notes.
+                        if (root._globalUndoFallback(editor, event)) return;
+
                         // Slash-commands — /today, /tomorrow, /завтра, etc.
                         // Tab or Enter replaces "/<word>" with a parsed ISO
                         // date when the chrono parser recognises the word.
@@ -540,76 +575,23 @@ Item {
                             || event.key === Qt.Key_Return
                             || event.key === Qt.Key_Enter)
                         {
-                            const beforeCmd = editor.text.substring(0, editor.cursorPosition);
-                            const slashM = beforeCmd.match(/\/([A-Za-zА-Яа-яЁё]+)$/);
-                            if (slashM) {
-                                const word = slashM[1];
-                                const parsed = AppController.parseDateTime(word, new Date());
-                                if (parsed && parsed.ok && parsed.start) {
-                                    const d = parsed.start;
-                                    const iso = d.getFullYear() + "-" +
-                                                String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                                                String(d.getDate()).padStart(2, "0");
-                                    const slashPos = editor.cursorPosition - (word.length + 1);
-                                    editor.remove(slashPos, editor.cursorPosition);
-                                    editor.insert(slashPos, iso);
-                                    event.accepted = true;
-                                    return;
-                                }
+                            if (root._expandSlashDate() && event.key === Qt.Key_Tab) {
+                                event.accepted = true;
+                                return;
                             }
+                            // Enter still ends the line after expanding: the
+                            // reader pressed it to get a new one.
                         }
 
                         // Everything below is markdown editing, which lives
-                        // in C++ so it can be tested without driving the UI.
-                        // See MdEditOps: each operation is one undo step.
-                        const mods = event.modifiers & ~Qt.KeypadModifier;
-
-                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            if (mods === Qt.ControlModifier) {
-                                mdEditor.toggleTask();
-                                event.accepted = true;
-                                return;
-                            }
-                            if (mods === Qt.NoModifier && mdEditor.handleReturn()) {
-                                event.accepted = true;
-                                return;
-                            }
-                        }
-
-                        if (event.key === Qt.Key_Tab && mods === Qt.NoModifier) {
-                            mdEditor.indent();
-                            event.accepted = true;
-                            return;
-                        }
-                        if (event.key === Qt.Key_Backtab
-                            || (event.key === Qt.Key_Tab && mods === Qt.ShiftModifier)) {
-                            mdEditor.outdent();
-                            event.accepted = true;
-                            return;
-                        }
-
-                        // Formatting. These are editor-scoped: Ctrl+K is the
-                        // command palette everywhere else in the app, and it
-                        // stays that way outside this field.
-                        if (mods === Qt.ControlModifier) {
-                            switch (event.key) {
-                            case Qt.Key_B: mdEditor.toggleBold();          event.accepted = true; return;
-                            case Qt.Key_I: mdEditor.toggleItalic();        event.accepted = true; return;
-                            case Qt.Key_E: mdEditor.toggleCode();          event.accepted = true; return;
-                            case Qt.Key_K: mdEditor.insertLink("");        event.accepted = true; return;
-                            }
-                        }
-                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
-                            switch (event.key) {
-                            case Qt.Key_X: mdEditor.toggleStrikethrough(); event.accepted = true; return;
-                            case Qt.Key_H: mdEditor.toggleHighlight();     event.accepted = true; return;
-                            case Qt.Key_L: mdEditor.cycleHeading();        event.accepted = true; return;
-                            }
-                        }
+                        // in C++ so it can be tested without driving the UI,
+                        // and is shared with the doc page editor. See
+                        // MdEditOps: each operation is one undo step.
+                        mdEditor.setSelection(editor.selectionStart, editor.selectionEnd);
+                        if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
                     }
                 }
             }
-
             // Vertical divider — only in split mode.
             Rectangle {
                 visible: root.viewMode === "split"
@@ -942,16 +924,26 @@ Item {
     // when it means neither it is an offer to write the note somebody clearly
     // expected to exist.
     signal taskRequested(string taskId)
+    signal personRequested(string personId)
 
     function _followLink(kind, target) {
-        if (kind !== "note") {
-            // A ticket in a note is a task: opening it is the whole reason for
-            // writing #HEAP-12 rather than the title.
-            if (kind === "ticket") root.taskRequested(target);
-            // People, tags and footnote jumps stay where they are; ignoring
-            // them beats opening a heap:// URL in a browser.
+        // A ticket in a note is a task: opening it is the whole reason for
+        // writing #HEAP-12 rather than the title. MdHtml calls it "task".
+        if (kind === "task" || kind === "ticket") {
+            root.taskRequested(target);
             return;
         }
+        if (kind === "person") {
+            const pid = AppController.personIdForHandle(target);
+            if (pid.length > 0) root.personRequested(pid);
+            return;
+        }
+        // A #tag lists the notes that carry it.
+        if (kind === "tag") {
+            notesList.setFilter("#" + target);
+            return;
+        }
+        if (kind !== "note") return;
         const hit = AppController.resolveNoteLink(target);
         if (hit.kind === "note") {
             root._flushPending();
@@ -959,8 +951,19 @@ Item {
             return;
         }
         if (hit.kind === "heading") {
+            // [[Note#Heading]] can name another note; open it first.
+            if (hit.noteId && hit.noteId !== AppController.activeNoteId) {
+                root._flushPending();
+                AppController.activeNoteId = hit.noteId;
+            }
             const off = AppController.noteHeadingOffset(editor.text, hit.heading);
             if (off >= 0) root._jumpToOffset(off);
+            return;
+        }
+        // [[APP-101]] with no note of that name is the task of that id.
+        const t = AppController.taskById(String(target).trim());
+        if (t && t.id) {
+            root.taskRequested(t.id);
             return;
         }
         missingLinkPopup.openFor(hit.title);
@@ -1009,6 +1012,9 @@ Item {
         viewMode = _readViewMode();
         _loadFromController();
         _loadedOnce = true;
+        // A palette hit that opened Notes for the first time: the binding's
+        // first value does not fire the change handler.
+        if (jumpToLine >= 0) Qt.callLater(root._consumeJump);
     }
     Component.onDestruction: _flushPending()
     // Quit is not covered by onDestruction: the engine tears down its root

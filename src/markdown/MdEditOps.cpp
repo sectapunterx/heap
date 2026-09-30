@@ -305,6 +305,18 @@ Selection continueLine(QTextDocument* document, Selection selection, bool* handl
     return Selection::at(lineStart);
   }
 
+  // Splitting "- hello| world" must give "- world", not "-  world": the space
+  // that separated the words would otherwise follow the new marker's own.
+  const QString rest = line.mid(caret - lineStart);
+  int gap = 0;
+  while(gap < static_cast<int>(rest.size()) && (rest.at(gap) == u' ' || rest.at(gap) == u'\t')) {
+    ++gap;
+  }
+  if(gap > 0 && gap < static_cast<int>(rest.size())) {
+    cursor.setPosition(caret);
+    cursor.setPosition(caret + gap, QTextCursor::KeepAnchor);
+    cursor.removeSelectedText();
+  }
   cursor.setPosition(caret);
   cursor.insertText(QStringLiteral("\n") + continuation);
   cursor.endEditBlock();

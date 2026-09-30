@@ -33,27 +33,30 @@ Rectangle {
     // Flat rows with a `kind`, so one ListView can draw both headers and notes
     // and the keyboard can walk them without a second structure to keep in step.
     function buildRows() {
-        const _r = root.rev;
         const m = AppController.notes;
-        const needle = root.filter.trim().toLowerCase();
+        const needle = root.filter.trim();
+        // The whole body, not the excerpt: a word from the middle of a note
+        // has to find it. Asked of the controller, which holds the bodies.
+        const hits = needle.length > 0 ? AppController.notesMatching(needle) : null;
+        const allowed = ({});
+        if (hits) for (let h = 0; h < hits.length; h++) allowed[hits[h]] = true;
 
         const pinned = [];
         const byFolder = ({});
         const loose = [];
+        const rId = m.roleOf("id"), rTitle = m.roleOf("title"), rFolder = m.roleOf("folder");
+        const rPinned = m.roleOf("pinned"), rExcerpt = m.roleOf("excerpt");
         for (let i = 0; i < m.rowCount(); i++) {
             const idx = m.index(i, 0);
+            const id = String(m.data(idx, rId));
+            if (hits && !allowed[id]) continue;
             const note = {
-                id:      String(root._data(idx, "id")),
-                title:   String(root._data(idx, "title") || ""),
-                folder:  String(root._data(idx, "folder") || ""),
-                pinned:  !!root._data(idx, "pinned"),
-                excerpt: String(root._data(idx, "excerpt") || ""),
-                updated: root._data(idx, "updated")
+                id:      id,
+                title:   String(m.data(idx, rTitle) || ""),
+                folder:  String(m.data(idx, rFolder) || ""),
+                pinned:  !!m.data(idx, rPinned),
+                excerpt: String(m.data(idx, rExcerpt) || "")
             };
-            if (needle.length > 0) {
-                const hay = (note.title + " " + note.excerpt + " " + note.folder).toLowerCase();
-                if (hay.indexOf(needle) < 0) continue;
-            }
             if (note.pinned) pinned.push(note);
             else if (note.folder.length > 0) {
                 if (!byFolder[note.folder]) byFolder[note.folder] = [];
@@ -71,11 +74,11 @@ Rectangle {
         const rows = [];
         if (pinned.length > 0) {
             rows.push({ kind: "header", label: I18n.t("notes.pinned") });
-            for (const n of pinned) rows.push({ kind: "note", note: n });
+            for (const n of pinned) rows.push({ kind: "note", note: n, inPinnedSection: true });
         }
         const folders = Object.keys(byFolder).sort();
         for (const f of folders) {
-            rows.push({ kind: "header", label: f });
+            rows.push({ kind: "header", label: f, folder: f });
             byFolder[f].sort(byTitle);
             for (const n of byFolder[f]) rows.push({ kind: "note", note: n });
         }
@@ -85,10 +88,53 @@ Rectangle {
         }
         return rows;
     }
-    readonly property var rows: buildRows()
+
+    // Rebuilt on purpose rather than as a binding. As a binding it re-ran for
+    // every row the model inserted — six hundred notes created in a loop meant
+    // six hundred full rebuilds — and every rebuild handed the ListView a new
+    // model, which threw the reader back to the top after each 250 ms save.
+    // Now model changes are coalesced into one rebuild per event-loop turn, a
+    // rebuild that changes nothing is not handed to the view at all, and one
+    // that does keeps the scroll position.
+    property var rows: []
+    property string _rowsKey: ""
+    property bool _rebuildQueued: false
+    function rebuildNow() {
+        root._rebuildQueued = false;
+        const next = root.buildRows();
+        const key = JSON.stringify(next);
+        if (key === root._rowsKey) return;
+        const y = list.contentY;
+        root._rowsKey = key;
+        root.rows = next;
+        list.contentY = Math.max(0, Math.min(y, list.contentHeight - list.height));
+    }
+    function scheduleRebuild() {
+        if (root._rebuildQueued) return;
+        root._rebuildQueued = true;
+        Qt.callLater(root.rebuildNow);
+    }
+    onFilterChanged: rebuildNow()
+    Component.onCompleted: rebuildNow()
+    Connections {
+        target: I18n
+        function onLangChanged() { root.rebuildNow() }
+    }
+
+    // The filter, set from outside: a #tag clicked in a note lists the notes
+    // carrying it.
+    function setFilter(text) {
+        filterField.text = text;
+        root.filter = text;
+    }
+    function focusFilter() {
+        filterField.forceActiveFocus();
+        filterField.selectAll();
+    }
 
     // The ids on screen, in order, so a caller can step through them.
     function visibleIds() {
+        if (root._rebuildQueued) root.rebuildNow();
         const out = [];
         for (let i = 0; i < root.rows.length; i++)
             if (root.rows[i].kind === "note") out.push(root.rows[i].note.id);
@@ -107,12 +153,11 @@ Rectangle {
 
     Connections {
         target: AppController.notes
-        function onRowsInserted() { root.rev++ }
-        function onRowsRemoved()  { root.rev++ }
-        function onDataChanged()  { root.rev++ }
-        function onModelReset()   { root.rev++ }
+        function onRowsInserted() { root.scheduleRebuild() }
+        function onRowsRemoved()  { root.scheduleRebuild() }
+        function onDataChanged()  { root.scheduleRebuild() }
+        function onModelReset()   { root.scheduleRebuild() }
     }
-
     Rectangle {
         anchors.right: parent.right; anchors.top: parent.top; anchors.bottom: parent.bottom
         width: 1; color: Theme.border
@@ -200,10 +245,12 @@ Rectangle {
             Component {
                 id: headerRow
                 Item {
+                    id: headerItem
                     property var rowData: ({})
                     height: 22
                     Text {
                         anchors.left: parent.left
+                        anchors.right: parent.right
                         anchors.verticalCenter: parent.verticalCenter
                         anchors.bottomMargin: Theme.sp2xs
                         text: (rowData.label || "").toUpperCase()
@@ -212,6 +259,25 @@ Rectangle {
                         font.weight: Font.DemiBold
                         font.letterSpacing: 1
                         elide: Text.ElideRight
+                    }
+                    // A folder header is the folder: right-click renames it or
+                    // removes it (its notes move up a level, none are lost).
+                    MouseArea {
+                        anchors.fill: parent
+                        enabled: (headerItem.rowData.folder || "").length > 0
+                        acceptedButtons: Qt.RightButton
+                        onClicked: folderMenu.popup()
+                    }
+                    AppMenu {
+                        id: folderMenu
+                        AppMenuItem {
+                            text: I18n.t("notes.folder.rename")
+                            onTriggered: folderPopup.openFor(headerItem.rowData.folder)
+                        }
+                        AppMenuItem {
+                            text: I18n.t("notes.folder.remove")
+                            onTriggered: AppController.removeNoteFolder(headerItem.rowData.folder)
+                        }
                     }
                 }
             }
@@ -302,6 +368,53 @@ Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    QQC.Dialog {
+        id: folderPopup
+        objectName: "note-folder-rename"
+        property string folder: ""
+        modal: true
+        anchors.centerIn: QQC.Overlay.overlay
+        parent: QQC.Overlay.overlay
+        padding: Theme.inset
+        width: 380
+        title: I18n.t("notes.folder.rename")
+
+        function openFor(folder) {
+            folderPopup.folder = folder;
+            folderName.text = folder;
+            folderPopup.open();
+            folderName.forceActiveFocus();
+            folderName.selectAll();
+        }
+        function commit() {
+            AppController.renameNoteFolder(folderPopup.folder, folderName.text);
+            folderPopup.close();
+        }
+
+        background: Rectangle {
+            radius: Theme.radiusXl
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+        contentItem: QQC.TextField {
+            id: folderName
+            objectName: "note-folder-name"
+            color: Theme.text
+            font.family: Theme.fontMono
+            font.pixelSize: Theme.fsSm
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            onAccepted: folderPopup.commit()
+        }
+        footer: RowLayout {
+            spacing: Theme.spMd
+            Layout.margins: Theme.sp2xl
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: folderPopup.close() }
+            PillButton { text: I18n.t("editor.btn.save"); primary: true; onClicked: folderPopup.commit() }
         }
     }
 

@@ -127,6 +127,11 @@ int MdDocument::rowForLine(int line) {
   return m_model.rowForLine(line);
 }
 
+int MdDocument::rowForFootnote(const QString& id) {
+  flush();
+  return m_model.rowForFootnote(id);
+}
+
 int MdDocument::firstLineOfRow(int row) {
   flush();
   return m_model.firstLineOfRow(row);

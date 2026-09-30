@@ -14,6 +14,9 @@ Item {
 
     property string filter: ""
 
+    // A [[note]], #TICKET or @person clicked in a page's preview.
+    signal linkActivated(string kind, string target)
+
     // Bumped by the model so the tree rebuilds.
     property int rev: 0
 
@@ -278,6 +281,7 @@ Item {
             Layout.fillHeight: true
             pageId: AppController.activeDocPageId
             emptyText: I18n.t("docs.noPageOpen")
+            onInternalLinkActivated: (kind, target) => root.linkActivated(kind, target)
         }
     }
 

@@ -238,6 +238,10 @@ class AppController : public QObject {
   }
 
   void setDocsState(const QString& v);
+  // The same write as one entry on the undo stack, labelled with what an undo
+  // says it restored. The docs catalogue's deletions go through here so they
+  // share Ctrl+Z and the stack with everything else.
+  Q_INVOKABLE void setDocsStateUndoable(const QString& v, const QString& label);
 
   NoteModel* notes() {
     return &m_notes;
@@ -262,6 +266,11 @@ class AppController : public QObject {
   Q_INVOKABLE void moveNoteToFolder(const QString& id, const QString& folder);
   // Every folder in use, sorted, for a tree or a picker.
   Q_INVOKABLE QStringList noteFolders() const;
+  // Re-file every note in `folder` (and its subfolders) under `newName`; an
+  // empty name files them at the root. One undo step; returns how many moved.
+  Q_INVOKABLE int renameNoteFolder(const QString& folder, const QString& newName);
+  // Remove the folder, keeping its notes: they move one level up.
+  Q_INVOKABLE int removeNoteFolder(const QString& folder);
 
   // ── Notes as a folder of .md files ──
   //
@@ -677,6 +686,8 @@ class AppController : public QObject {
   Q_INVOKABLE void setPersonState(const QString& id, const QString& state);
   Q_INVOKABLE QVariantMap newPersonDraft() const;
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
+  // The person an "@handle" in a note names, or empty.
+  Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
   Q_INVOKABLE void savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 
@@ -815,6 +826,15 @@ class AppController : public QObject {
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 
   Q_INVOKABLE QVariantList commandPaletteEntries() const;
+  // Full text over every note and every doc page of every profile, one row per
+  // section, in the palette's row shape: { kind: "note"|"docPage", label, sub,
+  // body, profileId, noteId|pageId, line, color }. Every word of `query` must
+  // appear; `limit` <= 0 means no limit.
+  Q_INVOKABLE QVariantList searchFullText(const QString& query, int limit = 50) const;
+  // Ids of the active profile's notes / doc pages whose title, folder or body
+  // contain every word of `query` — what the list filters show.
+  Q_INVOKABLE QStringList notesMatching(const QString& query) const;
+  Q_INVOKABLE QStringList docPagesMatching(const QString& query) const;
 
   // ---- Backups ----
   Q_INVOKABLE QVariantList listBackups() const;
@@ -1029,6 +1049,11 @@ class AppController : public QObject {
   // Reads a vault folder and decides what importing it would do (see
   // heap::notes::planImport); the summary is what import and preview return.
   QVariantMap planNotesImport(const QUrl& folderUrl, QVector<heap::notes::VaultPlanItem>* plan) const;
+  // Tells the contact importer about imported contacts that a docs change
+  // removed (dismiss) or brought back (restore).
+  void syncDismissedContacts(const QString& beforeJson, const QString& afterJson);
+  // The palette rows for one profile's notes and doc pages (see searchFullText).
+  QVariantList fullTextEntries(const Profile& p) const;
   QString m_appSettingsJson;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.

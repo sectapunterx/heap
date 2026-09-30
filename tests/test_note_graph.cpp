@@ -212,6 +212,49 @@ TEST(NoteGraph, AnUnresolvedLinkIsReported) {
   EXPECT_EQ(unresolvedLinksIn(QStringLiteral("see [[Ghost]]"), notes, QStringLiteral("n1")), QStringList{QStringLiteral("Ghost")});
 }
 
+// ── Audit 2026-09-30 ──
+
+TEST(NoteGraph, ANoteHeadingLinkResolvesAcrossNotes) {
+  const QVector<Note> notes{note(QStringLiteral("n1"), QStringLiteral("Diary")),
+                            note(QStringLiteral("n2"), QStringLiteral("Standup"), QStringLiteral("# Standup\n\n## Risks\n"))};
+  const LinkTarget t = resolveLink(QStringLiteral("Standup#Risks"), notes, QStringLiteral("n1"));
+  EXPECT_EQ(t.kind, LinkTarget::HeadingRef);
+  EXPECT_EQ(t.noteId, QStringLiteral("n2"));
+  EXPECT_EQ(t.heading, QStringLiteral("Risks"));
+  // A heading that is not there still opens the note.
+  EXPECT_EQ(resolveLink(QStringLiteral("Standup#Nope"), notes, QStringLiteral("n1")).kind, LinkTarget::NoteRef);
+}
+
+TEST(NoteGraph, CodeCommentsAndTicketsAreNotHeadings) {
+  const QVector<Note> notes{
+      note(QStringLiteral("n1"), QStringLiteral("Ops"), QStringLiteral("```bash\n# restart\n```\n#HEAP-12 is blocked\n## Deploy\n"))};
+  EXPECT_EQ(resolveLink(QStringLiteral("restart"), notes, QStringLiteral("n1")).kind, LinkTarget::Missing);
+  EXPECT_EQ(resolveLink(QStringLiteral("HEAP-12 is blocked"), notes, QStringLiteral("n1")).kind, LinkTarget::Missing);
+  EXPECT_EQ(resolveLink(QStringLiteral("Deploy"), notes, QStringLiteral("n1")).kind, LinkTarget::HeadingRef);
+}
+
+TEST(NoteGraph, ADuplicateTitlePrefersTheLinkingNotesFolder) {
+  Note a = note(QStringLiteral("a"), QStringLiteral("Meeting"));
+  a.folder = QStringLiteral("x");
+  Note b = note(QStringLiteral("b"), QStringLiteral("Meeting"));
+  b.folder = QStringLiteral("y");
+  Note from = note(QStringLiteral("f"), QStringLiteral("From"));
+  from.folder = QStringLiteral("y");
+  EXPECT_EQ(resolveLink(QStringLiteral("Meeting"), {a, b, from}, QStringLiteral("f")).noteId, QStringLiteral("b"));
+}
+
+TEST(NoteGraph, HeadingAndLabelLinksAreBacklinks) {
+  const QVector<Note> notes{note(QStringLiteral("t"), QStringLiteral("Standup")),
+                            note(QStringLiteral("o"), QStringLiteral("Other"), QStringLiteral("[[Standup#Risks]]\n[[standup|daily]]"))};
+  EXPECT_EQ(backlinksTo(QStringLiteral("t"), notes).size(), 2);
+}
+
+TEST(NoteGraph, RetargetingKeepsHeadingsAndLabels) {
+  EXPECT_EQ(heap::notes::retargetLinks(
+                QStringLiteral("a [[Old]] b [[old#H]] c [[Old|x]] d [[Older]]"), QStringLiteral("Old"), QStringLiteral("New")),
+            QStringLiteral("a [[New]] b [[New#H]] c [[New|x]] d [[Older]]"));
+}
+
 TEST(NoteGraph, AResolvedLinkIsNotReported) {
   const QVector<Note> notes{note(QStringLiteral("n1"), QStringLiteral("Diary")), note(QStringLiteral("n2"), QStringLiteral("Standup"))};
 

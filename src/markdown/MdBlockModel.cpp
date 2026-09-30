@@ -500,6 +500,15 @@ void MdBlockModel::applyRows(QVector<Row> rows) {
   }
 }
 
+int MdBlockModel::rowForFootnote(const QString& id) const {
+  for(int i = 0; i < m_rows.size(); ++i) {
+    if(m_rows.at(i).type == FootnoteDef && m_rows.at(i).footnoteId == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+
 int MdBlockModel::rowForLine(int line) const {
   // The last row that starts at or before the line: rows are in document
   // order, and a row covers everything up to the next one.

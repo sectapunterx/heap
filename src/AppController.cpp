@@ -203,6 +203,15 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notes.vault.conflict", {"%1 changed both here and on disk — kept both", "%1 изменён и здесь, и на диске — сохранены обе версии"}},
       {"notes.vault.conflictSuffix", {" (from disk)", " (с диска)"}},
       {"notes.vault.undo", {"Notes import undone", "Импорт заметок отменён"}},
+      {"docs.pageDeleted", {"Page deleted: %1", "Страница удалена: %1"}},
+      {"docs.pagesDeleted", {"Page deleted: %1 and %2 subpage(s)", "Удалена страница %1 и подстраниц: %2"}},
+      {"search.notes", {"Notes", "Заметки"}},
+      {"search.docs", {"Docs", "Документы"}},
+      {"notes.undo.rename", {"Rename undone: %1", "Переименование отменено: %1"}},
+      {"notes.undo.pin", {"Pin undone: %1", "Закрепление отменено: %1"}},
+      {"notes.undo.unpin", {"Unpin undone: %1", "Открепление отменено: %1"}},
+      {"notes.undo.move", {"Move undone: %1", "Перемещение отменено: %1"}},
+      {"notes.undo.folder", {"Folder change undone: %1", "Изменение папки отменено: %1"}},
       {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
       {"undo.importIcs", {"Calendar imported", "Календарь импортирован"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
@@ -801,6 +810,78 @@ void AppController::setDocsState(const QString& v) {
   scheduleSave();
 }
 
+namespace {
+
+// The text of a note's first line when it is an H1 ("# Standup"), or empty.
+QString firstH1(const QString& body) {
+  qsizetype start = 0;
+  while(start < body.size() && (body.at(start) == QLatin1Char('\n') || body.at(start) == QLatin1Char('\r'))) {
+    ++start;
+  }
+  qsizetype end = body.indexOf(QLatin1Char('\n'), start);
+  const QString line = body.mid(start, end < 0 ? -1 : end - start).trimmed();
+  if(!line.startsWith(QStringLiteral("# "))) {
+    return {};
+  }
+  return line.mid(2).trimmed();
+}
+
+// `body` with its leading H1 replaced by `title`.
+QString withH1(const QString& body, const QString& title) {
+  qsizetype start = 0;
+  while(start < body.size() && (body.at(start) == QLatin1Char('\n') || body.at(start) == QLatin1Char('\r'))) {
+    ++start;
+  }
+  const qsizetype end = body.indexOf(QLatin1Char('\n'), start);
+  return body.left(start) + QStringLiteral("# ") + title + (end < 0 ? QString() : body.mid(end));
+}
+
+// The imported contacts (source + external id) a docs blob holds.
+QSet<QPair<QString, QString>> importedContactsIn(const QString& docsJson) {
+  QSet<QPair<QString, QString>> out;
+  const QJsonDocument d = QJsonDocument::fromJson(docsJson.toUtf8());
+  for(const auto& v : d.object().value(QStringLiteral("contacts")).toArray()) {
+    const QJsonObject c = v.toObject();
+    const QString source = c.value(QStringLiteral("source")).toString();
+    const QString id = c.value(QStringLiteral("mmId")).toString();
+    if(!source.isEmpty() && !id.isEmpty()) {
+      out.insert({source, id});
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+void AppController::syncDismissedContacts(const QString& beforeJson, const QString& afterJson) {
+  const auto before = importedContactsIn(beforeJson);
+  const auto after = importedContactsIn(afterJson);
+  for(const auto& c : before) {
+    if(!after.contains(c)) {
+      dismissExternalContact(c.first, c.second);
+    }
+  }
+  for(const auto& c : after) {
+    if(!before.contains(c)) {
+      restoreExternalContact(c.first, c.second);
+    }
+  }
+}
+
+void AppController::setDocsStateUndoable(const QString& v, const QString& label) {
+  if(v == m_docsState) {
+    return;
+  }
+  const QString before = m_docsState;
+  {
+    const UndoScope scope(this, label);
+    setDocsState(v);
+  }
+  // A deleted imported contact would come back on the next sync unless the
+  // importer is told; the undo tells it the opposite (applyUndoEntry).
+  syncDismissedContacts(before, v);
+}
+
 void AppController::setNotesState(const QString& v) {
   if(v == m_notesState) {
     return;
@@ -850,6 +931,15 @@ void AppController::syncActiveNoteBody() {
   Note n = m_notes.items().at(row);
   if(n.body == m_notesState) {
     return;
+  }
+  // The title follows the note's H1 while the two agree: a new note opens as
+  // "# Untitled note", and retyping that heading left the list saying
+  // "Untitled note" forever. Only while nothing links to the note by its
+  // title, which an automatic rename would silently break.
+  const QString wasH1 = firstH1(n.body);
+  const QString nowH1 = firstH1(m_notesState);
+  if(!nowH1.isEmpty() && wasH1 == n.title && nowH1 != n.title && heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
+    n.title = nowH1;
   }
   n.body = m_notesState;
   n.updated = QDateTime::currentDateTime();
@@ -901,16 +991,42 @@ QString AppController::newNote(const QString& title, const QString& folder) {
 
 void AppController::renameNote(const QString& id, const QString& title) {
   const int row = m_notes.indexOfId(id);
-  if(row < 0 || title.trimmed().isEmpty()) {
+  const QString next = title.trimmed();
+  if(row < 0 || next.isEmpty() || m_notes.items().at(row).title == next) {
     return;
   }
-  Note n = m_notes.items().at(row);
-  n.title = title.trimmed();
-  n.updated = QDateTime::currentDateTime();
-  m_notes.upsert(n);
+  // The open note's pending keystrokes belong to it before its heading moves.
+  emit aboutToChangeActiveNote();
+  syncActiveNoteBody();
+  const QString old = m_notes.items().at(row).title;
+  {
+    const UndoScope scope(this, tr_("notes.undo.rename").arg(next));
+    Note n = m_notes.items().at(row);
+    n.title = next;
+    // The heading says what the note is called; one that said the old name
+    // would drift from the list the moment the note was renamed.
+    if(firstH1(n.body) == old) {
+      n.body = withH1(n.body, next);
+    }
+    n.updated = QDateTime::currentDateTime();
+    m_notes.upsert(n);
+    // And every [[Old]] elsewhere now says [[New]]: a rename used to leave
+    // each link to the note pointing at nothing.
+    for(const Note& other : QVector<Note>(m_notes.items())) {
+      if(other.id == id) {
+        continue;
+      }
+      const QString body = heap::notes::retargetLinks(other.body, old, next);
+      if(body != other.body) {
+        Note changed = other;
+        changed.body = body;
+        m_notes.upsert(changed);
+      }
+    }
+  }
+  reconcileActiveNote();
   scheduleSave();
 }
-
 void AppController::deleteNote(const QString& id) {
   if(m_notes.indexOfId(id) < 0) {
     return;
@@ -987,19 +1103,17 @@ void AppController::setNotePinned(const QString& id, bool pinned) {
   if(n.pinned == pinned) {
     return;
   }
+  const UndoScope scope(this, tr_(pinned ? "notes.undo.pin" : "notes.undo.unpin").arg(n.title));
   n.pinned = pinned;
   m_notes.upsert(n);
   scheduleSave();
 }
 
-void AppController::moveNoteToFolder(const QString& id, const QString& folder) {
-  const int row = m_notes.indexOfId(id);
-  if(row < 0) {
-    return;
-  }
-  Note n = m_notes.items().at(row);
-  // Normalised the way a path is: no leading or trailing separator, so
-  // "/meetings/" and "meetings" are the same folder rather than two.
+namespace {
+
+// Normalised the way a path is: no leading or trailing separator, so
+// "/meetings/" and "meetings" are the same folder rather than two.
+QString cleanFolder(const QString& folder) {
   QString clean = folder.trimmed();
   while(clean.startsWith(QLatin1Char('/'))) {
     clean = clean.mid(1);
@@ -1007,15 +1121,67 @@ void AppController::moveNoteToFolder(const QString& id, const QString& folder) {
   while(clean.endsWith(QLatin1Char('/'))) {
     clean.chop(1);
   }
+  return clean;
+}
+
+}  // namespace
+
+void AppController::moveNoteToFolder(const QString& id, const QString& folder) {
+  const int row = m_notes.indexOfId(id);
+  if(row < 0) {
+    return;
+  }
+  Note n = m_notes.items().at(row);
+  const QString clean = cleanFolder(folder);
   if(n.folder == clean) {
     return;
   }
+  const UndoScope scope(this, tr_("notes.undo.move").arg(n.title));
   n.folder = clean;
   n.updated = QDateTime::currentDateTime();
   m_notes.upsert(n);
   scheduleSave();
 }
 
+int AppController::renameNoteFolder(const QString& folder, const QString& newName) {
+  const QString from = cleanFolder(folder);
+  const QString to = cleanFolder(newName);
+  if(from.isEmpty() || from == to) {
+    return 0;
+  }
+  int moved = 0;
+  {
+    // The folder and everything under it, as one step: "meetings" → "team"
+    // takes "meetings/2026" with it.
+    const UndoScope scope(this, tr_("notes.undo.folder").arg(from));
+    for(const Note& n : QVector<Note>(m_notes.items())) {
+      QString next;
+      if(n.folder == from) {
+        next = to;
+      } else if(n.folder.startsWith(from + QLatin1Char('/'))) {
+        next = to.isEmpty() ? n.folder.mid(from.size() + 1) : to + n.folder.mid(from.size());
+      } else {
+        continue;
+      }
+      Note changed = n;
+      changed.folder = next;
+      m_notes.upsert(changed);
+      moved++;
+    }
+  }
+  if(moved > 0) {
+    scheduleSave();
+  }
+  return moved;
+}
+
+int AppController::removeNoteFolder(const QString& folder) {
+  // A folder is only a label on its notes. Removing it keeps every note and
+  // files them one level up; deleting notes is what Delete on a note is for.
+  const QString from = cleanFolder(folder);
+  const qsizetype slash = from.lastIndexOf(QLatin1Char('/'));
+  return renameNoteFolder(from, slash > 0 ? from.left(slash) : QString());
+}
 QStringList AppController::noteFolders() const {
   QStringList out;
   for(const Note& n : m_notes.items()) {
@@ -2614,15 +2780,25 @@ void AppController::deleteDocPage(const QString& id) {
       }
     }
   }
-  const UndoScope scope(this, tr_("docs.undo.deletePage"));
-  for(const QString& gone : doomed) {
-    m_docPages.removeById(gone);
-  }
-  if(doomed.contains(m_activeDocPageId)) {
-    m_activeDocPageId = m_docPages.rowCount() > 0 ? m_docPages.items().first().id : QString();
-    emit activeDocPageChanged();
+  // The open page's unsaved keystrokes go in first, so undoing the delete
+  // brings back what was on screen rather than the last save.
+  emit flushEditorsRequested();
+  const QString title = m_docPages.items().at(m_docPages.indexOfId(id)).title;
+  {
+    const UndoScope scope(this, tr_("docs.undo.deletePage"));
+    for(const QString& gone : doomed) {
+      m_docPages.removeById(gone);
+    }
+    if(doomed.contains(m_activeDocPageId)) {
+      m_activeDocPageId = m_docPages.rowCount() > 0 ? m_docPages.items().first().id : QString();
+      emit activeDocPageChanged();
+    }
   }
   scheduleSave();
+  // Said out loud, with the way back, like a deleted note: a subtree went
+  // with no confirm and no word, so the reader could not tell what happened.
+  emit undoableToast(doomed.size() > 1 ? tr_("docs.pagesDeleted").arg(title).arg(doomed.size() - 1) : tr_("docs.pageDeleted").arg(title),
+                     8);
 }
 
 void AppController::moveDocPage(const QString& id, const QString& newParentId, const QString& beforeId) {
@@ -2865,6 +3041,43 @@ QVariantMap AppController::newPersonDraft() const {
   m["state"] = "todo";
   m["color"] = c;
   return m;
+}
+
+QString AppController::personIdForHandle(const QString& handle) const {
+  // "@Oleg_T." as written in a note: underscores for spaces, maybe trailing
+  // punctuation. Compared without case, in any script.
+  const auto norm = [](QString s) {
+    s = s.trimmed();
+    if(s.startsWith(QLatin1Char('@'))) {
+      s = s.mid(1);
+    }
+    s.replace(QLatin1Char('_'), QLatin1Char(' '));
+    while(!s.isEmpty() && QStringLiteral(".,;:!? ").contains(s.back())) {
+      s.chop(1);
+    }
+    return s.simplified();
+  };
+  const QString want = norm(handle);
+  if(want.isEmpty()) {
+    return {};
+  }
+  for(const Person& p : m_people.items()) {
+    if(norm(p.name).compare(want, Qt::CaseInsensitive) == 0 || p.id.compare(want, Qt::CaseInsensitive) == 0) {
+      return p.id;
+    }
+  }
+  // "@oleg" for "Oleg T.": a unique first-word match is still a match.
+  QString found;
+  for(const Person& p : m_people.items()) {
+    const QString first = norm(p.name).section(QLatin1Char(' '), 0, 0);
+    if(first.compare(want, Qt::CaseInsensitive) == 0) {
+      if(!found.isEmpty()) {
+        return {};
+      }
+      found = p.id;
+    }
+  }
+  return found;
 }
 
 QVariantMap AppController::personById(const QString& id) const {
@@ -4076,8 +4289,12 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     emit statusesChanged();
   }
   if(entry.docsStateTouched) {
+    const QString was = m_docsState;
     m_docsState = backward ? entry.docsStateBefore : entry.docsStateAfter;
     emit docsStateChanged();
+    // Same reasoning as the tasks above: a contact coming back must stop
+    // being "dismissed", and one going again must be dismissed again.
+    syncDismissedContacts(was, m_docsState);
   }
   // The status-count cache drops itself from the task model's own signals, so
   // nothing here has to remember to invalidate it.
@@ -6725,12 +6942,145 @@ bool AppController::restoreFromBackup(const QString& fileName) {
 
 // ───────────────────────────────────────────── Command palette source ──
 
+QVariantList AppController::fullTextEntries(const Profile& p) const {
+  QVariantList out;
+  // One entry per heading rather than one per document: a section gives the
+  // reader a place to land and a snippet worth showing.
+  const auto sectionsOf =
+      [&out, &p](
+          const QString& kind, const QString& idKey, const QString& id, const QString& title, const QString& where, const QString& body) {
+        bool any = false;
+        for(const heap::md::MdSection& section : heap::md::searchSections(body)) {
+          if(section.body.trimmed().isEmpty() && section.title.trimmed().isEmpty()) {
+            continue;
+          }
+          // The note's own H1 is its title; repeating it as "Standup › Standup"
+          // says nothing.
+          QString sec = section.title;
+          if(sec.startsWith(title + QStringLiteral(" · "), Qt::CaseInsensitive)) {
+            sec = sec.mid(title.size() + 3);
+          }
+          const bool isTitle = sec.isEmpty() || sec.compare(title, Qt::CaseInsensitive) == 0;
+          QVariantMap m;
+          m["kind"] = kind;
+          m["label"] = isTitle ? title : QStringLiteral("%1 › %2").arg(title, sec);
+          m["sub"] = where;
+          m["body"] = section.body;
+          m["profileId"] = p.id;
+          m[idKey] = id;
+          m["line"] = section.line;
+          out.append(m);
+          any = true;
+        }
+        if(!any) {
+          // An empty note is still somewhere to go by its title.
+          QVariantMap m;
+          m["kind"] = kind;
+          m["label"] = title;
+          m["sub"] = where;
+          m["body"] = QString();
+          m["profileId"] = p.id;
+          m[idKey] = id;
+          m["line"] = 0;
+          out.append(m);
+        }
+      };
+  for(const Note& n : p.notes) {
+    const QString where = n.folder.isEmpty() ? QStringLiteral("%1 · %2").arg(p.name, tr_("search.notes"))
+                                             : QStringLiteral("%1 · %2 / %3").arg(p.name, tr_("search.notes"), n.folder);
+    sectionsOf(QStringLiteral("note"), QStringLiteral("noteId"), n.id, n.title, where, n.body);
+  }
+  for(const DocPage& d : p.docPages) {
+    sectionsOf(QStringLiteral("docPage"),
+               QStringLiteral("pageId"),
+               d.id,
+               d.title,
+               QStringLiteral("%1 · %2").arg(p.name, tr_("search.docs")),
+               d.body);
+  }
+  return out;
+}
+
+QVariantList AppController::searchFullText(const QString& query, int limit) const {
+  const QStringList terms = query.simplified().toLower().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+  QVariantList out;
+  if(terms.isEmpty()) {
+    return out;
+  }
+  emit const_cast<AppController*>(this)->flushEditorsRequested();
+  const_cast<AppController*>(this)->snapshotActiveProfile();
+  for(const Profile& p : m_profiles) {
+    for(const QVariant& v : fullTextEntries(p)) {
+      QVariantMap m = v.toMap();
+      const QString hay = (m.value("label").toString() + QLatin1Char(' ') + m.value("body").toString()).toLower();
+      bool all = true;
+      for(const QString& t : terms) {
+        if(!hay.contains(t)) {
+          all = false;
+          break;
+        }
+      }
+      if(!all) {
+        continue;
+      }
+      m["color"] = p.color;
+      out.append(m);
+      if(limit > 0 && out.size() >= limit) {
+        return out;
+      }
+    }
+  }
+  return out;
+}
+
+QStringList AppController::notesMatching(const QString& query) const {
+  // Title, folder and the whole body, every word required. The list filter
+  // used to look at the title and a one-line excerpt only, so a word from the
+  // middle of a note found nothing.
+  const QStringList terms = query.simplified().toLower().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+  QStringList out;
+  for(const Note& n : m_notes.items()) {
+    bool all = true;
+    for(const QString& t : terms) {
+      if(!n.title.contains(t, Qt::CaseInsensitive) && !n.folder.contains(t, Qt::CaseInsensitive) &&
+         !n.body.contains(t, Qt::CaseInsensitive)) {
+        all = false;
+        break;
+      }
+    }
+    if(all) {
+      out << n.id;
+    }
+  }
+  return out;
+}
+
+QStringList AppController::docPagesMatching(const QString& query) const {
+  const QStringList terms = query.simplified().toLower().split(QLatin1Char(' '), Qt::SkipEmptyParts);
+  QStringList out;
+  for(const DocPage& d : m_docPages.items()) {
+    bool all = true;
+    for(const QString& t : terms) {
+      if(!d.title.contains(t, Qt::CaseInsensitive) && !d.body.contains(t, Qt::CaseInsensitive)) {
+        all = false;
+        break;
+      }
+    }
+    if(all) {
+      out << d.id;
+    }
+  }
+  return out;
+}
+
 QVariantList AppController::commandPaletteEntries() const {
   // The palette searches the persisted profiles, not the live models, and the
   // live models only reach a profile when a save runs. That save is debounced
   // by 300 ms, so a task created or edited a moment ago was simply missing
   // from Ctrl+K. Push the active profile's rows across first — it is the same
   // snapshot a save would take, and it costs nothing when nothing changed.
+  // The editors go first: a word typed a moment ago is still only in a field.
+  emit const_cast<AppController*>(this)->flushEditorsRequested();
   const_cast<AppController*>(this)->snapshotActiveProfile();
 
   QVariantList out;
@@ -6791,21 +7141,13 @@ QVariantList AppController::commandPaletteEntries() const {
   };
 
   for(const Profile& p : m_profiles) {
-    // Notes — one entry per heading rather than one for the whole blob. A
-    // single entry could only say "it is somewhere in your notes"; a section
-    // gives the reader a place to land and a snippet worth showing.
-    for(const heap::md::MdSection& section : heap::md::searchSections(p.notesState)) {
-      if(section.body.trimmed().isEmpty() && section.title.trimmed().isEmpty()) {
-        continue;
-      }
-      QVariantMap m;
-      m["kind"] = "note";
-      m["label"] = section.title.isEmpty() ? QString("%1 · Notes").arg(p.name) : QString("%1 · Notes › %2").arg(p.name, section.title);
-      m["sub"] = p.name;
-      m["body"] = cap(section.body);
-      m["profileId"] = p.id;
+    // Every note of the profile, and every doc page. This used to index
+    // `notesState` — the one note that happened to be open — so Ctrl+K could
+    // not find a word in any other note, or in the docs at all.
+    for(const QVariant& v : fullTextEntries(p)) {
+      QVariantMap m = v.toMap();
+      m["body"] = cap(m.value("body").toString());
       m["color"] = p.color;
-      m["line"] = section.line;
       out.append(m);
     }
     // Tasks

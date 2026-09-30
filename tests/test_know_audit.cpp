@@ -30,6 +30,8 @@ class KnowAuditTest : public ::testing::Test {
     app_ = std::make_unique<AppController>();
     app_->notes()->reset({});
     app_->setNotesState(QString());
+    // The test profile persists between runs; start from no pages either.
+    app_->docPages()->reset({});
     ASSERT_TRUE(dir_.isValid());
   }
 
@@ -278,6 +280,100 @@ TEST_F(KnowAuditTest, Plat21_ProfileExportIncludesTheLatestNoteAndPageEdits) {
   }
   EXPECT_TRUE(sawNote);
   EXPECT_TRUE(sawPage);
+}
+
+// ── KNOW-11 / C: rename keeps links, H1 and undo ──
+
+TEST_F(KnowAuditTest, Know11_RenameRewritesLinksAndHeadingAndIsUndoable) {
+  const QString target = app_->newNote(QStringLiteral("Plan"));
+  const QString other = app_->newNote(QStringLiteral("Diary"));
+  app_->setNoteBody(other, QStringLiteral("see [[Plan]] and [[plan#Risks]]"));
+
+  app_->renameNote(target, QStringLiteral("Roadmap"));
+
+  EXPECT_EQ(app_->noteBody(other), QStringLiteral("see [[Roadmap]] and [[Roadmap#Risks]]"));
+  EXPECT_TRUE(app_->noteBody(target).startsWith(QStringLiteral("# Roadmap")));
+  app_->undo();
+  EXPECT_EQ(app_->noteBody(other), QStringLiteral("see [[Plan]] and [[plan#Risks]]"));
+  const int row = app_->notes()->indexOfId(target);
+  EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("Plan"));
+}
+
+TEST_F(KnowAuditTest, KnowC_TitleFollowsTheH1WhileTheyAgree) {
+  const QString id = app_->newNote();
+  app_->setNotesState(QStringLiteral("# Release checklist\n\nbody"));
+  const int row = app_->notes()->indexOfId(id);
+  EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("Release checklist"));
+}
+
+TEST_F(KnowAuditTest, KnowC_PinAndMoveAreUndoable) {
+  const QString id = app_->newNote(QStringLiteral("N"));
+  app_->setNotePinned(id, true);
+  app_->moveNoteToFolder(id, QStringLiteral("work"));
+  app_->undo();
+  EXPECT_TRUE(app_->notes()->items().at(app_->notes()->indexOfId(id)).folder.isEmpty());
+  app_->undo();
+  EXPECT_FALSE(app_->notes()->items().at(app_->notes()->indexOfId(id)).pinned);
+}
+
+TEST_F(KnowAuditTest, KnowC_FoldersCanBeRenamedAndRemovedKeepingNotes) {
+  const QString a = app_->newNote(QStringLiteral("A"), QStringLiteral("meetings"));
+  const QString b = app_->newNote(QStringLiteral("B"), QStringLiteral("meetings/2026"));
+  EXPECT_EQ(app_->renameNoteFolder(QStringLiteral("meetings"), QStringLiteral("team")), 2);
+  EXPECT_EQ(app_->noteFolders(), (QStringList{QStringLiteral("team"), QStringLiteral("team/2026")}));
+  EXPECT_EQ(app_->removeNoteFolder(QStringLiteral("team/2026")), 1);
+  EXPECT_EQ(app_->notes()->items().at(app_->notes()->indexOfId(b)).folder, QStringLiteral("team"));
+  EXPECT_EQ(app_->notes()->rowCount(), 2);
+  EXPECT_EQ(app_->notes()->items().at(app_->notes()->indexOfId(a)).folder, QStringLiteral("team"));
+}
+
+// ── KNOW-6 / TASKS-16: search reaches every note and every doc page ──
+
+TEST_F(KnowAuditTest, Know6_PaletteFindsWordsInNotesThatAreNotOpenAndInDocPages) {
+  const QString hidden = app_->newNote(QStringLiteral("Hidden"));
+  app_->setNoteBody(hidden, QStringLiteral("# Hidden\n\n## Deploy\n\nthe zebracorn rollout"));
+  app_->newNote(QStringLiteral("Open one"));  // now the open note
+  const QString page = app_->newDocPage(QStringLiteral("Runbook"));
+  app_->setDocPageBody(page, QStringLiteral("# Runbook\n\nrestart the quokkafleet"));
+
+  const QVariantList notes = app_->searchFullText(QStringLiteral("zebracorn"));
+  ASSERT_EQ(notes.size(), 1);
+  EXPECT_EQ(notes.at(0).toMap().value("kind").toString(), QStringLiteral("note"));
+  EXPECT_EQ(notes.at(0).toMap().value("noteId").toString(), hidden);
+  EXPECT_EQ(notes.at(0).toMap().value("label").toString(), QStringLiteral("Hidden › Deploy"));
+
+  const QVariantList pages = app_->searchFullText(QStringLiteral("quokkafleet"));
+  ASSERT_EQ(pages.size(), 1);
+  EXPECT_EQ(pages.at(0).toMap().value("kind").toString(), QStringLiteral("docPage"));
+  EXPECT_EQ(pages.at(0).toMap().value("pageId").toString(), page);
+
+  // And the palette's own list carries both, in the row shape it knows.
+  bool sawNote = false;
+  bool sawPage = false;
+  for(const QVariant& v : app_->commandPaletteEntries()) {
+    const QVariantMap m = v.toMap();
+    sawNote = sawNote || (m.value("noteId").toString() == hidden && m.value("body").toString().contains(QStringLiteral("zebracorn")));
+    sawPage = sawPage || (m.value("pageId").toString() == page && m.value("body").toString().contains(QStringLiteral("quokkafleet")));
+  }
+  EXPECT_TRUE(sawNote);
+  EXPECT_TRUE(sawPage);
+}
+
+TEST_F(KnowAuditTest, Know19_TheNoteFilterMatchesTheWholeBody) {
+  const QString a = app_->newNote(QStringLiteral("A"));
+  app_->setNoteBody(a, QStringLiteral("# A\n\nline one\n\n") + QString(500, QLatin1Char('x')) + QStringLiteral("\n\nneedle deep inside"));
+  app_->newNote(QStringLiteral("B"));
+  EXPECT_EQ(app_->notesMatching(QStringLiteral("deep needle")), QStringList{a});
+}
+
+TEST_F(KnowAuditTest, Know12_MentionsResolveToPeopleInAnyScript) {
+  app_->people()->reset({});
+  Person p;
+  p.id = QStringLiteral("p-oleg");
+  p.name = QStringLiteral("Олег Т.");
+  app_->people()->upsert(p);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@Олег_Т.")), QStringLiteral("p-oleg"));
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("олег")), QStringLiteral("p-oleg"));
 }
 
 int main(int argc, char** argv) {

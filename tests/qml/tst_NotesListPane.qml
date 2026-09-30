@@ -152,12 +152,13 @@ TestCase {
 
         const id = note("late probe");
 
-        compare(titlesOf(pane).length, before + 1);
+        // Coalesced into one rebuild per event-loop turn (see rebuildNow).
+        tryVerify(function () { return titlesOf(pane).length === before + 1; });
 
         AppController.deleteNote(id);
         tc.seeded.splice(tc.seeded.indexOf(id), 1);
 
-        compare(titlesOf(pane).length, before);
+        tryVerify(function () { return titlesOf(pane).length === before; });
     }
 
     function test_activating_a_note_reports_its_id() {

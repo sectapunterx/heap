@@ -58,6 +58,21 @@ class MarkdownEditorController : public QObject {
 
   void setSelectionEnd(int position);
 
+  // Caret and selection in one call, for an editor that wants to be sure the
+  // controller sees exactly what it shows before an operation.
+  Q_INVOKABLE void setSelection(int start, int end);
+
+  // The keyboard, shared by every markdown editor (notes and doc pages), so
+  // the two cannot drift apart again.
+  //
+  // `claimsShortcut` answers ShortcutOverride: true for the formatting keys,
+  // which must beat the app-wide shortcuts (Ctrl+K is the command palette
+  // everywhere else) while the editor has focus. `handleKey` performs Enter
+  // continuation, Tab/Shift+Tab, Ctrl+Enter and the formatting keys, and says
+  // whether it did, so an unhandled key still reaches the text field.
+  Q_INVOKABLE bool claimsShortcut(int key, int modifiers) const;
+  Q_INVOKABLE bool handleKey(int key, int modifiers);
+
   // ── Operations, each one undo step ──────────────────────────────
   Q_INVOKABLE void toggleBold();
   Q_INVOKABLE void toggleItalic();

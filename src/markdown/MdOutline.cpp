@@ -122,7 +122,8 @@ QVector<MdSection> searchSections(const QString& markdown, int bodyCap) {
   // Titles carry their ancestors, so a hit reads as "Release · Windows"
   // rather than as an isolated "Windows".
   QVector<MdHeading> trail;
-  for(const MdHeading& heading : headings) {
+  for(int h = 0; h < headings.size(); ++h) {
+    const MdHeading& heading = headings.at(h);
     while(!trail.isEmpty() && trail.last().level >= heading.level) {
       trail.removeLast();
     }
@@ -133,8 +134,15 @@ QVector<MdSection> searchSections(const QString& markdown, int bodyCap) {
     path << heading.text;
     trail.append(heading);
 
-    sections.append(MdSection{
-        path.join(QStringLiteral(" · ")), capped(src.textForLines(heading.sectionFirstLine, heading.sectionLastLine)), heading.line});
+    // Its own text only, up to the next heading of any level. A section that
+    // also held its subsections matched every word written under them, and
+    // outranked the subsection the word was actually in.
+    int last = heading.sectionLastLine;
+    if(h + 1 < headings.size()) {
+      last = std::min(last, headings.at(h + 1).line - 1);
+    }
+    const QString own = last >= heading.sectionFirstLine ? src.textForLines(heading.sectionFirstLine, last) : QString();
+    sections.append(MdSection{path.join(QStringLiteral(" · ")), capped(own), heading.line});
   }
   return sections;
 }

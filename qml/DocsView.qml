@@ -10,6 +10,10 @@ Item {
 
     property string searchText: ""
 
+    // A [[note]], #TICKET or @person clicked in a doc page. Opening a task or
+    // a note is Main's business, not the docs view's.
+    signal linkRequested(string kind, string target)
+
     // ── Data ─────────────────────────────────────────────────────────────────
 
     // Filled with the starter content (qml/DocsStarter.js) on creation, in the
@@ -89,9 +93,37 @@ Item {
     property bool _persisting: false   // we wrote AppController.docsState ourselves
     property bool _reloading:  false   // external change (e.g. profile switch) — suppress persist()
 
+    // Every catalogue entry gets an id of its own. Edit, delete, move and undo
+    // used to find an entry by its Ref, which the user types and may leave
+    // empty or repeat: two entries without a Ref were one entry to every
+    // operation, so editing one overwrote the other and deleting one deleted
+    // both. Entries saved before ids existed get one here, on load, and the
+    // blob is written back so the ids stick. Returns true when it assigned any.
+    function _newEntryId() {
+        return "e-" + Date.now().toString(36) + "-" + Math.floor(Math.random() * 1e9).toString(36);
+    }
+    function _ensureIds(list) {
+        const seen = ({});
+        let changed = false;
+        for (let i = 0; i < list.length; i++) {
+            const items = list[i].items || [];
+            for (let j = 0; j < items.length; j++) {
+                const it = items[j];
+                if (!it.id || seen[it.id]) {
+                    it.id = root._newEntryId();
+                    changed = true;
+                }
+                seen[it.id] = true;
+            }
+        }
+        return changed;
+    }
+
+    property bool _migratedOnLoad: false
     function _loadFromController() {
         _reloading = true;
         const raw = AppController.docsState || "";
+        let migrated = false;
         if (raw.length === 0) {
             sections = [];
             snippets = [];
@@ -103,16 +135,22 @@ Item {
                 // {contacts:[…]} into a blob that has never been saved, and
                 // reading that back as sections=[] used to wipe the starter
                 // docs. An explicitly empty array is still respected.
-                sections = o.sections !== undefined ? o.sections : root._sampleSections;
+                const secs = o.sections !== undefined ? o.sections : JSON.parse(JSON.stringify(root._sampleSections));
+                migrated = root._ensureIds(secs);
+                sections = secs;
                 snippets = o.snippets !== undefined ? o.snippets : root._sampleSnippets;
                 contacts = o.contacts || [];
             } catch (e) { /* corrupt — keep current view */ }
         }
         _reloading = false;
+        // Later, not now: on creation this runs before _loadedOnce is set.
+        if (migrated) { if (_loadedOnce) persist(); else _migratedOnLoad = true; }
     }
 
     Component.onCompleted: {
-        sections = Starter.sections(I18n.lang, [Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus]);
+        const starter = Starter.sections(I18n.lang, [Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus]);
+        root._ensureIds(starter);
+        sections = starter;
         snippets = Starter.snippets(I18n.lang);
         contacts = Starter.contacts(I18n.lang);
         // Snapshot the starter content before anything can overwrite it — a
@@ -126,6 +164,7 @@ Item {
         // and persist them so subsequent profile switches round-trip cleanly.
         if (!initiallyEmpty) _loadFromController();
         _loadedOnce = true;
+        if (_migratedOnLoad) persist();
         if (initiallyEmpty && (sections.length > 0 || snippets.length > 0 || contacts.length > 0))
             persist();
     }
@@ -184,38 +223,23 @@ Item {
     }
 
     // ── Undo ────────────────────────────────────────────────────────────────
-    property var pendingUndo: null
-
-    function undoLastDeletion() {
-        if (!pendingUndo) return;
-        const u = pendingUndo;
-        if (u.kind === "doc") {
-            _replaceSections(function (copy) {
-                const s = copy.find(function (x) { return x.id === u.sectionId; });
-                if (s) s.items.splice(u.itemIdx, 0, u.item);
-            });
-            showToast(I18n.t("docs.toast.restored").arg(u.item.ref || u.item.title));
-        } else if (u.kind === "snippet") {
-            const list = snippets.slice();
-            list.splice(u.idx, 0, u.item);
-            snippets = list;
-            showToast(I18n.t("docs.toast.restored").arg(u.item.title));
-        } else if (u.kind === "contact") {
-            const list = contacts.slice();
-            list.splice(u.idx, 0, u.item);
-            contacts = list;
-            if (u.item.mmId && u.item.source)
-                AppController.restoreExternalContact(u.item.source, u.item.mmId);
-            showToast(I18n.t("docs.toast.restored").arg(u.item.name));
-        } else if (u.kind === "section") {
-            const list = sections.slice();
-            list.splice(u.idx, 0, u.item);
-            sections = list;
-            showToast(I18n.t("docs.toast.section.restored").arg(u.item.title));
-        }
-        pendingUndo = null;
+    // Deletions go on AppController's undo stack, the one Ctrl+Z and every
+    // other Undo toast use. This view used to keep one pending deletion of its
+    // own: deleting a snippet and then a contact lost the snippet for good,
+    // and Ctrl+Z never reached either.
+    //
+    // The debounce is flushed first, so the recorded "before" is what was on
+    // screen and the undo takes back the deletion and nothing else.
+    function _beginUndoable() { flushPending(); }
+    function _commitUndoable(label) {
+        persistTimer.stop();
+        _persisting = true;
+        AppController.setDocsStateUndoable(JSON.stringify({ sections: sections, snippets: snippets, contacts: contacts }), label);
+        _persisting = false;
     }
 
+    // Kept for callers and tests that still ask the view: the stack is shared.
+    function undoLastDeletion() { AppController.undo(); }
     // ── Section ops ─────────────────────────────────────────────────────────
 
     function _replaceSections(updater) {
@@ -255,21 +279,21 @@ Item {
         });
     }
 
-    function _reorderDoc(srcSectionId, srcRef, dstSectionId, dstRef, before) {
+    function _reorderDoc(srcSectionId, srcId, dstSectionId, dstId, before) {
         _replaceSections(function (copy) {
             const src = copy.find(function (x) { return x.id === srcSectionId; });
             if (!src) return;
-            const i = src.items.findIndex(function (it) { return it.ref === srcRef; });
+            const i = src.items.findIndex(function (it) { return it.id === srcId; });
             if (i < 0) return;
             const moved = src.items.splice(i, 1)[0];
 
             const dst = copy.find(function (x) { return x.id === dstSectionId; });
             if (!dst) { src.items.splice(i, 0, moved); return; }
             let j;
-            if (dstRef === "" || dstRef === undefined) {
+            if (dstId === "" || dstId === undefined) {
                 j = dst.items.length;
             } else {
-                j = dst.items.findIndex(function (it) { return it.ref === dstRef; });
+                j = dst.items.findIndex(function (it) { return it.id === dstId; });
                 if (j < 0) j = dst.items.length;
                 if (!before) j += 1;
             }
@@ -302,11 +326,11 @@ Item {
         sections = copy;
     }
 
-    function _moveDocByDelta(sectionId, ref, delta) {
+    function _moveDocByDelta(sectionId, id, delta) {
         _replaceSections(function (copy) {
             const s = copy.find(function (x) { return x.id === sectionId; });
             if (!s) return;
-            const i = s.items.findIndex(function (it) { return it.ref === ref; });
+            const i = s.items.findIndex(function (it) { return it.id === id; });
             if (i < 0) return;
             const j = Math.max(0, Math.min(s.items.length - 1, i + delta));
             if (i === j) return;
@@ -331,6 +355,9 @@ Item {
         const cleaned = Object.assign({}, draft);
         delete cleaned._sectionId;
         delete cleaned._isNew;
+        const editingId = editor.isNew ? "" : (editor.originalId || cleaned.id || "");
+        if (!cleaned.id || editor.isNew) cleaned.id = root._newEntryId();
+        if (editingId.length > 0) cleaned.id = editingId;
 
         _replaceSections(copy => {
             if (editor.isNew) {
@@ -340,9 +367,9 @@ Item {
                 for (let s of copy) {
                     if (s.id === editor.sectionId) {
                         if (targetSectionId === s.id) {
-                            s.items = s.items.map(i => i.ref === editor.originalRef ? cleaned : i);
+                            s.items = s.items.map(i => i.id === editingId ? cleaned : i);
                         } else {
-                            s.items = s.items.filter(i => i.ref !== editor.originalRef);
+                            s.items = s.items.filter(i => i.id !== editingId);
                         }
                     } else if (s.id === targetSectionId) {
                         s.items.push(cleaned);
@@ -352,21 +379,20 @@ Item {
         });
         showToast(I18n.t(editor.isNew ? "docs.toast.created" : "docs.toast.saved").arg(cleaned.ref || cleaned.title));
     }
-    function deleteDoc(sectionId, ref) {
-        // Capture for undo
+    function deleteDoc(sectionId, id) {
         const sec = sections.find(function (s) { return s.id === sectionId; });
         if (!sec) return;
-        const idx = sec.items.findIndex(function (i) { return i.ref === ref; });
-        if (idx < 0) return;
-        const captured = sec.items[idx];
+        const captured = sec.items.find(function (i) { return i.id === id; });
+        if (!captured) return;
 
+        _beginUndoable();
         _replaceSections(function (copy) {
             for (let s of copy)
-                if (s.id === sectionId) s.items = s.items.filter(function (i) { return i.ref !== ref; });
+                if (s.id === sectionId) s.items = s.items.filter(function (i) { return i.id !== id; });
         });
-
-        pendingUndo = { kind: "doc", sectionId: sectionId, itemIdx: idx, item: captured };
-        showUndoToast(I18n.t("docs.toast.deleted").arg(ref), function () {
+        const name = captured.ref || captured.title;
+        _commitUndoable(I18n.t("docs.toast.restored").arg(name));
+        showUndoToast(I18n.t("docs.toast.deleted").arg(name), function () {
             root.undoLastDeletion()
         });
     }
@@ -393,10 +419,11 @@ Item {
     function deleteSnippet(idx) {
         if (idx < 0 || idx >= snippets.length) return;
         const captured = snippets[idx];
+        _beginUndoable();
         const list = snippets.slice();
         list.splice(idx, 1);
         snippets = list;
-        pendingUndo = { kind: "snippet", idx: idx, item: captured };
+        _commitUndoable(I18n.t("docs.toast.restored").arg(captured.title));
         showUndoToast(I18n.t("docs.toast.snippet.deleted").arg(captured.title), function () {
             root.undoLastDeletion()
         });
@@ -451,10 +478,11 @@ Item {
         const i = sections.findIndex(function (s) { return s.id === sectionId; });
         if (i < 0) return;
         const captured = sections[i];
+        _beginUndoable();
         const copy = sections.slice();
         copy.splice(i, 1);
         sections = copy;
-        pendingUndo = { kind: "section", idx: i, item: captured };
+        _commitUndoable(I18n.t("docs.toast.section.restored").arg(captured.title));
         showUndoToast(I18n.t("docs.toast.section.deleted").arg(captured.title), function () {
             root.undoLastDeletion()
         });
@@ -463,30 +491,44 @@ Item {
     function deleteContact(idx) {
         if (idx < 0 || idx >= contacts.length) return;
         const captured = contacts[idx];
+        _beginUndoable();
         const list = contacts.slice();
         list.splice(idx, 1);
         contacts = list;
-        // An imported contact would come back on the next sync, so record the
-        // deletion where the importer can see it. It cannot live in this blob:
-        // persist() rewrites the whole thing and drops keys it does not know.
-        if (captured.mmId && captured.source)
-            AppController.dismissExternalContact(captured.source, captured.mmId);
-        pendingUndo = { kind: "contact", idx: idx, item: captured };
+        // An imported contact would come back on the next sync; AppController
+        // records the deletion where the importer can see it (and takes the
+        // record back when the deletion is undone).
+        _commitUndoable(I18n.t("docs.toast.restored").arg(captured.name));
         showUndoToast(I18n.t("docs.toast.contact.deleted").arg(captured.name), function () {
             root.undoLastDeletion()
         });
     }
 
+    // "#name" is a link into the docs themselves: the page of that title (or
+    // id) opens in the Pages tab. Anything else goes through the same confirm
+    // step the notes preview uses — this view used to refuse an unusual link
+    // with a toast where the preview asked about the very same URL.
     function openExternal(url) {
         if (!url) return;
         if (url.indexOf("#") === 0) {
-            showToast("Open in wiki: " + url.substring(1));
-        } else if (AppController.isSafeLink(url)) {
-            Qt.openUrlExternally(url);
-        } else {
-            showToast(I18n.t("md.link.blocked").arg(url));
+            const want = url.substring(1).trim();
+            const m = AppController.docPages;
+            const rTitle = m.roleOf("title"), rId = m.roleOf("id");
+            for (let i = 0; i < m.rowCount(); i++) {
+                const idx = m.index(i, 0);
+                const id = String(m.data(idx, rId));
+                if (id === want || String(m.data(idx, rTitle)).toLowerCase() === want.toLowerCase()) {
+                    root.tab = "pages";
+                    AppController.activeDocPageId = id;
+                    return;
+                }
+            }
+            showToast(I18n.t("docs.wiki.missing").arg(want));
+            return;
         }
+        linkConfirm.openLink(url);
     }
+    LinkConfirmDialog { id: linkConfirm }
 
     // ── Layout ──────────────────────────────────────────────────────────────
 
@@ -606,10 +648,12 @@ Item {
 
         // Body — the page tree, or the catalog.
         DocsPagesPane {
+            id: pagesPane
             objectName: "docs-pages-pane"
             visible: root.tab === "pages"
             Layout.fillWidth: true
             Layout.fillHeight: true
+            onLinkActivated: (kind, target) => root.linkRequested(kind, target)
         }
 
         // Body — nav + scrollable content
@@ -1062,7 +1106,7 @@ Item {
         contactPalette: root.contactPalette
         accentPalette: root.accentPalette
         onSavedDoc:     (draft) => root.saveDoc(draft)
-        onDeletedDoc:   () => root.deleteDoc(editor.sectionId, editor.originalRef)
+        onDeletedDoc:   () => root.deleteDoc(editor.sectionId, editor.originalId)
         onSavedSnippet: (draft) => root.saveSnippet(draft, editor.idx)
         onDeletedSnippet: () => root.deleteSnippet(editor.idx)
         onSavedContact: (draft) => root.saveContact(draft, editor.idx)
@@ -1079,6 +1123,7 @@ Item {
         editor.kind = "doc";
         editor.sectionId = sectionId;
         editor.originalRef = "";
+        editor.originalId = "";
         editor.isNew = true;
         editor.docCustomFields = root._sectionCustomFields(sectionId);
         editor.draft = ({ ref: "", title: "", desc: "", url: "", source: "", version: "", updated: "", extra: {}, _sectionId: sectionId });
@@ -1088,6 +1133,7 @@ Item {
         editor.kind = "doc";
         editor.sectionId = sectionId;
         editor.originalRef = item.ref;
+        editor.originalId = item.id || "";
         editor.isNew = false;
         editor.docCustomFields = root._sectionCustomFields(sectionId);
         editor.draft = Object.assign({ extra: {} }, item, { _sectionId: sectionId, extra: Object.assign({}, item.extra || {}) });
@@ -1259,6 +1305,13 @@ Item {
     }
 
     function scrollToAnchor(objectName) {
+        // "page:<id>" is a doc page, which lives in the Pages tab.
+        if (objectName.indexOf("page:") === 0) {
+            root.tab = "pages";
+            AppController.activeDocPageId = objectName.substring(5);
+            return;
+        }
+        if (root.tab !== "references") root.tab = "references";
         const target = findChildByName(bodyCol, objectName);
         if (!target) return;
         const p = target.mapToItem(bodyCol, 0, 0);
@@ -1287,7 +1340,7 @@ Item {
         property var customFields: []
         readonly property bool isInternal: (item.url || "").indexOf("#") === 0
         // Drag-source identifiers (read by DropArea.drop.source)
-        property string docRef: item.ref || ""
+        property string docId: item.id || ""
         property string docSectionId: sectionId
         height: cardCol.implicitHeight + 24
         radius: Theme.radiusLg
@@ -1474,7 +1527,7 @@ Item {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.deleteDoc(card.sectionId, card.item.ref)
+                    onClicked: root.deleteDoc(card.sectionId, card.item.id)
                 }
             }
         }
@@ -1492,8 +1545,8 @@ Item {
             onDropped: (drop) => {
                 over = false;
                 const src = drop.source;
-                if (src && src !== card && src.docRef !== undefined && src.docSectionId !== undefined) {
-                    root._reorderDoc(src.docSectionId, src.docRef, card.sectionId, card.item.ref, insertBefore);
+                if (src && src !== card && src.docId !== undefined && src.docSectionId !== undefined) {
+                    root._reorderDoc(src.docSectionId, src.docId, card.sectionId, card.item.id, insertBefore);
                     drop.accept(Qt.MoveAction);
                 }
             }
@@ -1518,10 +1571,10 @@ Item {
             }
             AppMenuItem { text: I18n.t("docs.menu.edit"); onTriggered: root.openDocEdit(card.sectionId, card.item) }
             AppMenuSeparator {}
-            AppMenuItem { text: I18n.t("docs.menu.moveUp");   onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, -1) }
-            AppMenuItem { text: I18n.t("docs.menu.moveDown"); onTriggered: root._moveDocByDelta(card.sectionId, card.item.ref, +1) }
+            AppMenuItem { text: I18n.t("docs.menu.moveUp");   onTriggered: root._moveDocByDelta(card.sectionId, card.item.id, -1) }
+            AppMenuItem { text: I18n.t("docs.menu.moveDown"); onTriggered: root._moveDocByDelta(card.sectionId, card.item.id, +1) }
             AppMenuSeparator {}
-            AppMenuItem { danger: true; text: I18n.t("common.delete"); onTriggered: root.deleteDoc(card.sectionId, card.item.ref) }
+            AppMenuItem { danger: true; text: I18n.t("common.delete"); onTriggered: root.deleteDoc(card.sectionId, card.item.id) }
         }
     }
 

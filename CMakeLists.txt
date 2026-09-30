@@ -258,6 +258,7 @@ qt_add_qml_module(heap_core
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml
+        qml/LinkConfirmDialog.qml
         # ── audit-know: end ──
         # ── audit-ux: begin ──
         # ── audit-ux: end ──

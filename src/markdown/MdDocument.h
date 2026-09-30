@@ -89,6 +89,7 @@ class MdDocument : public QObject {
   Q_INVOKABLE int rowForLine(int line);
   Q_INVOKABLE int firstLineOfRow(int row);
   Q_INVOKABLE int lastLineOfRow(int row);
+  Q_INVOKABLE int rowForFootnote(const QString& id);
   // 0-based line holding a UTF-16 cursor position, and the position at which
   // a line starts. The editor counts in cursor positions; the model counts in
   // lines.
