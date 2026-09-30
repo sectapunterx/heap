@@ -220,6 +220,37 @@ ApplicationWindow {
     // the other.
     property string boardSortMode: "manual"
 
+    // Search, priority chips, sort and the archived / done toggles survive a
+    // restart (TASKS-22): they lived only on the window, so every launch
+    // started from an unfiltered board. Kept in the UI settings blob, written
+    // a moment after the last change rather than on every keystroke.
+    property bool _filtersRestored: false
+    function _restoreFilters() {
+        const f = _settingsObject().filters || {};
+        win.searchText = typeof f.search === "string" ? f.search : "";
+        win.prioritiesFilter = (f.priorities && typeof f.priorities === "object") ? f.priorities : ({});
+        win.boardSortMode = typeof f.sort === "string" && f.sort.length > 0 ? f.sort : "manual";
+        win.showArchived = f.archived === true;
+        win.showDoneTimeline = f.showDone === true;
+        win._filtersRestored = true;
+    }
+    function _saveFiltersSoon() { if (win._filtersRestored) filterSaveTimer.restart(); }
+    onSearchTextChanged: _saveFiltersSoon()
+    onPrioritiesFilterChanged: _saveFiltersSoon()
+    onBoardSortModeChanged: _saveFiltersSoon()
+    onShowArchivedChanged: _saveFiltersSoon()
+    onShowDoneTimelineChanged: _saveFiltersSoon()
+    Timer {
+        id: filterSaveTimer
+        interval: 400
+        onTriggered: {
+            const s = win._settingsObject();
+            s.filters = { search: win.searchText, priorities: win.prioritiesFilter, sort: win.boardSortMode,
+                          archived: win.showArchived, showDone: win.showDoneTimeline };
+            AppController.appSettingsJson = JSON.stringify(s);
+        }
+    }
+
     // Reactive task / status counts. statusCounts is one pass over the model,
     // recomputed when the model changes; these used to be four separate full
     // scans, re-run from all four of the model's signals.
@@ -232,6 +263,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         _restoreGeometry();
+        _restoreFilters();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
         // First run: greet the user once the overlay is ready.
@@ -1235,7 +1267,8 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !hotkeys.isCapturing
             && (AppController.currentView === "board"
                 || AppController.currentView === "timeline"
-                || AppController.currentView === "week")
+                || AppController.currentView === "week"
+                || AppController.currentView === "archive")
         onActivated: {
             const v = win.activeViewItem();
             if (v && v.selectAllVisible) v.selectAllVisible();
@@ -1310,8 +1343,10 @@ ApplicationWindow {
 
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
+        // Not while a card's menu is up: its arrows and letters belong to it.
         enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
             && AppController.currentView === "board"
+            && !(boardLoader.item && boardLoader.item.cardMenuOpen === true)
     }
 
     BoardKey {
@@ -1353,6 +1388,20 @@ ApplicationWindow {
     BoardKey {
         sequences: [_kbd("board.moveRight"), "Shift+Right"]
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(1, 0); }
+    }
+    // The card menu, archive and fold, for the card/column the keyboard is on
+    // (TASKS-32 / UX-26).
+    BoardKey {
+        sequences: [_kbd("board.cardMenu"), "Menu"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.openCursorMenu) b.openCursorMenu(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.archive")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.archiveCursor) b.archiveCursor(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.collapseColumn")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorColumn) b.toggleCursorColumn(); }
     }
 
     Shortcut {

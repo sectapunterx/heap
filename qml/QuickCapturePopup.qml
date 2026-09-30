@@ -142,8 +142,13 @@ Popup {
             "every:day": "daily", "every:week": "weekly", "every:weekday": "weekdays",
             "every:mon": "everyMon", "every:tue": "everyTue", "every:wed": "everyWed",
             "every:thu": "everyThu", "every:fri": "everyFri", "every:sat": "everySat",
-            "every:sun": "everySun"
+            "every:sun": "everySun", "every:month": "monthly"
         };
+        const monthly = /^every:month:(\d+)$/.exec(String(r || ""));
+        if (monthly) {
+            const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);
+            return l.charAt(0).toLowerCase() + l.slice(1);
+        }
         // Mid-sentence: "Повтор: по будням", not "Повтор: По будням".
         const label = keys[r] ? I18n.t("editor.recur." + keys[r]) : r;
         return label.charAt(0).toLowerCase() + label.slice(1);

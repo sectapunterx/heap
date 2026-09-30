@@ -203,6 +203,7 @@ qt_add_library(heap_core STATIC
     # ── audit-plat: begin ──
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
+    src/AppControllerTaskEdits.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
     # ── audit-time: end ──
@@ -253,6 +254,7 @@ qt_add_qml_module(heap_core
         # ── audit-plat: begin ──
         # ── audit-plat: end ──
         # ── audit-tasks: begin ──
+        qml/PlainText.js
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         # ── audit-time: end ──

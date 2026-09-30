@@ -15,10 +15,16 @@ restores a single default; *Reset all* restores the whole catalog.
 | Quick-capture task | `Ctrl+Shift+Space` |
 | Quick-capture note | `Ctrl+Shift+N` |
 | Focus the header search | `Ctrl+F` |
-| Undo last deletion | `Ctrl+Z` |
+| Undo the last action | `Ctrl+Z` (not while a dialog is open; in a text field it undoes the typing) |
+| Redo | `Ctrl+Shift+Z` |
 
-The header search also takes `field:value` clauses — `status:`, `priority:`,
-`deadline:`, `tag:`, `mention:` — mixed freely with ordinary search words. See
+The header search also takes `field:value` clauses — `status:` (a column by
+id or by the name the board shows: `status:"Code Review"`, `status:in-progress`),
+`priority:`, `due:`/`deadline:` (`today`, `overdue`, `week`, `<7d`, `friday`,
+`none`), `tag:` or `#label`, `mention:`, `is:open`/`done`/`archived`/`overdue` —
+mixed freely with ordinary search words. `-` in front of a clause or word
+excludes it, `OR` (or `|`) joins alternatives. A clause heap cannot read is
+flagged on the search box instead of silently searching for it. See
 [TUTORIAL.md](TUTORIAL.md#7-the-search-box-is-a-query-box).
 
 ## Views
@@ -48,6 +54,16 @@ alongside each one.
 | Open the card | `Return` |
 | Add to the selection | `Space` |
 | Move the card | `Shift+J` / `Shift+K` / `Shift+H` / `Shift+L` |
+| Card menu (status, priority, archive, …) | `M` (or the `Menu` key) |
+| Archive the card (or the selection) | `E` |
+| Fold / unfold the cursor's column | `Z` |
+
+While a card's menu is open its arrows and letters belong to the menu.
+
+## Timeline
+
+`J` / `K` (or `↓` / `↑`) walk the rows, `Return` opens one, `Space` adds it to
+the selection, and `O` opens the row's issue in its tracker.
 
 ## Calendar
 
@@ -74,7 +90,7 @@ Live on the week and month views only, where the board's own letters are not.
 | Open Tweaks (theme / density / a11y) | `Ctrl+,` |
 | Open Hotkeys panel | `Ctrl+/` |
 
-## Selection (Board / Timeline / Week)
+## Selection (Board / Timeline / Week / Archive)
 
 | Action | Default |
 |--------|---------|
@@ -117,7 +133,12 @@ Every one of these is a single undo step.
 ## Notes
 
 - **Quick-capture** opens a single-field popup that parses your line as you type
-  — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax. From
+  — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax.
+  `Return` adds and closes, `Ctrl+Return` adds and stays open for the next
+  item; `Tab` (or the arrows, then `Return`) takes a suggestion. From
   another app it comes up on its own, without the main window, and a
   notification confirms what was created.
 - `Esc` also closes any open modal or popup before it clears a selection.
+- **Task editor:** `Ctrl+Return` saves. `Esc` (or a click on the backdrop) closes
+  a task with no changes; with changes it asks — `Return` saves, `D` discards,
+  `Esc` keeps editing.

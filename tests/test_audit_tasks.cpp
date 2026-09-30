@@ -389,6 +389,85 @@ TEST_F(AuditTasksTest, AReviewWithoutABranchRefusesTheWholeSave) {
   EXPECT_EQ(task(QStringLiteral("A")).status, QStringLiteral("review"));
 }
 
+// ── TASKS-20: counters are about the live board ──
+
+TEST_F(AuditTasksTest, ArchivedTasksAreNotCounted) {
+  Task b1 = makeTask(QStringLiteral("B1"), QStringLiteral("blocked"));
+  Task b2 = makeTask(QStringLiteral("B2"), QStringLiteral("blocked"));
+  b2.archived = true;
+  app_->tasks()->reset({b1, b2, makeTask(QStringLiteral("T1"), QStringLiteral("todo"))});
+  const QVariantMap counts = app_->statusCounts();
+  EXPECT_EQ(counts.value(QStringLiteral("blocked")).toInt(), 1);
+  EXPECT_EQ(counts.value(QStringLiteral("_total")).toInt(), 2);
+  // A column delete re-homes archived cards too, so that count includes them.
+  EXPECT_EQ(app_->countByStatus(QStringLiteral("blocked")), 2);
+}
+
+// ── TASKS-32: priority and labels without the editor ──
+
+TEST_F(AuditTasksTest, BulkPriorityAndLabelsAreOneUndoStepEach) {
+  Task a = makeTask(QStringLiteral("A"), QStringLiteral("todo"));
+  a.labels = {Label{QStringLiteral("infra"), QStringLiteral("#00ff00")}};
+  app_->tasks()->reset({a, makeTask(QStringLiteral("B"), QStringLiteral("todo")), makeTask(QStringLiteral("C"), QStringLiteral("todo"))});
+  app_->setSelectedTaskIds({QStringLiteral("A"), QStringLiteral("B")});
+
+  app_->setSelectedTasksPriority(QStringLiteral("P0"));
+  EXPECT_EQ(task(QStringLiteral("A")).priority, QStringLiteral("P0"));
+  EXPECT_EQ(task(QStringLiteral("B")).priority, QStringLiteral("P0"));
+  EXPECT_EQ(task(QStringLiteral("C")).priority, QStringLiteral("P2"));
+
+  app_->setSelectedTasksLabel(QStringLiteral("#infra"), true);
+  ASSERT_EQ(task(QStringLiteral("B")).labels.size(), 1);
+  EXPECT_EQ(task(QStringLiteral("B")).labels.first().color, QStringLiteral("#00ff00")) << "the label keeps its colour";
+  EXPECT_EQ(task(QStringLiteral("A")).labels.size(), 1) << "already labelled";
+
+  app_->undo();
+  EXPECT_TRUE(task(QStringLiteral("B")).labels.isEmpty());
+  app_->undo();
+  EXPECT_EQ(task(QStringLiteral("B")).priority, QStringLiteral("P2"));
+
+  app_->setSelectedTasksLabel(QStringLiteral("infra"), false);
+  EXPECT_TRUE(task(QStringLiteral("A")).labels.isEmpty());
+}
+
+TEST_F(AuditTasksTest, OneCardsPriorityFromItsMenu) {
+  app_->tasks()->reset({makeTask(QStringLiteral("A"), QStringLiteral("todo"))});
+  app_->setTaskPriority(QStringLiteral("A"), QStringLiteral("P1"));
+  EXPECT_EQ(task(QStringLiteral("A")).priority, QStringLiteral("P1"));
+  app_->setTaskPriority(QStringLiteral("A"), QStringLiteral("P7"));
+  EXPECT_EQ(task(QStringLiteral("A")).priority, QStringLiteral("P1")) << "not a priority";
+  app_->undo();
+  EXPECT_EQ(task(QStringLiteral("A")).priority, QStringLiteral("P2"));
+}
+
+// ── TASKS-33: an id is a key ──
+
+TEST_F(AuditTasksTest, AnIdWithASpaceOrSlashIsRefused) {
+  for(const QString& bad : {QStringLiteral("FOO 1"), QStringLiteral("feat/1"), QStringLiteral("a\\b")}) {
+    QVariantMap d = app_->newTaskDraft(QStringLiteral("todo"));
+    d["id"] = bad;
+    d["title"] = QStringLiteral("x");
+    EXPECT_FALSE(app_->saveTask(d)) << bad.toStdString();
+    EXPECT_FALSE(has(bad));
+  }
+}
+
+// ── TASKS-30: "this week" is the calendar week ──
+
+TEST_F(AuditTasksTest, ThisWeekEndsOnSunday) {
+  const QDate today = app_->today();
+  const QDate sunday = today.addDays(7 - today.dayOfWeek());
+  const QDate nextMonday = sunday.addDays(1);
+  if(today.daysTo(sunday) >= 2) {
+    EXPECT_EQ(app_->deadlineBucket(sunday), QStringLiteral("thisweek"));
+  }
+  if(today.daysTo(nextMonday) >= 2) {
+    EXPECT_EQ(app_->deadlineBucket(nextMonday), QStringLiteral("nextweek")) << "next Monday is not this week";
+  }
+  EXPECT_EQ(app_->deadlineBucket(sunday.addDays(7)), QStringLiteral("nextweek"));
+  EXPECT_EQ(app_->deadlineBucket(sunday.addDays(8)), QStringLiteral("later"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

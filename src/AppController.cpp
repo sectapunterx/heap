@@ -184,6 +184,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Repeat rule not supported, saved as a single event: %1", "Правило повтора не поддерживается, сохранено одно событие: %1"}},
       {"task.idRequired", {"A task needs an id", "У задачи должен быть id"}},
       {"task.titleRequired", {"A task needs a title", "У задачи должен быть заголовок"}},
+      {"task.idInvalid", {"“%1” can't be an id — no spaces or slashes", "«%1» не подходит для id — без пробелов и слэшей"}},
       {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
       {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
       // audit-tasks: toasts for operations that became undoable.
@@ -195,6 +196,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"undo.bulkEdit", {"Change undone for %1 task(s)", "Изменение отменено для задач: %1"}},
       {"task.bulkPriority", {"%1 task(s) → %2", "Задач: %1 → %2"}},
       {"task.bulkLabel", {"%1 task(s) labelled %2", "Метка %2 — задач: %1"}},
+      {"task.bulkUnlabel", {"%2 removed from %1 task(s)", "Метка %2 снята — задач: %1"}},
       {"sync.conflicts",
        {"%1 kept your local edits (also changed in the tracker)", "%1 — оставлены локальные правки (в трекере тоже изменены)"}},
       {"sync.gone", {"%1 no longer in the tracker", "%1 больше нет в трекере"}},
@@ -242,6 +244,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.board.moveRight.label", {"Board: move card right", "Доска: карточку правее"}},
       {"shortcut.board.moveRight.desc",
        {"Move the card under the cursor to the next column.", "Перенести карточку под курсором в следующую колонку."}},
+      {"shortcut.board.cardMenu.label", {"Board: card menu", "Доска: меню карточки"}},
+      {"shortcut.board.cardMenu.desc",
+       {"Open the menu of the card under the cursor: status, priority, archive…",
+        "Открыть меню карточки под курсором: статус, приоритет, архив…"}},
+      {"shortcut.board.archive.label", {"Board: archive card", "Доска: в архив"}},
+      {"shortcut.board.archive.desc",
+       {"Archive the selection, or the card under the cursor.", "Отправить в архив выделение или карточку под курсором."}},
+      {"shortcut.board.collapseColumn.label", {"Board: fold column", "Доска: свернуть колонку"}},
+      {"shortcut.board.collapseColumn.desc",
+       {"Fold or unfold the column the cursor is in.", "Свернуть или развернуть колонку с курсором."}},
       {"shortcut.task.openExternal.label", {"Open ticket in browser", "Открыть тикет в браузере"}},
       {"shortcut.task.openExternal.desc",
        {"Opens the selected (or hovered) mirrored issue in its tracker.",
@@ -299,7 +311,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"profile.nameTaken", {"A profile named %1 already exists", "Профиль «%1» уже есть"}},
       {"deadline.today", {"today", "сегодня"}},
       {"deadline.tomorrow", {"+1 day", "+1 день"}},
-      {"deadline.inDays", {"+%1 days", "+%1 дн."}},
+      // One shape for every distance: "+6 days" next to "+7d" read as two
+      // different units.
+      {"deadline.inDays", {"+%1d", "+%1 д"}},
       {"deadline.inDaysShort", {"+%1d", "+%1 д"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
       {"import.emptyJson", {"Empty JSON", "Пустой JSON"}},
@@ -1580,6 +1594,15 @@ bool AppController::saveTask(const QVariantMap& draft) {
   }
   if(t.id.isEmpty()) {
     emit toast(tr_("task.idRequired"));
+    return false;
+  }
+  // An id is a key: it goes into branch names, commit messages, mentions and
+  // the query language, none of which survive a space or a slash in it. Only
+  // a new or changed id is checked, so an old one stays openable.
+  static const QRegularExpression kBadIdChar(QStringLiteral(R"([\s/\\])"));
+  const bool idChanged = isNew || (!originalId.isEmpty() && originalId != t.id);
+  if(idChanged && kBadIdChar.match(t.id).hasMatch()) {
+    emit toast(tr_("task.idInvalid").arg(t.id));
     return false;
   }
   t.title = draft.value("title").toString();
@@ -3126,7 +3149,8 @@ QVariantMap AppController::statusCounts() const {
   }
   // Archived tasks are off the board, so they are off its counters too: the
   // sidebar's Blocked badge counted every blocked card ever archived.
-  // "_total" (no column id can start with "_") is the live task count.
+  // "_total" (no column id can start with "_") is the live task count, left
+  // out when there is none so an empty board still counts as an empty map.
   m_statusCounts.clear();
   int total = 0;
   for(const Task& t : m_tasks.items()) {
@@ -3136,7 +3160,9 @@ QVariantMap AppController::statusCounts() const {
     ++total;
     m_statusCounts[t.status] = m_statusCounts.value(t.status).toInt() + 1;
   }
-  m_statusCounts[QStringLiteral("_total")] = total;
+  if(total > 0) {
+    m_statusCounts[QStringLiteral("_total")] = total;  // absent reads as 0
+  }
   m_statusCountsDirty = false;
   return m_statusCounts;
 }
@@ -3432,10 +3458,13 @@ QString AppController::deadlineBucket(const QDate& deadline) const {
   if(d == 1) {
     return "tomorrow";
   }
-  if(d <= 6) {
+  // Calendar weeks, Monday to Sunday: a rolling seven days put next Monday
+  // under "This week" (TASKS-30).
+  const QDate sunday = m_today.addDays(7 - m_today.dayOfWeek());
+  if(deadline <= sunday) {
     return "thisweek";
   }
-  if(d <= 13) {
+  if(deadline <= sunday.addDays(7)) {
     return "nextweek";
   }
   return "later";
@@ -7233,6 +7262,9 @@ void AppController::seedShortcutCatalog() {
   add("board.moveUp", "Shift+K");
   add("board.moveLeft", "Shift+H");
   add("board.moveRight", "Shift+L");
+  add("board.cardMenu", "M");
+  add("board.archive", "E");
+  add("board.collapseColumn", "Z");
   // Calendar date navigation. Only live on a calendar view, where the board's
   // own bare letters are not, so the two sets cannot collide.
   add("cal.today", "T");
@@ -7760,7 +7792,7 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
     }
     CalEvent e;
     e.id = QStringLiteral("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-    e.title = QStringLiteral("Focus: %1").arg(t.title);
+    e.title = QStringLiteral("Focus · %1").arg(t.title);
     e.type = QStringLiteral("focus");
     e.start = start;
     e.end = start + dur;

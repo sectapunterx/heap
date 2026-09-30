@@ -32,16 +32,80 @@ Item {
             if (AppController.selectionCount === 0) root.shiftAnchorId = "";
         }
 
+        function onStatusesChanged() { root._syncColumns(); }
+
         // Sidebar Blocked / Code Review buttons jump the board to a column.
         function onFocusedStatusChanged() {
             if (AppController.focusedStatus.length > 0) root.focusColumn(AppController.focusedStatus);
         }
     }
 
+    // ── Columns, updated in place (TASKS-19) ──────────────────────────
+    // AppController.statuses is a plain list, and a Repeater over a list
+    // rebuilds every delegate whenever it changes: renaming one column threw
+    // away all of them, with their scroll positions. This model is patched
+    // row by row, so an edit touches only the column it is about.
+    ListModel { id: colModel }
+    function _syncColumns() {
+        const sts = AppController.statuses;
+        const want = {};
+        for (let i = 0; i < sts.length; i++) want[sts[i].id] = true;
+        for (let i = colModel.count - 1; i >= 0; i--)
+            if (!want[colModel.get(i).sid]) colModel.remove(i);
+        for (let i = 0; i < sts.length; i++) {
+            const s = sts[i];
+            const row = { sid: String(s.id), sname: String(s.name || ""), scolor: String(s.color || ""), swip: Number(s.wip || 0) };
+            let at = -1;
+            for (let j = i; j < colModel.count; j++) if (colModel.get(j).sid === row.sid) { at = j; break; }
+            if (at < 0) { colModel.insert(i, row); continue; }
+            if (at !== i) colModel.move(at, i, 1);
+            const cur = colModel.get(i);
+            if (cur.sname !== row.sname) colModel.setProperty(i, "sname", row.sname);
+            if (cur.scolor !== row.scolor) colModel.setProperty(i, "scolor", row.scolor);
+            if (cur.swip !== row.swip) colModel.setProperty(i, "swip", row.swip);
+        }
+    }
+
+    // ── Collapsed columns (TASKS-32) ───────────────────────────────────
+    // A column folded to a narrow strip keeps its name and count and gives
+    // its width to the others. Remembered per column in the UI settings.
+    property var collapsed: ({})
+    function _loadCollapsed() {
+        let s = {};
+        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+        const ids = Array.isArray(s.boardCollapsed) ? s.boardCollapsed : [];
+        const out = {};
+        for (let i = 0; i < ids.length; i++) out[ids[i]] = true;
+        root.collapsed = out;
+    }
+    function toggleCollapsed(statusId) {
+        const next = Object.assign({}, root.collapsed);
+        if (next[statusId]) delete next[statusId]; else next[statusId] = true;
+        root.collapsed = next;
+        let s = {};
+        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+        s.boardCollapsed = Object.keys(next);
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+    // Fold or unfold the column the keyboard cursor is in.
+    function toggleCursorColumn() {
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        let c = pos ? pos.col : -1;
+        if (c < 0 && colRepeater.count > 0) c = 0;
+        const col = c >= 0 ? colRepeater.itemAt(c) : null;
+        if (col) root.toggleCollapsed(col.statusId);
+    }
+
+    // True while any card's menu is up; Main.qml holds the board keys back.
+    property int _openCardMenus: 0
+    readonly property bool cardMenuOpen: _openCardMenus > 0
+
     // One source of truth for the column width. focusColumn() scrolls by
     // index × width, so a literal here and a different literal in the delegate
     // silently put the wrong column on screen.
     readonly property int columnWidth: 280
+    readonly property int foldedWidth: 44
 
     // ── Column focus (sidebar Blocked / Code Review buttons) ──────────
     // Scroll the target status column into view and briefly highlight it.
@@ -69,6 +133,8 @@ Item {
     // A focus requested from another view fires focusedStatusChanged before this
     // board exists; pick it up once the board is created and laid out.
     Component.onCompleted: {
+        root._syncColumns();
+        root._loadCollapsed();
         if (AppController.focusedStatus && AppController.focusedStatus.length > 0)
             Qt.callLater(function() { root.focusColumn(AppController.focusedStatus); });
     }
@@ -109,7 +175,8 @@ Item {
         for (let c = 0; c < colRepeater.count; c++) {
             const col = colRepeater.itemAt(c);
             if (!col || !col.taskFilter) { cols.push({ statusId: "", ids: [] }); continue; }
-            cols.push({ statusId: col.statusId, ids: col.taskFilter.ids() });
+            // A folded column shows no cards, so the cursor walks past it.
+            cols.push({ statusId: col.statusId, ids: col.folded ? [] : col.taskFilter.ids() });
         }
         return cols;
     }
@@ -163,6 +230,52 @@ Item {
         const cols = _visibleByColumn();
         if (!_cursorPos(cols)) { root.cursorTaskId = _firstVisible(cols); return; }
         if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
+    }
+
+    // The card the next key acts on: the cursor's, else the single selected
+    // one, else the one under the pointer.
+    function _actionCardId() {
+        const cols = _visibleByColumn();
+        if (root.cursorTaskId && _cursorPos(cols)) return root.cursorTaskId;
+        if (AppController.selectionCount === 1) return AppController.selectedTaskIds[0];
+        return root.hoveredTaskId || "";
+    }
+    function _cardItem(id) {
+        for (let c = 0; c < colRepeater.count; c++) {
+            const col = colRepeater.itemAt(c);
+            if (!col || !col.taskList) continue;
+            const list = col.taskList;
+            const ids = col.taskFilter.ids();
+            const row = ids.indexOf(id);
+            if (row < 0) continue;
+            list.positionViewAtIndex(row, ListView.Contain);
+            list.forceLayout();
+            return list.itemAtIndex(row);
+        }
+        return null;
+    }
+    // M (and the Menu key): the card menu for the card the keyboard is on.
+    function openCursorMenu() {
+        const id = root._actionCardId();
+        if (!id) { root.moveCursor(0, 0); return; }
+        root.cursorTaskId = id;
+        root.cursorVisible = true;
+        const card = root._cardItem(id);
+        if (card && card.openMenu) card.openMenu();
+    }
+    // E: archive the selection, or the cursor's card when nothing is selected.
+    function archiveCursor() {
+        if (AppController.selectionCount > 0) { AppController.setSelectedTasksArchived(true); return; }
+        const id = root._actionCardId();
+        if (!id) return;
+        // Keep the cursor on the board: step to a neighbour first.
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (pos && id === root.cursorTaskId) {
+            const ids = cols[pos.col].ids;
+            root.cursorTaskId = pos.row + 1 < ids.length ? ids[pos.row + 1] : (pos.row > 0 ? ids[pos.row - 1] : "");
+        }
+        AppController.setArchived(id, true);
     }
 
     function toggleCursorSelection() {
@@ -311,15 +424,19 @@ Item {
 
             Repeater {
                 id: colRepeater
-                model: AppController.statuses
+                model: colModel
 
                 Rectangle {
                     id: col
-                    required property var modelData
+                    required property string sid
+                    required property string sname
+                    required property string scolor
+                    required property int swip
                     required property int index
-                    readonly property string statusId: modelData.id
-                    readonly property string statusName: modelData.name
-                    readonly property color statusColor: modelData.color
+                    readonly property string statusId: sid
+                    readonly property string statusName: sname
+                    readonly property color statusColor: scolor
+                    readonly property bool folded: !!root.collapsed[col.statusId]
                     readonly property alias taskList: bodyFlick
                     readonly property alias taskFilter: colFilter
                     property bool dragOver: false
@@ -328,7 +445,7 @@ Item {
                     // limit the badge turns, and that is all it does: a hard
                     // cap would make a drag silently do nothing, which reads
                     // as a bug rather than as a rule.
-                    readonly property int wipLimit: modelData.wip || 0
+                    readonly property int wipLimit: col.swip
                     readonly property bool overWip: col.wipLimit > 0 && col.visibleCount > col.wipLimit
                     property bool renaming: false
                     readonly property bool isFirst: index === 0
@@ -344,7 +461,7 @@ Item {
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
 
-                    width: root.columnWidth
+                    width: col.folded ? root.foldedWidth : root.columnWidth
                     height: rowL.height
                     radius: Theme.radius
                     color: Theme.panel
@@ -353,9 +470,68 @@ Item {
                     clip: true
                     Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(180) } }
 
+                    // Folded: the name runs down the strip, with the count; a
+                    // click (or Z on the board) opens it again.
+                    Item {
+                        objectName: "column-folded"
+                        anchors.fill: parent
+                        visible: col.folded
+                        Column {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.top: parent.top
+                            anchors.topMargin: Theme.spLg
+                            spacing: Theme.spLg
+                            Rectangle {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: 8; height: 8; radius: 4
+                                color: col.statusColor
+                            }
+                            Text {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                text: col.visibleCount
+                                color: Theme.textDim
+                                font.family: Theme.fontMono
+                                font.pixelSize: Theme.fsSm
+                            }
+                            Item {
+                                anchors.horizontalCenter: parent.horizontalCenter
+                                width: foldedName.implicitHeight
+                                height: foldedName.implicitWidth
+                                Text {
+                                    id: foldedName
+                                    anchors.centerIn: parent
+                                    rotation: 90
+                                    text: col.statusName
+                                    color: Theme.text
+                                    font.pixelSize: Theme.fsMd
+                                    font.weight: Font.DemiBold
+                                }
+                            }
+                        }
+                        MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: root.toggleCollapsed(col.statusId)
+                            ToolTip.visible: containsMouse
+                            ToolTip.delay: 400
+                            ToolTip.text: I18n.t("kanban.expand")
+                            hoverEnabled: true
+                        }
+                        DropArea {
+                            anchors.fill: parent
+                            onDropped: (drop) => {
+                                const src = drop.source;
+                                if (!src || !src.taskId) return;
+                                AppController.moveTaskTo(src.taskId, col.statusId, "");
+                                drop.accept(Qt.MoveAction);
+                            }
+                        }
+                    }
+
                     ColumnLayout {
                         anchors.fill: parent
                         spacing: 0
+                        visible: !col.folded
 
                         Rectangle {
                             Layout.fillWidth: true
@@ -492,9 +668,15 @@ Item {
                                     danger: true
                                     visible: AppController.statuses.length > 1
                                     revealed: col.headerHovered
-                                    onActivated: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount)
+                                    onActivated: root.requestDeleteColumn(col.statusId, col.statusName)
                                 }
 
+                                HoverIcon {
+                                    objectName: "column-fold"
+                                    glyph: "⇤"; tip: I18n.t("kanban.collapse")
+                                    revealed: col.headerHovered
+                                    onActivated: root.toggleCollapsed(col.statusId)
+                                }
                                 Rectangle {
                                     width: 22; height: 22; radius: Theme.radiusSm
                                     color: addMA.containsMouse ? Theme.panel3 : "transparent"
@@ -527,11 +709,12 @@ Item {
                                 AppMenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
                                 AppMenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
                                 AppMenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
+                                AppMenuItem { text: I18n.t("kanban.collapse"); onTriggered: root.toggleCollapsed(col.statusId) }
                                 AppMenuSeparator {}
                                 AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
                                 AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }
                                 AppMenuSeparator {}
-                                AppMenuItem { danger: true; text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName, col.visibleCount) }
+                                AppMenuItem { danger: true; text: I18n.t("kanban.deleteColumn"); enabled: AppController.statuses.length > 1; onTriggered: root.requestDeleteColumn(col.statusId, col.statusName) }
                             }
                         }
 
@@ -668,6 +851,8 @@ Item {
                                                 root.taskClicked(tc.id);
                                             }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
+                                            onMenuOpenChanged: root._openCardMenus += menuOpen ? 1 : -1
+                                            Component.onDestruction: if (menuOpen) root._openCardMenus--
                                         }
 
                                 Text {
@@ -1020,12 +1205,15 @@ Item {
     // ── Board-level empty state ──
     // Shown when the profile has no tasks at all (e.g. right after "Start
     // fresh"). Non-interactive so the column "+" affordances stay reachable.
-    property int _boardTotal: AppController.tasks.rowCount()
+    // Live tasks: a board whose every card is archived is empty too, and
+    // says where they went (TASKS-33).
+    readonly property int _boardTotal: AppController.statusCounts["_total"] || 0
+    property int _allRows: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
-        function onModelReset()   { root._boardTotal = AppController.tasks.rowCount() }
-        function onRowsInserted() { root._boardTotal = AppController.tasks.rowCount() }
-        function onRowsRemoved()  { root._boardTotal = AppController.tasks.rowCount() }
+        function onModelReset()   { root._allRows = AppController.tasks.rowCount() }
+        function onRowsInserted() { root._allRows = AppController.tasks.rowCount() }
+        function onRowsRemoved()  { root._allRows = AppController.tasks.rowCount() }
     }
     Column {
         anchors.centerIn: parent
@@ -1034,7 +1222,7 @@ Item {
         visible: root._boardTotal === 0
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
-            text: I18n.t("board.empty.title")
+            text: root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
             color: Theme.text
             font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
@@ -1043,7 +1231,7 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: I18n.t("board.empty.hint")
+            text: root._allRows > 0 ? I18n.t("board.empty.archivedHint") : I18n.t("board.empty.hint")
             color: Theme.textMuted
             font.pixelSize: Theme.fsMd
         }
@@ -1053,7 +1241,12 @@ Item {
     // five-second toast is a poor place to discover that thirty cards just
     // moved — so a non-empty column asks first. An empty one does not: there
     // is nothing to lose and a dialog would only be in the way.
-    function requestDeleteColumn(statusId, statusName, count) {
+    //
+    // The count is every card the delete re-homes — archived ones and the
+    // ones a filter is hiding included. The column's visible count skipped
+    // the confirmation for a column full of filtered-out cards (TASKS-8).
+    function requestDeleteColumn(statusId, statusName) {
+        const count = AppController.countByStatus(statusId);
         if (count <= 0) {
             AppController.deleteStatus(statusId);
             return;

@@ -437,6 +437,12 @@ class AppController : public QObject {
   Q_INVOKABLE void deleteSelectedTasks();
   Q_INVOKABLE void moveSelectedTasksToStatus(const QString& statusId);
   Q_INVOKABLE void setSelectedTasksArchived(bool archived);
+  // Priority and labels without the editor (src/AppControllerTaskEdits.cpp):
+  // one card from its menu, or every selected card at once. Each is one undo
+  // step. A label is added or removed by name ("#infra" works too).
+  Q_INVOKABLE void setTaskPriority(const QString& taskId, const QString& priority);
+  Q_INVOKABLE void setSelectedTasksPriority(const QString& priority);
+  Q_INVOKABLE void setSelectedTasksLabel(const QString& label, bool present);
 
   QStringList blockedStuckIds() const {
     return m_blockedStuckIds.values();
@@ -1178,6 +1184,9 @@ class AppController : public QObject {
     QVariantList m_statuses;
     QString m_docsState;
   };
+
+  // One task's priority, unrecorded; false when nothing changed.
+  bool setPriorityOf(const QString& id, const QString& priority);
 
   // Scopes opened by beginUndoGroup() and closed by endUndoGroup().
   std::vector<std::unique_ptr<UndoScope>> m_undoGroups;
