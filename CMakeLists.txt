@@ -259,6 +259,7 @@ qt_add_qml_module(heap_core
         # ── audit-know: begin ──
         # ── audit-know: end ──
         # ── audit-ux: begin ──
+        qml/PaletteMatch.js
         # ── audit-ux: end ──
         # ── audit-int: begin ──
         # ── audit-int: end ──

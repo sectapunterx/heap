@@ -659,6 +659,17 @@ Item {
     // Deep-link entry from the Welcome guide ("Learn more →"). Switch to the
     // Help section, then scroll to `anchor` once the body Loader has built
     // HelpContent (deferred a tick so _findChildByName can see it).
+    // Deep link from the command palette ("Settings: Appearance").
+    function openSection(id) {
+        for (let i = 0; i < sections.length; i++) {
+            if (sections[i].id === id) {
+                activeSection = id;
+                return true;
+            }
+        }
+        return false;
+    }
+
     function openHelp(anchor) {
         activeSection = "help";
         if (anchor && anchor.length > 0)

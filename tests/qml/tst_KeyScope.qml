@@ -254,6 +254,21 @@ TestCase {
         AppController.setStatusWipLimit(st.id, 0);
     }
 
+    // UX-20: the palette runs commands through Main.
+    function test_palette_runs_a_command() {
+        const pal = popup("CommandPalette");
+        keyClick(Qt.Key_K, Qt.ControlModifier);
+        tryCompare(pal, "opened", true);
+        for (const ch of "go to week") keyClick(ch === " " ? Qt.Key_Space : ch.toUpperCase().charCodeAt(0));
+        tryVerify(function () { return pal._matches.length > 0 && pal._matches[0].commandId === "view.week"; }, 1000,
+                  "top hit is " + JSON.stringify(pal._matches[0]));
+        keyClick(Qt.Key_Return);
+        tryCompare(AppController, "currentView", "week");
+        tryCompare(pal, "opened", false);
+        AppController.currentView = "board";
+        wait(50);
+    }
+
     // UX-22: global shortcuts stand down behind a modal.
     function test_global_shortcuts_wait_behind_modals() {
         const te = popup("TaskEditor");

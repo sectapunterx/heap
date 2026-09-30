@@ -1054,8 +1054,76 @@ ApplicationWindow {
         }
     }
 
+    // What a palette command does. Ids are the shortcut catalog's, so the
+    // palette offers exactly what the keys do; "settings:<section>" opens a
+    // Settings section, and a few have no key of their own.
+    function runCommand(id) {
+        if (id.indexOf("settings:") === 0) {
+            const section = id.slice(9);
+            AppController.currentView = "settings";
+            Qt.callLater(function () {
+                const v = win.activeViewItem();
+                if (v && v.openSection) v.openSection(section);
+            });
+            return;
+        }
+        if (id.indexOf("view.") === 0) {
+            AppController.currentView = id.slice(5);
+            return;
+        }
+        switch (id) {
+        case "task.new":             taskEditor.showFor(AppController.newTaskDraft("todo")); break;
+        case "quick-capture":        quickCapture.open(); break;
+        case "quick-capture-notes":  quickCaptureNotes.open(); break;
+        case "panel.right":          win.toggleRightPanel(); break;
+        case "rail.toggle":          win.toggleSideRail(); break;
+        case "theme.toggle":         AppController.theme = (AppController.theme === "dark" ? "light" : "dark"); break;
+        case "person.new":           personPicker.open_(); break;
+        case "profile.new":          profileEditor.showCreate(); break;
+        case "profile.next":         win._cycleProfile(1); break;
+        case "profile.prev":         win._cycleProfile(-1); break;
+        case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
+        case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
+        case "tweaks.open":          rail.openTweaks(rail.tweaksAnchor); break;
+        case "hotkeys.open":         rail.openHotkeys(rail.hotkeysAnchor); break;
+        case "search.focus":         win._focusSearch(); break;
+        case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
+        case "welcome.replay":       AppController.replayWelcome(); break;
+        default:                     console.warn("palette: no command", id);
+        }
+    }
+
+    function _cycleProfile(step) {
+        const list = AppController.profiles;
+        if (list.length === 0) return;
+        let idx = -1;
+        for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
+        const base = idx >= 0 ? idx : 0;
+        AppController.activeProfileId = list[(base + step + list.length) % list.length].id;
+    }
+
+    // The top bar's box searches tasks. In a view that has a search of its
+    // own — Docs, and Notes once it grows one — Ctrl+F used to focus that
+    // task box anyway, where typing did nothing to what was on screen.
+    // Duck-typed so a view picks this up by declaring focusSearch().
+    function _focusSearch() {
+        const view = win.activeViewItem();
+        if (view && typeof view.focusSearch === "function") {
+            view.focusSearch();
+            return;
+        }
+        // Notes has no box of its own; the palette searches every note's
+        // text, which is what Ctrl+F in a note is reaching for.
+        if (AppController.currentView === "notes") {
+            cmdPalette.open();
+            return;
+        }
+        topBar.focusSearch();
+    }
+
     CommandPalette {
         id: cmdPalette
+        onCommandRequested: (id) => win.runCommand(id)
         onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
@@ -1204,27 +1272,13 @@ ApplicationWindow {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: {
-            const list = AppController.profiles;
-            if (list.length === 0) return;
-            let idx = -1;
-            for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
-            const next = list[((idx >= 0 ? idx : 0) + 1) % list.length];
-            AppController.activeProfileId = next.id;
-        }
+        onActivated: win._cycleProfile(1)
     }
     Shortcut {
         sequence: _kbd("profile.prev")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        onActivated: {
-            const list = AppController.profiles;
-            if (list.length === 0) return;
-            let idx = 0;
-            for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
-            const prev = list[(idx - 1 + list.length) % list.length];
-            AppController.activeProfileId = prev.id;
-        }
+        onActivated: win._cycleProfile(-1)
     }
     Shortcut {
         sequence: _kbd("profile.exportMd")
@@ -1266,24 +1320,7 @@ ApplicationWindow {
         sequence: _kbd("search.focus")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
-        // The top bar's box searches tasks. In a view that has a search of its
-        // own — Docs, and Notes once it grows one — Ctrl+F used to focus that
-        // task box anyway, where typing did nothing to what was on screen.
-        // Duck-typed so a view picks this up by declaring focusSearch().
-        onActivated: {
-            const view = win.activeViewItem();
-            if (view && typeof view.focusSearch === "function") {
-                view.focusSearch();
-                return;
-            }
-            // Notes has no box of its own; the palette searches every note's
-            // text, which is what Ctrl+F in a note is reaching for.
-            if (AppController.currentView === "notes") {
-                cmdPalette.open();
-                return;
-            }
-            topBar.focusSearch();
-        }
+        onActivated: win._focusSearch()
     }
 
     Shortcut {

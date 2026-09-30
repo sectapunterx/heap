@@ -301,6 +301,10 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"import.emptyPath", {"Empty path", "Пустой путь"}},
       {"import.openFail", {"Cannot open: ", "Не открывается: "}},
       {"event.newDefault", {"New event", "Новое событие"}},
+      {"palette.fromTemplate", {"New from template: %1", "Новая по шаблону: %1"}},
+      {"palette.templateSub", {"template", "шаблон"}},
+      {"palette.profileTasks", {"%1 tasks", "задач: %1"}},
+      {"palette.repeats", {"repeats", "повторяется"}},
       // ---- Shortcuts catalog (labels + descriptions) ----
       {"shortcut.palette.open.label", {"Open Command Palette", "Открыть палитру команд"}},
       {"shortcut.palette.open.desc",
@@ -6620,8 +6624,8 @@ QVariantList AppController::commandPaletteEntries() const {
   for(const auto& t : builtinTemplates()) {
     QVariantMap m;
     m["kind"] = "template";
-    m["label"] = QStringLiteral("New from template: ") + t.name;
-    m["sub"] = QStringLiteral("template");
+    m["label"] = tr_("palette.fromTemplate").arg(t.name);
+    m["sub"] = tr_("palette.templateSub");
     m["templateName"] = t.name;
     m["color"] = QStringLiteral("#b58ad7");
     out.append(m);
@@ -6632,7 +6636,7 @@ QVariantList AppController::commandPaletteEntries() const {
     QVariantMap m;
     m["kind"] = "profile";
     m["label"] = p.name;
-    m["sub"] = QString("%1 tasks").arg(p.tasks.size());
+    m["sub"] = tr_("palette.profileTasks").arg(p.tasks.size());
     m["profileId"] = p.id;
     m["color"] = p.color;
     out.append(m);
@@ -6792,10 +6796,10 @@ QVariantList AppController::commandPaletteEntries() const {
     QVariantMap m;
     m["kind"] = "event";
     m["label"] = e.title;
-    const QString when =
-        e.date.isValid() ? (e.allDay ? e.date.toString(QStringLiteral("d MMM yyyy"))
-                                     : QStringLiteral("%1 %2").arg(e.date.toString(QStringLiteral("d MMM yyyy")), eventHourLabel(e.start)))
-                         : QString();
+    // In the UI language: QDate::toString always wrote English month names.
+    const QLocale uiLocale(m_language == QStringLiteral("ru") ? QLocale::Russian : QLocale::English);
+    const QString day = e.date.isValid() ? uiLocale.toString(e.date, QStringLiteral("d MMM yyyy")) : QString();
+    const QString when = day.isEmpty() ? QString() : (e.allDay ? day : QStringLiteral("%1 %2").arg(day, eventHourLabel(e.start)));
     QStringList sub;
     if(!profileName.isEmpty()) {
       sub << profileName;
@@ -6804,7 +6808,7 @@ QVariantList AppController::commandPaletteEntries() const {
       sub << when;
     }
     if(!e.rrule.isEmpty()) {
-      sub << QStringLiteral("repeats");
+      sub << tr_("palette.repeats");
     }
     m["sub"] = sub.join(QStringLiteral(" · "));
     m["body"] = cap(e.attendees + QLatin1Char(' ') + e.context);

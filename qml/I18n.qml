@@ -1018,6 +1018,21 @@ QtObject {
             "topbar.pr.merged": "merged",
             "topbar.pr.closed": "closed",
             "kanban.colName.ph": "Review · QA · Stalled…",
+            "palette.cmd.newEvent": "New event",
+            "palette.cmd.replayTour": "Replay the welcome tour",
+            "palette.cmd.settings": "Settings: %1",
+            "palette.kind.task": "task",
+            "palette.kind.doc": "doc",
+            "palette.kind.snippet": "snippet",
+            "palette.kind.contact": "contact",
+            "palette.kind.profile": "profile",
+            "palette.kind.person": "person",
+            "palette.kind.note": "note",
+            "palette.kind.dailyNote": "daily note",
+            "palette.kind.event": "event",
+            "palette.kind.template": "template",
+            "palette.kind.command": "command",
+            "palette.kind.setting": "settings",
             // ── audit-ux: end ──
             // ── audit-int: begin ──
             // ── audit-int: end ──
@@ -2011,6 +2026,21 @@ QtObject {
             "topbar.pr.merged": "влит",
             "topbar.pr.closed": "закрыт",
             "kanban.colName.ph": "Ревью · QA · Зависло…",
+            "palette.cmd.newEvent": "Новое событие",
+            "palette.cmd.replayTour": "Пройти приветственный тур заново",
+            "palette.cmd.settings": "Настройки: %1",
+            "palette.kind.task": "задача",
+            "palette.kind.doc": "док",
+            "palette.kind.snippet": "сниппет",
+            "palette.kind.contact": "контакт",
+            "palette.kind.profile": "профиль",
+            "palette.kind.person": "человек",
+            "palette.kind.note": "заметка",
+            "palette.kind.dailyNote": "заметка дня",
+            "palette.kind.event": "событие",
+            "palette.kind.template": "шаблон",
+            "palette.kind.command": "команда",
+            "palette.kind.setting": "настройки",
             // ── audit-ux: end ──
             // ── audit-int: begin ──
             // ── audit-int: end ──
