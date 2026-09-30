@@ -22,7 +22,11 @@ static_assert(heap::meta::fieldCount<TaskLink>() == 2,
               "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 25,
+static_assert(heap::meta::fieldCount<Attachment>() == 4,
+              "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
+              "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<Task>() == 26,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -84,6 +88,29 @@ QVector<TaskLink> linksFromJson(const QJsonArray& a) {
   for(const auto& it : a) {
     const QJsonObject o = it.toObject();
     out.append(TaskLink{o["type"].toString(), o["targetId"].toString()});
+  }
+  return out;
+}
+
+QJsonArray attachmentsToJson(const QVector<Attachment>& xs) {
+  QJsonArray a;
+  for(const Attachment& x : xs) {
+    QJsonObject o;
+    o["id"] = x.id;
+    o["name"] = x.name;
+    o["size"] = static_cast<double>(x.size);
+    o["mime"] = x.mime;
+    a.append(o);
+  }
+  return a;
+}
+
+QVector<Attachment> attachmentsFromJson(const QJsonArray& a) {
+  QVector<Attachment> out;
+  out.reserve(a.size());
+  for(const auto& it : a) {
+    const QJsonObject o = it.toObject();
+    out.append(Attachment{o["id"].toString(), o["name"].toString(), static_cast<qint64>(o["size"].toDouble(0)), o["mime"].toString()});
   }
   return out;
 }
@@ -276,6 +303,11 @@ QJsonObject taskToJson(const Task& t) {
   if(!t.links.isEmpty()) {
     o["links"] = linksToJson(t.links);
   }
+  // Attachments — optional, no schema bump: a file without the key simply has
+  // none, and a task with none keeps the JSON it had before.
+  if(!t.attachments.isEmpty()) {
+    o["attachments"] = attachmentsToJson(t.attachments);
+  }
   return o;
 }
 
@@ -326,6 +358,7 @@ Task taskFromJson(const QJsonObject& o) {
   t.externalMeta = externalMetaFromJson(o["externalMeta"].toObject());
   t.rank = o["rank"].toDouble(0.0);
   t.links = linksFromJson(o["links"].toArray());
+  t.attachments = attachmentsFromJson(o["attachments"].toArray());
   return t;
 }
 

@@ -181,6 +181,7 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {ChecklistRole, "checklist"},
       {ScheduledHasTimeRole, "scheduledHasTime"},
       {DueHasTimeRole, "dueHasTime"},
+      {AttachmentCountRole, "attachmentCount"},
   };
 }
 
@@ -274,6 +275,8 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return t.rank;
     case ChecklistRole:
       return checklistOf(t);
+    case AttachmentCountRole:
+      return static_cast<int>(t.attachments.size());
     case BlocksRole: {
       QStringList ids;
       for(const TaskLink& l : t.links) {

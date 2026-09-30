@@ -315,6 +315,9 @@ heap_add_appcontroller_test(heap_time_audit_tests test_time_audit.cpp)
 # ── audit-know: begin ──
 # Notes / docs / markdown regressions from the 2026-09-30 audit (KNOW-*, PLAT-21).
 heap_add_appcontroller_test(heap_know_audit_tests test_know_audit.cpp)
+# File attachments: the content-addressed store, references, undo, profile and
+# notes-folder export/import, cleanup, paste, safe open.
+heap_add_appcontroller_test(heap_attachments_tests test_attachments.cpp)
 # ── audit-know: end ──
 # ── audit-ux: begin ──
 # UX audit fixes that live in C++: first-run language, toast kinds, RU labels.

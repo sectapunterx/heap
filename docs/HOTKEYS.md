@@ -168,6 +168,9 @@ Fixed keys, live while the editor is open.
 | Indent / outdent a list line in the description | `Tab` / `Shift+Tab` on that line |
 | Insert indentation anywhere in the description | `Ctrl+Tab` |
 | Open / close Details, switch edit ↔ preview | `Tab` to it, then `Space` / `Enter` |
+| Attach files (file dialog, several at once) | `Ctrl+Shift+A` |
+| On an attachment chip: open / show in folder / detach | `Enter` / `Shift+Enter` / `Del` |
+| Paste a screenshot or copied files into the description (stored, linked at the cursor) | `Ctrl+V` |
 
 A new task's editor opens with the cursor in the title.
 
@@ -215,6 +218,8 @@ in the text undoes the last app action (a deleted note or page, an import).
 | Indent / outdent list line | `Tab` / `Shift+Tab` |
 | Tick the checkbox on this line | `Ctrl+Enter` |
 | Cycle edit → split → preview | `Ctrl+Shift+M` |
+| Attach files to the note (linked at the cursor) | `Ctrl+Shift+A` (notes editor) |
+| Paste a screenshot or copied files as attachments | `Ctrl+V` (notes editor; text pastes as text) |
 
 `Enter` continues whatever the line is: another bullet, the next number,
 another unticked checkbox, another quote marker. On an empty item it removes

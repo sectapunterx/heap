@@ -380,6 +380,15 @@ class UndoStack {
     return static_cast<int>(m_entries.size());
   }
 
+  // Every entry, undoable and redoable alike. Read-only: for callers that
+  // need to know what the history still refers to (the attachment cleanup).
+  template<class Fn>
+  void forEachEntry(Fn fn) const {
+    for(const Entry& e : m_entries) {
+      fn(e);
+    }
+  }
+
  private:
   QVector<Entry> m_entries;
   int m_cursor = 0;  // entries[0, cursor) are undoable

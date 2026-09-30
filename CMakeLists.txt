@@ -211,6 +211,8 @@ qt_add_library(heap_core STATIC
     # ── audit-time: begin ──
     # ── audit-time: end ──
     # ── audit-know: begin ──
+    src/storage/Attachments.cpp
+    src/AppControllerAttachments.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
@@ -275,6 +277,7 @@ qt_add_qml_module(heap_core
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml
         qml/LinkConfirmDialog.qml
+        qml/AttachmentChips.qml
         # ── audit-know: end ──
         # ── audit-ux: begin ──
         qml/PaletteMatch.js

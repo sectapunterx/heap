@@ -1,6 +1,7 @@
 #include "markdown/MdHtml.h"
 
 #include <QDir>
+#include <QFileInfo>
 #include <QRegularExpression>
 #include <QUrl>
 
@@ -409,9 +410,22 @@ ResolvedImage resolveImage(const QString& source, const QString& baseDir) {
     return out;
   }
   if(!baseDir.isEmpty()) {
+    // "attachments/<file>" is how heap itself links an attached file (see
+    // storage/Attachments.h): the same text works in a folder of exported .md
+    // files, where attachments/ sits beside the notes. Against a base that is
+    // the attachments folder, the prefix names that folder rather than one
+    // inside it — unless such a folder really is there, from before heap
+    // wrote links this way.
+    QString rel = QDir::fromNativeSeparators(src);
+    static const QString kPrefix = QStringLiteral("attachments/");
+    if(rel.startsWith(kPrefix, Qt::CaseInsensitive) &&
+       QFileInfo(QDir::cleanPath(baseDir)).fileName().compare(QLatin1String("attachments"), Qt::CaseInsensitive) == 0 &&
+       !QFileInfo::exists(QDir(baseDir).filePath(rel))) {
+      rel = rel.mid(kPrefix.size());
+    }
     // Clean the path, and refuse one that climbs out of the base: "../../"
     // could reach a share mounted somewhere above.
-    const QString joined = QDir::cleanPath(QDir(baseDir).filePath(QDir::fromNativeSeparators(src)));
+    const QString joined = QDir::cleanPath(QDir(baseDir).filePath(rel));
     if(joined.startsWith(QDir::cleanPath(baseDir) + QLatin1Char('/'), Qt::CaseInsensitive)) {
       out.url = QUrl::fromLocalFile(joined).toString();
     }

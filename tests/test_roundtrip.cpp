@@ -90,6 +90,13 @@ Task makeFullTask() {
   t.rank = 1536.5;
   t.links = {TaskLink{QStringLiteral("blocks"), QStringLiteral("HEAP-105")},
              TaskLink{QStringLiteral("blocks"), QStringLiteral("HEAP-106")}};
+  // A size past 2^32 on purpose: it travels as a JSON number and must come
+  // back as the same qint64.
+  t.attachments = {Attachment{QStringLiteral("0123456789abcdef0123456789abcdef.png"),
+                              QStringLiteral("shot [1].png"),
+                              5000000123LL,
+                              QStringLiteral("image/png")},
+                   Attachment{QStringLiteral("fedcba9876543210fedcba9876543210"), QStringLiteral("Makefile"), 42, QString()}};
   return t;
 }
 
@@ -217,6 +224,13 @@ class Gen {
     for(int i = 0; i < linkCount; ++i) {
       t.links.append(TaskLink{QStringLiteral("blocks"), QStringLiteral("T-") + QString::number(pick(1, 10000))});
     }
+    const int attachmentCount = pick(0, 2);
+    for(int i = 0; i < attachmentCount; ++i) {
+      t.attachments.append(Attachment{QStringLiteral("%1.pdf").arg(pick(1, 10000), 32, 10, QLatin1Char('0')),
+                                      text(),
+                                      pick(0, 1 << 30),
+                                      boolean() ? QStringLiteral("application/pdf") : QString()});
+    }
     return t;
   }
 
@@ -268,7 +282,8 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 25u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 26u);
+  EXPECT_EQ(heap::meta::fieldCount<Attachment>(), 4u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 21u);
 }
 
