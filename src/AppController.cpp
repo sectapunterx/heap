@@ -5436,15 +5436,15 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   if(backward) {
     heap::undo::applyBackward(m_tasks, entry.tasks);
     heap::undo::applyBackward(m_events, entry.events);
-    heap::undo::applyBackward(m_people, entry.people);
   } else {
     heap::undo::applyForward(m_tasks, entry.tasks);
     heap::undo::applyForward(m_events, entry.events);
-    heap::undo::applyForward(m_people, entry.people);
   }
   // Notes and doc pages are typed into without undo steps: the entry's own
   // changes are merged onto them rather than the recorded copies put back
-  // whole, which would take that typing with them (KNOW-1).
+  // whole, which would take that typing with them (KNOW-1). People likewise:
+  // a chip click or a Mattermost import since an edit stays.
+  heap::undo::applyMerged(m_people, entry.people, backward);
   heap::undo::applyMerged(m_docPages, entry.docPages, backward);
   heap::undo::applyMerged(m_notes, entry.notes, backward);
   if(!entry.notes.isEmpty()) {
@@ -5537,7 +5537,7 @@ bool AppController::undoEntry(double serialValue) {
     heap::undo::rebaseDocsState(m_docsState, copy.docsStateAfter, copy.docsStateBefore, &docsClean);
   }
   const bool clean = statusesClean && heap::undo::untouchedSince(m_tasks, copy.tasks) &&
-                     heap::undo::untouchedSince(m_events, copy.events) && heap::undo::untouchedSince(m_people, copy.people) &&
+                     heap::undo::untouchedSince(m_events, copy.events) && heap::undo::mergeableSince(m_people, copy.people) &&
                      heap::undo::mergeableSince(m_docPages, copy.docPages) && heap::undo::mergeableSince(m_notes, copy.notes) &&
                      docsClean && (!copy.savedViewsTouched || m_savedViews == copy.savedViewsAfter);
   if(!clean) {
@@ -5595,6 +5595,7 @@ void AppController::undo() {
   }
   heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/true);
   heap::undo::refreshLeaving(m_docPages, entry->docPages, /*backward=*/true);
+  heap::undo::refreshLeaving(m_people, entry->people, /*backward=*/true);
   // Copy: restoring a profile re-enters the stack's owner and the pointer
   // would not survive it.
   const heap::undo::Entry copy = *entry;
@@ -5619,6 +5620,7 @@ void AppController::redo() {
   }
   heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/false);
   heap::undo::refreshLeaving(m_docPages, entry->docPages, /*backward=*/false);
+  heap::undo::refreshLeaving(m_people, entry->people, /*backward=*/false);
   const heap::undo::Entry copy = *entry;
   applyUndoEntry(copy, /*backward=*/false);
   emit pendingUndoChanged();

@@ -205,6 +205,32 @@ TEST_F(UxAuditTest, PersonSavesAreUndoable) {
   EXPECT_EQ(app_->people()->rowCount(), 1);
 }
 
+// Undoing an edit takes back only what the edit changed: the chip click on
+// the rail since (not an undo step) stays.
+TEST_F(UxAuditTest, UndoingAPersonEditKeepsTheStateClickedSince) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  a.role = QStringLiteral("dev");
+  a.state = QStringLiteral("todo");
+  app_->people()->reset({a});
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("role")] = QStringLiteral("lead");
+  ASSERT_TRUE(app_->savePerson(edit));
+  app_->cyclePerson(QStringLiteral("a.s"));
+  ASSERT_EQ(app_->personById(QStringLiteral("a.s")).value("state").toString(), QStringLiteral("pinged"));
+
+  app_->undo();
+  const QVariantMap undone = app_->personById(QStringLiteral("a.s"));
+  EXPECT_EQ(undone.value("role").toString(), QStringLiteral("dev"));
+  EXPECT_EQ(undone.value("state").toString(), QStringLiteral("pinged"));
+  app_->redo();
+  const QVariantMap redone = app_->personById(QStringLiteral("a.s"));
+  EXPECT_EQ(redone.value("role").toString(), QStringLiteral("lead"));
+  EXPECT_EQ(redone.value("state").toString(), QStringLiteral("pinged"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

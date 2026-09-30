@@ -286,6 +286,35 @@ inline ::DocPage mergeDocPageEdit(const ::DocPage& current, const ::DocPage& fro
   return out;
 }
 
+// A person's state is cycled from the rail and people are imported from
+// Mattermost without undo steps, so undoing an edit made in the editor puts
+// back only the fields that edit changed.
+inline ::Person mergePersonEdit(const ::Person& current, const ::Person& from, const ::Person& to, bool* ok) {
+  static_assert(heap::meta::fieldCount<::Person>() == 7, "Person gained or lost a field: teach mergePersonEdit about it.");
+  ::Person out = current;
+  bool clean = true;
+  const auto field = [&](auto member) {
+    if(!(from.*member == to.*member)) {
+      clean = clean && current.*member == from.*member;
+      out.*member = to.*member;
+    }
+  };
+  field(&::Person::name);
+  field(&::Person::role);
+  field(&::Person::question);
+  field(&::Person::state);
+  field(&::Person::color);
+  field(&::Person::extra);
+  if(ok != nullptr) {
+    *ok = clean;
+  }
+  return out;
+}
+
+inline ::Person mergeEdit(const ::Person& current, const ::Person& from, const ::Person& to, bool* ok) {
+  return mergePersonEdit(current, from, to, ok);
+}
+
 inline ::Note mergeEdit(const ::Note& current, const ::Note& from, const ::Note& to, bool* ok) {
   return mergeNoteEdit(current, from, to, ok);
 }
@@ -295,8 +324,8 @@ inline ::DocPage mergeEdit(const ::DocPage& current, const ::DocPage& from, cons
 }
 
 // applyBackward/applyForward for a collection whose elements are also edited
-// outside the undo stack (notes, doc pages): an element the entry changed gets
-// only the entry's own changes, merged onto what it holds now.
+// outside the undo stack (notes, doc pages, people): an element the entry
+// changed gets only the entry's own changes, merged onto what it holds now.
 template<class Model, class T>
 void applyMerged(Model& model, const Edits<T>& edits, bool backward) {
   Edits<T> plain;
