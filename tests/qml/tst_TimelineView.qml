@@ -88,18 +88,26 @@ TestCase {
         d.dueAt = next; d.scheduledAt = next; d.hasTime = false;
         AppController.saveTask(d);
         const tv = make('import TodoCpp; TimelineView { anchors.fill: parent }');
-        wait(50);
-        const cols = [];
-        (function walk(it) {
-            if (!it) return;
-            if (it.objectName === "timeline-label-col" && it.visible) cols.push(it.width);
-            const kids = it.children || [];
-            for (let i = 0; i < kids.length; i++) walk(kids[i]);
-        })(tv);
+        function widths() {
+            const out = [];
+            (function walk(it) {
+                if (!it) return;
+                if (it.objectName === "timeline-label-col" && it.visible) out.push(it.width);
+                const kids = it.children || [];
+                for (let i = 0; i < kids.length; i++) walk(kids[i]);
+            })(tv);
+            return out;
+        }
+        // Rows are laid out a frame or more after they are built (slow CI
+        // runners showed 0 for the last ones); wait for the layout to settle.
+        tryVerify(function () {
+            const w = widths();
+            return w.length > 0 && w.every(function (x) { return x > 0; });
+        }, 3000, "label columns never got a width");
+        const cols = widths();
         AppController.deleteTask("TLV-ALIGN");
         AppController.clearPendingUndo();
         AppController.language = saved;
-        verify(cols.length > 0);
         for (let i = 0; i < cols.length; i++) compare(cols[i], 160);
     }
 
