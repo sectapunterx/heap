@@ -16,6 +16,7 @@
 #include <QApplication>
 #include <QDateTime>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -24,6 +25,9 @@
 #include <QTemporaryDir>
 
 #include <gtest/gtest.h>
+
+#include <algorithm>
+#include <iostream>
 
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
@@ -548,6 +552,55 @@ TEST_F(StorageSafety, CheckingOutTheBranchOfFinishedWorkLeavesItAlone) {
   };
   EXPECT_EQ(statusOf("TASK-5"), QStringLiteral("done")) << "finished work must not be reopened";
   EXPECT_EQ(statusOf("TASK-6"), QStringLiteral("prog")) << "work that is starting still moves";
+}
+
+// ── PLAT-23: a save does not freeze the UI thread ──
+
+TEST_F(StorageSafety, ADebouncedSaveOfTenThousandTasksDoesNotBlockTheEventLoop) {
+  writeRaw(statePath(), stateDoc({profileJson("a", {})}, "a"));
+  AppController app;
+  QVector<Task> many;
+  for(int i = 0; i < 10000; ++i) {
+    Task t;
+    t.id = QStringLiteral("BIG-%1").arg(i);
+    t.title = QStringLiteral("Task number %1 with a realistic title length").arg(i);
+    t.desc = QStringLiteral("Several lines of description text.\nSecond line.");
+    t.status = QStringLiteral("todo");
+    t.priority = QStringLiteral("P2");
+    t.statusChangedAt = QDateTime::currentDateTime();
+    many.append(t);
+  }
+  app.tasks()->reset(many);
+
+  // The whole cost of a save, snapshot to disk.
+  app.setCrumbUser(QStringLiteral("warm"));
+  app.flushSave();
+  app.setCrumbUser(QStringLiteral("full"));
+  QElapsedTimer full;
+  full.start();
+  app.flushSave();
+  const qint64 fullMs = full.elapsed();
+
+  // Now let the debounce fire on its own and watch how long the event loop
+  // is ever held: only the snapshot may run on it.
+  app.setCrumbUser(QStringLiteral("async"));
+  QElapsedTimer window;
+  window.start();
+  QElapsedTimer gap;
+  gap.start();
+  qint64 worst = 0;
+  while(window.elapsed() < 1500) {
+    QCoreApplication::processEvents(QEventLoop::AllEvents, 5);
+    worst = std::max(worst, gap.restart());
+  }
+  const bool savedInTheWindow = readRaw(statePath()).contains("\"async\"");
+  app.flushSave();
+  std::cout << "[ save-ui-block ] full=" << fullMs << "ms worst-event-loop-gap=" << worst << "ms" << std::endl;
+  if(fullMs < 40) {
+    GTEST_SKIP() << "this machine saves too fast to tell the difference";
+  }
+  EXPECT_LT(worst, fullMs / 2) << "the save still runs on the UI thread";
+  EXPECT_TRUE(savedInTheWindow) << "the debounced save did not run while the loop was watched";
 }
 
 // ── PLAT-17: git worktrees read refs from the common dir ──

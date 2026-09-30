@@ -1116,8 +1116,6 @@ class AppController : public QObject {
   void loadStateDocument(QJsonObject root, bool viewOnly);
   QString stateFilePath() const;
   QString backupDirPath() const;
-  void rotateBackupIfDue();
-  void pruneBackups(int keep);
   // When the newest rotational backup on disk was taken; invalid when none.
   QDateTime newestBackupTime() const;
   // Crash/corruption recovery for loadStateOnStart(): find the newest backup

@@ -999,9 +999,9 @@ Item {
                 text: "Auto-backups"
             }
             Body {
-                text: "Once a day (once every N minutes really, checked on save) heap. writes a snapshot of "
-                    + "the current state to AppDataLocation/backups/. The last N are kept (default 7), older "
-                    + "ones are deleted."
+                text: "At most once per interval (hourly, daily — the default — or weekly; Settings → Data), "
+                    + "checked on save, heap. copies state.json into the backups folder next to it. The newest "
+                    + "20 copies are kept, older ones are deleted."
             }
 
             H3 {
@@ -1009,7 +1009,8 @@ Item {
             }
             Body {
                 text: "Settings → Data → the list of backups. Restoring overwrites the current state, but "
-                    + "before that it creates one more backup itself — in case you change your mind."
+                    + "before that it always snapshots the current state (a -prerestore copy) — in case you "
+                    + "change your mind. Undo history does not carry across a restore or a profile switch."
             }
         }
 

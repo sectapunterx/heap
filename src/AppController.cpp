@@ -6182,16 +6182,6 @@ bool AppController::backupDueNow(const QDateTime& now) {
   return !m_lastBackupAt.isValid() || m_lastBackupAt.secsTo(now) >= intervalSecs;
 }
 
-void AppController::rotateBackupIfDue() {
-  const QDateTime now = QDateTime::currentDateTime();
-  if(!backupDueNow(now)) {
-    return;
-  }
-  copyStateToBackupDir(stateFilePath(), backupDirPath(), QString());
-  pruneBackupDir(backupDirPath(), kBackupRetentionCount);
-  m_lastBackupAt = now;
-}
-
 QString AppController::snapshotStateToBackups(const QString& tag) {
   if(m_saver) {
     m_saver->flush();  // never copy a file the worker is replacing
@@ -6223,10 +6213,6 @@ QDateTime AppController::newestBackupTime() const {
     }
   }
   return newest;
-}
-
-void AppController::pruneBackups(int keep) {
-  pruneBackupDir(backupDirPath(), keep);
 }
 
 bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath) {
