@@ -124,6 +124,14 @@ Popup {
         somedayBox.checked = !!draft.someday;
         recurBox.currentIndex = Math.max(0, recurBox._vals.indexOf(draft.recurrence || ""));
         open();
+        // Keyboard-first: Ctrl+N and type. Nothing had focus, so whatever was
+        // typed before reaching for the mouse went nowhere and the task was
+        // saved without a title. Focus lands now, not after the enter
+        // transition, so the first keystroke is not lost either. An existing
+        // task opens with the caret at the end of its title.
+        titleField.forceActiveFocus();
+        if (isNew) titleField.selectAll();
+        else titleField.cursorPosition = titleField.text.length;
         // Kick a one-shot PR/state refresh for this task's branch across all
         // watched repos. Result lands on TaskModel via repoStateUpdated and
         // chips on the underlying TaskCard update without re-opening.
@@ -187,6 +195,32 @@ Popup {
         const out = [];
         for (let i = 0; i < labels.length; ++i) out.push(labels[i].id);
         return out.join(", ");
+    }
+
+    // Tab on a markdown list line ("- a", "* [ ] b", "1. c") nests the item two
+    // spaces deeper; Shift+Tab takes up to two back out. Returns false off a
+    // list line, where Tab moves focus instead.
+    readonly property var _listLineRe: /^(\s*)([-*+]|\d+[.)])\s/
+
+    function indentListLine(field, outdent) {
+        const text = field.text;
+        const pos = field.cursorPosition;
+        const start = text.lastIndexOf("\n", pos - 1) + 1;
+        const endNl = text.indexOf("\n", pos);
+        const line = text.substring(start, endNl < 0 ? text.length : endNl);
+        const m = root._listLineRe.exec(line);
+        if (!m) return false;
+        if (outdent) {
+            const n = Math.min(2, m[1].length);
+            if (n > 0) {
+                field.remove(start, start + n);
+                field.cursorPosition = Math.max(start, pos - n);
+            }
+        } else {
+            field.insert(start, "  ");
+            field.cursorPosition = pos + 2;
+        }
+        return true;
     }
 
     function labelsFromText(s) {
@@ -668,6 +702,27 @@ Popup {
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             selectByMouse: true
+                            // Tab leaves the description, so Details, Save and
+                            // Delete can be reached from the keyboard; it used to
+                            // type a tab character and trap focus here. On a
+                            // list line Tab / Shift+Tab indent and outdent the
+                            // item, and Ctrl+Tab always inserts indentation.
+                            Keys.onPressed: (event) => {
+                                if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
+                                const back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier);
+                                if (event.modifiers & Qt.ControlModifier) {
+                                    descField.insert(descField.cursorPosition, "  ");
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (root.indentListLine(descField, back)) {
+                                    event.accepted = true;
+                                    return;
+                                }
+                                const next = descField.nextItemInFocusChain(!back);
+                                if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
+                                event.accepted = true;
+                            }
                         }
                     }
                     // The checkbox write goes through the editor's own document,
@@ -698,10 +753,27 @@ Popup {
                     color: Theme.border
                 }
                 Item {
+                    id: detailsToggle
                     objectName: "te-details-toggle"
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     implicitHeight: detailsRow.implicitHeight + Theme.spSm
+                    // On the Tab path between the description and the footer.
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: I18n.t("editor.details")
+                    Keys.onSpacePressed: root.detailsOpen = !root.detailsOpen
+                    Keys.onReturnPressed: root.detailsOpen = !root.detailsOpen
+                    Keys.onEnterPressed: root.detailsOpen = !root.detailsOpen
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -Theme.sp2xs
+                        radius: Theme.radiusSm
+                        color: "transparent"
+                        visible: detailsToggle.activeFocus
+                        border.color: Theme.focusRing
+                        border.width: 2
+                    }
                     RowLayout {
                         id: detailsRow
                         anchors.left: parent.left; anchors.right: parent.right
@@ -1023,8 +1095,13 @@ Popup {
         signal clicked()
         radius: Theme.radiusPill
         color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : "transparent")
-        border.color: active ? Theme.withAlpha(Theme.accent, 0.5) : "transparent"
-        border.width: 1
+        border.color: activeFocus ? Theme.focusRing : active ? Theme.withAlpha(Theme.accent, 0.5) : "transparent"
+        border.width: activeFocus ? 2 : 1
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: seg.text
+        Keys.onSpacePressed: seg.clicked()
+        Keys.onReturnPressed: seg.clicked()
         implicitWidth: segT.implicitWidth + 16
         implicitHeight: segT.implicitHeight + 6
         Text {

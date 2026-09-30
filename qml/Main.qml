@@ -345,7 +345,58 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened
+        || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
+
+    // ── Keyboard scope ────────────────────────────────────────────────
+    // Board and calendar keys (Return, Esc, the arrows, bare letters) are
+    // application shortcuts, so Qt offered them before the focused item —
+    // Return in the header search opened the card under the cursor, Down in a
+    // card's context menu moved the board cursor, Enter in "New column"
+    // opened the task editor. They belong to whatever holds focus unless that
+    // is the view itself.
+    //
+    // Focus in something that takes typed text: a search box, an inline
+    // rename, a breadcrumb being edited.
+    readonly property bool _typing: {
+        const f = win.activeFocusItem;
+        return !!f && typeof f.cursorPosition === "number" && f.readOnly !== true;
+    }
+    // Focus inside a popup, menu or dialog — including the ones a view owns
+    // (add column, WIP limit, delete confirm, a card's context menu), which
+    // Main has no id for. Every popup's item lives under the window overlay.
+    readonly property bool _focusInPopup: {
+        for (let p = win.activeFocusItem; p; p = p.parent)
+            if (p === Overlay.overlay) return true;
+        return false;
+    }
+    // …and that popup is one of the two side-rail popovers, which leave the
+    // app usable behind them.
+    readonly property bool _focusInPopover: {
+        for (let p = win.activeFocusItem; p; p = p.parent)
+            if (p === tweaks.contentItem || p === hotkeys.contentItem) return true;
+        return false;
+    }
+    // A view-local key (board cursor, calendar paging, Esc on the selection,
+    // Delete, the bare-letter shortcuts) stands down while any of this holds.
+    readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup
+    // Global shortcuts (switch view, new task, palette, undo…) stand down
+    // behind a modal: Ctrl+3 used to switch the view under an open task
+    // editor, Ctrl+K opened the palette over the welcome tour. The side-rail
+    // popovers are not modal and keep them.
+    readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
+        || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
+        || closeAsk.opened || goToDatePopup.opened
+        || (_focusInPopup && !_focusInPopover)
+    readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
+
+    // Esc in the header search with nothing left to clear hands the keyboard
+    // back to the view, so J/K and Return work again without the mouse.
+    function focusActiveView() {
+        const v = win.activeViewItem();
+        if (v) v.forceActiveFocus();
+        else win.contentItem.forceActiveFocus();
+    }
 
     function _placePopover(pop, anchor) {
         const p = anchor.mapToItem(win.contentItem, 0, 0);
@@ -457,6 +508,7 @@ ApplicationWindow {
             Layout.fillWidth: true
             searchText: win.searchText
             onSearchTextChanged: win.searchText = searchText
+            onLeaveRequested: win.focusActiveView()
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
@@ -1040,7 +1092,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("palette.open")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: cmdPalette.open()
     }
     // Built-in alias: Ctrl+P always opens the palette, independent of the
@@ -1048,110 +1100,110 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+P"
         context: Qt.ApplicationShortcut
-        enabled: !hotkeys.isCapturing
+        enabled: win._globalKeysOn
         onActivated: cmdPalette.open()
     }
 
     Shortcut {
         sequence: _kbd("panel.right")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: win.toggleRightPanel()
     }
     Shortcut {
         sequence: _kbd("rail.toggle")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: win.toggleSideRail()
     }
     Shortcut {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: taskEditor.showFor(AppController.newTaskDraft("todo"))
     }
     Shortcut {
         sequence: _kbd("quick-capture")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: quickCapture.open()
     }
     Shortcut {
         sequence: _kbd("quick-capture-notes")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: quickCaptureNotes.open()
     }
     Shortcut {
         sequence: _kbd("view.board")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "board"
     }
     Shortcut {
         sequence: _kbd("view.timeline")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "timeline"
     }
     Shortcut {
         sequence: _kbd("view.week")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "week"
     }
     Shortcut {
         sequence: _kbd("view.month")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "month"
     }
     Shortcut {
         sequence: _kbd("view.docs")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "docs"
     }
     Shortcut {
         sequence: _kbd("view.notes")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "notes"
     }
     Shortcut {
         sequence: _kbd("view.settings")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "settings"
     }
     Shortcut {
         sequence: _kbd("view.archive")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "archive"
     }
     Shortcut {
         sequence: _kbd("theme.toggle")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.theme = (AppController.theme === "dark" ? "light" : "dark")
     }
     Shortcut {
         sequence: _kbd("person.new")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: personPicker.open_()
     }
     Shortcut {
         sequence: _kbd("profile.new")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: profileEditor.showCreate()
     }
     Shortcut {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: {
             const list = AppController.profiles;
             if (list.length === 0) return;
@@ -1164,7 +1216,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("profile.prev")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: {
             const list = AppController.profiles;
             if (list.length === 0) return;
@@ -1177,43 +1229,43 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("profile.exportMd")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyActiveProfileMarkdownToClipboard()
     }
     Shortcut {
         sequence: _kbd("profile.weeklyReport")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyWeeklyReportToClipboard()
     }
     Shortcut {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openTweaks(rail.tweaksAnchor)
     }
     Shortcut {
         sequence: _kbd("hotkeys.open")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openHotkeys(rail.hotkeysAnchor)
     }
     Shortcut {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo
+        enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo
         onActivated: AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.canRedo
+        enabled: sequence.length > 0 && win._globalKeysOn && AppController.canRedo
         onActivated: AppController.redo()
     }
     Shortcut {
         sequence: _kbd("search.focus")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         // The top bar's box searches tasks. In a view that has a search of its
         // own — Docs, and Notes once it grows one — Ctrl+F used to focus that
         // task box anyway, where typing did nothing to what was on screen.
@@ -1224,6 +1276,12 @@ ApplicationWindow {
                 view.focusSearch();
                 return;
             }
+            // Notes has no box of its own; the palette searches every note's
+            // text, which is what Ctrl+F in a note is reaching for.
+            if (AppController.currentView === "notes") {
+                cmdPalette.open();
+                return;
+            }
             topBar.focusSearch();
         }
     }
@@ -1231,7 +1289,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("selection.selectAll")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "timeline"
                 || AppController.currentView === "week")
@@ -1241,14 +1299,16 @@ ApplicationWindow {
         }
     }
     // Esc lets go of the selection and, on the board, of the keyboard
-    // cursor. It stays out of the way (enabled only when there is something
-    // to let go of) so Esc still reaches popups and fields otherwise.
+    // cursor — last. It stays out of the way (enabled only when there is
+    // something to let go of, and never while a popup, menu, editor or text
+    // field holds the keyboard) so the innermost thing closes first: one Esc
+    // closes the editor or the menu, the next one lets go of the selection.
     Shortcut {
         sequence: _kbd("selection.clearSel")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
-                || (AppController.currentView === "board" && !win._overlayOpen
+                || (AppController.currentView === "board"
                     && !!boardLoader.item && boardLoader.item.cursorVisible === true))
         onActivated: {
             AppController.clearSelection();
@@ -1258,7 +1318,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("selection.deleteSel")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && AppController.selectionCount > 0
         onActivated: AppController.deleteSelectedTasks()
     }
@@ -1278,7 +1338,7 @@ ApplicationWindow {
     // date, so moving it moves everything that is on screen.
     component CalKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequences.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "week" || AppController.currentView === "month")
     }
 
@@ -1309,7 +1369,7 @@ ApplicationWindow {
 
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequences.length > 0 && !win._viewKeysBlocked
             && AppController.currentView === "board"
     }
 
@@ -1357,7 +1417,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("task.openExternal")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "archive"
                 || AppController.currentView === "timeline"

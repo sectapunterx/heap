@@ -14,6 +14,8 @@ Rectangle {
     // task list, unlike the filtering itself.
     readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
     signal newTaskRequested()
+    // Esc on an empty search box, or Return in it: give the keyboard back.
+    signal leaveRequested()
     signal rightPanelToggleRequested()
     // Whether the calendar/people column is on screen, for the toggle's look.
     property bool rightPanelShown: true
@@ -382,6 +384,7 @@ Rectangle {
                 }
                 TextField {
                     id: searchField
+                    objectName: "topbar-search"
                     Layout.fillWidth: true
                     placeholderText: I18n.t("topbar.search")
                     color: Theme.text
@@ -390,6 +393,16 @@ Rectangle {
                     font.pixelSize: Theme.fsMd
                     background: Item {}
                     selectByMouse: true
+                    // Esc clears what was typed, and a second Esc (or Return)
+                    // hands the keyboard back to the view, so the board cursor
+                    // can walk what the search left. It used to do neither.
+                    Keys.onEscapePressed: (event) => {
+                        if (searchField.text.length > 0) searchField.clear();
+                        else root.leaveRequested();
+                        event.accepted = true;
+                    }
+                    Keys.onReturnPressed: root.leaveRequested()
+                    Keys.onEnterPressed: root.leaveRequested()
                     // The syntax is only discoverable if something says it out
                     // loud; the field itself is the only place the user looks.
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0

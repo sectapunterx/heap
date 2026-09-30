@@ -445,7 +445,10 @@ Item {
                                         selectByMouse: true
                                         onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
                                         onActiveFocusChanged: if (!activeFocus && col.renaming) { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
-                                        Keys.onEscapePressed: { col.renaming = false }
+                                        // Put the name back before letting go: hiding the
+                                        // field blurs it, and the blur handler above commits
+                                        // whatever is in it while renaming is still set.
+                                        Keys.onEscapePressed: { text = col.statusName; col.renaming = false }
                                     }
                                 }
                                 Rectangle {
@@ -827,6 +830,7 @@ Item {
 
     Popup {
         id: addColumnPopup
+        objectName: "add-column-popup"
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -859,6 +863,7 @@ Item {
             }
             TextField {
                 id: nameField
+                objectName: "add-column-name"
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
                 placeholderText: "Review · QA · Stalled…"
                 color: Theme.text
