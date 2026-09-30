@@ -85,4 +85,48 @@ TestCase {
                    "TOC anchor '" + anchor + "' has no HelpCard with a matching objectName");
         }
     }
+
+    // UX-10: the whole guide reads in Russian when the app does, and flips
+    // back without being rebuilt.
+    function test_guide_follows_the_language() {
+        const saved = AppController.language;
+        const hc = make('import TodoCpp; HelpContent { width: 480 }');
+        const texts = [];
+        const walk = function (it) {
+            if (!it) return;
+            if (typeof it.text === "string" && it.contentWidth !== undefined) texts.push(it);
+            const kids = it.children || [];
+            for (let k = 0; k < kids.length; k++) walk(kids[k]);
+        };
+        walk(hc);
+        const before = texts.length;
+        verify(before > 100);
+        AppController.language = "ru";
+        texts.length = 0;
+        walk(hc);
+        const english = [];
+        for (const t of texts) {
+            const v = t.text;
+            // Prose only: key chips, code and bare symbols are the same in both.
+            if (v.length < 24 || /^[A-Za-z0-9+\-\/ .,]*$/.test(v) && v.indexOf(" ") < 0) continue;
+            if (!/[А-Яа-яЁё]/.test(v)) english.push(v.slice(0, 60));
+        }
+        const tocRu = hc.tocModel[0].label;
+        AppController.language = "en";
+        const tocEn = hc.tocModel[0].label;
+        AppController.language = saved;
+        compare(english.length, 0, "English left in the Russian guide: " + english.join(" | "));
+        verify(/[А-Яа-я]/.test(tocRu) && !/[А-Яа-я]/.test(tocEn), tocRu + " / " + tocEn);
+    }
+
+    // UX-30/34: key chips show the live bindings, and the views list names
+    // Month and Archive (and no longer a "Day" view).
+    function test_keys_are_live_and_views_are_current() {
+        const hc = make('import TodoCpp; HelpContent {}');
+        compare(hc.kbd("tweaks.open"), AppController.shortcutFor("tweaks.open"));
+        compare(hc.kbd("hotkeys.open"), AppController.shortcutFor("hotkeys.open"));
+        const views = hc.tocModel[0].label;
+        verify(views.indexOf("Month") >= 0 || views.indexOf("месяц") >= 0, views);
+        verify(views.indexOf("Archive") >= 0 || views.indexOf("архив") >= 0, views);
+    }
 }

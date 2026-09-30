@@ -83,6 +83,27 @@ TEST_F(UxAuditTest, SprintCrumbIsTheIsoWeek) {
   EXPECT_EQ(app_->sprintLabel(), QStringLiteral("нед. %1").arg(week));
 }
 
+// UX-30: docs/HOTKEYS.md names every default binding of the catalog (seven
+// were missing), and no longer claims Settings → Shortcuts can rebind.
+TEST_F(UxAuditTest, HotkeysDocCoversTheCatalog) {
+  QFile f(QStringLiteral(HEAP_DOCS_DIR "/HOTKEYS.md"));
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly | QIODevice::Text));
+  const QString doc = QString::fromUtf8(f.readAll());
+  // Arrow keys are written as glyphs in the doc.
+  const QHash<QString, QString> glyph = {{QStringLiteral("Left"), QStringLiteral("←")}, {QStringLiteral("Right"), QStringLiteral("→")}};
+  for(const QVariant& v : app_->shortcuts()) {
+    const QVariantMap m = v.toMap();
+    const QString seq = m.value("defaultSequence").toString();
+    if(seq.isEmpty()) {
+      continue;
+    }
+    const QString shown = glyph.value(seq, seq);
+    EXPECT_TRUE(doc.contains(QStringLiteral("`") + shown + QStringLiteral("`")))
+        << m.value("id").toString().toStdString() << " default " << seq.toStdString() << " is not in HOTKEYS.md";
+  }
+  EXPECT_TRUE(doc.contains(QStringLiteral("read-only")));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

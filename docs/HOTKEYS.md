@@ -1,10 +1,33 @@
 # Keyboard reference
 
-Every shortcut below is **rebindable** — open the floating Hotkeys panel
-(`Ctrl+/`) or **Settings → Shortcuts**, click a binding, and press the new
-combination. Conflicts are resolved VS Code-style: the new binding wins and the
-previous owner is unbound (you'll see a toast naming what was freed). *Reset*
-restores a single default; *Reset all* restores the whole catalog.
+Every shortcut in the tables below (except the notes-editor and task-editor
+keys) is **rebindable** in the floating Hotkeys panel (`Ctrl+/`). Click a
+binding — or Tab to it and press `Enter` / `Space` — press the new
+combination and `Enter` to save; `Esc` cancels, `Backspace` clears. Conflicts
+are resolved VS Code-style: the new binding wins and the previous owner is
+unbound (a toast names what was freed). `↺` restores a single default; `↺ all`
+restores the whole catalog after a second press. **Settings → Shortcuts** lists
+the current bindings read-only and links to the panel.
+
+The same catalog is in the command palette: every app-wide action below is a
+command there, under the same name.
+
+## Who gets a key
+
+Keys go to the innermost thing that holds the keyboard:
+
+- `Esc` closes a menu, dialog, the task editor or the palette first; an
+  selection and the board cursor are let go of last. In the header
+  search `Esc` clears the text, and a second `Esc` (or `Return`) hands the
+  keyboard back to the view.
+- The board and calendar keys (bare letters, arrows, `Return`, `Esc`, `Del`,
+  `Ctrl+A`) stand down while a text field, dialog, popup, menu or inline rename
+  has focus, and while a control outside the view that you reached with `Tab`
+  (a filter chip, the mini week, the day panel, the people list) has it — press
+  `Esc` there to give the keyboard back to the view.
+- The global shortcuts (views, new task, palette, undo…) stand down behind a
+  modal — the task or event editor, the palette, a capture popup, the welcome
+  tour, a confirmation. The Tweaks and Hotkeys popovers are not modal.
 
 ## Global
 
@@ -14,12 +37,29 @@ restores a single default; *Reset all* restores the whole catalog.
 | New task | `Ctrl+N` |
 | Quick-capture task | `Ctrl+Shift+Space` |
 | Quick-capture note | `Ctrl+Shift+N` |
-| Focus the header search | `Ctrl+F` |
-| Undo last deletion | `Ctrl+Z` |
+| Focus the header search (Notes: open the palette) | `Ctrl+F` |
+| Undo | `Ctrl+Z` |
+| Redo | `Ctrl+Shift+Z` |
+| Toggle light / dark | `Ctrl+Shift+T` |
+| New contact | `Ctrl+Shift+U` |
 
 The header search also takes `field:value` clauses — `status:`, `priority:`,
 `deadline:`, `tag:`, `mention:` — mixed freely with ordinary search words. See
 [TUTORIAL.md](TUTORIAL.md#7-the-search-box-is-a-query-box).
+
+## Command palette
+
+An empty query lists what you opened last, then every command. Words match in
+any order and a typo or two is forgiven (`ingress kubernetes`, `kubrenetes`).
+Commands cover every action in this file plus each Settings section
+("Settings: Appearance"), *New event* and *Replay the welcome tour*. Opening a
+task keeps the week, month, timeline or archive view you are on.
+
+| Action | Key |
+|---|---|
+| Next / previous result | `↓` / `↑` |
+| Open | `Return` |
+| Close | `Esc` |
 
 ## Views
 
@@ -65,14 +105,18 @@ Live on the week and month views only, where the board's own letters are not.
 |--------|---------|
 | Next profile | `Ctrl+]` |
 | Previous profile | `Ctrl+[` |
+| New profile | `Ctrl+Shift+P` |
 | Export active profile to Markdown (clipboard) | `Ctrl+Shift+E` |
+| Weekly shipped report (clipboard) | `Ctrl+Shift+W` |
 
 ## Panels
 
 | Action | Default |
 |--------|---------|
-| Open Tweaks (theme / density / a11y) | `Ctrl+,` |
+| Open Tweaks (theme / density / contrast) | `Ctrl+,` |
 | Open Hotkeys panel | `Ctrl+/` |
+| Show / hide the calendar column | `Ctrl+\` |
+| Expand / collapse the sidebar | `Ctrl+Shift+B` |
 
 ## Selection (Board / Timeline / Week)
 
@@ -86,6 +130,33 @@ Live on the week and month views only, where the board's own letters are not.
 `O` acts on the one selected card, or — with nothing selected — on the card
 under the cursor. It does nothing for a locally-created task, and it stands
 down entirely while a dialog is open or the cursor is in a text field.
+
+## Task editor
+
+Fixed keys, live while the editor is open.
+
+| Action | Key |
+|---|---|
+| Save | `Ctrl+Enter` |
+| Close without saving | `Esc` |
+| Next / previous field (leaves the description too) | `Tab` / `Shift+Tab` |
+| Indent / outdent a list line in the description | `Tab` / `Shift+Tab` on that line |
+| Insert indentation anywhere in the description | `Ctrl+Tab` |
+| Open / close Details, switch edit ↔ preview | `Tab` to it, then `Space` / `Enter` |
+
+A new task's editor opens with the cursor in the title.
+
+## Moving around without a mouse
+
+| Where | Keys |
+|---|---|
+| Filter bar (P0–P3, Clear, Sort, Archived) | `Tab` to a chip, `Space` / `Enter`; `↓` opens Sort |
+| Profile pill, breadcrumbs | `Tab`, then `Enter` (menu / edit; `F2` edits a crumb) |
+| Mini week | `←` / `→` a day, `PgUp` / `PgDn` a week, `Home` today |
+| Day panel | `←` / `→` a day, `Home` today, `↑` / `↓` walk the events, `Enter` opens one |
+| People list | `↑` / `↓`, `Enter` edits, `Menu` or `Shift+F10` for actions |
+| Settings | `Enter` in the search opens the first match, `↓` into the sections, `↑` / `↓` move between them; switches `Space`, segmented rows `←` / `→`, sliders `←` / `→` |
+| Tweaks, Hotkeys panels | `Tab` through every control; `Esc` closes |
 
 ## Notes editor
 
@@ -120,4 +191,3 @@ Every one of these is a single undo step.
   — see [TUTORIAL.md](TUTORIAL.md#quick-capture-syntax) for the syntax. From
   another app it comes up on its own, without the main window, and a
   notification confirms what was created.
-- `Esc` also closes any open modal or popup before it clears a selection.
