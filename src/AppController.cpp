@@ -5578,8 +5578,11 @@ void AppController::clearPendingUndo() {
 
 void AppController::flushNotesForUndo() {
   // The open note's pending keystrokes go into it first, so the merge sees
-  // them and the reload after it does not drop them.
+  // them and the reload after it does not drop them. The same for an open doc
+  // page and the Docs catalogue: their debounced write would otherwise land
+  // after the undo, over what it merged.
   emit aboutToChangeActiveNote();
+  emit flushEditorsRequested();
   adoptOrphanNotesState();
   syncActiveNoteBody();
 }
