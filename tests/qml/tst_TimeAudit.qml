@@ -410,4 +410,33 @@ TestCase {
         const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
         verify(mw.eventCountFor(probeDay(1303)) >= 1, "a later day of the series has a dot");
     }
+
+    // ── TIME-1: an occurrence moved days away shows on its new day ──
+
+    function occOf(id, day) {
+        const occ = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < occ.length; i++)
+            if ((occ[i].masterId === id || occ[i].id === id) && sameDay(occ[i].date, day)) return occ[i];
+        return null;
+    }
+
+    function test_moved_occurrence_shows_in_week_and_mini_week() {
+        const friday = new Date(2034, 0, 13);
+        const monday = new Date(2034, 0, 16);
+        clearRange(new Date(2034, 0, 1), new Date(2034, 0, 31));
+        const id = addEvent(new Date(2034, 0, 6), 10, 11, "FREQ=WEEKLY", "moved friday");
+        AppController.moveOccurrence(occOf(id, friday), 72, "this");
+        verify(occOf(id, monday) !== null, "a day's own range has it on Monday");
+        verify(occOf(id, friday) === null, "gone from its Friday");
+
+        AppController.selectedDate = monday;
+        const wv = createTemporaryQmlObject('import TodoCpp; WeekView { anchors.fill: parent }', host);
+        let seen = false;
+        for (const d of wv.eventDays.days)
+            for (const e of d.events)
+                if (e.title === "moved friday" && sameDay(d.date, monday)) seen = true;
+        verify(seen, "the week of the new day draws it");
+        const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
+        compare(mw.eventCountFor(monday), 1, "the mini week counts it");
+    }
 }
