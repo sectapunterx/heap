@@ -30,9 +30,9 @@ public:
 
     // The rule set a fence's language name selects: case-insensitive, with
     // the usual aliases ("Bash", "zsh", "C++", "yml", "golang", …).
-    static QString canonicalLanguage(const QString &lang);
+    static QString canonicalLanguage(const QString& lang);
 
-signals:
+   signals:
     void targetChanged();
     void languageChanged();
     void paletteChanged();

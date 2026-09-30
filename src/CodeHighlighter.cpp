@@ -1,9 +1,9 @@
 #include "CodeHighlighter.h"
 
-#include <QQuickTextDocument>
-#include <QTextDocument>
 #include <QColor>
 #include <QHash>
+#include <QQuickTextDocument>
+#include <QTextDocument>
 
 CodeHighlighter::CodeHighlighter(QObject *parent)
     : QSyntaxHighlighter(parent)
@@ -75,24 +75,21 @@ QString CodeHighlighter::canonicalLanguage(const QString& lang) {
   // uncoloured.
   const QString l = lang.trimmed().toLower();
   static const QHash<QString, QString> aliases = {
-      {"sh", "sh"},           {"bash", "sh"},         {"zsh", "sh"},        {"shell", "sh"},       {"console", "sh"},
-      {"shellsession", "sh"}, {"fish", "sh"},         {"ksh", "sh"},        {"cpp", "cpp"},        {"c++", "cpp"},
-      {"cxx", "cpp"},         {"cc", "cpp"},          {"hpp", "cpp"},       {"hxx", "cpp"},        {"h", "cpp"},
-      {"c", "cpp"},           {"objc", "cpp"},        {"cuda", "cpp"},      {"qml", "js"},         {"py", "py"},
-      {"python", "py"},       {"python3", "py"},      {"py3", "py"},        {"js", "js"},          {"javascript", "js"},
-      {"jsx", "js"},          {"mjs", "js"},          {"cjs", "js"},        {"ts", "js"},          {"typescript", "js"},
-      {"tsx", "js"},          {"yaml", "yaml"},       {"yml", "yaml"},      {"json", "json"},      {"jsonc", "json"},
-      {"json5", "json"},      {"go", "go"},           {"golang", "go"},     {"rust", "rust"},      {"rs", "rust"},
-      {"java", "java"},       {"kotlin", "java"},     {"kt", "java"},       {"scala", "java"},     {"cs", "cs"},
-      {"csharp", "cs"},       {"c#", "cs"},           {"swift", "java"},    {"dart", "java"},      {"sql", "sql"},
-      {"psql", "sql"},        {"mysql", "sql"},       {"sqlite", "sql"},    {"plsql", "sql"},      {"toml", "ini"},
-      {"ini", "ini"},         {"cfg", "ini"},         {"conf", "ini"},      {"properties", "ini"}, {"dockerfile", "docker"},
-      {"docker", "docker"},   {"makefile", "make"},   {"make", "make"},     {"cmake", "cmake"},    {"ps1", "ps"},
-      {"powershell", "ps"},   {"pwsh", "ps"},         {"lua", "lua"},       {"ruby", "ruby"},      {"rb", "ruby"},
-      {"php", "php"},         {"html", "xml"},        {"xml", "xml"},       {"svg", "xml"},        {"css", "css"},
-      {"scss", "css"},        {"less", "css"},        {"diff", "diff"},     {"patch", "diff"},     {"proto", "java"},
-      {"protobuf", "java"},   {"graphql", "js"},      {"gql", "js"},        {"hcl", "ini"},        {"terraform", "ini"},
-      {"tf", "ini"},          {"nginx", "ini"},       {"bat", "bat"},       {"cmd", "bat"},        {"batch", "bat"},
+      {"sh", "sh"},         {"bash", "sh"},       {"zsh", "sh"},        {"shell", "sh"},    {"console", "sh"},     {"shellsession", "sh"},
+      {"fish", "sh"},       {"ksh", "sh"},        {"cpp", "cpp"},       {"c++", "cpp"},     {"cxx", "cpp"},        {"cc", "cpp"},
+      {"hpp", "cpp"},       {"hxx", "cpp"},       {"h", "cpp"},         {"c", "cpp"},       {"objc", "cpp"},       {"cuda", "cpp"},
+      {"qml", "js"},        {"py", "py"},         {"python", "py"},     {"python3", "py"},  {"py3", "py"},         {"js", "js"},
+      {"javascript", "js"}, {"jsx", "js"},        {"mjs", "js"},        {"cjs", "js"},      {"ts", "js"},          {"typescript", "js"},
+      {"tsx", "js"},        {"yaml", "yaml"},     {"yml", "yaml"},      {"json", "json"},   {"jsonc", "json"},     {"json5", "json"},
+      {"go", "go"},         {"golang", "go"},     {"rust", "rust"},     {"rs", "rust"},     {"java", "java"},      {"kotlin", "java"},
+      {"kt", "java"},       {"scala", "java"},    {"cs", "cs"},         {"csharp", "cs"},   {"c#", "cs"},          {"swift", "java"},
+      {"dart", "java"},     {"sql", "sql"},       {"psql", "sql"},      {"mysql", "sql"},   {"sqlite", "sql"},     {"plsql", "sql"},
+      {"toml", "ini"},      {"ini", "ini"},       {"cfg", "ini"},       {"conf", "ini"},    {"properties", "ini"}, {"dockerfile", "docker"},
+      {"docker", "docker"}, {"makefile", "make"}, {"make", "make"},     {"cmake", "cmake"}, {"ps1", "ps"},         {"powershell", "ps"},
+      {"pwsh", "ps"},       {"lua", "lua"},       {"ruby", "ruby"},     {"rb", "ruby"},     {"php", "php"},        {"html", "xml"},
+      {"xml", "xml"},       {"svg", "xml"},       {"css", "css"},       {"scss", "css"},    {"less", "css"},       {"diff", "diff"},
+      {"patch", "diff"},    {"proto", "java"},    {"protobuf", "java"}, {"graphql", "js"},  {"gql", "js"},         {"hcl", "ini"},
+      {"terraform", "ini"}, {"tf", "ini"},        {"nginx", "ini"},     {"bat", "bat"},     {"cmd", "bat"},        {"batch", "bat"},
   };
   return aliases.value(l, l);
 }
@@ -133,7 +130,8 @@ void CodeHighlighter::rebuildRules() {
   };
   const auto other = [&](const QString& pattern, const QTextCharFormat& f, int group = 0, bool caseInsensitive = false) {
     Rule r;
-    r.pattern = QRegularExpression(pattern, caseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption);
+    r.pattern =
+        QRegularExpression(pattern, caseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption);
     r.format = f;
     r.captureGroup = group;
     m_others.push_back(r);
@@ -152,15 +150,16 @@ void CodeHighlighter::rebuildRules() {
     string(QStringLiteral("\"(?:\\\\.|[^\"\\\\\\n])*\""));
     string(QStringLiteral("'[^'\\n]*'"));
     appendKeywordRule(m_others,
-                      {"if",     "then",  "else", "elif",  "fi",     "case",  "esac",   "for",  "in",    "while", "do",
-                       "done",   "function", "return", "break", "continue", "exit", "local", "export", "readonly",
-                       "unset",  "set",   "shift", "source", "trap",  "echo",  "printf", "read", "cd",    "pushd", "popd"},
+                      {"if",    "then",     "else",   "elif",  "fi",       "case", "esac",  "for",    "in",       "while", "do",
+                       "done",  "function", "return", "break", "continue", "exit", "local", "export", "readonly", "unset", "set",
+                       "shift", "source",   "trap",   "echo",  "printf",   "read", "cd",    "pushd",  "popd"},
                       fKeyword);
-    appendKeywordRule(m_others,
-                      {"bazel", "cmake", "make", "gdb", "tcpdump", "pgrep", "perf", "valgrind", "sudo", "git",
-                       "grep", "awk", "sed", "cat", "ls", "mkdir", "rm", "mv", "cp", "ssh", "scp", "curl", "wget",
-                       "docker", "kubectl", "systemctl", "journalctl", "npm", "npx", "yarn", "pip", "cargo", "go", "ninja"},
-                      fBuiltin);
+    appendKeywordRule(
+        m_others,
+        {"bazel",   "cmake",     "make",       "gdb",   "tcpdump", "pgrep", "perf", "valgrind", "sudo", "git",  "grep", "awk",
+         "sed",     "cat",       "ls",         "mkdir", "rm",      "mv",    "cp",   "ssh",      "scp",  "curl", "wget", "docker",
+         "kubectl", "systemctl", "journalctl", "npm",   "npx",     "yarn",  "pip",  "cargo",    "go",   "ninja"},
+        fBuiltin);
     other(QStringLiteral("\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?"), fType);
     m_others.push_back(numRule);
   } else if(lang == "cpp" || lang == "cs" || lang == "java" || lang == "go" || lang == "rust" || lang == "js" || lang == "php") {
@@ -188,77 +187,173 @@ void CodeHighlighter::rebuildRules() {
     }
     static const QHash<QString, QStringList> keywords = {
         {"cpp",
-         {"alignas",   "alignof",    "asm",       "auto",         "break",         "case",       "catch",     "class",
-          "co_await",  "co_return",  "co_yield",  "concept",      "const",         "consteval",  "constexpr", "constinit",
-          "const_cast", "continue",  "decltype",  "default",      "delete",        "do",         "dynamic_cast", "else",
-          "enum",      "explicit",   "export",    "extern",       "false",         "final",      "for",       "friend",
-          "goto",      "if",         "inline",    "mutable",      "namespace",     "new",        "noexcept",  "nullptr",
-          "operator",  "override",   "private",   "protected",    "public",        "register",   "reinterpret_cast",
-          "requires",  "return",     "sizeof",    "static",       "static_assert", "static_cast", "struct",  "switch",
-          "template",  "this",       "thread_local", "throw",     "true",          "try",        "typedef",   "typeid",
-          "typename",  "union",      "using",     "virtual",      "void",          "volatile",   "while"}},
-        {"cs",
-         {"abstract", "as", "async", "await", "base", "break", "case", "catch", "checked", "class", "const", "continue",
-          "default", "delegate", "do", "else", "enum", "event", "explicit", "extern", "false", "finally", "fixed", "for",
-          "foreach", "get", "goto", "if", "implicit", "in", "init", "interface", "internal", "is", "lock", "namespace",
-          "new", "null", "operator", "out", "override", "params", "private", "protected", "public", "readonly", "record",
-          "ref", "return", "sealed", "set", "sizeof", "static", "struct", "switch", "this", "throw", "true", "try",
-          "typeof", "using", "var", "virtual", "void", "volatile", "when", "where", "while", "yield"}},
+         {"alignas",
+          "alignof",
+          "asm",
+          "auto",
+          "break",
+          "case",
+          "catch",
+          "class",
+          "co_await",
+          "co_return",
+          "co_yield",
+          "concept",
+          "const",
+          "consteval",
+          "constexpr",
+          "constinit",
+          "const_cast",
+          "continue",
+          "decltype",
+          "default",
+          "delete",
+          "do",
+          "dynamic_cast",
+          "else",
+          "enum",
+          "explicit",
+          "export",
+          "extern",
+          "false",
+          "final",
+          "for",
+          "friend",
+          "goto",
+          "if",
+          "inline",
+          "mutable",
+          "namespace",
+          "new",
+          "noexcept",
+          "nullptr",
+          "operator",
+          "override",
+          "private",
+          "protected",
+          "public",
+          "register",
+          "reinterpret_cast",
+          "requires",
+          "return",
+          "sizeof",
+          "static",
+          "static_assert",
+          "static_cast",
+          "struct",
+          "switch",
+          "template",
+          "this",
+          "thread_local",
+          "throw",
+          "true",
+          "try",
+          "typedef",
+          "typeid",
+          "typename",
+          "union",
+          "using",
+          "virtual",
+          "void",
+          "volatile",
+          "while"}},
+        {"cs", {"abstract", "as",        "async",    "await",     "base",     "break",     "case",   "catch", "checked",  "class",
+                "const",    "continue",  "default",  "delegate",  "do",       "else",      "enum",   "event", "explicit", "extern",
+                "false",    "finally",   "fixed",    "for",       "foreach",  "get",       "goto",   "if",    "implicit", "in",
+                "init",     "interface", "internal", "is",        "lock",     "namespace", "new",    "null",  "operator", "out",
+                "override", "params",    "private",  "protected", "public",   "readonly",  "record", "ref",   "return",   "sealed",
+                "set",      "sizeof",    "static",   "struct",    "switch",   "this",      "throw",  "true",  "try",      "typeof",
+                "using",    "var",       "virtual",  "void",      "volatile", "when",      "where",  "while", "yield"}},
         {"java",
-         {"abstract", "assert", "break", "case", "catch", "class", "const", "continue", "data", "default", "do", "else",
-          "enum", "extends", "false", "final", "finally", "for", "fun", "func", "guard", "if", "implements", "import",
-          "in", "instanceof", "interface", "is", "let", "message", "native", "new", "null", "object", "override",
-          "package", "private", "protected", "public", "return", "rpc", "sealed", "service", "static", "struct", "super",
-          "switch", "synchronized", "this", "throw", "throws", "true", "try", "val", "var", "void", "when", "while", "syntax",
-          "repeated", "optional", "oneof"}},
-        {"go",
-         {"break", "case", "chan", "const", "continue", "default", "defer", "else", "fallthrough", "false", "for", "func",
-          "go", "goto", "if", "import", "interface", "iota", "map", "nil", "package", "range", "return", "select",
-          "struct", "switch", "true", "type", "var"}},
-        {"rust",
-         {"as", "async", "await", "break", "const", "continue", "crate", "dyn", "else", "enum", "extern", "false", "fn",
-          "for", "if", "impl", "in", "let", "loop", "match", "mod", "move", "mut", "pub", "ref", "return", "self", "Self",
-          "static", "struct", "super", "trait", "true", "type", "unsafe", "use", "where", "while"}},
-        {"js",
-         {"async", "await", "break", "case", "catch", "class", "const", "continue", "debugger", "default", "delete",
-          "do", "else", "enum", "export", "extends", "false", "finally", "for", "from", "function", "if", "implements",
-          "import", "in", "instanceof", "interface", "let", "new", "null", "of", "package", "private", "property",
-          "protected", "public", "readonly", "return", "signal", "static", "super", "switch", "this", "throw", "true",
-          "try", "type", "typeof", "var", "void", "while", "with", "yield", "query", "mutation", "fragment"}},
-        {"php",
-         {"abstract", "and", "array", "as", "break", "case", "catch", "class", "const", "continue", "default", "do",
-          "echo", "else", "elseif", "extends", "false", "final", "finally", "fn", "for", "foreach", "function", "if",
-          "implements", "include", "interface", "match", "namespace", "new", "null", "or", "private", "protected",
-          "public", "require", "return", "static", "switch", "throw", "trait", "true", "try", "use", "while"}},
+         {"abstract",   "assert",   "break",   "case",         "catch",     "class",    "const",  "continue", "data",   "default", "do",
+          "else",       "enum",     "extends", "false",        "final",     "finally",  "for",    "fun",      "func",   "guard",   "if",
+          "implements", "import",   "in",      "instanceof",   "interface", "is",       "let",    "message",  "native", "new",     "null",
+          "object",     "override", "package", "private",      "protected", "public",   "return", "rpc",      "sealed", "service", "static",
+          "struct",     "super",    "switch",  "synchronized", "this",      "throw",    "throws", "true",     "try",    "val",     "var",
+          "void",       "when",     "while",   "syntax",       "repeated",  "optional", "oneof"}},
+        {"go", {"break",   "case",  "chan",   "const",  "continue", "default", "defer",     "else", "fallthrough", "false",
+                "for",     "func",  "go",     "goto",   "if",       "import",  "interface", "iota", "map",         "nil",
+                "package", "range", "return", "select", "struct",   "switch",  "true",      "type", "var"}},
+        {"rust", {"as",   "async", "await",  "break",  "const", "continue", "crate", "dyn",  "else",   "enum", "extern", "false", "fn",
+                  "for",  "if",    "impl",   "in",     "let",   "loop",     "match", "mod",  "move",   "mut",  "pub",    "ref",   "return",
+                  "self", "Self",  "static", "struct", "super", "trait",    "true",  "type", "unsafe", "use",  "where",  "while"}},
+        {"js", {"async",    "await",   "break",      "case",     "catch",     "class",      "const",     "continue", "debugger", "default",
+                "delete",   "do",      "else",       "enum",     "export",    "extends",    "false",     "finally",  "for",      "from",
+                "function", "if",      "implements", "import",   "in",        "instanceof", "interface", "let",      "new",      "null",
+                "of",       "package", "private",    "property", "protected", "public",     "readonly",  "return",   "signal",   "static",
+                "super",    "switch",  "this",       "throw",    "true",      "try",        "type",      "typeof",   "var",      "void",
+                "while",    "with",    "yield",      "query",    "mutation",  "fragment"}},
+        {"php", {"abstract", "and",       "array",  "as",      "break",    "case",    "catch",      "class",   "const",
+                 "continue", "default",   "do",     "echo",    "else",     "elseif",  "extends",    "false",   "final",
+                 "finally",  "fn",        "for",    "foreach", "function", "if",      "implements", "include", "interface",
+                 "match",    "namespace", "new",    "null",    "or",       "private", "protected",  "public",  "require",
+                 "return",   "static",    "switch", "throw",   "trait",    "true",    "try",        "use",     "while"}},
     };
     static const QHash<QString, QStringList> types = {
         {"cpp",
-         {"bool", "char", "char8_t", "char16_t", "char32_t", "double", "float", "int", "long", "short", "signed",
-          "unsigned", "wchar_t", "int8_t", "int16_t", "int32_t", "int64_t", "uint8_t", "uint16_t", "uint32_t", "uint64_t",
-          "size_t", "ptrdiff_t", "std", "string", "string_view", "vector", "array", "map", "unordered_map", "set",
-          "unordered_set", "optional", "variant", "tuple", "pair", "shared_ptr", "unique_ptr", "weak_ptr", "function",
-          "span", "chrono", "filesystem", "atomic", "mutex", "thread", "QString", "QStringList", "QVariant", "QObject"}},
-        {"cs", {"bool", "byte", "char", "decimal", "double", "dynamic", "float", "int", "long", "object", "sbyte", "short",
-                "string", "uint", "ulong", "ushort", "List", "Dictionary", "Task", "IEnumerable"}},
-        {"java", {"boolean", "byte", "char", "double", "float", "int", "long", "short", "String", "Integer", "List", "Map",
-                  "Set", "Optional", "Any", "Unit", "Int", "Double", "Boolean", "int32", "int64", "uint32", "uint64",
-                  "bytes", "string", "bool"}},
-        {"go", {"bool", "byte", "complex64", "complex128", "error", "float32", "float64", "int", "int8", "int16", "int32",
-                "int64", "rune", "string", "uint", "uint8", "uint16", "uint32", "uint64", "uintptr", "any"}},
-        {"rust", {"bool", "char", "f32", "f64", "i8", "i16", "i32", "i64", "i128", "isize", "str", "u8", "u16", "u32",
-                  "u64", "u128", "usize", "String", "Vec", "Option", "Result", "Box", "Rc", "Arc", "HashMap"}},
-        {"js", {"string", "number", "boolean", "any", "unknown", "never", "object", "bigint", "symbol", "var", "int",
-                "real", "bool", "list", "color", "url", "Item", "Rectangle", "Text"}},
+         {"bool",       "char",       "char8_t",       "char16_t", "char32_t",      "double",   "float",      "int",         "long",
+          "short",      "signed",     "unsigned",      "wchar_t",  "int8_t",        "int16_t",  "int32_t",    "int64_t",     "uint8_t",
+          "uint16_t",   "uint32_t",   "uint64_t",      "size_t",   "ptrdiff_t",     "std",      "string",     "string_view", "vector",
+          "array",      "map",        "unordered_map", "set",      "unordered_set", "optional", "variant",    "tuple",       "pair",
+          "shared_ptr", "unique_ptr", "weak_ptr",      "function", "span",          "chrono",   "filesystem", "atomic",      "mutex",
+          "thread",     "QString",    "QStringList",   "QVariant", "QObject"}},
+        {"cs", {"bool",  "byte",  "char",   "decimal", "double", "dynamic", "float", "int",        "long", "object",
+                "sbyte", "short", "string", "uint",    "ulong",  "ushort",  "List",  "Dictionary", "Task", "IEnumerable"}},
+        {"java",
+         {"boolean",  "byte", "char", "double", "float",  "int",     "long",  "short", "String", "Integer", "List",  "Map",    "Set",
+          "Optional", "Any",  "Unit", "Int",    "Double", "Boolean", "int32", "int64", "uint32", "uint64",  "bytes", "string", "bool"}},
+        {"go", {"bool",  "byte", "complex64", "complex128", "error", "float32", "float64", "int",    "int8",    "int16", "int32",
+                "int64", "rune", "string",    "uint",       "uint8", "uint16",  "uint32",  "uint64", "uintptr", "any"}},
+        {"rust", {"bool", "char", "f32",  "f64",   "i8",     "i16", "i32",    "i64",    "i128", "isize", "str", "u8",     "u16",
+                  "u32",  "u64",  "u128", "usize", "String", "Vec", "Option", "Result", "Box",  "Rc",    "Arc", "HashMap"}},
+        {"js",
+         {"string",
+          "number",
+          "boolean",
+          "any",
+          "unknown",
+          "never",
+          "object",
+          "bigint",
+          "symbol",
+          "var",
+          "int",
+          "real",
+          "bool",
+          "list",
+          "color",
+          "url",
+          "Item",
+          "Rectangle",
+          "Text"}},
     };
     static const QHash<QString, QStringList> builtins = {
-        {"cpp", {"Q_OBJECT", "Q_PROPERTY", "Q_INVOKABLE", "QML_ELEMENT", "QML_SINGLETON", "emit", "slots", "signals",
-                 "Q_SLOTS", "Q_SIGNALS"}},
+        {"cpp",
+         {"Q_OBJECT", "Q_PROPERTY", "Q_INVOKABLE", "QML_ELEMENT", "QML_SINGLETON", "emit", "slots", "signals", "Q_SLOTS", "Q_SIGNALS"}},
         {"cs", {"Console", "Math", "String", "Guid", "DateTime"}},
         {"java", {"System", "println", "Math", "Object", "Thread", "Exception"}},
         {"go", {"append", "cap", "close", "copy", "delete", "len", "make", "new", "panic", "print", "println", "recover", "fmt"}},
         {"rust", {"println", "format", "vec", "panic", "assert", "assert_eq", "Some", "None", "Ok", "Err"}},
-        {"js", {"console", "window", "document", "Math", "JSON", "Object", "Array", "String", "Number", "Boolean",
-                "Promise", "Map", "Set", "Symbol", "undefined", "NaN", "Infinity", "Qt", "parent"}},
+        {"js",
+         {"console",
+          "window",
+          "document",
+          "Math",
+          "JSON",
+          "Object",
+          "Array",
+          "String",
+          "Number",
+          "Boolean",
+          "Promise",
+          "Map",
+          "Set",
+          "Symbol",
+          "undefined",
+          "NaN",
+          "Infinity",
+          "Qt",
+          "parent"}},
         {"php", {"isset", "empty", "count", "strlen", "print", "var_dump", "die"}},
     };
     appendKeywordRule(m_others, keywords.value(lang), fKeyword);
@@ -275,24 +370,24 @@ void CodeHighlighter::rebuildRules() {
     string(dq);
     string(sq);
     if(lang == "py") {
+      appendKeywordRule(
+          m_others,
+          {"and",   "as",      "assert", "async",  "await",  "break", "class",  "continue", "def",   "del",    "elif", "else",     "except",
+           "False", "finally", "for",    "from",   "global", "if",    "import", "in",       "is",    "lambda", "None", "nonlocal", "not",
+           "or",    "pass",    "raise",  "return", "True",   "try",   "while",  "with",     "yield", "match",  "case"},
+          fKeyword);
       appendKeywordRule(m_others,
-                        {"and", "as", "assert", "async", "await", "break", "class", "continue", "def", "del", "elif",
-                         "else", "except", "False", "finally", "for", "from", "global", "if", "import", "in", "is",
-                         "lambda", "None", "nonlocal", "not", "or", "pass", "raise", "return", "True", "try", "while",
-                         "with", "yield", "match", "case"},
-                        fKeyword);
-      appendKeywordRule(m_others,
-                        {"print", "len", "range", "int", "str", "float", "bool", "list", "dict", "set", "tuple", "self",
-                         "cls", "open", "map", "filter", "zip", "enumerate", "sorted", "sum", "min", "max", "abs", "any",
-                         "all", "type", "isinstance", "getattr", "setattr", "hasattr", "super"},
+                        {"print", "len", "range", "int",  "str",        "float",   "bool",      "list",    "dict", "set", "tuple",
+                         "self",  "cls", "open",  "map",  "filter",     "zip",     "enumerate", "sorted",  "sum",  "min", "max",
+                         "abs",   "any", "all",   "type", "isinstance", "getattr", "setattr",   "hasattr", "super"},
                         fBuiltin);
     } else {
-      appendKeywordRule(m_others,
-                        {"alias", "and", "begin", "break", "case", "class", "def", "defined", "do", "else", "elsif",
-                         "end", "ensure", "false", "for", "if", "in", "module", "next", "nil", "not", "or", "redo",
-                         "rescue", "retry", "return", "self", "super", "then", "true", "undef", "unless", "until",
-                         "when", "while", "yield", "require", "puts"},
-                        fKeyword);
+      appendKeywordRule(
+          m_others,
+          {"alias", "and",   "begin", "break", "case",   "class",  "def",   "defined", "do",    "else",  "elsif",   "end",   "ensure",
+           "false", "for",   "if",    "in",    "module", "next",   "nil",   "not",     "or",    "redo",  "rescue",  "retry", "return",
+           "self",  "super", "then",  "true",  "undef",  "unless", "until", "when",    "while", "yield", "require", "puts"},
+          fKeyword);
       other(QStringLiteral(":[A-Za-z_][A-Za-z0-9_]*"), fType);
     }
     m_others.push_back(numRule);
@@ -301,8 +396,8 @@ void CodeHighlighter::rebuildRules() {
     string(dq);
     string(sq);
     appendKeywordRule(m_others,
-                      {"and", "break", "do", "else", "elseif", "end", "false", "for", "function", "goto", "if", "in",
-                       "local", "nil", "not", "or", "repeat", "return", "then", "true", "until", "while"},
+                      {"and", "break", "do",  "else", "elseif", "end",    "false",  "for",  "function", "goto",  "if",
+                       "in",  "local", "nil", "not",  "or",     "repeat", "return", "then", "true",     "until", "while"},
                       fKeyword);
     m_others.push_back(numRule);
   } else if(lang == "sql") {
@@ -316,10 +411,14 @@ void CodeHighlighter::rebuildRules() {
                          "group|by|order|having|limit|offset|union|all|distinct|as|in|is|null|like|between|exists|case|"
                          "when|then|else|end|with|returning|begin|commit|rollback|transaction|default|unique|check|"
                          "cascade|asc|desc|count|sum|avg|min|max|coalesce|true|false)\\b"),
-          fKeyword, 0, true);
+          fKeyword,
+          0,
+          true);
     other(QStringLiteral("\\b(?:int|integer|bigint|smallint|text|varchar|char|boolean|bool|date|timestamp|timestamptz|"
                          "numeric|decimal|real|float|double|serial|uuid|json|jsonb|blob)\\b"),
-          fType, 0, true);
+          fType,
+          0,
+          true);
     m_others.push_back(numRule);
   } else if(lang == "yaml") {
     comment(QStringLiteral("(?:^|(?<=\\s))#[^\\n]*"));
@@ -342,7 +441,9 @@ void CodeHighlighter::rebuildRules() {
     if(lang == "docker") {
       other(QStringLiteral("^\\s*(?:FROM|RUN|CMD|LABEL|EXPOSE|ENV|ADD|COPY|ENTRYPOINT|VOLUME|USER|WORKDIR|ARG|ONBUILD|"
                            "STOPSIGNAL|HEALTHCHECK|SHELL|AS)\\b"),
-            fKeyword, 0, true);
+            fKeyword,
+            0,
+            true);
     }
     if(lang == "cmake") {
       other(QStringLiteral("^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\("), fBuiltin, 1);
@@ -361,10 +462,12 @@ void CodeHighlighter::rebuildRules() {
     string(sq);
     other(lang == "ps" ? QStringLiteral("\\$[A-Za-z_][A-Za-z0-9_:]*") : QStringLiteral("%[A-Za-z0-9_~]+%?"), fType);
     other(lang == "ps" ? QStringLiteral("\\b(?:if|else|elseif|foreach|for|while|do|function|param|return|try|catch|"
-                                         "finally|throw|switch|break|continue|begin|process|end|in)\\b")
+                                        "finally|throw|switch|break|continue|begin|process|end|in)\\b")
                        : QStringLiteral("\\b(?:echo|set|if|else|goto|call|exit|for|in|do|not|exist|errorlevel|setlocal|"
-                                         "endlocal)\\b"),
-          fKeyword, 0, true);
+                                        "endlocal)\\b"),
+          fKeyword,
+          0,
+          true);
     other(QStringLiteral("\\b[A-Z][a-z]+-[A-Z][A-Za-z]+\\b"), fBuiltin);
     m_others.push_back(numRule);
   } else if(lang == "xml") {

@@ -300,7 +300,8 @@ TEST(MdHtmlTest, ResolveImage_SharesAndHostsStayBlocked) {
 TEST(MdHtmlTest, ResolveImage_RelativePathsNeedABaseAndCannotClimbOut) {
   EXPECT_TRUE(resolveImage(QStringLiteral("a/x.png"), {}).url.isEmpty());
   EXPECT_TRUE(resolveImage(QStringLiteral("../../x.png"), QStringLiteral("C:/data/attachments")).url.isEmpty());
-  EXPECT_EQ(resolveImage(QStringLiteral("a/x.png"), QStringLiteral("C:/data/attachments")).url, QStringLiteral("file:///C:/data/attachments/a/x.png"));
+  EXPECT_EQ(resolveImage(QStringLiteral("a/x.png"), QStringLiteral("C:/data/attachments")).url,
+            QStringLiteral("file:///C:/data/attachments/a/x.png"));
 }
 
 // ── Maths and plain text ────────────────────────────────────────────

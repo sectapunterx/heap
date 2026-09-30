@@ -10,10 +10,10 @@
 
 #include <QApplication>
 #include <QClipboard>
-#include <QGuiApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
+#include <QGuiApplication>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
