@@ -254,6 +254,30 @@ TestCase {
         AppController.setStatusWipLimit(st.id, 0);
     }
 
+    // TASKS-5 / UX-22: a view's own modal dialog blocks the board keys and
+    // the global shortcuts behind it — even one that never took focus.
+    function test_modal_dialog_blocks_keys_behind_it() {
+        const b = board();
+        b.searchText = tc.probe;
+        b.moveCursor(0, 1);
+        tc.win.focusActiveView();
+        const dlg = dataByName(b, "confirm-delete-column");
+        verify(dlg !== null);
+        dlg.focus = false;         // the worst case: a dialog that leaves focus behind
+        dlg.open();
+        tryCompare(dlg, "opened", true);
+        tryVerify(function () { return tc.win._dimmerShown; }, 1000, "no dimmer seen");
+        keyClick(Qt.Key_Return);
+        wait(50);
+        compare(popup("TaskEditor").opened, false, "Return opened a card behind the dialog");
+        keyClick(Qt.Key_3, Qt.ControlModifier);
+        compare(AppController.currentView, "board", "Ctrl+3 switched the view behind the dialog");
+        dlg.close();
+        tryCompare(dlg, "opened", false);
+        dlg.focus = true;
+        tryVerify(function () { return !tc.win._dimmerShown; }, 2000);
+    }
+
     // UX-20: the palette runs commands through Main.
     function test_palette_runs_a_command() {
         const pal = popup("CommandPalette");

@@ -1082,6 +1082,9 @@ Item {
     QQC.Dialog {
         id: confirmDelete
         objectName: "confirm-delete-column"
+        // Takes the keyboard, so Esc and Tab work in it and the board keys
+        // behind it stand down.
+        focus: true
         property string statusId: ""
         property string statusName: ""
         property int cardCount: 0

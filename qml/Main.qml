@@ -390,6 +390,20 @@ ApplicationWindow {
             if (p === Overlay.overlay) return true;
         return false;
     }
+    // A modal (or dimming) popup is up somewhere — even one that did not take
+    // focus, as most of the views' own confirm dialogs do not. Each puts its
+    // dimmer on the overlay next to the popup items, so a visible overlay child
+    // that is not a popup item is one.
+    readonly property bool _dimmerShown: {
+        const ov = Overlay.overlay;
+        if (!ov) return false;
+        const kids = ov.children;
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (k.visible && k.opacity > 0 && String(k).indexOf("QQuickPopupItem") !== 0) return true;
+        }
+        return false;
+    }
     // …and that popup is one of the two side-rail popovers, which leave the
     // app usable behind them.
     readonly property bool _focusInPopover: {
@@ -413,7 +427,7 @@ ApplicationWindow {
     }
     // A view-local key (board cursor, calendar paging, Esc on the selection,
     // Delete, the bare-letter shortcuts) stands down while any of this holds.
-    readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup
+    readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup || _dimmerShown
                                              || _focusOnControl
     // Global shortcuts (switch view, new task, palette, undo…) stand down
     // behind a modal: Ctrl+3 used to switch the view under an open task
@@ -423,7 +437,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || closeAsk.opened || goToDatePopup.opened
-        || (_focusInPopup && !_focusInPopover)
+        || (_focusInPopup && !_focusInPopover) || _dimmerShown
     readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
 
     // Esc in the header search with nothing left to clear hands the keyboard

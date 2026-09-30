@@ -234,6 +234,7 @@ Item {
             Body {
                 text: root.tr2("7 days as columns. At the top — deadline chips (all-day), below — an hourly grid with events. An event can be dragged between days and hours; drag the top/bottom edge to change its duration.",
                               "7 дней колонками. Сверху — чипы сроков (на весь день), ниже — почасовая сетка с событиями. Событие можно перетащить между днями и часами; потяните за верхний или нижний край, чтобы изменить длительность.")
+            }
 
             H3 {
                 text: root.tr2("Month View", "Месяц")
@@ -249,7 +250,6 @@ Item {
             Body {
                 text: root.tr2("Archived tasks of the active profile, newest first. Select several (Ctrl+A selects all visible) to restore or delete them at once.",
                               "Архивные задачи активного профиля, новые сверху. Выделите несколько (Ctrl+A — все видимые), чтобы вернуть или удалить их разом.")
-            }
             }
 
             H3 {
