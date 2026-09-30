@@ -19,7 +19,11 @@ static_assert(heap::meta::fieldCount<TaskLink>() == 2,
               "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 25,
+static_assert(heap::meta::fieldCount<Attachment>() == 4,
+              "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
+              "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
+              "then bump this count.");
+static_assert(heap::meta::fieldCount<Task>() == 26,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -93,6 +97,32 @@ QVector<TaskLink> linksFromJson(const QJsonArray& a) {
   return out;
 }
 
+QJsonArray attachmentsToJson(const QVector<Attachment>& xs) {
+  QJsonArray a;
+  for(const Attachment& x : xs) {
+    QJsonObject o;
+    o[QStringLiteral("id")] = x.id;
+    o[QStringLiteral("name")] = x.name;
+    o[QStringLiteral("size")] = static_cast<double>(x.size);
+    o[QStringLiteral("mime")] = x.mime;
+    a.append(o);
+  }
+  return a;
+}
+
+QVector<Attachment> attachmentsFromJson(const QJsonArray& a) {
+  QVector<Attachment> out;
+  out.reserve(a.size());
+  for(const QJsonValue& v : a) {
+    const QJsonObject o = v.toObject();
+    out.append(Attachment{o.value(QStringLiteral("id")).toString(),
+                          o.value(QStringLiteral("name")).toString(),
+                          static_cast<qint64>(o.value(QStringLiteral("size")).toDouble()),
+                          o.value(QStringLiteral("mime")).toString()});
+  }
+  return out;
+}
+
 }  // namespace
 
 QJsonArray SyncSerializer::sortedById(const QJsonArray& arr) {
@@ -141,6 +171,7 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   o[QStringLiteral("assignee")] = t.assignee;
   o[QStringLiteral("rank")] = t.rank;
   o[QStringLiteral("links")] = linksToJson(t.links);
+  o[QStringLiteral("attachments")] = attachmentsToJson(t.attachments);
   // Tracker metadata (HEAP-117). Nested, and its timestamps are deliberately
   // not named `updatedAt`/`createdAt`: JsonMerger reads those names at a task's
   // top level as heap's own last-write clock, and it applies "earlier wins" to
@@ -236,6 +267,7 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.externalMeta.pushQueued = meta.value(QStringLiteral("pushQueued")).toBool();
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
+  t.attachments = attachmentsFromJson(o.value(QStringLiteral("attachments")).toArray());
   return t;
 }
 

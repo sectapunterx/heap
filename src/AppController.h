@@ -7,6 +7,7 @@
 
 #include <QDate>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
 #include <QObject>
@@ -396,6 +397,46 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantList outgoingNoteLinks(const QString& markdown) const;
   // { lines, mentions, tickets } for the editor's header.
   Q_INVOKABLE QVariantMap noteStats(const QString& markdown) const;
+
+  // ---- Attachments (AppControllerAttachments.cpp, storage/Attachments.h) ----
+  // Files go into <dataDir>/attachments under a content hash; a task lists
+  // them, a note or description links them as "attachments/<id>".
+  QString attachmentsDir() const;
+  // Stores files (file:// URLs or paths) without attaching them to anything —
+  // a new task's draft, a note that is about to link them. Returns one
+  // { id, name, size, mime, isImage, ref } per stored file; a refused file is
+  // left out and named in a toast.
+  Q_INVOKABLE QVariantList importAttachments(const QVariantList& urls);
+  // Stores the files and appends them to the task, as one undo step. Returns
+  // how many were attached (a file the task already has counts once).
+  Q_INVOKABLE int attachFilesToTask(const QString& taskId, const QVariantList& urls);
+  // Detaches one file: one undo step. The bytes stay until the cleanup.
+  Q_INVOKABLE bool removeTaskAttachment(const QString& taskId, const QString& attachmentId);
+  // The task's files for the editor's chips: the stored metadata plus
+  // { exists, sizeText, isImage, ref }.
+  Q_INVOKABLE QVariantList taskAttachments(const QString& taskId) const;
+  // Chip data for a draft's list or for the files a piece of markdown links.
+  Q_INVOKABLE QVariantList describeAttachments(const QVariantList& attachments) const;
+  Q_INVOKABLE QVariantList markdownAttachments(const QString& markdown) const;
+  // Opens a stored file in its default application. Returns "opened",
+  // "confirm" (a type that runs something: ask, then call again with
+  // confirmed), "missing" or "invalid".
+  Q_INVOKABLE QString openAttachment(const QString& id, bool confirmed = false);
+  // Shows the file in the system file manager.
+  Q_INVOKABLE bool revealAttachment(const QString& id);
+  // The file:// URL of a stored file, for a preview; empty when missing.
+  Q_INVOKABLE QUrl attachmentUrl(const QString& id) const;
+  // Paste: an image on the clipboard is saved as a PNG, copied files are
+  // stored as they are. Empty when the clipboard holds neither, so the caller
+  // falls back to pasting text.
+  Q_INVOKABLE bool clipboardHasAttachment() const;
+  Q_INVOKABLE QVariantList importClipboardAttachments();
+  // Settings → Data: files no task, note, page or undo step refers to.
+  // { count, bytes, sizeText }.
+  Q_INVOKABLE QVariantMap unusedAttachments() const;
+  // Deletes them. Returns what unusedAttachments() said, as it was removed.
+  Q_INVOKABLE QVariantMap cleanUpUnusedAttachments();
+  Q_INVOKABLE QString formatBytes(double bytes) const;
 
   QString appSettingsJson() const {
     return m_appSettingsJson;
@@ -1196,6 +1237,25 @@ class AppController : public QObject {
   // A note with no body, made active without announcing a new notesState:
   // callers write the body next and that is the one change the editor sees.
   QString createActiveNote(const QString& title);
+  // ---- Attachments (AppControllerAttachments.cpp) ----
+  // Every attachment id something still points at: any profile's tasks,
+  // descriptions, notes and doc pages, the open editor text, and the undo
+  // history — so a file detached a minute ago survives a cleanup and Ctrl+Z
+  // still finds it.
+  QSet<QString> referencedAttachmentIds() const;
+  // The ids one profile uses, for its export.
+  QStringList profileAttachmentIds(const Profile& p) const;
+  // The export's "attachments" array, or an empty one (and *omittedBytes set)
+  // when the files would push the export past the cap.
+  QJsonArray attachmentsForExport(const Profile& p, qint64* omittedBytes, int* omittedCount) const;
+  // Writes an import's files into the store. Returns old id → new id for every
+  // file whose content did not match its id (it is stored under the right one
+  // and the references are rewritten).
+  QHash<QString, QString> importAttachmentBlobs(const QJsonArray& blobs, QStringList* problems);
+  // A string of the attachments feature, in the UI language.
+  QString attText(const char* key) const;
+  void toastAddFailure(const QString& name, int error);
+
   // Reads a vault folder and decides what importing it would do (see
   // heap::notes::planImport); the summary is what import and preview return.
   QVariantMap planNotesImport(const QUrl& folderUrl, QVector<heap::notes::VaultPlanItem>* plan) const;

@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
+import QtQuick.Dialogs
 import TodoCpp
 
 Popup {
@@ -54,6 +55,68 @@ Popup {
         if (somedayBox.checked) parts.push(I18n.t("editor.someday"));
         return parts.join("  ·  ");
     }
+    // The task's files, as chips. An existing task attaches and detaches on
+    // the stored task at once (each its own undo step, like a drag on the
+    // board); a new one keeps them here until Create.
+    property var _attachments: []
+
+    function _refreshAttachments() {
+        if (!root.isNew && root._originalId.length > 0)
+            root._attachments = AppController.taskAttachments(root._originalId);
+    }
+    // File URLs from the picker, a drop or the clipboard.
+    function attachUrls(urls) {
+        if (!urls || urls.length === 0) return 0;
+        const list = [];
+        for (let i = 0; i < urls.length; ++i) list.push(urls[i]);
+        if (!root.isNew && root._originalId.length > 0) {
+            const n = AppController.attachFilesToTask(root._originalId, list);
+            root._refreshAttachments();
+            return n;
+        }
+        const added = AppController.importAttachments(list);
+        const next = root._attachments.slice();
+        for (let j = 0; j < added.length; ++j) {
+            if (!next.some(a => a.id === added[j].id)) next.push(added[j]);
+        }
+        root._attachments = next;
+        return added.length;
+    }
+    function removeAttachment(attachmentId) {
+        if (!root.isNew && root._originalId.length > 0) {
+            AppController.removeTaskAttachment(root._originalId, attachmentId);
+            root._refreshAttachments();
+            return;
+        }
+        root._attachments = root._attachments.filter(a => a.id !== attachmentId);
+    }
+    // Ctrl+V in the description with a file or an image on the clipboard: the
+    // file is stored and linked where the caret is, as markdown. Returns false
+    // when the clipboard holds nothing to attach, so the paste stays a paste.
+    function pasteAttachment(field) {
+        if (!AppController.clipboardHasAttachment()) return false;
+        const added = AppController.importClipboardAttachments();
+        if (added.length === 0) return true;
+        const refs = added.map(a => a.ref).join("\n");
+        field.remove(field.selectionStart, field.selectionEnd);
+        field.insert(field.cursorPosition, refs);
+        return true;
+    }
+
+    // Undo from the toast puts a detached file back on the stored task.
+    Connections {
+        target: AppController.tasks
+        enabled: root.opened && !root.isNew
+        function onDataChanged() { root._refreshAttachments() }
+    }
+
+    FileDialog {
+        id: attachDialog
+        fileMode: FileDialog.OpenFiles
+        title: I18n.t("att.dialog.title")
+        onAccepted: root.attachUrls(selectedFiles)
+    }
+
     // Original id at the moment of opening the editor. Used so that even if
     // the user edits idField, AppController can find and rename the existing
     // row instead of inserting a duplicate.
@@ -163,6 +226,8 @@ Popup {
         estimateField.text = draft.estimateMinutes > 0 ? String(draft.estimateMinutes) : "";
         somedayBox.checked = !!draft.someday;
         recurBox.setRecurrence(draft.recurrence || "");
+        _attachments = isNew ? AppController.describeAttachments(draft.attachments || [])
+                             : AppController.taskAttachments(draft.id || "");
         _error = "";
         discardPrompt.close();
         _baseline = _snapshot();
@@ -185,7 +250,9 @@ Popup {
     function _snapshot() {
         return JSON.stringify([idField.text, titleField.text, descField.text, statusBox.currentIndex,
                                priBox.currentIndex, branchField.text, deadlineField.text, scheduledField.text,
-                               labelsField.text, estimateField.text, somedayBox.checked, recurBox.currentIndex]);
+                               labelsField.text, estimateField.text, somedayBox.checked, recurBox.currentIndex,
+                               // An existing task's files are saved as they are attached.
+                               root.isNew ? root._attachments.map(a => a.id) : []]);
     }
     function isDirty() {
         return root.opened && root._snapshot() !== root._baseline;
@@ -426,6 +493,11 @@ Popup {
             estimateMinutes: parseInt(estimateField.text || "0") || 0,
             someday: somedayBox.checked
         };
+        // A new task's files ride along with the draft; an existing task's
+        // are on it already.
+        if (root.isNew) {
+            d.attachments = root._attachments.map(a => ({ id: a.id, name: a.name, size: a.size, mime: a.mime }));
+        }
         // A task and the meeting it books are one undo step.
         AppController.beginUndoGroup(I18n.t("editor.undo.save").arg(finalId));
         try {
@@ -489,12 +561,30 @@ Popup {
         enabled: root.opened && !discardPrompt.opened
         onActivated: root._save()
     }
+    // Attach files without reaching for the button.
+    Shortcut {
+        sequence: "Ctrl+Shift+A"
+        enabled: root.opened && !discardPrompt.opened
+        onActivated: attachDialog.open()
+    }
 
     background: Rectangle {
         radius: Theme.radiusXl
         color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
+        border.color: fileDrop.containsDrag ? Theme.accent : Theme.borderStrong
+        border.width: fileDrop.containsDrag ? 2 : 1
+        // Files dropped anywhere on the editor are attached to the task.
+        DropArea {
+            id: fileDrop
+            objectName: "te-file-drop"
+            anchors.fill: parent
+            keys: ["text/uri-list"]
+            onEntered: (drag) => { drag.accepted = drag.hasUrls; }
+            onDropped: (drop) => {
+                if (!drop.hasUrls) return;
+                if (root.attachUrls(drop.urls) > 0) drop.accept(Qt.CopyAction);
+            }
+        }
     }
 
     // What the dialog is for comes first — title, status, priority, when it
@@ -651,6 +741,7 @@ Popup {
                 // ── Title ──
                 TextField {
                     id: titleField
+                    objectName: "te-title"
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     placeholderText: I18n.t("editor.ph.titleShort")
@@ -876,6 +967,10 @@ Popup {
                             // list line Tab / Shift+Tab indent and outdent the
                             // item, and Ctrl+Tab always inserts indentation.
                             Keys.onPressed: (event) => {
+                                if (event.matches(StandardKey.Paste) && root.pasteAttachment(descField)) {
+                                    event.accepted = true;
+                                    return;
+                                }
                                 if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
                                 const back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier);
                                 if (event.modifiers & Qt.ControlModifier) {
@@ -910,6 +1005,47 @@ Popup {
                             document: descDocument
                             editorDocument: descField.textDocument
                         }
+                    }
+                }
+
+                // ── Attachments ──
+                ColumnLayout {
+                    objectName: "te-attachments"
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    spacing: Theme.spSm
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spSm
+                        FieldLabel {
+                            text: I18n.t("att.label").toUpperCase()
+                                  + (root._attachments.length > 0 ? "  " + root._attachments.length : "")
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            visible: root._attachments.length === 0
+                            text: I18n.t("att.hint.task")
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsXs
+                            elide: Text.ElideRight
+                        }
+                        Item { Layout.fillWidth: root._attachments.length > 0 }
+                        PillButton {
+                            objectName: "te-attach"
+                            text: "📎  " + I18n.t("att.button")
+                            onClicked: attachDialog.open()
+                            ToolTip.visible: hovered
+                            ToolTip.delay: 400
+                            ToolTip.text: I18n.t("att.button.tip")
+                        }
+                    }
+                    AttachmentChips {
+                        id: attachmentChips
+                        objectName: "te-attachment-chips"
+                        visible: root._attachments.length > 0
+                        Layout.fillWidth: true
+                        model: root._attachments
+                        onRemoveRequested: (attachmentId) => root.removeAttachment(attachmentId)
                     }
                 }
 
@@ -1419,6 +1555,8 @@ Popup {
         id: descDocument
         text: descField.text
         allowRemoteImages: false
+        // An image pasted into the description lives in the attachments folder.
+        imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
     }
 

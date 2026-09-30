@@ -38,6 +38,7 @@
 #include "query/TaskQuery.h"
 #include "recur/RecurrenceEngine.h"
 #include "storage/AsyncSaver.h"
+#include "storage/Attachments.h"
 #include "storage/StateIO.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
@@ -2115,6 +2116,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   t.estimateMinutes = draft.value("estimateMinutes").toInt();
   t.someday = draft.value("someday").toBool();
   t.labels = labelsFromVariant(draft.value("labels").toList());
+  t.attachments = heap::attachments::fromVariantList(draft.value("attachments").toList());
   // Every card needs something to show; an edit that blanks the title used to
   // leave a card with nothing on it.
   if(t.title.trimmed().isEmpty()) {
@@ -2204,6 +2206,12 @@ bool AppController::saveTask(const QVariantMap& draft) {
       }
       if(!draft.contains("someday")) {
         t.someday = prev.someday;
+      }
+      // The editor attaches and detaches files on the stored task directly
+      // (each its own undo step), so a save that does not carry the list
+      // keeps what the task has.
+      if(!draft.contains("attachments")) {
+        t.attachments = prev.attachments;
       }
       // The editor shows neither the card's place in its column nor its
       // dependency links. Both used to be reset by any save — the card jumped
@@ -3131,6 +3139,7 @@ QVariantMap AppController::planNotesImport(const QUrl& folderUrl, QVector<heap::
   int skipped = 0;
   QVector<heap::notes::VaultSource> sources;
   sources.reserve(relatives.size());
+  int attachmentCount = 0;
   for(const QString& rel : relatives) {
     QFile f(root.filePath(rel));
     if(f.size() > heap::notes::kMaxVaultFileBytes) {
@@ -3146,12 +3155,20 @@ QVariantMap AppController::planNotesImport(const QUrl& folderUrl, QVector<heap::
     const QByteArray bytes = f.readAll();
     f.close();
     bool binary = false;
-    const QString text = heap::notes::decodeVaultBytes(bytes, &binary);
+    QString text = heap::notes::decodeVaultBytes(bytes, &binary);
     if(binary) {
       skipped++;
       warnings << tr_("notes.vault.binary").arg(rel);
       continue;
     }
+    // Files the note links (images, PDFs) come in as attachments and the link
+    // is rewritten to point at the stored copy. A preview only hashes them.
+    const heap::attachments::Store attachmentStore(attachmentsDir());
+    const heap::attachments::VaultRefResult refs = heap::attachments::importVaultRefs(
+        text, root, rel, plan != nullptr ? &attachmentStore : nullptr, m_language == QStringLiteral("ru"));
+    text = refs.text;
+    attachmentCount += static_cast<int>(refs.attachments.size());
+    warnings << refs.warnings;
     sources.append({rel, text});
   }
 
@@ -3193,6 +3210,7 @@ QVariantMap AppController::planNotesImport(const QUrl& folderUrl, QVector<heap::
   out["skipped"] = skipped;
   out["files"] = static_cast<int>(relatives.size());
   out["warnings"] = warnings;
+  out["attachments"] = attachmentCount;
   return out;
 }
 
@@ -3339,8 +3357,37 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
     scheduleSave();
   }
 
+  // The files the exported notes link, into attachments/ next to them. The
+  // links already say "attachments/<id>", so the folder reads the same in
+  // heap, in another editor and when it is imported back.
+  int files = 0;
+  {
+    const heap::attachments::Store store(attachmentsDir());
+    QStringList ids;
+    for(const Note& n : m_notes.items()) {
+      if(pathOf.contains(n.id)) {
+        for(const QString& id : heap::attachments::refsIn(n.body)) {
+          if(!ids.contains(id)) {
+            ids << id;
+          }
+        }
+      }
+    }
+    if(!ids.isEmpty() && root.mkpath(QStringLiteral("attachments"))) {
+      for(const QString& id : ids) {
+        const QString dest = root.filePath(QStringLiteral("attachments/") + id);
+        if(store.contains(id) && QFile::copy(store.pathFor(id), dest)) {
+          // The store keeps its files read-only; the copy is the user's.
+          QFile::setPermissions(dest, QFile::permissions(dest) | QFile::WriteOwner);
+          files++;
+        }
+      }
+    }
+  }
+
   out["written"] = written;
   out["skipped"] = skipped;
+  out["attachments"] = files;
   out["folder"] = QDir::toNativeSeparators(root.absolutePath());
   return out;
 }
@@ -9071,6 +9118,24 @@ QString AppController::exportActiveProfileJson() const {
   root["kind"] = "todocpp.profile";
   root["exportedAt"] = QDateTime::currentDateTime().toString(Qt::ISODate);
   root["profile"] = profObj;
+  // The files the profile's tasks and notes use, so the export stands on its
+  // own on another machine. Next to "profile", not in it: they are not part
+  // of the profile's state. Past the cap the export still carries every task
+  // and note, and says what it left out.
+  qint64 omittedBytes = 0;
+  int omittedCount = 0;
+  const QJsonArray files = attachmentsForExport(p, &omittedBytes, &omittedCount);
+  if(!files.isEmpty()) {
+    root["attachments"] = files;
+  }
+  if(omittedCount > 0) {
+    root["attachmentsOmitted"] = omittedCount;
+    emit self->toast(
+        attText("export.omitted")
+            .arg(omittedCount)
+            .arg(formatBytes(static_cast<double>(omittedBytes)), formatBytes(static_cast<double>(heap::attachments::kMaxExportBytes))),
+        QStringLiteral("warning"));
+  }
   return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Indented));
 }
 
@@ -9118,6 +9183,13 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
 
   QVector<CalEvent> importedEvents;
   Profile imported = heap::state::profileFromJson(profileObj, &importedEvents);
+  // The export's files go into the store first. One whose bytes do not match
+  // its id is stored under the right id and every reference follows it.
+  QStringList attachmentProblems;
+  heap::attachments::remapProfile(imported, importAttachmentBlobs(root.value("attachments").toArray(), &attachmentProblems));
+  if(!attachmentProblems.isEmpty()) {
+    emit toast(attText("import.problems").arg(attachmentProblems.join(QStringLiteral("; "))), QStringLiteral("warning"));
+  }
   if(imported.name.trimmed().isEmpty()) {
     imported.name = QStringLiteral("Imported");
   }

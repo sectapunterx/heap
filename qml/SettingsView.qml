@@ -2838,6 +2838,56 @@ Item {
                     }
                 }
             }
+            // Attached files nothing links any more. Counted when the section
+            // opens and after a cleanup; deleting asks first (the button arms,
+            // the second press deletes) and says how much it frees.
+            SectionCard {
+                objectName: "settings-attachments-cleanup"
+                ColumnLayout {
+                    id: attCleanup
+                    spacing: Theme.spXl
+                    Layout.fillWidth: true
+                    property var unused: ({ count: 0, bytes: 0, sizeText: "" })
+                    property bool armed: false
+                    function refresh() { attCleanup.unused = AppController.unusedAttachments(); attCleanup.armed = false; }
+                    Component.onCompleted: attCleanup.refresh()
+                    Sub {
+                        label: I18n.t("att.cleanup.title")
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spXl
+                        Text {
+                            objectName: "att-cleanup-hint"
+                            Layout.fillWidth: true
+                            text: attCleanup.unused.count > 0
+                                  ? I18n.t("att.cleanup.hint").arg(attCleanup.unused.count).arg(attCleanup.unused.sizeText)
+                                  : I18n.t("att.cleanup.none")
+                            color: Theme.textMuted
+                            font.pixelSize: Theme.fsSm
+                            wrapMode: Text.WordWrap
+                        }
+                        PillButton {
+                            objectName: "att-cleanup-button"
+                            visible: attCleanup.unused.count > 0
+                            danger: attCleanup.armed
+                            text: attCleanup.armed ? I18n.t("att.cleanup.confirm").arg(attCleanup.unused.sizeText)
+                                                   : I18n.t("att.cleanup.button")
+                            onClicked: {
+                                if (!attCleanup.armed) {
+                                    attCleanup.armed = true;
+                                    attCleanupDisarm.restart();
+                                    return;
+                                }
+                                attCleanupDisarm.stop();
+                                AppController.cleanUpUnusedAttachments();
+                                attCleanup.refresh();
+                            }
+                            Timer { id: attCleanupDisarm; interval: 3500; onTriggered: attCleanup.armed = false }
+                        }
+                    }
+                }
+            }
             SectionCard {
                 ColumnLayout {
                     spacing: Theme.spXl

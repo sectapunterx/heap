@@ -85,6 +85,13 @@ ListView {
                 return;
             }
         }
+        // A file attached to the note or task: opened from the attachments
+        // folder, under the same rules as its chip.
+        const att = /^attachments\/([0-9a-f]{32}(?:\.[a-z0-9]{1,12})?)$/.exec(link);
+        if (att) {
+            attOpener.open(att[1], att[1]);
+            return;
+        }
         view.openExternal(link);
     }
 
@@ -95,6 +102,8 @@ ListView {
     }
 
     LinkConfirmDialog { id: linkConfirm }
+    // Holds the "open this file?" dialog for attachment links.
+    AttachmentChips { id: attOpener; visible: false; model: []; removable: false }
 
     // Colour for a callout kind. Unknown kinds fall back to the accent, so a
     // note using "[!SOMETHING]" still renders as a callout rather than losing

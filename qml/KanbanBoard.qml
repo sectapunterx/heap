@@ -841,6 +841,7 @@ Item {
                                             required property bool   scheduledHasTime
                                             required property var    ticket
                                             required property string searchText
+                                            required property int    attachmentCount
                                             width: bodyFlick.width
                                             // A pooled card waits, culled but still
                                             // a child of the list, until a row needs
@@ -874,7 +875,7 @@ Item {
                                                 labels: tc.labels, dueAt: tc.dueAt, dueHasTime: tc.dueHasTime,
                                                 scheduledAt: tc.scheduledAt, scheduledHasTime: tc.scheduledHasTime,
                                                 ticket: tc.ticket, searchText: tc.searchText,
-                                                checklist: tc.checklist
+                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount
                                             })
                                             // Which card a bare "O" acts on when
                                             // nothing is selected.
@@ -952,7 +953,13 @@ Item {
                                     colDrop.indicatorY = slot.y;
                                 }
 
-                                onEntered: (drag) => { col.dragOver = true; _update(drag); }
+                                // Files from a file manager are for the card
+                                // under the pointer (TaskCard attaches them),
+                                // not a move: let them through.
+                                onEntered: (drag) => {
+                                    if (drag.hasUrls && !(drag.source && drag.source.taskId)) { drag.accepted = false; return; }
+                                    col.dragOver = true; _update(drag);
+                                }
                                 onPositionChanged: (drag) => _update(drag)
                                 onExited: col.dragOver = false
                                 onDropped: (drop) => {
