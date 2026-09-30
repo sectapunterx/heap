@@ -644,9 +644,24 @@ Item {
                                             required property var    ticket
                                             required property string searchText
                                             width: bodyFlick.width
-                                            // A recycled card must not carry the
-                                            // menu it opened for another task.
-                                            ListView.onPooled: tc.releaseMenu()
+                                            // A pooled card waits, culled but still
+                                            // a child of the list, until a row needs
+                                            // it: hide it so it is not taken for a
+                                            // card on the board (hover, focus, the
+                                            // tree walks in tests), and drop the menu
+                                            // it opened for another task.
+                                            ListView.onPooled: {
+                                                tc.releaseMenu();
+                                                tc.visible = false;
+                                            }
+                                            ListView.onReused: tc.visible = true
+                                            // A card dropped into another column
+                                            // leaves this one while it is still
+                                            // lifted into the drag layer. Hold its
+                                            // removal until the drag lets go, or the
+                                            // pool would hand a card parented to the
+                                            // drag layer to another row.
+                                            ListView.delayRemove: tc.Drag.active
 
                                             readonly property var taskData: ({
                                                 id: tc.id, title: tc.title, desc: tc.desc,
