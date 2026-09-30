@@ -961,7 +961,7 @@ QtObject {
             // Data section
             "settings.data.backups": "Backups",
             "settings.data.autoBackup": "Auto backup",
-            "settings.data.autoBackup.hint": "Save snapshots of state.json to <AppData>/backups (every 5 min, up to 20 copies).",
+            "settings.data.autoBackup.hint": "Copy state.json into the backups folder next to it at the interval below; the newest 20 copies are kept, and one is always taken before a restore.",
             "settings.data.interval": "Interval",
             "settings.data.interval.hourly": "Every hour",
             "settings.data.interval.daily": "Every day",
@@ -976,7 +976,7 @@ QtObject {
             "settings.data.importJson": "↑ Import from JSON",
             "settings.data.danger": "Danger zone",
             "settings.data.reset": "Reset all settings",
-            "settings.data.reset.hint": "Roll back to defaults. Profiles, tasks and notes are preserved.",
+            "settings.data.reset.hint": "Appearance (back to Minimal dark, soft), notifications, calendar, tasks, backups, updates and git rules go back to defaults. Kept: profiles, tasks, notes, your profile card, tracker connections, watched repositories, your own themes and the window layout. Undo from the toast.",
             "settings.data.resetButton": "Reset all",
             "settings.data.wipe": "Delete all data",
             "settings.data.wipe.hint": "Erase every profile, task, note, doc and backup on this device and restart as a fresh install — with the welcome guide and example data. This cannot be undone.",
@@ -1001,6 +1001,8 @@ QtObject {
             "update.download": "Download",
 
             // ── audit-plat: begin ──
+            "storage.retry": "Retry",
+            "storage.openFolder": "Open data folder",
             // ── audit-plat: end ──
             // ── audit-tasks: begin ──
             // ── audit-tasks: end ──
@@ -1946,7 +1948,7 @@ QtObject {
 
             "settings.data.backups": "Резервные копии",
             "settings.data.autoBackup": "Авто-бэкап",
-            "settings.data.autoBackup.hint": "Сохранять снапшоты state.json в <AppData>/backups (раз в 5 минут, до 20 копий).",
+            "settings.data.autoBackup.hint": "Копировать state.json в папку backups рядом с ним с интервалом ниже; хранятся 20 последних копий, и одна всегда делается перед восстановлением.",
             "settings.data.interval": "Интервал",
             "settings.data.interval.hourly": "Каждый час",
             "settings.data.interval.daily": "Каждый день",
@@ -1961,7 +1963,7 @@ QtObject {
             "settings.data.importJson": "↑ Импорт из JSON",
             "settings.data.danger": "Опасная зона",
             "settings.data.reset": "Сбросить все настройки",
-            "settings.data.reset.hint": "Откатить к значениям по умолчанию. Профили, задачи и заметки останутся.",
+            "settings.data.reset.hint": "Оформление (обратно Minimal dark, мягкий контраст), уведомления, календарь, задачи, бэкапы, обновления и правила git — к значениям по умолчанию. Остаются: профили, задачи, заметки, карточка профиля, подключения трекеров, отслеживаемые репозитории, свои темы и раскладка окна. Отменить — из тоста.",
             "settings.data.resetButton": "Сбросить всё",
             "settings.data.wipe": "Удалить все данные",
             "settings.data.wipe.hint": "Стереть все профили, задачи, заметки, документы и резервные копии на этом устройстве и запустить приложение как при первой установке — с приветствием и примерами. Отменить нельзя.",
@@ -1985,6 +1987,8 @@ QtObject {
             "update.download": "Скачать",
 
             // ── audit-plat: begin ──
+            "storage.retry": "Повторить",
+            "storage.openFolder": "Открыть папку данных",
             // ── audit-plat: end ──
             // ── audit-tasks: begin ──
             // ── audit-tasks: end ──

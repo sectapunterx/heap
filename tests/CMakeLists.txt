@@ -298,6 +298,9 @@ heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 
 # ── audit-plat: begin ──
+# Storage safety (locked/damaged/newer state.json, failed saves, restore),
+# profile-scoped undo and task ids, automation across profiles, worktrees.
+heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
 # ── audit-plat: end ──
 # ── audit-tasks: begin ──
 # ── audit-tasks: end ──

@@ -7,6 +7,7 @@
 
 #include <QDate>
 #include <QHash>
+#include <QJsonObject>
 #include <QMap>
 #include <QObject>
 #include <qqmlregistration.h>
@@ -20,7 +21,6 @@
 #include <memory>
 #include <vector>
 
-class QJsonObject;
 class QNetworkAccessManager;
 
 namespace heap::chrono {
@@ -42,6 +42,11 @@ class GlobalHotkey;
 namespace heap::update {
 class Updater;
 }
+
+namespace heap::storage {
+class AsyncSaver;
+struct SaveOutcome;
+}  // namespace heap::storage
 
 namespace heap::integrations {
 class IntegrationProvider;
@@ -133,11 +138,31 @@ class AppController : public QObject {
   Q_PROPERTY(QVariantMap focusedRepoState READ focusedRepoState NOTIFY focusedGitChanged)
   Q_PROPERTY(bool focusedBannerDismissed READ focusedBannerDismissed NOTIFY focusedGitChanged)
 
+  // ---- Storage health (PLAT-1/4/5) ----
+  // "ok", "unreadable" (state.json exists but could not be opened: read-only
+  // session, never saved over), "tooNew" (written by a newer heap: read-only),
+  // or "writeFailed" (the last save did not reach disk; retried with backoff).
+  // storageMessage is the localized banner text, reason included.
+  Q_PROPERTY(QString storageState READ storageState NOTIFY storageStateChanged)
+  Q_PROPERTY(QString storageMessage READ storageMessage NOTIFY storageStateChanged)
+
  public:
   explicit AppController(QObject* parent = nullptr);
   ~AppController() override;
 
   Q_INVOKABLE void flushSave();
+
+  QString storageState() const {
+    return m_storageState;
+  }
+
+  QString storageMessage() const {
+    return m_storageMessage;
+  }
+
+  // The banner's Retry: re-reads an unreadable state.json (and loads it), or
+  // writes a failed save again now.
+  Q_INVOKABLE void retryStorage();
 
   TaskModel* tasks() {
     return &m_tasks;
@@ -372,6 +397,13 @@ class AppController : public QObject {
   // on-disk state.json + backups — and re-seed the Example profile with the
   // first-run onboarding, so the app is exactly "as new" on this device.
   Q_INVOKABLE void resetToFirstRun();
+  // Settings -> Data -> "Reset all settings" (UX-5): preferences go back to a
+  // new install's (Minimal dark + soft contrast included). Kept: the profile
+  // card, tracker connections, watched repositories, your own themes, window
+  // and panel layout, and anything the Settings page does not own. Undoable
+  // through undoSettingsReset() for as long as the toast offers it.
+  Q_INVOKABLE void resetSettingsToDefaults();
+  Q_INVOKABLE void undoSettingsReset();
   // Re-open the welcome guide on demand (Settings → Help "Replay"). Purely a UI
   // request — it does NOT touch welcomeSeen/demoActive or any persisted state.
   Q_INVOKABLE void replayWelcome();
@@ -876,6 +908,7 @@ class AppController : public QObject {
   Q_INVOKABLE void createBranchForTask(const QString& taskId);
 
  signals:
+  void storageStateChanged();
   void selectedDateChanged();
   void themeChanged();
   void densityChanged();
@@ -901,6 +934,8 @@ class AppController : public QObject {
   // Emitted after resetToFirstRun() rebuilds a fresh install — Main.qml re-opens
   // the Welcome dialog and surfaces a confirmation toast.
   void firstRunReset();
+  // "Reset all settings" went through; `message` is the toast text.
+  void settingsReset(const QString& message);
   // Emitted by replayWelcome() — Main.qml re-opens the Welcome guide from step 0
   // without changing any persisted onboarding flags.
   void welcomeReplayRequested();
@@ -1056,6 +1091,8 @@ class AppController : public QObject {
   std::unique_ptr<heap::notify::NotificationCenter> m_notifier;
   void onNotifierAction(const QString& notificationId, const QString& actionId);
   void onNotifierActivated(const QString& notificationId);
+  // A reminder can be for a task in another profile; opening it switches there.
+  void activateProfileOfTask(const QString& taskId);
   QSet<QString> m_blockedStuckIds;
   QMap<QString, QDate> m_lastReminderDay;  // task/sentinel id -> last day notified
   QVariantMap settingsMap() const;
@@ -1073,6 +1110,10 @@ class AppController : public QObject {
   void scheduleSave();
   void saveStateNow();
   void loadStateOnStart();
+  // Everything after the bytes are known to be a state document: the schema
+  // ladder, settings, profiles, events. `viewOnly` loads a backup for display
+  // in a read-only session (no pre-migration copy, no recovery records).
+  void loadStateDocument(QJsonObject root, bool viewOnly);
   QString stateFilePath() const;
   QString backupDirPath() const;
   void rotateBackupIfDue();
@@ -1083,7 +1124,10 @@ class AppController : public QObject {
   // that still parses (returns its object + path), and move a damaged
   // state.json aside so a fresh seed can never silently overwrite it.
   bool recoverFromNewestBackup(QJsonObject& out, QString& fromPath);
-  void quarantineCorruptState(const QString& path);
+  // Moves (or, when a lock forbids the rename, copies `bytes` to) a damaged
+  // state.json aside. Returns the quarantine file name, empty on failure — in
+  // which case nothing may be written over the original.
+  QString quarantineCorruptState(const QString& path, const QByteArray& bytes);
   // Copies the pre-migration state.json into the backup dir before the schema
   // ladder rewrites it. Exempt from retention pruning: it is the only pre-v4
   // image of the user's data.
@@ -1093,6 +1137,41 @@ class AppController : public QObject {
   // path is a no-op while it is true: this build cannot represent the fields it
   // did not parse, so writing would drop them.
   bool m_saveBlocked = false;
+
+  // ---- Storage health + background save (PLAT-1/4/5/23) ----
+  QString m_storageState = QStringLiteral("ok");
+  QString m_storageMessage;
+  void setStorageState(const QString& state, const QString& message);
+  // state.json exists but could not be read: show the newest backup (or an
+  // empty workspace) read-only and never write over the file.
+  void enterUnreadableMode(const QString& error);
+  // Drops every profile and re-reads state.json (restore, retry after a lock).
+  void reloadStateFromDisk();
+  // Whether an edit was made while saving was blocked (it will not persist).
+  bool m_editsWhileBlocked = false;
+  std::unique_ptr<heap::storage::AsyncSaver> m_saver;
+  quint64 m_saveGeneration = 0;
+  QTimer* m_saveRetryTimer = nullptr;
+  QTimer* m_storageRetryTimer = nullptr;
+  int m_saveRetryStep = 0;
+  void onSaveFinished(const heap::storage::SaveOutcome& outcome);
+  bool backupDueNow(const QDateTime& now);
+  // Copies state.json into backups/ now (regardless of the rotation interval).
+  // Returns the copy's file name, empty on failure.
+  QString snapshotStateToBackups(const QString& tag = QString());
+  // Unknown keys read from disk at the same schema version, written back
+  // untouched (PLAT-26): the document root and settings.
+  QJsonObject m_rootExtra;
+  QJsonObject m_settingsExtra;
+  // Next number to mint per task id prefix, across every profile (TASKS-1/31).
+  QHash<QString, int> m_taskSeq;
+  // What resetSettingsToDefaults() replaced, for its Undo.
+  QString m_settingsBeforeReset;
+  // The id newTaskDraft & co. hand out for `stem`: past the persisted counter
+  // and past every id any profile holds under it.
+  QString mintTaskId(const QString& stem) const;
+  // Records that `id` was taken, so it is never handed out again.
+  void noteTaskIdUsed(const QString& id);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;

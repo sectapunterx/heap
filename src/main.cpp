@@ -1,12 +1,19 @@
+#include "AppController.h"
 #include "Logger.h"
+#include "ViewNames.h"
 
 #include "platform/Paths.h"
+#include "platform/SingleInstance.h"
+#include "storage/StateIO.h"
 
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDir>
+#include <QFile>
 #include <QIcon>
 #include <QImageReader>
+#include <QMessageBox>
 #include <QQmlApplicationEngine>
 #include <QQmlContext>
 #include <QQmlError>
@@ -17,6 +24,7 @@
 #include <QTimer>
 
 #include <csignal>
+#include <cstdlib>
 
 #ifdef Q_OS_MACOS
 #include "platform/MacWindow.h"
@@ -37,17 +45,27 @@ void quitOnSignal(int) {
 struct CliOptions {
   QString initialView;
   QString dataDir;
+  bool dataDirSet = false;
   bool smoke = false;
 };
+
+// Exit code for a command line heap cannot act on (the usual "usage" code).
+constexpr int kUsageExit = 2;
 
 // How long --smoke lets the UI settle before judging it: long enough for the
 // deferred loaders and the first frame, short enough for a CI step.
 constexpr int kSmokeSettleMs = 2000;
 
-// Parses heap's own options. Deliberately uses parse() rather than process():
-// unknown arguments are reported and then ignored, so Qt's own platform
-// switches (and anything a launcher appends) keep working as they did before
-// heap had a parser at all. --help and --version exit here.
+[[noreturn]] void usageError(const QCommandLineParser& parser, const QString& message) {
+  fputs(qPrintable(QStringLiteral("heap: %1\n\n").arg(message) + parser.helpText()), stderr);
+  std::exit(kUsageExit);
+}
+
+// Parses heap's own options. Qt's own switches (-platform, -style, ...) are
+// consumed by QApplication before this sees the list. Anything else heap does
+// not know is an error with the usage text and a non-zero exit (REL-2): a
+// typo'd flag that silently started the GUI looked as if it had worked.
+// --help and --version exit here.
 CliOptions parseCommandLine(const QStringList& args) {
   QCommandLineParser parser;
   // ASCII only: this is printed straight to a console whose code page is not
@@ -56,9 +74,10 @@ CliOptions parseCommandLine(const QStringList& args) {
   const QCommandLineOption helpOption = parser.addHelpOption();
   const QCommandLineOption versionOption = parser.addVersionOption();
 
-  const QCommandLineOption viewOption(QStringLiteral("view"),
-                                      QStringLiteral("Open <name> instead of the last used view (kanban, week, notes, ...)."),
-                                      QStringLiteral("name"));
+  const QCommandLineOption viewOption(
+      QStringLiteral("view"),
+      QStringLiteral("Open <name> instead of the last used view: %1.").arg(heap::views::all().join(QStringLiteral(", "))),
+      QStringLiteral("name"));
   parser.addOption(viewOption);
 
   const QCommandLineOption dataDirOption(QStringLiteral("data-dir"),
@@ -69,16 +88,19 @@ CliOptions parseCommandLine(const QStringList& args) {
 
   const QCommandLineOption smokeOption(
       QStringLiteral("smoke"),
-      QStringLiteral("Load the whole UI against a throwaway profile, report any QML error, missing plugin or "
-                     "image format, and exit: 0 when healthy. Used to check a packaged build."));
+      QStringLiteral("Load the whole UI against a throwaway profile (a copy of --data-dir's state.json, if given), "
+                     "report any QML error, missing plugin or image format, and exit: 0 when healthy. Used to "
+                     "check a packaged build."));
   parser.addOption(smokeOption);
 
-  if(!parser.parse(args)) {
-    fputs(qPrintable(parser.errorText() + QLatin1Char('\n')), stderr);
+  // A macOS Finder launch may still append -psn_<n>_<m>; it is not the user's.
+  QStringList filtered;
+  for(const QString& a : args) {
+    if(!a.startsWith(QLatin1String("-psn_"))) {
+      filtered << a;
+    }
   }
-  for(const QString& unknown : parser.unknownOptionNames()) {
-    fputs(qPrintable(QStringLiteral("heap: ignoring unknown option --%1\n").arg(unknown)), stderr);
-  }
+  const bool parsed = parser.parse(filtered);
 
   // showHelp/showVersion terminate the process, so these come after parsing.
   if(parser.isSet(helpOption)) {
@@ -87,11 +109,24 @@ CliOptions parseCommandLine(const QStringList& args) {
   if(parser.isSet(versionOption)) {
     parser.showVersion();
   }
+  if(!parsed) {
+    usageError(parser, parser.errorText());
+  }
 
   CliOptions opts;
   opts.initialView = parser.value(viewOption);
+  opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  if(parser.isSet(viewOption) && !heap::views::isKnown(opts.initialView)) {
+    usageError(parser,
+               QStringLiteral("unknown view '%1' (valid: %2)").arg(opts.initialView, heap::views::all().join(QStringLiteral(", "))));
+  }
+  // `--data-dir ""` (an unset shell variable) must never mean "the real
+  // profile" — keeping a run away from it is what the flag is for (PLAT-22).
+  if(opts.dataDirSet && opts.dataDir.trimmed().isEmpty()) {
+    usageError(parser, QStringLiteral("--data-dir needs a directory"));
+  }
   return opts;
 }
 
@@ -123,6 +158,20 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
   qInfo("smoke: %s (%lld problem(s))", problems.isEmpty() ? "OK" : "FAILED", static_cast<long long>(problems.size()));
   return problems.isEmpty() ? 0 : 1;
 }
+
+// Closes heap.log when it goes out of scope. Declared between the smoke temp
+// dir and the QML engine, so it runs after the engine (and AppController's
+// final save) and before the temp dir is removed: an open log is what used to
+// keep every --smoke run's %TEMP%\heap-XXXXXX behind (PLAT-16).
+struct LogCloser {
+  bool enabled = false;
+
+  ~LogCloser() {
+    if(enabled) {
+      heap::logging::closeFileLogger();
+    }
+  }
+};
 }  // namespace
 
 int main(int argc, char* argv[]) {
@@ -139,17 +188,57 @@ int main(int argc, char* argv[]) {
   // Redirect the data directory before the logger opens its file and before
   // AppController resolves state.json. The flag wins over the environment so a
   // single run can override a shell-wide HEAP_DATA_DIR. --smoke never touches a
-  // real profile: without --data-dir it gets a temporary one, removed on exit.
+  // real profile: it always runs in a temporary one, removed on exit. With
+  // --data-dir, that profile's state.json is copied in first, so the smoke
+  // test loads real data without migrating or rewriting it (PLAT-16).
   const QTemporaryDir smokeDataDir;
-  QString dataDir = cli.dataDir.isEmpty() ? qEnvironmentVariable("HEAP_DATA_DIR") : cli.dataDir;
-  if(cli.smoke && cli.dataDir.isEmpty()) {
+  QString dataDir = cli.dataDirSet ? cli.dataDir : qEnvironmentVariable("HEAP_DATA_DIR");
+  if(cli.smoke) {
+    const QString source = dataDir;
     dataDir = smokeDataDir.path();
+    if(!source.isEmpty()) {
+      QFile::copy(QDir(source).filePath(QStringLiteral("state.json")), QDir(dataDir).filePath(QStringLiteral("state.json")));
+    }
   }
   heap::paths::setDataDir(dataDir);
+
+  // Say it on the console too: a GUI that cannot save is otherwise only a
+  // banner, and nobody scripting heap reads that (PLAT-4).
+  {
+    QString why;
+    if(!heap::storage::probeWritableDir(heap::paths::dataDir(), &why)) {
+      fputs(qPrintable(QStringLiteral("heap: data directory is not writable, nothing will be saved: %1\n").arg(why)), stderr);
+    }
+  }
+
+  // One heap per data directory (PLAT-2): a second launch brings the running
+  // window forward (switching view if --view was given) and exits.
+  heap::platform::SingleInstance instance(heap::paths::dataDir());
+  if(!cli.smoke) {
+    QByteArray hello = "activate";
+    if(!cli.initialView.isEmpty()) {
+      hello += " view=" + cli.initialView.toUtf8();
+    }
+    switch(instance.acquire(hello)) {
+      case heap::platform::SingleInstance::Result::Primary:
+        break;
+      case heap::platform::SingleInstance::Result::Forwarded:
+        return 0;
+      case heap::platform::SingleInstance::Result::Busy:
+        fputs("heap: another heap is using this data directory and is not responding\n", stderr);
+        QMessageBox::warning(nullptr,
+                             QStringLiteral("heap"),
+                             QStringLiteral("heap is already running with this data folder, but it is not responding:\n%1\n\n"
+                                            "Close it (or end it in the task manager) and start heap again.")
+                                 .arg(QDir::toNativeSeparators(heap::paths::dataDir())));
+        return 1;
+    }
+  }
 
   // Route qDebug/qWarning/… to a rotating log file (must come after the
   // org/app names are set so AppDataLocation resolves to the heap folder).
   heap::logging::installFileLogger();
+  LogCloser logCloser{cli.smoke};
   qInfo("heap %s starting", qUtf8Printable(app.applicationVersion()));
   if(heap::paths::dataDirOverridden()) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));
@@ -186,6 +275,22 @@ int main(int argc, char* argv[]) {
     }
   }
 #endif
+
+  // A second launch forwarded here: bring the window forward, the same way
+  // the tray's "Show" does (it also restores a window hidden to the tray).
+  QObject::connect(&instance, &heap::platform::SingleInstance::messageReceived, &app, [&engine](const QByteArray& message) {
+    const QList<QObject*> roots = engine.rootObjects();
+    if(roots.isEmpty()) {
+      return;
+    }
+    const qsizetype at = message.indexOf("view=");
+    if(at >= 0) {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        controller->setCurrentView(QString::fromUtf8(message.mid(at + 5)).trimmed());
+      }
+    }
+    QMetaObject::invokeMethod(roots.constFirst(), "_summon");
+  });
 
   if(cli.smoke) {
     QTimer::singleShot(kSmokeSettleMs, &app, [&engine, &smokeWarnings]() {

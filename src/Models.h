@@ -5,6 +5,7 @@
 #include <QDate>
 #include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <qqmlregistration.h>
 #include <QSet>
 #include <QSortFilterProxyModel>
@@ -245,6 +246,9 @@ struct Profile {
   QString activeNoteId;
   QVector<DocPage> docPages;
   QString activeDocPageId;
+  // Keys of the profile object this build does not read, carried through a
+  // save untouched (PLAT-26). Only filled for a document at the current schema.
+  QJsonObject extra;
 };
 
 // Notes, without their bodies.

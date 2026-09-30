@@ -22,6 +22,8 @@ inline constexpr auto kWriteFailed = "write-failed";     // a save could not be 
 inline constexpr auto kMigrated = "migrated";            // the schema ladder upgraded the file
 inline constexpr auto kPreMigration = "premigration";    // a pre-migration copy was retained
 inline constexpr auto kSchemaTooNew = "schema-too-new";  // written by a newer build; saving disabled
+inline constexpr auto kUnreadable = "unreadable";        // state.json could not be opened; read-only session
+inline constexpr auto kQuarantineFailed = "quarantine-failed";  // damaged, and could not be set aside
 
 QString recoveryLogPath();
 

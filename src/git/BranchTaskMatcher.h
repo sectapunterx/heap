@@ -37,6 +37,11 @@ class BranchTaskMatcher {
 
   static QString branchFromHeadText(QStringView headFileContents);
   static QString resolveGitDir(const QString& repoPath);
+  // The shared git dir behind `gitDir`: a linked worktree's private dir
+  // (.git/worktrees/<name>) holds only HEAD and index and names the main
+  // repository's .git in its `commondir` file; branches, packed-refs and the
+  // config are read from there. Returns `gitDir` itself for a plain clone.
+  static QString resolveCommonDir(const QString& gitDir);
 
   // Slug for a branch name: lowercased, non-alphanumerics collapsed to single
   // '-', trimmed of leading/trailing '-', capped to a sane length.
