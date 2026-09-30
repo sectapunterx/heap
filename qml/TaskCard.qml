@@ -258,9 +258,15 @@ Rectangle {
                 QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip")
                                   : (card._ticket.queued ? I18n.t("taskcard.queued.tip") : I18n.t("taskcard.unsynced.tip"))
                 HoverHandler { id: syncStateHover }
-                TapHandler {
+                // The retry had no keyboard path: the card menu does not
+                // offer it (design audit DES-19). The HoverHandler above keeps
+                // the tooltip, which also shows for a card that is gone.
+                ClickArea {
+                    objectName: "tc-retry-push"
                     enabled: !!card._ticket.unsynced && !card._ticket.gone
-                    onTapped: AppController.retryTrackerPush(card.task.id)
+                    label: I18n.t("taskcard.retryPush")
+                    showTip: false
+                    onActivated: AppController.retryTrackerPush(card.task.id)
                 }
             }
             // Both heap and the tracker changed the same field since the last

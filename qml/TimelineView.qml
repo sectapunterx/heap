@@ -315,8 +315,9 @@ Item {
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
+                    objectName: "timeline-show-done"
                     radius: Theme.radiusPill
-                    color: root.showDone ? Theme.accentSoft : Theme.panel2
+                    color: root.showDone ? Theme.accentSoft : (showDoneMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root.showDone ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: showDoneRow.implicitWidth + 16
@@ -328,10 +329,14 @@ Item {
                         Rectangle { width: 8; height: 8; radius: Theme.radiusXs; color: Theme.stDone }
                         Text { text: I18n.t("timeline.showDone"); color: root.showDone ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsMd }
                     }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.toggleShowDone()
+                    ClickArea {
+                        id: showDoneMA
+                        label: I18n.t("timeline.showDone")
+                        showTip: false
+                        role: Accessible.CheckBox
+                        checkable: true
+                        checked: root.showDone
+                        onActivated: root.toggleShowDone()
                     }
                 }
             }
