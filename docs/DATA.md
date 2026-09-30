@@ -132,7 +132,7 @@ place on first launch (keeping a pre-migration copy in `backups/`); an older
 build refuses to save over a file written by a newer one, so nothing is lost by
 running an old version by mistake.
 
-**v10** (after 0.5.2) changed how a task records its times:
+**v10** (0.5.3) changed how a task records its times:
 
 - `dueAt` and `scheduledAt` each say for themselves whether their clock time is
   real: `dueHasTime` / `scheduledHasTime` replace the single `hasTime` flag. A

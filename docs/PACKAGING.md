@@ -128,7 +128,7 @@ configurations**: `portable` (recursively signs `*.exe`/`*.dll` in the bundle) a
 [`packaging/windows/signpath/`](../packaging/windows/signpath) — paste each into
 the console under the slug of the same name.
 
-**Status (0.5.2):** not active. The repository has none of the settings above,
+**Status (0.5.3):** not active. The repository has none of the settings above,
 so every release so far shipped unsigned (`Get-AuthenticodeSignature` →
 `NotSigned`) and the release notes say so. What the owner has to do, once:
 
