@@ -516,7 +516,7 @@ TEST_F(MigrationTest, V9HasTimeSplitsPerDatetime) {
   })")
                          .object();
   ASSERT_TRUE(heap::state::migrateState(root, 9));
-  EXPECT_EQ(root["schemaVersion"].toInt(), 10);
+  EXPECT_EQ(root["schemaVersion"].toInt(), heap::state::kSchemaVersion);
 
   const QJsonObject a = v10Task(root, 0);
   EXPECT_TRUE(a["scheduledHasTime"].toBool());
@@ -577,4 +577,60 @@ TEST_F(MigrationTest, V9RankTiesAreSpreadInBoardOrder) {
   // A column without a tie keeps its ranks.
   EXPECT_EQ(v10Task(root, 3)["rank"].toDouble(), 7.0);
   EXPECT_EQ(v10Task(root, 4)["rank"].toDouble(), 9.0);
+}
+
+// ── v10 → v11: attachments and saved views get a schema of their own ──
+//
+// 0.5.3 reads v10 and has no `attachments`: given a file with them at v10 it
+// saved every task without its files (PLAT-15). The rung changes nothing; the
+// version is what sends 0.5.3 into its read-only mode.
+
+namespace {
+QByteArray v10DocumentWithAttachment() {
+  return R"({
+  "schemaVersion": 10,
+  "activeProfileId": "default",
+  "events": [],
+  "profiles": [{
+    "id": "default", "name": "Example", "color": "#5cc2dd", "createdAt": "2026-01-01T00:00:00",
+    "people": [],
+    "statuses": [{"id": "todo", "name": "To Do", "color": "#888888"}],
+    "savedViews": [{"id": "view-1", "name": "Urgent", "query": "priority:P0"}],
+    "tasks": [{"id": "APP-113", "title": "spec", "priority": "P1", "status": "todo", "rank": 1024,
+               "statusChangedAt": "2026-07-01T09:00:00", "archived": false,
+               "attachments": [{"id": "0123456789abcdef0123456789abcdef.png", "name": "shot.png", "size": 42, "mime": "image/png"}]}]
+  }]
+})";
+}
+}  // namespace
+
+TEST_F(MigrationTest, V10ToV11ChangesNothingButTheVersion) {
+  QJsonObject root = QJsonDocument::fromJson(v10DocumentWithAttachment()).object();
+  const QJsonArray before = root["profiles"].toArray();
+  ASSERT_TRUE(heap::state::migrateState(root, 10));
+  EXPECT_EQ(root["schemaVersion"].toInt(), 11);
+  EXPECT_EQ(root["profiles"].toArray(), before);
+}
+
+TEST_F(MigrationTest, OpeningAV10ProfileUpgradesItKeepingFilesViewsAndACopy) {
+  const QByteArray original = v10DocumentWithAttachment();
+  writeFile(statePath(), original);
+  {
+    AppController app;
+    const Task* t = taskById(app, QStringLiteral("APP-113"));
+    ASSERT_NE(t, nullptr);
+    ASSERT_EQ(t->attachments.size(), 1);
+    app.flushSave();
+  }
+  const QJsonObject root = readJson(statePath());
+  EXPECT_EQ(root.value("schemaVersion").toInt(), heap::state::kSchemaVersion);
+  const QJsonObject profile = root["profiles"].toArray().at(0).toObject();
+  EXPECT_EQ(profile["tasks"].toArray().at(0).toObject()["attachments"].toArray().size(), 1);
+  EXPECT_EQ(profile["savedViews"].toArray().size(), 1);
+
+  const QStringList kept = QDir(backupDir()).entryList({"state-premigration-*.json"}, QDir::Files);
+  ASSERT_EQ(kept.size(), 1);
+  QFile f(backupDir() + "/" + kept.first());
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  EXPECT_EQ(f.readAll(), original);
 }

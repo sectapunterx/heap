@@ -41,7 +41,9 @@ tasks is one copy; a stored file is read-only and never changes.
 - A task lists its files in an optional `attachments` array — `{id, name,
   size, mime}` per file, the name and size being what the file was when it was
   attached. A task without files has no key, and a `state.json` from before
-  attachments simply has none (no schema bump).
+  attachments simply has none. The key arrived with schema **v11**, so 0.5.3
+  (v10), which does not know it, opens such a file read-only instead of saving
+  every task without its files.
 - A note, a doc page or a task description links a file as markdown:
   `![shot.png](attachments/<id>)` for an image (shown inline in the preview),
   `[spec.pdf](attachments/<id>)` for anything else. The text is the reference —
@@ -67,7 +69,7 @@ everything, copy the whole data folder.
 
 A profile may carry `savedViews`, the sidebar's saved views in their order. The
 key is optional: a profile without views — and every file written before saved
-views existed — simply has none, and no schema bump was needed. Each entry:
+views existed — simply has none; the key belongs to schema v11. Each entry:
 
 ```json
 { "id": "view-3f9c2a1b", "name": "Urgent",
@@ -152,7 +154,8 @@ heap never replaces a `state.json` it could not read with anything else:
 
 Every one of these leaves a line in `logs/recovery.log`. Keys heap does not
 know (from a newer point release or a hand edit) are kept on save at the
-document, settings and profile level.
+document, settings and profile level, and on every task, event, person and
+column.
 
 ## Automatic backups
 
@@ -237,3 +240,8 @@ running an old version by mistake.
   `every:month:15` (the 15th, the last day in a shorter month).
 
 Exported profiles from older builds (`hasTime`) import with the same rule.
+
+**v11** (0.5.4) added a task's `attachments` and a profile's `savedViews`.
+Nothing is rewritten on upgrade — a v10 file has neither — but the version
+matters the other way round: 0.5.3 does not know `attachments`, and a v11 file
+opens there read-only rather than losing every task's files on the first save.

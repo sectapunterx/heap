@@ -156,6 +156,10 @@ struct Task {
   QVector<TaskLink> links;
   // Files attached to the task, in the order they were attached.
   QVector<Attachment> attachments;
+  // Keys of the task object this build does not read, carried through a save
+  // untouched (PLAT-15), the way Profile::extra is. Only filled for a document
+  // at the current schema.
+  QJsonObject extra;
 
   bool operator==(const Task&) const = default;
 };
@@ -202,6 +206,8 @@ struct CalEvent {
   // Minutes before the start to remind, per event. kReminderDefault uses the
   // notifications setting; kReminderOff never reminds.
   int reminderMinutes = -1;
+  // Keys this build does not read, carried through a save (PLAT-15).
+  QJsonObject extra;
 
   static constexpr int kReminderDefault = -1;
   static constexpr int kReminderOff = -2;
@@ -232,6 +238,8 @@ struct Person {
   QString question;
   QString state;  // todo/pinged/replied
   QColor color;
+  // Keys this build does not read, carried through a save (PLAT-15).
+  QJsonObject extra;
 
   bool operator==(const Person&) const = default;
 };

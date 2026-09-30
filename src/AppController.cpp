@@ -2217,6 +2217,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
       // to the top and its "blocks" links were gone.
       t.rank = prev.rank;
       t.links = prev.links;
+      t.extra = prev.extra;  // keys a newer build wrote (PLAT-15)
       // A label sent as plain text keeps the colour it already had.
       for(Label& l : t.labels) {
         if(!l.color.isEmpty()) {
@@ -2396,6 +2397,7 @@ void AppController::saveEvent(const QVariantMap& draft) {
   // edits it — so it is always the stored one.
   if(prev) {
     e.exdates = prev->exdates;
+    e.extra = prev->extra;  // keys a newer build wrote (PLAT-15)
   }
   storeEvent(e);
 }
@@ -4026,6 +4028,10 @@ void AppController::savePerson(const QVariantMap& draft) {
     // Names with no transliterable letters at all — fall back to UUID
     // so we never end up with an empty key.
     p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  }
+  // Keys a newer build wrote stay with the person (PLAT-15).
+  if(const int prevRow = m_people.indexOfId(draft.value("id").toString()); prevRow >= 0) {
+    p.extra = m_people.items().at(prevRow).extra;
   }
   const bool isNew = draft.value("_isNew").toBool();
   m_people.upsert(p);
@@ -8328,7 +8334,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       QVector<CalEvent> legacy;
       Profile p = heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr);
       if(schema != heap::state::kSchemaVersion) {
-        p.extra = {};  // pass-through is for the version this build writes
+        heap::state::dropPassThrough(p);  // pass-through is for the version this build writes
       }
       // Two profiles under one id cannot both be addressed; the second one
       // gets its own rather than shadowing the first.
@@ -8354,6 +8360,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(schema >= 3 && root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray());
     }
+    if(schema != heap::state::kSchemaVersion) {
+      heap::state::dropPassThrough(globalEvents);
+    }
   } else {
     // ----- schema v1: flat fields → wrap into one "Example" profile -----
     Profile p;
@@ -8377,6 +8386,8 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray(), p.id);
     }
+    heap::state::dropPassThrough(p);
+    heap::state::dropPassThrough(globalEvents);
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
   }

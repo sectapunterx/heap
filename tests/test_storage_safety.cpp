@@ -762,6 +762,75 @@ TEST_F(StorageSafety, ABranchNamedByATrackerKeyMovesTheMirroredTask) {
   EXPECT_EQ(app.focusedTaskId(), QStringLiteral("jira-LUX-1")) << "the banner's Open must open the mirrored task";
 }
 
+// ── PLAT-15 (2026-09-30-1): unknown keys of tasks, events, people and columns ──
+
+TEST_F(StorageSafety, UnknownKeysOfTasksEventsPeopleAndColumnsSurviveASave) {
+  QJsonObject task = taskJson("T-1", "todo");
+  task["futureTask"] = QJsonObject{{"n", 1}};
+  QJsonObject p = profileJson("a", {task});
+  p["people"] = QJsonArray{QJsonObject{{"id", "ann"}, {"name", "Ann"}, {"state", "todo"}, {"color", "#7da8d9"}, {"futurePerson", "keep"}}};
+  QJsonArray statuses = defaultStatuses();
+  QJsonObject todo = statuses.at(1).toObject();
+  todo["futureStatus"] = true;
+  statuses[1] = todo;
+  p["statuses"] = statuses;
+  QJsonObject root = QJsonDocument::fromJson(stateDoc({p}, "a")).object();
+  root["events"] = QJsonArray{QJsonObject{
+      {"id", "ev-1"}, {"title", "sync"}, {"date", "2026-09-30"}, {"start", 10}, {"end", 11}, {"profileId", "a"}, {"futureEvent", 7}}};
+  writeRaw(statePath(), QJsonDocument(root).toJson());
+  {
+    AppController app;
+    // Edit each of them through the paths the editors use.
+    QVariantMap d = app.taskById(QStringLiteral("T-1"));
+    d["title"] = QStringLiteral("edited");
+    app.saveTask(d);
+    QVariantMap person = app.personById(QStringLiteral("ann"));
+    person["role"] = QStringLiteral("dev");
+    app.savePerson(person);
+    QVariantMap ev;
+    for(const CalEvent& e : app.events()->items()) {
+      if(e.id == QStringLiteral("ev-1")) {
+        ev = QVariantMap{{"id", e.id}, {"title", QStringLiteral("sync 2")}, {"date", e.date}, {"start", e.start}, {"end", e.end}};
+      }
+    }
+    ASSERT_FALSE(ev.isEmpty());
+    app.saveEvent(ev);
+    app.flushSave();
+  }
+  const QJsonObject saved = readJson(statePath());
+  const QJsonObject sp = saved["profiles"].toArray().at(0).toObject();
+  const QJsonObject st = sp["tasks"].toArray().at(0).toObject();
+  EXPECT_EQ(st["title"].toString(), QStringLiteral("edited"));
+  EXPECT_EQ(st["futureTask"].toObject()["n"].toInt(), 1);
+  const QJsonObject sperson = sp["people"].toArray().at(0).toObject();
+  EXPECT_EQ(sperson["role"].toString(), QStringLiteral("dev"));
+  EXPECT_EQ(sperson["futurePerson"].toString(), QStringLiteral("keep"));
+  EXPECT_TRUE(sp["statuses"].toArray().at(1).toObject()["futureStatus"].toBool());
+  EXPECT_FALSE(sp["statuses"].toArray().at(1).toObject().contains(QLatin1String(heap::state::kStatusExtraKey)));
+  const QJsonObject sev = saved["events"].toArray().at(0).toObject();
+  EXPECT_EQ(sev["title"].toString(), QStringLiteral("sync 2"));
+  EXPECT_EQ(sev["futureEvent"].toInt(), 7);
+}
+
+TEST_F(StorageSafety, UnknownTaskKeysOfAnOlderSchemaAreNotCarried) {
+  QJsonObject task = taskJson("T-1", "todo");
+  task["retiredKey"] = true;
+  QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("a", {task})}, "a")).object();
+  root["schemaVersion"] = heap::state::kSchemaVersion - 1;
+  writeRaw(statePath(), QJsonDocument(root).toJson());
+  {
+    AppController app;
+    app.flushSave();
+    QVariantMap d = app.taskById(QStringLiteral("T-1"));
+    d["title"] = QStringLiteral("edited");
+    app.saveTask(d);
+    app.flushSave();
+  }
+  const QJsonObject st = readJson(statePath())["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(0).toObject();
+  EXPECT_EQ(st["title"].toString(), QStringLiteral("edited"));
+  EXPECT_FALSE(st.contains(QStringLiteral("retiredKey")));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
