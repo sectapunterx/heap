@@ -270,6 +270,23 @@ TEST(UndoRebase, ADocsDeletionIsUndoneById) {
   EXPECT_EQ(QJsonDocument::fromJson(redone.toUtf8()), QJsonDocument::fromJson(now.toUtf8()));
 }
 
+// A contact has no id: linking it to a Person inside an undo step and a
+// Mattermost sync changing it again afterwards still leave one contact, and
+// the undo takes back only the link.
+TEST(UndoRebase, AnEditedDocsContactIsUndoneInPlace) {
+  const QString before = QStringLiteral(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"dev"}]})");
+  const QString after = QStringLiteral(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"dev","personId":"ann"}]})");
+  const QString now =
+      QStringLiteral(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"lead","personId":"ann","mm":{"role":"lead"}}]})");
+  bool ok = false;
+  const QString undone = heap::undo::rebaseDocsState(now, after, before, &ok);
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(QJsonDocument::fromJson(undone.toUtf8()),
+            QJsonDocument::fromJson(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"lead","mm":{"role":"lead"}}]})"));
+  const QString redone = heap::undo::rebaseDocsState(undone, before, after, &ok);
+  EXPECT_EQ(QJsonDocument::fromJson(redone.toUtf8()), QJsonDocument::fromJson(now.toUtf8()));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

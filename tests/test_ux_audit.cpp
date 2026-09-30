@@ -152,6 +152,37 @@ TEST_F(UxAuditTest, AnEditCannotMoveOntoAnotherPersonsId) {
   EXPECT_EQ(app_->personById(QStringLiteral("a.s")).value("question").toString(), QStringLiteral("release?"));
 }
 
+// Picking a contact links it to the new Person inside the save's undo step; a
+// Mattermost sync then changes that contact outside undo. Ctrl+Z takes the
+// link back off that contact instead of re-adding the original next to it.
+TEST_F(UxAuditTest, UndoingAPickedContactLeavesOneContact) {
+  app_->people()->reset({});
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Olga Titova","role":"dev","mattermost":"@olga.t","mmId":"u123"}]})"));
+  QVariantMap pick;
+  for(const QVariant& v : app_->pingCandidates()) {
+    if(v.toMap().value(QStringLiteral("name")).toString() == QStringLiteral("Olga Titova")) {
+      pick = v.toMap();
+    }
+  }
+  ASSERT_FALSE(pick.isEmpty());
+  ASSERT_TRUE(app_->savePerson(app_->pingDraftFor(pick)));
+  const auto contacts = [this] {
+    return QJsonDocument::fromJson(app_->docsState().toUtf8()).object().value(QStringLiteral("contacts")).toArray();
+  };
+  ASSERT_EQ(contacts().size(), 1);
+  QJsonObject synced = contacts().first().toObject();
+  ASSERT_FALSE(synced.value(QStringLiteral("personId")).toString().isEmpty());
+  synced.insert(QStringLiteral("role"), QStringLiteral("Tech Lead"));
+  app_->setDocsState(QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("contacts"), QJsonArray{synced}}}).toJson()));
+
+  app_->undo();
+  ASSERT_EQ(contacts().size(), 1) << app_->docsState().toStdString();
+  const QJsonObject c = contacts().first().toObject();
+  EXPECT_EQ(c.value(QStringLiteral("role")).toString(), QStringLiteral("Tech Lead"));
+  EXPECT_FALSE(c.contains(QStringLiteral("personId")));
+  EXPECT_EQ(app_->people()->rowCount(), 0);
+}
+
 TEST_F(UxAuditTest, PersonSavesAreUndoable) {
   Person a;
   a.id = QStringLiteral("a.s");

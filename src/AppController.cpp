@@ -4172,18 +4172,9 @@ bool AppController::savePerson(const QVariantMap& draft) {
 }
 
 QString AppController::docsContactKey(const QJsonObject& contact) {
-  const QString ext = contact.value(QStringLiteral("mmId")).toString();
-  if(!ext.isEmpty()) {
-    return QStringLiteral("mm:") + ext;
-  }
-  QString handle = contact.value(QStringLiteral("mattermost")).toString().trimmed();
-  while(handle.startsWith(QLatin1Char('@'))) {
-    handle.remove(0, 1);
-  }
-  if(!handle.isEmpty()) {
-    return QStringLiteral("at:") + handle.toLower();
-  }
-  return QStringLiteral("name:") + contact.value(QStringLiteral("name")).toString().trimmed().toLower();
+  // Shared with the undo rebase, which must recognise an edited contact as the
+  // same one.
+  return heap::undo::docsContactKey(contact);
 }
 
 QVariantList AppController::pingCandidates() const {

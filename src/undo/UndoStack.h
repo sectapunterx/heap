@@ -353,31 +353,57 @@ bool mergeableSince(const Model& model, const Edits<T>& edits) {
   return true;
 }
 
+// Who a Docs contact is: its Mattermost user id once it came from there, the
+// handle it was typed with, else its name. Contacts carry no id of their own,
+// and a personId or a synced title added to one must not make it another.
+inline QString docsContactKey(const QJsonObject& contact) {
+  const QString ext = contact.value(QStringLiteral("mmId")).toString();
+  if(!ext.isEmpty()) {
+    return QStringLiteral("mm:") + ext;
+  }
+  QString handle = contact.value(QStringLiteral("mattermost")).toString().trimmed();
+  while(handle.startsWith(QLatin1Char('@'))) {
+    handle.remove(0, 1);
+  }
+  if(!handle.isEmpty()) {
+    return QStringLiteral("at:") + handle.toLower();
+  }
+  return QStringLiteral("name:") + contact.value(QStringLiteral("name")).toString().trimmed().toLower();
+}
+
 namespace detail {
 
 // What identifies one element of a docs list: its id where it has one (the
-// sections and their entries), its whole value otherwise (snippets, contacts).
-// The occurrence number keeps two identical snippets two elements.
-inline QStringList jsonKeys(const QJsonArray& xs) {
+// sections and their entries), who it is for a contact, its whole value
+// otherwise (snippets). The occurrence number keeps two identical snippets
+// two elements.
+inline QStringList jsonKeys(const QJsonArray& xs, bool contacts = false) {
   QStringList out;
   QHash<QString, int> seen;
   for(const QJsonValue& v : xs) {
     const QString id = v.isObject() ? v.toObject().value(QStringLiteral("id")).toString() : QString();
-    const QString base = id.isEmpty()
-                             ? QStringLiteral("v:") + QString::fromUtf8(QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact))
-                             : QStringLiteral("id:") + id;
+    QString base;
+    if(!id.isEmpty()) {
+      base = QStringLiteral("id:") + id;
+    } else if(contacts && v.isObject()) {
+      base = QStringLiteral("c:") + docsContactKey(v.toObject());
+    } else {
+      base = QStringLiteral("v:") + QString::fromUtf8(QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact));
+    }
     out.append(base + QLatin1Char('#') + QString::number(seen[base]++));
   }
   return out;
 }
 
-inline QJsonValue rebaseJson(const QJsonValue& current, const QJsonValue& from, const QJsonValue& to, bool* clean);
+inline QJsonValue rebaseJson(
+    const QJsonValue& current, const QJsonValue& from, const QJsonValue& to, bool* clean, const QString& field = QString());
 
-inline QJsonArray rebaseJsonArray(const QJsonArray& current, const QJsonArray& from, const QJsonArray& to, bool* clean) {
-  const QStringList fromKeys = jsonKeys(from);
-  const QStringList toKeys = jsonKeys(to);
+inline QJsonArray rebaseJsonArray(
+    const QJsonArray& current, const QJsonArray& from, const QJsonArray& to, bool* clean, bool contacts = false) {
+  const QStringList fromKeys = jsonKeys(from, contacts);
+  const QStringList toKeys = jsonKeys(to, contacts);
   QJsonArray out = current;
-  QStringList outKeys = jsonKeys(current);
+  QStringList outKeys = jsonKeys(current, contacts);
   bool membership = false;
   // Gone in `to`: take them out of the current list.
   for(int i = 0; i < fromKeys.size(); ++i) {
@@ -435,7 +461,7 @@ inline QJsonArray rebaseJsonArray(const QJsonArray& current, const QJsonArray& f
   return out;
 }
 
-inline QJsonValue rebaseJson(const QJsonValue& current, const QJsonValue& from, const QJsonValue& to, bool* clean) {
+inline QJsonValue rebaseJson(const QJsonValue& current, const QJsonValue& from, const QJsonValue& to, bool* clean, const QString& field) {
   if(from == to) {
     return current;
   }
@@ -459,13 +485,13 @@ inline QJsonValue rebaseJson(const QJsonValue& current, const QJsonValue& from, 
       if(!t.contains(k)) {
         out.remove(k);
       } else {
-        out.insert(k, rebaseJson(out.value(k), f.value(k), t.value(k), clean));
+        out.insert(k, rebaseJson(out.value(k), f.value(k), t.value(k), clean, k));
       }
     }
     return out;
   }
   if(current.isArray() && from.isArray() && to.isArray()) {
-    return rebaseJsonArray(current.toArray(), from.toArray(), to.toArray(), clean);
+    return rebaseJsonArray(current.toArray(), from.toArray(), to.toArray(), clean, field == QLatin1String("contacts"));
   }
   // A plain value changed again since: the undo still says what it says.
   *clean = false;
