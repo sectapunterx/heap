@@ -118,7 +118,7 @@ Item {
         if (!urls || urls.length === 0) return 0;
         const list = [];
         for (let i = 0; i < urls.length; ++i) list.push(urls[i]);
-        return root.insertAttachmentRefs(AppController.importAttachments(list));
+        return root.insertAttachmentRefs(AppController.importAttachments(list, true));
     }
     // Ctrl+V with a file or a bare image on the clipboard.
     function pasteAttachment() {

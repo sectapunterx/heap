@@ -566,6 +566,7 @@ AppController::AppController(QObject* parent) :
   });
 
   m_activePeople.setSourceModel(&m_people);
+  trackAttachmentRefsInText();
 
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);

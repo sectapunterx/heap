@@ -412,8 +412,10 @@ class AppController : public QObject {
   // Stores files (file:// URLs or paths) without attaching them to anything —
   // a new task's draft, a note that is about to link them. Returns one
   // { id, name, size, mime, isImage, ref } per stored file; a refused file is
-  // left out and named in a toast.
-  Q_INVOKABLE QVariantList importAttachments(const QVariantList& urls);
+  // left out and named in a toast. `intoText`: the caller links them from an
+  // editor's text, whose own undo can bring the link back after it is deleted,
+  // so the cleanup keeps them for the rest of the session (KNOW-3).
+  Q_INVOKABLE QVariantList importAttachments(const QVariantList& urls, bool intoText = false);
   // Stores the files and appends them to the task, as one undo step. Returns
   // how many were attached (a file the task already has counts once).
   Q_INVOKABLE int attachFilesToTask(const QString& taskId, const QVariantList& urls);
@@ -435,10 +437,12 @@ class AppController : public QObject {
   Q_INVOKABLE QUrl attachmentUrl(const QString& id) const;
   // Paste: an image on the clipboard is saved as a PNG, copied files are
   // stored as they are. Empty when the clipboard holds neither, so the caller
-  // falls back to pasting text.
+  // falls back to pasting text. What it stores is linked from text, as with
+  // importAttachments(urls, true).
   Q_INVOKABLE bool clipboardHasAttachment() const;
   Q_INVOKABLE QVariantList importClipboardAttachments();
-  // Settings → Data: files no task, note, page or undo step refers to.
+  // Settings → Data: files no task, note, page or undo step refers to, and
+  // that no text has linked since the app started (m_attachmentsLinkedThisSession).
   // { count, bytes, sizeText }.
   Q_INVOKABLE QVariantMap unusedAttachments() const;
   // Deletes them. Returns what unusedAttachments() said, as it was removed.
@@ -1272,6 +1276,13 @@ class AppController : public QObject {
   // history — so a file detached a minute ago survives a cleanup and Ctrl+Z
   // still finds it.
   QSet<QString> referencedAttachmentIds() const;
+  // Every attachment a note, doc page, description or the Docs catalogue has
+  // linked to since the app started. A text editor's own undo history is out
+  // of reach from here, and Ctrl+Z in it can bring back a link the text no
+  // longer holds, so the cleanup leaves these alone until the next start
+  // (KNOW-3). Fed from the models' signals by trackAttachmentRefsInText().
+  QSet<QString> m_attachmentsLinkedThisSession;
+  void trackAttachmentRefsInText();
   // The ids one profile uses, for its export.
   QStringList profileAttachmentIds(const Profile& p) const;
   // The export's "attachments" array, or an empty one (and *omittedBytes set)
