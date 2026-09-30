@@ -24,6 +24,7 @@ TestCase {
 
     readonly property url plainFile: Qt.resolvedUrl("tst_Attachments.qml")
     readonly property url scriptFile: Qt.resolvedUrl("../../packaging/windows/copy-deps.sh")
+    readonly property url hashFile: Qt.resolvedUrl("tst_NotesView.qml")
 
     function make(qml) {
         const o = createTemporaryQmlObject(qml, host);
@@ -186,6 +187,30 @@ TestCase {
         // The removal was an ordinary edit: the editor's undo brings it back.
         editor.undo();
         verify(editor.text.indexOf("attachments/") > 0, "Ctrl+Z restores the link");
+        nv.destroy();
+        AppController.notesState = "";
+    }
+
+    // 2026-09-30 audit, KNOW-3: the cleanup between the chip's Remove and the
+    // editor's Ctrl+Z used to delete the file the restored link points at.
+    function test_notes_cleanup_spares_a_link_the_editor_can_undo() {
+        AppController.notesState = "";
+        const nv = Qt.createQmlObject('import TodoCpp; NotesView { anchors.fill: parent }', host, "tst_Attachments.notesUndo");
+        tryVerify(function () { return nv._loadedOnce; });
+        const editor = findChild(nv, "notesEditor");
+        editor.text = "Intro";
+        editor.cursorPosition = editor.text.length;
+        compare(nv.attachUrls([tc.hashFile]), 1);
+        const id = nv._noteAttachments[0].id;
+        compare(nv.removeAttachmentRefs(id), 1);
+        AppController.clearPendingUndo();
+
+        AppController.cleanUpUnusedAttachments();
+        verify(String(AppController.attachmentUrl(id)).length > 0, "the file is still there");
+        editor.forceActiveFocus();
+        keyClick(Qt.Key_Z, Qt.ControlModifier);
+        verify(editor.text.indexOf("attachments/" + id) > 0, editor.text);
+        tryVerify(function () { return nv._noteAttachments.length === 1 && nv._noteAttachments[0].exists; }, 2000);
         nv.destroy();
         AppController.notesState = "";
     }

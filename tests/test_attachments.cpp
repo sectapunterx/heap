@@ -480,8 +480,16 @@ TEST_F(AttachmentAppTest, ProfileExportCarriesTheFilesAndImportBringsThemBack) {
   QFile f(store().pathFor(taskAtt));
   ASSERT_TRUE(f.open(QIODevice::ReadOnly));
   EXPECT_EQ(f.readAll(), taskBytes);
-  const Task* imported = task(id);
+  // The import is a profile beside the exported one, so its copy of the task
+  // has an id of its own (PLAT-9): find it by what it carries.
+  const Task* imported = nullptr;
+  for(const Task& t : app_->tasks()->items()) {
+    if(t.title == QStringLiteral("export probe") && !t.attachments.isEmpty() && t.attachments.at(0).id == taskAtt) {
+      imported = &t;
+    }
+  }
   ASSERT_NE(imported, nullptr);
+  EXPECT_NE(imported->id, id);
   ASSERT_EQ(imported->attachments.size(), 1);
   EXPECT_EQ(imported->attachments.at(0).id, taskAtt);
   EXPECT_EQ(imported->attachments.at(0).name, QStringLiteral("spec.pdf"));
@@ -518,7 +526,14 @@ TEST_F(AttachmentAppTest, ImportedBytesThatDoNotMatchTheirIdAreRekeyed) {
   root["attachments"] = QJsonArray({blob, bad});
   ASSERT_TRUE(app_->importProfileFromJson(QString::fromUtf8(QJsonDocument(root).toJson()), true).isEmpty());
 
-  const Task* t = this->task(QStringLiteral("REKEY-1"));
+  // REKEY-1 unless an earlier run of this suite left one in the profile, in
+  // which case the import gets the next id (PLAT-9).
+  const Task* t = nullptr;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.title == QStringLiteral("rekey")) {
+      t = &x;
+    }
+  }
   ASSERT_NE(t, nullptr);
   ASSERT_EQ(t->attachments.size(), 1);
   const QString real = t->attachments.at(0).id;
@@ -638,6 +653,61 @@ TEST_F(AttachmentAppTest, CleanupDeletesOnlyWhatNothingPointsAt) {
   EXPECT_TRUE(store().contains(task(id)->attachments.at(0).id));
   EXPECT_TRUE(store().contains(noteAtt.at(0).toMap().value("id").toString()));
   EXPECT_EQ(app_->unusedAttachments().value("count").toInt(), 0);
+}
+
+// 2026-09-30 audit, KNOW-3: a link taken out of a note can come back with the
+// editor's own Ctrl+Z, which the app's undo stack knows nothing about. The
+// cleanup used to delete the file in between, and the link came back to
+// nothing — for a pasted screenshot, the only copy there was.
+TEST_F(AttachmentAppTest, Audit0930Know3_CleanupKeepsAFileUnlinkedFromTextThisSession) {
+  const QVariantList added = app_->importAttachments(urls({write(QStringLiteral("plain.png"), uniqueBytes("png"))}), true);
+  ASSERT_EQ(added.size(), 1);
+  const QString attId = added.at(0).toMap().value("id").toString();
+  const QString ref = added.at(0).toMap().value("ref").toString();
+  app_->newNote(QStringLiteral("Att"));
+  app_->setNotesState(QStringLiteral("# Att\n\nIntro\n\n") + ref + QStringLiteral("\n"));
+  app_->setNotesState(QStringLiteral("# Att\n\nIntro\n\n"));  // the chip's Remove, an editor edit
+  app_->clearPendingUndo();
+
+  EXPECT_EQ(app_->unusedAttachments().value("count").toInt(), 0);
+  app_->cleanUpUnusedAttachments();
+  EXPECT_TRUE(store().contains(attId));
+  // What the editor's Ctrl+Z puts back still finds its file.
+  app_->setNotesState(QStringLiteral("# Att\n\nIntro\n\n") + ref + QStringLiteral("\n"));
+  EXPECT_FALSE(app_->attachmentUrl(attId).isEmpty());
+  const QVariantList chips = app_->markdownAttachments(app_->notesState());
+  ASSERT_EQ(chips.size(), 1);
+  EXPECT_TRUE(chips.at(0).toMap().value("exists").toBool());
+}
+
+// Linked and unlinked before the editor handed its text over: the app never
+// saw the link, but the file was stored for the text, so it is kept as well.
+TEST_F(AttachmentAppTest, Audit0930Know3_AFileStoredForTextIsKeptEvenIfTheLinkNeverArrived) {
+  const QVariantList added = app_->importAttachments(urls({write(QStringLiteral("quick.png"), uniqueBytes("quick"))}), true);
+  ASSERT_EQ(added.size(), 1);
+  const QString attId = added.at(0).toMap().value("id").toString();
+  app_->cleanUpUnusedAttachments();
+  EXPECT_TRUE(store().contains(attId));
+}
+
+// The next start has no editor history to protect: such a file is cleaned up
+// then, like any other orphan.
+TEST_F(AttachmentAppTest, Audit0930Know3_TheNextSessionCleansItUp) {
+  const QVariantList added = app_->importAttachments(urls({write(QStringLiteral("later.png"), uniqueBytes("later"))}), true);
+  ASSERT_EQ(added.size(), 1);
+  const QString attId = added.at(0).toMap().value("id").toString();
+  const QString ref = added.at(0).toMap().value("ref").toString();
+  app_->newNote(QStringLiteral("Later"));
+  app_->setNotesState(QStringLiteral("# Later\n\n") + ref + QStringLiteral("\n"));
+  app_->setNotesState(QStringLiteral("# Later\n\n"));
+  app_->flushSave();
+  app_.reset();
+
+  app_ = std::make_unique<AppController>();
+  app_->clearPendingUndo();
+  ASSERT_TRUE(store().contains(attId));
+  const QVariantMap done = app_->cleanUpUnusedAttachments();
+  EXPECT_FALSE(store().contains(attId)) << "count " << done.value("count").toInt();
 }
 
 }  // namespace

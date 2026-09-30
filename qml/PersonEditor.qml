@@ -35,6 +35,8 @@ Popup {
     // sync with the live name. Flips to false on first manual edit so we
     // don't clobber the user's chosen handle.
     property bool _idAutoDerived: true
+    // Why the last save was refused; the dialog stays open on the draft.
+    property string _error: ""
 
     function showFor(initialDraft) {
         draft = initialDraft || {};
@@ -43,6 +45,7 @@ Popup {
         roleField.text     = draft.role || "";
         questionField.text = draft.question || "";
         idField.text       = draft.id || "";
+        _error = "";
         _idAutoDerived = isNew || (idField.text.length === 0);
         stateBox.currentIndex = Math.max(0, states.indexOf(draft.state || "todo"));
         const cur = String(draft.color || swatches[0]).toLowerCase();
@@ -70,6 +73,9 @@ Popup {
             // rail and Docs unlinked.
             _contactKey: root.draft._contactKey || "",
             _createContact: !!root.draft._createContact,
+            // The id this person had when the editor opened: moving to an id
+            // someone else holds is refused, like a new person taking one.
+            _originalId: root.isNew ? "" : (root.draft.id || ""),
             // Prefer the explicit idField value; fall back to the
             // auto-suggested slug when the user left it blank.
             id: (idField.text || "").trim().length > 0
@@ -82,7 +88,26 @@ Popup {
             state: root.states[stateBox.currentIndex],
             color: root.swatches[colorSwatch.selectedIndex]
         };
-        AppController.savePerson(d);
+        // savePerson() refuses a nameless person too, but says nothing for a
+        // new one — so say it here, where the name is typed.
+        if (d.name.trim().length === 0) {
+            root._error = I18n.t("editor.person.err.name");
+            nameField.forceActiveFocus();
+            return;
+        }
+        // An id someone already has would replace that person whole
+        // (SHELL-24). Say who holds it and keep the draft.
+        const holder = AppController.personById(d.id);
+        if (holder && holder.id && (root.isNew || d.id !== d._originalId)) {
+            root._error = I18n.t("editor.person.err.idTaken").arg(d.id).arg(holder.name || holder.id);
+            idField.forceActiveFocus();
+            idField.selectAll();
+            return;
+        }
+        if (!AppController.savePerson(d)) {
+            root._error = I18n.t("editor.err.refused");
+            return;
+        }
         root.close();
     }
 
@@ -117,6 +142,7 @@ Popup {
                color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: nameField
+            objectName: "pe-name"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("editor.ph.fullName")
             background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
@@ -124,6 +150,7 @@ Popup {
             placeholderTextColor: Theme.textDim
             // Re-derive idField while the user has not taken control of it.
             onTextChanged: {
+                root._error = "";
                 if (root._idAutoDerived) {
                     idField.text = AppController.suggestPersonId(
                         text, root.draft.id || "");
@@ -135,6 +162,7 @@ Popup {
                color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: idField
+            objectName: "pe-id"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "e.zaharov"
             font.family: Theme.fontMono
@@ -142,6 +170,18 @@ Popup {
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onActiveFocusChanged: if (activeFocus) root._idAutoDerived = false
+            onTextChanged: root._error = ""
+        }
+        Text {
+            objectName: "pe-error"
+            visible: root._error.length > 0
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            text: root._error
+            textFormat: Text.PlainText
+            color: Theme.danger
+            font.pixelSize: Theme.fsSm
+            wrapMode: Text.Wrap
         }
 
         Text {

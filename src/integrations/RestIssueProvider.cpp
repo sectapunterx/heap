@@ -472,18 +472,22 @@ void RestIssueProvider::fetchComments(const QString& externalId, const QString& 
 }
 
 void RestIssueProvider::pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) {
-  // A "my issues" pull has no configured repo to write to, but an issue from it
-  // knows its own. Without either there is nowhere the write could go.
+  if(m_desc.pushPathTemplate.isEmpty()) {
+    // Pull-only provider: report success without touching the remote so
+    // moving a linked task never spams the log with "push failed".
+    emit taskPushed(externalId, project, true, QStringLiteral("pull-only"), QString());
+    return;
+  }
+  // The issue's own repo, when the card knows it. A "my issues" pull has no
+  // configured repo to fall back on, so without it the write has nowhere to
+  // go — and answering that as success hid a move that never left (INT-2).
   const bool ownProject = !project.isEmpty() && !m_desc.scopeKey.isEmpty();
-  if(m_desc.pushPathTemplate.isEmpty() || (inSelfScope() && !ownProject)) {
-    // Pull-only provider, or nothing to address: report success without
-    // touching the remote so moving a linked task never spams the log with
-    // "push failed".
-    emit taskPushed(externalId, project, true, QStringLiteral("pull-only"));
+  if(inSelfScope() && !ownProject) {
+    emit taskPushed(externalId, project, false, QStringLiteral("the issue's repo is unknown — sync it again first"), QString());
     return;
   }
   if(!isConfigured() || externalId.isEmpty()) {
-    emit taskPushed(externalId, project, false, QStringLiteral("not configured"));
+    emit taskPushed(externalId, project, false, QStringLiteral("not configured"), QString());
     return;
   }
   const QString state = m_desc.pushMap ? m_desc.pushMap(newStatus) : newStatus;
@@ -494,7 +498,10 @@ void RestIssueProvider::pushStatusChange(const QString& externalId, const QStrin
   if(ownProject) {
     extra.insert(m_desc.scopeKey, project);
   }
-  const QString url = expand(m_desc.baseUrlTemplate) + expand(m_desc.pushPathTemplate, extra);
+  // Same base as pull and comments: GitLab with an empty Host is gitlab.com,
+  // and a bare path has no scheme to send it with (INT-7).
+  const QString base = resolvedBaseUrl();
+  const QString url = base + expand(m_desc.pushPathTemplate, extra);
 
   QNetworkRequest req = buildRequest(url);
   QByteArray body;
@@ -504,10 +511,22 @@ void RestIssueProvider::pushStatusChange(const QString& externalId, const QStrin
     req.setHeader(QNetworkRequest::ContentTypeHeader, QStringLiteral("application/json"));
   }
   QNetworkReply* reply = m_nam->sendCustomRequest(req, m_desc.pushMethod.toUtf8(), body);
-  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId, project]() {
+  connect(reply, &QNetworkReply::finished, this, [this, reply, externalId, project, base]() {
     reply->deleteLater();
-    const bool ok = reply->error() == QNetworkReply::NoError;
-    emit taskPushed(externalId, project, ok, ok ? QString() : describeReplyError(reply));
+    if(reply->error() != QNetworkReply::NoError) {
+      emit taskPushed(externalId, project, false, describeReplyError(reply), QString());
+      return;
+    }
+    // The trackers with a push path answer with the updated issue. Read its
+    // status the way a pull would, so the sync base is what the next pull
+    // compares against (INT-3).
+    QByteArray issue = reply->readAll().trimmed();
+    if(issue.startsWith('{')) {
+      issue = '[' + issue + ']';
+    }
+    const QVector<ExternalTask> parsed =
+        m_desc.parser ? m_desc.parser(issue, base) : parseWithFieldMap(issue, m_desc.fields, m_desc.id, base);
+    emit taskPushed(externalId, project, true, QString(), parsed.size() == 1 ? parsed.first().status : QString());
   });
 }
 

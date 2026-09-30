@@ -199,4 +199,105 @@ TestCase {
         te.detailsOpen = false;
         te.close();
     }
+
+    // ── TASKS-10: what Save does to the title ──
+    // An existing task's title is saved as typed. Save used to run it through
+    // the quick-add parser and throw away what that took out: "Critical",
+    // "blocker", "p1", ticket keys, "#labels", "task:", and everything after the
+    // "//" of a URL.
+    function test_saving_an_existing_task_keeps_its_title() {
+        const titles = ["Critical crash on login", "Remove blocker for release p1 plan",
+                        "See https://example.com/a/b for details", "Follow-up on APP-104 regression",
+                        "Support C# and #ops tooling", "task: write migration",
+                        "Critical: crash, see https://example.com/issue/7 // not a note"];
+        const te = make('import TodoCpp; TaskEditor { }');
+        for (const t of titles) {
+            const d = AppController.newTaskDraft("todo");
+            d.title = t;
+            d.priority = "P2";
+            verify(AppController.saveTask(d));
+            te.showFor(AppController.taskById(d.id));
+            verify(te._save(), "save refused for " + t);
+            const after = AppController.taskById(d.id);
+            compare(after.title, t);
+            compare(after.priority, "P2");
+            compare(after.desc || "", "");
+            // Twice, since each save used to cut a bit more.
+            te.showFor(AppController.taskById(d.id));
+            verify(te._save());
+            compare(AppController.taskById(d.id).title, t);
+            AppController.deleteTask(d.id);
+        }
+    }
+
+    function newFrom(te, title) {
+        te.showFor(AppController.newTaskDraft("todo"));
+        findChild(te, "te-title").text = title;
+        const before = {};
+        const m = AppController.tasks;
+        for (let i = 0; i < m.rowCount(); i++) before[m.data(m.index(i, 0), Qt.UserRole + 1)] = 1;
+        verify(te._save(), "save refused for " + title);
+        for (let i = 0; i < m.rowCount(); i++) {
+            const id = m.data(m.index(i, 0), Qt.UserRole + 1);
+            if (!before[id]) return AppController.taskById(id);
+        }
+        fail("no task created for " + title);
+        return null;
+    }
+
+    // A new task reads the title the way quick-add does: the tokens are applied,
+    // never just dropped.
+    function test_a_new_task_applies_what_its_title_says() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        const a = newFrom(te, "p0 hotfix payments #billing tomorrow 9am");
+        compare(a.title, "hotfix payments tomorrow 9am");
+        compare(a.priority, "P0");
+        compare(a.labels.map(l => l.id).join(","), "billing");
+        AppController.deleteTask(a.id);
+
+        const b = newFrom(te, "See https://example.com/a/b // check the docs");
+        compare(b.title, "See https://example.com/a/b");
+        compare(b.desc, "check the docs");
+        AppController.deleteTask(b.id);
+
+        const key = "TEQA-4711";
+        AppController.deleteTask(key);   // the test profile persists
+        const c = newFrom(te, "hotfix " + key + " regression");
+        compare(c.id, key);
+        compare(c.title, "hotfix regression");
+        AppController.deleteTask(c.id);
+    }
+
+    // …and when a token cannot be applied, the title keeps all of them.
+    function test_a_new_task_keeps_tokens_it_cannot_apply() {
+        const te = make('import TodoCpp; TaskEditor { }');
+        // The key is taken: the new task cannot have that id.
+        const held = AppController.newTaskDraft("todo");
+        held.title = "holder";
+        verify(AppController.saveTask(held));
+        const a = newFrom(te, "Follow-up on " + held.id + " regression #ops");
+        compare(a.title, "Follow-up on " + held.id + " regression #ops");
+        verify(a.id !== held.id);
+        compare(AppController.taskById(held.id).title, "holder");
+        AppController.deleteTask(a.id);
+        AppController.deleteTask(held.id);
+
+        // A priority picked in the box that disagrees with the title's.
+        const title = "urgent: rotate keys " + Date.now();
+        te.showFor(AppController.newTaskDraft("todo"));
+        findChild(te, "te-title").text = title;
+        const pri = findChild(te, "te-priority");
+        verify(pri !== null, "te-priority not found");
+        pri.currentIndex = 3;   // P3
+        verify(te._save());
+        const m = AppController.tasks;
+        let made = null;
+        for (let i = 0; i < m.rowCount(); i++) {
+            const t = AppController.taskById(m.data(m.index(i, 0), Qt.UserRole + 1));
+            if (t.title === title) made = t;
+        }
+        verify(made !== null, "the title was not kept as typed");
+        compare(made.priority, "P3");
+        AppController.deleteTask(made.id);
+    }
 }

@@ -952,7 +952,7 @@ void JiraProvider::fetchStatuses() {
 
 void JiraProvider::pushStatusChange(const QString& externalId, const QString& newStatus, const QString& project) {
   if(!isConfigured() || externalId.isEmpty()) {
-    emit taskPushed(externalId, project, false, QStringLiteral("not configured"));
+    emit taskPushed(externalId, project, false, QStringLiteral("not configured"), QString());
     return;
   }
   // Jira has no direct "set status" — you POST one of the issue's available
@@ -961,12 +961,13 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
   const QString path = QStringLiteral("/issue/") + externalId + QStringLiteral("/transitions");
   send("GET", path, {}, [this, path, externalId, newStatus, project](const ApiResult& r) {
     if(!r.ok) {
-      emit taskPushed(externalId, project, false, r.error);
+      emit taskPushed(externalId, project, false, r.error, QString());
       return;
     }
     const QJsonDocument doc = QJsonDocument::fromJson(r.body);
     const QJsonArray transitions = doc.object().value(QStringLiteral("transitions")).toArray();
     QString transitionId;
+    QString targetStatus;
     for(const auto& tv : transitions) {
       const QJsonObject to = tv.toObject().value(QStringLiteral("to")).toObject();
       // The user's own mapping decides first: a "Blocked" or "50/50" column
@@ -974,6 +975,7 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
       const QString targetColumn = StatusMap::column(to.value(QStringLiteral("name")).toString(), m_statusOverrides, QString());
       if(targetColumn == newStatus) {
         transitionId = tv.toObject().value(QStringLiteral("id")).toString();
+        targetStatus = to.value(QStringLiteral("name")).toString();
         break;
       }
     }
@@ -982,16 +984,20 @@ void JiraProvider::pushStatusChange(const QString& externalId, const QString& ne
           externalId,
           project,
           false,
-          QStringLiteral("this issue has no transition to a status mapped to '%1' — map one in Settings → Integrations").arg(newStatus));
+          QStringLiteral("this issue has no transition to a status mapped to '%1' — map one in Settings → Integrations").arg(newStatus),
+          QString());
       return;
     }
     QJsonObject body;
     QJsonObject tr;
     tr.insert(QStringLiteral("id"), transitionId);
     body.insert(QStringLiteral("transition"), tr);
-    send("POST", path, QJsonDocument(body).toJson(QJsonDocument::Compact), [this, externalId, project](const ApiResult& post) {
-      emit taskPushed(externalId, project, post.ok, post.error);
-    });
+    // The transition's target is the status a pull will report from now on,
+    // and so the base the next one compares against (INT-3).
+    send(
+        "POST", path, QJsonDocument(body).toJson(QJsonDocument::Compact), [this, externalId, project, targetStatus](const ApiResult& post) {
+          emit taskPushed(externalId, project, post.ok, post.error, post.ok ? targetStatus : QString());
+        });
   });
 }
 

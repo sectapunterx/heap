@@ -320,6 +320,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"person.added", {"Added: %1", "Добавлен: %1"}},
       {"person.deleted", {"Removed: %1", "Удалён: %1"}},
       {"person.restored", {"Restored: %1", "Восстановлён: %1"}},
+      {"person.idTaken", {"%1 is already taken by %2 — pick another id", "%1 уже занят: %2 — выберите другой id"}},
+      {"person.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+      {"person.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
       {"status.added", {"Column added: %1", "Колонка добавлена: %1"}},
       {"status.deleted", {"Column removed: %1", "Удалена колонка: %1"}},
       {"status.restored", {"Column restored: %1", "Восстановлена колонка: %1"}},
@@ -336,11 +339,15 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
-       {"Your data file was damaged — recovered from backup %1. The damaged file was kept as %2.",
-        "Файл данных был повреждён — восстановлено из бэкапа %1. Повреждённый файл сохранён как %2."}},
+       {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
+        "The damaged file is kept in the data folder as %2.",
+        "Файл данных был повреждён, heap открыл бэкап %1 — изменений, сделанных после него, здесь нет. "
+        "Повреждённый файл сохранён в папке данных как %2."}},
       {"data.corruptKept",
-       {"Your data file was damaged and no backup was found. The damaged file was kept as %1.",
-        "Файл данных был повреждён, бэкап не найден. Повреждённый файл сохранён как %1."}},
+       {"Your data file was damaged and there is no backup, so this is an empty workspace, not a new install. "
+        "The damaged file is kept in the data folder as %1.",
+        "Файл данных был повреждён, бэкапа нет, поэтому открыто пустое пространство — это не новая установка. "
+        "Повреждённый файл сохранён в папке данных как %1."}},
       {"data.schemaTooNew",
        {"Read-only: this data file was written by a newer heap (schema v%1, this build reads v%2). "
         "Nothing you change now is saved — update heap to edit it.",
@@ -566,6 +573,7 @@ AppController::AppController(QObject* parent) :
   });
 
   m_activePeople.setSourceModel(&m_people);
+  trackAttachmentRefsInText();
 
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
@@ -692,16 +700,6 @@ AppController::AppController(QObject* parent) :
   m_globalHotkey = heap::platform::GlobalHotkey::create(this);
   connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
   registerGlobalHotkeys();
-
-  // If loadStateOnStart() had to recover from a backup or quarantine a corrupt
-  // file, surface it once the QML toast bar exists (singleShot fires after the
-  // engine has loaded Main.qml and this event loop starts).
-  if(!m_recoveryNotice.isEmpty()) {
-    QTimer::singleShot(0, this, [this]() {
-      emit toast(m_recoveryNotice);
-      m_recoveryNotice.clear();
-    });
-  }
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -1684,16 +1682,20 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   if(t.externalId.isEmpty() || t.externalProvider.isEmpty()) {
     return;
   }
-  // An issue pulled from an "assigned to me" endpoint belongs to some other
-  // repo, and its number means nothing in the configured one — the write goes
-  // to the repo it came from instead. One whose repo is unknown has nowhere to
-  // go; the provider answers that as pull-only.
-  const QString project = t.externalMeta.crossProject ? t.externalMeta.project : QString();
-  if(t.externalMeta.crossProject && project.isEmpty()) {
-    return;
-  }
+  // The write goes to the repo the issue came from, never simply the one in
+  // the settings card: after the filter changes, a card kept from the old repo
+  // would otherwise close or reopen whatever issue has its number in the new
+  // one (INT-1), and under "assigned to me" it would not be sent at all
+  // (INT-2). A card without a known repo was pulled from the configured one.
+  const QString project = t.externalMeta.project;
   const QString providerId = t.externalProvider;
   const QString externalId = t.externalId;
+  if(t.externalMeta.crossProject && project.isEmpty()) {
+    // Its number means nothing in the configured repo, and its own is unknown:
+    // there is nowhere the write could go. Say so rather than drop the move.
+    onTaskPushed(providerId, externalId, project, false, QStringLiteral("the issue's repo is unknown — sync it again first"));
+    return;
+  }
   // A tracker that is disconnected has no provider to send through. The move
   // used to vanish there (INT-6): flag it and send it after the next pull.
   const bool connected = std::any_of(m_syncProviders.cbegin(), m_syncProviders.cend(), [&providerId](const auto& provider) {
@@ -1732,15 +1734,18 @@ QString AppController::pushKey(const QString& providerId, const QString& project
   return providerId + QChar('\n') + project + QChar('\n') + externalId;
 }
 
-void AppController::onTaskPushed(
-    const QString& providerId, const QString& externalId, const QString& project, bool ok, const QString& error) {
+void AppController::onTaskPushed(const QString& providerId,
+                                 const QString& externalId,
+                                 const QString& project,
+                                 bool ok,
+                                 const QString& error,
+                                 const QString& remoteStatus) {
   const QString taskId = m_pendingPushes.take(pushKey(providerId, project, externalId));
   int row = taskId.isEmpty() ? -1 : m_tasks.indexOfId(taskId);
   if(row < 0) {
     for(int i = 0; i < m_tasks.rowCount(); ++i) {
       const Task& t = m_tasks.items().at(i);
-      const QString taskProject = t.externalMeta.crossProject ? t.externalMeta.project : QString();
-      if(t.externalProvider == providerId && t.externalId == externalId && taskProject == project) {
+      if(t.externalProvider == providerId && t.externalId == externalId && t.externalMeta.project == project) {
         row = i;
         break;
       }
@@ -1753,10 +1758,20 @@ void AppController::onTaskPushed(
   // The flag is what keeps the card where the user put it until the tracker
   // agrees, and what the card shows as "not synced".
   const QString wanted = ok ? QString() : t.status;
-  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued) {
+  // The issue's status in the tracker is the one just written, not the one the
+  // last pull saw. Left stale, a reopen in the tracker would match it and read
+  // as "nothing moved" (INT-3). A push the tracker did not describe leaves the
+  // base unknown, and the next pull goes by open/closed. A pull-only answer
+  // wrote nothing, so the base still holds.
+  const bool wrote = ok && error != QStringLiteral("pull-only");
+  const bool baseMoves = wrote && t.externalMeta.status != remoteStatus;
+  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves) {
     t.externalMeta.unsyncedStatus = wanted;
     // The tracker answered: the move is no longer waiting to be sent.
     t.externalMeta.pushQueued = false;
+    if(wrote) {
+      t.externalMeta.status = remoteStatus;
+    }
     m_tasks.upsert(t);
     scheduleSave();
   }
@@ -2223,6 +2238,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
       // to the top and its "blocks" links were gone.
       t.rank = prev.rank;
       t.links = prev.links;
+      t.extra = prev.extra;  // keys a newer build wrote (PLAT-15)
       // A label sent as plain text keeps the colour it already had.
       for(Label& l : t.labels) {
         if(!l.color.isEmpty()) {
@@ -2402,6 +2418,7 @@ void AppController::saveEvent(const QVariantMap& draft) {
   // edits it — so it is always the stored one.
   if(prev) {
     e.exdates = prev->exdates;
+    e.extra = prev->extra;  // keys a newer build wrote (PLAT-15)
   }
   storeEvent(e);
 }
@@ -2521,10 +2538,16 @@ QVariantMap occurrenceToVariant(const CalEvent& e) {
 // The rule without its end: two rules that differ only in COUNT or UNTIL put
 // occurrences on the same days, so deletions and moved occurrences still
 // line up with the new one.
-QString rulePattern(const QString& text) {
+//
+// Given the series' start, a weekly rule's implicit weekday is spelled out, so
+// "FREQ=WEEKLY" and "FREQ=WEEKLY;BYDAY=MO" on a Monday series read the same.
+QString rulePattern(const QString& text, const QDate& anchor = QDate()) {
   heap::cal::RRule r = heap::cal::parseRRule(text);
   if(!r.isValid()) {
     return text;
+  }
+  if(anchor.isValid() && r.freq == heap::cal::RRule::Weekly && r.byDay.isEmpty()) {
+    r.byDay = {heap::cal::WeekdayNum{0, anchor.dayOfWeek()}};
   }
   r.count = 0;
   r.until = QDate();
@@ -2699,29 +2722,111 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       storeEvent(m);
       return;
     }
+    // A moved occurrence (a stored override) is measured against where it
+    // sits now, not the date it replaced: renaming Monday's meeting that was
+    // moved to Wednesday is not a request to make the series a Wednesday one.
+    // Its time only becomes the series' when the edit changed it.
+    std::optional<CalEvent> moved;
+    {
+      const int editedRow = m_events.indexOfId(draft.value("id").toString());
+      if(editedRow >= 0 && m_events.items().at(editedRow).masterId == masterId) {
+        moved = m_events.items().at(editedRow);
+      }
+    }
+    const QDate draftDate = draft.value("date").toDate();
+    const QDate draftEndDate = draft.value("endDate").toDate();
+    const double draftStart = draft.value("start").toDouble();
+    const double draftEnd = draft.value("end").toDouble();
+    qint64 shift = dayShift;
+    qint64 seriesLength = lengthDays;
+    if(moved.has_value()) {
+      shift = (moved->date.isValid() && draftDate.isValid()) ? moved->date.daysTo(draftDate) : 0;
+      const qint64 movedSpan = (moved->endDate.isValid() && moved->endDate > moved->date) ? moved->date.daysTo(moved->endDate) : 0;
+      const qint64 draftSpan =
+          (draftDate.isValid() && draftEndDate.isValid() && draftEndDate > draftDate) ? draftDate.daysTo(draftEndDate) : 0;
+      const bool timeKept = allDay == moved->allDay && movedSpan == draftSpan &&
+                            (allDay || (std::abs(draftStart - moved->start) < 1e-9 && std::abs(draftEnd - moved->end) < 1e-9));
+      if(timeKept) {
+        m.allDay = master.allDay;
+        m.start = master.start;
+        m.end = master.end;
+        seriesLength = (master.endDate.isValid() && master.endDate > master.date) ? master.date.daysTo(master.endDate) : 0;
+      }
+    }
     // Moving one occurrence of "all" moves the anchor by the same number of
     // days, and the end with it — the end used to stay behind, so every
     // occurrence became a multi-day event.
-    m.date = master.date.addDays(dayShift);
-    m.endDate = lengthDays > 0 ? m.date.addDays(lengthDays) : QDate();
-    const QString shiftedOld = shiftWeekdays(master.rrule, dayShift);
-    const bool patternChanged = rulePattern(draftRule) != rulePattern(master.rrule) && rulePattern(draftRule) != rulePattern(shiftedOld);
-    m.rrule = (draftRule == master.rrule) ? shiftedOld : draftRule;
+    m.date = master.date.addDays(shift);
+    m.endDate = seriesLength > 0 ? m.date.addDays(seriesLength) : QDate();
+    const QString shiftedOld = shiftWeekdays(master.rrule, shift);
+    // Compared by the days they produce: "FREQ=WEEKLY;BYDAY=MO" on a Monday
+    // series (how Google and Outlook store it) is the editor's "FREQ=WEEKLY".
+    const bool likeShifted = rulePattern(draftRule, m.date) == rulePattern(shiftedOld, m.date);
+    const bool patternChanged = !likeShifted && rulePattern(draftRule, m.date) != rulePattern(master.rrule, master.date);
+    if(patternChanged || (!likeShifted && draftRule != master.rrule)) {
+      m.rrule = draftRule;
+    } else {
+      // The same days: the series keeps its own spelling of the rule and
+      // takes only the end the editor may have changed.
+      m.rrule = shiftedOld;
+      heap::cal::RRule kept = heap::cal::parseRRule(shiftedOld);
+      const heap::cal::RRule edited = heap::cal::parseRRule(draftRule);
+      if(draftRule != master.rrule && kept.isValid() && edited.isValid() &&
+         (kept.count != edited.count || kept.until != edited.until || kept.untilAt != edited.untilAt)) {
+        kept.count = edited.count;
+        kept.until = edited.until;
+        kept.untilAt = edited.untilAt;
+        m.rrule = heap::cal::toRRuleText(kept);
+      }
+    }
     if(patternChanged) {
       // New days: the old deletions and moves were about other dates.
       m.exdates.clear();
       for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
         m_events.removeById(id);
       }
-    } else if(dayShift != 0) {
-      // The same series a few days later: its exceptions move with it, or a
-      // deleted occurrence would come back and a moved one would revert.
+    } else {
+      // The same series, maybe a few days later: its exceptions move with it,
+      // or a deleted occurrence would come back and a moved one would revert.
+      // A moved occurrence also takes what the edit changed — a new title is
+      // the whole series' — unless it had its own value there already.
       for(QDate& d : m.exdates) {
-        d = d.addDays(dayShift);
+        d = d.addDays(shift);
       }
+      const auto follow = [](QString& own, const QString& was, const QString& now) {
+        if(now != was && own == was) {
+          own = now;
+        }
+      };
       for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
-        CalEvent ov = m_events.items().at(m_events.indexOfId(id));
-        ov.originalDate = ov.originalDate.addDays(dayShift);
+        const CalEvent before = m_events.items().at(m_events.indexOfId(id));
+        CalEvent ov = before;
+        ov.originalDate = ov.originalDate.addDays(shift);
+        follow(ov.title, master.title, m.title);
+        follow(ov.type, master.type, m.type);
+        follow(ov.attendees, master.attendees, m.attendees);
+        follow(ov.context, master.context, m.context);
+        follow(ov.location, master.location, m.location);
+        follow(ov.notes, master.notes, m.notes);
+        follow(ov.url, master.url, m.url);
+        if(m.reminderMinutes != master.reminderMinutes && ov.reminderMinutes == master.reminderMinutes) {
+          ov.reminderMinutes = m.reminderMinutes;
+        }
+        if(ov != before) {
+          m_events.upsert(ov);
+        }
+      }
+      // The moved occurrence that was edited is part of "all" too: it takes
+      // the edit as it stands in the editor, in the viewer's clock like any
+      // override, and stays where it was moved unless the edit moved it.
+      const int movedRow = moved.has_value() ? m_events.indexOfId(moved->id) : -1;
+      if(movedRow >= 0) {
+        CalEvent ov = m_events.items().at(movedRow);
+        applyDraftFields(ov);
+        ov.start = draftStart;
+        ov.end = draftEnd;
+        ov.date = draftDate.isValid() ? draftDate : ov.date;
+        ov.endDate = (draftEndDate.isValid() && draftEndDate > ov.date) ? draftEndDate : QDate();
         m_events.upsert(ov);
       }
     }
@@ -3999,7 +4104,7 @@ QVariantMap AppController::personById(const QString& id) const {
   return m;
 }
 
-void AppController::savePerson(const QVariantMap& draft) {
+bool AppController::savePerson(const QVariantMap& draft) {
   Person p;
   p.id = draft.value("id").toString();
   p.name = draft.value("name").toString();
@@ -4009,7 +4114,7 @@ void AppController::savePerson(const QVariantMap& draft) {
     if(!draft.value("_isNew").toBool()) {
       emit toast(tr_("person.nameRequired"));
     }
-    return;
+    return false;
   }
   p.role = draft.value("role").toString();
   p.question = draft.value("question").toString();
@@ -4033,7 +4138,21 @@ void AppController::savePerson(const QVariantMap& draft) {
     // so we never end up with an empty key.
     p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
   }
+  // Keys a newer build wrote stay with the person (PLAT-15).
+  if(const int prevRow = m_people.indexOfId(draft.value("id").toString()); prevRow >= 0) {
+    p.extra = m_people.items().at(prevRow).extra;
+  }
   const bool isNew = draft.value("_isNew").toBool();
+  // upsert() on an id someone else holds replaces that person whole — name,
+  // role, question — with no undo (SHELL-24). A new person, or an edit that
+  // moves to another id, must pick a free one.
+  const QString originalId = draft.value("_originalId").toString();
+  const int holder = m_people.indexOfId(p.id);
+  if(holder >= 0 && (isNew || (!originalId.isEmpty() && originalId != p.id))) {
+    emit toast(tr_("person.idTaken").arg(p.id, m_people.items().at(holder).name), QStringLiteral("warning"));
+    return false;
+  }
+  const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
   m_people.upsert(p);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
@@ -4046,24 +4165,16 @@ void AppController::savePerson(const QVariantMap& draft) {
     linkDocsContact(draft.value("_contactKey").toString(), p.id);
   }
   if(isNew) {
-    emit toast(tr_("person.added").arg(p.name));
+    emit undoableToast(tr_("person.added").arg(p.name), 5);
   }
   scheduleSave();
+  return true;
 }
 
 QString AppController::docsContactKey(const QJsonObject& contact) {
-  const QString ext = contact.value(QStringLiteral("mmId")).toString();
-  if(!ext.isEmpty()) {
-    return QStringLiteral("mm:") + ext;
-  }
-  QString handle = contact.value(QStringLiteral("mattermost")).toString().trimmed();
-  while(handle.startsWith(QLatin1Char('@'))) {
-    handle.remove(0, 1);
-  }
-  if(!handle.isEmpty()) {
-    return QStringLiteral("at:") + handle.toLower();
-  }
-  return QStringLiteral("name:") + contact.value(QStringLiteral("name")).toString().trimmed().toLower();
+  // Shared with the undo rebase, which must recognise an edited contact as the
+  // same one.
+  return heap::undo::docsContactKey(contact);
 }
 
 QVariantList AppController::pingCandidates() const {
@@ -5207,6 +5318,7 @@ QVariantMap AppController::extractTaskMeta(const QString& text) const {
   out["ticketKey"] = m.ticketKey;
   out["priority"] = m.priority;
   out["labels"] = m.labels;
+  out["head"] = m.head;
   return out;
 }
 
@@ -5324,16 +5436,17 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   if(backward) {
     heap::undo::applyBackward(m_tasks, entry.tasks);
     heap::undo::applyBackward(m_events, entry.events);
-    heap::undo::applyBackward(m_people, entry.people);
-    heap::undo::applyBackward(m_docPages, entry.docPages);
-    heap::undo::applyBackward(m_notes, entry.notes);
   } else {
     heap::undo::applyForward(m_tasks, entry.tasks);
     heap::undo::applyForward(m_events, entry.events);
-    heap::undo::applyForward(m_people, entry.people);
-    heap::undo::applyForward(m_docPages, entry.docPages);
-    heap::undo::applyForward(m_notes, entry.notes);
   }
+  // Notes and doc pages are typed into without undo steps: the entry's own
+  // changes are merged onto them rather than the recorded copies put back
+  // whole, which would take that typing with them (KNOW-1). People likewise:
+  // a chip click or a Mattermost import since an edit stays.
+  heap::undo::applyMerged(m_people, entry.people, backward);
+  heap::undo::applyMerged(m_docPages, entry.docPages, backward);
+  heap::undo::applyMerged(m_notes, entry.notes, backward);
   if(!entry.notes.isEmpty()) {
     reconcileActiveNote();
   }
@@ -5365,7 +5478,12 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   }
   if(entry.docsStateTouched) {
     const QString was = m_docsState;
-    m_docsState = backward ? entry.docsStateBefore : entry.docsStateAfter;
+    // Only what the entry changed, by id, on top of the blob as it is now:
+    // an entry edited after a deletion keeps its edit (KNOW-2).
+    m_docsState = heap::undo::rebaseDocsState(m_docsState,
+                                              backward ? entry.docsStateAfter : entry.docsStateBefore,
+                                              backward ? entry.docsStateBefore : entry.docsStateAfter,
+                                              nullptr);
     emit docsStateChanged();
     // Same reasoning as the tasks above: a contact coming back must stop
     // being "dismissed", and one going again must be dismissed again.
@@ -5408,16 +5526,20 @@ bool AppController::undoEntry(double serialValue) {
   // Reversing one operation out of order is only safe while nothing it
   // touched has changed again since; otherwise the later edit would be
   // silently thrown away.
+  flushNotesForUndo();
   bool statusesClean = true;
   QVariantList statuses = m_statuses;
   if(copy.statusesTouched) {
     statuses = heap::undo::revertStatusesOnly(m_statuses, copy.statusesBefore, copy.statusesAfter, &statusesClean);
   }
+  bool docsClean = true;
+  if(copy.docsStateTouched) {
+    heap::undo::rebaseDocsState(m_docsState, copy.docsStateAfter, copy.docsStateBefore, &docsClean);
+  }
   const bool clean = statusesClean && heap::undo::untouchedSince(m_tasks, copy.tasks) &&
-                     heap::undo::untouchedSince(m_events, copy.events) && heap::undo::untouchedSince(m_people, copy.people) &&
-                     heap::undo::untouchedSince(m_docPages, copy.docPages) && heap::undo::untouchedSince(m_notes, copy.notes) &&
-                     (!copy.docsStateTouched || m_docsState == copy.docsStateAfter) &&
-                     (!copy.savedViewsTouched || m_savedViews == copy.savedViewsAfter);
+                     heap::undo::untouchedSince(m_events, copy.events) && heap::undo::mergeableSince(m_people, copy.people) &&
+                     heap::undo::mergeableSince(m_docPages, copy.docPages) && heap::undo::mergeableSince(m_notes, copy.notes) &&
+                     docsClean && (!copy.savedViewsTouched || m_savedViews == copy.savedViewsAfter);
   if(!clean) {
     emit toast(tr_("undo.changedSince"));
     return false;
@@ -5454,11 +5576,29 @@ void AppController::clearPendingUndo() {
   emit pendingUndoChanged();
 }
 
+void AppController::flushNotesForUndo() {
+  // The open note's pending keystrokes go into it first, so the merge sees
+  // them and the reload after it does not drop them. The same for an open doc
+  // page and the Docs catalogue: their debounced write would otherwise land
+  // after the undo, over what it merged.
+  emit aboutToChangeActiveNote();
+  emit flushEditorsRequested();
+  adoptOrphanNotesState();
+  syncActiveNoteBody();
+}
+
 void AppController::undo() {
-  const heap::undo::Entry* entry = m_undo.takeUndo();
+  if(!m_undo.canUndo()) {
+    return;
+  }
+  flushNotesForUndo();
+  heap::undo::Entry* entry = m_undo.takeUndo();
   if(entry == nullptr) {
     return;
   }
+  heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/true);
+  heap::undo::refreshLeaving(m_docPages, entry->docPages, /*backward=*/true);
+  heap::undo::refreshLeaving(m_people, entry->people, /*backward=*/true);
   // Copy: restoring a profile re-enters the stack's owner and the pointer
   // would not survive it.
   const heap::undo::Entry copy = *entry;
@@ -5473,10 +5613,17 @@ void AppController::undo() {
 }
 
 void AppController::redo() {
-  const heap::undo::Entry* entry = m_undo.takeRedo();
+  if(!m_undo.canRedo()) {
+    return;
+  }
+  flushNotesForUndo();
+  heap::undo::Entry* entry = m_undo.takeRedo();
   if(entry == nullptr) {
     return;
   }
+  heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/false);
+  heap::undo::refreshLeaving(m_docPages, entry->docPages, /*backward=*/false);
+  heap::undo::refreshLeaving(m_people, entry->people, /*backward=*/false);
   const heap::undo::Entry copy = *entry;
   applyUndoEntry(copy, /*backward=*/false);
   emit pendingUndoChanged();
@@ -6194,12 +6341,13 @@ void AppController::applyIntegrationSettings() {
           }
           emit toast(tr_("sync.failed").arg(label, providerReason(error)), QStringLiteral("error"));
         });
-    connect(provider,
-            &heap::integrations::IntegrationProvider::taskPushed,
-            this,
-            [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error) {
-              onTaskPushed(providerId, externalId, project, ok, error);
-            });
+    connect(
+        provider,
+        &heap::integrations::IntegrationProvider::taskPushed,
+        this,
+        [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error, const QString& remoteStatus) {
+          onTaskPushed(providerId, externalId, project, ok, error, remoteStatus);
+        });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
       emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)),
                  ok ? QStringLiteral("success") : QStringLiteral("error"));
@@ -8019,6 +8167,12 @@ void AppController::setStorageState(const QString& state, const QString& message
   emit storageStateChanged();
 }
 
+void AppController::dismissStorageNotice() {
+  if(m_storageState == QLatin1String("recovered") || m_storageState == QLatin1String("damaged")) {
+    setStorageState(QStringLiteral("ok"), QString());
+  }
+}
+
 void AppController::retryStorage() {
   if(m_storageState == QLatin1String("writeFailed")) {
     if(m_saveTimer) {
@@ -8066,10 +8220,6 @@ void AppController::reloadStateFromDisk() {
   loadStateOnStart();
   if(m_profiles.isEmpty()) {
     seedExampleProfile();
-  }
-  if(!m_recoveryNotice.isEmpty()) {
-    emit toast(m_recoveryNotice);
-    m_recoveryNotice.clear();
   }
 }
 
@@ -8157,17 +8307,38 @@ void AppController::loadStateOnStart() {
       if(!heap::storage::writeAtomically(path, QJsonDocument(recovered).toJson(QJsonDocument::Indented), &error)) {
         qWarning("todocpp: could not promote backup %s: %s", qUtf8Printable(recoveredFrom), qUtf8Printable(error));
       }
-      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept);
       heap::recovery::append(QString::fromLatin1(heap::recovery::kRecovered),
                              {{QStringLiteral("from"), recoveredFrom}, {QStringLiteral("reason"), shapeError}});
       loadStateDocument(recovered, /*viewOnly=*/false);
+      // A banner that stays up, not a toast (PLAT-6): whatever changed after
+      // the backup was taken is not in it, and the user has to know where the
+      // damaged file went to look for it. A newer-schema backup has already
+      // raised its own read-only banner, which says more.
+      if(m_storageState == QLatin1String("ok")) {
+        setStorageState(QStringLiteral("recovered"), tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept));
+      }
     } else {
-      // No usable backup. The damaged file is preserved under a distinct name
-      // and the caller seeds a fresh profile — the user keeps a recoverable
-      // copy and a visible warning instead of a silent wipe.
-      m_recoveryNotice = tr_("data.corruptKept").arg(kept);
+      // No usable backup. The damaged file is preserved under a distinct name.
+      // What opens is an empty workspace with a banner saying so — never the
+      // demo and the welcome tour, which read as "a new install" and invited
+      // working on in sample data (PLAT-6).
       heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered),
                              {{QStringLiteral("path"), path}, {QStringLiteral("reason"), shapeError}});
+      Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+      p.id = QStringLiteral("default");
+      m_profiles.push_back(p);
+      m_activeProfileId = p.id;
+      applyProfileToModels(p);
+      m_welcomeSeen = true;
+      m_demoActive = false;
+      emit onboardingChanged();
+      emit profilesChanged();
+      emit activeProfileChanged();
+      setStorageState(QStringLiteral("damaged"), tr_("data.corruptKept").arg(kept));
+      // Written now, so the next launch opens this workspace too rather than
+      // taking the missing file for a first run. The damaged bytes are safe in
+      // the quarantined copy.
+      scheduleSave();
     }
     return;
   }
@@ -8311,7 +8482,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       QVector<CalEvent> legacy;
       Profile p = heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr);
       if(schema != heap::state::kSchemaVersion) {
-        p.extra = {};  // pass-through is for the version this build writes
+        heap::state::dropPassThrough(p);  // pass-through is for the version this build writes
       }
       // Two profiles under one id cannot both be addressed; the second one
       // gets its own rather than shadowing the first.
@@ -8337,6 +8508,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(schema >= 3 && root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray());
     }
+    if(schema != heap::state::kSchemaVersion) {
+      heap::state::dropPassThrough(globalEvents);
+    }
   } else {
     // ----- schema v1: flat fields → wrap into one "Example" profile -----
     Profile p;
@@ -8360,6 +8534,8 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray(), p.id);
     }
+    heap::state::dropPassThrough(p);
+    heap::state::dropPassThrough(globalEvents);
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
   }
@@ -8612,6 +8788,108 @@ QVariantMap AppController::profileById(const QString& id) const {
   return m;
 }
 
+QHash<QString, QString> AppController::reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events) {
+  // A task id is a key across the whole app, not per profile (TASKS-1): the
+  // reminder log, notification actions, undo and event links all look a task
+  // up by id alone. A copied or imported profile that kept its ids silenced
+  // the other profile's reminders and let "Mark done" close the wrong task
+  // (PLAT-9). Every id another profile already holds is given a fresh one.
+  QSet<QString> taken;
+  for(const Task& t : m_tasks.items()) {
+    taken.insert(t.id);
+  }
+  for(const Profile& other : m_profiles) {
+    for(const Task& t : other.tasks) {
+      taken.insert(t.id);
+    }
+  }
+  // The ids that stay are claimed first, so no fresh one lands on them.
+  for(const Task& t : p.tasks) {
+    if(!taken.contains(t.id)) {
+      noteTaskIdUsed(t.id);
+    }
+  }
+  QSet<QString> used = taken;
+  for(const Task& t : p.tasks) {
+    used.insert(t.id);
+  }
+  QHash<QString, QString> remap;
+  for(Task& t : p.tasks) {
+    if(!taken.contains(t.id)) {
+      continue;
+    }
+    QString stem;
+    int n = 0;
+    QString fresh;
+    if(t.externalId.isEmpty() && splitTaskId(t.id, stem, n)) {
+      // The next number under the same prefix, the way a new task gets one.
+      do {
+        fresh = mintTaskId(stem);
+        noteTaskIdUsed(fresh);
+      } while(used.contains(fresh));
+    } else {
+      // A mirrored issue's id spells its tracker key (jira-LUX-1), and
+      // renumbering it would name another issue: suffix it instead, the way
+      // a second pull of the same key is told apart.
+      int k = 2;
+      do {
+        fresh = t.id + QChar('-') + QString::number(k++);
+      } while(used.contains(fresh));
+    }
+    used.insert(fresh);
+    remap.insert(t.id, fresh);
+    t.id = fresh;
+  }
+  if(remap.isEmpty()) {
+    return remap;
+  }
+
+  // Everything inside the profile that names a task by id follows it: the
+  // dependency links, and the #KEY-1 references of descriptions, notes and
+  // pages (the same pattern the markdown renderer turns into a task link).
+  static const QRegularExpression kTicketRef(QStringLiteral("(?<![A-Za-z0-9_])#([A-Z][A-Z0-9]*-\\d+)"));
+  const auto rewrite = [&remap](QString& text) {
+    if(!text.contains(QLatin1Char('#'))) {
+      return;
+    }
+    QString out;
+    qsizetype last = 0;
+    for(auto it = kTicketRef.globalMatch(text); it.hasNext();) {
+      const QRegularExpressionMatch m = it.next();
+      const auto hit = remap.constFind(m.captured(1));
+      if(hit == remap.constEnd()) {
+        continue;
+      }
+      out += QStringView(text).mid(last, m.capturedStart(1) - last);
+      out += hit.value();
+      last = m.capturedEnd(1);
+    }
+    if(last > 0) {
+      out += QStringView(text).mid(last);
+      text = out;
+    }
+  };
+  for(Task& t : p.tasks) {
+    for(TaskLink& l : t.links) {
+      l.targetId = remap.value(l.targetId, l.targetId);
+    }
+    rewrite(t.desc);
+  }
+  for(Note& n : p.notes) {
+    rewrite(n.body);
+  }
+  rewrite(p.notesState);
+  for(DocPage& d : p.docPages) {
+    rewrite(d.body);
+  }
+  if(events) {
+    for(CalEvent& e : *events) {
+      e.taskId = remap.value(e.taskId, e.taskId);
+    }
+  }
+  return remap;
+}
+
 QString AppController::duplicateProfile(const QString& id, const QString& newName) {
   const int i = profileIndexOf(id);
   if(i < 0) {
@@ -8624,6 +8902,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
+  reissueSharedTaskIds(copy, nullptr);  // the copy's tasks are new tasks (PLAT-9)
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
@@ -9233,6 +9512,9 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   if(activate) {
     snapshotActiveProfile();
   }
+  // Before the profile joins the list, and with the events it brought, whose
+  // task links follow the renamed tasks (PLAT-9).
+  reissueSharedTaskIds(imported, &importedEvents);
   m_profiles.push_back(imported);
 
   // Hoist the imported calendar events into the global pool, re-attributed to
@@ -10172,10 +10454,11 @@ void AppController::runAutomationAt(const QDateTime& now) {
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTask(t.id,
-                 call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
-                 QStringLiteral("%1 (%2)").arg(t.title, t.priority),
-                 QStringLiteral("deadline"));
+      notifyTaskAt(t.id,
+                   call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
+                   QStringLiteral("%1 (%2)").arg(t.title, t.priority),
+                   QStringLiteral("deadline"),
+                   now);
     }
   }
 
@@ -10221,7 +10504,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
 
   // Anything else that arrived during quiet hours goes out now.
   if(!quiet) {
-    flushHeldNotifications();
+    flushHeldNotifications(now);
   }
 }
 
@@ -10317,13 +10600,13 @@ void AppController::holdNotification(const HeldNotification& n) {
   m_heldNotifications.append(n);
 }
 
-void AppController::flushHeldNotifications() {
+void AppController::flushHeldNotifications(const QDateTime& now) {
   const QVector<HeldNotification> held = std::exchange(m_heldNotifications, {});
   for(const HeldNotification& h : held) {
     if(h.taskId.isEmpty()) {
       emit notification(h.title, h.body, h.kind);
     } else {
-      notifyTask(h.taskId, h.title, h.body, h.kind);
+      notifyTaskAt(h.taskId, h.title, h.body, h.kind, now);
     }
   }
 }
@@ -10411,7 +10694,11 @@ void AppController::refreshFocusedTaskId() {
   emit focusedGitChanged();
 }
 
-void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId) {
+void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId) {
+  // The watcher reports the key it found in the branch name. A tracker-mirrored
+  // task is stored under its provider-prefixed id (jira-LUX-1 for LUX-1), so
+  // resolve it the way the banner refresh and the git badges do (PLAT-14).
+  const QString taskId = taskIdForBranchMatch(matchedId);
   m_focusedRepo = repo;
   m_focusedBranch = branch;
   m_focusedTaskId = taskId;
@@ -10591,7 +10878,12 @@ void AppController::onGitCommits(const QString& repo, const QVariantMap& commits
 // ── Native notifications with action buttons ─────────────────────
 
 void AppController::notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind) {
-  if(inQuietHours(QDateTime::currentDateTime())) {
+  notifyTaskAt(taskId, title, body, kind, QDateTime::currentDateTime());
+}
+
+void AppController::notifyTaskAt(
+    const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now) {
+  if(inQuietHours(now)) {
     holdNotification({title, body, kind, taskId});
     return;
   }

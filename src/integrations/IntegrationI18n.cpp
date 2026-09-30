@@ -72,6 +72,8 @@ const QList<QPair<QString, QString>>& phrases() {
       {QStringLiteral("no access token in the response"), QStringLiteral("в ответе нет токена доступа")},
       {QStringLiteral("nothing to refresh with"), QStringLiteral("нечем обновить сессию")},
       {QStringLiteral("nothing to exchange"), QStringLiteral("нечего обменивать")},
+      {QStringLiteral("the issue's repo is unknown — sync it again first"),
+       QStringLiteral("репозиторий задачи неизвестен — сначала синхронизируйте её ещё раз")},
       {QStringLiteral("not configured"), QStringLiteral("не настроено")},
       {QStringLiteral("unsupported"), QStringLiteral("не поддерживается")},
   };

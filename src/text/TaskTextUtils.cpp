@@ -212,13 +212,28 @@ TaskMeta extractMeta(QStringView raw) {
     TaskMeta out;
     QString text = raw.toString();
 
-    // 1. "// comment" → desc. Split on the first occurrence.
-    const int dslash = text.indexOf(QStringLiteral("//"));
+    // 1. "// comment" → desc. Split on the first occurrence outside a URL:
+    //    "see https://example.com/a" used to lose everything after "https:".
+    static const QRegularExpression urlRx(QStringLiteral("[A-Za-z][A-Za-z0-9+.\\-]*://\\S*"));
+    int dslash = text.indexOf(QStringLiteral("//"));
+    while(dslash >= 0) {
+      bool inUrl = false;
+      QRegularExpressionMatchIterator ui = urlRx.globalMatch(text);
+      while(ui.hasNext() && !inUrl) {
+        const auto m = ui.next();
+        inUrl = dslash >= m.capturedStart(0) && dslash < m.capturedEnd(0);
+      }
+      if(!inUrl) {
+        break;
+      }
+      dslash = text.indexOf(QStringLiteral("//"), dslash + 2);
+    }
     QString body = text;
     if (dslash >= 0) {
         out.desc = text.mid(dslash + 2).trimmed();
         body     = text.left(dslash);
     }
+    out.head = body;
 
     // 2. "@handle" tokens → collected into handles[], but LEFT IN PLACE in
     //    the title so the user keeps the context they typed ("синк с

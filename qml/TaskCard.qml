@@ -679,7 +679,10 @@ Rectangle {
     // a recycled list delegate calls that when it is pooled.
     property var _menu: null
     function contextMenu() {
-        if (!card._menu) card._menu = taskMenuComponent.createObject(card);
+        if (!card._menu) {
+            card._menu = taskMenuComponent.createObject(card);
+            card._menu.subMenuRequested.connect(card.openSubMenu);
+        }
         return card._menu;
     }
     // The status and priority lists are built the same way, on first use.
@@ -692,6 +695,18 @@ Rectangle {
     function priorityMenu() {
         if (!card._priorityMenu) card._priorityMenu = priorityMenuComponent.createObject(card);
         return card._priorityMenu;
+    }
+    // The status or priority list at the card, on the task's current value,
+    // so an Enter straight away changes nothing.
+    function openSubMenu(which) {
+        const sub = which === "status" ? card.statusMenu() : card.priorityMenu();
+        sub.popup(card, Theme.spLg, Math.min(card.height, 28));
+        let cur = -1;
+        if (card.task && which === "status")
+            cur = AppController.statuses.findIndex(st => st.id === card.task.status);
+        else if (card.task)
+            cur = ["P0", "P1", "P2", "P3"].indexOf(card.task.priority);
+        sub.currentIndex = Math.max(0, cur);
     }
     function releaseMenu() {
         for (const k of ["_menu", "_statusMenu", "_priorityMenu"]) {
@@ -723,23 +738,27 @@ Rectangle {
         }
         // Status and priority without opening the editor (UX-26). Each opens
         // its own list at the card, so the keyboard can walk it too.
+        // The list opens once this menu has finished closing. Opened straight
+        // from the row, it came up while this menu's close was still handing
+        // focus back to the board: the board kept the keys, and the list sat
+        // open without them until another popup's close gave it focus back and
+        // a stray Enter picked P0 (PERA-1).
+        property string _openNext: ""
+        signal subMenuRequested(string which)
+        onClosed: {
+            const which = taskMenu._openNext;
+            taskMenu._openNext = "";
+            if (which) taskMenu.subMenuRequested(which);
+        }
         AppMenuItem {
             objectName: "tc-menu-status"
             glyph: "⇥"; text: I18n.t("taskcard.setStatus") + "  ›"
-            onTriggered: Qt.callLater(function () {
-                const sub = card.statusMenu();
-                sub.popup(card, Theme.spLg, Math.min(card.height, 28));
-                sub.currentIndex = 0;
-            })
+            onTriggered: taskMenu._openNext = "status"
         }
         AppMenuItem {
             objectName: "tc-menu-priority"
             glyph: "!"; text: I18n.t("taskcard.setPriority") + "  ›"
-            onTriggered: Qt.callLater(function () {
-                const sub = card.priorityMenu();
-                sub.popup(card, Theme.spLg, Math.min(card.height, 28));
-                sub.currentIndex = 0;
-            })
+            onTriggered: taskMenu._openNext = "priority"
         }
         AppMenuItem {
             objectName: "tc-menu-archive"

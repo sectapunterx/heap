@@ -183,6 +183,10 @@ class AppController : public QObject {
   // The banner's Retry: re-reads an unreadable state.json (and loads it), or
   // writes a failed save again now.
   Q_INVOKABLE void retryStorage();
+  // The banner's Dismiss, for the two states that only report what happened
+  // at startup ("recovered" from a backup, "damaged" with none): nothing is
+  // wrong any more, so the user may put the message away (PLAT-6).
+  Q_INVOKABLE void dismissStorageNotice();
 
   TaskModel* tasks() {
     return &m_tasks;
@@ -412,8 +416,10 @@ class AppController : public QObject {
   // Stores files (file:// URLs or paths) without attaching them to anything —
   // a new task's draft, a note that is about to link them. Returns one
   // { id, name, size, mime, isImage, ref } per stored file; a refused file is
-  // left out and named in a toast.
-  Q_INVOKABLE QVariantList importAttachments(const QVariantList& urls);
+  // left out and named in a toast. `intoText`: the caller links them from an
+  // editor's text, whose own undo can bring the link back after it is deleted,
+  // so the cleanup keeps them for the rest of the session (KNOW-3).
+  Q_INVOKABLE QVariantList importAttachments(const QVariantList& urls, bool intoText = false);
   // Stores the files and appends them to the task, as one undo step. Returns
   // how many were attached (a file the task already has counts once).
   Q_INVOKABLE int attachFilesToTask(const QString& taskId, const QVariantList& urls);
@@ -435,10 +441,12 @@ class AppController : public QObject {
   Q_INVOKABLE QUrl attachmentUrl(const QString& id) const;
   // Paste: an image on the clipboard is saved as a PNG, copied files are
   // stored as they are. Empty when the clipboard holds neither, so the caller
-  // falls back to pasting text.
+  // falls back to pasting text. What it stores is linked from text, as with
+  // importAttachments(urls, true).
   Q_INVOKABLE bool clipboardHasAttachment() const;
   Q_INVOKABLE QVariantList importClipboardAttachments();
-  // Settings → Data: files no task, note, page or undo step refers to.
+  // Settings → Data: files no task, note, page or undo step refers to, and
+  // that no text has linked since the app started (m_attachmentsLinkedThisSession).
   // { count, bytes, sizeText }.
   Q_INVOKABLE QVariantMap unusedAttachments() const;
   // Deletes them. Returns what unusedAttachments() said, as it was removed.
@@ -764,6 +772,9 @@ class AppController : public QObject {
   // `taskId` is the optional task tied to this toast — it is encoded into
   // the notification id so the action handlers can route back.
   Q_INVOKABLE void notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind = QString());
+  // notifyTask() judged at `now` rather than the wall clock: runAutomationAt()
+  // decides quiet hours for its own moment, and so must what it posts.
+  void notifyTaskAt(const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now);
   // The confirmation for something quick-captured from outside the app (the
   // global hotkeys' capture window). Unlike notify(), it is shown while a heap
   // window has focus — the capture window has it — and in quiet hours, since
@@ -850,7 +861,7 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
   // The person an "@handle" in a note names, or empty.
   Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
-  Q_INVOKABLE void savePerson(const QVariantMap& draft);
+  Q_INVOKABLE bool savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 
   // ---- People picker ----
@@ -1244,9 +1255,14 @@ class AppController : public QObject {
   void pushStatusToTracker(const QString& taskId, const QString& status);
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
-  void onTaskPushed(const QString& providerId, const QString& externalId, const QString& project, bool ok, const QString& error);
-  // Key of m_pendingPushes. `project` is empty unless the issue came from a
-  // cross-project pull, where the number alone is ambiguous.
+  void onTaskPushed(const QString& providerId,
+                    const QString& externalId,
+                    const QString& project,
+                    bool ok,
+                    const QString& error,
+                    const QString& remoteStatus = QString());
+  // Key of m_pendingPushes. `project` is the issue's own repo/project (empty
+  // when it is not known): in a cross-project pull the number alone is ambiguous.
   static QString pushKey(const QString& providerId, const QString& project, const QString& externalId);
   // pushKey → task id, for pushes still in flight.
   QHash<QString, QString> m_pendingPushes;
@@ -1272,6 +1288,13 @@ class AppController : public QObject {
   // history — so a file detached a minute ago survives a cleanup and Ctrl+Z
   // still finds it.
   QSet<QString> referencedAttachmentIds() const;
+  // Every attachment a note, doc page, description or the Docs catalogue has
+  // linked to since the app started. A text editor's own undo history is out
+  // of reach from here, and Ctrl+Z in it can bring back a link the text no
+  // longer holds, so the cleanup leaves these alone until the next start
+  // (KNOW-3). Fed from the models' signals by trackAttachmentRefsInText().
+  QSet<QString> m_attachmentsLinkedThisSession;
+  void trackAttachmentRefsInText();
   // The ids one profile uses, for its export.
   QStringList profileAttachmentIds(const Profile& p) const;
   // The export's "attachments" array, or an empty one (and *omittedBytes set)
@@ -1370,7 +1393,7 @@ class AppController : public QObject {
   QSet<QString> sentReminderKeys() const;
   void markReminderSent(const QString& key, const QDateTime& at);
   void holdNotification(const HeldNotification& n);
-  void flushHeldNotifications();
+  void flushHeldNotifications(const QDateTime& now);
   // settings.calendar.workDays, Monday to Friday by default.
   bool isWorkDay(const QDate& day) const;
   // Fires at the next local midnight; see refreshToday().
@@ -1418,7 +1441,6 @@ class AppController : public QObject {
   // ladder rewrites it. Exempt from retention pruning: it is the only pre-v4
   // image of the user's data.
   void retainPreMigrationBackup(const QString& path, int fromVersion);
-  QString m_recoveryNotice;  // deferred toast shown once the UI is up
   // Set when state.json was written by a newer build than this one. Every save
   // path is a no-op while it is true: this build cannot represent the fields it
   // did not parse, so writing would drop them.
@@ -1458,6 +1480,11 @@ class AppController : public QObject {
   QString mintTaskId(const QString& stem) const;
   // Records that `id` was taken, so it is never handed out again.
   void noteTaskIdUsed(const QString& id);
+  // Gives every task of `p` (a profile about to be added) whose id another
+  // profile already holds a fresh one, and points the references inside `p`
+  // — links, #KEY-1 mentions — and `events`' task links at it. Returns
+  // old id -> new id (PLAT-9).
+  QHash<QString, QString> reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
@@ -1539,6 +1566,8 @@ class AppController : public QObject {
   // Applies one recorded entry in either direction and refreshes what the UI
   // derives from the models.
   void applyUndoEntry(const heap::undo::Entry& entry, bool backward);
+  // Hands the open note's unsaved keystrokes to it before an undo or redo.
+  void flushNotesForUndo();
 
   // Selection state
   QSet<QString> m_selectedTaskIds;
@@ -1690,7 +1719,7 @@ class AppController : public QObject {
   // refresh the banner. Needed because a prefix change (settings/profile) does
   // not move HEAD, so no branchChanged fires to re-run the match on its own.
   void refreshFocusedTaskId();
-  void onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId);
+  void onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
 };

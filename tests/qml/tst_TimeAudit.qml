@@ -410,4 +410,59 @@ TestCase {
         const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
         verify(mw.eventCountFor(probeDay(1303)) >= 1, "a later day of the series has a dot");
     }
+
+    // ── TIME-1: an occurrence moved days away shows on its new day ──
+
+    function occOf(id, day) {
+        const occ = AppController.eventOccurrences(day, day);
+        for (let i = 0; i < occ.length; i++)
+            if ((occ[i].masterId === id || occ[i].id === id) && sameDay(occ[i].date, day)) return occ[i];
+        return null;
+    }
+
+    function test_moved_occurrence_shows_in_week_and_mini_week() {
+        const friday = new Date(2034, 0, 13);
+        const monday = new Date(2034, 0, 16);
+        clearRange(new Date(2034, 0, 1), new Date(2034, 0, 31));
+        const id = addEvent(new Date(2034, 0, 6), 10, 11, "FREQ=WEEKLY", "moved friday");
+        AppController.moveOccurrence(occOf(id, friday), 72, "this");
+        verify(occOf(id, monday) !== null, "a day's own range has it on Monday");
+        verify(occOf(id, friday) === null, "gone from its Friday");
+
+        AppController.selectedDate = monday;
+        const wv = createTemporaryQmlObject('import TodoCpp; WeekView { anchors.fill: parent }', host);
+        let seen = false;
+        for (const d of wv.eventDays.days)
+            for (const e of d.events)
+                if (e.title === "moved friday" && sameDay(d.date, monday)) seen = true;
+        verify(seen, "the week of the new day draws it");
+        const mw = createTemporaryQmlObject('import TodoCpp; MiniWeek { }', host);
+        compare(mw.eventCountFor(monday), 1, "the mini week counts it");
+    }
+
+    // ── TIME-2: an untouched repeat rule is saved back as it was given ──
+
+    function test_editor_hands_back_an_untouched_rule() {
+        const start = new Date(2034, 2, 6);  // a Monday
+        clearRange(new Date(2034, 2, 1), new Date(2034, 3, 30));
+        const id = addEvent(start, 10, 11, "FREQ=WEEKLY;BYDAY=MO", "imported weekly");
+        AppController.deleteOccurrence(id, new Date(2034, 2, 13), "this");
+
+        const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
+        ed.showForOccurrence(occOf(id, new Date(2034, 2, 27)));
+        findChild(ed, "event-title").text = "renamed weekly";
+        compare(ed._ruleFromBox(), "FREQ=WEEKLY", "the controls' own spelling");
+        compare(ed._draft().rrule, "FREQ=WEEKLY;BYDAY=MO", "an untouched rule goes back as given");
+        AppController.saveOccurrence(ed._draft(), "all");
+        ed.close();
+        compare(AppController.eventById(id).rrule, "FREQ=WEEKLY;BYDAY=MO");
+        verify(occOf(id, new Date(2034, 2, 13)) === null, "the deleted one stays deleted");
+        compare(occOf(id, new Date(2034, 3, 3)).title, "renamed weekly");
+
+        // Touched, the controls say what is saved.
+        ed.showForOccurrence(occOf(id, new Date(2034, 3, 3)));
+        ed._toggleDay(3);
+        compare(ed._draft().rrule, "FREQ=WEEKLY;BYDAY=MO,WE");
+        ed.close();
+    }
 }

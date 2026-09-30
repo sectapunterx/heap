@@ -248,3 +248,90 @@ TEST(Occurrences, OverridesOnlyApplyToTheirOwnMaster) {
   }
   EXPECT_EQ(fromB, 2);
 }
+
+// ── An occurrence moved further than a day (TIME-1) ──
+//
+// A day or a week view asks for its own few days; the date the occurrence
+// replaced may be well outside them. It must still be drawn where it now is.
+
+namespace {
+
+// Weekly on Fridays from 2032-01-02; the 01-09 one moved to Monday 01-12.
+QVector<CalEvent> fridayMovedToMonday() {
+  CalEvent m = master(QStringLiteral("fri"), QStringLiteral("FREQ=WEEKLY"), QDate(2032, 1, 2));
+  CalEvent ov = master(QStringLiteral("fri-ov"), QString(), QDate(2032, 1, 12));
+  ov.title = QStringLiteral("moved");
+  ov.masterId = QStringLiteral("fri");
+  ov.originalDate = QDate(2032, 1, 9);
+  return {m, ov};
+}
+
+int countMoved(const QVector<Occurrence>& xs) {
+  int n = 0;
+  for(const Occurrence& o : xs) {
+    if(o.event.id == QStringLiteral("fri-ov")) {
+      n++;
+      EXPECT_EQ(o.event.date, QDate(2032, 1, 12));
+      EXPECT_EQ(o.occurrenceDate, QDate(2032, 1, 9));
+    }
+  }
+  return n;
+}
+
+}  // namespace
+
+TEST(Occurrences, AnOverrideMovedDaysAwayIsOnEveryRangeOfItsNewDate) {
+  const QVector<CalEvent> stored = fridayMovedToMonday();
+
+  EXPECT_EQ(countMoved(expandEvents(stored, QDate(2032, 1, 12), QDate(2032, 1, 12))), 1) << "the day itself";
+  EXPECT_EQ(countMoved(expandEvents(stored, QDate(2032, 1, 11), QDate(2032, 1, 13))), 1) << "a day panel's d-1..d+1";
+  EXPECT_EQ(countMoved(expandEvents(stored, QDate(2032, 1, 11), QDate(2032, 1, 17))), 1) << "its week";
+  EXPECT_EQ(countMoved(expandEvents(stored, QDate(2031, 12, 28), QDate(2032, 2, 7))), 1) << "a month: once, not twice";
+  EXPECT_EQ(countMoved(expandEvents(stored, QDate(2032, 1, 5), QDate(2032, 1, 10))), 0) << "not on the week it left";
+  EXPECT_TRUE(expandEvents(stored, QDate(2032, 1, 9), QDate(2032, 1, 9)).isEmpty()) << "the Friday it left stays empty";
+}
+
+// Backwards across a week boundary: Tuesday 02-17 moved to Thursday 02-12.
+TEST(Occurrences, AnOverrideMovedBackAcrossAWeekIsInTheEarlierWeek) {
+  CalEvent m = master(QStringLiteral("tue"), QStringLiteral("FREQ=WEEKLY"), QDate(2032, 2, 3));
+  CalEvent ov = master(QStringLiteral("tue-ov"), QString(), QDate(2032, 2, 12));
+  ov.masterId = QStringLiteral("tue");
+  ov.originalDate = QDate(2032, 2, 17);
+
+  EXPECT_EQ(datesOf(expandEvents({m, ov}, QDate(2032, 2, 8), QDate(2032, 2, 14))),
+            (QVector<QDate>{QDate(2032, 2, 10), QDate(2032, 2, 12)}));
+  EXPECT_TRUE(expandEvents({m, ov}, QDate(2032, 2, 15), QDate(2032, 2, 21)).isEmpty()) << "its one Tuesday was moved away";
+}
+
+// Seen through its new date, an override still needs its master to produce
+// the date it replaces — or it is a ghost.
+TEST(Occurrences, AMovedOverrideOfADateTheSeriesNoLongerHasIsNotEmitted) {
+  const QDate newDay(2032, 1, 12);
+  const auto movedShown = [&](const QVector<CalEvent>& stored) {
+    return countMoved(expandEvents(stored, newDay, newDay));
+  };
+
+  QVector<CalEvent> deleted = fridayMovedToMonday();
+  deleted[0].exdates = {QDate(2032, 1, 9)};
+  EXPECT_EQ(movedShown(deleted), 0) << "the occurrence was deleted";
+
+  QVector<CalEvent> counted = fridayMovedToMonday();
+  counted[0].rrule = QStringLiteral("FREQ=WEEKLY;COUNT=1");
+  EXPECT_EQ(movedShown(counted), 0) << "the series ended before it (COUNT)";
+
+  QVector<CalEvent> until = fridayMovedToMonday();
+  until[0].rrule = QStringLiteral("FREQ=WEEKLY;UNTIL=20320108T000000Z");
+  EXPECT_EQ(movedShown(until), 0) << "the series ended before it (UNTIL)";
+
+  QVector<CalEvent> offDay = fridayMovedToMonday();
+  offDay[1].originalDate = QDate(2032, 1, 8);  // a Thursday
+  EXPECT_EQ(movedShown(offDay), 0) << "not a date of the series";
+
+  QVector<CalEvent> noRule = fridayMovedToMonday();
+  noRule[0].rrule.clear();
+  EXPECT_EQ(movedShown(noRule), 0) << "no series left";
+
+  QVector<CalEvent> orphan = fridayMovedToMonday();
+  orphan.removeFirst();
+  EXPECT_EQ(movedShown(orphan), 0) << "no master";
+}

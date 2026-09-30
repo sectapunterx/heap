@@ -11,11 +11,15 @@ Rectangle {
 
     readonly property string state_: AppController.storageState
     readonly property bool retryable: state_ === "unreadable" || state_ === "writeFailed"
+    // What startup found and did about a damaged state.json (PLAT-6): nothing
+    // is failing now, so it can be put away once read.
+    readonly property bool notice: state_ === "recovered" || state_ === "damaged"
+    readonly property bool mild: state_ === "tooNew" || state_ === "recovered"
 
     visible: state_ !== "" && state_ !== "ok"
     implicitHeight: visible ? Math.max(40, row.implicitHeight + Theme.spMd * 2) : 0
-    color: state_ === "tooNew" ? Theme.panel2 : Theme.panel3
-    border.color: state_ === "tooNew" ? Theme.warning : Theme.danger
+    color: banner.mild ? Theme.panel2 : Theme.panel3
+    border.color: banner.mild ? Theme.warning : Theme.danger
     border.width: 1
 
     RowLayout {
@@ -30,7 +34,7 @@ Rectangle {
             implicitWidth: Theme.spSm
             implicitHeight: Theme.spSm
             radius: Theme.spSm / 2
-            color: banner.state_ === "tooNew" ? Theme.warning : Theme.danger
+            color: banner.mild ? Theme.warning : Theme.danger
         }
         Text {
             objectName: "storage-banner-text"
@@ -53,6 +57,12 @@ Rectangle {
             objectName: "storage-banner-folder"
             text: I18n.t("storage.openFolder")
             onClicked: Qt.openUrlExternally("file:///" + AppController.dataDir)
+        }
+        PillButton {
+            objectName: "storage-banner-dismiss"
+            visible: banner.notice
+            text: I18n.t("banner.dismiss")
+            onClicked: AppController.dismissStorageNotice()
         }
     }
 }

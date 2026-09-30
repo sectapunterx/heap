@@ -1,8 +1,13 @@
 #pragma once
 
+#include "FieldCount.h"
 #include "Models.h"
 
 #include <QHash>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonValue>
 #include <QSet>
 #include <QString>
 #include <QStringList>
@@ -162,6 +167,397 @@ bool untouchedSince(const Model& model, const Edits<T>& edits) {
     }
   }
   return true;
+}
+
+// Replays the edit that turned `from` into `to` on `current`, a later version
+// of `from`. The changed stretch is found in `current` by its own text plus a
+// little of what surrounds it, so a heading rewritten by a rename changes back
+// while the paragraphs typed under it since stay. `ok` is false (and `current`
+// comes back as it is) when that stretch is no longer there to change.
+inline QString rebaseTextEdit(const QString& current, const QString& from, const QString& to, bool* ok) {
+  if(ok != nullptr) {
+    *ok = true;
+  }
+  if(current == from) {
+    return to;
+  }
+  if(from == to || current == to) {
+    return current;
+  }
+  qsizetype prefix = 0;
+  const qsizetype shorter = qMin(from.size(), to.size());
+  while(prefix < shorter && from.at(prefix) == to.at(prefix)) {
+    ++prefix;
+  }
+  qsizetype suffix = 0;
+  while(suffix < shorter - prefix && from.at(from.size() - 1 - suffix) == to.at(to.size() - 1 - suffix)) {
+    ++suffix;
+  }
+  const QString fromMid = from.mid(prefix, from.size() - prefix - suffix);
+  const QString toMid = to.mid(prefix, to.size() - prefix - suffix);
+  const auto spliceAt = [&](qsizetype at) {
+    return current.left(at) + toMid + current.mid(at + fromMid.size());
+  };
+  // Anchored at either end of the text: a heading, a trailing line.
+  if(current.startsWith(from.left(prefix) + fromMid)) {
+    return spliceAt(prefix);
+  }
+  if(current.endsWith(fromMid + from.right(suffix))) {
+    return spliceAt(current.size() - suffix - fromMid.size());
+  }
+  // Anywhere else, as long as the stretch and its context occur exactly once.
+  for(const qsizetype context : {qsizetype(32), qsizetype(8), qsizetype(2)}) {
+    const qsizetype left = qMin(prefix, context);
+    const qsizetype right = qMin(suffix, context);
+    const QString needle = from.mid(prefix - left, left + fromMid.size() + right);
+    if(needle.isEmpty()) {
+      continue;
+    }
+    const qsizetype at = current.indexOf(needle);
+    if(at >= 0 && current.indexOf(needle, at + 1) < 0) {
+      return spliceAt(at + left);
+    }
+  }
+  if(ok != nullptr) {
+    *ok = false;
+  }
+  return current;
+}
+
+// A note's typing is not an undo step, so an entry that renamed, pinned or
+// moved a note must not put the whole note back: that would take everything
+// typed since with it. Only the fields the entry changed go from `from` to
+// `to`, on top of the note as it is now. `ok` is false when one of them has
+// been changed again since.
+inline ::Note mergeNoteEdit(const ::Note& current, const ::Note& from, const ::Note& to, bool* ok) {
+  static_assert(heap::meta::fieldCount<::Note>() == 10, "Note gained or lost a field: teach mergeNoteEdit about it.");
+  ::Note out = current;
+  bool clean = true;
+  const auto field = [&](auto member) {
+    if(!(from.*member == to.*member)) {
+      clean = clean && current.*member == from.*member;
+      out.*member = to.*member;
+    }
+  };
+  field(&::Note::title);
+  field(&::Note::folder);
+  field(&::Note::pinned);
+  field(&::Note::created);
+  field(&::Note::vaultPath);
+  field(&::Note::vaultHash);
+  field(&::Note::frontmatter);
+  bool bodyClean = true;
+  out.body = rebaseTextEdit(current.body, from.body, to.body, &bodyClean);
+  clean = clean && bodyClean;
+  // The edit time the entry recorded, unless there has been typing since.
+  if(from.updated != to.updated && current.body == from.body) {
+    out.updated = to.updated;
+  }
+  if(ok != nullptr) {
+    *ok = clean;
+  }
+  return out;
+}
+
+// The same for a doc page: its body is typed without undo steps too.
+inline ::DocPage mergeDocPageEdit(const ::DocPage& current, const ::DocPage& from, const ::DocPage& to, bool* ok) {
+  static_assert(heap::meta::fieldCount<::DocPage>() == 7, "DocPage gained or lost a field: teach mergeDocPageEdit about it.");
+  ::DocPage out = current;
+  bool clean = true;
+  const auto field = [&](auto member) {
+    if(!(from.*member == to.*member)) {
+      clean = clean && current.*member == from.*member;
+      out.*member = to.*member;
+    }
+  };
+  field(&::DocPage::parentId);
+  field(&::DocPage::title);
+  field(&::DocPage::rank);
+  field(&::DocPage::created);
+  bool bodyClean = true;
+  out.body = rebaseTextEdit(current.body, from.body, to.body, &bodyClean);
+  clean = clean && bodyClean;
+  if(from.updated != to.updated && current.body == from.body) {
+    out.updated = to.updated;
+  }
+  if(ok != nullptr) {
+    *ok = clean;
+  }
+  return out;
+}
+
+// A person's state is cycled from the rail and people are imported from
+// Mattermost without undo steps, so undoing an edit made in the editor puts
+// back only the fields that edit changed.
+inline ::Person mergePersonEdit(const ::Person& current, const ::Person& from, const ::Person& to, bool* ok) {
+  static_assert(heap::meta::fieldCount<::Person>() == 7, "Person gained or lost a field: teach mergePersonEdit about it.");
+  ::Person out = current;
+  bool clean = true;
+  const auto field = [&](auto member) {
+    if(!(from.*member == to.*member)) {
+      clean = clean && current.*member == from.*member;
+      out.*member = to.*member;
+    }
+  };
+  field(&::Person::name);
+  field(&::Person::role);
+  field(&::Person::question);
+  field(&::Person::state);
+  field(&::Person::color);
+  field(&::Person::extra);
+  if(ok != nullptr) {
+    *ok = clean;
+  }
+  return out;
+}
+
+inline ::Person mergeEdit(const ::Person& current, const ::Person& from, const ::Person& to, bool* ok) {
+  return mergePersonEdit(current, from, to, ok);
+}
+
+inline ::Note mergeEdit(const ::Note& current, const ::Note& from, const ::Note& to, bool* ok) {
+  return mergeNoteEdit(current, from, to, ok);
+}
+
+inline ::DocPage mergeEdit(const ::DocPage& current, const ::DocPage& from, const ::DocPage& to, bool* ok) {
+  return mergeDocPageEdit(current, from, to, ok);
+}
+
+// applyBackward/applyForward for a collection whose elements are also edited
+// outside the undo stack (notes, doc pages, people): an element the entry
+// changed gets only the entry's own changes, merged onto what it holds now.
+template<class Model, class T>
+void applyMerged(Model& model, const Edits<T>& edits, bool backward) {
+  Edits<T> plain;
+  for(const Edit<T>& e : edits) {
+    const int row = e.existedBefore && e.existsAfter ? model.indexOfId(e.id) : -1;
+    if(row < 0) {
+      plain.append(e);
+      continue;
+    }
+    const T& from = backward ? e.after : e.before;
+    const T& to = backward ? e.before : e.after;
+    model.upsert(mergeEdit(model.items().at(row), from, to, nullptr));
+  }
+  if(backward) {
+    applyBackward(model, plain);
+  } else {
+    applyForward(model, plain);
+  }
+}
+
+// Before an entry takes an element out again (undoing its creation, redoing
+// its deletion), the copy it will put back later is refreshed to the element
+// as it is now — otherwise what was typed into it in between would not come
+// back with it.
+template<class Model, class T>
+void refreshLeaving(const Model& model, Edits<T>& edits, bool backward) {
+  for(Edit<T>& e : edits) {
+    const bool leaves = backward ? (!e.existedBefore && e.existsAfter) : (e.existedBefore && !e.existsAfter);
+    const int row = leaves ? model.indexOfId(e.id) : -1;
+    if(row < 0) {
+      continue;
+    }
+    (backward ? e.after : e.before) = model.items().at(row);
+  }
+}
+
+// untouchedSince for the merged collections: the fields the entry changed
+// still say what it left them saying.
+template<class Model, class T>
+bool mergeableSince(const Model& model, const Edits<T>& edits) {
+  for(const Edit<T>& e : edits) {
+    const int row = model.indexOfId(e.id);
+    if((row >= 0) != e.existsAfter) {
+      return false;
+    }
+    if(row >= 0 && e.existedBefore) {
+      bool ok = true;
+      mergeEdit(model.items().at(row), e.after, e.before, &ok);
+      if(!ok) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+// Who a Docs contact is: its Mattermost user id once it came from there, the
+// handle it was typed with, else its name. Contacts carry no id of their own,
+// and a personId or a synced title added to one must not make it another.
+inline QString docsContactKey(const QJsonObject& contact) {
+  const QString ext = contact.value(QStringLiteral("mmId")).toString();
+  if(!ext.isEmpty()) {
+    return QStringLiteral("mm:") + ext;
+  }
+  QString handle = contact.value(QStringLiteral("mattermost")).toString().trimmed();
+  while(handle.startsWith(QLatin1Char('@'))) {
+    handle.remove(0, 1);
+  }
+  if(!handle.isEmpty()) {
+    return QStringLiteral("at:") + handle.toLower();
+  }
+  return QStringLiteral("name:") + contact.value(QStringLiteral("name")).toString().trimmed().toLower();
+}
+
+namespace detail {
+
+// What identifies one element of a docs list: its id where it has one (the
+// sections and their entries), who it is for a contact, its whole value
+// otherwise (snippets). The occurrence number keeps two identical snippets
+// two elements.
+inline QStringList jsonKeys(const QJsonArray& xs, bool contacts = false) {
+  QStringList out;
+  QHash<QString, int> seen;
+  for(const QJsonValue& v : xs) {
+    const QString id = v.isObject() ? v.toObject().value(QStringLiteral("id")).toString() : QString();
+    QString base;
+    if(!id.isEmpty()) {
+      base = QStringLiteral("id:") + id;
+    } else if(contacts && v.isObject()) {
+      base = QStringLiteral("c:") + docsContactKey(v.toObject());
+    } else {
+      base = QStringLiteral("v:") + QString::fromUtf8(QJsonDocument(QJsonArray{v}).toJson(QJsonDocument::Compact));
+    }
+    out.append(base + QLatin1Char('#') + QString::number(seen[base]++));
+  }
+  return out;
+}
+
+inline QJsonValue rebaseJson(
+    const QJsonValue& current, const QJsonValue& from, const QJsonValue& to, bool* clean, const QString& field = QString());
+
+inline QJsonArray rebaseJsonArray(
+    const QJsonArray& current, const QJsonArray& from, const QJsonArray& to, bool* clean, bool contacts = false) {
+  const QStringList fromKeys = jsonKeys(from, contacts);
+  const QStringList toKeys = jsonKeys(to, contacts);
+  QJsonArray out = current;
+  QStringList outKeys = jsonKeys(current, contacts);
+  bool membership = false;
+  // Gone in `to`: take them out of the current list.
+  for(int i = 0; i < fromKeys.size(); ++i) {
+    if(!toKeys.contains(fromKeys.at(i))) {
+      membership = true;
+      const qsizetype at = outKeys.indexOf(fromKeys.at(i));
+      if(at >= 0) {
+        out.removeAt(at);
+        outKeys.removeAt(at);
+      }
+    }
+  }
+  // In both but changed: merge them in place.
+  for(int i = 0; i < toKeys.size(); ++i) {
+    const qsizetype inFrom = fromKeys.indexOf(toKeys.at(i));
+    if(inFrom < 0 || from.at(inFrom) == to.at(i)) {
+      continue;
+    }
+    membership = true;
+    const qsizetype at = outKeys.indexOf(toKeys.at(i));
+    if(at >= 0) {
+      out[at] = rebaseJson(out.at(at), from.at(inFrom), to.at(i), clean);
+    } else {
+      *clean = false;
+    }
+  }
+  // New in `to`: put them back after whatever preceded them there.
+  for(int i = 0; i < toKeys.size(); ++i) {
+    if(fromKeys.contains(toKeys.at(i))) {
+      continue;
+    }
+    membership = true;
+    if(outKeys.contains(toKeys.at(i))) {
+      continue;
+    }
+    qsizetype at = 0;
+    for(int j = i - 1; j >= 0; --j) {
+      const qsizetype prev = outKeys.indexOf(toKeys.at(j));
+      if(prev >= 0) {
+        at = prev + 1;
+        break;
+      }
+    }
+    out.insert(at, to.at(i));
+    outKeys.insert(at, toKeys.at(i));
+  }
+  // Only the order changed: that can be put back only if nothing moved since.
+  if(!membership && from != to) {
+    if(current == from) {
+      out = to;
+    } else {
+      *clean = false;
+    }
+  }
+  return out;
+}
+
+inline QJsonValue rebaseJson(const QJsonValue& current, const QJsonValue& from, const QJsonValue& to, bool* clean, const QString& field) {
+  if(from == to) {
+    return current;
+  }
+  if(current == from) {
+    return to;
+  }
+  if(current.isObject() && from.isObject() && to.isObject()) {
+    QJsonObject out = current.toObject();
+    const QJsonObject f = from.toObject();
+    const QJsonObject t = to.toObject();
+    QStringList keys = f.keys();
+    for(const QString& k : t.keys()) {
+      if(!keys.contains(k)) {
+        keys.append(k);
+      }
+    }
+    for(const QString& k : keys) {
+      if(f.value(k) == t.value(k)) {
+        continue;
+      }
+      if(!t.contains(k)) {
+        out.remove(k);
+      } else {
+        out.insert(k, rebaseJson(out.value(k), f.value(k), t.value(k), clean, k));
+      }
+    }
+    return out;
+  }
+  if(current.isArray() && from.isArray() && to.isArray()) {
+    return rebaseJsonArray(current.toArray(), from.toArray(), to.toArray(), clean, field == QLatin1String("contacts"));
+  }
+  // A plain value changed again since: the undo still says what it says.
+  *clean = false;
+  return to;
+}
+
+}  // namespace detail
+
+// The Docs catalogue is one JSON blob, but a later edit to one entry is not
+// part of an entry that deleted another: undoing that deletion puts the entry
+// back by id into the blob as it is now, and redoing it takes it out by id,
+// rather than swapping the whole blob for the copy taken at the time. Falls
+// back to the recorded copy when a side is not JSON (a blob never saved).
+inline QString rebaseDocsState(const QString& current, const QString& from, const QString& to, bool* ok) {
+  if(ok != nullptr) {
+    *ok = true;
+  }
+  if(current == from) {
+    return to;
+  }
+  QJsonParseError e1{}, e2{}, e3{};
+  const QJsonDocument cur = QJsonDocument::fromJson(current.toUtf8(), &e1);
+  const QJsonDocument f = QJsonDocument::fromJson(from.toUtf8(), &e2);
+  const QJsonDocument t = QJsonDocument::fromJson(to.toUtf8(), &e3);
+  if(e1.error != QJsonParseError::NoError || e2.error != QJsonParseError::NoError || e3.error != QJsonParseError::NoError ||
+     !cur.isObject() || !f.isObject() || !t.isObject()) {
+    if(ok != nullptr) {
+      *ok = false;
+    }
+    return to;
+  }
+  bool clean = true;
+  const QJsonValue merged = detail::rebaseJson(cur.object(), f.object(), t.object(), &clean);
+  if(ok != nullptr) {
+    *ok = clean;
+  }
+  return QString::fromUtf8(QJsonDocument(merged.toObject()).toJson(QJsonDocument::Compact));
 }
 
 namespace detail {
@@ -329,19 +725,20 @@ class UndoStack {
     return canRedo() ? &m_entries.at(m_cursor) : nullptr;
   }
 
-  const Entry* takeUndo() {
+  // Mutable: the entry refreshes what it will put back (refreshLeaving).
+  Entry* takeUndo() {
     if(!canUndo()) {
       return nullptr;
     }
     --m_cursor;
-    return &m_entries.at(m_cursor);
+    return &m_entries[m_cursor];
   }
 
-  const Entry* takeRedo() {
+  Entry* takeRedo() {
     if(!canRedo()) {
       return nullptr;
     }
-    const Entry* e = &m_entries.at(m_cursor);
+    Entry* e = &m_entries[m_cursor];
     ++m_cursor;
     return e;
   }

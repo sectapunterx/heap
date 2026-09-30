@@ -17,6 +17,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonDocument>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QVector>
@@ -209,6 +210,81 @@ TEST_F(UndoTest, TheStackIsCappedAtItsMaximumDepth) {
     app_->moveTask(QStringLiteral("T-1"), (i % 2 == 0) ? QStringLiteral("prog") : QStringLiteral("todo"));
   }
   EXPECT_EQ(app_->undoDepth(), cap);
+}
+
+// Replaying a recorded text edit on a later version of the text (KNOW-1): the
+// stretch that changed is found again, and anything typed elsewhere stays.
+TEST(UndoRebase, ATextEditIsReplayedOnTheTextAsItIsNow) {
+  bool ok = false;
+  // A rename's heading, with a paragraph typed under it since.
+  EXPECT_EQ(
+      heap::undo::rebaseTextEdit(QStringLiteral("# Final\n\nimportant"), QStringLiteral("# Final\n\n"), QStringLiteral("# Draft\n\n"), &ok),
+      QStringLiteral("# Draft\n\nimportant"));
+  EXPECT_TRUE(ok);
+  // A link retargeted mid-text, with typing on both sides of it.
+  EXPECT_EQ(heap::undo::rebaseTextEdit(QStringLiteral("new top\nsee [[New]] here\nnew end"),
+                                       QStringLiteral("see [[New]] here"),
+                                       QStringLiteral("see [[Old]] here"),
+                                       &ok),
+            QStringLiteral("new top\nsee [[Old]] here\nnew end"));
+  EXPECT_TRUE(ok);
+  // The stretch itself was retyped: the text is left alone and says so.
+  EXPECT_EQ(heap::undo::rebaseTextEdit(
+                QStringLiteral("# Something else\n\nx"), QStringLiteral("# Final\n\n"), QStringLiteral("# Draft\n\n"), &ok),
+            QStringLiteral("# Something else\n\nx"));
+  EXPECT_FALSE(ok);
+}
+
+// Only the fields the entry changed move; the rest of the note is as it is now.
+TEST(UndoRebase, ANoteEditMovesOnlyTheFieldsItChanged) {
+  Note before;
+  before.id = QStringLiteral("n");
+  before.title = QStringLiteral("N");
+  before.body = QStringLiteral("# N\n\n");
+  Note after = before;
+  after.pinned = true;
+  Note now = after;
+  now.body = QStringLiteral("# N\n\ntyped");
+  now.folder = QStringLiteral("moved by hand");
+  bool ok = false;
+  const Note undone = heap::undo::mergeNoteEdit(now, after, before, &ok);
+  EXPECT_TRUE(ok);
+  EXPECT_FALSE(undone.pinned);
+  EXPECT_EQ(undone.body, now.body);
+  EXPECT_EQ(undone.folder, now.folder);
+}
+
+// The Docs blob: entries go back in by id, next to the neighbour they had, and
+// edits to other entries stay (KNOW-2).
+TEST(UndoRebase, ADocsDeletionIsUndoneById) {
+  const QString before = QStringLiteral(R"({"sections":[{"id":"s","items":[{"id":"a"},{"id":"b"},{"id":"c"}]}],"snippets":[]})");
+  const QString after = QStringLiteral(R"({"sections":[{"id":"s","items":[{"id":"a"},{"id":"c"}]}],"snippets":[]})");
+  const QString now = QStringLiteral(R"({"sections":[{"id":"s","items":[{"id":"a","t":"edited"},{"id":"c"},{"id":"d"}]}],"snippets":[]})");
+  bool ok = false;
+  const QString undone = heap::undo::rebaseDocsState(now, after, before, &ok);
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(QJsonDocument::fromJson(undone.toUtf8()),
+            QJsonDocument::fromJson(
+                R"({"sections":[{"id":"s","items":[{"id":"a","t":"edited"},{"id":"b"},{"id":"c"},{"id":"d"}]}],"snippets":[]})"));
+  const QString redone = heap::undo::rebaseDocsState(undone, before, after, &ok);
+  EXPECT_EQ(QJsonDocument::fromJson(redone.toUtf8()), QJsonDocument::fromJson(now.toUtf8()));
+}
+
+// A contact has no id: linking it to a Person inside an undo step and a
+// Mattermost sync changing it again afterwards still leave one contact, and
+// the undo takes back only the link.
+TEST(UndoRebase, AnEditedDocsContactIsUndoneInPlace) {
+  const QString before = QStringLiteral(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"dev"}]})");
+  const QString after = QStringLiteral(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"dev","personId":"ann"}]})");
+  const QString now =
+      QStringLiteral(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"lead","personId":"ann","mm":{"role":"lead"}}]})");
+  bool ok = false;
+  const QString undone = heap::undo::rebaseDocsState(now, after, before, &ok);
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(QJsonDocument::fromJson(undone.toUtf8()),
+            QJsonDocument::fromJson(R"({"contacts":[{"name":"Ann","mattermost":"@ann","role":"lead","mm":{"role":"lead"}}]})"));
+  const QString redone = heap::undo::rebaseDocsState(undone, before, after, &ok);
+  EXPECT_EQ(QJsonDocument::fromJson(redone.toUtf8()), QJsonDocument::fromJson(now.toUtf8()));
 }
 
 int main(int argc, char** argv) {

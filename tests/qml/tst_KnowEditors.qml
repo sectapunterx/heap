@@ -134,6 +134,27 @@ TestCase {
         compare(area.text, "**bold** me");
     }
 
+    // Ctrl+Shift+Z within the debounce: the page's last keystrokes go into it
+    // before the redo deletes it again, so the next undo brings them back.
+    function test_undo_flushes_the_doc_page_editor() {
+        const id = AppController.newDocPage("Flush probe");
+        tc.pages.push(id);
+        const pane = createTemporaryQmlObject('import TodoCpp; MdEditorPane { width: 800; height: 400 }', host);
+        pane.pageId = id;
+        AppController.deleteDocPage(id);
+        AppController.undo();
+        compare(AppController.docPageBody(id), "# Flush probe\n\n");
+        const area = findChild(pane, "docpage-text");
+        area.forceActiveFocus();
+        area.cursorPosition = area.length;
+        keyClick(Qt.Key_Z);
+        verify(pane._dirty, "the keystroke is still only in the editor");
+        AppController.redo();
+        wait(400);
+        AppController.undo();
+        compare(AppController.docPageBody(id), "# Flush probe\n\nz");
+    }
+
     function test_doc_page_head_follows_a_rename() {
         const id = AppController.newDocPage("Before probe");
         tc.pages.push(id);

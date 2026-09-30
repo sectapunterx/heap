@@ -278,6 +278,10 @@ python -m aqt install-qt windows desktop 6.9.1 win64_msvc2022_64 -O C:/Qt -m qtn
 python .github/scripts/qmllint_local.py --build build --qt C:/Qt/6.9.1/msvc2022_64   # or set HEAP_QMLLINT_QT
 ```
 
+Once that Qt is in `C:/Qt/6.9.1`, `~/Qt/6.9.1` or `HEAP_QMLLINT_QT`, configuring the build finds it and `ctest` runs the
+same check as `heap_qmllint_qt69` (lines changed since `origin/master`), so a green `ctest` means a green ratchet.
+Set `-DHEAP_QMLLINT_QT=` to another Qt 6.9 dir, or leave the Qt out to skip it.
+
 ## Project layout
 
 ```

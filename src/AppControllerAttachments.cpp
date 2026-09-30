@@ -110,7 +110,7 @@ QVariantList AppController::describeAttachments(const QVariantList& attachments)
   return out;
 }
 
-QVariantList AppController::importAttachments(const QVariantList& urls) {
+QVariantList AppController::importAttachments(const QVariantList& urls, bool intoText) {
   const att::Store store(attachmentsDir());
   QVector<::Attachment> stored;
   for(const QVariant& v : urls) {
@@ -124,6 +124,9 @@ QVariantList AppController::importAttachments(const QVariantList& urls) {
       continue;
     }
     stored.append(r.attachment);
+    if(intoText) {
+      m_attachmentsLinkedThisSession.insert(r.attachment.id);
+    }
   }
   return describeAttachments(att::toVariantList(stored));
 }
@@ -294,7 +297,7 @@ QVariantList AppController::importClipboardAttachments() {
     for(const QString& f : files) {
       urls << QUrl::fromLocalFile(f);
     }
-    return importAttachments(urls);
+    return importAttachments(urls, /*intoText=*/true);
   }
   if(!clipboardImageOnly(mime)) {
     return {};
@@ -315,6 +318,7 @@ QVariantList AppController::importClipboardAttachments() {
     toastAddFailure(name, r.error);
     return {};
   }
+  m_attachmentsLinkedThisSession.insert(r.attachment.id);
   return describeAttachments(att::toVariantList({r.attachment}));
 }
 
@@ -353,8 +357,48 @@ void collectProfile(const Profile& p, QSet<QString>* ids) {
 
 }  // namespace
 
+void AppController::trackAttachmentRefsInText() {
+  const auto note = [this](const QString& text) {
+    collectText(text, &m_attachmentsLinkedThisSession);
+  };
+  // Rows as they are inserted, changed or reset: that covers typing, undo,
+  // imports and a profile switch alike.
+  const auto watch = [this](auto* model, auto textOf) {
+    const auto scan = [model, textOf, this](int first, int last) {
+      const auto& items = model->items();
+      for(int row = qMax(0, first); row <= last && row < items.size(); ++row) {
+        collectText(textOf(items.at(row)), &m_attachmentsLinkedThisSession);
+      }
+    };
+    connect(model, &QAbstractItemModel::dataChanged, this, [scan](const QModelIndex& from, const QModelIndex& to) {
+      scan(from.row(), to.row());
+    });
+    connect(model, &QAbstractItemModel::rowsInserted, this, [scan](const QModelIndex&, int first, int last) {
+      scan(first, last);
+    });
+    connect(model, &QAbstractItemModel::modelReset, this, [scan, model]() {
+      scan(0, model->rowCount() - 1);
+    });
+  };
+  watch(&m_notes, [](const Note& n) -> const QString& {
+    return n.body;
+  });
+  watch(&m_docPages, [](const DocPage& d) -> const QString& {
+    return d.body;
+  });
+  watch(&m_tasks, [](const ::Task& t) -> const QString& {
+    return t.desc;
+  });
+  connect(this, &AppController::notesStateChanged, this, [this, note]() {
+    note(m_notesState);
+  });
+  connect(this, &AppController::docsStateChanged, this, [this, note]() {
+    note(m_docsState);
+  });
+}
+
 QSet<QString> AppController::referencedAttachmentIds() const {
-  QSet<QString> ids;
+  QSet<QString> ids = m_attachmentsLinkedThisSession;
   for(const Profile& p : m_profiles) {
     if(p.id != m_activeProfileId) {
       collectProfile(p, &ids);

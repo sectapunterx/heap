@@ -274,14 +274,10 @@ TEST_F(FaultInjectionTest, RecoveryIsSurfacedToTheUser) {
   writeRaw(statePath(), QByteArray("{ truncated"));
 
   AppController app;
-  // The controller defers the banner to the event loop so the QML toast bar
-  // exists; drain it and check the user is actually told.
-  QString shown;
-  QObject::connect(&app, &AppController::toast, [&shown](const QString& msg) {
-    shown = msg;
-  });
-  QCoreApplication::processEvents();
-  EXPECT_FALSE(shown.isEmpty()) << "recovery happened silently";
+  // A persistent storage banner, not a toast that is gone in two seconds
+  // under the welcome dialog (PLAT-6).
+  EXPECT_EQ(app.storageState(), QStringLiteral("recovered")) << "recovery happened silently";
+  EXPECT_FALSE(app.storageMessage().isEmpty());
 }
 
 int main(int argc, char** argv) {

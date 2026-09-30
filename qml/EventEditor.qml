@@ -67,6 +67,7 @@ Popup {
     // RRULE text → editor state. Returns false for a rule the controls cannot
     // represent (it is then kept as custom text).
     function _loadRule(rule) {
+        root._openedRule = rule || "";
         root.customRule = rule || "";
         root.repeatDays = [];
         root.endKind = "never";
@@ -135,6 +136,22 @@ Popup {
             r += ";UNTIL=" + Qt.formatDate(root.untilDate, "yyyyMMdd");
         return r;
     }
+    // The rule as it was opened, and the repeat controls' state at that
+    // moment. Rebuilt from the controls, an imported "FREQ=WEEKLY;BYDAY=MO"
+    // comes back as "FREQ=WEEKLY" and an exact UNTIL loses its time; a save
+    // that never touched the controls hands back the rule it was given.
+    property string _openedRule: ""
+    property string _openedRuleState: ""
+    function _ruleState() {
+        return JSON.stringify({
+            kind: repeatBox.currentIndex, days: root.repeatDays.slice().sort(), endKind: root.endKind,
+            until: root.untilDate && root.untilDate.getFullYear ? Qt.formatDate(root.untilDate, "yyyyMMdd") : "",
+            count: root.repeatCount, custom: root.customRule
+        });
+    }
+    function _ruleToSave() {
+        return root._ruleState() === root._openedRuleState ? root._openedRule : root._ruleFromBox();
+    }
     function _toggleDay(d) {
         const days = root.repeatDays.slice();
         const i = days.indexOf(d);
@@ -190,6 +207,7 @@ Popup {
         root._confirmDiscard = false;
         open();
         root._openedAs = JSON.stringify(root._draftFields());
+        root._openedRuleState = root._ruleState();
         titleField.forceActiveFocus();
         titleField.selectAll();
     }
@@ -341,7 +359,7 @@ Popup {
             date: root.pickedDate,
             endDate: root.pickedEndDate,
             allDay: root.allDay,
-            rrule: root._ruleFromBox(),
+            rrule: root._ruleToSave(),
             masterId: root.masterId,
             originalDate: root.originalDate,
             taskId: (stored && stored.taskId) ? stored.taskId : "",

@@ -220,6 +220,51 @@ TestCase {
         verify(b.cursorVisible, "Esc closed the menu and nothing else");
     }
 
+    // PERA-1: M → Down → Down → Enter on "Set priority ›" opened the list while
+    // the card menu's close was handing focus back to the board. The list sat
+    // open without the keyboard; G's date popup closing gave it focus back,
+    // unseen, and the next Enter set P0.
+    function test_priority_list_from_the_keyboard_never_holds_focus_unseen() {
+        const b = board();
+        b.searchText = tc.probe;
+        b.moveCursor(0, 1);
+        const id = b.cursorTaskId;
+        verify(id !== "");
+        AppController.setTaskPriority(id, "P3");
+        const card = b._cardItem(id);
+        verify(card !== null);
+        tc.win.focusActiveView();
+
+        keyClick(Qt.Key_M);
+        tryVerify(function () { return card._menu && card._menu.opened; });
+        keyClick(Qt.Key_Down);
+        keyClick(Qt.Key_Down);
+        compare(card._menu.itemAt(card._menu.currentIndex).objectName, "tc-menu-priority");
+        keyClick(Qt.Key_Return);
+        // The list is up, has the keyboard, and starts on the current value.
+        tryVerify(function () { return card._priorityMenu && card._priorityMenu.opened; }, 2000);
+        tryVerify(function () { return card._priorityMenu.activeFocus; }, 2000, "the list opened without the keyboard");
+        compare(tc.win.activeFocusItem.text, "P3");
+
+        keyClick(Qt.Key_G);
+        const go = popup("go-to-date");
+        tryCompare(go, "opened", true);
+        tryCompare(card._priorityMenu, "visible", false, 2000, "a menu the keyboard left stays open");
+        keyClick(Qt.Key_Escape);
+        tryCompare(go, "opened", false);
+        wait(100);
+        verify(typeName(tc.win.activeFocusItem).indexOf("AppMenuItem") !== 0,
+               "a closed menu's row holds the keyboard: " + typeName(tc.win.activeFocusItem));
+
+        keyClick(Qt.Key_Return);
+        wait(100);
+        compare(AppController.taskById(id).priority, "P3", "Enter changed the priority unseen");
+        const te = popup("TaskEditor");
+        tryCompare(te, "opened", true);
+        keyClick(Qt.Key_Escape);
+        tryCompare(te, "opened", false);
+    }
+
     // TASKS-5: Enter in "New column" creates the column, not a task editor.
     function test_add_column_enter_creates_column() {
         const b = board();

@@ -97,6 +97,8 @@ Task makeFullTask() {
                               5000000123LL,
                               QStringLiteral("image/png")},
                    Attachment{QStringLiteral("fedcba9876543210fedcba9876543210"), QStringLiteral("Makefile"), 42, QString()}};
+  // A key a newer build wrote: it has to come back out as itself (PLAT-15).
+  t.extra = QJsonObject{{QStringLiteral("futureTaskField"), QJsonObject{{QStringLiteral("n"), 1}}}};
   return t;
 }
 
@@ -123,6 +125,7 @@ CalEvent makeFullEvent() {
   e.notes = QStringLiteral("agenda:\n- one");
   e.url = QStringLiteral("https://meet.example/abc");
   e.reminderMinutes = 15;
+  e.extra = QJsonObject{{QStringLiteral("futureEventField"), QStringLiteral("keep")}};
   return e;
 }
 
@@ -282,9 +285,9 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 26u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 27u);
   EXPECT_EQ(heap::meta::fieldCount<Attachment>(), 4u);
-  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 21u);
+  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 22u);
 }
 
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole

@@ -9,8 +9,10 @@
 #include "diag/IssueReport.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/IntegrationTypes.h"
+#include "integrations/JiraProvider.h"
 #include "integrations/OAuthRefresh.h"
 #include "integrations/ProviderRegistry.h"
+#include "integrations/RestIssueProvider.h"
 #include "integrations/TrackerMerge.h"
 #include "update/Updater.h"
 
@@ -19,6 +21,7 @@
 #include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QNetworkProxy>
 #include <QNetworkReply>
 #include <QStandardPaths>
 #include <QTemporaryDir>
@@ -26,6 +29,7 @@
 
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <memory>
 
 namespace intaudit {
@@ -505,6 +509,258 @@ TEST_F(IntAudit, JiraMoveTheWorkflowCannotMake_IsRefusedOnTheDrop) {
   e.transitions.clear();
   app_->mergeExternalTasks(QStringLiteral("jira"), QStringLiteral("jira-"), {e}, false);
   EXPECT_TRUE(app_->canTransitionStatus(QStringLiteral("jira-HT-11"), QStringLiteral("review")));
+}
+
+// ── Audit 2026-09-30-1 INT-1/2/3/7: where a status push goes, and what it leaves ──
+
+class TrackerPush : public IntAudit {
+ protected:
+  // A Gitea card: its host is configurable, so the whole push runs against the
+  // fake server through the same RestIssueProvider path as GitHub and GitLab.
+  void addCard(const QString& number, const QString& project, bool crossProject = false) {
+    Task t;
+    t.id = QStringLiteral("gitea-") + number;
+    t.title = QStringLiteral("issue ") + number;
+    t.status = QStringLiteral("todo");
+    t.externalId = number;
+    t.externalProvider = QStringLiteral("gitea");
+    t.externalUrl = QStringLiteral("https://gitea.example.com/%1/issues/%2").arg(project, number);
+    t.externalMeta.status = QStringLiteral("open");
+    t.externalMeta.column = QStringLiteral("todo");
+    t.externalMeta.title = t.title;
+    t.externalMeta.body = QString();
+    t.externalMeta.project = project;
+    t.externalMeta.crossProject = crossProject;
+    QVector<Task> all = app_->tasks()->items();
+    all.append(t);
+    app_->tasks()->reset(all);
+  }
+
+  void connectGitea(const QString& repo) {
+    app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+    writeIntegrationConfig(QStringLiteral("gitea"),
+                           QJsonObject{
+                               {QStringLiteral("connected"), true},
+                               {QStringLiteral("host"), server.base()},
+                               {QStringLiteral("repo"), repo},
+                           });
+  }
+
+  static QByteArray giteaIssue(const QString& number, const QString& state, const QString& repo = QStringLiteral("acme/web")) {
+    return QStringLiteral(
+               R"({"number":%1,"title":"issue %1","body":"","state":"%2","html_url":"https://gitea.example.com/%3/issues/%1","repository":{"full_name":"%3"}})")
+        .arg(number, state, repo)
+        .toUtf8();
+  }
+
+  ExternalTask pulled(const QString& number, const QString& state) const {
+    ExternalTask e;
+    e.providerId = QStringLiteral("gitea");
+    e.externalId = number;
+    e.url = QStringLiteral("https://gitea.example.com/acme/web/issues/") + number;
+    e.title = QStringLiteral("issue ") + number;
+    e.status = state;
+    e.project = QStringLiteral("acme/web");
+    return e;
+  }
+
+  int requestsTo(const QByteArray& key) const {
+    return static_cast<int>(server.seen().count(key));
+  }
+
+  bool anyRequestMentions(const QByteArray& fragment) const {
+    return std::any_of(server.seen().cbegin(), server.seen().cend(), [&fragment](const QByteArray& k) {
+      return k.contains(fragment);
+    });
+  }
+
+  heap::testing::FakeHttpServer server;
+};
+
+// INT-1: a card kept from the previous repo writes to that repo, Retry too.
+TEST_F(TrackerPush, CardFromThePreviousRepo_IsPushedToItsOwnRepo_AndSoIsTheRetry) {
+  server.routeSequence("PATCH /api/v1/repos/acme/web/issues/8",
+                       {{404, R"({"message":"not found"})", {}}, {200, giteaIssue("8", "closed"), {}}});
+  connectGitea(QStringLiteral("acme/other"));
+  addCard(QStringLiteral("8"), QStringLiteral("acme/web"));
+
+  app_->moveTask(QStringLiteral("gitea-8"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("gitea-8")->externalMeta.unsyncedStatus == QStringLiteral("done") &&
+           requestsTo("PATCH /api/v1/repos/acme/web/issues/8") == 1;
+  })) << "the push did not go to the card's own repo";
+
+  app_->retryTrackerPush(QStringLiteral("gitea-8"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("gitea-8")->externalMeta.unsyncedStatus.isEmpty();
+  })) << "the retry did not go through";
+  EXPECT_EQ(requestsTo("PATCH /api/v1/repos/acme/web/issues/8"), 2);
+  EXPECT_FALSE(anyRequestMentions("acme/other")) << "a push wrote to the repo in the settings, not the card's";
+  EXPECT_TRUE(server.lastRequest("PATCH /api/v1/repos/acme/web/issues/8").body.contains("closed"));
+}
+
+// INT-2: under "assigned to me" a card whose repo is known is really sent.
+TEST_F(TrackerPush, AssignedToMeScope_PushesACardWithAKnownRepo) {
+  server.route("PATCH /api/v1/repos/acme/web/issues/9", {200, giteaIssue("9", "closed"), {}});
+  connectGitea(QString());
+  addCard(QStringLiteral("9"), QStringLiteral("acme/web"));
+
+  app_->moveTask(QStringLiteral("gitea-9"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return requestsTo("PATCH /api/v1/repos/acme/web/issues/9") == 1 && task("gitea-9")->externalMeta.status == QStringLiteral("closed");
+  })) << "the move was answered without being sent";
+  EXPECT_TRUE(task("gitea-9")->externalMeta.unsyncedStatus.isEmpty());
+}
+
+// INT-2: with the repo genuinely unknown the card says it was not synced.
+TEST_F(TrackerPush, UnknownRepo_LeavesTheCardUnsyncedWithAReason_NeverSilentlyOk) {
+  connectGitea(QString());
+  addCard(QStringLiteral("12"), QString());
+  QStringList failures;
+  QObject::connect(app_.get(), &::AppController::trackerPushFailed, app_.get(), [&failures](const QString& id, const QString&) {
+    failures.append(id);
+  });
+
+  app_->moveTask(QStringLiteral("gitea-12"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("gitea-12")->externalMeta.unsyncedStatus == QStringLiteral("done");
+  })) << "a move with nowhere to go was reported as synced";
+  EXPECT_TRUE(failures.contains(QStringLiteral("gitea-12")));
+  EXPECT_FALSE(anyRequestMentions("PATCH"));
+  EXPECT_NE(heap::integrations::translateProviderReason(QStringLiteral("the issue's repo is unknown — sync it again first"), true),
+            QStringLiteral("the issue's repo is unknown — sync it again first"));
+
+  // A cross-project card without its repo must not fall back to the configured one.
+  connectGitea(QStringLiteral("acme/other"));
+  addCard(QStringLiteral("13"), QString(), /*crossProject=*/true);
+  app_->moveTask(QStringLiteral("gitea-13"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("gitea-13")->externalMeta.unsyncedStatus == QStringLiteral("done");
+  }));
+  EXPECT_TRUE(failures.contains(QStringLiteral("gitea-13")));
+  EXPECT_FALSE(anyRequestMentions("PATCH"));
+}
+
+// INT-3: the push moves the sync base, so a reopen in the tracker is news.
+TEST_F(TrackerPush, ReopenAfterAPush_IsFollowed) {
+  server.route("PATCH /api/v1/repos/acme/web/issues/16", {200, giteaIssue("16", "closed"), {}});
+  connectGitea(QStringLiteral("acme/web"));
+  addCard(QStringLiteral("16"), QStringLiteral("acme/web"));
+
+  app_->moveTask(QStringLiteral("gitea-16"), QStringLiteral("done"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("gitea-16")->externalMeta.status == QStringLiteral("closed");
+  })) << "the sync base still holds the status from before the push";
+  EXPECT_TRUE(task("gitea-16")->externalMeta.unsyncedStatus.isEmpty());
+
+  // Nothing new upstream: the card stays where it was put.
+  app_->mergeExternalTasks(
+      QStringLiteral("gitea"), QStringLiteral("gitea-"), {pulled(QStringLiteral("16"), QStringLiteral("closed"))}, true);
+  EXPECT_EQ(task("gitea-16")->status, QStringLiteral("done"));
+  // Someone reopened it in the tracker: the card follows.
+  app_->mergeExternalTasks(QStringLiteral("gitea"), QStringLiteral("gitea-"), {pulled(QStringLiteral("16"), QStringLiteral("open"))}, true);
+  EXPECT_EQ(task("gitea-16")->status, QStringLiteral("todo")) << "a reopen in the tracker was lost";
+}
+
+TEST_F(TrackerPush, ReopenAfterAPushTheTrackerDidNotDescribe_IsStillFollowed) {
+  server.route("PATCH /api/v1/repos/acme/web/issues/17", {200, "{}", {}});
+  connectGitea(QStringLiteral("acme/web"));
+  addCard(QStringLiteral("17"), QStringLiteral("acme/web"));
+  // A column that is not the pull's: an unknown base must not throw it away.
+  addCard(QStringLiteral("18"), QStringLiteral("acme/web"));
+  server.route("PATCH /api/v1/repos/acme/web/issues/18", {200, "{}", {}});
+
+  app_->moveTask(QStringLiteral("gitea-17"), QStringLiteral("done"));
+  app_->moveTask(QStringLiteral("gitea-18"), QStringLiteral("prog"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("gitea-17")->externalMeta.status.isEmpty() && task("gitea-18")->externalMeta.status.isEmpty();
+  }));
+  app_->mergeExternalTasks(QStringLiteral("gitea"),
+                           QStringLiteral("gitea-"),
+                           {pulled(QStringLiteral("17"), QStringLiteral("open")), pulled(QStringLiteral("18"), QStringLiteral("open"))},
+                           true);
+  EXPECT_EQ(task("gitea-17")->status, QStringLiteral("todo"));
+  EXPECT_EQ(task("gitea-18")->status, QStringLiteral("prog"));
+}
+
+TEST_F(TrackerPush, JiraPush_ReportsTheTransitionTarget) {
+  server.route("GET /rest/api/3/issue/HT-10/transitions", {200, R"({"transitions":[{"id":"31","to":{"name":"Done"}}]})", {}});
+  server.route("POST /rest/api/3/issue/HT-10/transitions", {204, "", {}});
+  heap::integrations::JiraProvider jira;
+  jira.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  jira.setDeployment(heap::integrations::JiraDeployment::Cloud);
+  bool done = false;
+  bool ok = false;
+  QString remote;
+  QObject::connect(&jira,
+                   &heap::integrations::IntegrationProvider::taskPushed,
+                   &jira,
+                   [&](const QString&, const QString&, bool o, const QString&, const QString& r) {
+                     ok = o;
+                     remote = r;
+                     done = true;
+                   });
+  jira.pushStatusChange(QStringLiteral("HT-10"), QStringLiteral("done"), QStringLiteral("HT"));
+  ASSERT_TRUE(heap::testing::waitFor(done));
+  EXPECT_TRUE(ok);
+  EXPECT_EQ(remote, QStringLiteral("Done"));
+}
+
+// INT-7: GitLab with an empty Host pushes to gitlab.com, like pull does.
+namespace {
+struct PushResult {
+  bool done = false;
+  bool ok = false;
+  QString error;
+  QString remote;
+};
+
+void pushGitlab(heap::integrations::RestIssueProvider& p, PushResult& out) {
+  QObject::connect(&p,
+                   &heap::integrations::IntegrationProvider::taskPushed,
+                   &p,
+                   [&out](const QString&, const QString&, bool ok, const QString& error, const QString& remote) {
+                     out = {true, ok, error, remote};
+                   });
+  p.pushStatusChange(QStringLiteral("5"), QStringLiteral("done"), QStringLiteral("acme/web"));
+}
+}  // namespace
+
+TEST(GitlabPush, EmptyHost_GoesToGitlabCom) {
+  // The fake is a proxy here: the request is caught at CONNECT and never
+  // leaves the machine, yet names the host it was aimed at.
+  heap::testing::FakeHttpServer proxy;
+  const quint16 port = static_cast<quint16>(QUrl(proxy.base()).port());
+  QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::HttpProxy, QStringLiteral("127.0.0.1"), port));
+  heap::integrations::RestIssueProvider p(*heap::integrations::findDescriptor(QStringLiteral("gitlab")));
+  p.setConfig({{QStringLiteral("host"), QString()},
+               {QStringLiteral("projectId"), QStringLiteral("acme/web")},
+               {QStringLiteral("token"), QStringLiteral("fake")}});
+  PushResult r;
+  pushGitlab(p, r);
+  const bool answered = heap::testing::waitFor(r.done);
+  QNetworkProxy::setApplicationProxy(QNetworkProxy(QNetworkProxy::NoProxy));
+  ASSERT_TRUE(answered);
+  EXPECT_FALSE(r.error.contains(QStringLiteral("Protocol"))) << r.error.toStdString();
+  ASSERT_FALSE(proxy.requests().isEmpty()) << "nothing was sent: " << r.error.toStdString();
+  EXPECT_EQ(proxy.requests().first().method, QByteArray("CONNECT"));
+  EXPECT_EQ(proxy.requests().first().path, QByteArray("gitlab.com:443"));
+}
+
+TEST(GitlabPush, PathAndRemoteStatus) {
+  heap::testing::FakeHttpServer gitlab;
+  gitlab.route("PUT /api/v4/projects/acme%2Fweb/issues/5",
+               {200, R"({"iid":5,"state":"closed","title":"five","references":{"full":"acme/web#5"}})", {}});
+  heap::integrations::RestIssueProvider p(*heap::integrations::findDescriptor(QStringLiteral("gitlab")));
+  p.setConfig({{QStringLiteral("host"), gitlab.base()},
+               {QStringLiteral("projectId"), QStringLiteral("acme/other")},
+               {QStringLiteral("token"), QStringLiteral("fake")}});
+  PushResult r;
+  pushGitlab(p, r);
+  ASSERT_TRUE(heap::testing::waitFor(r.done));
+  EXPECT_TRUE(r.ok) << r.error.toStdString();
+  EXPECT_EQ(gitlab.lastRequest("PUT /api/v4/projects/acme%2Fweb/issues/5").query, QByteArray("state_event=close"));
+  EXPECT_EQ(r.remote, QStringLiteral("closed"));
 }
 
 // ── PLAT-27: the update check ──

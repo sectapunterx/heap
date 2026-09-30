@@ -104,6 +104,133 @@ TEST_F(UxAuditTest, HotkeysDocCoversTheCatalog) {
   EXPECT_TRUE(doc.contains(QStringLiteral("read-only")));
 }
 
+// SHELL-24: a new person typed onto someone's id used to replace that person
+// whole — name, role, question — with no undo.
+TEST_F(UxAuditTest, ANewPersonCannotTakeAnExistingId) {
+  Person oleg;
+  oleg.id = QStringLiteral("o.t");
+  oleg.name = QStringLiteral("Oleg T.");
+  oleg.role = QStringLiteral("Tech Lead");
+  oleg.question = QStringLiteral("Which metrics?");
+  app_->people()->reset({oleg});
+
+  QVariantMap draft = app_->newContactDraft(QStringLiteral("Impostor"));
+  draft[QStringLiteral("_isNew")] = true;
+  draft[QStringLiteral("id")] = QStringLiteral("o.t");
+  QSignalSpy spy(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->savePerson(draft));
+
+  ASSERT_EQ(app_->people()->rowCount(), 1);
+  const QVariantMap kept = app_->personById(QStringLiteral("o.t"));
+  EXPECT_EQ(kept.value("name").toString(), QStringLiteral("Oleg T."));
+  EXPECT_EQ(kept.value("role").toString(), QStringLiteral("Tech Lead"));
+  EXPECT_EQ(kept.value("question").toString(), QStringLiteral("Which metrics?"));
+  ASSERT_GE(spy.count(), 1);
+  EXPECT_TRUE(spy.last().at(0).toString().contains(QStringLiteral("Oleg T.")));
+  EXPECT_EQ(spy.last().at(1).toString(), QStringLiteral("warning"));
+}
+
+TEST_F(UxAuditTest, AnEditCannotMoveOntoAnotherPersonsId) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  Person b;
+  b.id = QStringLiteral("b.k");
+  b.name = QStringLiteral("Boris K.");
+  app_->people()->reset({a, b});
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("_originalId")] = QStringLiteral("a.s");
+  edit[QStringLiteral("id")] = QStringLiteral("b.k");
+  EXPECT_FALSE(app_->savePerson(edit));
+  EXPECT_EQ(app_->personById(QStringLiteral("b.k")).value("name").toString(), QStringLiteral("Boris K."));
+
+  // Saving under its own id is an ordinary edit.
+  edit[QStringLiteral("id")] = QStringLiteral("a.s");
+  edit[QStringLiteral("question")] = QStringLiteral("release?");
+  EXPECT_TRUE(app_->savePerson(edit));
+  EXPECT_EQ(app_->personById(QStringLiteral("a.s")).value("question").toString(), QStringLiteral("release?"));
+}
+
+// Picking a contact links it to the new Person inside the save's undo step; a
+// Mattermost sync then changes that contact outside undo. Ctrl+Z takes the
+// link back off that contact instead of re-adding the original next to it.
+TEST_F(UxAuditTest, UndoingAPickedContactLeavesOneContact) {
+  app_->people()->reset({});
+  app_->setDocsState(QStringLiteral(R"({"contacts":[{"name":"Olga Titova","role":"dev","mattermost":"@olga.t","mmId":"u123"}]})"));
+  QVariantMap pick;
+  for(const QVariant& v : app_->pingCandidates()) {
+    if(v.toMap().value(QStringLiteral("name")).toString() == QStringLiteral("Olga Titova")) {
+      pick = v.toMap();
+    }
+  }
+  ASSERT_FALSE(pick.isEmpty());
+  ASSERT_TRUE(app_->savePerson(app_->pingDraftFor(pick)));
+  const auto contacts = [this] {
+    return QJsonDocument::fromJson(app_->docsState().toUtf8()).object().value(QStringLiteral("contacts")).toArray();
+  };
+  ASSERT_EQ(contacts().size(), 1);
+  QJsonObject synced = contacts().first().toObject();
+  ASSERT_FALSE(synced.value(QStringLiteral("personId")).toString().isEmpty());
+  synced.insert(QStringLiteral("role"), QStringLiteral("Tech Lead"));
+  app_->setDocsState(QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("contacts"), QJsonArray{synced}}}).toJson()));
+
+  app_->undo();
+  ASSERT_EQ(contacts().size(), 1) << app_->docsState().toStdString();
+  const QJsonObject c = contacts().first().toObject();
+  EXPECT_EQ(c.value(QStringLiteral("role")).toString(), QStringLiteral("Tech Lead"));
+  EXPECT_FALSE(c.contains(QStringLiteral("personId")));
+  EXPECT_EQ(app_->people()->rowCount(), 0);
+}
+
+TEST_F(UxAuditTest, PersonSavesAreUndoable) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  a.question = QStringLiteral("first");
+  app_->people()->reset({a});
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("question")] = QStringLiteral("second");
+  ASSERT_TRUE(app_->savePerson(edit));
+  EXPECT_TRUE(app_->hasPendingUndo());
+  app_->undo();
+  EXPECT_EQ(app_->personById(QStringLiteral("a.s")).value("question").toString(), QStringLiteral("first"));
+
+  QVariantMap fresh = app_->newContactDraft(QStringLiteral("Ivan Petrov"));
+  fresh[QStringLiteral("_isNew")] = true;
+  ASSERT_TRUE(app_->savePerson(fresh));
+  EXPECT_EQ(app_->people()->rowCount(), 2);
+  app_->undo();
+  EXPECT_EQ(app_->people()->rowCount(), 1);
+}
+
+// Undoing an edit takes back only what the edit changed: the chip click on
+// the rail since (not an undo step) stays.
+TEST_F(UxAuditTest, UndoingAPersonEditKeepsTheStateClickedSince) {
+  Person a;
+  a.id = QStringLiteral("a.s");
+  a.name = QStringLiteral("Anna S.");
+  a.role = QStringLiteral("dev");
+  a.state = QStringLiteral("todo");
+  app_->people()->reset({a});
+
+  QVariantMap edit = app_->personById(QStringLiteral("a.s"));
+  edit[QStringLiteral("role")] = QStringLiteral("lead");
+  ASSERT_TRUE(app_->savePerson(edit));
+  app_->cyclePerson(QStringLiteral("a.s"));
+  ASSERT_EQ(app_->personById(QStringLiteral("a.s")).value("state").toString(), QStringLiteral("pinged"));
+
+  app_->undo();
+  const QVariantMap undone = app_->personById(QStringLiteral("a.s"));
+  EXPECT_EQ(undone.value("role").toString(), QStringLiteral("dev"));
+  EXPECT_EQ(undone.value("state").toString(), QStringLiteral("pinged"));
+  app_->redo();
+  const QVariantMap redone = app_->personById(QStringLiteral("a.s"));
+  EXPECT_EQ(redone.value("role").toString(), QStringLiteral("lead"));
+  EXPECT_EQ(redone.value("state").toString(), QStringLiteral("pinged"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);
