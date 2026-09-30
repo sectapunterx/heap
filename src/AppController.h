@@ -443,6 +443,12 @@ class AppController : public QObject {
   Q_INVOKABLE void setTaskPriority(const QString& taskId, const QString& priority);
   Q_INVOKABLE void setSelectedTasksPriority(const QString& priority);
   Q_INVOKABLE void setSelectedTasksLabel(const QString& label, bool present);
+  // The filter bar's counters under the filters the user set: search text or
+  // query, priority chips, the archived toggle. { total, active, blocked,
+  // review }. `hideDone` is the timeline's "Show done" off. `rev` is unused;
+  // binding it to statusCounts re-evaluates the counts whenever tasks change.
+  Q_INVOKABLE QVariantMap filteredCounts(
+      const QString& search, const QStringList& priorities, bool showArchived, bool hideDone = false, const QVariant& rev = {}) const;
 
   QStringList blockedStuckIds() const {
     return m_blockedStuckIds.values();

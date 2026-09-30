@@ -100,6 +100,11 @@ Item {
     // True while any card's menu is up; Main.qml holds the board keys back.
     property int _openCardMenus: 0
     readonly property bool cardMenuOpen: _openCardMenus > 0
+    // One of the board's own dialogs or menus is up (new column, WIP limit,
+    // delete confirmation, a card menu). Main.qml keeps Ctrl+Z from acting
+    // on the board behind it.
+    readonly property bool dialogOpen: cardMenuOpen || addColumnPopup.opened || wipPopup.opened
+                                       || confirmDelete.opened || colorPopup.opened
 
     // One source of truth for the column width. focusColumn() scrolls by
     // index × width, so a literal here and a different literal in the delegate

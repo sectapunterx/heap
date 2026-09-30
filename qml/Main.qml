@@ -258,8 +258,11 @@ ApplicationWindow {
     readonly property int _activeCount:  (_counts["prog"] || 0) + (_counts["half"] || 0)
     readonly property int _blockedCount: _counts["blocked"] || 0
     readonly property int _reviewCount:  _counts["review"] || 0
-    // Live tasks only: archived ones are off the board and off its counts.
-    readonly property int _taskCount: _counts["_total"] || 0
+    readonly property var _activePriorities: {
+        const out = [];
+        for (const k in win.prioritiesFilter) if (win.prioritiesFilter[k]) out.push(k);
+        return out;
+    }
 
     Component.onCompleted: {
         _restoreGeometry();
@@ -603,10 +606,15 @@ ApplicationWindow {
                              : AppController.currentView === "month" ? I18n.t("siderail.month")
                              : I18n.t("siderail.board")
                     priorities: win.prioritiesFilter
-                    totalCount: win._taskCount
-                    activeCount: win._activeCount
-                    blockedCount: win._blockedCount
-                    reviewCount: win._reviewCount
+                    // Under the filters the bar itself shows (TASKS-20): the
+                    // counts used to include archived tasks and ignore the
+                    // search and the priority chips.
+                    readonly property var _fc: AppController.filteredCounts(win.searchText, win._activePriorities,
+                        win.showArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
+                    totalCount: _fc.total
+                    activeCount: _fc.active
+                    blockedCount: _fc.blocked
+                    reviewCount: _fc.review
                     showArchived: win.showArchived
                     showSort: AppController.currentView === "board"
                     sortMode: win.boardSortMode
@@ -1235,12 +1243,14 @@ ApplicationWindow {
         // is showing (and could delete the task being edited). Inside a text
         // field Ctrl+Z belongs to the field, which takes it first.
         enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo && !win._overlayOpen
+            && !(boardLoader.item && boardLoader.item.dialogOpen === true)
         onActivated: AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.canRedo && !win._overlayOpen
+            && !(boardLoader.item && boardLoader.item.dialogOpen === true)
         onActivated: AppController.redo()
     }
     Shortcut {

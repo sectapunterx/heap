@@ -4,6 +4,8 @@
 
 #include "AppController.h"
 
+#include "query/TaskQuery.h"
+
 #include <QRegularExpression>
 
 namespace {
@@ -104,4 +106,37 @@ void AppController::setSelectedTasksLabel(const QString& label, bool present) {
     emit undoableToast(tr_(present ? "task.bulkLabel" : "task.bulkUnlabel").arg(n).arg(name), 5);
     scheduleSave();
   }
+}
+
+QVariantMap AppController::filteredCounts(
+    const QString& search, const QStringList& priorities, bool showArchived, bool hideDone, const QVariant&) const {
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(search, m_today, m_statuses);
+  const QString free = q.freeText();
+  int total = 0;
+  int active = 0;
+  int blocked = 0;
+  int review = 0;
+  for(int row = 0; row < m_tasks.rowCount(); ++row) {
+    const Task& t = m_tasks.items().at(row);
+    if((t.archived && !showArchived) || (hideDone && t.status == QStringLiteral("done"))) {
+      continue;
+    }
+    if(!priorities.isEmpty() && !priorities.contains(t.priority)) {
+      continue;
+    }
+    if(!free.isEmpty() && !m_tasks.data(m_tasks.index(row, 0), TaskModel::SearchTextRole).toString().contains(free)) {
+      continue;
+    }
+    if(q.isQuery() && !q.matches(t)) {
+      continue;
+    }
+    ++total;
+    active += (t.status == QStringLiteral("prog") || t.status == QStringLiteral("half")) ? 1 : 0;
+    blocked += t.status == QStringLiteral("blocked") ? 1 : 0;
+    review += t.status == QStringLiteral("review") ? 1 : 0;
+  }
+  return {{QStringLiteral("total"), total},
+          {QStringLiteral("active"), active},
+          {QStringLiteral("blocked"), blocked},
+          {QStringLiteral("review"), review}};
 }

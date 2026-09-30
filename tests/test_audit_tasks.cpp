@@ -403,6 +403,22 @@ TEST_F(AuditTasksTest, ArchivedTasksAreNotCounted) {
   EXPECT_EQ(app_->countByStatus(QStringLiteral("blocked")), 2);
 }
 
+TEST_F(AuditTasksTest, TheFilterBarCountsFollowTheFilters) {
+  Task a = makeTask(QStringLiteral("A"), QStringLiteral("blocked"));
+  a.priority = QStringLiteral("P0");
+  Task b = makeTask(QStringLiteral("B"), QStringLiteral("prog"));
+  Task c = makeTask(QStringLiteral("C"), QStringLiteral("blocked"));
+  c.archived = true;
+  app_->tasks()->reset({a, b, c});
+  QVariantMap all = app_->filteredCounts(QString(), {}, false);
+  EXPECT_EQ(all.value("total").toInt(), 2);
+  EXPECT_EQ(all.value("blocked").toInt(), 1);
+  EXPECT_EQ(app_->filteredCounts(QString(), {}, true).value("blocked").toInt(), 2);
+  EXPECT_EQ(app_->filteredCounts(QString(), {QStringLiteral("P0")}, false).value("total").toInt(), 1);
+  EXPECT_EQ(app_->filteredCounts(QStringLiteral("status:prog"), {}, false).value("active").toInt(), 1);
+  EXPECT_EQ(app_->filteredCounts(QStringLiteral("status:prog"), {}, false).value("total").toInt(), 1);
+}
+
 // ── TASKS-32: priority and labels without the editor ──
 
 TEST_F(AuditTasksTest, BulkPriorityAndLabelsAreOneUndoStepEach) {
