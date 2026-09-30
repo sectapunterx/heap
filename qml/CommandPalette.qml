@@ -222,8 +222,20 @@ Popup {
                 required property int index
                 width: ListView.view.width
                 height: (modelData._snippet && modelData._snippet.length > 0) ? 58 : 42
-                color: index === root._selectedIdx ? Theme.panel2 : "transparent"
+                color: index === root._selectedIdx ? Theme.rowHighlight : "transparent"
                 radius: Theme.radiusSm
+                // The selected row's marker: 3:1 against the panel on every
+                // theme (panel2 alone was 1.03:1).
+                Rectangle {
+                    objectName: "palette-row-marker"
+                    visible: index === root._selectedIdx
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 3
+                    height: parent.height - 2 * Theme.spSm
+                    radius: Theme.radiusXs
+                    color: Theme.focusRing
+                }
 
                 RowLayout {
                     anchors.fill: parent
