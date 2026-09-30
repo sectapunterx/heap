@@ -397,6 +397,13 @@ Item {
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
         clip: true
+        // The columns that do not fit sit off to the right with nothing to
+        // say so but a card cut in half (design audit DES-6): while the board
+        // overflows, its scrollbar stays in view.
+        ScrollBar.horizontal: ThinScrollBar {
+            objectName: "board-hscrollbar"
+            policy: hscroll.contentWidth > hscroll.width ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+        }
         // pressDelay: 0 — keep card-drag activation instant on press.
         // Horizontal flick by dragging empty board space is rarely used
         // on desktop (mouse wheel handles it via WheelHandler below).
@@ -585,6 +592,7 @@ Item {
                                     Layout.preferredHeight: 22
                                     Text {
                                         id: colName
+                                        objectName: "column-name"
                                         visible: !col.renaming
                                         anchors.verticalCenter: parent.verticalCenter
                                         // The name as the user wrote it. Uppercase with
@@ -633,6 +641,7 @@ Item {
                                     }
                                 }
                                 Rectangle {
+                                    id: cntPill
                                     radius: Theme.radiusPill
                                     color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
                                     border.color: col.overWip ? Theme.danger : "transparent"
@@ -654,37 +663,6 @@ Item {
                                     HoverHandler { id: wipHover }
                                 }
 
-                                // Move-left / Move-right / Delete. `visible` only
-                                // carries the structural conditions; the reveal
-                                // rides on opacity so the header doesn't reflow
-                                // (name and counter used to jump sideways) and
-                                // the icons keep a stable position to click.
-                                HoverIcon {
-                                    glyph: "‹"; tip: I18n.t("kanban.moveLeft")
-                                    visible: !col.isFirst
-                                    revealed: col.headerHovered
-                                    onActivated: AppController.moveStatus(col.statusId, col.index - 1)
-                                }
-                                HoverIcon {
-                                    glyph: "›"; tip: I18n.t("kanban.moveRight")
-                                    visible: !col.isLast
-                                    revealed: col.headerHovered
-                                    onActivated: AppController.moveStatus(col.statusId, col.index + 1)
-                                }
-                                HoverIcon {
-                                    glyph: "×"; tip: I18n.t("kanban.deleteColumn")
-                                    danger: true
-                                    visible: AppController.statuses.length > 1
-                                    revealed: col.headerHovered
-                                    onActivated: root.requestDeleteColumn(col.statusId, col.statusName)
-                                }
-
-                                HoverIcon {
-                                    objectName: "column-fold"
-                                    glyph: "⇤"; tip: I18n.t("kanban.collapse")
-                                    revealed: col.headerHovered
-                                    onActivated: root.toggleCollapsed(col.statusId)
-                                }
                                 Rectangle {
                                     width: 22; height: 22; radius: Theme.radiusSm
                                     color: addMA.containsMouse ? Theme.panel3 : "transparent"
@@ -700,6 +678,57 @@ Item {
                                         hoverEnabled: true
                                         cursorShape: Qt.PointingHandCursor
                                         onClicked: root.createInStatus(col.statusId)
+                                    }
+                                }
+                            }
+                            // Move-left / Move-right / Delete / Fold, laid over the
+                            // end of the name while the pointer is on the header
+                            // (design audit DES-6). They used to hold four slots
+                            // in the row even while hidden, which left the name
+                            // about 100px: "To Do" read "To …" and "К выполнению"
+                            // "К вып…" on a 1600px window. Laid over, the name
+                            // gets the whole width at rest and still nothing
+                            // reflows when the icons fade in. `visible` carries
+                            // only the structural conditions.
+                            Rectangle {
+                                objectName: "column-hover-icons"
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.spMd + 22 + Theme.spMd + cntPill.width + Theme.spMd
+                                width: hoverIcons.implicitWidth + Theme.spSm
+                                height: hoverIcons.implicitHeight
+                                color: Theme.panel2
+                                opacity: col.headerHovered ? 1 : 0
+                                visible: !col.renaming
+                                z: 2
+                                Row {
+                                    id: hoverIcons
+                                    anchors.right: parent.right
+                                    spacing: Theme.spXs
+                                    HoverIcon {
+                                        glyph: "‹"; tip: I18n.t("kanban.moveLeft")
+                                        visible: !col.isFirst
+                                        revealed: col.headerHovered
+                                        onActivated: AppController.moveStatus(col.statusId, col.index - 1)
+                                    }
+                                    HoverIcon {
+                                        glyph: "›"; tip: I18n.t("kanban.moveRight")
+                                        visible: !col.isLast
+                                        revealed: col.headerHovered
+                                        onActivated: AppController.moveStatus(col.statusId, col.index + 1)
+                                    }
+                                    HoverIcon {
+                                        glyph: "×"; tip: I18n.t("kanban.deleteColumn")
+                                        danger: true
+                                        visible: AppController.statuses.length > 1
+                                        revealed: col.headerHovered
+                                        onActivated: root.requestDeleteColumn(col.statusId, col.statusName)
+                                    }
+                                    HoverIcon {
+                                        objectName: "column-fold"
+                                        glyph: "⇤"; tip: I18n.t("kanban.collapse")
+                                        revealed: col.headerHovered
+                                        onActivated: root.toggleCollapsed(col.statusId)
                                     }
                                 }
                             }
@@ -1228,8 +1257,8 @@ Item {
         // being clickable.
         property bool revealed: false
         signal activated()
-        Layout.preferredWidth: 20
-        Layout.preferredHeight: 20
+        width: 20
+        height: 20
         radius: Theme.radiusSm
         opacity: revealed ? 1 : 0
         enabled: revealed
