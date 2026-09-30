@@ -237,6 +237,19 @@ TestCase {
         if (item.contentItem && item.contentItem !== item) collectFields(item.contentItem, out);
     }
 
+    // UX-25: the status box is never narrower than its longest column name.
+    function test_the_status_box_does_not_truncate() {
+        const id = addTask("prog", { title: "status width" });
+        const te = make('import TodoCpp; TaskEditor { }');
+        te.showFor(Object.assign({}, AppController.taskById(id)));
+        tryVerify(() => te.opened);
+        const box = findChild(te, "te-status");
+        verify(box !== null);
+        wait(50);
+        verify(!box.contentItem.truncated, "status box shows \"" + box.displayText + "\" truncated at " + box.width);
+        te.close();
+    }
+
     function test_a_clean_editor_closes_on_request() {
         const id = addTask("todo", { title: "clean" });
         const te = make('import TodoCpp; TaskEditor { }');
