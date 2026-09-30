@@ -679,7 +679,10 @@ Rectangle {
     // a recycled list delegate calls that when it is pooled.
     property var _menu: null
     function contextMenu() {
-        if (!card._menu) card._menu = taskMenuComponent.createObject(card);
+        if (!card._menu) {
+            card._menu = taskMenuComponent.createObject(card);
+            card._menu.subMenuRequested.connect(card.openSubMenu);
+        }
         return card._menu;
     }
     // The status and priority lists are built the same way, on first use.
@@ -741,10 +744,11 @@ Rectangle {
         // open without them until another popup's close gave it focus back and
         // a stray Enter picked P0 (PERA-1).
         property string _openNext: ""
+        signal subMenuRequested(string which)
         onClosed: {
             const which = taskMenu._openNext;
             taskMenu._openNext = "";
-            if (which) card.openSubMenu(which);
+            if (which) taskMenu.subMenuRequested(which);
         }
         AppMenuItem {
             objectName: "tc-menu-status"

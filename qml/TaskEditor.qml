@@ -412,8 +412,7 @@ Popup {
 
     function _mergeLabels(typed, fromTitle) {
         const out = typed.slice();
-        for (let i = 0; i < fromTitle.length; ++i) {
-            const l = fromTitle[i];
+        for (const l of fromTitle) {
             if (!out.some(x => x.toLowerCase() === l.toLowerCase()))
                 out.push(l);
         }

@@ -21,7 +21,7 @@ Menu {
     // An open cascading submenu of this one does not count as leaving.
     onActiveFocusChanged: {
         if (activeFocus || !visible) return;
-        const cur = menu.currentIndex >= 0 ? menu.itemAt(menu.currentIndex) : null;
+        const cur = menu.currentIndex >= 0 ? menu.itemAt(menu.currentIndex) as MenuItem : null;
         if (cur && cur.subMenu && cur.subMenu.visible) return;
         menu.close();
     }
