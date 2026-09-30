@@ -430,7 +430,7 @@ QtObject {
             "palette.empty.miss": "nothing found",
             "palette.kbdHint": "↑↓ choose · Enter select · Esc close",
             "hotkeys.allClear": "↺ all",
-            "hotkeys.recordHelp": "Esc — cancel, Enter — save, ⌫ — clear",
+            "hotkeys.recordHelp": "Enter — record · Enter — save · Esc — cancel · ⌫ — clear",
             "hotkeys.recordPress": "…press a combo",
             "hotkeys.conflict.body": "Conflict: %1 (Enter — reassign)",
             "tweaks.section.appearance": "Appearance",
@@ -1009,6 +1009,7 @@ QtObject {
             // ── audit-know: begin ──
             // ── audit-know: end ──
             // ── audit-ux: begin ──
+            "hotkeys.allClear.confirm": "Reset all? Click again",
             // ── audit-ux: end ──
             // ── audit-int: begin ──
             // ── audit-int: end ──
@@ -1433,7 +1434,7 @@ QtObject {
             "palette.empty.miss": "ничего не найдено",
             "palette.kbdHint": "↑↓ выбор · Enter переход · Esc закрыть",
             "hotkeys.allClear": "↺ всё",
-            "hotkeys.recordHelp": "Esc — отмена, Enter — сохранить, ⌫ — очистить",
+            "hotkeys.recordHelp": "Enter — записать · Enter — сохранить · Esc — отмена · ⌫ — очистить",
             "hotkeys.recordPress": "…нажмите комбинацию",
             "hotkeys.conflict.body": "Конфликт: %1 (Enter — переназначить)",
             "tweaks.section.appearance": "Внешний вид",
@@ -1993,6 +1994,7 @@ QtObject {
             // ── audit-know: begin ──
             // ── audit-know: end ──
             // ── audit-ux: begin ──
+            "hotkeys.allClear.confirm": "Сбросить всё? Ещё раз",
             // ── audit-ux: end ──
             // ── audit-int: begin ──
             // ── audit-int: end ──
