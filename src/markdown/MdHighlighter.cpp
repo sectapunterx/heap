@@ -309,9 +309,10 @@ void MdHighlighter::highlightInline(const QString& text) {
   static const QRegularExpression wikiRx(QStringLiteral("\\[\\[[^\\]\\n]+\\]\\]"));
   static const QRegularExpression urlRx(QStringLiteral("\\bhttps?://[^\\s)\\]]+"));
   static const QRegularExpression mathRx(QStringLiteral("(?<![\\\\$])\\$(?!\\s)[^$\\n]+\\$(?!\\$)"));
-  static const QRegularExpression mentionRx(QStringLiteral("(?<![A-Za-z0-9_])@[A-Za-z0-9_.-]+"));
+  // Names and tags in any script: "@Олег_Т" is as much a mention as "@oleg".
+  static const QRegularExpression mentionRx(QStringLiteral("(?<![\\p{L}\\p{N}_])@[\\p{L}\\p{N}_.-]+"));
   static const QRegularExpression ticketRx(QStringLiteral("(?<![A-Za-z0-9_])#[A-Z][A-Z0-9]*-\\d+"));
-  static const QRegularExpression tagRx(QStringLiteral("(?<![A-Za-z0-9_])#[A-Za-z][A-Za-z0-9_/-]*"));
+  static const QRegularExpression tagRx(QStringLiteral("(?<![\\p{L}\\p{N}_])#[\\p{L}][\\p{L}\\p{N}_/-]*"));
   static const QRegularExpression footnoteRx(QStringLiteral("\\[\\^[^\\]\\s]+\\]"));
 
   const Rule rules[] = {

@@ -20,6 +20,8 @@ Rectangle {
     property int rev: 0
 
     signal noteActivated(string id)
+    // After "+": the view puts the cursor in the new note.
+    signal noteCreated(string id)
 
     color: Theme.panel
     implicitWidth: 240
@@ -127,6 +129,15 @@ Rectangle {
         filterField.text = text;
         root.filter = text;
     }
+    // F2: the rename dialog for the open note, wherever the focus is.
+    function renameActive() {
+        const m = AppController.notes;
+        const row = m.indexOfId(AppController.activeNoteId);
+        if (row < 0) return;
+        const idx = m.index(row, 0);
+        renamePopup.openFor(AppController.activeNoteId, String(m.data(idx, m.roleOf("title")) || ""),
+                            String(m.data(idx, m.roleOf("folder")) || ""));
+    }
     function focusFilter() {
         filterField.forceActiveFocus();
         filterField.selectAll();
@@ -196,7 +207,11 @@ Rectangle {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: root.noteActivated(AppController.newNote())
+                    onClicked: {
+                        const id = AppController.newNote();
+                        root.noteActivated(id);
+                        root.noteCreated(id);
+                    }
                 }
                 QQC.ToolTip.visible: newMA.containsMouse
                 QQC.ToolTip.delay: 500

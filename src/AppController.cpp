@@ -222,6 +222,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.cal.next.desc", {"Step forward one week or month.", "Шаг вперёд на неделю или месяц."}},
       {"shortcut.cal.goToDate.label", {"Calendar: go to date", "Календарь: перейти к дате"}},
       {"shortcut.cal.goToDate.desc", {"Open a date picker and jump straight there.", "Открыть выбор даты и перейти сразу к ней."}},
+      {"shortcut.notes.new.label", {"Notes: new note", "Заметки: новая заметка"}},
+      {"shortcut.notes.new.desc", {"Start a note and put the cursor in it.", "Создать заметку и поставить в неё курсор."}},
+      {"shortcut.notes.next.label", {"Notes: next note", "Заметки: следующая"}},
+      {"shortcut.notes.next.desc", {"Open the next note in the list.", "Открыть следующую заметку в списке."}},
+      {"shortcut.notes.prev.label", {"Notes: previous note", "Заметки: предыдущая"}},
+      {"shortcut.notes.prev.desc", {"Open the previous note in the list.", "Открыть предыдущую заметку в списке."}},
+      {"shortcut.notes.rename.label", {"Notes: rename note", "Заметки: переименовать"}},
+      {"shortcut.notes.rename.desc", {"Rename or re-file the open note.", "Переименовать открытую заметку или сменить её папку."}},
+      {"shortcut.notes.toggleList.label", {"Notes: show or hide the list", "Заметки: показать или скрыть список"}},
+      {"shortcut.notes.toggleList.desc", {"Fold the list of notes away, or bring it back.", "Свернуть список заметок или вернуть его."}},
       {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
       {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
       {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
@@ -1240,6 +1250,55 @@ QStringList AppController::noteHeadings(const QString& markdown) const {
 
 QVariantList AppController::noteBacklinks(const QString& markdown) const {
   return heap::notes::collectBacklinks(markdown);
+}
+
+QVariantList AppController::outgoingNoteLinks(const QString& markdown) const {
+  // The note's own [[links]], each resolved the way a click would resolve it:
+  // a link to another note is fine, not "broken" because no heading of this
+  // note happens to carry its name.
+  QVariantList out;
+  for(const QVariant& v : heap::notes::collectBacklinks(markdown)) {
+    QVariantMap m = v.toMap();
+    const heap::notes::LinkTarget t = heap::notes::resolveLink(m.value("target").toString(), m_notes.items(), m_activeNoteId);
+    m["kind"] = t.kind == heap::notes::LinkTarget::NoteRef      ? QStringLiteral("note")
+                : t.kind == heap::notes::LinkTarget::HeadingRef ? QStringLiteral("heading")
+                                                                : QStringLiteral("missing");
+    m["noteId"] = t.noteId;
+    m["heading"] = t.heading;
+    m["resolved"] = t.kind != heap::notes::LinkTarget::Missing;
+    // A pane, not a report: the first few places a target is used, and how
+    // many there are. A note linking one target on every one of its 50 000
+    // lines took seconds to draw.
+    QVariantList refs = m.value("refs").toList();
+    m["count"] = static_cast<int>(refs.size());
+    if(refs.size() > 20) {
+      refs.resize(20);
+      m["refs"] = refs;
+    }
+    out.append(m);
+  }
+  return out;
+}
+
+QVariantMap AppController::noteStats(const QString& markdown) const {
+  // Counted here rather than with a JavaScript regex over the whole note on
+  // every keystroke, which is what the header used to do — at 3 MB that alone
+  // was a good part of each keystroke. Names in any script.
+  static const QRegularExpression mentionRx(QStringLiteral("(?:^|[\\s.,;:!?()\\[\\]{}])@[\\p{L}\\p{N}_.-]+"));
+  static const QRegularExpression ticketRx(QStringLiteral("(?:^|[\\s.,;:!?()\\[\\]{}])#[A-Z][A-Z0-9]*-\\d+"));
+  QVariantMap out;
+  out["lines"] = markdown.isEmpty() ? 0 : static_cast<int>(markdown.count(QLatin1Char('\n'))) + 1;
+  int mentions = 0;
+  for(auto it = mentionRx.globalMatch(markdown); it.hasNext(); it.next()) {
+    ++mentions;
+  }
+  int tickets = 0;
+  for(auto it = ticketRx.globalMatch(markdown); it.hasNext(); it.next()) {
+    ++tickets;
+  }
+  out["mentions"] = mentions;
+  out["tickets"] = tickets;
+  return out;
 }
 
 int AppController::noteHeadingOffset(const QString& markdown, const QString& heading) const {
@@ -7516,6 +7575,13 @@ void AppController::seedShortcutCatalog() {
   add("cal.prev", "Left");
   add("cal.next", "Right");
   add("cal.goToDate", "G");
+  // Notes, live only in the Notes view. Ctrl+PgUp/PgDn is how every tabbed
+  // editor steps between documents; F2 renames, as in a file manager.
+  add("notes.new", "Ctrl+Alt+N");
+  add("notes.next", "Ctrl+PgDown");
+  add("notes.prev", "Ctrl+PgUp");
+  add("notes.rename", "F2");
+  add("notes.toggleList", "Ctrl+Alt+L");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;

@@ -59,7 +59,22 @@ void MdDocument::setAllowRemoteImages(bool allow) {
   reparse();
 }
 
+void MdDocument::setLive(bool live) {
+  if(m_live == live) {
+    return;
+  }
+  m_live = live;
+  emit liveChanged();
+  if(m_live && m_dirty) {
+    scheduleParse();
+  }
+}
+
 void MdDocument::scheduleParse() {
+  if(!m_live) {
+    m_parseTimer.stop();
+    return;  // stays dirty; the next query or going live parses
+  }
   if(m_lastParseMs <= kSynchronousBudgetMs) {
     reparse();
     return;

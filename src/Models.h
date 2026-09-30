@@ -296,7 +296,7 @@ class NoteModel : public QAbstractListModel {
     return m_items;
   }
 
-  int indexOfId(const QString& id) const;
+  Q_INVOKABLE int indexOfId(const QString& id) const;
   void upsert(const Note& n);
   // Undo puts a deleted note back in its old row, not at the end of the list.
   void insertAt(int row, const Note& n);

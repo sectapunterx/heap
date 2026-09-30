@@ -47,6 +47,11 @@ class MdDocument : public QObject {
   // honest about a document that has grown too large rather than just feeling
   // slow.
   Q_PROPERTY(int lastParseMs READ lastParseMs NOTIFY parsed)
+  // Parse as the text changes (true), or only when asked (false): an editor
+  // with its preview hidden has no use for a parse of every pause, and at
+  // megabytes each one is a visible stall. A query (rowForLine, flush, …)
+  // still parses on demand, and going live again catches up.
+  Q_PROPERTY(bool live READ live WRITE setLive NOTIFY liveChanged)
 
  public:
   explicit MdDocument(QObject* parent = nullptr);
@@ -72,6 +77,12 @@ class MdDocument : public QObject {
   }
 
   void setAllowRemoteImages(bool allow);
+
+  bool live() const {
+    return m_live;
+  }
+
+  void setLive(bool live);
 
   QVariantList outlineList() const {
     return m_outline;
@@ -116,6 +127,7 @@ class MdDocument : public QObject {
   void textChanged();
   void paletteChanged();
   void allowRemoteImagesChanged();
+  void liveChanged();
   void parsed();
 
  private:
@@ -126,6 +138,7 @@ class MdDocument : public QObject {
   QString m_text;
   QVariantMap m_palette;
   bool m_allowRemoteImages = false;
+  bool m_live = true;
 
   MdSourceMap m_src;
   MdAst m_ast;

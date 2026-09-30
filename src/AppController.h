@@ -354,6 +354,12 @@ class AppController : public QObject {
   Q_INVOKABLE QStringList noteHeadings(const QString& markdown) const;
   Q_INVOKABLE QVariantList noteBacklinks(const QString& markdown) const;
   Q_INVOKABLE int noteHeadingOffset(const QString& markdown, const QString& heading) const;
+  // The open note's own [[links]], grouped by target like noteBacklinks(), each
+  // resolved against every note: { target, kind: note|heading|missing, noteId,
+  // heading, resolved, refs: [{ line, text }] }.
+  Q_INVOKABLE QVariantList outgoingNoteLinks(const QString& markdown) const;
+  // { lines, mentions, tickets } for the editor's header.
+  Q_INVOKABLE QVariantMap noteStats(const QString& markdown) const;
 
   QString appSettingsJson() const {
     return m_appSettingsJson;

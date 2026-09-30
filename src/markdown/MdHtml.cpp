@@ -18,11 +18,11 @@ const QRegularExpression& decorationRx() {
   // reference must be tried before a bare tag, or "#HEAP-1" reads as the tag
   // "HEAP".
   static const QRegularExpression rx(
-      QStringLiteral("(==(?!\\s)([^=\\n]+)==)"                         // 1,2: ==highlight==
-                     "|(\\[\\^([^\\]\\s]+)\\])"                        // 3,4: [^footnote]
-                     "|(?<![A-Za-z0-9_])(#([A-Z][A-Z0-9]*-\\d+))"      // 5,6: #TICKET-123
-                     "|(?<![A-Za-z0-9_])(#([A-Za-z][A-Za-z0-9_/-]*))"  // 7,8: #tag
-                     "|(?<![A-Za-z0-9_])(@([A-Za-z0-9_.-]+))"));       // 9,10: @mention
+      QStringLiteral("(==(?!\\s)([^=\\n]+)==)"                               // 1,2: ==highlight==
+                     "|(\\[\\^([^\\]\\s]+)\\])"                              // 3,4: [^footnote]
+                     "|(?<![A-Za-z0-9_])(#([A-Z][A-Z0-9]*-\\d+))"            // 5,6: #TICKET-123
+                     "|(?<![\\p{L}\\p{N}_])(#([\\p{L}][\\p{L}\\p{N}_/-]*))"  // 7,8: #tag
+                     "|(?<![\\p{L}\\p{N}_])(@([\\p{L}\\p{N}_.-]+))"));       // 9,10: @mention, any script
   return rx;
 }
 
