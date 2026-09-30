@@ -93,53 +93,99 @@ Item {
     property int modelRev: 0
     Connections {
         target: AppController.tasks
-        function onDataChanged()  { root.modelRev++ }
+        function onDataChanged(topLeft, bottomRight) {
+            root._forgetRows(topLeft.row, bottomRight.row);
+            root.modelRev++;
+        }
         function onRowsInserted() { root.modelRev++ }
         function onRowsRemoved()  { root.modelRev++ }
-        function onModelReset()   { root.modelRev++ }
+        function onModelReset()   { root._rowCache = ({}); root.modelRev++ }
+    }
+
+    // One snapshot row per task id, kept between rebuilds. A rebuild used to
+    // read ten roles and ask C++ for the bucket of every task — 3k tasks,
+    // ~85 ms — for every change anywhere, a single card's move included. Now
+    // only the rows the model says changed are read again. Rows are keyed by
+    // id, not position, so an insert or a removal leaves the rest valid; the
+    // entries of removed tasks are simply never looked up again. The bucket
+    // depends on today, so a new day starts a new cache.
+    property var _rowCache: ({})
+    property string _rowCacheDay: ""
+    function _forgetRows(first, last) {
+        const m = AppController.tasks;
+        for (let i = first; i <= last; i++) delete root._rowCache[m.data(m.index(i, 0), Qt.UserRole + 1)];
+    }
+    function _rowAt(m, idx) {
+        const t = {
+            id:       m.data(idx, Qt.UserRole + 1),
+            title:    m.data(idx, Qt.UserRole + 2),
+            desc:     m.data(idx, Qt.UserRole + 3),
+            priority: m.data(idx, Qt.UserRole + 4),
+            status:   m.data(idx, Qt.UserRole + 5),
+            deadline: m.data(idx, Qt.UserRole + 6),
+            branch:   m.data(idx, Qt.UserRole + 7),
+            archived: m.data(idx, Qt.UserRole + 9),
+            // The one haystack passesFilter() searches (HEAP-117).
+            searchText: m.data(idx, Qt.UserRole + 32),
+            ticket:     m.data(idx, Qt.UserRole + 31),
+        };
+        t.bucket = AppController.deadlineBucket(t.deadline);
+        t.dueMs = t.deadline && t.deadline.getTime && !isNaN(t.deadline.getTime()) ? t.deadline.getTime() : 9e15;
+        return t;
     }
 
     function buildGroups() {
         const _rev = root.modelRev; // dependency
         const groups = { overdue: [], today: [], tomorrow: [], thisweek: [], nextweek: [], later: [], nodl: [] };
         const m = AppController.tasks;
+        const day = String(AppController.today);
+        if (root._rowCacheDay !== day) {
+            root._rowCache = ({});
+            root._rowCacheDay = day;
+        }
+        const cache = root._rowCache;
         for (let i = 0; i < m.rowCount(); i++) {
             const idx = m.index(i, 0);
-            const archived = m.data(idx, Qt.UserRole + 9);
-            if (archived && !root.showArchived) continue;
-            const t = {
-                id:       m.data(idx, Qt.UserRole + 1),
-                title:    m.data(idx, Qt.UserRole + 2),
-                desc:     m.data(idx, Qt.UserRole + 3),
-                priority: m.data(idx, Qt.UserRole + 4),
-                status:   m.data(idx, Qt.UserRole + 5),
-                deadline: m.data(idx, Qt.UserRole + 6),
-                branch:   m.data(idx, Qt.UserRole + 7),
-                // The one haystack passesFilter() searches (HEAP-117).
-                searchText: m.data(idx, Qt.UserRole + 32),
-                ticket:     m.data(idx, Qt.UserRole + 31),
-            };
+            const id = m.data(idx, Qt.UserRole + 1);
+            let t = cache[id];
+            if (!t) {
+                t = root._rowAt(m, idx);
+                cache[id] = t;
+            }
+            if (t.archived && !root.showArchived) continue;
             if (!root.passesFilter(t)) continue;
-            const b = AppController.deadlineBucket(t.deadline);
-            groups[b].push(t);
+            groups[t.bucket].push(t);
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
         for (const k in groups) {
             groups[k].sort((a, b) => {
-                const ad = a.deadline && a.deadline.getTime ? a.deadline.getTime() : 9e15;
-                const bd = b.deadline && b.deadline.getTime ? b.deadline.getTime() : 9e15;
-                if (ad !== bd) return ad - bd;
+                if (a.dueMs !== b.dueMs) return a.dueMs - b.dueMs;
                 return (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9);
             });
         }
         return groups;
     }
-    property var groups: buildGroups()
-    onModelRevChanged: groups = buildGroups()
-    onSearchTextChanged: groups = buildGroups()
-    onPrioritiesFilterChanged: groups = buildGroups()
-    onShowDoneChanged: groups = buildGroups()
-    onShowArchivedChanged: groups = buildGroups()
+    // Rebuilt once per event-loop pass, not once per signal. One status change
+    // emits several model signals (the move, its timestamp, the focus block it
+    // books), and each used to rebuild the whole timeline — 3k tasks, ~100 ms a
+    // pass. It was also a binding on top of the handlers, so the first change
+    // rebuilt twice. A zero-interval timer folds repeated requests into one
+    // (and, unlike Qt.callLater, dies with the view instead of calling into a
+    // destroyed one after a view switch).
+    property var groups: ({})
+    function _rebuild() { root.groups = root.buildGroups(); }
+    function _scheduleRebuild() { rebuildTimer.restart(); }
+    Timer {
+        id: rebuildTimer
+        interval: 0
+        onTriggered: root._rebuild()
+    }
+    Component.onCompleted: root._rebuild()
+    onModelRevChanged: _scheduleRebuild()
+    onSearchTextChanged: _scheduleRebuild()
+    onPrioritiesFilterChanged: _scheduleRebuild()
+    onShowDoneChanged: _scheduleRebuild()
+    onShowArchivedChanged: _scheduleRebuild()
 
     // Expand a bucket's flat task list into a mixed array of
     // {kind:"header", label, date} / {kind:"task", task} rows. Buckets that
@@ -176,7 +222,9 @@ Item {
             if (list.length === 0) continue;
             const rows = root.bucketRows(k, list);
             for (let i = 0; i < rows.length; i++) {
-                const r = Object.assign({ bucketId: k, first: i === 0 }, rows[i]);
+                const r = rows[i];
+                r.bucketId = k;
+                r.first = i === 0;
                 out.push(r);
             }
         }
@@ -258,15 +306,20 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
-            model: root.flatRows
+            // A row count, not the array. Every rebuild makes a new array, and
+            // an array model is reset whenever it is replaced: all rows torn
+            // down and laid out again for a single card's move. With a count
+            // the list stays put while it is unchanged, and each row on screen
+            // just re-reads its entry below.
+            model: root.flatRows.length
             cacheBuffer: 400
+            reuseItems: true
             footer: Item { width: rowList.width; height: 24 }
 
             delegate: Item {
                 id: rowItem
-                required property var modelData
                 required property int index
-                readonly property var rd: modelData
+                readonly property var rd: root.flatRows[index] ?? null
                 readonly property bool first: !!(rd && rd.first)
                 readonly property var meta: rd ? root.bucketMeta[rd.bucketId] : null
                 readonly property var list: rd ? (root.groups[rd.bucketId] || []) : []
