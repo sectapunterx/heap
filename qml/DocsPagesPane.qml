@@ -173,7 +173,7 @@ Item {
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
                     font.pixelSize: Theme.fsSm
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
                     onTextChanged: root.filter = text
                 }
 
@@ -333,7 +333,7 @@ Item {
             objectName: "docpage-rename-title"
             implicitWidth: 320
             color: Theme.text
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             onAccepted: renamePagePopup.commit()
         }
 

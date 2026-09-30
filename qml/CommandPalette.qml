@@ -395,7 +395,7 @@ Popup {
                         Text {
                             anchors.centerIn: parent
                             text: root._kindGlyph(modelData.kind)
-                            color: modelData.color || Theme.accent
+                            color: modelData.color || Theme.accentStrong
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold

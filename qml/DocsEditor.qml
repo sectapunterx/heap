@@ -501,6 +501,6 @@ Popup {
         color: Theme.text
         placeholderTextColor: Theme.textDim
         font.family: mono ? Theme.fontMono : Theme.fontUi
-        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
     }
 }

@@ -318,7 +318,7 @@ Item {
                         // Day number.
                         Text {
                             text: cell.date.getDate()
-                            color: _today ? Theme.accent : Theme.text
+                            color: _today ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsSm
                             font.weight: _today ? Font.DemiBold : Font.Normal
                         }

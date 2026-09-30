@@ -145,7 +145,7 @@ Popup {
             objectName: "pe-name"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("editor.ph.fullName")
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             // Re-derive idField while the user has not taken control of it.
@@ -166,7 +166,7 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "e.zaharov"
             font.family: Theme.fontMono
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onActiveFocusChanged: if (activeFocus) root._idAutoDerived = false
@@ -191,7 +191,7 @@ Popup {
             id: roleField
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "Tech Lead / QA / PHY team…"
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
         }
@@ -206,7 +206,7 @@ Popup {
                 id: questionField
                 placeholderText: I18n.t("editor.ph.question")
                 wrapMode: TextEdit.Wrap
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
             }

@@ -88,7 +88,7 @@ Popup {
             id: nameField
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("profile.ph.name")
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             color: Theme.text
             placeholderTextColor: Theme.textDim
             selectByMouse: true

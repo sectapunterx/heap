@@ -117,7 +117,7 @@ Rectangle {
                 placeholderText: I18n.t("selection.bar.labelPh")
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
                 Keys.onReturnPressed: (e) => labelPopup.apply((e.modifiers & Qt.ShiftModifier) === 0)
                 Keys.onEnterPressed: (e) => labelPopup.apply((e.modifiers & Qt.ShiftModifier) === 0)
             }

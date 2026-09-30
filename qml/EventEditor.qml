@@ -460,7 +460,7 @@ Popup {
         font.letterSpacing: 1
     }
     component Field: TextField {
-        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
         color: Theme.text
         placeholderTextColor: Theme.textDim
         selectByMouse: true

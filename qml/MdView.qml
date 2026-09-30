@@ -237,7 +237,7 @@ ListView {
                 height: 14
                 radius: Theme.radiusXs
                 border.width: 1.5
-                border.color: rowItem.model.taskState === 1 ? Theme.stDone : Theme.border
+                border.color: rowItem.model.taskState === 1 ? Theme.stDone : Theme.fieldBorder
                 color: rowItem.model.taskState === 1 ? Theme.stDone : "transparent"
                 Text {
                     anchors.centerIn: parent
@@ -334,7 +334,7 @@ ListView {
                         Text {
                             objectName: "mdCodeCopy"
                             text: copyArea.copied ? I18n.t("notes.code.copied") : I18n.t("notes.code.copy")
-                            color: copyArea.containsMouse ? Theme.accent : Theme.textDim
+                            color: copyArea.containsMouse ? Theme.accentStrong : Theme.textDim
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
                             MouseArea {
@@ -539,7 +539,7 @@ ListView {
                         objectName: "mdRemoteImageLoad"
                         visible: /^https?:\/\//i.test(rowItem.model.imageSource)
                         text: I18n.t("notes.image.load")
-                        color: loadArea.containsMouse ? Theme.accent : Theme.textDim
+                        color: loadArea.containsMouse ? Theme.accentStrong : Theme.textDim
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         MouseArea {
@@ -552,7 +552,7 @@ ListView {
                     }
                     Text {
                         text: I18n.t("notes.image.open")
-                        color: openArea.containsMouse ? Theme.accent : Theme.textDim
+                        color: openArea.containsMouse ? Theme.accentStrong : Theme.textDim
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                         MouseArea {

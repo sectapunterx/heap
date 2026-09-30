@@ -862,7 +862,7 @@ Popup {
                                 radius: Theme.radiusMd
                                 color: Theme.panel2
                                 border.color: deadlineField.text.length === 0
-                                    ? Theme.border
+                                    ? Theme.fieldBorder
                                     : (root._deadlinePreview && root._deadlinePreview.ok
                                         ? Theme.accent
                                         : Theme.danger)
@@ -1588,7 +1588,7 @@ Popup {
     component FieldBg: Rectangle {
         radius: Theme.radiusMd
         color: Theme.panel2
-        border.color: Theme.border
+        border.color: Theme.fieldBorder
         border.width: 1
     }
     // Parses the description for the preview. Same engine the notes editor

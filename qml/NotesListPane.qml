@@ -227,7 +227,7 @@ Rectangle {
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.pixelSize: Theme.fsSm
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             onTextChanged: root.filter = text
         }
 
@@ -421,7 +421,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontMono
             font.pixelSize: Theme.fsSm
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
             onAccepted: folderPopup.commit()
         }
         footer: RowLayout {
@@ -476,7 +476,7 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320
                 color: Theme.text
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
                 onAccepted: renamePopup.commit()
             }
             QQC.TextField {
@@ -489,7 +489,7 @@ Rectangle {
                 color: Theme.text
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSm
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
                 onAccepted: renamePopup.commit()
             }
         }
