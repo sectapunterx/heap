@@ -72,10 +72,12 @@ QVariantMap checklistOf(const Task& t) {
   return {{QStringLiteral("done"), done}, {QStringLiteral("total"), total}};
 }
 
+}  // namespace
+
 // One lowercase haystack per task, so the five views that filter on a search
 // box each read one role instead of concatenating four themselves — and so a
 // ticket is findable by its key, its labels and its owner, not just its title.
-QString searchTextOf(const Task& t) {
+QString TaskModel::searchTextOf(const Task& t) {
   QStringList parts{t.title, t.id, t.desc, externalKeyOf(t), t.assignee, t.externalMeta.project, t.externalMeta.milestone};
   for(const Label& l : t.labels) {
     parts.append(l.id);
@@ -83,7 +85,22 @@ QString searchTextOf(const Task& t) {
   return parts.join(QChar(' ')).toLower();
 }
 
-}  // namespace
+const QString& TaskModel::searchTextAt(int row) const {
+  // Built on first read and kept until the row's text can have changed
+  // (upsert, reset). Every board column is a proxy over the whole model and
+  // re-tests every row on each keystroke; rebuilding the haystack there —
+  // title, description, labels, joined and lowercased — cost ~250 ms per
+  // keystroke at 3k tasks. The status/archive/timer setters leave it alone:
+  // none of the fields it is made of move there.
+  if(m_searchCache.size() != m_items.size()) {
+    m_searchCache = QVector<QString>(m_items.size());
+  }
+  QString& hay = m_searchCache[row];
+  if(hay.isNull()) {
+    hay = searchTextOf(m_items[row]);
+  }
+  return hay;
+}
 
 QVariantList labelsToVariant(const QVector<Label>& labels) {
   QVariantList out;
@@ -238,7 +255,7 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case TicketRole:
       return ticketToVariant(t);
     case SearchTextRole:
-      return searchTextOf(t);
+      return searchTextAt(idx.row());
     case RankRole:
       return t.rank;
     case ChecklistRole:
@@ -259,6 +276,7 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
 void TaskModel::reset(QVector<Task> items) {
   beginResetModel();
   m_items = std::move(items);
+  m_searchCache = QVector<QString>(m_items.size());
   m_git.clear();
   m_indexDirty = true;
   endResetModel();
@@ -408,11 +426,17 @@ void TaskModel::upsert(const Task& t) {
   const int row = indexOfId(t.id);
   if(row >= 0) {
     m_items[row] = t;
+    if(row < m_searchCache.size()) {
+      m_searchCache[row] = QString();
+    }
     const QModelIndex mi = index(row, 0);
     emit dataChanged(mi, mi);
   } else {
     beginInsertRows({}, m_items.size(), m_items.size());
     m_items.push_back(t);
+    if(m_searchCache.size() == m_items.size() - 1) {
+      m_searchCache.push_back(QString());
+    }
     m_indexDirty = true;
     endInsertRows();
   }
@@ -422,6 +446,9 @@ void TaskModel::insertAt(int row, const Task& t) {
   row = qBound(0, row, m_items.size());
   beginInsertRows({}, row, row);
   m_items.insert(row, t);
+  if(row <= m_searchCache.size() && m_searchCache.size() == m_items.size() - 1) {
+    m_searchCache.insert(row, QString());
+  }
   m_indexDirty = true;  // every row at or after this one shifted
   endInsertRows();
 }
@@ -433,6 +460,9 @@ void TaskModel::removeById(const QString& id) {
   }
   beginRemoveRows({}, row, row);
   m_items.removeAt(row);
+  if(row < m_searchCache.size() && m_searchCache.size() == m_items.size() + 1) {
+    m_searchCache.removeAt(row);
+  }
   m_indexDirty = true;  // every row after this one shifted
   endRemoveRows();
 }

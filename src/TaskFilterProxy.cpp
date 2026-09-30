@@ -12,9 +12,24 @@ TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent
   sort(0, Qt::AscendingOrder);
 
   // The header badge and the "nothing here" placeholder both read count().
-  connect(this, &QAbstractItemModel::rowsInserted, this, &TaskFilterProxy::countChanged);
-  connect(this, &QAbstractItemModel::rowsRemoved, this, &TaskFilterProxy::countChanged);
-  connect(this, &QAbstractItemModel::modelReset, this, &TaskFilterProxy::countChanged);
+  // Not while a filter change is being applied: that removes and inserts rows
+  // one contiguous range at a time — hundreds of ranges when a keystroke
+  // narrows 3k tasks — and every one re-ran each binding on count. The setter
+  // announces the new count once when it is done.
+  const auto rowsMoved = [this]() {
+    if(!m_refiltering) {
+      emit countChanged();
+    }
+  };
+  connect(this, &QAbstractItemModel::rowsInserted, this, rowsMoved);
+  connect(this, &QAbstractItemModel::rowsRemoved, this, rowsMoved);
+  connect(this, &QAbstractItemModel::modelReset, this, rowsMoved);
+}
+
+void TaskFilterProxy::refilter() {
+  m_refiltering = true;
+  invalidateFilter();
+  m_refiltering = false;
 }
 
 void TaskFilterProxy::setStatus(const QString& v) {
@@ -22,7 +37,7 @@ void TaskFilterProxy::setStatus(const QString& v) {
     return;
   }
   m_status = v;
-  invalidateFilter();
+  refilter();
   emit filterChanged();
   emit countChanged();
 }
@@ -32,7 +47,17 @@ void TaskFilterProxy::setShowArchived(bool v) {
     return;
   }
   m_showArchived = v;
-  invalidateFilter();
+  refilter();
+  emit filterChanged();
+  emit countChanged();
+}
+
+void TaskFilterProxy::setArchivedOnly(bool v) {
+  if(m_archivedOnly == v) {
+    return;
+  }
+  m_archivedOnly = v;
+  refilter();
   emit filterChanged();
   emit countChanged();
 }
@@ -46,7 +71,7 @@ void TaskFilterProxy::setSearchText(const QString& v) {
   // runs the date parser, which has no business being in a per-row predicate.
   m_query = heap::query::TaskQuery::compile(v, QDate::currentDate());
   m_searchText = m_query.freeText();
-  invalidateFilter();
+  refilter();
   emit filterChanged();
   emit countChanged();
 }
@@ -56,7 +81,7 @@ void TaskFilterProxy::setPriorities(const QStringList& v) {
     return;
   }
   m_priorities = v;
-  invalidateFilter();
+  refilter();
   emit filterChanged();
   emit countChanged();
 }
@@ -135,6 +160,32 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   if(src == nullptr) {
     return false;
   }
+  // The board's source is always the TaskModel, and this predicate runs for
+  // every row of it in every column on each keystroke. Reading the Task
+  // directly skips five QVariant round trips per row; the generic path below
+  // stays for any other source model.
+  if(const auto* tasks = qobject_cast<const TaskModel*>(src); tasks != nullptr && !sourceParent.isValid()) {
+    if(sourceRow < 0 || sourceRow >= tasks->items().size()) {
+      return false;
+    }
+    const Task& t = tasks->items().at(sourceRow);
+    if(!m_status.isEmpty() && t.status != m_status) {
+      return false;
+    }
+    if(m_archivedOnly ? !t.archived : (!m_showArchived && t.archived)) {
+      return false;
+    }
+    if(!m_priorities.isEmpty() && !m_priorities.contains(t.priority)) {
+      return false;
+    }
+    // The model's cached haystack (see SearchTextRole), not a concatenation
+    // of a few fields here, which would quietly narrow what the board finds.
+    if(!m_searchText.isEmpty() && !tasks->searchTextAt(sourceRow).contains(m_searchText)) {
+      return false;
+    }
+    return !m_query.isQuery() || m_query.matches(t);
+  }
+
   const QModelIndex idx = src->index(sourceRow, 0, sourceParent);
   if(!idx.isValid()) {
     return false;
@@ -143,7 +194,8 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   if(!m_status.isEmpty() && src->data(idx, TaskModel::StatusRole).toString() != m_status) {
     return false;
   }
-  if(!m_showArchived && src->data(idx, TaskModel::ArchivedRole).toBool()) {
+  const bool archived = src->data(idx, TaskModel::ArchivedRole).toBool();
+  if(m_archivedOnly ? !archived : (!m_showArchived && archived)) {
     return false;
   }
   // An empty priority set means "no filter", not "nothing passes" — the filter
@@ -158,16 +210,8 @@ bool TaskFilterProxy::filterAcceptsRow(int sourceRow, const QModelIndex& sourceP
   if(!m_searchText.isEmpty() && !src->data(idx, TaskModel::SearchTextRole).toString().contains(m_searchText)) {
     return false;
   }
-  // Structured clauses, if the box held any. The evaluator works on the real
-  // Task rather than a role-by-role reconstruction of it, so a clause can ask
-  // about fields the model exposes no role for.
-  if(m_query.isQuery()) {
-    const auto* tasks = qobject_cast<const TaskModel*>(src);
-    if(tasks == nullptr || sourceRow >= tasks->items().size() || !m_query.matches(tasks->items().at(sourceRow))) {
-      return false;
-    }
-  }
-  return true;
+  // Structured clauses need the real Task, which only a TaskModel source has.
+  return !m_query.isQuery();
 }
 
 QStringList TaskFilterProxy::ids() const {

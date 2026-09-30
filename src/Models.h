@@ -434,6 +434,10 @@ class TaskModel : public QAbstractListModel {
   }
 
   int indexOfId(const QString& id) const;
+  // SearchTextRole without the QVariant: the row's cached lowercase haystack.
+  // TaskFilterProxy reads it once per row per keystroke per column.
+  const QString& searchTextAt(int row) const;
+  static QString searchTextOf(const Task& t);
   // Moves a task to `status`. statusChangedAt is stamped with the current time
   // unless `changedAt` is given — undo passes the original back so restoring a
   // task does not look like a fresh move (the "stuck in this column" badge is
@@ -460,6 +464,11 @@ class TaskModel : public QAbstractListModel {
   // replaced wholesale. Mutable so the lookup can stay const.
   mutable QHash<QString, int> m_index;
   mutable bool m_indexDirty = true;
+  // searchTextAt()'s per-row haystacks, parallel to m_items. A null entry has
+  // not been built yet (or was invalidated by an upsert). If the sizes ever
+  // disagree the whole cache is dropped and rebuilt lazily, so a mutation path
+  // that forgets to maintain it costs speed, never correctness.
+  mutable QVector<QString> m_searchCache;
 };
 
 class EventModel : public QAbstractListModel {
