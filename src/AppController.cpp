@@ -5781,18 +5781,29 @@ void AppController::syncNow() {
 }
 
 void AppController::syncProviderNow(const QString& providerId) {
-  ensureFreshToken(providerId, [this, providerId]() {
-    for(const auto& provider : m_syncProviders) {
-      if(provider->id() == providerId) {
-        if(!m_statusesAsked.contains(providerId)) {
-          m_statusesAsked.insert(providerId);
-          provider->fetchStatuses();
+  ensureFreshToken(
+      providerId,
+      [this, providerId]() {
+        for(const auto& provider : m_syncProviders) {
+          if(provider->id() == providerId) {
+            if(!m_statusesAsked.contains(providerId)) {
+              m_statusesAsked.insert(providerId);
+              provider->fetchStatuses();
+            }
+            provider->pullTasks();
+            return;
+          }
         }
-        provider->pullTasks();
-        return;
-      }
-    }
-  });
+        emit integrationActionFinished(providerId, QStringLiteral("sync"), false, tr_("sync.noTracker"));
+      },
+      [this, providerId]() {
+        // The refresh already said why (offline, or signed out).
+        emit integrationActionFinished(
+            providerId,
+            QStringLiteral("sync"),
+            false,
+            tr_("sync.failed").arg(providerDisplayName(providerId), providerReason(QStringLiteral("token refresh failed"))));
+      });
 }
 
 QString AppController::uniqueTaskId(const QString& base) const {
@@ -6260,6 +6271,7 @@ void AppController::applyIntegrationSettings() {
               m_retriedAfter401.remove(providerId);
               // The tracker answered, so it is reachable again.
               setProviderOffline(providerId, false);
+              emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
               const bool settlePull = m_settlePulls.remove(providerId);
               const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues, provider->lastPullComplete());
               // Moves made while the tracker was out of reach go now that it
@@ -6332,14 +6344,19 @@ void AppController::applyIntegrationSettings() {
              cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth") &&
              !cfg.value(QStringLiteral("refreshToken")).toString().isEmpty()) {
             m_retriedAfter401.insert(providerId);
-            refreshOAuthToken(providerId, [this, providerId](bool ok) {
+            refreshOAuthToken(providerId, [this, providerId, label, error](bool ok) {
               if(ok) {
                 syncProviderNow(providerId);
+              } else {
+                emit integrationActionFinished(
+                    providerId, QStringLiteral("sync"), false, tr_("sync.failed").arg(label, providerReason(error)));
               }
             });
             return;
           }
-          emit toast(tr_("sync.failed").arg(label, providerReason(error)), QStringLiteral("error"));
+          const QString message = tr_("sync.failed").arg(label, providerReason(error));
+          emit toast(message, QStringLiteral("error"));
+          emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
         });
     connect(
         provider,
@@ -6348,10 +6365,14 @@ void AppController::applyIntegrationSettings() {
         [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error, const QString& remoteStatus) {
           onTaskPushed(providerId, externalId, project, ok, error, remoteStatus);
         });
-    connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
-      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)),
-                 ok ? QStringLiteral("success") : QStringLiteral("error"));
-    });
+    connect(provider,
+            &heap::integrations::IntegrationProvider::connectionTested,
+            this,
+            [this, providerId, label](bool ok, const QString& error) {
+              const QString message = ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error));
+              emit toast(message, ok ? QStringLiteral("success") : QStringLiteral("error"));
+              emit integrationActionFinished(providerId, QStringLiteral("test"), ok, ok ? QString() : message);
+            });
     // The mapping UI used to list only statuses an issue had already arrived
     // in; the tracker's own list fills in the rest.
     connect(provider, &heap::integrations::IntegrationProvider::statusesFetched, this, [this, providerId](const QStringList& statuses) {
@@ -6444,15 +6465,17 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
 
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   const QString label = d ? d->displayName : providerId;
-  connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, label](bool ok, const QString& error) {
-    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)),
-               ok ? QStringLiteral("success") : QStringLiteral("error"));
+  connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, providerId, label](bool ok, const QString& error) {
+    const QString message = ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error));
+    emit toast(message, ok ? QStringLiteral("success") : QStringLiteral("error"));
+    emit integrationActionFinished(providerId, QStringLiteral("test"), ok, ok ? QString() : message);
   });
   connect(client,
           &heap::integrations::MattermostClient::contactsFetched,
           this,
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
             const int changed = mergeExternalContacts(providerId, contacts);
+            emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
             if(changed == 0) {
               emit toast(tr_("contacts.upToDate").arg(label));
               return;
@@ -6465,9 +6488,12 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
     if(status == 401) {
       disconnectIntegration(providerId);
       emit toast(tr_("int.sessionExpired").arg(label), QStringLiteral("warning"));
+      emit integrationActionFinished(providerId, QStringLiteral("sync"), false, tr_("int.sessionExpired").arg(label));
       return;
     }
-    emit toast(tr_("sync.failed").arg(label, providerReason(error)), QStringLiteral("error"));
+    const QString message = tr_("sync.failed").arg(label, providerReason(error));
+    emit toast(message, QStringLiteral("error"));
+    emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
   });
 
   m_directoryClients.insert(providerId, client);
@@ -6753,12 +6779,14 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(d == nullptr || d->loginFields.isEmpty()) {
     emit toast(tr_("int.noPassword"));
+    emit integrationActionFinished(providerId, QStringLiteral("signin"), false, tr_("int.noPassword"));
     return;
   }
   const QString host = integrationConfig(providerId).value(QStringLiteral("host")).toString().trimmed();
   if(host.isEmpty()) {
     emit toast(tr_("int.needUrl").arg(d->displayName));
     emit integrationLoginFinished(providerId, false);
+    emit integrationActionFinished(providerId, QStringLiteral("signin"), false, tr_("int.needUrl").arg(d->displayName));
     return;
   }
 
@@ -6773,7 +6801,9 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
             client->deleteLater();
             emit integrationLoginFinished(providerId, ok);
             if(!ok) {
-              emit toast(tr_("int.signInFailed").arg(label, providerReason(error)), QStringLiteral("error"));
+              const QString message = tr_("int.signInFailed").arg(label, providerReason(error));
+              emit toast(message, QStringLiteral("error"));
+              emit integrationActionFinished(providerId, QStringLiteral("signin"), false, message);
               return;
             }
             if(m_secretStore) {
@@ -6788,6 +6818,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
                                  });
             emit integrationSecretsChanged();
             emit toast(tr_("int.connected").arg(label));
+            emit integrationActionFinished(providerId, QStringLiteral("signin"), true, QString());
           });
   client->login(credentials.value(QStringLiteral("loginId")).toString(),
                 credentials.value(QStringLiteral("password")).toString(),
@@ -6911,18 +6942,21 @@ void AppController::syncProvider(const QString& providerId) {
     }
   }
   emit toast(tr_("sync.noTracker"));
+  emit integrationActionFinished(providerId, QStringLiteral("sync"), false, tr_("sync.noTracker"));
 }
 
 void AppController::testIntegration(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d) {
     emit toast(tr_("int.unknown"));
+    emit integrationActionFinished(providerId, QStringLiteral("test"), false, tr_("int.unknown"));
     return;
   }
   if(d->kind == heap::integrations::ProviderKind::Directory) {
     heap::integrations::MattermostClient* client = directoryClient(providerId);
     if(client == nullptr) {
       emit toast(tr_("int.notConfigured").arg(d->displayName));
+      emit integrationActionFinished(providerId, QStringLiteral("test"), false, tr_("int.notConfigured").arg(d->displayName));
       return;
     }
     client->testConnection();
@@ -6939,15 +6973,19 @@ void AppController::testIntegration(const QString& providerId) {
   }
   if(!provider) {
     emit toast(tr_("int.notConfigured").arg(d->displayName));
+    emit integrationActionFinished(providerId, QStringLiteral("test"), false, tr_("int.notConfigured").arg(d->displayName));
     return;
   }
   const QString label = d->displayName;
-  connect(
-      provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, provider, label](bool ok, const QString& error) {
-        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)),
-                   ok ? QStringLiteral("success") : QStringLiteral("error"));
-        provider->deleteLater();
-      });
+  connect(provider,
+          &heap::integrations::IntegrationProvider::connectionTested,
+          this,
+          [this, provider, providerId, label](bool ok, const QString& error) {
+            const QString message = ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error));
+            emit toast(message, ok ? QStringLiteral("success") : QStringLiteral("error"));
+            emit integrationActionFinished(providerId, QStringLiteral("test"), ok, ok ? QString() : message);
+            provider->deleteLater();
+          });
   provider->testConnection();
 }
 
@@ -7541,6 +7579,7 @@ void AppController::connectOAuth(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d || !d->oauth.supported) {
     emit toast(tr_("int.noBrowser"), QStringLiteral("error"));
+    emit integrationActionFinished(providerId, QStringLiteral("oauth"), false, tr_("int.noBrowser"));
     return;
   }
   const QVariantMap cfg = integrationConfig(providerId);
@@ -7552,6 +7591,7 @@ void AppController::connectOAuth(const QString& providerId) {
   }
   if(clientId.isEmpty()) {
     emit toast(tr_("int.noOAuthApp"));
+    emit integrationActionFinished(providerId, QStringLiteral("oauth"), false, tr_("int.noOAuthApp"));
     return;
   }
   QString clientSecret = cfg.value(QStringLiteral("clientSecret")).toString();
@@ -7563,10 +7603,12 @@ void AppController::connectOAuth(const QString& providerId) {
   // not, so say so instead of opening a browser that will refuse the exchange.
   if(d->oauth.needsSecret && clientSecret.isEmpty()) {
     emit toast(tr_("int.needSecret").arg(d->displayName));
+    emit integrationActionFinished(providerId, QStringLiteral("oauth"), false, tr_("int.needSecret").arg(d->displayName));
     return;
   }
   if(d->oauth.effectiveFlow() == heap::integrations::OAuthFlow::Device && !heap::integrations::OAuthManager::deviceFlowAvailable()) {
     emit toast(tr_("int.needQt").arg(d->displayName));
+    emit integrationActionFinished(providerId, QStringLiteral("oauth"), false, tr_("int.needQt").arg(d->displayName));
     return;
   }
   // {host} defaults to the descriptor fallback (e.g. gitlab.com) so gitlab.com
@@ -7619,9 +7661,12 @@ void AppController::connectOAuth(const QString& providerId) {
     mgr->deleteLater();
     emit oauthDeviceCode(providerId, QString(), QString());  // clear the banner
     if(!r.ok) {
-      emit toast(tr_("int.signInFailed").arg(label, providerReason(r.error)), QStringLiteral("error"));
+      const QString message = tr_("int.signInFailed").arg(label, providerReason(r.error));
+      emit toast(message, QStringLiteral("error"));
+      emit integrationActionFinished(providerId, QStringLiteral("oauth"), false, message);
       return;
     }
+    emit integrationActionFinished(providerId, QStringLiteral("oauth"), true, QString());
     if(m_secretStore) {
       // Same order as refreshOAuthToken: the refresh token goes in first.
       if(!r.refreshToken.isEmpty()) {

@@ -23,6 +23,7 @@
 #include <QJsonObject>
 #include <QNetworkProxy>
 #include <QNetworkReply>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 #include <QTimeZone>
@@ -825,6 +826,81 @@ TEST_F(IntAudit, IssueReportBody_IsShortAndCarriesNoHomePath) {
   const QString body = app_->issueReportBody();
   EXPECT_FALSE(body.contains(QDir::homePath(), Qt::CaseInsensitive));
   EXPECT_LT(body.size(), 3000);
+}
+
+// ── DES-5: every card action says when it is done, and how it went ──
+// The card keeps its buttons busy until this arrives and shows the failure,
+// so a path that ends without it leaves "Syncing…" on screen for good.
+
+class ActionFinished : public IntAudit {
+ protected:
+  void connectGitea(const QString& host) {
+    app_->setIntegrationSecret(QStringLiteral("gitea"), QStringLiteral("token"), QStringLiteral("tok"));
+    writeIntegrationConfig(QStringLiteral("gitea"),
+                           QJsonObject{
+                               {QStringLiteral("connected"), true},
+                               {QStringLiteral("host"), host},
+                               {QStringLiteral("repo"), QStringLiteral("acme/web")},
+                           });
+  }
+};
+
+TEST_F(ActionFinished, SyncWithNoTracker_FinishesAsAFailure) {
+  QSignalSpy spy(app_.get(), &AppController::integrationActionFinished);
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_EQ(spy.count(), 1);
+  EXPECT_EQ(spy.at(0).at(0).toString(), QStringLiteral("gitea"));
+  EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("sync"));
+  EXPECT_FALSE(spy.at(0).at(2).toBool());
+  EXPECT_FALSE(spy.at(0).at(3).toString().isEmpty()) << "a failure with nothing to show on the card";
+}
+
+TEST_F(ActionFinished, SyncThatLands_FinishesOk) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/web/issues", {200, "[]", {}});
+  connectGitea(gitea.base());
+  QSignalSpy spy(app_.get(), &AppController::integrationActionFinished);
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  })) << "a sync that came back never said so";
+  EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("sync"));
+  EXPECT_TRUE(spy.at(0).at(2).toBool());
+  EXPECT_TRUE(spy.at(0).at(3).toString().isEmpty());
+}
+
+TEST_F(ActionFinished, SyncThatFails_CarriesTheReason) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/web/issues", {404, R"({"message":"boom"})", {}});
+  connectGitea(gitea.base());
+  QSignalSpy spy(app_.get(), &AppController::integrationActionFinished);
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  }));
+  EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("sync"));
+  EXPECT_FALSE(spy.at(0).at(2).toBool());
+  EXPECT_TRUE(spy.at(0).at(3).toString().contains(QStringLiteral("Gitea"))) << spy.at(0).at(3).toString().toStdString();
+}
+
+TEST_F(ActionFinished, TestConnection_FinishesOnBothOutcomes) {
+  QSignalSpy spy(app_.get(), &AppController::integrationActionFinished);
+  app_->testIntegration(QStringLiteral("no-such-provider"));
+  ASSERT_EQ(spy.count(), 1);
+  EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("test"));
+  EXPECT_FALSE(spy.at(0).at(2).toBool());
+
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/user", {200, R"({"login":"me"})", {}});
+  gitea.route("GET /api/v1/repos/acme/web", {200, R"({"full_name":"acme/web"})", {}});
+  connectGitea(gitea.base());
+  spy.clear();
+  app_->testIntegration(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  })) << "a connection test that came back never said so";
+  EXPECT_EQ(spy.at(0).at(0).toString(), QStringLiteral("gitea"));
+  EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("test"));
 }
 
 }  // namespace intaudit
