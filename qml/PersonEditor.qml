@@ -88,6 +88,13 @@ Popup {
             state: root.states[stateBox.currentIndex],
             color: root.swatches[colorSwatch.selectedIndex]
         };
+        // savePerson() refuses a nameless person too, but says nothing for a
+        // new one — so say it here, where the name is typed.
+        if (d.name.trim().length === 0) {
+            root._error = I18n.t("editor.person.err.name");
+            nameField.forceActiveFocus();
+            return;
+        }
         // An id someone already has would replace that person whole
         // (SHELL-24). Say who holds it and keep the draft.
         const holder = AppController.personById(d.id);
@@ -135,6 +142,7 @@ Popup {
                color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: nameField
+            objectName: "pe-name"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("editor.ph.fullName")
             background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
@@ -142,6 +150,7 @@ Popup {
             placeholderTextColor: Theme.textDim
             // Re-derive idField while the user has not taken control of it.
             onTextChanged: {
+                root._error = "";
                 if (root._idAutoDerived) {
                     idField.text = AppController.suggestPersonId(
                         text, root.draft.id || "");

@@ -124,6 +124,31 @@ TestCase {
         tryCompare(pe, "opened", false);
     }
 
+    // A new person with no name is refused by savePerson() without a toast;
+    // the editor has to say why itself, not "see the message below" over no
+    // message at all.
+    function test_new_person_without_a_name_says_so() {
+        const before = AppController.people.rowCount();
+        const pe = make('import TodoCpp; PersonEditor { }');
+        pe.showFor({ _isNew: true });
+        tryCompare(pe, "opened", true);
+        const nameField = findChild(pe.contentItem, "pe-name");
+        nameField.text = "   ";
+        pe._save();
+
+        verify(pe.opened, "the editor stays open on the draft");
+        const err = findChild(pe.contentItem, "pe-error");
+        verify(err.visible);
+        compare(err.text, I18n.t("editor.person.err.name"));
+        verify(nameField.activeFocus, "the name field is where to fix it");
+        compare(AppController.people.rowCount(), before);
+
+        nameField.text = "Named";
+        verify(!err.visible, "typing a name clears the message");
+        pe.close();
+        tryCompare(pe, "opened", false);
+    }
+
     // SHELL-24: a new person typed onto an id someone already has used to
     // replace that person whole. The editor refuses, says who holds the id and
     // stays open on the draft; the existing person is unchanged.
