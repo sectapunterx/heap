@@ -45,7 +45,8 @@ Popup {
     // a selection — offered by the palette they would do nothing.
     readonly property var _contextual: ["palette.open", "task.openExternal", "undo", "redo"]
     function _isContextual(id) {
-        return _contextual.indexOf(id) >= 0 || id.indexOf("board.") === 0
+        // savedView.N is offered by name instead ("View: Urgent"), below.
+        return _contextual.indexOf(id) >= 0 || id.indexOf("board.") === 0 || id.indexOf("savedView.") === 0
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0;
     }
 
@@ -66,6 +67,16 @@ Popup {
         }
         out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), sub: "" });
         out.push({ kind: "command", commandId: "welcome.replay", label: I18n.t("palette.cmd.replayTour"), sub: "" });
+        // Saved views: one command per view, by name, plus saving the current
+        // filters as one.
+        const views = AppController.savedViews;
+        for (let v = 0; v < views.length; v++) {
+            out.push({ kind: "command", commandId: "savedview:" + views[v].id,
+                       label: I18n.t("palette.cmd.savedView").arg(views[v].name),
+                       sub: v < 9 ? AppController.shortcutFor("savedView." + (v + 1)) : "",
+                       body: views[v].query });
+        }
+        out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
         for (let j = 0; j < _settingsSections.length; j++) {
             const id = _settingsSections[j];
             out.push({ kind: "setting", commandId: "settings:" + id,

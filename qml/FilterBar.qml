@@ -35,6 +35,16 @@ Rectangle {
     signal toggleArchived()
     signal sortModeRequested(string mode)
 
+    // Saved views. With none active the bar offers "Save view…"; with one it
+    // names it, and once the filters move off it, offers to update it or keep
+    // the change as a new view.
+    property string savedViewName: ""
+    property bool savedViewModified: false
+    signal saveViewRequested()
+    signal updateViewRequested()
+    signal saveAsNewRequested()
+    signal leaveViewRequested()
+
     Rectangle {
         anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
         height: 1; color: Theme.border
@@ -144,6 +154,39 @@ Rectangle {
         y: root._wrapped ? 44 + (34 - height) / 2 - 6 : (44 - height) / 2
         width: Math.min(implicitWidth, root.width - 32)
         spacing: Theme.spMd
+
+        // ── Saved view ──
+        BarChip {
+            objectName: "save-view"
+            visible: root.savedViewName.length === 0
+            glyph: "☆"
+            text: I18n.t("filter.saveView")
+            tip: I18n.t("filter.saveViewTip")
+            onActivated: root.saveViewRequested()
+        }
+        BarChip {
+            objectName: "saved-view-chip"
+            visible: root.savedViewName.length > 0
+            selected: !root.savedViewModified
+            glyph: "★"
+            text: root.savedViewModified ? I18n.t("filter.viewModified").arg(root.savedViewName) : root.savedViewName
+            trailing: "×"
+            tip: I18n.t("filter.leaveView")
+            onActivated: root.leaveViewRequested()
+            Layout.maximumWidth: 220
+        }
+        BarChip {
+            objectName: "update-view"
+            visible: root.savedViewName.length > 0 && root.savedViewModified
+            text: I18n.t("filter.updateView")
+            onActivated: root.updateViewRequested()
+        }
+        BarChip {
+            objectName: "save-as-new-view"
+            visible: root.savedViewName.length > 0 && root.savedViewModified
+            text: I18n.t("filter.saveAsNew")
+            onActivated: root.saveAsNewRequested()
+        }
 
         // Sort. Manual is the board's own order — the one a drag writes — so
         // it is first and is what the board starts on. One button and a menu:
@@ -269,6 +312,65 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.maximumWidth: implicitWidth
+        }
+    }
+
+    // A pill in the bar's own style: the saved-view controls.
+    component BarChip: Rectangle {
+        id: chip
+        property string text: ""
+        property string glyph: ""
+        property string trailing: ""
+        property string tip: ""
+        property bool selected: false
+        signal activated()
+        radius: Theme.radiusPill
+        color: chip.selected ? Theme.accentSoft : (chipMA.containsMouse ? Theme.panel3 : Theme.panel2)
+        border.color: chip.selected ? Theme.accent : (chipMA.containsMouse ? Theme.borderStrong : Theme.border)
+        border.width: 1
+        implicitWidth: chipRow.implicitWidth + 16
+        implicitHeight: 24
+        activeFocusOnTab: visible
+        Accessible.role: Accessible.Button
+        Accessible.name: chip.tip.length > 0 ? chip.text + ", " + chip.tip : chip.text
+        Accessible.onPressAction: chip.activated()
+        Keys.onSpacePressed: chip.activated()
+        Keys.onReturnPressed: chip.activated()
+        FocusRing {}
+        RowLayout {
+            id: chipRow
+            anchors.centerIn: parent
+            width: Math.min(implicitWidth, chip.width - 16)
+            spacing: Theme.spXs
+            Text {
+                visible: chip.glyph.length > 0
+                text: chip.glyph
+                color: chip.selected ? Theme.accentStrong : Theme.textDim
+                font.pixelSize: Theme.fsSm
+            }
+            Text {
+                Layout.fillWidth: true
+                text: chip.text
+                elide: Text.ElideRight
+                color: chip.selected ? Theme.accentStrong : Theme.textMuted
+                font.pixelSize: Theme.fsMd
+            }
+            Text {
+                visible: chip.trailing.length > 0
+                text: chip.trailing
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+            }
+        }
+        MouseArea {
+            id: chipMA
+            anchors.fill: parent
+            hoverEnabled: true
+            cursorShape: Qt.PointingHandCursor
+            onClicked: chip.activated()
+            ToolTip.visible: containsMouse && chip.tip.length > 0
+            ToolTip.text: chip.tip
+            ToolTip.delay: 500
         }
     }
 }

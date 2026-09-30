@@ -264,6 +264,8 @@ qt_add_qml_module(heap_core
         # ── audit-plat: end ──
         # ── audit-tasks: begin ──
         qml/PlainText.js
+        qml/SavedViewsHost.qml
+        qml/SavedViewNameDialog.qml
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml

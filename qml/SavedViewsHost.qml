@@ -1,0 +1,154 @@
+// The window's side of saved views: which one is active, whether the filters
+// have moved away from it, and applying one. The views themselves are
+// AppController.savedViews (per profile, undoable); the filters a view
+// restores live on the window (Main.qml: searchText, prioritiesFilter,
+// boardSortMode, showArchived, showDoneTimeline), so applying one is here.
+//
+// Kept out of Main.qml, which is long enough: Main makes one of these, hands it
+// itself as `host`, and routes the filter bar, the sidebar and the palette to
+// it.
+import QtQuick
+import TodoCpp
+
+Item {
+    id: root
+    // Main.qml's window. Read and written: the filter properties above,
+    // _activePriorities, _kbd(), _globalKeysOn.
+    property var host: null
+
+    // The view the filters were last set from. Cleared when it is deleted, on
+    // a profile switch, and by "leave view".
+    property string activeId: ""
+
+    readonly property var activeView: {
+        const list = AppController.savedViews;
+        for (let i = 0; i < list.length; i++)
+            if (list[i].id === root.activeId) return list[i];
+        return null;
+    }
+
+    // The filter state as a saved view stores it. Off a task view (Notes,
+    // Docs, Settings) the active view's own view stands in, so walking over to
+    // Notes and back does not mark it modified.
+    function currentState() {
+        if (!root.host) return ({});
+        const cur = AppController.currentView;
+        const taskView = ["board", "timeline", "week", "month", "archive"].indexOf(cur) >= 0;
+        return {
+            query: root.host.searchText,
+            priorities: root.host._activePriorities,
+            sort: root.host.boardSortMode,
+            archived: root.host.showArchived,
+            showDone: root.host.showDoneTimeline,
+            view: taskView ? cur : (root.activeView ? root.activeView.view : "board")
+        };
+    }
+
+    readonly property bool modified: {
+        if (!root.activeView || !root.host) return false;
+        // currentState() reads the window's filters, so the binding follows
+        // them; activeView follows AppController.savedViews.
+        return AppController.savedViewDiffers(root.activeId, root.currentState());
+    }
+
+    function apply(id) {
+        const list = AppController.savedViews;
+        let v = null;
+        for (let i = 0; i < list.length; i++) if (list[i].id === id) v = list[i];
+        if (!v || !root.host) return false;
+        const chips = {};
+        for (let j = 0; j < v.priorities.length; j++) chips[v.priorities[j]] = true;
+        root.host.searchText = v.query;
+        root.host.prioritiesFilter = chips;
+        root.host.boardSortMode = v.sort;
+        root.host.showArchived = v.archived;
+        root.host.showDoneTimeline = v.showDone;
+        AppController.currentView = v.view;
+        root.activeId = id;
+        return true;
+    }
+
+    // Alt+N: the Nth view in the sidebar, 1-based.
+    function applyAt(n) {
+        const list = AppController.savedViews;
+        if (n < 1 || n > list.length) return false;
+        return root.apply(list[n - 1].id);
+    }
+
+    // What a view would capture, one line: the dialog shows it under the name.
+    function describe(state) {
+        const parts = [];
+        if (state.query && state.query.length > 0) parts.push(state.query);
+        if (state.priorities && state.priorities.length > 0) parts.push(state.priorities.join(","));
+        if (state.archived) parts.push(I18n.t("filter.archived"));
+        if (state.view === "board" && state.sort && state.sort !== "manual")
+            parts.push(I18n.t("filter.sortBy") + " " + I18n.t("filter.sort." + state.sort));
+        parts.push(I18n.t("siderail." + state.view));
+        return parts.join(" · ");
+    }
+
+    // A name to start from: the query when there is one, else the chips, else
+    // the view's own name — something the user can accept with one Enter.
+    function suggestName(state) {
+        const q = (state.query || "").trim();
+        if (q.length > 0) return q.length > 40 ? q.slice(0, 39) + "…" : q;
+        if (state.priorities && state.priorities.length > 0) return state.priorities.join(" · ");
+        return I18n.t("siderail." + state.view);
+    }
+
+    function openSave() {
+        const s = root.currentState();
+        nameDialog.targetId = "";
+        nameDialog.openFor("save", root.suggestName(s), root.describe(s));
+    }
+    function openRename(id) {
+        const v = AppController.savedView(id);
+        if (!v.id) return;
+        nameDialog.targetId = id;
+        nameDialog.openFor("rename", v.name, root.describe(v));
+    }
+    function updateActive() {
+        if (root.activeView) AppController.updateSavedView(root.activeId, root.currentState());
+    }
+    function updateFromCurrent(id) {
+        if (AppController.updateSavedView(id, root.currentState())) root.activeId = id;
+    }
+    function leave() { root.activeId = ""; }
+
+    SavedViewNameDialog {
+        id: nameDialog
+        property string targetId: ""
+        onAccepted: (name) => {
+            if (nameDialog.mode === "rename") {
+                AppController.renameSavedView(nameDialog.targetId, name);
+                return;
+            }
+            const id = AppController.saveView(name, root.currentState());
+            if (id.length > 0) root.activeId = id;
+        }
+    }
+    readonly property alias nameDialog: nameDialog
+
+    // Alt+1 … Alt+9.
+    // An inline component does not see this file's ids, so each key is handed
+    // the host it works for.
+    component ViewKey: Shortcut {
+        id: vk
+        property int n: 1
+        property var owner: null
+        sequence: vk.owner && vk.owner.host ? vk.owner.host._kbd("savedView." + vk.n) : ""
+        context: Qt.ApplicationShortcut
+        enabled: String(vk.sequence).length > 0 && !!vk.owner && !!vk.owner.host && vk.owner.host._globalKeysOn
+                 && vk.n <= AppController.savedViews.length
+        onActivated: vk.owner.applyAt(vk.n)
+    }
+    ViewKey { n: 1; owner: root }
+    ViewKey { n: 2; owner: root }
+    ViewKey { n: 3; owner: root }
+    ViewKey { n: 4; owner: root }
+    ViewKey { n: 5; owner: root }
+    ViewKey { n: 6; owner: root }
+    ViewKey { n: 7; owner: root }
+    ViewKey { n: 8; owner: root }
+    ViewKey { n: 9; owner: root }
+}

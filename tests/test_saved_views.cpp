@@ -128,9 +128,10 @@ TEST(SavedViewData, SyncSerializerRoundTrips) {
   p.savedViews = {sample(), second};
   const auto back = heap::sync::SyncSerializer::deserializeProfile(heap::sync::SyncSerializer::serializeProfile(p));
   ASSERT_TRUE(back.has_value());
-  ASSERT_EQ(back->savedViews.size(), 2);
-  EXPECT_EQ(back->savedViews[0].id, QStringLiteral("view-a"));
-  EXPECT_EQ(back->savedViews[1], second);
+  const QVector<SavedView> views = back ? back->savedViews : QVector<SavedView>{};
+  ASSERT_EQ(views.size(), 2);
+  EXPECT_EQ(views.at(0).id, QStringLiteral("view-a"));
+  EXPECT_EQ(views.at(1), second);
 }
 
 TEST(SavedViewData, SameFiltersIgnoresSpellingAndOrder) {
@@ -143,7 +144,7 @@ TEST(SavedViewData, SameFiltersIgnoresSpellingAndOrder) {
 }
 
 TEST(SavedViewData, UniqueNamesAreCaseInsensitive) {
-  QVector<SavedView> views = {sample()};
+  const QVector<SavedView> views = {sample()};
   EXPECT_EQ(heap::savedviews::uniqueName(views, QStringLiteral("infra ON fire")), QStringLiteral("infra ON fire (2)"));
   EXPECT_EQ(heap::savedviews::uniqueName(views, QStringLiteral("Infra on fire"), QStringLiteral("view-a")), QStringLiteral("Infra on fire"))
       << "a view does not collide with itself";
@@ -364,8 +365,8 @@ TEST_F(SavedViewsTest, TheToastsUndoTakesBackItsOwnDeleteEvenOutOfOrder) {
 
 TEST_F(SavedViewsTest, CountsMatchWhatTheViewShows) {
   clearViews();
-  Task p0 = makeTask(QStringLiteral("C-1"), QStringLiteral("todo"), QStringLiteral("P0"));
-  Task p1done = makeTask(QStringLiteral("C-2"), QStringLiteral("done"), QStringLiteral("P1"));
+  const Task p0 = makeTask(QStringLiteral("C-1"), QStringLiteral("todo"), QStringLiteral("P0"));
+  const Task p1done = makeTask(QStringLiteral("C-2"), QStringLiteral("done"), QStringLiteral("P1"));
   Task p0arch = makeTask(QStringLiteral("C-3"), QStringLiteral("todo"), QStringLiteral("P0"));
   p0arch.archived = true;
   Task infra = makeTask(QStringLiteral("C-4"), QStringLiteral("blocked"), QStringLiteral("P2"));
@@ -382,7 +383,7 @@ TEST_F(SavedViewsTest, CountsMatchWhatTheViewShows) {
   const QString text = app_->saveView(QStringLiteral("Tx"), state(QStringLiteral("database")));
   const QString blocked = app_->saveView(QStringLiteral("Bl"), state(QStringLiteral("status:blocked")));
 
-  QVariantMap c = app_->savedViewCounts();
+  const QVariantMap c = app_->savedViewCounts();
   EXPECT_EQ(c.value(urgent).toInt(), 2);
   EXPECT_EQ(c.value(urgentArch).toInt(), 3);
   EXPECT_EQ(c.value(archive).toInt(), 1);
@@ -394,7 +395,7 @@ TEST_F(SavedViewsTest, CountsMatchWhatTheViewShows) {
   EXPECT_EQ(app_->filteredCounts(QStringLiteral("priority:P0,P1"), {}, false).value("total").toInt(), c.value(urgent).toInt());
 
   // A task edit moves the badge, and the signal comes once per burst.
-  QSignalSpy changed(app_.get(), &AppController::savedViewCountsChanged);
+  const QSignalSpy changed(app_.get(), &AppController::savedViewCountsChanged);
   Task more = makeTask(QStringLiteral("C-5"), QStringLiteral("todo"), QStringLiteral("P1"));
   app_->tasks()->upsert(more);
   more.title = QStringLiteral("renamed");
@@ -416,7 +417,7 @@ TEST_F(SavedViewsTest, AQueryNamingADeletedColumnReportsTheProblem) {
     return QStringList{QStringLiteral("missing")};
   };
   EXPECT_TRUE(problemsOf(id).isEmpty());
-  QSignalSpy views(app_.get(), &AppController::savedViewsChanged);
+  const QSignalSpy views(app_.get(), &AppController::savedViewsChanged);
   app_->deleteStatus(QStringLiteral("review"));
   EXPECT_GE(views.size(), 1) << "a column change re-reads the views";
   EXPECT_EQ(problemsOf(id), QStringList{QStringLiteral("status:review")});
@@ -425,7 +426,6 @@ TEST_F(SavedViewsTest, AQueryNamingADeletedColumnReportsTheProblem) {
 }
 
 TEST_F(SavedViewsTest, AltDigitsAreInTheCatalogAndFree) {
-  QStringList seen;
   for(int n = 1; n <= 9; ++n) {
     const QString id = QStringLiteral("savedView.%1").arg(n);
     EXPECT_EQ(app_->shortcutFor(id), QStringLiteral("Alt+%1").arg(n));
@@ -461,7 +461,7 @@ int main(int argc, char** argv) {
   qputenv("XDG_CONFIG_HOME", scratch.path().toUtf8());
   qputenv("XDG_DATA_HOME", scratch.path().toUtf8());
 
-  QApplication qapp(argc, argv);
+  const QApplication qapp(argc, argv);
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();

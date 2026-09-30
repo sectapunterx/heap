@@ -30,6 +30,35 @@ wherever you are); a series imported from another time zone keeps the zone's
 IANA name there, its hours are that zone's, and every occurrence is converted
 on its own day so it follows that zone's daylight-saving changes.
 
+### Saved views
+
+A profile may carry `savedViews`, the sidebar's saved views in their order. The
+key is optional: a profile without views — and every file written before saved
+views existed — simply has none, and no schema bump was needed. Each entry:
+
+```json
+{ "id": "view-3f9c2a1b", "name": "Urgent",
+  "query": "priority:P0,P1 is:open", "priorities": ["P0"],
+  "sort": "manual", "archived": false, "showDone": false, "view": "board" }
+```
+
+`query` is the search box text exactly as typed (whitespace collapsed) and is
+read again against the current columns every time, so a view naming a column
+that has since been deleted shows the search box's "not understood" badge
+rather than an empty board. `priorities` are the filter bar chips that were
+on, `sort` the board order (`manual`, `priority`, `due`, `updated`, `title`),
+`archived` the Archived toggle, `showDone` the timeline's Show done, `view` the
+view it opens in (`board`, `timeline`, `week`, `month`, `archive`). Unknown
+values read as the defaults; entries without an id or a name are dropped.
+Views travel with a profile export/import and a profile duplicate. The three
+starter views a new profile gets are ordinary entries, written once when the
+profile is created: delete them and they stay deleted.
+
+The filters the window is showing right now are not per profile: they live in
+the settings blob under `settings.app.filters` (`search`, `priorities`, `sort`,
+`archived`, `showDone`, and `savedView`, the id of the view they were last set
+from).
+
 `reminders.json`, next to `state.json`, remembers which reminders were already
 shown in the last three days, so a restart does not show them again. Deleting
 it is harmless.

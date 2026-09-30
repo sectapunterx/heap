@@ -945,12 +945,12 @@ QString AppController::tr_(const QString& key) const {
   const auto it = table.constFind(key);
   if(it == table.constEnd()) {
     // The integrations keep their own strings (audit INT-7).
-    const QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
-    if(!own.isNull()) {
-      return own;
+    // …and so do saved views.
+    QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
+    if(own.isNull()) {
+      own = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
     }
-    const QString views = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
-    return views.isNull() ? key : views;
+    return own.isNull() ? key : own;
   }
   return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
 }

@@ -279,6 +279,7 @@ ApplicationWindow {
         win.boardSortMode = typeof f.sort === "string" && f.sort.length > 0 ? f.sort : "manual";
         win.showArchived = f.archived === true;
         win.showDoneTimeline = f.showDone === true;
+        savedViewsHost.activeId = typeof f.savedView === "string" ? f.savedView : "";
         win._filtersRestored = true;
     }
     function _saveFiltersSoon() { if (win._filtersRestored) filterSaveTimer.restart(); }
@@ -293,7 +294,8 @@ ApplicationWindow {
         onTriggered: {
             const s = win._settingsObject();
             s.filters = { search: win.searchText, priorities: win.prioritiesFilter, sort: win.boardSortMode,
-                          archived: win.showArchived, showDone: win.showDoneTimeline };
+                          archived: win.showArchived, showDone: win.showDoneTimeline,
+                          savedView: savedViewsHost.activeId };
             AppController.appSettingsJson = JSON.stringify(s);
         }
     }
@@ -694,6 +696,12 @@ ApplicationWindow {
             onToggleRequested: win.toggleSideRail()
             onOpenTweaks:  (anchor) => win._togglePopover(tweaks, anchor)
             onOpenHotkeys: (anchor) => win._togglePopover(hotkeys, anchor)
+            activeSavedViewId: savedViewsHost.activeView ? savedViewsHost.activeId : ""
+            savedViewModified: savedViewsHost.modified
+            onSavedViewActivated: (id) => savedViewsHost.apply(id)
+            onSavedViewRenameRequested: (id) => savedViewsHost.openRename(id)
+            onSavedViewUpdateRequested: (id) => savedViewsHost.updateFromCurrent(id)
+            onSaveViewRequested: savedViewsHost.openSave()
         }
 
         // Main column: filter bar + active view
@@ -790,6 +798,12 @@ ApplicationWindow {
                     }
                     onClearPriorities: win.prioritiesFilter = ({})
                     onToggleArchived: win.showArchived = !win.showArchived
+                    savedViewName: savedViewsHost.activeView ? savedViewsHost.activeView.name : ""
+                    savedViewModified: savedViewsHost.modified
+                    onSaveViewRequested: savedViewsHost.openSave()
+                    onSaveAsNewRequested: savedViewsHost.openSave()
+                    onUpdateViewRequested: savedViewsHost.updateActive()
+                    onLeaveViewRequested: savedViewsHost.leave()
                 }
                 Item {
                     Layout.fillWidth: true
@@ -1231,6 +1245,19 @@ ApplicationWindow {
             AppController.currentView = id.slice(5);
             return;
         }
+        if (id.indexOf("savedview:") === 0) {
+            savedViewsHost.apply(id.slice(10));
+            return;
+        }
+        if (id.indexOf("savedView.") === 0) {
+            savedViewsHost.applyAt(Number(id.slice(10)));
+            return;
+        }
+        if (id === "savedview.save") {
+            // After the palette has closed, so the dialog gets the keyboard.
+            Qt.callLater(savedViewsHost.openSave);
+            return;
+        }
         switch (id) {
         case "task.new":             taskEditor.showFor(AppController.newTaskDraft("todo")); break;
         case "quick-capture":        quickCapture.open(); break;
@@ -1279,6 +1306,14 @@ ApplicationWindow {
             return;
         }
         topBar.focusSearch();
+    }
+
+    // Saved views: the active one, applying one, Alt+1…9, the name dialog.
+    SavedViewsHost {
+        id: savedViewsHost
+        objectName: "saved-views-host"
+        host: win
+        onActiveIdChanged: win._saveFiltersSoon()
     }
 
     CommandPalette {
@@ -1709,6 +1744,7 @@ ApplicationWindow {
         function onActiveProfileChanged() {
             win.searchText = "";
             win.prioritiesFilter = ({});
+            savedViewsHost.leave();   // views belong to the profile being left
             AppController.selectedDate = AppController.today;
             Qt.callLater(win.seedStarterDocs);
         }

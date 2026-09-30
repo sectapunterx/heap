@@ -23,6 +23,41 @@ Rectangle {
     signal openHotkeys(Item anchor)
     signal toggleRequested()
 
+    // ── Saved views ──
+    // The list is AppController.savedViews; which one is active and whether
+    // the filters have moved off it is Main's (SavedViewsHost), handed in.
+    property string activeSavedViewId: ""
+    property bool savedViewModified: false
+    signal savedViewActivated(string id)
+    signal savedViewRenameRequested(string id)
+    signal savedViewUpdateRequested(string id)
+    signal saveViewRequested()
+    readonly property var _savedViews: AppController.savedViews
+    readonly property var _savedCounts: AppController.savedViewCounts
+
+    // Put the keyboard on the n-th saved view row (after a reorder rebuilt
+    // the list, or from the arrows).
+    function focusSavedView(index) {
+        if (index < 0 || index >= savedList.count) return;
+        const it = savedList.itemAtIndex(index);
+        if (it) it.forceActiveFocus(Qt.TabFocusReason);
+    }
+    function _moveSavedView(id, index, delta) {
+        if (AppController.moveSavedView(id, delta))
+            Qt.callLater(root.focusSavedView, index + delta);
+    }
+    function _deleteSavedView(id, index) {
+        if (!AppController.deleteSavedView(id)) return;
+        Qt.callLater(function () {
+            if (savedList.count > 0) root.focusSavedView(Math.min(index, savedList.count - 1));
+        });
+    }
+    function _openSavedMenu(item, id, index) {
+        savedMenu.targetId = id;
+        savedMenu.targetIndex = index;
+        savedMenu.popup(item, item.width - Theme.spMd, item.height / 2);
+    }
+
     // Expose anchors so Main can position popups when triggered via
     // shortcut (i.e. "as if the rail button had been clicked").
     property alias tweaksAnchor:  tweaksBtn
@@ -39,6 +74,27 @@ Rectangle {
         width: 1; color: Theme.border
     }
 
+    // Everything above the bottom group scrolls when the window is too short
+    // for it — with saved views in the list, a laptop screen was — instead of
+    // the lower buttons being cut off. The keyboard's row is kept in view.
+    function _revealFocus() {
+        const w = root.Window.window;
+        const f = w ? w.activeFocusItem : null;
+        for (let p = f; p; p = p.parent) {
+            if (p !== railUpper) continue;
+            const y = f.mapToItem(railUpper, 0, 0).y;
+            if (y < railScroll.contentY)
+                railScroll.contentY = Math.max(0, y - Theme.spMd);
+            else if (y + f.height > railScroll.contentY + railScroll.height)
+                railScroll.contentY = Math.min(railScroll.contentHeight - railScroll.height, y + f.height - railScroll.height + Theme.spMd);
+            return;
+        }
+    }
+    Connections {
+        target: root.Window.window
+        function onActiveFocusItemChanged() { root._revealFocus(); }
+    }
+
     ColumnLayout {
         anchors.fill: parent
         anchors.topMargin: Theme.spLg
@@ -46,98 +102,187 @@ Rectangle {
         anchors.rightMargin: Theme.spLg
         spacing: Theme.sp2xs
 
-        // Collapse / expand toggle
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-toggle"
-            label: I18n.t("siderail.collapse")
-            tooltipText: I18n.t("siderail.expand") + "  " + AppController.shortcutFor("rail.toggle")
-            glyph: root.expanded ? "«" : "»"
-            onActivated: root.toggleRequested()
-            Layout.bottomMargin: Theme.spSm
+        Flickable {
+            id: railScroll
+            objectName: "rail-scroll"
+            Layout.fillWidth: true
+            Layout.fillHeight: true
+            contentWidth: width
+            contentHeight: railUpper.implicitHeight
+            clip: true
+            boundsBehavior: Flickable.StopAtBounds
+            interactive: contentHeight > height
+            ScrollBar.vertical: ThinScrollBar {}
+
+            ColumnLayout {
+                id: railUpper
+                width: railScroll.width
+                spacing: Theme.sp2xs
+
+                // Collapse / expand toggle
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-toggle"
+                    label: I18n.t("siderail.collapse")
+                    tooltipText: I18n.t("siderail.expand") + "  " + AppController.shortcutFor("rail.toggle")
+                    glyph: root.expanded ? "«" : "»"
+                    onActivated: root.toggleRequested()
+                    Layout.bottomMargin: Theme.spSm
+                }
+
+                SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.views") }
+
+                // View switcher
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-board"
+                    iconSource: "qrc:/brand/icons/heap-01-board.svg"
+                    label: I18n.t("siderail.board"); tooltipText: I18n.t("siderail.tip.board"); shortcutId: "view.board"
+                    active: AppController.currentView === "board"
+                    onActivated: AppController.currentView = "board" }
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-timeline"
+                    iconSource: "qrc:/brand/icons/heap-02-timeline.svg"
+                    label: I18n.t("siderail.timeline"); tooltipText: I18n.t("siderail.tip.timeline"); shortcutId: "view.timeline"
+                    active: AppController.currentView === "timeline"
+                    onActivated: AppController.currentView = "timeline" }
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-week"
+                    iconSource: "qrc:/brand/icons/heap-03-week.svg"
+                    label: I18n.t("siderail.week"); tooltipText: I18n.t("siderail.tip.week"); shortcutId: "view.week"
+                    active: AppController.currentView === "week"
+                    onActivated: AppController.currentView = "week" }
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-month"
+                    iconSource: "qrc:/brand/icons/heap-04-month.svg"
+                    label: I18n.t("siderail.month"); tooltipText: I18n.t("siderail.tip.month"); shortcutId: "view.month"
+                    active: AppController.currentView === "month"
+                    onActivated: AppController.currentView = "month" }
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-archive"
+                    iconSource: "qrc:/brand/icons/heap-05-archive.svg"
+                    label: I18n.t("siderail.archive"); tooltipText: I18n.t("siderail.tip.archive"); shortcutId: "view.archive"
+                    active: AppController.currentView === "archive"
+                    onActivated: AppController.currentView = "archive"
+                }
+
+                SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.focus") }
+
+                RailBtn {
+
+                    expanded: root.expanded
+                    objectName: "rail-blocked"
+                    iconSource: "qrc:/brand/icons/heap-06-blocked.svg"
+                    label: I18n.t("siderail.blocked"); tooltipText: I18n.t("siderail.tip.blocked")
+                    countText: root._blockedCount > 0 ? root._blockedCount : ""
+                    countColor: Theme.danger
+                    active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
+                    onActivated: AppController.focusStatusColumn("blocked") }
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-review"
+                    iconSource: "qrc:/brand/icons/heap-07-code-review.svg"
+                    label: I18n.t("siderail.review"); tooltipText: I18n.t("siderail.tip.review")
+                    countText: root._reviewCount > 0 ? root._reviewCount : ""
+                    countColor: Theme.accent
+                    active: AppController.currentView === "board" && AppController.focusedStatus === "review"
+                    onActivated: AppController.focusStatusColumn("review") }
+
+                SectionHead {
+                    objectName: "rail-saved-head"
+                    expanded: root.expanded
+                    text: I18n.t("siderail.section.saved")
+                }
+
+                // One row per saved view, numbered like the Alt+N that applies it.
+                // As tall as its rows: the rail scrolls, not the list.
+                ListView {
+                    id: savedList
+                    objectName: "rail-saved-list"
+                    Layout.fillWidth: true
+                    Layout.preferredHeight: contentHeight
+                    interactive: false
+                    spacing: Theme.sp2xs
+                    model: root._savedViews
+                    delegate: RailBtn {
+                        id: svBtn
+                        required property var modelData
+                        required property int index
+                        width: savedList.width
+                        height: 34
+                        objectName: "rail-saved-" + index
+                        expanded: root.expanded
+                        glyph: index < 9 ? String(index + 1) : "·"
+                        glyphMono: true
+                        label: modelData.name
+                        readonly property bool _active: modelData.id === root.activeSavedViewId
+                        active: _active
+                        modified: _active && root.savedViewModified
+                        readonly property var _problems: modelData.problems || []
+                        countText: _problems.length > 0 ? "?"
+                                 : (root._savedCounts[modelData.id] !== undefined ? String(root._savedCounts[modelData.id]) : "")
+                        countColor: _problems.length > 0 ? Theme.warning : Theme.panel3
+                        shortcutId: index < 9 ? "savedView." + (index + 1) : ""
+                        tooltipText: _problems.length > 0
+                            ? modelData.name + " — " + I18n.t("topbar.searchUnknown").arg(_problems.join("  "))
+                            : modelData.name + (modelData.query.length > 0 ? "  ·  " + modelData.query : "")
+                        Accessible.name: modelData.name + (_problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(countText))
+                        onActivated: root.savedViewActivated(modelData.id)
+                        onContextRequested: root._openSavedMenu(svBtn, modelData.id, index)
+                        Keys.onUpPressed: (e) => {
+                            if (e.modifiers & Qt.ControlModifier) root._moveSavedView(modelData.id, index, -1);
+                            else root.focusSavedView(index - 1);
+                        }
+                        Keys.onDownPressed: (e) => {
+                            if (e.modifiers & Qt.ControlModifier) root._moveSavedView(modelData.id, index, 1);
+                            else root.focusSavedView(index + 1);
+                        }
+                        Keys.onDeletePressed: root._deleteSavedView(modelData.id, index)
+                        Keys.onPressed: (e) => {
+                            if (e.key === Qt.Key_F2) {
+                                root.savedViewRenameRequested(modelData.id);
+                                e.accepted = true;
+                            } else if (e.key === Qt.Key_Menu || (e.key === Qt.Key_F10 && (e.modifiers & Qt.ShiftModifier))) {
+                                root._openSavedMenu(svBtn, modelData.id, index);
+                                e.accepted = true;
+                            }
+                        }
+                    }
+                }
+                // Nothing saved yet: the one thing to do here.
+                RailBtn {
+                    objectName: "rail-saved-empty"
+                    visible: root._savedViews.length === 0 && root.expanded
+                    expanded: root.expanded
+                    glyph: "+"
+                    label: I18n.t("siderail.saved.empty")
+                    tooltipText: I18n.t("siderail.saved.empty")
+                    onActivated: root.saveViewRequested()
+                }
+
+                SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.knowledge") }
+
+                RailBtn {
+
+                    expanded: root.expanded
+                    objectName: "rail-docs"
+                    iconSource: "qrc:/brand/icons/heap-08-docs.svg"
+                    label: I18n.t("siderail.docs"); tooltipText: I18n.t("siderail.tip.docs"); shortcutId: "view.docs"
+                    active: AppController.currentView === "docs"
+                    onActivated: AppController.currentView = "docs" }
+                RailBtn {
+                    expanded: root.expanded
+                    objectName: "rail-notes"
+                    iconSource: "qrc:/brand/icons/heap-09-notes.svg"
+                    label: I18n.t("siderail.notes"); tooltipText: I18n.t("siderail.tip.notes"); shortcutId: "view.notes"
+                    active: AppController.currentView === "notes"
+                    onActivated: AppController.currentView = "notes" }
+            }
         }
-
-        SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.views") }
-
-        // View switcher
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-board"
-            iconSource: "qrc:/brand/icons/heap-01-board.svg"
-            label: I18n.t("siderail.board"); tooltipText: I18n.t("siderail.tip.board"); shortcutId: "view.board"
-            active: AppController.currentView === "board"
-            onActivated: AppController.currentView = "board" }
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-timeline"
-            iconSource: "qrc:/brand/icons/heap-02-timeline.svg"
-            label: I18n.t("siderail.timeline"); tooltipText: I18n.t("siderail.tip.timeline"); shortcutId: "view.timeline"
-            active: AppController.currentView === "timeline"
-            onActivated: AppController.currentView = "timeline" }
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-week"
-            iconSource: "qrc:/brand/icons/heap-03-week.svg"
-            label: I18n.t("siderail.week"); tooltipText: I18n.t("siderail.tip.week"); shortcutId: "view.week"
-            active: AppController.currentView === "week"
-            onActivated: AppController.currentView = "week" }
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-month"
-            iconSource: "qrc:/brand/icons/heap-04-month.svg"
-            label: I18n.t("siderail.month"); tooltipText: I18n.t("siderail.tip.month"); shortcutId: "view.month"
-            active: AppController.currentView === "month"
-            onActivated: AppController.currentView = "month" }
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-archive"
-            iconSource: "qrc:/brand/icons/heap-05-archive.svg"
-            label: I18n.t("siderail.archive"); tooltipText: I18n.t("siderail.tip.archive"); shortcutId: "view.archive"
-            active: AppController.currentView === "archive"
-            onActivated: AppController.currentView = "archive"
-        }
-
-        SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.focus") }
-
-        RailBtn {
-
-            expanded: root.expanded
-            objectName: "rail-blocked"
-            iconSource: "qrc:/brand/icons/heap-06-blocked.svg"
-            label: I18n.t("siderail.blocked"); tooltipText: I18n.t("siderail.tip.blocked")
-            countText: root._blockedCount > 0 ? root._blockedCount : ""
-            countColor: Theme.danger
-            active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
-            onActivated: AppController.focusStatusColumn("blocked") }
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-review"
-            iconSource: "qrc:/brand/icons/heap-07-code-review.svg"
-            label: I18n.t("siderail.review"); tooltipText: I18n.t("siderail.tip.review")
-            countText: root._reviewCount > 0 ? root._reviewCount : ""
-            countColor: Theme.accent
-            active: AppController.currentView === "board" && AppController.focusedStatus === "review"
-            onActivated: AppController.focusStatusColumn("review") }
-
-        SectionHead { expanded: root.expanded; text: I18n.t("siderail.section.knowledge") }
-
-        RailBtn {
-
-            expanded: root.expanded
-            objectName: "rail-docs"
-            iconSource: "qrc:/brand/icons/heap-08-docs.svg"
-            label: I18n.t("siderail.docs"); tooltipText: I18n.t("siderail.tip.docs"); shortcutId: "view.docs"
-            active: AppController.currentView === "docs"
-            onActivated: AppController.currentView = "docs" }
-        RailBtn {
-            expanded: root.expanded
-            objectName: "rail-notes"
-            iconSource: "qrc:/brand/icons/heap-09-notes.svg"
-            label: I18n.t("siderail.notes"); tooltipText: I18n.t("siderail.tip.notes"); shortcutId: "view.notes"
-            active: AppController.currentView === "notes"
-            onActivated: AppController.currentView = "notes" }
-
-        Item { Layout.fillHeight: true }
 
         RailBtn {
 
@@ -164,6 +309,54 @@ Rectangle {
             active: AppController.currentView === "settings"
             onActivated: AppController.currentView = "settings"
             Layout.bottomMargin: Theme.spLg
+        }
+    }
+
+    // One menu for every saved view row; the row sets which view it is for.
+    AppMenu {
+        id: savedMenu
+        objectName: "rail-saved-menu"
+        property string targetId: ""
+        property int targetIndex: -1
+        AppMenuItem {
+            objectName: "rail-saved-apply"
+            text: I18n.t("siderail.saved.apply")
+            onTriggered: root.savedViewActivated(savedMenu.targetId)
+        }
+        AppMenuItem {
+            objectName: "rail-saved-update"
+            text: I18n.t("siderail.saved.update")
+            onTriggered: root.savedViewUpdateRequested(savedMenu.targetId)
+        }
+        AppMenuItem {
+            objectName: "rail-saved-rename"
+            text: I18n.t("siderail.saved.rename")
+            onTriggered: root.savedViewRenameRequested(savedMenu.targetId)
+        }
+        AppMenuItem {
+            objectName: "rail-saved-duplicate"
+            text: I18n.t("siderail.saved.duplicate")
+            onTriggered: AppController.duplicateSavedView(savedMenu.targetId)
+        }
+        AppMenuSeparator {}
+        AppMenuItem {
+            objectName: "rail-saved-up"
+            text: I18n.t("siderail.saved.moveUp")
+            enabled: savedMenu.targetIndex > 0
+            onTriggered: root._moveSavedView(savedMenu.targetId, savedMenu.targetIndex, -1)
+        }
+        AppMenuItem {
+            objectName: "rail-saved-down"
+            text: I18n.t("siderail.saved.moveDown")
+            enabled: savedMenu.targetIndex >= 0 && savedMenu.targetIndex < root._savedViews.length - 1
+            onTriggered: root._moveSavedView(savedMenu.targetId, savedMenu.targetIndex, 1)
+        }
+        AppMenuSeparator {}
+        AppMenuItem {
+            objectName: "rail-saved-delete"
+            text: I18n.t("siderail.saved.delete")
+            danger: true
+            onTriggered: root._deleteSavedView(savedMenu.targetId, savedMenu.targetIndex)
         }
     }
 
@@ -214,12 +407,19 @@ Rectangle {
         property string countText: ""
         property color countColor: Theme.danger
         property int iconSize: 18
+        // Saved views: the glyph is the Alt+N digit, set in the mono face; a
+        // view whose filters were changed since it was applied gets a dot.
+        property bool glyphMono: false
+        property bool modified: false
         signal activated()
+        // Right click, or the Menu key on a row that has a menu.
+        signal contextRequested()
         activeFocusOnTab: true
         Accessible.role: Accessible.Button
         Accessible.name: btn.tooltipText || btn.label
         Accessible.onPressAction: btn.activated()
         Keys.onReturnPressed: btn.activated()
+        Keys.onEnterPressed: btn.activated()
         Keys.onSpacePressed: btn.activated()
         Layout.fillWidth: true
         Layout.preferredHeight: 34
@@ -257,8 +457,8 @@ Rectangle {
                 anchors.centerIn: parent
                 text: btn.glyph
                 color: btn._fg
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsLg
+                font.family: btn.glyphMono ? Theme.fontMono : Theme.fontUi
+                font.pixelSize: btn.glyphMono ? Theme.fsSm : Theme.fsLg
             }
         }
         Text {
@@ -271,8 +471,9 @@ Rectangle {
                          : comboT.visible ? comboT.left : parent.right
             anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
-            text: btn.label
+            text: btn.modified ? btn.label + " •" : btn.label
             elide: Text.ElideRight
+            font.italic: btn.modified
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
@@ -314,7 +515,11 @@ Rectangle {
             anchors.fill: parent
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
-            onClicked: btn.activated()
+            acceptedButtons: Qt.LeftButton | Qt.RightButton
+            onClicked: (m) => {
+                if (m.button === Qt.RightButton) btn.contextRequested();
+                else btn.activated();
+            }
             // Labels are on screen when expanded; the tooltip is only for
             // the icon-only rail.
             ToolTip.visible: containsMouse && !btn.expanded && btn.tooltipText !== ""
