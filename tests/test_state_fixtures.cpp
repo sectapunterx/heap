@@ -4,7 +4,7 @@
 // itself wrote: its own AppController, booted on a fresh test-mode profile (the
 // demo seed) plus a typed note, saved by its own code — not a hand-written
 // imitation of the format. One per schema generation that shipped: 3 (≤ 0.4.7),
-// 4 (0.4.8–0.4.9), 9 (0.5.0–0.5.2) and 10 (after 0.5.2).
+// 4 (0.4.8–0.4.9), 9 (0.5.0–0.5.2), 10 (0.5.3) and 11 (after 0.5.3).
 //
 // Every fixture is opened by today's AppController and checked against the file
 // itself: every task, event and person is still there under the same id and
@@ -110,6 +110,13 @@ class StateFixtureTest : public ::testing::TestWithParam<std::string> {
     events_ =
         titlesById(root.contains("events") ? root.value("events").toArray() : profile.value("events").toArray(), QStringLiteral("title"));
     people_ = titlesById(profile.value("people").toArray(), QStringLiteral("name"));
+    // Files attached to tasks (schema 11 on).
+    for(const auto& v : profile.value("tasks").toArray()) {
+      const QJsonObject t = v.toObject();
+      for(const auto& a : t.value("attachments").toArray()) {
+        attachments_.insert(t.value("id").toString(), a.toObject().value("id").toString());
+      }
+    }
     ASSERT_FALSE(tasks_.isEmpty()) << "a fixture with no tasks checks nothing";
   }
 
@@ -123,12 +130,20 @@ class StateFixtureTest : public ::testing::TestWithParam<std::string> {
     EXPECT_EQ(titlesById(app.events()->items()), events_);
     EXPECT_EQ(namesById(app.people()->items()), people_);
     EXPECT_TRUE(hasNoteWithMarker(app)) << "the typed note did not survive";
+    QMultiMap<QString, QString> attachments;
+    for(const Task& t : app.tasks()->items()) {
+      for(const Attachment& a : t.attachments) {
+        attachments.insert(t.id, a.id);
+      }
+    }
+    EXPECT_EQ(attachments, attachments_);
   }
 
   int schema_ = 0;
   QMap<QString, QString> tasks_;
   QMap<QString, QString> events_;
   QMap<QString, QString> people_;
+  QMultiMap<QString, QString> attachments_;
 };
 
 }  // namespace

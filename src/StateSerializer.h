@@ -22,7 +22,14 @@ namespace heap::state {
 //   v5  Task.rank — manual order within a status column
 //   v10 Task.hasTime split into dueHasTime / scheduledHasTime; every task
 //       gets a distinct rank (rank-0 ties are spread out in board order)
-inline constexpr int kSchemaVersion = 10;
+//   v11 Task.attachments and Profile.savedViews (no rung: absent = none). The
+//       bump is what sends a v10 build into its read-only mode instead of
+//       saving every task without its files (PLAT-15)
+inline constexpr int kSchemaVersion = 11;
+
+// The key of a column's map (Profile::statuses) that holds the column keys
+// this build does not read, as a QVariantMap, so they survive a save.
+inline constexpr const char* kStatusExtraKey = "_extra";
 
 // Gap between consecutive ranks handed out by the v4→v5 migration and by
 // "add to the end". Large enough that a long run of midpoint inserts between
@@ -78,6 +85,13 @@ QJsonObject profileToJson(const Profile& p);
 // schema v2) so the caller can hoist them into the global event pool with
 // fallback profileId = p.id.
 Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents = nullptr);
+
+// Forgets the unknown keys the readers above kept, on the profile and on every
+// task, person and column in it, or on every event. Pass-through is for the
+// schema this build writes: in an older document an unknown key is one a later
+// version retired, not one a sibling build added.
+void dropPassThrough(Profile& p);
+void dropPassThrough(QVector<CalEvent>& events);
 
 // Upgrades a whole state document in place from `fromVersion` to kSchemaVersion.
 // Idempotent: a document already at kSchemaVersion is left untouched and false

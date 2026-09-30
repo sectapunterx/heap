@@ -339,11 +339,15 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
-       {"Your data file was damaged — recovered from backup %1. The damaged file was kept as %2.",
-        "Файл данных был повреждён — восстановлено из бэкапа %1. Повреждённый файл сохранён как %2."}},
+       {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
+        "The damaged file is kept in the data folder as %2.",
+        "Файл данных был повреждён, heap открыл бэкап %1 — изменений, сделанных после него, здесь нет. "
+        "Повреждённый файл сохранён в папке данных как %2."}},
       {"data.corruptKept",
-       {"Your data file was damaged and no backup was found. The damaged file was kept as %1.",
-        "Файл данных был повреждён, бэкап не найден. Повреждённый файл сохранён как %1."}},
+       {"Your data file was damaged and there is no backup, so this is an empty workspace, not a new install. "
+        "The damaged file is kept in the data folder as %1.",
+        "Файл данных был повреждён, бэкапа нет, поэтому открыто пустое пространство — это не новая установка. "
+        "Повреждённый файл сохранён в папке данных как %1."}},
       {"data.schemaTooNew",
        {"Read-only: this data file was written by a newer heap (schema v%1, this build reads v%2). "
         "Nothing you change now is saved — update heap to edit it.",
@@ -696,16 +700,6 @@ AppController::AppController(QObject* parent) :
   m_globalHotkey = heap::platform::GlobalHotkey::create(this);
   connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
   registerGlobalHotkeys();
-
-  // If loadStateOnStart() had to recover from a backup or quarantine a corrupt
-  // file, surface it once the QML toast bar exists (singleShot fires after the
-  // engine has loaded Main.qml and this event loop starts).
-  if(!m_recoveryNotice.isEmpty()) {
-    QTimer::singleShot(0, this, [this]() {
-      emit toast(m_recoveryNotice);
-      m_recoveryNotice.clear();
-    });
-  }
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -2244,6 +2238,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
       // to the top and its "blocks" links were gone.
       t.rank = prev.rank;
       t.links = prev.links;
+      t.extra = prev.extra;  // keys a newer build wrote (PLAT-15)
       // A label sent as plain text keeps the colour it already had.
       for(Label& l : t.labels) {
         if(!l.color.isEmpty()) {
@@ -2423,6 +2418,7 @@ void AppController::saveEvent(const QVariantMap& draft) {
   // edits it — so it is always the stored one.
   if(prev) {
     e.exdates = prev->exdates;
+    e.extra = prev->extra;  // keys a newer build wrote (PLAT-15)
   }
   storeEvent(e);
 }
@@ -4141,6 +4137,10 @@ bool AppController::savePerson(const QVariantMap& draft) {
     // Names with no transliterable letters at all — fall back to UUID
     // so we never end up with an empty key.
     p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  }
+  // Keys a newer build wrote stay with the person (PLAT-15).
+  if(const int prevRow = m_people.indexOfId(draft.value("id").toString()); prevRow >= 0) {
+    p.extra = m_people.items().at(prevRow).extra;
   }
   const bool isNew = draft.value("_isNew").toBool();
   // upsert() on an id someone else holds replaces that person whole — name,
@@ -8171,6 +8171,12 @@ void AppController::setStorageState(const QString& state, const QString& message
   emit storageStateChanged();
 }
 
+void AppController::dismissStorageNotice() {
+  if(m_storageState == QLatin1String("recovered") || m_storageState == QLatin1String("damaged")) {
+    setStorageState(QStringLiteral("ok"), QString());
+  }
+}
+
 void AppController::retryStorage() {
   if(m_storageState == QLatin1String("writeFailed")) {
     if(m_saveTimer) {
@@ -8218,10 +8224,6 @@ void AppController::reloadStateFromDisk() {
   loadStateOnStart();
   if(m_profiles.isEmpty()) {
     seedExampleProfile();
-  }
-  if(!m_recoveryNotice.isEmpty()) {
-    emit toast(m_recoveryNotice);
-    m_recoveryNotice.clear();
   }
 }
 
@@ -8309,17 +8311,38 @@ void AppController::loadStateOnStart() {
       if(!heap::storage::writeAtomically(path, QJsonDocument(recovered).toJson(QJsonDocument::Indented), &error)) {
         qWarning("todocpp: could not promote backup %s: %s", qUtf8Printable(recoveredFrom), qUtf8Printable(error));
       }
-      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept);
       heap::recovery::append(QString::fromLatin1(heap::recovery::kRecovered),
                              {{QStringLiteral("from"), recoveredFrom}, {QStringLiteral("reason"), shapeError}});
       loadStateDocument(recovered, /*viewOnly=*/false);
+      // A banner that stays up, not a toast (PLAT-6): whatever changed after
+      // the backup was taken is not in it, and the user has to know where the
+      // damaged file went to look for it. A newer-schema backup has already
+      // raised its own read-only banner, which says more.
+      if(m_storageState == QLatin1String("ok")) {
+        setStorageState(QStringLiteral("recovered"), tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept));
+      }
     } else {
-      // No usable backup. The damaged file is preserved under a distinct name
-      // and the caller seeds a fresh profile — the user keeps a recoverable
-      // copy and a visible warning instead of a silent wipe.
-      m_recoveryNotice = tr_("data.corruptKept").arg(kept);
+      // No usable backup. The damaged file is preserved under a distinct name.
+      // What opens is an empty workspace with a banner saying so — never the
+      // demo and the welcome tour, which read as "a new install" and invited
+      // working on in sample data (PLAT-6).
       heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered),
                              {{QStringLiteral("path"), path}, {QStringLiteral("reason"), shapeError}});
+      Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+      p.id = QStringLiteral("default");
+      m_profiles.push_back(p);
+      m_activeProfileId = p.id;
+      applyProfileToModels(p);
+      m_welcomeSeen = true;
+      m_demoActive = false;
+      emit onboardingChanged();
+      emit profilesChanged();
+      emit activeProfileChanged();
+      setStorageState(QStringLiteral("damaged"), tr_("data.corruptKept").arg(kept));
+      // Written now, so the next launch opens this workspace too rather than
+      // taking the missing file for a first run. The damaged bytes are safe in
+      // the quarantined copy.
+      scheduleSave();
     }
     return;
   }
@@ -8463,7 +8486,7 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       QVector<CalEvent> legacy;
       Profile p = heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr);
       if(schema != heap::state::kSchemaVersion) {
-        p.extra = {};  // pass-through is for the version this build writes
+        heap::state::dropPassThrough(p);  // pass-through is for the version this build writes
       }
       // Two profiles under one id cannot both be addressed; the second one
       // gets its own rather than shadowing the first.
@@ -8489,6 +8512,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(schema >= 3 && root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray());
     }
+    if(schema != heap::state::kSchemaVersion) {
+      heap::state::dropPassThrough(globalEvents);
+    }
   } else {
     // ----- schema v1: flat fields → wrap into one "Example" profile -----
     Profile p;
@@ -8512,6 +8538,8 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(root.contains("events")) {
       globalEvents = heap::state::eventsFromJson(root["events"].toArray(), p.id);
     }
+    heap::state::dropPassThrough(p);
+    heap::state::dropPassThrough(globalEvents);
     m_profiles.push_back(p);
     m_activeProfileId = p.id;
   }
@@ -8764,6 +8792,108 @@ QVariantMap AppController::profileById(const QString& id) const {
   return m;
 }
 
+QHash<QString, QString> AppController::reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events) {
+  // A task id is a key across the whole app, not per profile (TASKS-1): the
+  // reminder log, notification actions, undo and event links all look a task
+  // up by id alone. A copied or imported profile that kept its ids silenced
+  // the other profile's reminders and let "Mark done" close the wrong task
+  // (PLAT-9). Every id another profile already holds is given a fresh one.
+  QSet<QString> taken;
+  for(const Task& t : m_tasks.items()) {
+    taken.insert(t.id);
+  }
+  for(const Profile& other : m_profiles) {
+    for(const Task& t : other.tasks) {
+      taken.insert(t.id);
+    }
+  }
+  // The ids that stay are claimed first, so no fresh one lands on them.
+  for(const Task& t : p.tasks) {
+    if(!taken.contains(t.id)) {
+      noteTaskIdUsed(t.id);
+    }
+  }
+  QSet<QString> used = taken;
+  for(const Task& t : p.tasks) {
+    used.insert(t.id);
+  }
+  QHash<QString, QString> remap;
+  for(Task& t : p.tasks) {
+    if(!taken.contains(t.id)) {
+      continue;
+    }
+    QString stem;
+    int n = 0;
+    QString fresh;
+    if(t.externalId.isEmpty() && splitTaskId(t.id, stem, n)) {
+      // The next number under the same prefix, the way a new task gets one.
+      do {
+        fresh = mintTaskId(stem);
+        noteTaskIdUsed(fresh);
+      } while(used.contains(fresh));
+    } else {
+      // A mirrored issue's id spells its tracker key (jira-LUX-1), and
+      // renumbering it would name another issue: suffix it instead, the way
+      // a second pull of the same key is told apart.
+      int k = 2;
+      do {
+        fresh = t.id + QChar('-') + QString::number(k++);
+      } while(used.contains(fresh));
+    }
+    used.insert(fresh);
+    remap.insert(t.id, fresh);
+    t.id = fresh;
+  }
+  if(remap.isEmpty()) {
+    return remap;
+  }
+
+  // Everything inside the profile that names a task by id follows it: the
+  // dependency links, and the #KEY-1 references of descriptions, notes and
+  // pages (the same pattern the markdown renderer turns into a task link).
+  static const QRegularExpression kTicketRef(QStringLiteral("(?<![A-Za-z0-9_])#([A-Z][A-Z0-9]*-\\d+)"));
+  const auto rewrite = [&remap](QString& text) {
+    if(!text.contains(QLatin1Char('#'))) {
+      return;
+    }
+    QString out;
+    qsizetype last = 0;
+    for(auto it = kTicketRef.globalMatch(text); it.hasNext();) {
+      const QRegularExpressionMatch m = it.next();
+      const auto hit = remap.constFind(m.captured(1));
+      if(hit == remap.constEnd()) {
+        continue;
+      }
+      out += QStringView(text).mid(last, m.capturedStart(1) - last);
+      out += hit.value();
+      last = m.capturedEnd(1);
+    }
+    if(last > 0) {
+      out += QStringView(text).mid(last);
+      text = out;
+    }
+  };
+  for(Task& t : p.tasks) {
+    for(TaskLink& l : t.links) {
+      l.targetId = remap.value(l.targetId, l.targetId);
+    }
+    rewrite(t.desc);
+  }
+  for(Note& n : p.notes) {
+    rewrite(n.body);
+  }
+  rewrite(p.notesState);
+  for(DocPage& d : p.docPages) {
+    rewrite(d.body);
+  }
+  if(events) {
+    for(CalEvent& e : *events) {
+      e.taskId = remap.value(e.taskId, e.taskId);
+    }
+  }
+  return remap;
+}
+
 QString AppController::duplicateProfile(const QString& id, const QString& newName) {
   const int i = profileIndexOf(id);
   if(i < 0) {
@@ -8776,6 +8906,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
+  reissueSharedTaskIds(copy, nullptr);  // the copy's tasks are new tasks (PLAT-9)
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
@@ -9385,6 +9516,9 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   if(activate) {
     snapshotActiveProfile();
   }
+  // Before the profile joins the list, and with the events it brought, whose
+  // task links follow the renamed tasks (PLAT-9).
+  reissueSharedTaskIds(imported, &importedEvents);
   m_profiles.push_back(imported);
 
   // Hoist the imported calendar events into the global pool, re-attributed to
@@ -10564,7 +10698,11 @@ void AppController::refreshFocusedTaskId() {
   emit focusedGitChanged();
 }
 
-void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId) {
+void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId) {
+  // The watcher reports the key it found in the branch name. A tracker-mirrored
+  // task is stored under its provider-prefixed id (jira-LUX-1 for LUX-1), so
+  // resolve it the way the banner refresh and the git badges do (PLAT-14).
+  const QString taskId = taskIdForBranchMatch(matchedId);
   m_focusedRepo = repo;
   m_focusedBranch = branch;
   m_focusedTaskId = taskId;

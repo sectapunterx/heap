@@ -23,7 +23,7 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 26,
+static_assert(heap::meta::fieldCount<Task>() == 27,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -31,7 +31,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 21,
+static_assert(heap::meta::fieldCount<CalEvent>() == 22,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -123,6 +123,18 @@ QVector<Attachment> attachmentsFromJson(const QJsonArray& a) {
   return out;
 }
 
+// The keys of `o` this build does not read, kept on the object's `extra` so a
+// sync round trip carries them like the state file does (PLAT-15).
+QJsonObject unknownKeys(const QJsonObject& o, const QStringList& known) {
+  QJsonObject out;
+  for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
+    if(!known.contains(it.key())) {
+      out.insert(it.key(), it.value());
+    }
+  }
+  return out;
+}
+
 }  // namespace
 
 QJsonArray SyncSerializer::sortedById(const QJsonArray& arr) {
@@ -146,7 +158,7 @@ QJsonArray SyncSerializer::sortedById(const QJsonArray& arr) {
 // key that disappears when its value is default is a key the merger reads as
 // "deleted on the other side".
 QJsonObject SyncSerializer::taskToJson(const Task& t) {
-  QJsonObject o;
+  QJsonObject o = t.extra;  // unknown keys first, so every known one overwrites
   o[QStringLiteral("id")] = t.id;
   o[QStringLiteral("title")] = t.title;
   o[QStringLiteral("desc")] = t.desc;
@@ -268,12 +280,42 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   t.attachments = attachmentsFromJson(o.value(QStringLiteral("attachments")).toArray());
+  static const QStringList kKnown = {QStringLiteral("id"),
+                                     QStringLiteral("title"),
+                                     QStringLiteral("desc"),
+                                     QStringLiteral("priority"),
+                                     QStringLiteral("status"),
+                                     QStringLiteral("scheduledAt"),
+                                     QStringLiteral("dueAt"),
+                                     QStringLiteral("scheduledHasTime"),
+                                     QStringLiteral("dueHasTime"),
+                                     QStringLiteral("branch"),
+                                     QStringLiteral("statusChangedAt"),
+                                     QStringLiteral("archived"),
+                                     QStringLiteral("trackedSeconds"),
+                                     QStringLiteral("timerStartedAt"),
+                                     QStringLiteral("recurrence"),
+                                     QStringLiteral("externalId"),
+                                     QStringLiteral("externalUrl"),
+                                     QStringLiteral("externalProvider"),
+                                     QStringLiteral("labels"),
+                                     QStringLiteral("estimateMinutes"),
+                                     QStringLiteral("someday"),
+                                     QStringLiteral("assignee"),
+                                     QStringLiteral("rank"),
+                                     QStringLiteral("links"),
+                                     QStringLiteral("attachments"),
+                                     QStringLiteral("externalMeta"),
+                                     // Read, never written.
+                                     QStringLiteral("hasTime"),
+                                     QStringLiteral("deadline")};
+  t.extra = unknownKeys(o, kKnown);
   return t;
 }
 
 // ── Person ──
 QJsonObject SyncSerializer::personToJson(const Person& p) {
-  QJsonObject o;
+  QJsonObject o = p.extra;
   o[QStringLiteral("id")] = p.id;
   o[QStringLiteral("name")] = p.name;
   o[QStringLiteral("role")] = p.role;
@@ -292,12 +334,19 @@ Person SyncSerializer::personFromJson(const QJsonObject& o) {
   p.state = o.value(QStringLiteral("state")).toString();
   const QString c = o.value(QStringLiteral("color")).toString();
   p.color = c.isEmpty() ? QColor() : QColor(c);
+  static const QStringList kKnown = {QStringLiteral("id"),
+                                     QStringLiteral("name"),
+                                     QStringLiteral("role"),
+                                     QStringLiteral("question"),
+                                     QStringLiteral("state"),
+                                     QStringLiteral("color")};
+  p.extra = unknownKeys(o, kKnown);
   return p;
 }
 
 // ── CalEvent ──
 QJsonObject SyncSerializer::eventToJson(const CalEvent& e) {
-  QJsonObject o;
+  QJsonObject o = e.extra;
   o[QStringLiteral("id")] = e.id;
   o[QStringLiteral("title")] = e.title;
   o[QStringLiteral("type")] = e.type;
@@ -356,6 +405,14 @@ CalEvent SyncSerializer::eventFromJson(const QJsonObject& o) {
   e.notes = o.value(QStringLiteral("notes")).toString();
   e.url = o.value(QStringLiteral("url")).toString();
   e.reminderMinutes = o.value(QStringLiteral("reminderMinutes")).toInt(CalEvent::kReminderDefault);
+  static const QStringList kKnown = {QStringLiteral("id"),           QStringLiteral("title"),   QStringLiteral("type"),
+                                     QStringLiteral("start"),        QStringLiteral("end"),     QStringLiteral("attendees"),
+                                     QStringLiteral("date"),         QStringLiteral("taskId"),  QStringLiteral("profileId"),
+                                     QStringLiteral("context"),      QStringLiteral("allDay"),  QStringLiteral("endDate"),
+                                     QStringLiteral("rrule"),        QStringLiteral("exdates"), QStringLiteral("masterId"),
+                                     QStringLiteral("originalDate"), QStringLiteral("tz"),      QStringLiteral("location"),
+                                     QStringLiteral("notes"),        QStringLiteral("url"),     QStringLiteral("reminderMinutes")};
+  e.extra = unknownKeys(o, kKnown);
   return e;
 }
 

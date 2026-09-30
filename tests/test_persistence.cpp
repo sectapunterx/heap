@@ -108,16 +108,19 @@ TEST_F(PersistenceTest, RecoversFromNewestBackupWhenStateCorrupt) {
   EXPECT_FALSE(corruptFiles(dir).isEmpty());
 }
 
-// A corrupt state.json with NO backup preserves the damaged file and boots a
-// fresh Example profile — never a silent wipe.
+// A corrupt state.json with NO backup preserves the damaged file and boots an
+// empty workspace — never a silent wipe, and never the demo, which reads as a
+// new install (PLAT-6).
 TEST_F(PersistenceTest, QuarantinesCorruptStateWhenNoBackup) {
   const QString dir = appDataDir();
   ASSERT_TRUE(writeFile(dir + QStringLiteral("/state.json"), QByteArray("garbage{{{ not json")));
 
   AppController app;
-  // Did not adopt any recovered marker; booted the demo profile instead.
   EXPECT_NE(app.crumbUser(), QStringLiteral("RECOVERED_MARKER"));
-  EXPECT_EQ(firstProfileName(app), QStringLiteral("Example"));
+  EXPECT_NE(firstProfileName(app), QStringLiteral("Example"));
+  EXPECT_EQ(app.tasks()->rowCount(), 0);
+  EXPECT_FALSE(app.demoActive());
+  EXPECT_TRUE(app.welcomeSeen());
   // The damaged original is preserved, not overwritten.
   EXPECT_FALSE(corruptFiles(dir).isEmpty());
 }

@@ -183,6 +183,10 @@ class AppController : public QObject {
   // The banner's Retry: re-reads an unreadable state.json (and loads it), or
   // writes a failed save again now.
   Q_INVOKABLE void retryStorage();
+  // The banner's Dismiss, for the two states that only report what happened
+  // at startup ("recovered" from a backup, "damaged" with none): nothing is
+  // wrong any more, so the user may put the message away (PLAT-6).
+  Q_INVOKABLE void dismissStorageNotice();
 
   TaskModel* tasks() {
     return &m_tasks;
@@ -1437,7 +1441,6 @@ class AppController : public QObject {
   // ladder rewrites it. Exempt from retention pruning: it is the only pre-v4
   // image of the user's data.
   void retainPreMigrationBackup(const QString& path, int fromVersion);
-  QString m_recoveryNotice;  // deferred toast shown once the UI is up
   // Set when state.json was written by a newer build than this one. Every save
   // path is a no-op while it is true: this build cannot represent the fields it
   // did not parse, so writing would drop them.
@@ -1477,6 +1480,11 @@ class AppController : public QObject {
   QString mintTaskId(const QString& stem) const;
   // Records that `id` was taken, so it is never handed out again.
   void noteTaskIdUsed(const QString& id);
+  // Gives every task of `p` (a profile about to be added) whose id another
+  // profile already holds a fresh one, and points the references inside `p`
+  // — links, #KEY-1 mentions — and `events`' task links at it. Returns
+  // old id -> new id (PLAT-9).
+  QHash<QString, QString> reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
@@ -1711,7 +1719,7 @@ class AppController : public QObject {
   // refresh the banner. Needed because a prefix change (settings/profile) does
   // not move HEAD, so no branchChanged fires to re-run the match on its own.
   void refreshFocusedTaskId();
-  void onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId);
+  void onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
 };

@@ -1,0 +1,490 @@
+{
+    "activeProfileId": "default",
+    "events": [
+        {
+            "allDay": false,
+            "attendees": "Product team",
+            "context": "",
+            "date": "2026-09-30",
+            "end": 10.25,
+            "endDate": "",
+            "exdates": [
+            ],
+            "id": "ev-1",
+            "location": "",
+            "masterId": "",
+            "notes": "",
+            "originalDate": "",
+            "profileId": "default",
+            "reminderMinutes": -1,
+            "rrule": "",
+            "start": 10,
+            "taskId": "",
+            "title": "Daily standup",
+            "type": "standup",
+            "tz": "",
+            "url": ""
+        },
+        {
+            "allDay": false,
+            "attendees": "Oleg T.",
+            "context": "",
+            "date": "2026-10-01",
+            "end": 11.5,
+            "endDate": "",
+            "exdates": [
+            ],
+            "id": "ev-2",
+            "location": "",
+            "masterId": "",
+            "notes": "",
+            "originalDate": "",
+            "profileId": "default",
+            "reminderMinutes": -1,
+            "rrule": "",
+            "start": 11,
+            "taskId": "",
+            "title": "1:1 with Oleg",
+            "type": "oneone",
+            "tz": "",
+            "url": ""
+        },
+        {
+            "allDay": false,
+            "attendees": "🔒 deep work",
+            "context": "",
+            "date": "2026-09-30",
+            "end": 15,
+            "endDate": "",
+            "exdates": [
+            ],
+            "id": "ev-3",
+            "location": "",
+            "masterId": "",
+            "notes": "",
+            "originalDate": "",
+            "profileId": "default",
+            "reminderMinutes": -1,
+            "rrule": "",
+            "start": 13,
+            "taskId": "",
+            "title": "Focus block",
+            "type": "focus",
+            "tz": "",
+            "url": ""
+        },
+        {
+            "allDay": false,
+            "attendees": "Whole team",
+            "context": "",
+            "date": "2026-10-02",
+            "end": 16.5,
+            "endDate": "",
+            "exdates": [
+            ],
+            "id": "ev-4",
+            "location": "",
+            "masterId": "",
+            "notes": "",
+            "originalDate": "",
+            "profileId": "default",
+            "reminderMinutes": -1,
+            "rrule": "",
+            "start": 16,
+            "taskId": "",
+            "title": "Sprint planning",
+            "type": "sync",
+            "tz": "",
+            "url": ""
+        },
+        {
+            "allDay": false,
+            "attendees": "Andrey, Victor",
+            "context": "",
+            "date": "2026-10-03",
+            "end": 17.5,
+            "endDate": "",
+            "exdates": [
+            ],
+            "id": "ev-5",
+            "location": "",
+            "masterId": "",
+            "notes": "",
+            "originalDate": "",
+            "profileId": "default",
+            "reminderMinutes": -1,
+            "rrule": "",
+            "start": 17,
+            "taskId": "",
+            "title": "Code review",
+            "type": "sync",
+            "tz": "",
+            "url": ""
+        }
+    ],
+    "profiles": [
+        {
+            "activeNoteId": "note-welcome",
+            "color": "#5cc2dd",
+            "createdAt": "2026-09-30T20:49:50.430",
+            "id": "default",
+            "name": "Example",
+            "notes": [
+                {
+                    "body": "# Планёрка\n\n- [x] ревью PR #42\n- [ ] ответить в HEAP-7 — «срочно»\n\n```cpp\nint main() { return 0; }\n```\n",
+                    "created": "2026-09-30T20:49:50.431",
+                    "folder": "",
+                    "id": "note-welcome",
+                    "pinned": false,
+                    "title": "Планёрка",
+                    "updated": "2026-09-30T20:49:50.431"
+                }
+            ],
+            "people": [
+                {
+                    "color": "#d97a6c",
+                    "id": "o.t",
+                    "name": "Oleg T.",
+                    "question": "Clarify which metrics to show in the dashboard empty state (new vs active)",
+                    "role": "Tech Lead",
+                    "state": "todo"
+                },
+                {
+                    "color": "#c87fc7",
+                    "id": "m.k",
+                    "name": "Masha K.",
+                    "question": "Ask for the full repro trace on APP-105 from customer X",
+                    "role": "QA",
+                    "state": "todo"
+                },
+                {
+                    "color": "#6cc4b8",
+                    "id": "a.s",
+                    "name": "Andrey S.",
+                    "question": "Nudge review on PR #4471 (CSV export)",
+                    "role": "Backend dev",
+                    "state": "pinged"
+                },
+                {
+                    "color": "#7da8d9",
+                    "id": "p.n",
+                    "name": "Priya N.",
+                    "question": "30 min slot — discuss search empty-state illustrations (APP-104)",
+                    "role": "Designer",
+                    "state": "todo"
+                },
+                {
+                    "color": "#dcc06a",
+                    "id": "ekaterina",
+                    "name": "Ekaterina",
+                    "question": "Confirm acceptance criteria for APP-102",
+                    "role": "PM",
+                    "state": "replied"
+                },
+                {
+                    "color": "#7cc492",
+                    "id": "h.m",
+                    "name": "Hiroshi M.",
+                    "question": "Ask about notification toggles (APP-110) — are there tests?",
+                    "role": "Frontend dev",
+                    "state": "todo"
+                }
+            ],
+            "savedViews": [
+                {
+                    "archived": false,
+                    "id": "view-urgent",
+                    "name": "Urgent",
+                    "priorities": [
+                    ],
+                    "query": "priority:P0,P1 is:open",
+                    "showDone": false,
+                    "sort": "manual",
+                    "view": "board"
+                },
+                {
+                    "archived": false,
+                    "id": "view-due-week",
+                    "name": "Due this week",
+                    "priorities": [
+                    ],
+                    "query": "due:week is:open",
+                    "showDone": false,
+                    "sort": "due",
+                    "view": "board"
+                },
+                {
+                    "archived": false,
+                    "id": "view-overdue",
+                    "name": "Overdue",
+                    "priorities": [
+                    ],
+                    "query": "is:overdue",
+                    "showDone": false,
+                    "sort": "due",
+                    "view": "board"
+                }
+            ],
+            "statuses": [
+                {
+                    "color": "#8a8e98",
+                    "id": "backlog",
+                    "name": "Backlog"
+                },
+                {
+                    "color": "#9aa3b4",
+                    "id": "todo",
+                    "name": "To Do"
+                },
+                {
+                    "color": "#5aa9e6",
+                    "id": "prog",
+                    "name": "In Progress"
+                },
+                {
+                    "color": "#5aa9e6",
+                    "id": "half",
+                    "name": "50/50"
+                },
+                {
+                    "color": "#e6624c",
+                    "id": "blocked",
+                    "name": "Blocked"
+                },
+                {
+                    "color": "#9aa3b4",
+                    "id": "review",
+                    "name": "Code Review"
+                },
+                {
+                    "color": "#6ec18a",
+                    "id": "done",
+                    "name": "Done"
+                }
+            ],
+            "tasks": [
+                {
+                    "archived": false,
+                    "attachments": [
+                        {
+                            "id": "9e47da89d244fcfe763b8a8f412546d9.txt",
+                            "mime": "text/plain",
+                            "name": "spec.txt",
+                            "size": 16
+                        }
+                    ],
+                    "branch": "fix/login-rate-limit",
+                    "desc": "After a password reset the attempt counter sometimes resets — brute force is possible. Repros on mobile clients.",
+                    "dueAt": "2026-10-01T00:00:00.000",
+                    "id": "APP-101",
+                    "priority": "P0",
+                    "rank": 1024,
+                    "scheduledAt": "2026-10-01T00:00:00.000",
+                    "status": "prog",
+                    "statusChangedAt": "",
+                    "title": "Login rate-limit bypass"
+                },
+                {
+                    "archived": false,
+                    "branch": "feat/api-pagination",
+                    "desc": "Profiling outcome: when items are deleted mid-scroll, the cursor skips a page.",
+                    "dueAt": "2026-10-04T00:00:00.000",
+                    "id": "APP-102",
+                    "priority": "P1",
+                    "rank": 2048,
+                    "scheduledAt": "2026-10-04T00:00:00.000",
+                    "status": "prog",
+                    "statusChangedAt": "",
+                    "title": "API pagination: cursor drift on large lists"
+                },
+                {
+                    "archived": false,
+                    "branch": "feat/dashboard-widgets",
+                    "desc": "Unsure which metrics to show for new vs active accounts. Need Oleg's input.",
+                    "dueAt": "2026-10-02T00:00:00.000",
+                    "id": "APP-103",
+                    "priority": "P1",
+                    "rank": 1024,
+                    "scheduledAt": "2026-10-02T00:00:00.000",
+                    "status": "half",
+                    "statusChangedAt": "",
+                    "title": "Dashboard: empty state for new accounts"
+                },
+                {
+                    "archived": false,
+                    "branch": "fix/search-empty-state",
+                    "desc": "On a zero-result query the old list flashes before the 'nothing found' message.",
+                    "dueAt": "2026-10-06T00:00:00.000",
+                    "id": "APP-104",
+                    "priority": "P2",
+                    "rank": 2048,
+                    "scheduledAt": "2026-10-06T00:00:00.000",
+                    "status": "half",
+                    "statusChangedAt": "",
+                    "title": "Search: incorrect empty state"
+                },
+                {
+                    "archived": false,
+                    "branch": "fix/checkout-timeout",
+                    "desc": "Waiting on QA trace: only repros for one customer on a slow network.",
+                    "dueAt": "2026-09-30T00:00:00.000",
+                    "id": "APP-105",
+                    "priority": "P0",
+                    "scheduledAt": "2026-09-30T00:00:00.000",
+                    "status": "blocked",
+                    "statusChangedAt": "",
+                    "title": "Checkout: 10s timeout"
+                },
+                {
+                    "archived": false,
+                    "branch": "feat/csv-export",
+                    "desc": "PR #4471. Waiting on Andrey, small review.",
+                    "dueAt": "2026-10-03T00:00:00.000",
+                    "id": "APP-106",
+                    "priority": "P2",
+                    "rank": 1024,
+                    "scheduledAt": "2026-10-03T00:00:00.000",
+                    "status": "review",
+                    "statusChangedAt": "",
+                    "title": "CSV export: paginated download"
+                },
+                {
+                    "archived": false,
+                    "branch": "perf/image-thumbnails",
+                    "desc": "PR #4488. +18% speed on the server, -3% memory — discuss trade-off.",
+                    "dueAt": "2026-10-02T00:00:00.000",
+                    "id": "APP-107",
+                    "priority": "P1",
+                    "rank": 2048,
+                    "scheduledAt": "2026-10-02T00:00:00.000",
+                    "status": "review",
+                    "statusChangedAt": "",
+                    "title": "Image thumbnail generation: caching"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Avatar save sometimes arrives before the profile update completes — race on shared state.",
+                    "dueAt": "2026-10-05T00:00:00.000",
+                    "id": "APP-108",
+                    "priority": "P1",
+                    "rank": 1024,
+                    "scheduledAt": "2026-10-05T00:00:00.000",
+                    "status": "todo",
+                    "statusChangedAt": "",
+                    "title": "Race condition on profile update"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Split the 1.4k LOC monolith into validation + routing + delivery.",
+                    "dueAt": "2026-10-08T00:00:00.000",
+                    "id": "APP-109",
+                    "priority": "P2",
+                    "rank": 2048,
+                    "scheduledAt": "2026-10-08T00:00:00.000",
+                    "status": "todo",
+                    "statusChangedAt": "",
+                    "title": "Refactor the webhook handler"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Add per-channel support to the notification settings path.",
+                    "dueAt": "2026-10-09T00:00:00.000",
+                    "id": "APP-110",
+                    "priority": "P2",
+                    "rank": 3072,
+                    "scheduledAt": "2026-10-09T00:00:00.000",
+                    "status": "todo",
+                    "statusChangedAt": "",
+                    "title": "Notification settings: granular toggles"
+                },
+                {
+                    "archived": false,
+                    "branch": "fix/session-memory-leak",
+                    "desc": "Profiler clean, merged into master this morning.",
+                    "dueAt": "2026-09-29T00:00:00.000",
+                    "id": "APP-111",
+                    "priority": "P1",
+                    "rank": 1024,
+                    "scheduledAt": "2026-09-29T00:00:00.000",
+                    "status": "done",
+                    "statusChangedAt": "",
+                    "title": "Memory leak in session store"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Done, merged.",
+                    "dueAt": "2026-09-28T00:00:00.000",
+                    "id": "APP-112",
+                    "priority": "P3",
+                    "rank": 2048,
+                    "scheduledAt": "2026-09-28T00:00:00.000",
+                    "status": "done",
+                    "statusChangedAt": "",
+                    "title": "Logs: structured fields for API requests"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Slow-path logs inside the hot loop — need a ring buffer.",
+                    "id": "APP-113",
+                    "priority": "P3",
+                    "rank": 1024,
+                    "status": "backlog",
+                    "statusChangedAt": "",
+                    "title": "Internal logging improvements"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Edge case: empty report vs single-row report under low load.",
+                    "id": "APP-114",
+                    "priority": "P3",
+                    "rank": 2048,
+                    "status": "backlog",
+                    "statusChangedAt": "",
+                    "title": "Export: empty report edge case"
+                },
+                {
+                    "archived": false,
+                    "branch": "",
+                    "desc": "Profile under load >200 req/s.",
+                    "id": "APP-115",
+                    "priority": "P3",
+                    "rank": 3072,
+                    "status": "backlog",
+                    "statusChangedAt": "",
+                    "title": "Search cache threshold tuning"
+                }
+            ]
+        }
+    ],
+    "schemaVersion": 11,
+    "settings": {
+        "app": {
+            "appearance": {
+                "contrast": "soft",
+                "darkPreset": "minimal-dark",
+                "lightPreset": "heap-light"
+            }
+        },
+        "crumbProject": "",
+        "crumbUser": "You",
+        "currentView": "board",
+        "demoActive": true,
+        "density": "comfy",
+        "language": "en",
+        "shortcuts": {
+        },
+        "shortcutsSchema": 2,
+        "theme": "dark",
+        "welcomeSeen": false,
+        "workdayEnd": 19,
+        "workdayStart": 9
+    },
+    "taskSeq": {
+    }
+}

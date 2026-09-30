@@ -26,7 +26,7 @@ static_assert(heap::meta::fieldCount<Attachment>() == 4,
               "Attachment gained or lost a field. Update attachmentsToJson/attachmentsFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 26,
+static_assert(heap::meta::fieldCount<Task>() == 27,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -34,7 +34,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 21,
+static_assert(heap::meta::fieldCount<CalEvent>() == 22,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -59,6 +59,21 @@ QJsonArray labelsToJson(const QVector<Label>& labels) {
     a.append(o);
   }
   return a;
+}
+
+// The keys of `o` this build does not read (PLAT-15). Each object type that
+// carries an `extra` lists every key its toJson writes and its fromJson reads,
+// legacy ones included; anything else comes back on the next save. A key added
+// to a toJson must be listed too, or a stale copy of it would return from
+// `extra` whenever the new code omits it at its default.
+QJsonObject unknownKeys(const QJsonObject& o, const QStringList& known) {
+  QJsonObject out;
+  for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
+    if(!known.contains(it.key())) {
+      out.insert(it.key(), it.value());
+    }
+  }
+  return out;
 }
 
 QVector<Label> labelsFromJson(const QJsonArray& a) {
@@ -234,7 +249,8 @@ ExternalMeta externalMetaFromJson(const QJsonObject& o) {
 }  // namespace
 
 QJsonObject taskToJson(const Task& t) {
-  QJsonObject o;
+  // Unknown keys first, so every key this build owns overwrites a stale copy.
+  QJsonObject o = t.extra;
   o["id"] = t.id;
   o["title"] = t.title;
   o["desc"] = t.desc;
@@ -303,7 +319,7 @@ QJsonObject taskToJson(const Task& t) {
   if(!t.links.isEmpty()) {
     o["links"] = linksToJson(t.links);
   }
-  // Attachments — optional, no schema bump: a file without the key simply has
+  // Attachments (schema v11) — optional: a file without the key simply has
   // none, and a task with none keeps the JSON it had before.
   if(!t.attachments.isEmpty()) {
     o["attachments"] = attachmentsToJson(t.attachments);
@@ -359,6 +375,36 @@ Task taskFromJson(const QJsonObject& o) {
   t.rank = o["rank"].toDouble(0.0);
   t.links = linksFromJson(o["links"].toArray());
   t.attachments = attachmentsFromJson(o["attachments"].toArray());
+  static const QStringList kKnown = {QStringLiteral("id"),
+                                     QStringLiteral("title"),
+                                     QStringLiteral("desc"),
+                                     QStringLiteral("priority"),
+                                     QStringLiteral("status"),
+                                     QStringLiteral("branch"),
+                                     QStringLiteral("statusChangedAt"),
+                                     QStringLiteral("archived"),
+                                     QStringLiteral("scheduledAt"),
+                                     QStringLiteral("dueAt"),
+                                     QStringLiteral("scheduledHasTime"),
+                                     QStringLiteral("dueHasTime"),
+                                     QStringLiteral("trackedSeconds"),
+                                     QStringLiteral("timerStartedAt"),
+                                     QStringLiteral("recurrence"),
+                                     QStringLiteral("externalId"),
+                                     QStringLiteral("externalUrl"),
+                                     QStringLiteral("externalProvider"),
+                                     QStringLiteral("labels"),
+                                     QStringLiteral("estimateMinutes"),
+                                     QStringLiteral("someday"),
+                                     QStringLiteral("assignee"),
+                                     QStringLiteral("externalMeta"),
+                                     QStringLiteral("rank"),
+                                     QStringLiteral("links"),
+                                     QStringLiteral("attachments"),
+                                     // Read, never written: schema ≤ 3 and ≤ 9.
+                                     QStringLiteral("deadline"),
+                                     QStringLiteral("hasTime")};
+  t.extra = unknownKeys(o, kKnown);
   return t;
 }
 
@@ -407,7 +453,7 @@ QVector<QDate> datesFromJson(const QJsonArray& a) {
 }
 
 QJsonObject eventToJson(const CalEvent& e) {
-  QJsonObject o;
+  QJsonObject o = e.extra;  // unknown keys first (PLAT-15)
   o["id"] = e.id;
   o["title"] = e.title;
   o["type"] = e.type;
@@ -459,6 +505,14 @@ CalEvent eventFromJson(const QJsonObject& o, const QString& fallbackProfileId) {
   e.notes = o["notes"].toString();
   e.url = o["url"].toString();
   e.reminderMinutes = o["reminderMinutes"].toInt(CalEvent::kReminderDefault);
+  static const QStringList kKnown = {QStringLiteral("id"),           QStringLiteral("title"),   QStringLiteral("type"),
+                                     QStringLiteral("start"),        QStringLiteral("end"),     QStringLiteral("attendees"),
+                                     QStringLiteral("date"),         QStringLiteral("taskId"),  QStringLiteral("profileId"),
+                                     QStringLiteral("context"),      QStringLiteral("allDay"),  QStringLiteral("endDate"),
+                                     QStringLiteral("rrule"),        QStringLiteral("exdates"), QStringLiteral("masterId"),
+                                     QStringLiteral("originalDate"), QStringLiteral("tz"),      QStringLiteral("location"),
+                                     QStringLiteral("notes"),        QStringLiteral("url"),     QStringLiteral("reminderMinutes")};
+  e.extra = unknownKeys(o, kKnown);
   return e;
 }
 
@@ -584,7 +638,7 @@ QVector<DocPage> docPagesFromJson(const QJsonArray& a) {
 QJsonArray peopleToJson(const QVector<Person>& xs) {
   QJsonArray a;
   for(const Person& p : xs) {
-    QJsonObject o;
+    QJsonObject o = p.extra;  // unknown keys first (PLAT-15)
     o["id"] = p.id;
     o["name"] = p.name;
     o["role"] = p.role;
@@ -608,6 +662,13 @@ QVector<Person> peopleFromJson(const QJsonArray& a) {
     p.question = o["question"].toString();
     p.state = o["state"].toString();
     p.color = QColor(o["color"].toString());
+    static const QStringList kKnown = {QStringLiteral("id"),
+                                       QStringLiteral("name"),
+                                       QStringLiteral("role"),
+                                       QStringLiteral("question"),
+                                       QStringLiteral("state"),
+                                       QStringLiteral("color")};
+    p.extra = unknownKeys(o, kKnown);
     v.append(p);
   }
   return v;
@@ -617,7 +678,9 @@ QJsonArray statusesToJson(const QVariantList& xs) {
   QJsonArray a;
   for(const QVariant& v : xs) {
     const QVariantMap m = v.toMap();
-    QJsonObject o;
+    // Unknown keys first (PLAT-15). A column is a plain map, so they ride in
+    // it under kStatusExtraKey rather than loose among the ones QML reads.
+    QJsonObject o = QJsonObject::fromVariantMap(m.value(QLatin1String(kStatusExtraKey)).toMap());
     o["id"] = m.value("id").toString();
     o["name"] = m.value("name").toString();
     const QVariant col = m.value("color");
@@ -642,6 +705,11 @@ QVariantList statusesFromJson(const QJsonArray& a) {
     m["name"] = o["name"].toString();
     m["color"] = QColor(o["color"].toString());
     m["wip"] = o["wip"].toInt(0);
+    static const QStringList kKnown = {QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("color"), QStringLiteral("wip")};
+    const QJsonObject extra = unknownKeys(o, kKnown);
+    if(!extra.isEmpty()) {
+      m[QLatin1String(kStatusExtraKey)] = extra.toVariantMap();
+    }
     v.append(m);
   }
   return v;
@@ -744,6 +812,28 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
     }
   }
   return p;
+}
+
+void dropPassThrough(Profile& p) {
+  p.extra = {};
+  for(Task& t : p.tasks) {
+    t.extra = {};
+  }
+  for(Person& person : p.people) {
+    person.extra = {};
+  }
+  for(QVariant& v : p.statuses) {
+    QVariantMap m = v.toMap();
+    if(m.remove(QLatin1String(kStatusExtraKey)) > 0) {
+      v = m;
+    }
+  }
+}
+
+void dropPassThrough(QVector<CalEvent>& events) {
+  for(CalEvent& e : events) {
+    e.extra = {};
+  }
 }
 
 // ───────────────── Migration ─────────────────
@@ -963,6 +1053,11 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   if(fromVersion < 10) {
     forEachTaskArray(root, migratedTaskArrayV9ToV10);
   }
+  // v10 -> v11 added Task.attachments and Profile.savedViews. No rung: a v10
+  // task has no files and a v10 profile no saved views, which is what the two
+  // keys mean when absent. The bump exists for the other direction — 0.5.3
+  // reads v10, does not know `attachments`, and saved every task without it
+  // (PLAT-15); v11 sends it into its newer-schema read-only mode instead.
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

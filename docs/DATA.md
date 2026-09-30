@@ -41,7 +41,9 @@ tasks is one copy; a stored file is read-only and never changes.
 - A task lists its files in an optional `attachments` array — `{id, name,
   size, mime}` per file, the name and size being what the file was when it was
   attached. A task without files has no key, and a `state.json` from before
-  attachments simply has none (no schema bump).
+  attachments simply has none. The key arrived with schema **v11**, so 0.5.3
+  (v10), which does not know it, opens such a file read-only instead of saving
+  every task without its files.
 - A note, a doc page or a task description links a file as markdown:
   `![shot.png](attachments/<id>)` for an image (shown inline in the preview),
   `[spec.pdf](attachments/<id>)` for anything else. The text is the reference —
@@ -67,7 +69,7 @@ everything, copy the whole data folder.
 
 A profile may carry `savedViews`, the sidebar's saved views in their order. The
 key is optional: a profile without views — and every file written before saved
-views existed — simply has none, and no schema bump was needed. Each entry:
+views existed — simply has none; the key belongs to schema v11. Each entry:
 
 ```json
 { "id": "view-3f9c2a1b", "name": "Urgent",
@@ -136,8 +138,12 @@ heap never replaces a `state.json` it could not read with anything else:
   into the read-only session are not kept).
 - **Damaged** (not JSON, or JSON without any profile): the file is kept as
   `state.corrupt-<time>.json` next to it (moved, or copied when a lock forbids
-  moving), the newest usable backup is loaded, and a notice names both files.
-  If the damaged file cannot be set aside at all, the session is read-only.
+  moving) and the newest usable backup is loaded. A banner that stays up until
+  you dismiss it names both files, with **Open data folder**: whatever changed
+  after that backup is not in it. With no backup at all, heap opens an empty
+  workspace under the same banner — not the demo and the welcome tour, since
+  this is not a new install. If the damaged file cannot be set aside at all,
+  the session is read-only.
 - **From a newer heap** (a higher `schemaVersion`): opens read-only with a
   banner that stays up; a copy is kept once as
   `backups/state-premigration-v<N>-<time>.json`. Update heap to edit it.
@@ -148,7 +154,8 @@ heap never replaces a `state.json` it could not read with anything else:
 
 Every one of these leaves a line in `logs/recovery.log`. Keys heap does not
 know (from a newer point release or a hand edit) are kept on save at the
-document, settings and profile level.
+document, settings and profile level, and on every task, event, person and
+column.
 
 ## Automatic backups
 
@@ -176,6 +183,13 @@ Each profile can be exported and re-imported independently:
 
 Export/import is content-only — it never carries settings or other profiles, so
 importing is always non-destructive.
+
+A task id is unique across all profiles (reminders, notification actions and
+event links find a task by id alone). An imported task whose id another profile
+already holds gets the next free one under its prefix — `TASK-1` becomes, say,
+`TASK-8` — and its dependency links, `#TASK-1` mentions in descriptions, notes
+and pages, and the imported events follow it. **Duplicate profile** does the
+same for every task of the copy.
 
 The export carries the profile's attached files too, base64-encoded in a
 top-level `attachments` array next to `profile`, so the file stands on its own
@@ -226,3 +240,8 @@ running an old version by mistake.
   `every:month:15` (the 15th, the last day in a shorter month).
 
 Exported profiles from older builds (`hasTime`) import with the same rule.
+
+**v11** (0.5.4) added a task's `attachments` and a profile's `savedViews`.
+Nothing is rewritten on upgrade — a v10 file has neither — but the version
+matters the other way round: 0.5.3 does not know `attachments`, and a v11 file
+opens there read-only rather than losing every task's files on the first save.

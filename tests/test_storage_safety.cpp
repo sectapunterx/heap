@@ -628,6 +628,209 @@ TEST(GitWorktree, ShaAndUpstreamComeFromTheCommonDir) {
   EXPECT_EQ(heap::git::BranchTaskMatcher::resolveCommonDir(main), main) << "a plain clone is its own common dir";
 }
 
+// ── PLAT-6 (2026-09-30-1): a damaged file is a banner, not a first run ──
+
+TEST_F(StorageSafety, ADamagedFileWithNoBackupOpensAnEmptyWorkspaceUnderABanner) {
+  const QByteArray damaged = stateDoc({profileJson("a", {taskJson("T-1", "todo")})}, "a").left(40);
+  writeRaw(statePath(), damaged);
+  {
+    AppController app;
+    const QStringList kept = corruptFiles();
+    ASSERT_EQ(kept.size(), 1);
+    EXPECT_EQ(readRaw(appDataDir() + "/" + kept.first()), damaged) << "the damaged bytes must be kept as they were";
+    EXPECT_EQ(app.storageState(), QStringLiteral("damaged"));
+    EXPECT_TRUE(app.storageMessage().contains(kept.first())) << app.storageMessage().toStdString();
+    // Not a new install: no welcome tour, no demo board to work on in.
+    EXPECT_TRUE(app.welcomeSeen());
+    EXPECT_FALSE(app.demoActive());
+    EXPECT_EQ(app.tasks()->rowCount(), 0);
+    EXPECT_FALSE(app.statuses().isEmpty());
+    app.dismissStorageNotice();
+    EXPECT_EQ(app.storageState(), QStringLiteral("ok"));
+    app.flushSave();
+  }
+  // The next launch opens the same empty workspace, not a first run either.
+  AppController reopened;
+  EXPECT_EQ(reopened.storageState(), QStringLiteral("ok"));
+  EXPECT_TRUE(reopened.welcomeSeen());
+  EXPECT_FALSE(reopened.demoActive());
+  EXPECT_EQ(reopened.tasks()->rowCount(), 0);
+  EXPECT_EQ(corruptFiles().size(), 1);
+}
+
+TEST_F(StorageSafety, ADamagedFileRestoredFromABackupSaysWhichOneAndStaysUp) {
+  writeRaw(backupDir() + "/state-20260101-000000.json", stateDoc({profileJson("a", {taskJson("T-1", "todo")})}, "a"));
+  writeRaw(statePath(), QByteArray("{ truncated"));
+  AppController app;
+  EXPECT_TRUE(hasTask(app, "T-1"));
+  EXPECT_EQ(app.storageState(), QStringLiteral("recovered"));
+  EXPECT_TRUE(app.storageMessage().contains(QStringLiteral("state-20260101-000000.json"))) << app.storageMessage().toStdString();
+  ASSERT_EQ(corruptFiles().size(), 1);
+  EXPECT_TRUE(app.storageMessage().contains(corruptFiles().first()));
+  // An ordinary save does not take the notice down; only the user does.
+  QVariantMap d = app.newTaskDraft(QStringLiteral("todo"));
+  d["title"] = QStringLiteral("after");
+  app.saveTask(d);
+  app.flushSave();
+  EXPECT_EQ(app.storageState(), QStringLiteral("recovered"));
+}
+
+// ── PLAT-9 (2026-09-30-1): a copied or imported profile gets its own task ids ──
+
+TEST_F(StorageSafety, ADuplicatedProfileGetsFreshTaskIdsWithItsReferences) {
+  QJsonObject blocker = taskJson("TASK-1", "todo");
+  blocker["desc"] = QStringLiteral("see #TASK-2 and #TASK-20");
+  blocker["links"] = QJsonArray{QJsonObject{{"type", "blocks"}, {"targetId", "TASK-2"}}};
+  QJsonObject p = profileJson("a", {blocker, taskJson("TASK-2", "todo"), taskJson("TASK-20", "todo")});
+  writeRaw(statePath(), stateDoc({p, profileJson("other", {taskJson("TASK-20", "todo")})}, "a"));
+  AppController app;
+  const QString copyId = app.duplicateProfile(QStringLiteral("a"), QStringLiteral("A copy"));
+  ASSERT_FALSE(copyId.isEmpty());
+  ASSERT_EQ(app.activeProfileId(), copyId);
+  QSet<QString> ids;
+  const Task* first = nullptr;
+  for(const Task& t : app.tasks()->items()) {
+    ids.insert(t.id);
+    if(t.title == QStringLiteral("TASK-1 title")) {
+      first = &t;
+    }
+  }
+  ASSERT_EQ(ids.size(), 3);
+  for(const char* shared : {"TASK-1", "TASK-2", "TASK-20"}) {
+    EXPECT_FALSE(ids.contains(QString::fromLatin1(shared))) << shared << " is still shared with the original";
+  }
+  ASSERT_NE(first, nullptr);
+  ASSERT_EQ(first->links.size(), 1);
+  const QString newTwo = first->links.first().targetId;
+  EXPECT_TRUE(ids.contains(newTwo)) << "the link must follow its target";
+  EXPECT_TRUE(first->desc.contains(QStringLiteral("#") + newTwo)) << first->desc.toStdString();
+  EXPECT_FALSE(first->desc.contains(QStringLiteral("#TASK-2 "))) << first->desc.toStdString();
+  // A new task in the copy is not handed an id the copy just took either.
+  EXPECT_FALSE(ids.contains(app.newTaskDraft(QStringLiteral("todo")).value("id").toString()));
+
+  app.setActiveProfileId(QStringLiteral("a"));
+  EXPECT_TRUE(hasTask(app, "TASK-1"));
+  EXPECT_TRUE(hasTask(app, "TASK-2")) << "the original keeps its ids";
+}
+
+TEST_F(StorageSafety, AnImportedProfileNeverReusesATaskIdAndItsEventsFollow) {
+  writeRaw(statePath(), stateDoc({profileJson("a", {taskJson("TASK-1", "todo")})}, "a"));
+  AppController app;
+  QJsonObject exported = profileJson("b", {taskJson("TASK-1", "todo"), taskJson("ZED-9", "todo")});
+  exported["events"] = QJsonArray{
+      QJsonObject{{"id", "ev-x"}, {"title", "pairing"}, {"date", "2026-09-30"}, {"start", 10}, {"end", 11}, {"taskId", "TASK-1"}}};
+  ASSERT_TRUE(app.importProfileFromJson(QString::fromUtf8(QJsonDocument(QJsonObject{{"profile", exported}}).toJson())).isEmpty());
+  EXPECT_FALSE(hasTask(app, "TASK-1")) << "the import took an id profile A holds";
+  EXPECT_TRUE(hasTask(app, "ZED-9")) << "an id nobody holds is kept";
+  QString renamed;
+  for(const Task& t : app.tasks()->items()) {
+    if(t.title == QStringLiteral("TASK-1 title")) {
+      renamed = t.id;
+    }
+  }
+  ASSERT_FALSE(renamed.isEmpty());
+  bool sawEvent = false;
+  for(const CalEvent& e : app.events()->items()) {
+    if(e.title == QStringLiteral("pairing")) {
+      sawEvent = true;
+      EXPECT_EQ(e.taskId, renamed);
+    }
+  }
+  EXPECT_TRUE(sawEvent);
+}
+
+// ── PLAT-14 (2026-09-30-1): a branch named by a tracker key ──
+
+TEST_F(StorageSafety, ABranchNamedByATrackerKeyMovesTheMirroredTask) {
+  QTemporaryDir repos;
+  const QString dir = repos.path() + "/lux";
+  QDir().mkpath(dir + "/.git/refs/heads");
+  writeRaw(dir + "/.git/HEAD", "ref: refs/heads/LUX-1-skeleton\n");
+  QJsonObject mirrored = taskJson("jira-LUX-1", "todo");
+  mirrored["externalId"] = QStringLiteral("LUX-1");
+  mirrored["externalProvider"] = QStringLiteral("jira");
+  mirrored["externalUrl"] = QStringLiteral("https://x.invalid/browse/LUX-1");
+  writeRaw(statePath(), stateDoc({profileJson("a", {mirrored, taskJson("APP-110", "todo")})}, "a"));
+  AppController app;
+  const QJsonObject settings{{"git", QJsonObject{{"watchedRepos", QJsonArray{dir}}, {"watchPrState", false}}},
+                             {"tasks", QJsonObject{{"idPrefix", "APP"}}}};
+  app.setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  QCoreApplication::processEvents();
+  const int row = app.tasks()->indexOfId(QStringLiteral("jira-LUX-1"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app.tasks()->items().at(row).status, QStringLiteral("prog"));
+  EXPECT_EQ(app.focusedTaskId(), QStringLiteral("jira-LUX-1")) << "the banner's Open must open the mirrored task";
+}
+
+// ── PLAT-15 (2026-09-30-1): unknown keys of tasks, events, people and columns ──
+
+TEST_F(StorageSafety, UnknownKeysOfTasksEventsPeopleAndColumnsSurviveASave) {
+  QJsonObject task = taskJson("T-1", "todo");
+  task["futureTask"] = QJsonObject{{"n", 1}};
+  QJsonObject p = profileJson("a", {task});
+  p["people"] = QJsonArray{QJsonObject{{"id", "ann"}, {"name", "Ann"}, {"state", "todo"}, {"color", "#7da8d9"}, {"futurePerson", "keep"}}};
+  QJsonArray statuses = defaultStatuses();
+  QJsonObject todo = statuses.at(1).toObject();
+  todo["futureStatus"] = true;
+  statuses[1] = todo;
+  p["statuses"] = statuses;
+  QJsonObject root = QJsonDocument::fromJson(stateDoc({p}, "a")).object();
+  root["events"] = QJsonArray{QJsonObject{
+      {"id", "ev-1"}, {"title", "sync"}, {"date", "2026-09-30"}, {"start", 10}, {"end", 11}, {"profileId", "a"}, {"futureEvent", 7}}};
+  writeRaw(statePath(), QJsonDocument(root).toJson());
+  {
+    AppController app;
+    // Edit each of them through the paths the editors use.
+    QVariantMap d = app.taskById(QStringLiteral("T-1"));
+    d["title"] = QStringLiteral("edited");
+    app.saveTask(d);
+    QVariantMap person = app.personById(QStringLiteral("ann"));
+    person["role"] = QStringLiteral("dev");
+    app.savePerson(person);
+    QVariantMap ev;
+    for(const CalEvent& e : app.events()->items()) {
+      if(e.id == QStringLiteral("ev-1")) {
+        ev = QVariantMap{{"id", e.id}, {"title", QStringLiteral("sync 2")}, {"date", e.date}, {"start", e.start}, {"end", e.end}};
+      }
+    }
+    ASSERT_FALSE(ev.isEmpty());
+    app.saveEvent(ev);
+    app.flushSave();
+  }
+  const QJsonObject saved = readJson(statePath());
+  const QJsonObject sp = saved["profiles"].toArray().at(0).toObject();
+  const QJsonObject st = sp["tasks"].toArray().at(0).toObject();
+  EXPECT_EQ(st["title"].toString(), QStringLiteral("edited"));
+  EXPECT_EQ(st["futureTask"].toObject()["n"].toInt(), 1);
+  const QJsonObject sperson = sp["people"].toArray().at(0).toObject();
+  EXPECT_EQ(sperson["role"].toString(), QStringLiteral("dev"));
+  EXPECT_EQ(sperson["futurePerson"].toString(), QStringLiteral("keep"));
+  EXPECT_TRUE(sp["statuses"].toArray().at(1).toObject()["futureStatus"].toBool());
+  EXPECT_FALSE(sp["statuses"].toArray().at(1).toObject().contains(QLatin1String(heap::state::kStatusExtraKey)));
+  const QJsonObject sev = saved["events"].toArray().at(0).toObject();
+  EXPECT_EQ(sev["title"].toString(), QStringLiteral("sync 2"));
+  EXPECT_EQ(sev["futureEvent"].toInt(), 7);
+}
+
+TEST_F(StorageSafety, UnknownTaskKeysOfAnOlderSchemaAreNotCarried) {
+  QJsonObject task = taskJson("T-1", "todo");
+  task["retiredKey"] = true;
+  QJsonObject root = QJsonDocument::fromJson(stateDoc({profileJson("a", {task})}, "a")).object();
+  root["schemaVersion"] = heap::state::kSchemaVersion - 1;
+  writeRaw(statePath(), QJsonDocument(root).toJson());
+  {
+    AppController app;
+    app.flushSave();
+    QVariantMap d = app.taskById(QStringLiteral("T-1"));
+    d["title"] = QStringLiteral("edited");
+    app.saveTask(d);
+    app.flushSave();
+  }
+  const QJsonObject st = readJson(statePath())["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(0).toObject();
+  EXPECT_EQ(st["title"].toString(), QStringLiteral("edited"));
+  EXPECT_FALSE(st.contains(QStringLiteral("retiredKey")));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
