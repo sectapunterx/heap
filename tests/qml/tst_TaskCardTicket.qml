@@ -116,14 +116,43 @@ TestCase {
     }
 
     // Open-in-browser and copy-link belong to a ticket, not to a local task.
-    // A Menu builds its items lazily, so it has to be opened before they exist.
+    // The card builds its menu on first use, and a Menu builds its items
+    // lazily, so it has to be made and opened before they exist.
     function menuItem(card, name) {
-        const menu = findChild(card, "tc-menu");
+        const menu = card.contextMenu();
         verify(menu !== null, "the card has no context menu");
+        compare(menu.objectName, "tc-menu");
         menu.open();
         const item = findChild(menu, name);
         verify(item !== null, "no menu item named " + name);
         return item;
+    }
+
+    // Audit 2026-09-30 (TASKS-4): every card used to own its 13-item menu, so
+    // a list of N cards built N menus nobody opened. The menu now exists only
+    // once asked for, is reused after that, and a pooled delegate releases it.
+    function test_menu_is_built_only_when_asked_for() {
+        const card = make(localTask());
+        compare(findChild(card, "tc-menu"), null, "a fresh card built its context menu up front");
+        const menu = card.contextMenu();
+        verify(menu !== null);
+        compare(findChild(card, "tc-menu"), menu);
+        compare(card.contextMenu(), menu, "a second right-click built a second menu");
+        card.releaseMenu();
+        tryVerify(() => findChild(card, "tc-menu") === null, 1000, "releaseMenu() kept the menu");
+        verify(card.contextMenu() !== null, "the menu could not be rebuilt after a release");
+        card.destroy();
+    }
+
+    // A real right-click still opens it.
+    function test_right_click_opens_the_menu() {
+        const card = make(localTask());
+        mouseClick(card, card.width / 2, 10, Qt.RightButton);
+        const menu = findChild(card, "tc-menu");
+        verify(menu !== null, "right-click built no menu");
+        tryVerify(() => menu.opened, 1000, "right-click did not open the menu");
+        menu.close();
+        card.destroy();
     }
 
     function test_menu_offers_open_only_for_a_ticket() {
