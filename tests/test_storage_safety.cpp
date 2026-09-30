@@ -175,7 +175,7 @@ TEST_F(StorageSafety, RetryLoadsTheFileOnceTheLockLifts) {
       return r;
     }
     QFile f(path);
-    f.open(QIODevice::ReadOnly);
+    EXPECT_TRUE(f.open(QIODevice::ReadOnly));
     r.kind = heap::storage::ReadResult::Ok;
     r.bytes = f.readAll();
     return r;
@@ -200,7 +200,7 @@ TEST_F(StorageSafety, AShortLockIsWaitedOut) {
       return r;
     }
     QFile f(path);
-    f.open(QIODevice::ReadOnly);
+    EXPECT_TRUE(f.open(QIODevice::ReadOnly));
     r.kind = heap::storage::ReadResult::Ok;
     r.bytes = f.readAll();
     return r;
@@ -535,7 +535,7 @@ TEST_F(StorageSafety, CheckingOutTheBranchOfFinishedWorkLeavesItAlone) {
     const QString dir = repos.path() + "/" + name;
     QDir().mkpath(dir + "/.git/refs/heads");
     QFile head(dir + "/.git/HEAD");
-    head.open(QIODevice::WriteOnly);
+    EXPECT_TRUE(head.open(QIODevice::WriteOnly));
     head.write(("ref: refs/heads/" + branch + "\n").toUtf8());
     return dir;
   };
@@ -613,7 +613,7 @@ TEST(GitWorktree, ShaAndUpstreamComeFromTheCommonDir) {
   QDir().mkpath(wt);
   const auto put = [](const QString& path, const QByteArray& bytes) {
     QFile f(path);
-    f.open(QIODevice::WriteOnly);
+    ASSERT_TRUE(f.open(QIODevice::WriteOnly));
     f.write(bytes);
   };
   put(wt + "/commondir", "../..\n");

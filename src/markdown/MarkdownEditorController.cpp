@@ -51,7 +51,7 @@ bool MarkdownEditorController::claimsShortcut(int key, int modifiers) const {
   if(mods == Qt::ControlModifier) {
     return key == Qt::Key_B || key == Qt::Key_I || key == Qt::Key_E || key == Qt::Key_K;
   }
-  if(mods == (Qt::ControlModifier | Qt::ShiftModifier)) {
+  if(mods == static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)) {
     return key == Qt::Key_X || key == Qt::Key_H || key == Qt::Key_L;
   }
   return false;
