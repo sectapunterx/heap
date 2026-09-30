@@ -1244,9 +1244,14 @@ class AppController : public QObject {
   void pushStatusToTracker(const QString& taskId, const QString& status);
   // Drop the not-yet-started focus blocks planned for a task that is finished.
   void dropFutureFocusBlocks(const QString& taskId);
-  void onTaskPushed(const QString& providerId, const QString& externalId, const QString& project, bool ok, const QString& error);
-  // Key of m_pendingPushes. `project` is empty unless the issue came from a
-  // cross-project pull, where the number alone is ambiguous.
+  void onTaskPushed(const QString& providerId,
+                    const QString& externalId,
+                    const QString& project,
+                    bool ok,
+                    const QString& error,
+                    const QString& remoteStatus = QString());
+  // Key of m_pendingPushes. `project` is the issue's own repo/project (empty
+  // when it is not known): in a cross-project pull the number alone is ambiguous.
   static QString pushKey(const QString& providerId, const QString& project, const QString& externalId);
   // pushKey → task id, for pushes still in flight.
   QHash<QString, QString> m_pendingPushes;

@@ -1684,16 +1684,20 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   if(t.externalId.isEmpty() || t.externalProvider.isEmpty()) {
     return;
   }
-  // An issue pulled from an "assigned to me" endpoint belongs to some other
-  // repo, and its number means nothing in the configured one — the write goes
-  // to the repo it came from instead. One whose repo is unknown has nowhere to
-  // go; the provider answers that as pull-only.
-  const QString project = t.externalMeta.crossProject ? t.externalMeta.project : QString();
-  if(t.externalMeta.crossProject && project.isEmpty()) {
-    return;
-  }
+  // The write goes to the repo the issue came from, never simply the one in
+  // the settings card: after the filter changes, a card kept from the old repo
+  // would otherwise close or reopen whatever issue has its number in the new
+  // one (INT-1), and under "assigned to me" it would not be sent at all
+  // (INT-2). A card without a known repo was pulled from the configured one.
+  const QString project = t.externalMeta.project;
   const QString providerId = t.externalProvider;
   const QString externalId = t.externalId;
+  if(t.externalMeta.crossProject && project.isEmpty()) {
+    // Its number means nothing in the configured repo, and its own is unknown:
+    // there is nowhere the write could go. Say so rather than drop the move.
+    onTaskPushed(providerId, externalId, project, false, QStringLiteral("the issue's repo is unknown — sync it again first"));
+    return;
+  }
   // A tracker that is disconnected has no provider to send through. The move
   // used to vanish there (INT-6): flag it and send it after the next pull.
   const bool connected = std::any_of(m_syncProviders.cbegin(), m_syncProviders.cend(), [&providerId](const auto& provider) {
@@ -1732,15 +1736,18 @@ QString AppController::pushKey(const QString& providerId, const QString& project
   return providerId + QChar('\n') + project + QChar('\n') + externalId;
 }
 
-void AppController::onTaskPushed(
-    const QString& providerId, const QString& externalId, const QString& project, bool ok, const QString& error) {
+void AppController::onTaskPushed(const QString& providerId,
+                                 const QString& externalId,
+                                 const QString& project,
+                                 bool ok,
+                                 const QString& error,
+                                 const QString& remoteStatus) {
   const QString taskId = m_pendingPushes.take(pushKey(providerId, project, externalId));
   int row = taskId.isEmpty() ? -1 : m_tasks.indexOfId(taskId);
   if(row < 0) {
     for(int i = 0; i < m_tasks.rowCount(); ++i) {
       const Task& t = m_tasks.items().at(i);
-      const QString taskProject = t.externalMeta.crossProject ? t.externalMeta.project : QString();
-      if(t.externalProvider == providerId && t.externalId == externalId && taskProject == project) {
+      if(t.externalProvider == providerId && t.externalId == externalId && t.externalMeta.project == project) {
         row = i;
         break;
       }
@@ -1753,10 +1760,20 @@ void AppController::onTaskPushed(
   // The flag is what keeps the card where the user put it until the tracker
   // agrees, and what the card shows as "not synced".
   const QString wanted = ok ? QString() : t.status;
-  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued) {
+  // The issue's status in the tracker is the one just written, not the one the
+  // last pull saw. Left stale, a reopen in the tracker would match it and read
+  // as "nothing moved" (INT-3). A push the tracker did not describe leaves the
+  // base unknown, and the next pull goes by open/closed. A pull-only answer
+  // wrote nothing, so the base still holds.
+  const bool wrote = ok && error != QStringLiteral("pull-only");
+  const bool baseMoves = wrote && t.externalMeta.status != remoteStatus;
+  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves) {
     t.externalMeta.unsyncedStatus = wanted;
     // The tracker answered: the move is no longer waiting to be sent.
     t.externalMeta.pushQueued = false;
+    if(wrote) {
+      t.externalMeta.status = remoteStatus;
+    }
     m_tasks.upsert(t);
     scheduleSave();
   }
@@ -6194,12 +6211,13 @@ void AppController::applyIntegrationSettings() {
           }
           emit toast(tr_("sync.failed").arg(label, providerReason(error)), QStringLiteral("error"));
         });
-    connect(provider,
-            &heap::integrations::IntegrationProvider::taskPushed,
-            this,
-            [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error) {
-              onTaskPushed(providerId, externalId, project, ok, error);
-            });
+    connect(
+        provider,
+        &heap::integrations::IntegrationProvider::taskPushed,
+        this,
+        [this, providerId](const QString& externalId, const QString& project, bool ok, const QString& error, const QString& remoteStatus) {
+          onTaskPushed(providerId, externalId, project, ok, error, remoteStatus);
+        });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
       emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)),
                  ok ? QStringLiteral("success") : QStringLiteral("error"));

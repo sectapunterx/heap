@@ -208,7 +208,7 @@ void TrelloProvider::fetchCards(const QHash<QString, QString>& listNames) {
 void TrelloProvider::pushStatusChange(const QString& externalId, const QString& /*newStatus*/, const QString& project) {
   // Pull-only for v1: moving a card would require resolving the target column to
   // a list id on the card's board. Report success so linked-task moves stay quiet.
-  emit taskPushed(externalId, project, true, QStringLiteral("pull-only"));
+  emit taskPushed(externalId, project, true, QStringLiteral("pull-only"), QString());
 }
 
 }  // namespace heap::integrations
