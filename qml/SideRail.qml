@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -214,40 +215,40 @@ Rectangle {
                         required property int index
                         width: savedList.width
                         height: 34
-                        objectName: "rail-saved-" + index
+                        objectName: "rail-saved-" + svBtn.index
                         expanded: root.expanded
-                        glyph: index < 9 ? String(index + 1) : "·"
+                        glyph: svBtn.index < 9 ? String(svBtn.index + 1) : "·"
                         glyphMono: true
-                        label: modelData.name
-                        readonly property bool _active: modelData.id === root.activeSavedViewId
-                        active: _active
-                        modified: _active && root.savedViewModified
-                        readonly property var _problems: modelData.problems || []
-                        countText: _problems.length > 0 ? "?"
-                                 : (root._savedCounts[modelData.id] !== undefined ? String(root._savedCounts[modelData.id]) : "")
-                        countColor: _problems.length > 0 ? Theme.warning : Theme.panel3
-                        shortcutId: index < 9 ? "savedView." + (index + 1) : ""
-                        tooltipText: _problems.length > 0
-                            ? modelData.name + " — " + I18n.t("topbar.searchUnknown").arg(_problems.join("  "))
-                            : modelData.name + (modelData.query.length > 0 ? "  ·  " + modelData.query : "")
-                        Accessible.name: modelData.name + (_problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(countText))
-                        onActivated: root.savedViewActivated(modelData.id)
-                        onContextRequested: root._openSavedMenu(svBtn, modelData.id, index)
+                        label: svBtn.modelData.name
+                        readonly property bool _active: svBtn.modelData.id === root.activeSavedViewId
+                        active: svBtn._active
+                        modified: svBtn._active && root.savedViewModified
+                        readonly property var _problems: svBtn.modelData.problems || []
+                        countText: svBtn._problems.length > 0 ? "?"
+                                 : (root._savedCounts[svBtn.modelData.id] !== undefined ? String(root._savedCounts[svBtn.modelData.id]) : "")
+                        countColor: svBtn._problems.length > 0 ? Theme.warning : Theme.panel3
+                        shortcutId: svBtn.index < 9 ? "savedView." + (svBtn.index + 1) : ""
+                        tooltipText: svBtn._problems.length > 0
+                            ? svBtn.modelData.name + " — " + I18n.t("topbar.searchUnknown").arg(svBtn._problems.join("  "))
+                            : svBtn.modelData.name + (svBtn.modelData.query.length > 0 ? "  ·  " + svBtn.modelData.query : "")
+                        Accessible.name: svBtn.modelData.name + (svBtn._problems.length > 0 ? "" : ", " + I18n.t("siderail.saved.count").arg(svBtn.countText))
+                        onActivated: root.savedViewActivated(svBtn.modelData.id)
+                        onContextRequested: root._openSavedMenu(svBtn, svBtn.modelData.id, svBtn.index)
                         Keys.onUpPressed: (e) => {
-                            if (e.modifiers & Qt.ControlModifier) root._moveSavedView(modelData.id, index, -1);
-                            else root.focusSavedView(index - 1);
+                            if (e.modifiers & Qt.ControlModifier) root._moveSavedView(svBtn.modelData.id, svBtn.index, -1);
+                            else root.focusSavedView(svBtn.index - 1);
                         }
                         Keys.onDownPressed: (e) => {
-                            if (e.modifiers & Qt.ControlModifier) root._moveSavedView(modelData.id, index, 1);
-                            else root.focusSavedView(index + 1);
+                            if (e.modifiers & Qt.ControlModifier) root._moveSavedView(svBtn.modelData.id, svBtn.index, 1);
+                            else root.focusSavedView(svBtn.index + 1);
                         }
-                        Keys.onDeletePressed: root._deleteSavedView(modelData.id, index)
+                        Keys.onDeletePressed: root._deleteSavedView(svBtn.modelData.id, svBtn.index)
                         Keys.onPressed: (e) => {
                             if (e.key === Qt.Key_F2) {
-                                root.savedViewRenameRequested(modelData.id);
+                                root.savedViewRenameRequested(svBtn.modelData.id);
                                 e.accepted = true;
                             } else if (e.key === Qt.Key_Menu || (e.key === Qt.Key_F10 && (e.modifiers & Qt.ShiftModifier))) {
-                                root._openSavedMenu(svBtn, modelData.id, index);
+                                root._openSavedMenu(svBtn, svBtn.modelData.id, svBtn.index);
                                 e.accepted = true;
                             }
                         }

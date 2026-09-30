@@ -1,3 +1,4 @@
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
@@ -28,7 +29,7 @@ Flow {
     // run something rather than show (a script, a program, a shortcut).
     function open(attachmentId, name) {
         const r = AppController.openAttachment(attachmentId, false);
-        if (r === "confirm") confirm.ask(attachmentId, name || attachmentId);
+        if (r === "confirm") root._askOpen(attachmentId, name || attachmentId);
     }
     function reveal(attachmentId) {
         AppController.revealAttachment(attachmentId);
@@ -37,7 +38,7 @@ Flow {
     function chipFor(attachmentId) {
         for (let i = 0; i < rep.count; ++i) {
             const c = rep.itemAt(i);
-            if (c && c.attId === attachmentId) return c;
+            if (c && c.objectName === "att-chip-" + attachmentId) return c;
         }
         return null;
     }
@@ -158,7 +159,16 @@ Flow {
         QQC.ToolTip.text: cb.tip
     }
 
-    // "Open this file?" for a type that would run rather than show.
+    // "Open this file?" for a type that would run rather than show. Built on
+    // first use rather than declared as a child: a child of a Flow is one of
+    // the items it lays out.
+    property var _confirm: null
+    function _askOpen(attachmentId, name) {
+        if (!root._confirm) root._confirm = confirmComponent.createObject(root);
+        root._confirm.ask(attachmentId, name);
+    }
+    Component {
+        id: confirmComponent
     QQC.Dialog {
         id: confirm
         objectName: "att-open-confirm"
@@ -218,5 +228,6 @@ Flow {
             }
             Item { Layout.preferredWidth: Theme.spMd }
         }
+    }
     }
 }
