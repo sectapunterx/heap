@@ -364,13 +364,14 @@ TestCase {
         compare(d.accentStrong, String(Qt.lighter(Brand.accent, 1.18)));
         compare(d.p0, "#e6624c");
         compare(d.stDone, String(Brand.statusDone));
-        compare(d.textDim, "#808a9a");
+        // Shipped as #808a9a; lifted just enough to read at AA on panel3.
+        compare(d.textDim, "#86909f");
         compare(l.bg, String(Brand.lightBg));
         compare(l.bg2, String(Qt.darker(Brand.lightBg, 1.04)));
         compare(l.panel2, String(Qt.darker(Brand.lightPanel, 1.03)));
         compare(l.accent, String(Brand.lightAccent));
         compare(l.accentStrong, String(Qt.darker(Brand.lightAccent, 1.18)));
-        compare(l.p0, "#be4835");
+        compare(l.p0, "#b54432");  // #be4835, darkened to read at AA on panel3
     }
 
     // Each slot shows its own theme; flipping AppController.theme flips slot.
@@ -593,13 +594,15 @@ TestCase {
     }
 
     // Everything drawn as text — priorities, alerts, headings, links, code
-    // comments — reads at WCAG AA (4.5:1) on bg, panel and panel2, in every
+    // comments — reads at WCAG AA (4.5:1) on bg, panel, panel2 and panel3 (the
+    // highlighted row), in every
     // built-in theme and contrast mode. heap. light had P1 at 3.3:1, headings
     // at 2.5:1, links at 3.5:1; the dark kaneo themes had P3 and comments
     // near 3.5:1.
     function test_text_roles_meet_aa_everywhere() {
         const fails = _eachThemeAndContrast(function (tag, out) {
-            const surfaces = [Theme.bg, Qt.tint(Theme.bg, Theme.panel), Qt.tint(Theme.bg, Theme.panel2)];
+            const surfaces = [Theme.bg, Qt.tint(Theme.bg, Theme.panel), Qt.tint(Theme.bg, Theme.panel2),
+                              Qt.tint(Theme.bg, Theme.panel3)];
             for (const key of Presets.TEXT_ROLES) {
                 for (const s of surfaces) {
                     const r = Presets.contrast(String(Theme[key]), String(s));
@@ -635,6 +638,46 @@ TestCase {
             }
         });
         compare(fails.length, 0, fails.join("; "));
+    }
+
+    // A field's outline is its only edge (panel2 on panel is ~1.05:1), so
+    // it reaches 3:1 for UI in every mode, not only in high contrast.
+    function test_field_border_reaches_three_to_one() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            for (const s of [Theme.bg, Theme.panel, Theme.panel2]) {
+                const r = Presets.contrast(String(Theme.fieldBorder), String(Qt.tint(Theme.bg, s)));
+                if (r < 3) out.push(tag + " fieldBorder on " + s + " = " + r.toFixed(2));
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // Labels on filled buttons read at AA at rest and on hover: heap. light
+    // had textOnDanger at 3.9:1 and textOnAccent on its hover fill at 3.7:1.
+    function test_filled_button_labels_read_on_their_fill() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            const pairs = [["textOnAccent", Theme.textOnAccent, Theme.accent],
+                           ["textOnAccent/hover", Theme.textOnAccent, Theme.accentHover],
+                           ["textOnDanger", Theme.textOnDanger, Theme.danger]];
+            for (const p of pairs) {
+                const r = Presets.contrast(String(p[1]), String(Qt.tint(Theme.bg, p[2])));
+                if (r < 4.5) out.push(tag + " " + p[0] + " = " + r.toFixed(2));
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // readable() lifts a data colour (a status) to AA on the panels and
+    // leaves one that already passes alone.
+    function test_readable_repairs_only_what_fails() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            for (const c of ["#8a8e98", "#9aa3b4", "#6ec18a", "#5aa9e6"]) {
+                const r = Presets.contrast(String(Theme.readable(c)), String(Qt.tint(Theme.bg, Theme.panel)));
+                if (r < 4.5) out.push(tag + " readable(" + c + ") = " + r.toFixed(2));
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+        compare(String(Theme.readable(String(Theme.text))), String(Theme.text));
     }
 
     // High contrast: lines, field outlines included, reach 3:1 for UI.

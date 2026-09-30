@@ -466,6 +466,41 @@ ApplicationWindow {
             if (p === Overlay.overlay) return true;
         return false;
     }
+    // Where the keyboard goes back to when a popup closes (design audit
+    // DES-1). Qt hands focus to whatever focus scope is left in the window —
+    // a bare ColumnLayout after Esc in the task editor — so J/K, Return and
+    // the view's other keys were dead until the next click. The last item
+    // that held focus outside every popup is kept here and gets it back; if
+    // it is gone (a card rebuilt by the save, a view switched away), the view
+    // does. A popup that hands focus on by itself (the palette opening an
+    // editor, a click on a field) is left alone: this only steps in while
+    // focus still sits where Qt dropped it.
+    property Item _focusHome: null
+    property bool _focusWasInPopup: false
+    onActiveFocusItemChanged: {
+        const it = win.activeFocusItem;
+        if (!it) return;
+        if (win._focusInPopup) {
+            win._focusWasInPopup = true;
+            return;
+        }
+        if (win._focusWasInPopup) {
+            win._focusWasInPopup = false;
+            if (it !== win._focusHome) {
+                const landed = it;
+                Qt.callLater(function () {
+                    if (win.activeFocusItem === landed && !win._focusInPopup) win.returnFocusHome();
+                });
+            }
+            return;
+        }
+        win._focusHome = it;
+    }
+    function returnFocusHome() {
+        const h = win._focusHome;
+        if (h && h.visible && h.enabled && h.Window.window === win) h.forceActiveFocus();
+        else win.focusActiveView();
+    }
     // A modal (or dimming) popup is up somewhere — even one that did not take
     // focus, as most of the views' own confirm dialogs do not. Each puts its
     // dimmer on the overlay next to the popup items, so a visible overlay child

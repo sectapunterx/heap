@@ -91,6 +91,11 @@ QtObject {
     readonly property color borderStrong: highContrast
         ? Presets.ensureContrast(String(dark ? Qt.lighter(_solidBorder, 2.2) : Qt.darker(_solidBorder, 1.8)), _lineSurfaces, 3.5)
         : _c.borderStrong
+    // Outline of a text field, combo or checkbox — the only edge a control
+    // drawn as panel2 on panel has, so it must reach WCAG's 3:1 for UI
+    // (1.4.11) in every contrast mode. The hairline `border` stays for
+    // dividers and cards, where it is decoration; on a field it was 1.2:1.
+    readonly property color fieldBorder: Presets.ensureContrast(String(Qt.tint(_c.bg, _c.borderStrong)), _lineSurfaces, 3.0)
     readonly property color text:         highContrast ? (dark ? "#ffffff" : "#000000") : _c.text
     readonly property color textMuted:    _c.textMuted
     // The smallest text in the app uses this; every built-in theme keeps it
@@ -106,6 +111,12 @@ QtObject {
     readonly property color accent:       _legacyAccent ? _appearance.accent : _c.accent
     readonly property color accentStrong: _legacyAccent ? (dark ? Qt.lighter(accent, 1.18) : Qt.darker(accent, 1.18)) : _c.accentStrong
     readonly property color accentSoft:   _legacyAccent ? Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.12) : _c.accentSoft
+    // Hover fill of a primary (accent) button. accentStrong where the label
+    // still reads on it; heap. light's accentStrong is darker than accent and
+    // left textOnAccent at 3.7:1, so there the hover moves the other way.
+    readonly property color accentHover: Presets.contrast(String(textOnAccent), String(accentStrong)) >= 4.5
+        ? accentStrong
+        : Presets.mix(String(accent), Presets.contrast(String(textOnAccent), "#000000") < 4.5 ? "#ffffff" : "#000000", 0.15)
     // Switch and slider handles.
     readonly property color knob:         _c.knob
 
@@ -214,6 +225,12 @@ QtObject {
             if (r > bestRatio) { best = alt[i]; bestRatio = r; }
         }
         return best;
+    }
+    // A colour that comes from the user's data (a status, a label), used as
+    // text on the panels: kept as is where it reads at AA, else nudged just
+    // far enough. A column's grey on heap. light's panel was 2.2:1.
+    function readable(fg) {
+        return Presets.ensureContrast(String(fg), [String(bg), String(Qt.tint(bg, panel)), String(Qt.tint(bg, panel2))], 4.5);
     }
     function alertColor(kind) {
         switch (kind) {

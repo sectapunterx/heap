@@ -504,7 +504,7 @@ Rectangle {
                                                  : (card.task.trackedSeconds || 0);
                     return (card.task.isTiming ? "● " : "⧗ ") + card._fmtElapsed(s);
                 }
-                color: card.task && card.task.isTiming ? Theme.accent : Theme.textDim
+                color: card.task && card.task.isTiming ? Theme.accentStrong : Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: card.task && card.task.isTiming ? Font.DemiBold : Font.Normal

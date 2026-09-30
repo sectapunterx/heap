@@ -603,7 +603,7 @@ Item {
                                 id: stT
                                 anchors.centerIn: parent
                                 text: tlRow.st.name
-                                color: tlRow.st.color
+                                color: Theme.readable(tlRow.st.color)
                                 font.pixelSize: Theme.fsXs
                                 font.weight: Font.DemiBold
                             }

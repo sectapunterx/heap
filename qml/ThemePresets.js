@@ -110,13 +110,13 @@ var HEAP_DARK = {
     colors: {
         bg: "#0b0e13", bg2: "#11151c", panel: "#14181f", panel2: "#1a1f29", panel3: "#1f2530",
         border: "#262d39", borderStrong: "#313a4a",
-        text: "#e5ecf3", textMuted: "#a0aab8", textDim: "#808a9a",
+        text: "#e5ecf3", textMuted: "#a0aab8", textDim: "#86909f",
         textOnAccent: "#06121a", textOnDanger: "#0b0b0f", textOnBadge: "#ffffff",
         accent: "#3bccdd", accentStrong: "#4aecff", accentSoft: "#2e3bccdd", knob: "#ffffff",
         danger: "#e6624c", warning: "#fe9c3a", success: "#78be7a", info: "#5aa3e6",
         toastBg: "#1f2530", toastBorder: "#313a4a", toastText: "#e5ecf3",
         scrim: "#8c000000",
-        p0: "#e6624c", p1: "#fe9c3a", p2: "#a0aab8", p3: "#808a9a",
+        p0: "#e6624c", p1: "#fe9c3a", p2: "#a0aab8", p3: "#86909f",
         stBacklog: "#6f7888", stTodo: "#8a94a3", stProg: "#5aa3e6", stHalf: "#5aa3e6",
         stBlocked: "#e6624c", stReview: "#a0aab8", stDone: "#78be7a",
         mStandup: "#5aa3e6", mOneone: "#c07acf", mSync: "#6cc4b8", mFocus: "#7cc492", nowLine: "#e6624c",
@@ -135,12 +135,12 @@ var HEAP_LIGHT = {
         bg: "#f3f5f8", bg2: "#eaecee", panel: "#ffffff", panel2: "#f8f8f8", panel3: "#f1f1f1",
         border: "#dde3ec", borderStrong: "#b8bdc5",
         text: "#11151c", textMuted: "#4b5463", textDim: "#656e7d",
-        textOnAccent: "#06121a", textOnDanger: "#0b0b0f", textOnBadge: "#ffffff",
+        textOnAccent: "#06121a", textOnDanger: "#ffffff", textOnBadge: "#ffffff",
         accent: "#178ea0", accentStrong: "#137888", accentSoft: "#1f178ea0", knob: "#ffffff",
-        danger: "#be4835", warning: "#9c6128", success: "#387c54", info: "#1f6fb0",
+        danger: "#b54432", warning: "#945c26", success: "#357650", info: "#1f6fb0",
         toastBg: "#f1f1f1", toastBorder: "#b8bdc5", toastText: "#11151c",
         scrim: "#8c000000",
-        p0: "#be4835", p1: "#9c6128", p2: "#5f6878", p3: "#696f7a",
+        p0: "#b54432", p1: "#945c26", p2: "#5f6878", p3: "#646974",
         stBacklog: "#8a909a", stTodo: "#6b7382", stProg: "#1f6fb0", stHalf: "#1f6fb0",
         stBlocked: "#c34a36", stReview: "#4b5463", stDone: "#3e8a5d",
         mStandup: "#1f6fb0", mOneone: "#7a3e91", mSync: "#317e74", mFocus: "#3e8a5d", nowLine: "#c34a36",
@@ -170,7 +170,7 @@ var ASH = {
         knob: "#a3a3a3", danger: "#cf7a7c", warning: "#c9ab70", success: "#83b39b",
         info: "#86a3c9", toastBg: "#1f1f1f", toastBorder: "#14ffffff", toastText: "#d4d4d4",
         scrim: "#99000000", p0: "#cf7a7c", p1: "#c99470", p2: "#a3a3a3",
-        p3: "#888888", stBacklog: "#6e6e6e", stTodo: "#a3a3a3", stProg: "#86a3c9",
+        p3: "#8e8e8e", stBacklog: "#6e6e6e", stTodo: "#a3a3a3", stProg: "#86a3c9",
         stHalf: "#c9ab70", stBlocked: "#cf7a7c", stReview: "#a59bc6", stDone: "#83b39b",
         mStandup: "#86a3c9", mOneone: "#a59bc6", mSync: "#7eaeaa", mFocus: "#83b39b",
         nowLine: "#cf7a7c", synKeyword: "#a59bc6", synString: "#83b39b", synNumber: "#c9ab70",
@@ -187,12 +187,12 @@ var STONE = {
     colors: {
         bg: "#171514", bg2: "#131110", panel: "#1b1918", panel2: "#211e1c",
         panel3: "#2a2724", border: "#0fffffff", borderStrong: "#1affffff", text: "#d6d1cb",
-        textMuted: "#a8a29d", textDim: "#8f8984", textOnAccent: "#1b1918", textOnDanger: "#171514",
+        textMuted: "#a8a29d", textDim: "#958f8a", textOnAccent: "#1b1918", textOnDanger: "#171514",
         textOnBadge: "#171514", accent: "#d6d1cb", accentStrong: "#e7e2dc", accentSoft: "#14ffffff",
         knob: "#a8a29d", danger: "#c97b72", warning: "#c6a66c", success: "#95ad88",
         info: "#91a3b5", toastBg: "#211e1c", toastBorder: "#14ffffff", toastText: "#d6d1cb",
         scrim: "#99000000", p0: "#c97b72", p1: "#c79166", p2: "#a8a29d",
-        p3: "#8d8681", stBacklog: "#716b66", stTodo: "#a8a29d", stProg: "#91a3b5",
+        p3: "#98928e", stBacklog: "#716b66", stTodo: "#a8a29d", stProg: "#91a3b5",
         stHalf: "#c6a66c", stBlocked: "#c97b72", stReview: "#b09ba8", stDone: "#95ad88",
         mStandup: "#91a3b5", mOneone: "#b09ba8", mSync: "#8dab9f", mFocus: "#95ad88",
         nowLine: "#c97b72", synKeyword: "#b09ba8", synString: "#95ad88", synNumber: "#c6a66c",
@@ -209,12 +209,12 @@ var SLATE = {
     colors: {
         bg: "#13161a", bg2: "#0f1215", panel: "#171a1f", panel2: "#1c2026",
         panel3: "#242931", border: "#0fffffff", borderStrong: "#1affffff", text: "#cdd3db",
-        textMuted: "#9da5b0", textDim: "#858e9a", textOnAccent: "#171a1f", textOnDanger: "#13161a",
+        textMuted: "#9da5b0", textDim: "#8b949f", textOnAccent: "#171a1f", textOnDanger: "#13161a",
         textOnBadge: "#13161a", accent: "#bcc7d6", accentStrong: "#d3dbe6", accentSoft: "#14ffffff",
         knob: "#9da5b0", danger: "#c77c84", warning: "#c2a772", success: "#80ad9d",
         info: "#84a0c6", toastBg: "#1c2026", toastBorder: "#14ffffff", toastText: "#cdd3db",
         scrim: "#99000000", p0: "#c77c84", p1: "#c49174", p2: "#9da5b0",
-        p3: "#808997", stBacklog: "#687280", stTodo: "#9da5b0", stProg: "#84a0c6",
+        p3: "#8d95a1", stBacklog: "#687280", stTodo: "#9da5b0", stProg: "#84a0c6",
         stHalf: "#c2a772", stBlocked: "#c77c84", stReview: "#9d98c8", stDone: "#80ad9d",
         mStandup: "#84a0c6", mOneone: "#9d98c8", mSync: "#7aa8ad", mFocus: "#80ad9d",
         nowLine: "#c77c84", synKeyword: "#9d98c8", synString: "#80ad9d", synNumber: "#c2a772",
@@ -231,12 +231,12 @@ var SAGE = {
     colors: {
         bg: "#141613", bg2: "#101210", panel: "#181a17", panel2: "#1d201c",
         panel3: "#252923", border: "#0fffffff", borderStrong: "#1affffff", text: "#d0d6cc",
-        textMuted: "#a0a79c", textDim: "#888f84", textOnAccent: "#181a17", textOnDanger: "#141613",
+        textMuted: "#a0a79c", textDim: "#8e958a", textOnAccent: "#181a17", textOnDanger: "#141613",
         textOnBadge: "#141613", accent: "#aebfa5", accentStrong: "#c3d1bb", accentSoft: "#14ffffff",
         knob: "#a0a79c", danger: "#c47d73", warning: "#c1a96f", success: "#95b489",
         info: "#8aa5b3", toastBg: "#1d201c", toastBorder: "#14ffffff", toastText: "#d0d6cc",
         scrim: "#99000000", p0: "#c47d73", p1: "#c29269", p2: "#a0a79c",
-        p3: "#828a7f", stBacklog: "#6b7268", stTodo: "#a0a79c", stProg: "#8aa5b3",
+        p3: "#8f968c", stBacklog: "#6b7268", stTodo: "#a0a79c", stProg: "#8aa5b3",
         stHalf: "#c1a96f", stBlocked: "#c47d73", stReview: "#a79db6", stDone: "#95b489",
         mStandup: "#8aa5b3", mOneone: "#a79db6", mSync: "#89aea2", mFocus: "#95b489",
         nowLine: "#c47d73", synKeyword: "#a79db6", synString: "#95b489", synNumber: "#c1a96f",
@@ -256,18 +256,18 @@ var MINIMAL_DARK = {
     colors: {
         bg: "#141414", bg2: "#111111", panel: "#171717", panel2: "#1c1c1c",
         panel3: "#232323", border: "#0fffffff", borderStrong: "#1affffff", text: "#f5f5f5",
-        textMuted: "#a3a3a3", textDim: "#868686", textOnAccent: "#262626", textOnDanger: "#141414",
+        textMuted: "#a3a3a3", textDim: "#8c8c8c", textOnAccent: "#262626", textOnDanger: "#141414",
         textOnBadge: "#141414", accent: "#f5f5f5", accentStrong: "#ffffff", accentSoft: "#14ffffff",
-        knob: "#a3a3a3", danger: "#fb414a", warning: "#fbbf24", success: "#34d399",
+        knob: "#a3a3a3", danger: "#fb4b53", warning: "#fbbf24", success: "#34d399",
         info: "#60a5fa", toastBg: "#1c1c1c", toastBorder: "#14ffffff", toastText: "#f5f5f5",
-        scrim: "#99000000", p0: "#fb414a", p1: "#fb923c", p2: "#a3a3a3",
-        p3: "#858585", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
+        scrim: "#99000000", p0: "#fb4b53", p1: "#fb923c", p2: "#a3a3a3",
+        p3: "#8b8b8b", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
         stHalf: "#fbbf24", stBlocked: "#f87171", stReview: "#a78bfa", stDone: "#34d399",
         mStandup: "#60a5fa", mOneone: "#a78bfa", mSync: "#2dd4bf", mFocus: "#34d399",
         nowLine: "#fb414a", synKeyword: "#a78bfa", synString: "#34d399", synNumber: "#fbbf24",
         synComment: "#7d7d7d", synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111",
         code: "#d4d4d4", mention: "#60a5fa", ticket: "#a3a3a3", tag: "#a78bfa",
-        math: "#fbbf24", heading: "#858585", highlightBg: "#4dfbbf24", mdLink: "#60a5fa",
+        math: "#fbbf24", heading: "#8b8b8b", highlightBg: "#4dfbbf24", mdLink: "#60a5fa",
         mdCode: "#e5e5e5", mdCodeBg: "#1c1c1c", mdMention: "#60a5fa", mdTicket: "#f5f5f5",
         mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#4dfbbf24"
     }
@@ -503,16 +503,28 @@ var TEXT_ROLES = ["textMuted", "textDim", "p0", "p1", "p2", "p3",
 var CODE_ROLES = ["synKeyword", "synString", "synNumber", "synComment", "synType", "synBuiltin", "code"];
 
 // Every text-role token of `colors` brought up to AA where it falls short.
+// panel3 is a surface too: it is the highlighted menu / palette row
+// (Theme.rowHighlight) and hover fills, and textDim, P3 and headings sat at
+// 4.1–4.4:1 on it in every dark theme.
 function ensureTextContrast(colors) {
     var c = {};
     for (var k in colors) c[k] = colors[k];
-    var surf = [colors.bg, _fmt(_over(colors.panel, colors.bg)), _fmt(_over(colors.panel2, colors.bg))];
+    var surf = [colors.bg, _fmt(_over(colors.panel, colors.bg)), _fmt(_over(colors.panel2, colors.bg)),
+                _fmt(_over(colors.panel3, colors.bg))];
     for (var i = 0; i < TEXT_ROLES.length; i++)
         c[TEXT_ROLES[i]] = ensureContrast(colors[TEXT_ROLES[i]], surf, 4.5);
     var code = [_fmt(_over(colors.codeBg, colors.bg))];
     for (var j = 0; j < CODE_ROLES.length; j++)
         c[CODE_ROLES[j]] = ensureContrast(colors[CODE_ROLES[j]], code, 4.5);
     return c;
+}
+
+// The theme's own label colour for `fill` while it reads at AA there, else
+// black or white, whichever reads better.
+function _labelOn(fill, bg, pref) {
+    var f = _fmt(_over(fill, bg));
+    if (contrast(pref, f) >= 4.5) return pref;
+    return contrast("#000000", f) >= contrast("#ffffff", f) ? "#000000" : "#ffffff";
 }
 
 function soften(colors) {
@@ -530,6 +542,9 @@ function soften(colors) {
     for (var i = 0; i < _COLOURED.length; i++)
         c[_COLOURED[i]] = desaturate(colors[_COLOURED[i]], 0.65);
     // Losing saturation moves luminance too; a softened P1 or link must still
-    // read at AA on the panels it sits on.
+    // read at AA on the panels it sits on, and a button label on its fill
+    // (heap. light's softened accent left textOnAccent at 3.9:1).
+    c.textOnAccent = _labelOn(c.accent, c.bg, colors.textOnAccent);
+    c.textOnDanger = _labelOn(c.danger, c.bg, colors.textOnDanger);
     return ensureTextContrast(c);
 }

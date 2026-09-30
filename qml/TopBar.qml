@@ -399,7 +399,7 @@ Rectangle {
                 // failing to find the literal string anywhere.
                 Text {
                     text: "⌕"
-                    color: root.searchIsQuery ? Theme.accent : Theme.textDim
+                    color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
                     font.pixelSize: Theme.fsSm
                     Behavior on color { ColorAnimation { duration: Theme.scaledMs(120) } }
                 }
@@ -444,7 +444,7 @@ Rectangle {
                         id: qLbl
                         anchors.centerIn: parent
                         text: parent.bad ? "?" + root.searchProblems.length : I18n.t("topbar.searchQueryBadge")
-                        color: parent.bad ? Theme.warning : Theme.accent
+                        color: parent.bad ? Theme.warning : Theme.accentStrong
                         font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }
                     QQC.ToolTip.visible: bad && (qBadgeHover.hovered || searchField.activeFocus)

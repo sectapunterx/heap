@@ -400,9 +400,7 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("quick.fieldPh")
             font.pixelSize: Theme.fsLg
-            background: Rectangle {
-                radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1
-            }
+            background: FieldFrame {}
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onTextChanged: { previewTimer.restart(); at.refresh(); root._hint = ""; }

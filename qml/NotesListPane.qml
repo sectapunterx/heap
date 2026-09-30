@@ -152,6 +152,20 @@ Rectangle {
         return out;
     }
 
+    // The list row of the open note, scrolled into view — the keyboard's
+    // way into that row's menu.
+    function _activeRowItem() {
+        if (root._rebuildQueued) root.rebuildNow();
+        for (let i = 0; i < root.rows.length; i++) {
+            const r = root.rows[i];
+            if (r.kind !== "note" || r.note.id !== AppController.activeNoteId) continue;
+            list.positionViewAtIndex(i, ListView.Contain);
+            const loader = list.itemAtIndex(i) as Loader;
+            return loader ? loader.item : null;
+        }
+        return null;
+    }
+
     // Open the note `delta` places from the open one. Headers are skipped
     // because they are not somewhere the selection can land.
     function step(delta) {
@@ -227,7 +241,7 @@ Rectangle {
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.pixelSize: Theme.fsSm
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: FieldFrame {}
             onTextChanged: root.filter = text
         }
 
@@ -249,6 +263,20 @@ Rectangle {
             spacing: Theme.sp2xs
             model: root.rows
             QQC.ScrollBar.vertical: QQC.ScrollBar { policy: QQC.ScrollBar.AsNeeded }
+            // Keyboard (design audit DES-3): Tab lands on the list, ↑/↓ open
+            // the next note, the menu key (or Shift+F10) opens the open
+            // note's menu — pin and delete had no keyboard path.
+            activeFocusOnTab: true
+            Accessible.role: Accessible.List
+            Keys.onUpPressed: { root.step(-1); Qt.callLater(root._activeRowItem); }
+            Keys.onDownPressed: { root.step(1); Qt.callLater(root._activeRowItem); }
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
+                    const r = root._activeRowItem();
+                    if (r) r.openMenu();
+                    event.accepted = true;
+                }
+            }
 
             delegate: Loader {
                 required property var modelData
@@ -309,6 +337,22 @@ Rectangle {
                     readonly property bool current: row.note.id === AppController.activeNoteId
                     color: row.current ? Theme.withAlpha(Theme.accent, 0.14)
                          : rowMA.containsMouse ? Theme.panel2 : "transparent"
+                    Accessible.role: Accessible.ListItem
+                    Accessible.name: row.note.title || ""
+                    readonly property alias menu: rowMenu
+                    // The row sits in a Loader, the ListView's delegate.
+                    readonly property bool listFocused: !!row.parent && !!row.parent.ListView.view
+                                                        && row.parent.ListView.view.activeFocus
+                    function openMenu() { rowMenu.popup(row, Theme.spXl, row.height / 2); }
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: "transparent"
+                        border.color: Theme.focusRing
+                        border.width: 2
+                        visible: row.current && row.listFocused
+                        z: 10
+                    }
 
                     Rectangle {
                         visible: row.current
@@ -421,7 +465,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontMono
             font.pixelSize: Theme.fsSm
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: FieldFrame {}
             onAccepted: folderPopup.commit()
         }
         footer: RowLayout {
@@ -476,7 +520,7 @@ Rectangle {
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320
                 color: Theme.text
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 onAccepted: renamePopup.commit()
             }
             QQC.TextField {
@@ -489,7 +533,7 @@ Rectangle {
                 color: Theme.text
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSm
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 onAccepted: renamePopup.commit()
             }
         }

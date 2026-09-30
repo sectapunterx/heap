@@ -1230,7 +1230,7 @@ Item {
                         Text {
                             anchors.centerIn: parent
                             text: modelData.id
-                            color: Theme.accent
+                            color: Theme.accentStrong
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
                             font.weight: Font.DemiBold

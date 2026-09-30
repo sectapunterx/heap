@@ -46,6 +46,29 @@ TestCase {
         return out;
     }
 
+    // Design audit DES-3: the tree is on the Tab path; the arrows walk it and
+    // fold / unfold, Enter opens the page, the menu key opens the row menu.
+    function test_the_keyboard_walks_the_tree() {
+        const parent = page("aaa kb parent");
+        const child = page("kb child", parent);
+        const pane = makePane();
+        pane.filter = "";
+        const tree = findChild(pane, "docpage-tree");
+        verify(tree.activeFocusOnTab, "the page tree is not on the Tab path");
+        tree.forceActiveFocus(Qt.TabFocusReason);
+        const at = idsOf(pane).indexOf(parent);
+        verify(at >= 0);
+        tree.currentIndex = at;
+        verify(!pane.isExpanded(parent));
+        keyClick(Qt.Key_Right);
+        verify(pane.isExpanded(parent), "→ did not unfold the page");
+        verify(idsOf(pane).indexOf(child) >= 0);
+        keyClick(Qt.Key_Left);
+        verify(!pane.isExpanded(parent), "← did not fold the page");
+        keyClick(Qt.Key_Return);
+        compare(AppController.activeDocPageId, parent);
+    }
+
     function test_a_root_page_is_a_row() {
         const id = page("Runbook");
 

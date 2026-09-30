@@ -257,7 +257,7 @@ Item {
                     Text {
                         anchors.centerIn: parent
                         text: row.st.name
-                        color: row.st.color
+                        color: Theme.readable(row.st.color)
                         font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                     }

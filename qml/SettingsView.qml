@@ -338,13 +338,15 @@ Item {
                     Layout.topMargin: Theme.spSm
                     radius: Theme.radiusMd
                     color: Theme.panel2
-                    border.color: Theme.border; border.width: 1
+                    border.color: settingsSearch.activeFocus ? Theme.focusRing : Theme.fieldBorder
+                    border.width: settingsSearch.activeFocus ? 2 : 1
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
                         spacing: Theme.spSm
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
+                            id: settingsSearch
                             objectName: "settings-search"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
@@ -906,8 +908,7 @@ Item {
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2
-                                    border.color: textRow.invalid ? Theme.danger : Theme.border; border.width: 1 }
+            background: FieldFrame { border.color: textRow.invalid ? Theme.danger : (focused ? Theme.focusRing : Theme.fieldBorder) }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
             // mid-edit text (no two-way binding → no loop, no per-keystroke
@@ -2183,7 +2184,7 @@ Item {
                                 visible: intCard.canOneClick && !intCard.isConn
                                 Layout.fillWidth: true
                                 radius: Theme.radiusMd
-                                color: oauthMA.containsMouse ? Theme.accentStrong : Theme.accent
+                                color: oauthMA.containsMouse ? Theme.accentHover : Theme.accent
                                 border.color: Theme.accent; border.width: 1
                                 implicitHeight: 34
                                 Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
@@ -2454,7 +2455,7 @@ Item {
                                 Rectangle {
                                     Layout.fillWidth: true
                                     radius: Theme.radiusMd
-                                    color: signInMA.containsMouse ? Theme.accentStrong : Theme.accent
+                                    color: signInMA.containsMouse ? Theme.accentHover : Theme.accent
                                     border.color: Theme.accent; border.width: 1
                                     implicitHeight: 30
                                     Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
@@ -2484,7 +2485,7 @@ Item {
                                     objectName: "int-connect-" + intCard.intKey
                                     visible: !intCard.isConn && (!intCard.canOneClick || intCard.advanced)
                                     radius: Theme.radiusMd
-                                    color: connMA.containsMouse ? Theme.accentStrong : Theme.accent
+                                    color: connMA.containsMouse ? Theme.accentHover : Theme.accent
                                     border.color: Theme.accent; border.width: 1
                                     implicitWidth: connTxt.implicitWidth + 28; implicitHeight: 30
                                     Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
@@ -2619,24 +2620,19 @@ Item {
                             placeholderTextColor: Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsSm
-                            background: Rectangle {
-                                radius: Theme.radiusMd
-                                color: Theme.panel2
-                                border.color: Theme.border
-                                border.width: 1
-                            }
+                            background: FieldFrame {}
                             selectByMouse: true
                         }
                         Rectangle {
                             radius: Theme.radiusMd
                             implicitHeight: 30
                             implicitWidth: addT.implicitWidth + 22
-                            color: addMA.containsMouse ? Theme.accentStrong : Theme.accent
+                            color: addMA.containsMouse ? Theme.accentHover : Theme.accent
                             Text {
                                 id: addT
                                 anchors.centerIn: parent
                                 text: "+ " + I18n.t("common.add")
-                                color: Theme.bg
+                                color: Theme.textOnAccent
                                 font.weight: Font.Medium
                             }
                             MouseArea {
@@ -3071,7 +3067,7 @@ Item {
                             border.color: Theme.border; border.width: 1
                             implicitWidth: dlTxt.implicitWidth + 24; implicitHeight: 30
                             Text {
-                                id: dlTxt; anchors.centerIn: parent; text: I18n.t("settings.about.download"); color: Theme.text; font.pixelSize: Theme.fsMd
+                                id: dlTxt; anchors.centerIn: parent; text: I18n.t("settings.about.download"); color: dlMA.containsMouse ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsMd
                             }
                             MouseArea { id: dlMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLatestRelease() }
                         }

@@ -74,7 +74,7 @@ Popup {
             background: Rectangle {
                 radius: Theme.radiusMd
                 color: Theme.panel2
-                border.color: nameField.activeFocus ? Theme.accent : Theme.border
+                border.color: nameField.activeFocus ? Theme.accent : Theme.fieldBorder
                 border.width: 1
             }
             color: Theme.text

@@ -867,41 +867,22 @@ Item {
                                                 font.pixelSize: Theme.fsLg
                                                 font.weight: Font.DemiBold
                                             }
-                                            Rectangle {
-                                                opacity: secAnchor.headerHovered ? 1 : 0
-                                                enabled: secAnchor.headerHovered
-                                                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                                                width: 22; height: 22; radius: Theme.radiusSm
-                                                color: secEditMA.containsMouse ? Theme.panel2 : "transparent"
-                                                border.color: Theme.border; border.width: 1
-                                                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: Theme.fsSm }
-                                                MouseArea {
-                                                    id: secEditMA
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: root.openSectionEdit(secCol.section)
-                                                }
+                                            IconButton {
+                                                objectName: "docs-section-edit"
+                                                glyph: "✎"
+                                                label: I18n.t("docs.menu.renameFields")
+                                                revealed: secAnchor.headerHovered
+                                                restColor: "transparent"
+                                                onActivated: root.openSectionEdit(secCol.section)
                                             }
-                                            Rectangle {
-                                                opacity: secAnchor.headerHovered ? 1 : 0
-                                                enabled: secAnchor.headerHovered
-                                                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                                                width: 22; height: 22; radius: Theme.radiusSm
-                                                color: secDelMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : "transparent"
-                                                border.color: secDelMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                                                Text {
-                                                    anchors.centerIn: parent; text: "×"
-                                                    color: secDelMA.containsMouse ? Theme.danger : Theme.textMuted
-                                                    font.pixelSize: Theme.fsMd
-                                                }
-                                                MouseArea {
-                                                    id: secDelMA
-                                                    anchors.fill: parent
-                                                    hoverEnabled: true
-                                                    cursorShape: Qt.PointingHandCursor
-                                                    onClicked: root.deleteSection(secCol.section.id)
-                                                }
+                                            IconButton {
+                                                objectName: "docs-section-delete"
+                                                glyph: "×"
+                                                danger: true
+                                                label: I18n.t("docs.menu.deleteSection")
+                                                revealed: secAnchor.headerHovered
+                                                restColor: "transparent"
+                                                onActivated: root.deleteSection(secCol.section.id)
                                             }
                                         }
                                         Text { text: secCol.section.subtitle; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
@@ -1485,13 +1466,15 @@ Item {
         // instead, which made the buttons decorative.
         Row {
             visible: !handleMA.drag.active
-            opacity: card.cardHovered ? 1 : 0
-            enabled: card.cardHovered
-            Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
             anchors.top: parent.top; anchors.right: parent.right
             anchors.margins: Theme.spSm
             spacing: Theme.spXs
             Rectangle {
+                // The drag handle is a pointer affordance; the keyboard has
+                // the section menu's Move up / Move down.
+                opacity: card.cardHovered ? 1 : 0
+                enabled: card.cardHovered
+                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                 width: 18; height: 22; radius: Theme.radiusSm
                 color: handleMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
@@ -1508,31 +1491,20 @@ Item {
                     onReleased: { card.Drag.drop(); card.x = card.homeX; card.y = card.homeY }
                 }
             }
-            Rectangle {
-                width: 22; height: 22; radius: Theme.radiusSm
-                color: editIcoMA.containsMouse ? Theme.panel3 : Theme.panel2
-                border.color: Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: Theme.fsSm }
-                MouseArea {
-                    id: editIcoMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.openDocEdit(card.sectionId, card.item)
-                }
+            IconButton {
+                objectName: "docs-card-edit"
+                glyph: "✎"
+                label: I18n.t("docs.menu.edit")
+                revealed: card.cardHovered
+                onActivated: root.openDocEdit(card.sectionId, card.item)
             }
-            Rectangle {
-                width: 22; height: 22; radius: Theme.radiusSm
-                color: delIcoMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
-                border.color: delIcoMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                Text { anchors.centerIn: parent; text: "×"; color: delIcoMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
-                MouseArea {
-                    id: delIcoMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root.deleteDoc(card.sectionId, card.item.id)
-                }
+            IconButton {
+                objectName: "docs-card-delete"
+                glyph: "×"
+                danger: true
+                label: I18n.t("common.delete")
+                revealed: card.cardHovered
+                onActivated: root.deleteDoc(card.sectionId, card.item.id)
             }
         }
 
@@ -1774,23 +1746,21 @@ Item {
                 Text { text: cc.c.mattermost || ""; textFormat: Text.PlainText; color: Theme.textDim; font.family: Theme.fontMono; font.pixelSize: Theme.fsXs }
             }
             Row {
-                opacity: cc.cardHovered ? 1 : 0
-                enabled: cc.cardHovered
-                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
                 spacing: Theme.spXs
-                Rectangle {
-                    width: 22; height: 22; radius: Theme.radiusSm
-                    color: editCMA.containsMouse ? Theme.panel3 : Theme.panel2
-                    border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "✎"; color: Theme.textMuted; font.pixelSize: Theme.fsSm }
-                    MouseArea { id: editCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openContactEdit(cc.idx) }
+                IconButton {
+                    objectName: "docs-contact-edit"
+                    glyph: "✎"
+                    label: I18n.t("docs.menu.edit")
+                    revealed: cc.cardHovered
+                    onActivated: root.openContactEdit(cc.idx)
                 }
-                Rectangle {
-                    width: 22; height: 22; radius: Theme.radiusSm
-                    color: delCMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
-                    border.color: delCMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: "×"; color: delCMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
-                    MouseArea { id: delCMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteContact(cc.idx) }
+                IconButton {
+                    objectName: "docs-contact-delete"
+                    glyph: "×"
+                    danger: true
+                    label: I18n.t("common.delete")
+                    revealed: cc.cardHovered
+                    onActivated: root.deleteContact(cc.idx)
                 }
             }
         }

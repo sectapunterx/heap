@@ -17,6 +17,13 @@ Item {
     // A [[note]], #TICKET or @person clicked in a page's preview.
     signal linkActivated(string kind, string target)
 
+    // Flush first: the editor debounces its saves, so switching pages would
+    // drop the last keystrokes.
+    function _openPage(id) {
+        editorPane.flush();
+        AppController.activeDocPageId = id;
+    }
+
     // Ctrl+F on the Pages tab: the page filter, not the catalogue search.
     function focusFilter() {
         pageFilter.forceActiveFocus();
@@ -173,7 +180,7 @@ Item {
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
                     font.pixelSize: Theme.fsSm
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: FieldFrame {}
                     onTextChanged: root.filter = text
                 }
 
@@ -192,6 +199,31 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     clip: true
+                    // Keyboard (design audit DES-3): Tab lands on the tree,
+                    // ↑/↓ walk it, Enter opens the page, →/← unfold and fold,
+                    // the menu key (or Shift+F10) opens the row's menu —
+                    // rename, subpage, delete had no keyboard path at all.
+                    activeFocusOnTab: true
+                    keyNavigationEnabled: true
+                    Accessible.role: Accessible.Tree
+                    signal menuRequested()
+                    onActiveFocusChanged: if (activeFocus && currentIndex < 0 && count > 0) currentIndex = 0
+                    Keys.onReturnPressed: if (tree.currentIndex >= 0) root._openPage(root.rows[tree.currentIndex].id)
+                    Keys.onEnterPressed: if (tree.currentIndex >= 0) root._openPage(root.rows[tree.currentIndex].id)
+                    Keys.onPressed: (event) => {
+                        if (tree.currentIndex < 0) return;
+                        const d = root.rows[tree.currentIndex];
+                        if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
+                            tree.menuRequested();
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Right && d.hasChildren && !root.isExpanded(d.id)) {
+                            root.toggle(d.id);
+                            event.accepted = true;
+                        } else if (event.key === Qt.Key_Left && d.hasChildren && root.isExpanded(d.id)) {
+                            root.toggle(d.id);
+                            event.accepted = true;
+                        }
+                    }
                     spacing: 1
                     model: root.rows
                     QQC.ScrollBar.vertical: QQC.ScrollBar { policy: QQC.ScrollBar.AsNeeded }
@@ -206,6 +238,22 @@ Item {
                         readonly property bool current: pageRow.modelData.id === AppController.activeDocPageId
                         color: pageRow.current ? Theme.withAlpha(Theme.accent, 0.14)
                              : rowMA.containsMouse ? Theme.panel2 : "transparent"
+                        Accessible.role: Accessible.TreeItem
+                        Accessible.name: pageRow.modelData.title || ""
+                        function openMenu() { pageMenu.popup(pageRow, Theme.spXl, pageRow.height / 2); }
+                        Connections {
+                            target: pageRow.ListView.view
+                            function onMenuRequested() { if (pageRow.ListView.isCurrentItem) pageRow.openMenu(); }
+                        }
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: parent.radius
+                            color: "transparent"
+                            border.color: Theme.focusRing
+                            border.width: 2
+                            visible: pageRow.ListView.isCurrentItem && pageRow.ListView.view.activeFocus
+                            z: 10
+                        }
 
                         RowLayout {
                             anchors.fill: parent
@@ -253,8 +301,7 @@ Item {
                             cursorShape: Qt.PointingHandCursor
                             onClicked: (mouse) => {
                                 if (mouse.button === Qt.RightButton) { pageMenu.popup(); return; }
-                                editorPane.flush();
-                                AppController.activeDocPageId = pageRow.modelData.id;
+                                root._openPage(pageRow.modelData.id);
                             }
                         }
 
@@ -333,7 +380,7 @@ Item {
             objectName: "docpage-rename-title"
             implicitWidth: 320
             color: Theme.text
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: FieldFrame {}
             onAccepted: renamePagePopup.commit()
         }
 

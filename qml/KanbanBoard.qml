@@ -1107,7 +1107,7 @@ Item {
                 placeholderText: I18n.t("kanban.colName.ph")
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 onAccepted: saveBtn.activate()
             }
             Text {
@@ -1427,7 +1427,7 @@ Item {
                 placeholderText: "0"
                 color: Theme.text
                 font.family: Theme.fontMono
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 onAccepted: wipPopup.commit()
             }
             Text {

@@ -104,7 +104,7 @@ Popup {
                     color: Theme.text
                     placeholderText: "…"
                     placeholderTextColor: Theme.textDim
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: FieldFrame {}
                 }
             }
 
@@ -164,7 +164,7 @@ Popup {
                     id: docSection
                     Layout.fillWidth: true
                     model: root.sections.map(s => s.title)
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: FieldFrame {}
                     contentItem: Text { text: docSection.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                     onCurrentIndexChanged: {
                         if (currentIndex >= 0 && currentIndex < root.sections.length)
@@ -198,7 +198,7 @@ Popup {
                 ComboBox {
                     Layout.fillWidth: true
                     model: ["sh", "cpp", "py", "js", "yaml", "text"]
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: FieldFrame {}
                     contentItem: Text { text: parent.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                     currentIndex: {
                         const idx = ["sh","cpp","py","js","yaml","text"].indexOf(root.draft.lang || "sh");
@@ -501,6 +501,6 @@ Popup {
         color: Theme.text
         placeholderTextColor: Theme.textDim
         font.family: mono ? Theme.fontMono : Theme.fontUi
-        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+        background: FieldFrame {}
     }
 }
