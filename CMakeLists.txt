@@ -294,6 +294,7 @@ qt_add_qml_module(heap_core
         qml/FocusRing.qml
         qml/FieldFrame.qml
         qml/IconButton.qml
+        qml/ClickArea.qml
         qml/ActionButton.qml
         qml/IntegrationActivity.qml
         # ── audit-ux: end ──
