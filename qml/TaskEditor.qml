@@ -104,8 +104,10 @@ Popup {
     }
 
     // Undo from the toast puts a detached file back on the stored task.
+    // Held as a var: Qt 6.9's qmllint reads the TaskModel type as not a QObject.
+    readonly property var _taskModel: AppController.tasks
     Connections {
-        target: AppController.tasks
+        target: root._taskModel
         enabled: root.opened && !root.isNew
         function onDataChanged() { root._refreshAttachments() }
     }

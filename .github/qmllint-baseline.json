@@ -9,7 +9,7 @@
   "qml/DocsPagesPane.qml": 13,
   "qml/DocsView.qml": 116,
   "qml/EventEditor.qml": 11,
-  "qml/FilterBar.qml": 12,
+  "qml/FilterBar.qml": 11,
   "qml/FocusRing.qml": 2,
   "qml/HelpContent.qml": 5,
   "qml/HotkeysPanel.qml": 16,

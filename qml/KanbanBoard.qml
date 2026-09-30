@@ -957,7 +957,7 @@ Item {
                                 // under the pointer (TaskCard attaches them),
                                 // not a move: let them through.
                                 onEntered: (drag) => {
-                                    if (drag.hasUrls && !(drag.source && drag.source.taskId)) { drag.accepted = false; return; }
+                                    if (drag.hasUrls && !(drag.source && drag.source["taskId"])) { drag.accepted = false; return; }
                                     col.dragOver = true; _update(drag);
                                 }
                                 onPositionChanged: (drag) => _update(drag)
