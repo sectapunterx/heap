@@ -364,6 +364,174 @@ TEST_F(SeriesEditTest, UndoRestoresADeletedOccurrence) {
   EXPECT_EQ(dates().size(), 5);
 }
 
+// ── "all" on a series with exceptions (TIME-2, TIME-4) ──
+
+namespace {
+
+QVariantMap seriesDraft(AppController& app, const QDate& start, const QString& rule, const QString& title) {
+  QVariantMap draft = app.newEventDraft(10.0, start);
+  draft["title"] = title;
+  draft["date"] = start;
+  draft["start"] = 10.0;
+  draft["end"] = 11.0;
+  draft["rrule"] = rule;
+  app.saveEvent(draft);
+  return draft;
+}
+
+QVariantMap occurrenceAt(const AppController& app, const QDate& day) {
+  for(const QVariant& v : app.eventOccurrences(day, day)) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("date")).toDate() == day) {
+      return m;
+    }
+  }
+  return {};
+}
+
+}  // namespace
+
+class SeriesExceptionsTest : public SeriesEditTest {
+ protected:
+  const QDate kStart{2031, 3, 3};  // a Monday
+
+  // FREQ=WEEKLY;BYDAY=MO — how Google, Outlook and .ics store a weekly
+  // meeting — with 03-10 deleted and 03-17 moved to 12:00.
+  QString seedImportedWeekly() {
+    const QString id =
+        seriesDraft(*app_, kStart, QStringLiteral("FREQ=WEEKLY;BYDAY=MO"), QStringLiteral("imported")).value("id").toString();
+    app_->deleteOccurrence(id, kStart.addDays(7), QStringLiteral("this"));
+    QVariantMap moved = occurrenceAt(*app_, kStart.addDays(14));
+    moved["start"] = 12.0;
+    moved["end"] = 13.0;
+    app_->saveOccurrence(moved, QStringLiteral("this"));
+    return id;
+  }
+
+  CalEvent stored(const QString& id) const {
+    return app_->events()->items().at(app_->events()->indexOfId(id));
+  }
+
+  // The occurrence on `day` as the editor would save it with scope "all":
+  // renamed, and with the rule the way the repeat controls rebuild it.
+  void renameAll(const QDate& day, const QString& rule) {
+    QVariantMap occ = occurrenceAt(*app_, day);
+    ASSERT_FALSE(occ.isEmpty());
+    occ["title"] = QStringLiteral("renamed");
+    occ["rrule"] = rule;
+    app_->saveOccurrence(occ, QStringLiteral("all"));
+  }
+};
+
+// The editor spells a Monday series as "FREQ=WEEKLY"; that is the same rule,
+// and renaming must not bring back what was deleted or undo what was moved.
+TEST_F(SeriesExceptionsTest, RenamingAByDaySeriesKeepsItsExceptions) {
+  const QString id = seedImportedWeekly();
+
+  renameAll(kStart.addDays(21), QStringLiteral("FREQ=WEEKLY"));
+
+  EXPECT_EQ(stored(id).rrule, QStringLiteral("FREQ=WEEKLY;BYDAY=MO")) << "the series keeps its own rule";
+  EXPECT_TRUE(occurrenceAt(*app_, kStart.addDays(7)).isEmpty()) << "03-10 stays deleted";
+  const QVariantMap moved = occurrenceAt(*app_, kStart.addDays(14));
+  ASSERT_FALSE(moved.isEmpty());
+  EXPECT_DOUBLE_EQ(moved.value("start").toDouble(), 12.0) << "03-17 stays at 12:00";
+  EXPECT_EQ(moved.value("title").toString(), QStringLiteral("renamed")) << "the whole series is renamed";
+  EXPECT_EQ(occurrenceAt(*app_, kStart.addDays(28)).value("title").toString(), QStringLiteral("renamed"));
+  EXPECT_EQ(occurrenceAt(*app_, kStart.addDays(28)).value("start").toDouble(), 10.0);
+}
+
+// A moved occurrence that was given a title of its own keeps it.
+TEST_F(SeriesExceptionsTest, RenamingAllKeepsAMovedOccurrencesOwnTitle) {
+  seedImportedWeekly();
+  QVariantMap own = occurrenceAt(*app_, kStart.addDays(14));
+  own["title"] = QStringLiteral("special");
+  app_->saveOccurrence(own, QStringLiteral("this"));
+
+  renameAll(kStart.addDays(21), QStringLiteral("FREQ=WEEKLY"));
+
+  EXPECT_EQ(occurrenceAt(*app_, kStart.addDays(14)).value("title").toString(), QStringLiteral("special"));
+}
+
+// A new end is not a new pattern: the exceptions stay, the end is taken.
+TEST_F(SeriesExceptionsTest, ChangingOnlyTheEndOfAByDaySeriesKeepsItsExceptions) {
+  const QString id = seedImportedWeekly();
+
+  renameAll(kStart.addDays(21), QStringLiteral("FREQ=WEEKLY;COUNT=8"));
+
+  const heap::cal::RRule rule = heap::cal::parseRRule(stored(id).rrule);
+  EXPECT_EQ(rule.count, 8);
+  ASSERT_EQ(rule.byDay.size(), 1);
+  EXPECT_EQ(rule.byDay.first().day, 1);
+  EXPECT_TRUE(occurrenceAt(*app_, kStart.addDays(7)).isEmpty());
+  EXPECT_DOUBLE_EQ(occurrenceAt(*app_, kStart.addDays(14)).value("start").toDouble(), 12.0);
+}
+
+// Other days are a new pattern, and the old exceptions were about other dates.
+TEST_F(SeriesExceptionsTest, ARealPatternChangeStillDropsTheExceptions) {
+  const QString id = seedImportedWeekly();
+
+  renameAll(kStart.addDays(21), QStringLiteral("FREQ=WEEKLY;BYDAY=MO,WE"));
+
+  const CalEvent m = stored(id);
+  EXPECT_EQ(m.rrule, QStringLiteral("FREQ=WEEKLY;BYDAY=MO,WE"));
+  EXPECT_TRUE(m.exdates.isEmpty());
+  EXPECT_EQ(storedCount(), 1) << "the override went with the old pattern";
+  EXPECT_FALSE(occurrenceAt(*app_, kStart.addDays(7)).isEmpty());
+}
+
+// Renaming Monday's meeting that was moved to Wednesday, for all events,
+// renames the series. It stays a Monday series, and the moved one — the one
+// the user was looking at — takes the new title too.
+TEST_F(SeriesExceptionsTest, RenamingAMovedOccurrenceForAllDoesNotShiftTheSeries) {
+  const QDate start(2033, 5, 2);  // a Monday
+  const QString id = seriesDraft(*app_, start, QStringLiteral("FREQ=WEEKLY"), QStringLiteral("weekly")).value("id").toString();
+  QVariantMap occ = occurrenceAt(*app_, start.addDays(7));
+  occ["date"] = start.addDays(9);  // Wednesday 05-11
+  app_->saveOccurrence(occ, QStringLiteral("this"));
+
+  renameAll(start.addDays(9), QStringLiteral("FREQ=WEEKLY"));
+
+  const CalEvent m = stored(id);
+  EXPECT_EQ(m.date, start) << "still on Mondays";
+  EXPECT_DOUBLE_EQ(m.start, 10.0);
+  EXPECT_EQ(occurrenceAt(*app_, start.addDays(14)).value("title").toString(), QStringLiteral("renamed"));
+  const QVariantMap moved = occurrenceAt(*app_, start.addDays(9));
+  ASSERT_FALSE(moved.isEmpty()) << "the moved one stays on its Wednesday";
+  EXPECT_EQ(moved.value("title").toString(), QStringLiteral("renamed"));
+  EXPECT_EQ(moved.value("occurrenceDate").toDate(), start.addDays(7));
+  EXPECT_TRUE(occurrenceAt(*app_, start.addDays(7)).isEmpty());
+}
+
+// A real change on a moved occurrence, for all events: a new time is the
+// series' new time; a new day moves the series by as many days as the moved
+// one was moved from where it sat.
+TEST_F(SeriesExceptionsTest, ChangingAMovedOccurrenceForAllMovesTheSeriesByTheEdit) {
+  const QDate start(2033, 5, 2);
+  const QString id = seriesDraft(*app_, start, QStringLiteral("FREQ=WEEKLY"), QStringLiteral("weekly")).value("id").toString();
+  QVariantMap occ = occurrenceAt(*app_, start.addDays(7));
+  occ["date"] = start.addDays(9);
+  app_->saveOccurrence(occ, QStringLiteral("this"));
+
+  QVariantMap retimed = occurrenceAt(*app_, start.addDays(9));
+  retimed["start"] = 14.0;
+  retimed["end"] = 15.0;
+  app_->saveOccurrence(retimed, QStringLiteral("all"));
+  EXPECT_EQ(stored(id).date, start);
+  EXPECT_DOUBLE_EQ(stored(id).start, 14.0);
+  EXPECT_DOUBLE_EQ(occurrenceAt(*app_, start.addDays(14)).value("start").toDouble(), 14.0);
+  EXPECT_DOUBLE_EQ(occurrenceAt(*app_, start.addDays(9)).value("start").toDouble(), 14.0);
+
+  QVariantMap redated = occurrenceAt(*app_, start.addDays(9));
+  redated["date"] = start.addDays(10);  // Wednesday -> Thursday
+  app_->saveOccurrence(redated, QStringLiteral("all"));
+  EXPECT_EQ(stored(id).date, start.addDays(1)) << "one day later: Tuesdays";
+  const QVariantMap moved = occurrenceAt(*app_, start.addDays(10));
+  ASSERT_FALSE(moved.isEmpty());
+  EXPECT_EQ(moved.value("occurrenceDate").toDate(), start.addDays(8)) << "it still replaces its own (now Tuesday) occurrence";
+  EXPECT_TRUE(occurrenceAt(*app_, start.addDays(8)).isEmpty());
+  EXPECT_FALSE(occurrenceAt(*app_, start.addDays(15)).isEmpty());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);
