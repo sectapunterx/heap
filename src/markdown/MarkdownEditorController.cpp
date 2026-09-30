@@ -92,7 +92,7 @@ bool MarkdownEditorController::handleKey(int key, int modifiers) {
         break;
     }
   }
-  if(mods == (Qt::ControlModifier | Qt::ShiftModifier)) {
+  if(mods == static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)) {
     switch(key) {
       case Qt::Key_X:
         toggleStrikethrough();

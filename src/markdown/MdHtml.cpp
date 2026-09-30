@@ -384,7 +384,18 @@ ResolvedImage resolveImage(const QString& source, const QString& baseDir) {
   }
   const bool drive = src.size() >= 3 && src.at(0).isLetter() && src.at(1) == QLatin1Char(':') &&
                      (src.at(2) == QLatin1Char('/') || src.at(2) == QLatin1Char('\\'));
-  if(drive || src.startsWith(QLatin1Char('/'))) {
+  if(drive) {
+    // Built by hand: QUrl::fromLocalFile only knows drive letters on
+    // Windows, and a note written there is read on every platform.
+    QString path = src;
+    path.replace(QLatin1Char('\\'), QLatin1Char('/'));
+    QUrl url;
+    url.setScheme(QStringLiteral("file"));
+    url.setPath(QLatin1Char('/') + path);
+    out.url = url.toString();
+    return out;
+  }
+  if(src.startsWith(QLatin1Char('/'))) {
     out.url = QUrl::fromLocalFile(QDir::fromNativeSeparators(src)).toString();
     return out;
   }

@@ -70,9 +70,9 @@ TestCase {
 
     function test_width_is_capped_and_long_text_wraps() {
         const t = make();
-        let long = "";
-        for (let i = 0; i < 60; i++) long += "word" + i + " ";
-        t.show(long);
+        let longText = "";
+        for (let i = 0; i < 60; i++) longText += "word" + i + " ";
+        t.show(longText);
         wait(0);
         const c = cards(t)[0];
         verify(c.width <= 560, "toast is " + c.width + "px wide");
