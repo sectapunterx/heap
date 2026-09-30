@@ -578,12 +578,15 @@ AppController::AppController(QObject* parent) :
     armMidnightTimer();
   });
   armMidnightTimer();
-  connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
-    if(state == Qt::ApplicationActive) {
-      refreshToday();
-      armMidnightTimer();
-    }
-  });
+  // qApp would cast to QApplication, which the QML tests' app is not.
+  if(auto* gui = qobject_cast<QGuiApplication*>(QCoreApplication::instance())) {
+    connect(gui, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+      if(state == Qt::ApplicationActive) {
+        refreshToday();
+        armMidnightTimer();
+      }
+    });
+  }
 
   // (Legacy QSystemTrayIcon creation removed — the notification backend
   // owns its own tray icon on Windows/macOS via the tray fallback. Having
