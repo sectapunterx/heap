@@ -197,12 +197,56 @@ Rectangle {
                     font.weight: Font.DemiBold
                 }
                 QQC.ToolTip.visible: syncStateHover.hovered
-                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip") : I18n.t("taskcard.unsynced.tip")
+                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip")
+                                  : (card._ticket.queued ? I18n.t("taskcard.queued.tip") : I18n.t("taskcard.unsynced.tip"))
                 HoverHandler { id: syncStateHover }
                 TapHandler {
                     enabled: !!card._ticket.unsynced && !card._ticket.gone
                     onTapped: AppController.retryTrackerPush(card.task.id)
                 }
+            }
+            // Both heap and the tracker changed the same field since the last
+            // sync. The local value is kept; the editor offers the other one.
+            Rectangle {
+                objectName: "tc-conflict"
+                visible: card._isTicket && !!card._ticket.conflict
+                radius: Theme.radiusSm
+                color: Theme.withAlpha(Theme.warning, 0.14)
+                implicitWidth: conflictT.implicitWidth + 10
+                implicitHeight: conflictT.implicitHeight + 2
+                Text {
+                    id: conflictT
+                    anchors.centerIn: parent
+                    text: I18n.t("taskcard.conflict")
+                    textFormat: Text.PlainText
+                    color: Theme.warning
+                    font.pixelSize: Theme.fsXs
+                    font.weight: Font.DemiBold
+                }
+                QQC.ToolTip.visible: conflictHover.hovered
+                QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
+                HoverHandler { id: conflictHover }
+            }
+            // Left behind by a filter change: still a live issue, just not one
+            // this connection pulls any more. Quiet on purpose.
+            Rectangle {
+                objectName: "tc-out-of-scope"
+                visible: card._isTicket && !!card._ticket.outOfScope && !card._ticket.gone
+                radius: Theme.radiusSm
+                color: Theme.panel2
+                implicitWidth: scopeT.implicitWidth + 10
+                implicitHeight: scopeT.implicitHeight + 2
+                Text {
+                    id: scopeT
+                    anchors.centerIn: parent
+                    text: I18n.t("taskcard.outOfScope")
+                    textFormat: Text.PlainText
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsXs
+                }
+                QQC.ToolTip.visible: scopeHover.hovered
+                QQC.ToolTip.text: I18n.t("taskcard.outOfScope.tip")
+                HoverHandler { id: scopeHover }
             }
             Rectangle {
                 objectName: "tc-stuck"

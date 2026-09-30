@@ -22,7 +22,7 @@ static_assert(heap::meta::fieldCount<Task>() == 24,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -159,6 +159,12 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   meta[QStringLiteral("remoteColumn")] = t.externalMeta.column;
   meta[QStringLiteral("unsyncedStatus")] = t.externalMeta.unsyncedStatus;
   meta[QStringLiteral("goneUpstream")] = t.externalMeta.goneUpstream;
+  meta[QStringLiteral("remoteScope")] = t.externalMeta.scope;
+  meta[QStringLiteral("outOfScope")] = t.externalMeta.outOfScope;
+  meta[QStringLiteral("remotePriority")] = t.externalMeta.priority;
+  meta[QStringLiteral("remoteLabels")] = QJsonArray::fromStringList(t.externalMeta.labels);
+  meta[QStringLiteral("conflicts")] = QJsonArray::fromStringList(t.externalMeta.conflicts);
+  meta[QStringLiteral("pushQueued")] = t.externalMeta.pushQueued;
   o[QStringLiteral("externalMeta")] = meta;
   return o;
 }
@@ -210,6 +216,16 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.externalMeta.column = meta.value(QStringLiteral("remoteColumn")).toString();
   t.externalMeta.unsyncedStatus = meta.value(QStringLiteral("unsyncedStatus")).toString();
   t.externalMeta.goneUpstream = meta.value(QStringLiteral("goneUpstream")).toBool();
+  t.externalMeta.scope = meta.value(QStringLiteral("remoteScope")).toString();
+  t.externalMeta.outOfScope = meta.value(QStringLiteral("outOfScope")).toBool();
+  t.externalMeta.priority = meta.value(QStringLiteral("remotePriority")).toString();
+  for(const QJsonValue& v : meta.value(QStringLiteral("remoteLabels")).toArray()) {
+    t.externalMeta.labels.append(v.toString());
+  }
+  for(const QJsonValue& v : meta.value(QStringLiteral("conflicts")).toArray()) {
+    t.externalMeta.conflicts.append(v.toString());
+  }
+  t.externalMeta.pushQueued = meta.value(QStringLiteral("pushQueued")).toBool();
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   return t;

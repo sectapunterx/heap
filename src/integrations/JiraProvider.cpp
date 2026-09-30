@@ -328,21 +328,14 @@ class AdfRenderer {
   }
 };
 
-// A description: markdown, so the editor's preview draws it as it looked in
-// Jira. Server/DC hands over a plain string, which passes through.
+// A description or a comment: markdown, the same text GitHub and GitLab hand
+// over for both, so bold, code and lists survive as they looked in Jira.
+// Server/DC hands over a plain string, which passes through.
 QString adfValueToText(const QJsonValue& description) {
   if(description.isString()) {
     return description.toString();
   }
   return AdfRenderer(/*markdown=*/true).render(description);
-}
-
-// A comment is shown as plain text, so it keeps link targets but no markup.
-QString adfValueToPlain(const QJsonValue& body) {
-  if(body.isString()) {
-    return body.toString();
-  }
-  return AdfRenderer(/*markdown=*/false).render(body);
 }
 
 }  // namespace
@@ -413,6 +406,18 @@ QVector<ExternalTask> parseJiraIssues(const QByteArray& json, const QString& bas
                       : fields.value(QStringLiteral("fixVersions")).toArray().at(0).toObject().value(QStringLiteral("name")).toString();
     // The comment count is not requested: asking for `comment` inlines every
     // comment body of all 100 issues into the search response.
+    // Where the workflow lets the issue go from here, when the search was
+    // asked to expand it — so the board can refuse an impossible drop before
+    // a round trip (INT-8).
+    if(o.contains(QStringLiteral("transitions"))) {
+      t.transitionsKnown = true;
+      for(const auto& tv : o.value(QStringLiteral("transitions")).toArray()) {
+        const QString to = tv.toObject().value(QStringLiteral("to")).toObject().value(QStringLiteral("name")).toString();
+        if(!to.isEmpty() && !t.transitions.contains(to)) {
+          t.transitions.append(to);
+        }
+      }
+    }
     out.append(t);
   }
   return out;
@@ -431,7 +436,9 @@ QVector<ExternalComment> parseJiraComments(const QByteArray& json) {
     ExternalComment c;
     c.author = o.value(QStringLiteral("author")).toObject().value(QStringLiteral("displayName")).toString();
     // ADF on Cloud, a plain string on Server/DC — adfValueToText takes both.
-    c.body = adfValueToPlain(o.value(QStringLiteral("body")));
+    // Markdown, like the description: bold, code and lists used to be
+    // flattened to plain text (INT-9).
+    c.body = adfValueToText(o.value(QStringLiteral("body")));
     c.createdAt = parseTrackerTimestamp(o.value(QStringLiteral("created")));
     const QString id = o.value(QStringLiteral("id")).toString();
     if(!id.isEmpty()) {
@@ -845,6 +852,14 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
     fields.append(QLatin1String(f));
   }
   payload.insert(QStringLiteral("fields"), fields);
+  // Each issue's available workflow transitions, so a move the workflow cannot
+  // make is caught on the drop. Cloud's /search/jql takes a comma-separated
+  // string, Server's /search an array.
+  if(m_deployment == JiraDeployment::Server) {
+    payload.insert(QStringLiteral("expand"), QJsonArray{QStringLiteral("transitions")});
+  } else {
+    payload.insert(QStringLiteral("expand"), QStringLiteral("transitions"));
+  }
 
   // Atlassian retired GET /rest/api/3/search (it answers 410 pointing here);
   // /search/jql is the replacement. POST rather than GET so a long JQL never

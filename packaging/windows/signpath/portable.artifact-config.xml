@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  SignPath artifact configuration: "portable"
+  Signs the Windows portable bundle produced by the CMake `portable` target.
+
+  The CI step  actions/upload-artifact(path: build/heap-portable)  produces a ZIP
+  whose ROOT holds heap.exe + the Qt runtime DLLs (some nested under plugins/,
+  qml/, etc.). `**` matches zero-or-more path segments, so `**/*.exe` and
+  `**/*.dll` cover both the root binary and every nested DLL.
+
+  If validation complains that a root-level file is not matched, add a plain
+  `<pe-file path="*.exe" .../>` alongside the `**` entry.
+-->
+<artifact-configuration xmlns="http://signpath.io/artifact-configuration/v1">
+  <zip-file>
+    <pe-file path="**/*.exe" min-matches="1" max-matches="unbounded">
+      <authenticode-sign/>
+    </pe-file>
+    <pe-file path="**/*.dll" min-matches="1" max-matches="unbounded">
+      <authenticode-sign/>
+    </pe-file>
+  </zip-file>
+</artifact-configuration>

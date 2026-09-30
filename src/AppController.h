@@ -126,6 +126,12 @@ class AppController : public QObject {
   // "" (idle), a "checking" string, "up to date", or "update available: vX".
   Q_PROPERTY(QString updateStatus READ updateStatus NOTIFY updateStatusChanged)
 
+  // Per tracker: { offline: bool, outOfScope: int }. `offline` is set while
+  // the token endpoint or the tracker cannot be reached and heap is retrying
+  // — the card stays connected. `outOfScope` counts cards left behind by a
+  // filter change (repo, JQL…), which the card offers to archive.
+  Q_PROPERTY(QVariantMap integrationStates READ integrationStates NOTIFY integrationStatesChanged)
+
   // ---- Git focus banner ----
   Q_PROPERTY(QString focusedTaskId READ focusedTaskId NOTIFY focusedGitChanged)
   Q_PROPERTY(QString focusedBranch READ focusedBranch NOTIFY focusedGitChanged)
@@ -402,6 +408,12 @@ class AppController : public QObject {
   Q_INVOKABLE bool saveTask(const QVariantMap& draft);
   // Send a card's current status to its tracker again, after a failed push.
   Q_INVOKABLE void retryTrackerPush(const QString& taskId);
+  // A title/description/priority both sides changed: take the tracker's
+  // version of every conflicting field (true), or keep the local one and stop
+  // flagging it (false). Undoable.
+  Q_INVOKABLE void resolveTrackerConflict(const QString& taskId, bool useTracker);
+  // Archive every card of this tracker the current filter no longer covers.
+  Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
   // Whether a link from user or tracker content may open without asking. See
   // heap::md::isSafeLink.
   Q_INVOKABLE bool isSafeLink(const QString& url) const;
@@ -466,11 +478,17 @@ class AppController : public QObject {
   // Open a pre-filled GitHub "new issue" page carrying version / OS / Qt
   // version / recent-log-tail diagnostics, so a user can file a report in one
   // click.
-  Q_INVOKABLE void reportAnIssue() const;
+  // The full diagnostics go to the clipboard, not into the URL.
+  Q_INVOKABLE void reportAnIssue();
   // The body reportAnIssue() pre-fills, built from purely local sources: app
   // version, OS, Qt version, the log tail and the recovery log. Split out so the
   // no-network-egress guarantee can be exercised without opening a browser.
+  // It travels in a URL, so the tails are short and scrubbed of the home
+  // folder and user name (audit PLAT-28).
   Q_INVOKABLE QString issueReportBody() const;
+  // The longer log and recovery tails, scrubbed the same way, for the
+  // clipboard.
+  Q_INVOKABLE QString issueDiagnostics() const;
 
   // How much one pull actually changed. An issue that came back identical
   // counts as neither, so a quiet auto-sync writes nothing and says so.
@@ -480,8 +498,12 @@ class AppController : public QObject {
     // Cards whose title or description was edited here while the tracker
     // changed the same field: the local text is kept and the user is told.
     int conflicts = 0;
-    // Cards whose issue was missing from a complete pull.
+    // Cards whose issue was missing from a complete pull under the same filter.
     int gone = 0;
+    // Cards newly left outside a changed filter: kept, not "gone".
+    int outOfScope = 0;
+    // The keys of the cards behind `conflicts`, so the toast can name them.
+    QStringList conflictKeys;
   };
 
   // Fold a batch of pulled external tasks into the model. providerId tags the
@@ -930,6 +952,7 @@ class AppController : public QObject {
   // `error` is empty on success; an empty list with no error means no comments.
   void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
   void updateStatusChanged();
+  void integrationStatesChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
   void undoableToast(const QString& message, int seconds);
@@ -1262,7 +1285,8 @@ class AppController : public QObject {
   // PAT, or whose token does not expire, fall straight through. A browser
   // sign-in hands out a token that lives ~2h (GitLab), so without this every
   // sync after the first couple of hours came back empty.
-  void ensureFreshToken(const QString& providerId, std::function<void()> then);
+  // `onFail` runs instead when the token could not be renewed.
+  void ensureFreshToken(const QString& providerId, std::function<void()> then, std::function<void()> onFail = {});
   // Refresh if needed, then pull. Looks the provider up again afterwards,
   // because a refresh rebuilds m_syncProviders.
   void syncProviderNow(const QString& providerId);
@@ -1279,6 +1303,27 @@ class AppController : public QObject {
   // Providers whose 401 already bought one refresh-and-retry, so a tracker that
   // answers 401 no matter what cannot loop. Cleared by a successful pull.
   QSet<QString> m_retriedAfter401;
+  // ---- Offline tolerance (audit INT-5/INT-6/INT-8) ----
+  QVariantMap integrationStates() const;
+  // A provider's own English reason, in the UI language when heap knows it.
+  QString providerReason(const QString& reason) const;
+  // A refresh that failed for want of a network: keep the session, retry
+  // later with a doubling delay, say "offline" meanwhile.
+  void scheduleRefreshRetry(const QString& providerId);
+  void setProviderOffline(const QString& providerId, bool offline);
+  QSet<QString> m_offlineProviders;
+  QHash<QString, int> m_refreshRetryMs;
+  // A move that could not be sent (tracker disconnected or unreachable):
+  // flagged on the card and sent after the next successful pull.
+  void queueTrackerPush(const QString& taskId, const QString& status);
+  void flushQueuedPushes(const QString& providerId);
+  // What a pull under the card's current settings is scoped to. See
+  // heap::integrations::scopeFingerprint.
+  QString scopeFingerprintFor(const QString& providerId) const;
+  // provider + newline + issue key → the statuses the issue's workflow can move
+  // to, as of the last pull. Only trackers that report transitions (Jira)
+  // fill it; an issue without an entry is not second-guessed.
+  QHash<QString, QStringList> m_trackerTransitions;
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name

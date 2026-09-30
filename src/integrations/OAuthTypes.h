@@ -17,6 +17,11 @@ struct OAuthResult {
   QString refreshToken;
   QDateTime expiresAt;
   QString error;
+  // For a failed token-endpoint call: the HTTP status (0 = no answer at all —
+  // offline, DNS, timeout) and whether the provider refused the grant itself.
+  // Only a refusal means the session is over; everything else is "later".
+  int httpStatus = 0;
+  bool grantRejected = false;
 };
 
 // How the user's consent turns into a token.

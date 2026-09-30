@@ -11,6 +11,7 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QString>
+#include <QStringList>
 #include <QUrl>
 #include <QUrlQuery>
 
@@ -49,7 +50,28 @@ inline OAuthResult parseTokenResponse(const QByteArray& body, const QDateTime& n
   return r;
 }
 
+// Whether a failed refresh means the grant itself is gone. Only the token
+// endpoint saying so counts: invalid_grant / invalid_client and friends, or a
+// plain 400/401 (RFC 6749 §5.2 answers every refusal with one of the two).
+// No answer (offline, DNS, timeout, a captive portal's HTML page), 5xx and
+// 429 are the network's problem, and dropping the session for them sends the
+// user back through the browser for nothing.
+inline bool isDefinitiveGrantFailure(int httpStatus, const QByteArray& body) {
+  const QString code = QJsonDocument::fromJson(body).object().value(QStringLiteral("error")).toString();
+  static const QStringList kGrantErrors = {QStringLiteral("invalid_grant"),
+                                           QStringLiteral("invalid_client"),
+                                           QStringLiteral("unauthorized_client"),
+                                           QStringLiteral("unsupported_grant_type")};
+  if(kGrantErrors.contains(code)) {
+    return true;
+  }
+  return httpStatus == 400 || httpStatus == 401;
+}
+
 namespace detail {
+
+// How long one token request may take before it counts as "no answer".
+constexpr int kTokenRequestTimeoutMs = 30 * 1000;
 
 // Dress one token request per the provider's dialect. Shared by the code
 // exchange and the refresh so the two can never drift apart.
@@ -64,6 +86,9 @@ inline QNetworkReply* postTokenRequest(QNetworkAccessManager* nam,
   // the client secret to wherever it pointed; Qt's default permits another host.
   req.setAttribute(QNetworkRequest::RedirectPolicyAttribute, QNetworkRequest::SameOriginRedirectPolicy);
   req.setRawHeader("Accept", "application/json");  // GitHub answers form-encoded otherwise
+  // A hung endpoint would otherwise hold the refresh (and every push waiting
+  // on it) until the OS gives up on the socket, minutes later.
+  req.setTransferTimeout(kTokenRequestTimeoutMs);
   req.setRawHeader("User-Agent", "heap-sync");
 
   if(style == TokenStyle::BasicAuthForm) {
@@ -101,9 +126,13 @@ inline void finishTokenRequest(QNetworkReply* reply, std::function<void(const OA
     reply->deleteLater();
     const QByteArray body = reply->readAll();
     OAuthResult r = parseTokenResponse(body);
+    if(!r.ok) {
+      r.httpStatus = replyHttpStatus(reply);
+      r.grantRejected = isDefinitiveGrantFailure(r.httpStatus, body);
+    }
     if(!r.ok && reply->error() != QNetworkReply::NoError) {
       // Prefer the provider's own words ("invalid_grant") over Qt's.
-      r.error = describeHttpError(replyHttpStatus(reply), body, reply->errorString());
+      r.error = describeHttpError(r.httpStatus, body, reply->errorString());
     }
     done(r);
   });
@@ -141,6 +170,18 @@ inline bool tokenNeedsRefresh(const QDateTime& expiresAt, const QDateTime& now =
   }
   // A minute of slack: a token that expires mid-request is no use either.
   return expiresAt <= now.addSecs(60);
+}
+
+// How tokenExpiresAt is stored: UTC with its offset ("…Z"), so a timezone or
+// DST change cannot move the expiry by hours. An empty string = no expiry.
+inline QString expiryToString(const QDateTime& expiresAt) {
+  return expiresAt.isValid() ? expiresAt.toUTC().toString(Qt::ISODate) : QString();
+}
+
+// Reads both forms: the UTC one above, and the offset-less local wall time
+// that builds before 0.5.3 wrote, which Qt takes as local time — what it was.
+inline QDateTime expiryFromString(const QString& stored) {
+  return QDateTime::fromString(stored, Qt::ISODate);
 }
 
 // POST grant_type=refresh_token. `done` runs exactly once. Providers rotate the

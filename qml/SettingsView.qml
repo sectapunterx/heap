@@ -1748,6 +1748,11 @@ Item {
                         readonly property bool mapOpen: root._openStatusMaps[intKey] === true
                         readonly property var conf: (root.settings.integrations && root.settings.integrations[intKey]) || ({})
                         readonly property bool isConn: intCard.conf.connected === true
+                        // Out of reach (token refresh got no answer) and cards
+                        // a filter change left behind (audit INT-1/INT-5).
+                        readonly property var liveState: AppController.integrationStates[intCard.intKey] || ({})
+                        readonly property bool offline: !!intCard.liveState.offline
+                        readonly property int outOfScope: intCard.liveState.outOfScope || 0
                         readonly property bool isOAuth: modelData.oauth === true
                         // One-click browser sign-in is only offered when a client ID
                         // exists — baked into the build (oauthReady) or entered under
@@ -1829,8 +1834,12 @@ Item {
                                     Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                 }
                                 Text {
-                                    text: intCard.isConn ? I18n.t("common.connected") : I18n.t("common.disconnected")
-                                    color: intCard.isConn ? Theme.success : Theme.textDim
+                                    objectName: "int-card-state"
+                                    // Offline is still connected: heap keeps the
+                                    // session and retries (audit INT-5).
+                                    text: !intCard.isConn ? I18n.t("common.disconnected")
+                                          : (intCard.offline ? I18n.t("settings.integrations.offline") : I18n.t("common.connected"))
+                                    color: !intCard.isConn ? Theme.textDim : (intCard.offline ? Theme.warning : Theme.success)
                                     font.family: Theme.fontMono; font.pixelSize: Theme.fsSm
                                 }
                                 Text {
@@ -1896,6 +1905,39 @@ Item {
                                     wrapMode: Text.WordWrap
                                     color: Theme.text; font.pixelSize: Theme.fsSm
                                     text: I18n.t("settings.integrations.needsFields").replace("%1", intCard.missingFields.join(", "))
+                                }
+                            }
+
+                            // Offline: say what heap is doing about it.
+                            Text {
+                                objectName: "int-offline-hint"
+                                visible: intCard.isConn && intCard.offline
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: Theme.warning
+                                font.pixelSize: Theme.fsXs
+                                text: I18n.t("settings.integrations.offlineHint")
+                            }
+
+                            // Cards a filter change left behind: live issues this
+                            // connection no longer pulls. Kept until the user
+                            // says otherwise.
+                            RowLayout {
+                                objectName: "int-out-of-scope"
+                                visible: intCard.outOfScope > 0
+                                Layout.fillWidth: true
+                                spacing: Theme.spMd
+                                Text {
+                                    Layout.fillWidth: true
+                                    wrapMode: Text.WordWrap
+                                    color: Theme.textMuted
+                                    font.pixelSize: Theme.fsSm
+                                    text: I18n.t("settings.integrations.outOfScope").replace("%1", intCard.outOfScope)
+                                }
+                                PillButton {
+                                    objectName: "int-archive-out-of-scope"
+                                    text: I18n.t("settings.integrations.archiveOutOfScope")
+                                    onClicked: AppController.archiveOutOfScope(intCard.intKey)
                                 }
                             }
 

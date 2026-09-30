@@ -49,6 +49,12 @@ ExternalMeta makeFullMeta() {
   m.column = QStringLiteral("review");
   m.unsyncedStatus = QStringLiteral("blocked");
   m.goneUpstream = true;
+  m.scope = QStringLiteral("3f9a0c1e7b2d");
+  m.outOfScope = true;
+  m.priority = QStringLiteral("P1");
+  m.labels = {QStringLiteral("bug"), QStringLiteral("ui")};
+  m.conflicts = {QStringLiteral("title"), QStringLiteral("priority")};
+  m.pushQueued = true;
   return m;
 }
 
@@ -256,7 +262,7 @@ TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole
 // object — this is what stops a field added in there from being dropped.
 TEST(FieldCountGuard, ExternalMetaArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 15u);
+  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 21u);
 }
 
 // ── The runtime half: one emitted key per declared field ──

@@ -9,6 +9,7 @@
 #include <QSet>
 #include <QSortFilterProxyModel>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -57,6 +58,23 @@ struct ExternalMeta {
   // The issue was missing from the last complete pull: deleted upstream, or
   // moved somewhere this connection cannot see.
   bool goneUpstream = false;
+  // The filter the issue was last pulled under (a digest of the card's scope
+  // fields: repo, JQL, project…). A complete pull under a different filter
+  // that no longer carries the issue says nothing about the issue itself, so
+  // the card is only "out of scope" — "gone" needs the same filter.
+  QString scope;
+  bool outOfScope = false;
+  // What the tracker said last time for priority (already mapped to P0..P3)
+  // and for labels, so both merge three-way like title and body.
+  QString priority;
+  QStringList labels;
+  // Fields ("title", "body", "priority") that changed both here and in the
+  // tracker since the last pull. The local value is kept until the user picks
+  // a side in the editor.
+  QStringList conflicts;
+  // The move in unsyncedStatus was never sent — the tracker was disconnected
+  // or unreachable — so it goes out after the next successful pull.
+  bool pushQueued = false;
 
   bool operator==(const ExternalMeta&) const = default;
 };

@@ -127,6 +127,9 @@ jobs:
     # cannot be referenced in `if` directly). Mirrors the macOS signing pattern.
     env:
       SIGNPATH_API_TOKEN: ${{ secrets.SIGNPATH_API_TOKEN }}
+      SIGNPATH_ORG_ID: ${{ vars.SIGNPATH_ORG_ID }}
+      SIGNPATH_PROJECT_SLUG: ${{ vars.SIGNPATH_PROJECT_SLUG }}
+      SIGNPATH_POLICY_SLUG: ${{ vars.SIGNPATH_POLICY_SLUG }}
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
@@ -223,6 +226,27 @@ jobs:
       # it, signs the configured PE files, and the signed files are written back
       # over build/heap-portable. Runs only when SIGNPATH_API_TOKEN is
       # configured — unsigned builds still ship (default). See docs/PACKAGING.md.
+      # Half a configuration is a mistake, not an opt-out: a token without the
+      # three variables would fail deep inside the SignPath action with an
+      # unhelpful message, so say which one is missing up front. With no token
+      # at all the signing steps below are skipped and the build ships
+      # unsigned, as before (see docs/PACKAGING.md → Windows signing).
+      - name: Check the SignPath configuration
+        shell: bash
+        run: |
+          if [ -z "$SIGNPATH_API_TOKEN" ]; then
+            echo "SignPath: SIGNPATH_API_TOKEN not set — Windows binaries will be unsigned"
+            exit 0
+          fi
+          missing=""
+          for v in SIGNPATH_ORG_ID SIGNPATH_PROJECT_SLUG SIGNPATH_POLICY_SLUG; do
+            [ -n "${!v}" ] || missing="$missing $v"
+          done
+          if [ -n "$missing" ]; then
+            echo "::error::SIGNPATH_API_TOKEN is set but these repository variables are not:$missing"
+            exit 1
+          fi
+
       - name: Upload unsigned portable bundle
         if: ${{ env.SIGNPATH_API_TOKEN != '' }}
         id: upload-portable
@@ -245,6 +269,17 @@ jobs:
           # Overwrite the bundle in place so the zip + installer below wrap the
           # signed binaries.
           output-artifact-directory: build/heap-portable
+
+      # A signing request that "succeeded" but handed back unsigned files (a
+      # wrong artifact configuration matches nothing) must not ship as signed.
+      - name: Verify the portable signatures
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        shell: pwsh
+        run: |
+          $bad = Get-ChildItem build\heap-portable -Recurse -Include *.exe,*.dll |
+                 Where-Object { (Get-AuthenticodeSignature $_.FullName).Status -ne 'Valid' }
+          if ($bad) { $bad | ForEach-Object { Write-Host "unsigned: $($_.FullName)" }; Write-Error "$($bad.Count) PE file(s) not signed"; exit 1 }
+          Write-Host "every PE file in the bundle carries a valid Authenticode signature"
 
       - name: Zip portable bundle
         shell: pwsh
@@ -289,6 +324,21 @@ jobs:
           github-artifact-id: ${{ steps.upload-installer.outputs.artifact-id }}
           wait-for-completion: true
           output-artifact-directory: installer/Output
+
+      - name: Verify the installer signature
+        if: ${{ env.SIGNPATH_API_TOKEN != '' }}
+        shell: pwsh
+        run: |
+          $sig = Get-AuthenticodeSignature "installer\Output\heap-${{ needs.meta.outputs.tag }}-windows-setup.exe"
+          if ($sig.Status -ne 'Valid') { Write-Error "setup.exe signature: $($sig.Status)"; exit 1 }
+          Write-Host "setup.exe signed by $($sig.SignerCertificate.Subject)"
+
+      # Same as the macOS note: unsigned binaries are not fatal (no signing
+      # account is configured yet) but a stable release says so.
+      - name: Flag an unsigned stable Windows release
+        if: ${{ env.SIGNPATH_API_TOKEN == '' && needs.meta.outputs.prerelease == 'false' }}
+        shell: bash
+        run: echo "::warning::stable release with unsigned Windows binaries — SmartScreen will warn; see docs/PACKAGING.md → Windows signing"
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
@@ -631,6 +681,7 @@ jobs:
       attestations: write   # store it with the repository
     env:
       MACOS_NOTARIZED: ${{ secrets.MACOS_CERT_P12 != '' }}
+      WINDOWS_SIGNED: ${{ secrets.SIGNPATH_API_TOKEN != '' }}
     steps:
       - name: Download all artifacts
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8.0.1
@@ -641,6 +692,19 @@ jobs:
           # unsigned duplicates.
           pattern: dist-*
           merge-multiple: true
+
+      # The Windows artifact keeps its installer under installer/Output/, so
+      # the setup .exe sat one level down and neither the checksum list nor
+      # the attestation (both read dist/ only) covered it — v0.5.2's
+      # SHA256SUMS has no line for it. Every asset goes to the top level.
+      - name: Flatten artifacts
+        run: |
+          set -eu
+          find dist -mindepth 2 -type f -exec mv -n -t dist {} +
+          find dist -mindepth 1 -type d -empty -delete
+          if [ -n "$(find dist -mindepth 2 -type f)" ]; then
+            echo "::error::two artifacts share a file name"; find dist -mindepth 2 -type f; exit 1
+          fi
 
       - name: List artifacts
         run: find dist -type f -printf '%p (%s bytes)\n'
@@ -682,10 +746,25 @@ jobs:
               echo "> **macOS:** this build is not notarized. On first launch, right-click heap.app → **Open**."
               echo
             fi
+            if [ "$WINDOWS_SIGNED" != "true" ]; then
+              echo "> **Windows:** this build is not code-signed, so SmartScreen may say \"Windows protected your PC\". Choose **More info → Run anyway**, after checking the SHA-256 below."
+              echo
+            fi
             cat <<EOF
           Verify a download: \`sha256sum -c SHA256SUMS\`, or \`gh attestation verify <file> --repo $REPO\`.
+
+          <details><summary>SHA-256 checksums</summary>
+
+          \`\`\`
           EOF
+            # The same lines as the SHA256SUMS asset, so a checksum can be read
+            # off the release page without downloading anything else.
+            cat dist/SHA256SUMS
+            echo '```'
+            echo
+            echo '</details>'
           } > notes.md
+          cat notes.md
 
       - name: Publish
         uses: softprops/action-gh-release@efb35369e0ad2afab669f228072c1b0d510eae64 # v3.0.3
@@ -698,4 +777,4 @@ jobs:
           # hyphenated tag (rc/beta) is flagged pre-release and stays off latest.
           prerelease: ${{ needs.meta.outputs.prerelease }}
           make_latest: ${{ needs.meta.outputs.prerelease == 'false' }}
-          files: dist/**/*
+          files: dist/*
