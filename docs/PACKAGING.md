@@ -40,6 +40,16 @@ workflow refuses to publish if the two disagree.
 | Linux    | `…-linux-x86_64.AppImage`| `linuxdeploy` + the Qt plugin over a Qt 6.9.1 build (install-qt-action), smoke-tested in a clean `ubuntu:24.04` ([`packaging/linux/smoke-appimage.sh`](../packaging/linux/smoke-appimage.sh)) |
 | macOS    | `…-macos.dmg`            | `macdeployqt` → `hdiutil` drag-to-Applications dmg, **ad-hoc codesigned** (Developer ID + notarized when signing secrets are set) |
 
+Every asset is listed in `SHA256SUMS` and, in the same form, in a collapsed
+"SHA-256 checksums" block of the release notes; each also has a build-provenance
+attestation (`gh attestation verify <file> --repo sectapunterx/heap`).
+
+The Windows bundle carries only the Qt Quick Controls style heap uses (Basic;
+`main.cpp` forces it). [`packaging/windows/prune-bundle.sh`](../packaging/windows/prune-bundle.sh)
+drops the other styles and the unused Particles / LocalStorage (Qt6Sql) modules
+before `copy-deps.sh` walks and verifies the DLL closure, and fails the build if
+`qml/` ever starts importing one of them.
+
 ## macOS signing & notarization
 
 By default the `.app` inside the `.dmg` is **ad-hoc codesigned** (no paid Apple
@@ -114,7 +124,32 @@ Configure it after the SignPath Foundation application is approved:
 In the SignPath console the project needs the **GitHub.com** trusted build system
 (with the SignPath GitHub App installed on the repo) and two **artifact
 configurations**: `portable` (recursively signs `*.exe`/`*.dll` in the bundle) and
-`installer` (signs the setup `.exe`). SignPath's OSS program requires every job up
+`installer` (signs the setup `.exe`). Their XML lives in
+[`packaging/windows/signpath/`](../packaging/windows/signpath) — paste each into
+the console under the slug of the same name.
+
+**Status (0.5.2):** not active. The repository has none of the settings above,
+so every release so far shipped unsigned (`Get-AuthenticodeSignature` →
+`NotSigned`) and the release notes say so. What the owner has to do, once:
+
+1. Apply to the SignPath Foundation OSS programme (signpath.org → Apply) with
+   the repo URL, MIT licence and `package-windows` as the build definition, and
+   wait for approval. MFA must be on for the GitHub and SignPath accounts.
+2. In SignPath: create the project (slug e.g. `heap`), a signing policy (e.g.
+   `release-signing`), link the **GitHub.com** trusted build system and install
+   the SignPath GitHub App on `sectapunterx/heap`.
+3. Add the two artifact configurations from `packaging/windows/signpath/`.
+4. Create an API token for a user with *submitter* rights on that policy.
+5. In GitHub → Settings → Secrets and variables → Actions: secret
+   `SIGNPATH_API_TOKEN`; variables `SIGNPATH_ORG_ID`, `SIGNPATH_PROJECT_SLUG`,
+   `SIGNPATH_POLICY_SLUG`.
+6. Run the Release workflow manually (workflow_dispatch) once and check the
+   `Verify the portable signatures` / `Verify the installer signature` steps.
+
+The workflow checks this configuration before it builds: no token means
+"unsigned, with a warning on a stable release and a note in the release
+notes"; a token with a missing variable fails the job, and a signing request
+that hands back unsigned files fails the verify steps rather than shipping. SignPath's OSS program requires every job up
 to the signing request to run on GitHub-hosted runners — `package-windows` already
 does. The uninstaller (`unins000.exe`, which Inno generates on the target machine)
 is not signed.

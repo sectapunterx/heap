@@ -636,6 +636,10 @@ if(WIN32)
                 # SDK redist was not found at configure time.
                 ${_copy_ucrt}
                 COMMAND ${CMAKE_COMMAND} -E copy_directory "${MSYS_QML_DIR}/QtQuick"  "${PORTABLE_DIR}/QtQuick"
+                # Drop the Controls styles other than Basic and the QML modules
+                # heap never imports (Particles, LocalStorage → Qt6Sql) before
+                # the closure walk below, which re-adds anything still needed.
+                COMMAND bash "${CMAKE_SOURCE_DIR}/packaging/windows/prune-bundle.sh" "${PORTABLE_DIR}"
                 # windeployqt bundles Qt's own DLLs + plugins but not qtkeychain
                 # (a non-Qt module) nor the transitive non-Qt deps of
                 # Qt6Core/Qt6Gui/plugins (pcre2/zlib/zstd/double-conversion/
