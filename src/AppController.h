@@ -768,6 +768,9 @@ class AppController : public QObject {
   // `taskId` is the optional task tied to this toast — it is encoded into
   // the notification id so the action handlers can route back.
   Q_INVOKABLE void notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind = QString());
+  // notifyTask() judged at `now` rather than the wall clock: runAutomationAt()
+  // decides quiet hours for its own moment, and so must what it posts.
+  void notifyTaskAt(const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now);
   // The confirmation for something quick-captured from outside the app (the
   // global hotkeys' capture window). Unlike notify(), it is shown while a heap
   // window has focus — the capture window has it — and in quiet hours, since
@@ -1386,7 +1389,7 @@ class AppController : public QObject {
   QSet<QString> sentReminderKeys() const;
   void markReminderSent(const QString& key, const QDateTime& at);
   void holdNotification(const HeldNotification& n);
-  void flushHeldNotifications();
+  void flushHeldNotifications(const QDateTime& now);
   // settings.calendar.workDays, Monday to Friday by default.
   bool isWorkDay(const QDate& day) const;
   // Fires at the next local midnight; see refreshToday().

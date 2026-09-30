@@ -10324,10 +10324,11 @@ void AppController::runAutomationAt(const QDateTime& now) {
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTask(t.id,
-                 call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
-                 QStringLiteral("%1 (%2)").arg(t.title, t.priority),
-                 QStringLiteral("deadline"));
+      notifyTaskAt(t.id,
+                   call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
+                   QStringLiteral("%1 (%2)").arg(t.title, t.priority),
+                   QStringLiteral("deadline"),
+                   now);
     }
   }
 
@@ -10373,7 +10374,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
 
   // Anything else that arrived during quiet hours goes out now.
   if(!quiet) {
-    flushHeldNotifications();
+    flushHeldNotifications(now);
   }
 }
 
@@ -10469,13 +10470,13 @@ void AppController::holdNotification(const HeldNotification& n) {
   m_heldNotifications.append(n);
 }
 
-void AppController::flushHeldNotifications() {
+void AppController::flushHeldNotifications(const QDateTime& now) {
   const QVector<HeldNotification> held = std::exchange(m_heldNotifications, {});
   for(const HeldNotification& h : held) {
     if(h.taskId.isEmpty()) {
       emit notification(h.title, h.body, h.kind);
     } else {
-      notifyTask(h.taskId, h.title, h.body, h.kind);
+      notifyTaskAt(h.taskId, h.title, h.body, h.kind, now);
     }
   }
 }
@@ -10743,7 +10744,12 @@ void AppController::onGitCommits(const QString& repo, const QVariantMap& commits
 // ── Native notifications with action buttons ─────────────────────
 
 void AppController::notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind) {
-  if(inQuietHours(QDateTime::currentDateTime())) {
+  notifyTaskAt(taskId, title, body, kind, QDateTime::currentDateTime());
+}
+
+void AppController::notifyTaskAt(
+    const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now) {
+  if(inQuietHours(now)) {
     holdNotification({title, body, kind, taskId});
     return;
   }
