@@ -30,6 +30,68 @@ wherever you are); a series imported from another time zone keeps the zone's
 IANA name there, its hours are that zone's, and every occurrence is converted
 on its own day so it follows that zone's daylight-saving changes.
 
+### Attachments
+
+Files attached to a task or linked from a note live in `attachments/`, next to
+`state.json` (so `--data-dir` moves them too). Each file is stored once, named
+by its content: the first 32 hex digits of its SHA-256 plus the original
+extension, e.g. `attachments/3fa94c…c1.png`. The same file attached to three
+tasks is one copy; a stored file is read-only and never changes.
+
+- A task lists its files in an optional `attachments` array — `{id, name,
+  size, mime}` per file, the name and size being what the file was when it was
+  attached. A task without files has no key, and a `state.json` from before
+  attachments simply has none (no schema bump).
+- A note, a doc page or a task description links a file as markdown:
+  `![shot.png](attachments/<id>)` for an image (shown inline in the preview),
+  `[spec.pdf](attachments/<id>)` for anything else. The text is the reference —
+  there is no separate list for notes.
+- Detaching a file, or deleting the link, only drops the reference. **Settings →
+  Data → Unused attachments** shows how many files (and how many bytes) nothing
+  refers to any more and deletes them after a second press. A file counts as in
+  use while any profile's tasks, descriptions, notes or pages link it, or while
+  undo or redo could bring such a link back.
+- A file missing from the folder (deleted by hand, or a profile imported without
+  its files) shows as a broken chip; the task keeps its name and size.
+- One file may be at most 100 MB. Symbolic links, junctions and shortcuts are
+  never followed: attach the file itself.
+- Opening a file uses its default application; a type that would run
+  something (a program, a script, a shortcut) is confirmed first.
+
+**Backups do not include attachments.** The files in `backups/` are copies of
+`state.json` only; restoring one brings back the references, and the files are
+still in `attachments/` unless the cleanup removed them since. To back up
+everything, copy the whole data folder.
+
+### Saved views
+
+A profile may carry `savedViews`, the sidebar's saved views in their order. The
+key is optional: a profile without views — and every file written before saved
+views existed — simply has none, and no schema bump was needed. Each entry:
+
+```json
+{ "id": "view-3f9c2a1b", "name": "Urgent",
+  "query": "priority:P0,P1 is:open", "priorities": ["P0"],
+  "sort": "manual", "archived": false, "showDone": false, "view": "board" }
+```
+
+`query` is the search box text exactly as typed (whitespace collapsed) and is
+read again against the current columns every time, so a view naming a column
+that has since been deleted shows the search box's "not understood" badge
+rather than an empty board. `priorities` are the filter bar chips that were
+on, `sort` the board order (`manual`, `priority`, `due`, `updated`, `title`),
+`archived` the Archived toggle, `showDone` the timeline's Show done, `view` the
+view it opens in (`board`, `timeline`, `week`, `month`, `archive`). Unknown
+values read as the defaults; entries without an id or a name are dropped.
+Views travel with a profile export/import and a profile duplicate. The three
+starter views a new profile gets are ordinary entries, written once when the
+profile is created: delete them and they stay deleted.
+
+The filters the window is showing right now are not per profile: they live in
+the settings blob under `settings.app.filters` (`search`, `priorities`, `sort`,
+`archived`, `showDone`, and `savedView`, the id of the view they were last set
+from).
+
 `reminders.json`, next to `state.json`, remembers which reminders were already
 shown in the last three days, so a restart does not show them again. Deleting
 it is harmless.
@@ -114,6 +176,23 @@ Each profile can be exported and re-imported independently:
 
 Export/import is content-only — it never carries settings or other profiles, so
 importing is always non-destructive.
+
+The export carries the profile's attached files too, base64-encoded in a
+top-level `attachments` array next to `profile`, so the file stands on its own
+on another machine. Up to 64 MB of files are included; past that the export
+still writes every task and note, leaves the files out (`attachmentsOmitted`
+says how many) and says so — copy the `attachments/` folder alongside, or use
+the notes-folder export. On import every file is re-hashed: its id is
+recomputed from its bytes, never taken from the file, and the references follow
+if the two disagree.
+
+**Notes as a folder** (Notes → Export) copies the files the notes link into an
+`attachments/` folder next to them, so `attachments/<id>` links read the same
+in any markdown editor. Importing a folder brings those files back — and any
+other file a note links by a relative path inside the folder (an Obsidian
+`assets/shot 1.png`), which is stored and its link rewritten to
+`attachments/<id>`. Links to other notes, to the web, or outside the folder are
+left as written.
 
 ## Multi-device sync (roadmap)
 

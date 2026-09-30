@@ -7,6 +7,7 @@
 
 #include <QDate>
 #include <QHash>
+#include <QJsonArray>
 #include <QJsonObject>
 #include <QMap>
 #include <QObject>
@@ -75,6 +76,13 @@ class AppController : public QObject {
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
+  // The active profile's saved views, in sidebar order: [{id, name, query,
+  // priorities, sort, archived, showDone, view, problems}] — `problems` is what
+  // the search box would flag in the query (a deleted column, a typo).
+  Q_PROPERTY(QVariantList savedViews READ savedViews NOTIFY savedViewsChanged)
+  // view id → how many tasks opening it shows. One pass for all views, cached
+  // until a task, a column, the day or the views change.
+  Q_PROPERTY(QVariantMap savedViewCounts READ savedViewCounts NOTIFY savedViewCountsChanged)
   // Moves at local midnight, on resume and on a clock or zone change: every
   // "today" in the UI binds to this, so after midnight T goes to the new day.
   Q_PROPERTY(QDate today READ today NOTIFY todayChanged)
@@ -396,6 +404,46 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantList outgoingNoteLinks(const QString& markdown) const;
   // { lines, mentions, tickets } for the editor's header.
   Q_INVOKABLE QVariantMap noteStats(const QString& markdown) const;
+
+  // ---- Attachments (AppControllerAttachments.cpp, storage/Attachments.h) ----
+  // Files go into <dataDir>/attachments under a content hash; a task lists
+  // them, a note or description links them as "attachments/<id>".
+  QString attachmentsDir() const;
+  // Stores files (file:// URLs or paths) without attaching them to anything —
+  // a new task's draft, a note that is about to link them. Returns one
+  // { id, name, size, mime, isImage, ref } per stored file; a refused file is
+  // left out and named in a toast.
+  Q_INVOKABLE QVariantList importAttachments(const QVariantList& urls);
+  // Stores the files and appends them to the task, as one undo step. Returns
+  // how many were attached (a file the task already has counts once).
+  Q_INVOKABLE int attachFilesToTask(const QString& taskId, const QVariantList& urls);
+  // Detaches one file: one undo step. The bytes stay until the cleanup.
+  Q_INVOKABLE bool removeTaskAttachment(const QString& taskId, const QString& attachmentId);
+  // The task's files for the editor's chips: the stored metadata plus
+  // { exists, sizeText, isImage, ref }.
+  Q_INVOKABLE QVariantList taskAttachments(const QString& taskId) const;
+  // Chip data for a draft's list or for the files a piece of markdown links.
+  Q_INVOKABLE QVariantList describeAttachments(const QVariantList& attachments) const;
+  Q_INVOKABLE QVariantList markdownAttachments(const QString& markdown) const;
+  // Opens a stored file in its default application. Returns "opened",
+  // "confirm" (a type that runs something: ask, then call again with
+  // confirmed), "missing" or "invalid".
+  Q_INVOKABLE QString openAttachment(const QString& id, bool confirmed = false);
+  // Shows the file in the system file manager.
+  Q_INVOKABLE bool revealAttachment(const QString& id);
+  // The file:// URL of a stored file, for a preview; empty when missing.
+  Q_INVOKABLE QUrl attachmentUrl(const QString& id) const;
+  // Paste: an image on the clipboard is saved as a PNG, copied files are
+  // stored as they are. Empty when the clipboard holds neither, so the caller
+  // falls back to pasting text.
+  Q_INVOKABLE bool clipboardHasAttachment() const;
+  Q_INVOKABLE QVariantList importClipboardAttachments();
+  // Settings → Data: files no task, note, page or undo step refers to.
+  // { count, bytes, sizeText }.
+  Q_INVOKABLE QVariantMap unusedAttachments() const;
+  // Deletes them. Returns what unusedAttachments() said, as it was removed.
+  Q_INVOKABLE QVariantMap cleanUpUnusedAttachments();
+  Q_INVOKABLE QString formatBytes(double bytes) const;
 
   QString appSettingsJson() const {
     return m_appSettingsJson;
@@ -841,6 +889,26 @@ class AppController : public QObject {
   // scan. Archived tasks are not counted; "_total" is the live task count.
   QVariantMap statusCounts() const;
 
+  // ---- Saved views (src/AppControllerSavedViews.cpp) ----
+  // `state` is the filter state as Main.qml holds it: {query, priorities
+  // (list or {P0: true} map), sort, archived, showDone, view}. Every mutation
+  // is one undo step with a toast. Names are made unique ("Name (2)").
+  QVariantList savedViews() const;
+  QVariantMap savedViewCounts() const;
+  // Returns the new view's id; "" when there is no profile.
+  Q_INVOKABLE QString saveView(const QString& name, const QVariantMap& state);
+  Q_INVOKABLE bool renameSavedView(const QString& id, const QString& name);
+  // Overwrites the view's filters with `state`, keeping its name and place.
+  Q_INVOKABLE bool updateSavedView(const QString& id, const QVariantMap& state);
+  Q_INVOKABLE QString duplicateSavedView(const QString& id);
+  Q_INVOKABLE bool deleteSavedView(const QString& id);
+  // -1 = up, +1 = down; false at either end.
+  Q_INVOKABLE bool moveSavedView(const QString& id, int delta);
+  // {} when there is no such view.
+  Q_INVOKABLE QVariantMap savedView(const QString& id) const;
+  // True when `state` no longer matches the view — what shows it as modified.
+  Q_INVOKABLE bool savedViewDiffers(const QString& id, const QVariantMap& state) const;
+
   // settingsMap() is private and also cached; this exists so a test can prove
   // the cache does not outlive the settings it was built from.
   QVariantMap settingsMapForTest() const {
@@ -1082,6 +1150,8 @@ class AppController : public QObject {
   void shortcutsChanged();
   void blockedStuckChanged();
   void statusCountsChanged();
+  void savedViewsChanged();
+  void savedViewCountsChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
   // `kind` tints the toast: "info" (default when empty), "success", "warning"
   // or "error". Every C++ toast used to arrive as info, failures included.
@@ -1196,6 +1266,25 @@ class AppController : public QObject {
   // A note with no body, made active without announcing a new notesState:
   // callers write the body next and that is the one change the editor sees.
   QString createActiveNote(const QString& title);
+  // ---- Attachments (AppControllerAttachments.cpp) ----
+  // Every attachment id something still points at: any profile's tasks,
+  // descriptions, notes and doc pages, the open editor text, and the undo
+  // history — so a file detached a minute ago survives a cleanup and Ctrl+Z
+  // still finds it.
+  QSet<QString> referencedAttachmentIds() const;
+  // The ids one profile uses, for its export.
+  QStringList profileAttachmentIds(const Profile& p) const;
+  // The export's "attachments" array, or an empty one (and *omittedBytes set)
+  // when the files would push the export past the cap.
+  QJsonArray attachmentsForExport(const Profile& p, qint64* omittedBytes, int* omittedCount) const;
+  // Writes an import's files into the store. Returns old id → new id for every
+  // file whose content did not match its id (it is stored under the right one
+  // and the references are rewritten).
+  QHash<QString, QString> importAttachmentBlobs(const QJsonArray& blobs, QStringList* problems);
+  // A string of the attachments feature, in the UI language.
+  QString attText(const char* key) const;
+  void toastAddFailure(const QString& name, int error);
+
   // Reads a vault folder and decides what importing it would do (see
   // heap::notes::planImport); the summary is what import and preview return.
   QVariantMap planNotesImport(const QUrl& folderUrl, QVector<heap::notes::VaultPlanItem>* plan) const;
@@ -1213,6 +1302,15 @@ class AppController : public QObject {
   // every mutation path is covered without each one remembering to.
   mutable QVariantMap m_statusCounts;
   mutable bool m_statusCountsDirty = true;
+  // The active profile's saved views and savedViewCounts()' cache. The count
+  // signal is coalesced: a bulk edit fires the model's signals per row.
+  QVector<heap::savedviews::SavedView> m_savedViews;
+  mutable QVariantMap m_savedViewCounts;
+  mutable bool m_savedViewCountsDirty = true;
+  QTimer m_savedViewCountsTimer;
+  void wireSavedViews();
+  void dropSavedViewCounts();
+  void setSavedViews(const QVector<heap::savedviews::SavedView>& views);
   bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
   bool m_demoActive = false;   // onboarding: profile still holds seeded demo
 
@@ -1429,6 +1527,7 @@ class AppController : public QObject {
     QVector<::Note> m_notes;
     QVariantList m_statuses;
     QString m_docsState;
+    QVector<heap::savedviews::SavedView> m_savedViews;
   };
 
   // One task's priority, unrecorded; false when nothing changed.

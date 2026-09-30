@@ -375,6 +375,7 @@ jobs:
           name: qmllint
           path: |
             build/heap_core_qmllint.json
+            build/TodoCpp/heap_core.qmltypes
             .github/qmllint-baseline.json
           if-no-files-found: ignore
 

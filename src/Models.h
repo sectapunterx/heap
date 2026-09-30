@@ -1,5 +1,7 @@
 #pragma once
 
+#include "views/SavedView.h"
+
 #include <QAbstractListModel>
 #include <QColor>
 #include <QDate>
@@ -90,6 +92,20 @@ struct TaskLink {
   bool operator==(const TaskLink&) const = default;
 };
 
+// A file attached to a task. The bytes live in <dataDir>/attachments/<id> (see
+// storage/Attachments.h) and never change: the id is derived from the content,
+// so two tasks attaching the same file share one copy, and detaching only drops
+// this entry. The name, size and type are what the file was called and held
+// when it was attached, kept here so a chip can say what a missing file was.
+struct Attachment {
+  QString id;
+  QString name;
+  qint64 size = 0;
+  QString mime;
+
+  bool operator==(const Attachment&) const = default;
+};
+
 struct Task {
   QString id;
   QString title;
@@ -138,6 +154,8 @@ struct Task {
   double rank = 0.0;
   // Dependencies this task blocks. See TaskLink.
   QVector<TaskLink> links;
+  // Files attached to the task, in the order they were attached.
+  QVector<Attachment> attachments;
 
   bool operator==(const Task&) const = default;
 };
@@ -294,6 +312,8 @@ struct Profile {
   QString activeNoteId;
   QVector<DocPage> docPages;
   QString activeDocPageId;
+  // Named filter snapshots, in sidebar order (profile key `savedViews`).
+  QVector<heap::savedviews::SavedView> savedViews;
   // Keys of the profile object this build does not read, carried through a
   // save untouched (PLAT-26). Only filled for a document at the current schema.
   QJsonObject extra;
@@ -447,6 +467,8 @@ class TaskModel : public QAbstractListModel {
     // answering for the deadline, which is what every reader of it meant.
     ScheduledHasTimeRole,
     DueHasTimeRole,
+    // How many files are attached, for the card's paperclip chip.
+    AttachmentCountRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {

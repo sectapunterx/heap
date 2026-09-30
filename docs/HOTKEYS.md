@@ -81,6 +81,29 @@ task keeps the week, month, timeline or archive view you are on.
 
 The numbers follow the side rail, top to bottom.
 
+## Saved views
+
+A saved view is a named set of filters — the search query, the priority chips,
+the board sort, Archived, Show done — plus the view it opens in. They are
+listed in the sidebar under *Saved views*, numbered; the number is the key.
+
+| Action | Default |
+|--------|---------|
+| Apply saved view 1 … 9 | `Alt+1` `Alt+2` `Alt+3` `Alt+4` `Alt+5` `Alt+6` `Alt+7` `Alt+8` `Alt+9` |
+
+In the palette every view is a command, *View: name*, and *Save current view*
+saves the filters on screen. In the name dialog `Enter` saves and `Esc`
+cancels. In the sidebar list (`Tab` to it):
+
+| Action | Key |
+|---|---|
+| Previous / next view | `↑` / `↓` |
+| Apply | `Enter` |
+| Move the view up / down | `Ctrl+↑` / `Ctrl+↓` |
+| Rename | `F2` |
+| Delete (Undo in the toast, or `Ctrl+Z`) | `Del` |
+| Menu (apply, update from current filters, rename, duplicate, move, delete) | `Menu` or `Shift+F10`, or right click |
+
 ## Board cursor
 
 Bare letters, so a focused text field still types them. Arrow keys work
@@ -168,6 +191,9 @@ Fixed keys, live while the editor is open.
 | Indent / outdent a list line in the description | `Tab` / `Shift+Tab` on that line |
 | Insert indentation anywhere in the description | `Ctrl+Tab` |
 | Open / close Details, switch edit ↔ preview | `Tab` to it, then `Space` / `Enter` |
+| Attach files (file dialog, several at once) | `Ctrl+Shift+A` |
+| On an attachment chip: open / show in folder / detach | `Enter` / `Shift+Enter` / `Del` |
+| Paste a screenshot or copied files into the description (stored, linked at the cursor) | `Ctrl+V` |
 
 A new task's editor opens with the cursor in the title.
 
@@ -215,6 +241,8 @@ in the text undoes the last app action (a deleted note or page, an import).
 | Indent / outdent list line | `Tab` / `Shift+Tab` |
 | Tick the checkbox on this line | `Ctrl+Enter` |
 | Cycle edit → split → preview | `Ctrl+Shift+M` |
+| Attach files to the note (linked at the cursor) | `Ctrl+Shift+A` (notes editor) |
+| Paste a screenshot or copied files as attachments | `Ctrl+V` (notes editor; text pastes as text) |
 
 `Enter` continues whatever the line is: another bullet, the next number,
 another unticked checkbox, another quote marker. On an empty item it removes

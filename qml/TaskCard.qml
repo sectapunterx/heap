@@ -412,7 +412,19 @@ Rectangle {
                      || !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
                      || !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
                      || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
+                     || card._attachmentCount > 0
             spacing: Theme.spLg
+
+            // How many files are attached. Opening them is the editor's job.
+            Text {
+                objectName: "tc-attachments"
+                visible: card._attachmentCount > 0
+                text: "📎 " + card._attachmentCount
+                color: Theme.textMuted
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+                Accessible.name: I18n.t("att.card.count").arg(card._attachmentCount)
+            }
 
             Text {
                 id: dueT
@@ -594,6 +606,38 @@ Rectangle {
         anchors.fill: parent
         hoverEnabled: true
         acceptedButtons: Qt.NoButton
+    }
+
+    // Files dragged in from a file manager attach to this task — one undo
+    // step for the whole drop. Only external drags carry text/uri-list, so a
+    // card being moved around the board passes straight through.
+    readonly property int _attachmentCount: card.task ? (card.task.attachmentCount || 0) : 0
+    property bool _fileOver: false
+    function attachDroppedFiles(urls) {
+        if (!card.taskId || !urls || urls.length === 0) return 0;
+        const list = [];
+        for (let i = 0; i < urls.length; ++i) list.push(urls[i]);
+        return AppController.attachFilesToTask(card.taskId, list);
+    }
+    DropArea {
+        objectName: "tc-file-drop"
+        anchors.fill: parent
+        keys: ["text/uri-list"]
+        onEntered: (drag) => { drag.accepted = drag.hasUrls; card._fileOver = drag.accepted; }
+        onExited: card._fileOver = false
+        onDropped: (drop) => {
+            card._fileOver = false;
+            if (drop.hasUrls && card.attachDroppedFiles(drop.urls) > 0) drop.accept(Qt.CopyAction);
+        }
+    }
+    Rectangle {
+        visible: card._fileOver
+        anchors.fill: parent
+        radius: Theme.radiusMd
+        color: "transparent"
+        border.color: Theme.accent
+        border.width: 2
+        z: 6
     }
     MouseArea {
         id: dragArea

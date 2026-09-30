@@ -1,0 +1,551 @@
+// Files attached to tasks and linked from notes. The store itself — ids,
+// hashing, the folder — is storage/Attachments.h; this is the part that knows
+// about tasks, notes, undo and the UI. Kept out of AppController.cpp, which is
+// long enough; these are ordinary members.
+
+#include "AppController.h"
+
+#include "storage/Attachments.h"
+
+#include <QBuffer>
+#include <QClipboard>
+#include <QDateTime>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QGuiApplication>
+#include <QHash>
+#include <QImage>
+#include <QJsonObject>
+#include <QMimeData>
+#include <QUrl>
+
+#include <algorithm>
+
+namespace att = heap::attachments;
+
+namespace {
+
+struct AttText {
+  const char* en;
+  const char* ru;
+};
+
+// The feature's own strings, in the UI language. Kept here rather than in the
+// shared table so this file can be read, and merged, on its own.
+const QHash<QString, AttText>& attTable() {
+  static const QHash<QString, AttText> table = {
+      {"attached.one", {"Attached %1 to %2", "«%1» прикреплён к %2"}},
+      {"attached.many", {"Attached %1 files to %2", "К %2 прикреплено файлов: %1"}},
+      {"attached.undo", {"Attachment undone: %1", "Вложение отменено: %1"}},
+      {"removed", {"Detached %1 from %2", "«%1» откреплён от %2"}},
+      {"removed.undo", {"Reattached %1 to %2", "«%1» снова прикреплён к %2"}},
+      {"missing", {"%1 is no longer in the attachments folder", "«%1» больше нет в папке вложений"}},
+      {"pasted", {"pasted-%1.png", "вставка-%1.png"}},
+      {"export.omitted",
+       {"Exported without attachments: %1 files (%2) are over the %3 export limit. Copy the attachments folder from heap's data "
+        "folder next to the file, or export the notes as a folder.",
+        "Экспорт без вложений: %1 файлов (%2) больше предела %3. Скопируйте папку attachments из папки данных heap рядом с "
+        "файлом или экспортируйте заметки папкой."}},
+      {"import.problems", {"Some attachments were not imported: %1", "Часть вложений не импортирована: %1"}},
+      {"cleanup.done", {"Deleted %1 unused attachments (%2)", "Удалено неиспользуемых вложений: %1 (%2)"}},
+      {"cleanup.none", {"No unused attachments", "Неиспользуемых вложений нет"}},
+  };
+  return table;
+}
+
+QString localPathOf(const QVariant& v) {
+  const QUrl url = v.toUrl();
+  if(url.isValid() && url.isLocalFile()) {
+    return url.toLocalFile();
+  }
+  const QString s = v.toString();
+  if(s.startsWith(QStringLiteral("file:"), Qt::CaseInsensitive)) {
+    return QUrl(s).toLocalFile();
+  }
+  return s;
+}
+
+}  // namespace
+
+QString AppController::attText(const char* key) const {
+  const auto it = attTable().constFind(QString::fromLatin1(key));
+  if(it == attTable().constEnd()) {
+    return QString::fromLatin1(key);
+  }
+  return QString::fromUtf8(m_language == QStringLiteral("ru") ? it->ru : it->en);
+}
+
+QString AppController::attachmentsDir() const {
+  return dataDir() + QStringLiteral("/attachments");
+}
+
+QString AppController::formatBytes(double bytes) const {
+  return att::formatSize(static_cast<qint64>(bytes), m_language == QStringLiteral("ru"));
+}
+
+void AppController::toastAddFailure(const QString& name, int error) {
+  emit toast(att::errorText(static_cast<att::AddResult::Error>(error), name, m_language == QStringLiteral("ru")),
+             QStringLiteral("warning"));
+}
+
+QVariantList AppController::describeAttachments(const QVariantList& attachments) const {
+  const att::Store store(attachmentsDir());
+  const bool ru = m_language == QStringLiteral("ru");
+  QVariantList out;
+  for(const ::Attachment& a : att::fromVariantList(attachments)) {
+    QVariantMap m;
+    m["id"] = a.id;
+    m["name"] = a.name.isEmpty() ? a.id : a.name;
+    const qint64 onDisk = store.sizeOf(a.id);
+    m["exists"] = onDisk >= 0;
+    m["size"] = static_cast<double>(onDisk >= 0 ? onDisk : a.size);
+    m["sizeText"] = att::formatSize(onDisk >= 0 ? onDisk : a.size, ru);
+    m["mime"] = a.mime;
+    m["isImage"] = att::isDisplayableImage(a.mime);
+    m["ref"] = att::markdownRef(a);
+    m["url"] = onDisk >= 0 ? QUrl::fromLocalFile(store.pathFor(a.id)) : QUrl();
+    out.append(m);
+  }
+  return out;
+}
+
+QVariantList AppController::importAttachments(const QVariantList& urls) {
+  const att::Store store(attachmentsDir());
+  QVector<::Attachment> stored;
+  for(const QVariant& v : urls) {
+    const QString path = localPathOf(v);
+    if(path.isEmpty()) {
+      continue;
+    }
+    const att::AddResult r = store.addFile(path);
+    if(!r.ok()) {
+      toastAddFailure(QFileInfo(path).fileName(), r.error);
+      continue;
+    }
+    stored.append(r.attachment);
+  }
+  return describeAttachments(att::toVariantList(stored));
+}
+
+int AppController::attachFilesToTask(const QString& taskId, const QVariantList& urls) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return 0;
+  }
+  // Stored first, outside the undo scope: the bytes are not part of what undo
+  // puts back, only the task's list is.
+  const QVariantList added = importAttachments(urls);
+  if(added.isEmpty()) {
+    return 0;
+  }
+  ::Task t = m_tasks.items().at(row);
+  QStringList names;
+  for(const ::Attachment& a : att::fromVariantList(added)) {
+    const bool already = std::any_of(t.attachments.cbegin(), t.attachments.cend(), [&](const ::Attachment& x) {
+      return x.id == a.id;
+    });
+    if(!already) {
+      t.attachments.append(a);
+    }
+    names << a.name;
+  }
+  if(t == m_tasks.items().at(row)) {
+    // Every file was attached already: nothing to record, but say so rather
+    // than swallow the drop.
+    emit toast(names.size() == 1 ? attText("attached.one").arg(names.first(), taskId)
+                                 : attText("attached.many").arg(names.size()).arg(taskId));
+    return static_cast<int>(names.size());
+  }
+  {
+    const UndoScope scope(this, attText("attached.undo").arg(taskId));
+    m_tasks.upsert(t);
+    emit undoableToast(
+        names.size() == 1 ? attText("attached.one").arg(names.first(), taskId) : attText("attached.many").arg(names.size()).arg(taskId), 5);
+  }
+  scheduleSave();
+  return static_cast<int>(names.size());
+}
+
+bool AppController::removeTaskAttachment(const QString& taskId, const QString& attachmentId) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return false;
+  }
+  ::Task t = m_tasks.items().at(row);
+  const auto it = std::find_if(t.attachments.begin(), t.attachments.end(), [&](const ::Attachment& a) {
+    return a.id == attachmentId;
+  });
+  if(it == t.attachments.end()) {
+    return false;
+  }
+  const QString name = it->name.isEmpty() ? it->id : it->name;
+  t.attachments.erase(it);
+  {
+    // Detaching only drops the entry: the file stays in the store, so undo is
+    // the task's list coming back and nothing else.
+    const UndoScope scope(this, attText("removed.undo").arg(name, taskId));
+    m_tasks.upsert(t);
+    emit undoableToast(attText("removed").arg(name, taskId), 5);
+  }
+  scheduleSave();
+  return true;
+}
+
+QVariantList AppController::taskAttachments(const QString& taskId) const {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return {};
+  }
+  return describeAttachments(att::toVariantList(m_tasks.items().at(row).attachments));
+}
+
+QVariantList AppController::markdownAttachments(const QString& markdown) const {
+  const att::Store store(attachmentsDir());
+  const QHash<QString, QString> labels = att::refLabelsIn(markdown);
+  QVector<::Attachment> xs;
+  for(const QString& id : att::refsIn(markdown)) {
+    ::Attachment a;
+    a.id = id;
+    a.name = labels.value(id);
+    a.size = qMax<qint64>(0, store.sizeOf(id));
+    a.mime = att::mimeFor(a.name.isEmpty() ? id : a.name);
+    // The id keeps the real extension; a label may have none.
+    if(a.mime == QStringLiteral("application/octet-stream")) {
+      a.mime = att::mimeFor(id);
+    }
+    xs.append(a);
+  }
+  return describeAttachments(att::toVariantList(xs));
+}
+
+QString AppController::openAttachment(const QString& id, bool confirmed) {
+  const att::Store store(attachmentsDir());
+  if(!att::isValidId(id)) {
+    return QStringLiteral("invalid");
+  }
+  if(!store.contains(id)) {
+    emit toast(attText("missing").arg(id), QStringLiteral("warning"));
+    return QStringLiteral("missing");
+  }
+  // The same rule links follow (LinkConfirmDialog): anything that would run
+  // rather than show is asked about first. The id carries the extension the
+  // shell decides by.
+  if(!confirmed && att::needsOpenConfirmation(id)) {
+    return QStringLiteral("confirm");
+  }
+  att::shell(store.pathFor(id), false);
+  return QStringLiteral("opened");
+}
+
+bool AppController::revealAttachment(const QString& id) {
+  const att::Store store(attachmentsDir());
+  if(!store.contains(id)) {
+    if(att::isValidId(id)) {
+      emit toast(attText("missing").arg(id), QStringLiteral("warning"));
+    }
+    return false;
+  }
+  return att::shell(store.pathFor(id), true);
+}
+
+QUrl AppController::attachmentUrl(const QString& id) const {
+  const att::Store store(attachmentsDir());
+  return store.contains(id) ? QUrl::fromLocalFile(store.pathFor(id)) : QUrl();
+}
+
+namespace {
+
+// Local files on the clipboard (copied in a file manager), or nothing.
+QStringList clipboardFiles(const QMimeData* mime) {
+  QStringList out;
+  if(mime == nullptr || !mime->hasUrls()) {
+    return out;
+  }
+  for(const QUrl& u : mime->urls()) {
+    if(!u.isLocalFile() || !QFileInfo(u.toLocalFile()).isFile()) {
+      return {};
+    }
+    out << u.toLocalFile();
+  }
+  return out;
+}
+
+// An image with no text alongside it. A spreadsheet puts both a picture and
+// the cells' text on the clipboard; the text is what a paste into a note means.
+bool clipboardImageOnly(const QMimeData* mime) {
+  return mime != nullptr && mime->hasImage() && (!mime->hasText() || mime->text().trimmed().isEmpty());
+}
+
+}  // namespace
+
+bool AppController::clipboardHasAttachment() const {
+  const QClipboard* cb = QGuiApplication::clipboard();
+  const QMimeData* mime = cb != nullptr ? cb->mimeData() : nullptr;
+  return !clipboardFiles(mime).isEmpty() || clipboardImageOnly(mime);
+}
+
+QVariantList AppController::importClipboardAttachments() {
+  const QClipboard* cb = QGuiApplication::clipboard();
+  const QMimeData* mime = cb != nullptr ? cb->mimeData() : nullptr;
+  const QStringList files = clipboardFiles(mime);
+  if(!files.isEmpty()) {
+    QVariantList urls;
+    for(const QString& f : files) {
+      urls << QUrl::fromLocalFile(f);
+    }
+    return importAttachments(urls);
+  }
+  if(!clipboardImageOnly(mime)) {
+    return {};
+  }
+  const QImage image = qvariant_cast<QImage>(mime->imageData());
+  if(image.isNull()) {
+    return {};
+  }
+  QByteArray png;
+  QBuffer buf(&png);
+  buf.open(QIODevice::WriteOnly);
+  if(!image.save(&buf, "PNG")) {
+    return {};
+  }
+  const QString name = attText("pasted").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyyMMdd-HHmmss")));
+  const att::AddResult r = att::Store(attachmentsDir()).addBytes(png, name, QStringLiteral("image/png"));
+  if(!r.ok()) {
+    toastAddFailure(name, r.error);
+    return {};
+  }
+  return describeAttachments(att::toVariantList({r.attachment}));
+}
+
+// ── What still points at a file ──
+
+namespace {
+
+void collectTask(const ::Task& t, QSet<QString>* ids) {
+  for(const ::Attachment& a : t.attachments) {
+    ids->insert(a.id);
+  }
+  for(const QString& id : att::refsIn(t.desc)) {
+    ids->insert(id);
+  }
+}
+
+void collectText(const QString& text, QSet<QString>* ids) {
+  for(const QString& id : att::refsIn(text)) {
+    ids->insert(id);
+  }
+}
+
+void collectProfile(const Profile& p, QSet<QString>* ids) {
+  for(const ::Task& t : p.tasks) {
+    collectTask(t, ids);
+  }
+  for(const Note& n : p.notes) {
+    collectText(n.body, ids);
+  }
+  for(const DocPage& d : p.docPages) {
+    collectText(d.body, ids);
+  }
+  collectText(p.notesState, ids);
+  collectText(p.docsState, ids);
+}
+
+}  // namespace
+
+QSet<QString> AppController::referencedAttachmentIds() const {
+  QSet<QString> ids;
+  for(const Profile& p : m_profiles) {
+    if(p.id != m_activeProfileId) {
+      collectProfile(p, &ids);
+    }
+  }
+  // The active profile lives in the models, which are ahead of its snapshot.
+  for(const ::Task& t : m_tasks.items()) {
+    collectTask(t, &ids);
+  }
+  for(const Note& n : m_notes.items()) {
+    collectText(n.body, &ids);
+  }
+  for(const DocPage& d : m_docPages.items()) {
+    collectText(d.body, &ids);
+  }
+  collectText(m_notesState, &ids);
+  collectText(m_docsState, &ids);
+  // Undo and redo can bring back anything they hold.
+  m_undo.forEachEntry([&](const heap::undo::Entry& e) {
+    for(const auto& x : e.tasks) {
+      collectTask(x.before, &ids);
+      collectTask(x.after, &ids);
+    }
+    for(const auto& x : e.notes) {
+      collectText(x.before.body, &ids);
+      collectText(x.after.body, &ids);
+    }
+    for(const auto& x : e.docPages) {
+      collectText(x.before.body, &ids);
+      collectText(x.after.body, &ids);
+    }
+    collectText(e.docsStateBefore, &ids);
+    collectText(e.docsStateAfter, &ids);
+    if(e.profileRemoved) {
+      collectProfile(e.profile, &ids);
+    }
+  });
+  return ids;
+}
+
+QVariantMap AppController::unusedAttachments() const {
+  const att::Store store(attachmentsDir());
+  const QSet<QString> used = referencedAttachmentIds();
+  int count = 0;
+  qint64 bytes = 0;
+  for(const QString& id : store.ids()) {
+    if(!used.contains(id)) {
+      ++count;
+      bytes += qMax<qint64>(0, store.sizeOf(id));
+    }
+  }
+  QVariantMap out;
+  out["count"] = count;
+  out["bytes"] = static_cast<double>(bytes);
+  out["sizeText"] = att::formatSize(bytes, m_language == QStringLiteral("ru"));
+  return out;
+}
+
+QVariantMap AppController::cleanUpUnusedAttachments() {
+  // What an editor has typed but not yet handed over is a reference too.
+  emit flushEditorsRequested();
+  syncActiveNoteBody();
+  const att::Store store(attachmentsDir());
+  const QSet<QString> used = referencedAttachmentIds();
+  int count = 0;
+  qint64 bytes = 0;
+  for(const QString& id : store.ids()) {
+    if(used.contains(id)) {
+      continue;
+    }
+    const qint64 size = qMax<qint64>(0, store.sizeOf(id));
+    if(store.remove(id)) {
+      ++count;
+      bytes += size;
+    }
+  }
+  QVariantMap out;
+  out["count"] = count;
+  out["bytes"] = static_cast<double>(bytes);
+  out["sizeText"] = att::formatSize(bytes, m_language == QStringLiteral("ru"));
+  emit toast(count > 0 ? attText("cleanup.done").arg(count).arg(out["sizeText"].toString()) : attText("cleanup.none"));
+  return out;
+}
+
+// ── Profile export / import ──
+
+QStringList AppController::profileAttachmentIds(const Profile& p) const {
+  QSet<QString> ids;
+  collectProfile(p, &ids);
+  QStringList out(ids.cbegin(), ids.cend());
+  out.sort();
+  return out;
+}
+
+QJsonArray AppController::attachmentsForExport(const Profile& p, qint64* omittedBytes, int* omittedCount) const {
+  const att::Store store(attachmentsDir());
+  // The names a task kept for its files, so a file only a note links still
+  // gets a sensible one from the note's label.
+  QHash<QString, ::Attachment> meta;
+  for(const ::Task& t : p.tasks) {
+    for(const ::Attachment& a : t.attachments) {
+      meta.insert(a.id, a);
+    }
+  }
+  const auto labelsFrom = [&](const QString& text) {
+    const QHash<QString, QString> labels = att::refLabelsIn(text);
+    for(auto it = labels.cbegin(); it != labels.cend(); ++it) {
+      if(!meta.contains(it.key()) && !it.value().isEmpty()) {
+        meta.insert(it.key(), ::Attachment{it.key(), it.value(), 0, QString()});
+      }
+    }
+  };
+  for(const Note& n : p.notes) {
+    labelsFrom(n.body);
+  }
+  for(const DocPage& d : p.docPages) {
+    labelsFrom(d.body);
+  }
+  const QStringList ids = profileAttachmentIds(p);
+  qint64 total = 0;
+  int present = 0;
+  for(const QString& id : ids) {
+    const qint64 size = store.sizeOf(id);
+    if(size >= 0) {
+      total += size;
+      ++present;
+    }
+  }
+  *omittedBytes = 0;
+  *omittedCount = 0;
+  QJsonArray out;
+  if(total > att::kMaxExportBytes) {
+    *omittedBytes = total;
+    *omittedCount = present;
+    return out;
+  }
+  for(const QString& id : ids) {
+    QFile f(store.pathFor(id));
+    if(!store.contains(id) || !f.open(QIODevice::ReadOnly)) {
+      continue;  // missing here too: the task still says what it was
+    }
+    const ::Attachment a = meta.value(id, ::Attachment{id, id, 0, QString()});
+    QJsonObject o;
+    o["id"] = id;
+    o["name"] = a.name.isEmpty() ? id : a.name;
+    o["mime"] = a.mime.isEmpty() ? att::mimeFor(id) : a.mime;
+    const QByteArray bytes = f.readAll();
+    o["size"] = static_cast<double>(bytes.size());
+    o["data"] = QString::fromLatin1(bytes.toBase64());
+    out.append(o);
+  }
+  return out;
+}
+
+QHash<QString, QString> AppController::importAttachmentBlobs(const QJsonArray& blobs, QStringList* problems) {
+  const att::Store store(attachmentsDir());
+  const bool ru = m_language == QStringLiteral("ru");
+  QHash<QString, QString> remap;
+  for(const QJsonValue& v : blobs) {
+    const QJsonObject o = v.toObject();
+    const QString claimed = o.value("id").toString();
+    QString name = o.value("name").toString();
+    if(name.trimmed().isEmpty()) {
+      name = claimed;
+    }
+    // Never a path: the name is metadata, the id is recomputed from the bytes.
+    name = QFileInfo(name).fileName();
+    const QByteArray b64 = o.value("data").toString().toLatin1();
+    // A base64 string four thirds the size of the cap is the cap.
+    if(b64.size() > att::kMaxFileBytes / 3 * 4 + 4) {
+      problems->append(att::errorText(att::AddResult::TooLarge, name, ru));
+      continue;
+    }
+    const auto decoded = QByteArray::fromBase64Encoding(b64);
+    if(!decoded) {
+      problems->append(att::errorText(att::AddResult::Unreadable, name, ru));
+      continue;
+    }
+    // The stored name decides the extension, and with it the id: keep the
+    // claimed id's extension when the name lost it.
+    if(att::isValidId(claimed) && att::extensionOf(name) != att::extensionOf(claimed) && !att::extensionOf(claimed).isEmpty()) {
+      name += QLatin1Char('.') + att::extensionOf(claimed);
+    }
+    const att::AddResult r = store.addBytes(*decoded, name, o.value("mime").toString());
+    if(!r.ok()) {
+      problems->append(att::errorText(r.error, name, ru));
+      continue;
+    }
+    if(att::isValidId(claimed) && claimed != r.attachment.id) {
+      remap.insert(claimed, r.attachment.id);
+    }
+  }
+  return remap;
+}

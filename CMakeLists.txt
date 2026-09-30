@@ -207,10 +207,14 @@ qt_add_library(heap_core STATIC
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
     src/AppControllerTaskEdits.cpp
+    src/AppControllerSavedViews.cpp
+    src/views/SavedViewMatch.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
     # ── audit-time: end ──
     # ── audit-know: begin ──
+    src/storage/Attachments.cpp
+    src/AppControllerAttachments.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
@@ -259,6 +263,11 @@ qt_add_qml_module(heap_core
     # qmllint ratchet grew with each line of new QML. The app itself loads the
     # module from qrc, so only the tooling sees this path.
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/TodoCpp"
+    # The C++ models derive from QAbstractListModel, whose QML description is
+    # in QtQml.Models. Without the dependency qmllint on some Qts (CI's 6.9)
+    # cannot resolve the base: every model lost data()/rowCount()/index() and
+    # every Connections { target: AppController.tasks } read as a type error.
+    DEPENDENCIES QtQml.Models
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
@@ -268,6 +277,8 @@ qt_add_qml_module(heap_core
         # ── audit-plat: end ──
         # ── audit-tasks: begin ──
         qml/PlainText.js
+        qml/SavedViewsHost.qml
+        qml/SavedViewNameDialog.qml
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
@@ -275,6 +286,7 @@ qt_add_qml_module(heap_core
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml
         qml/LinkConfirmDialog.qml
+        qml/AttachmentChips.qml
         # ── audit-know: end ──
         # ── audit-ux: begin ──
         qml/PaletteMatch.js

@@ -269,6 +269,15 @@ check gates the merge into `master`. A PR that only touches docs or Markdown ski
 workflow (`pages.yml`); see [`site/README.md`](site/README.md). Work on a branch off `master` named
 `heap-<ticket>_<short-desc>`; keep the tree green.
 
+The qmllint ratchet runs CI's Qt (6.9.1), whose qmllint reports differently from newer ones. To get CI's verdict
+before pushing, install that Qt's QML modules once and run the same check against your build:
+
+```sh
+pip install aqtinstall
+python -m aqt install-qt windows desktop 6.9.1 win64_msvc2022_64 -O C:/Qt -m qtnetworkauth --archives qtbase qtdeclarative qtsvg
+python .github/scripts/qmllint_local.py --build build --qt C:/Qt/6.9.1/msvc2022_64   # or set HEAP_QMLLINT_QT
+```
+
 ## Project layout
 
 ```

@@ -306,6 +306,9 @@ heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
 # Regressions from the 2026-09-30 audit, tasks area (undo, ranks, recurrence,
 # the per-field clock flags of schema v10).
 heap_add_appcontroller_test(heap_audit_tasks_tests test_audit_tasks.cpp)
+# Saved views: storage round-trip and profile export/import, apply/modify/
+# update semantics, the count badges, undo and the Alt+N catalog entries.
+heap_add_appcontroller_test(heap_saved_views_tests test_saved_views.cpp)
 # ── audit-tasks: end ──
 # ── audit-time: begin ──
 # Calendar fixes from the 2026-09-30 audit: series drags and edits, reminders,
@@ -315,6 +318,9 @@ heap_add_appcontroller_test(heap_time_audit_tests test_time_audit.cpp)
 # ── audit-know: begin ──
 # Notes / docs / markdown regressions from the 2026-09-30 audit (KNOW-*, PLAT-21).
 heap_add_appcontroller_test(heap_know_audit_tests test_know_audit.cpp)
+# File attachments: the content-addressed store, references, undo, profile and
+# notes-folder export/import, cleanup, paste, safe open.
+heap_add_appcontroller_test(heap_attachments_tests test_attachments.cpp)
 # ── audit-know: end ──
 # ── audit-ux: begin ──
 # UX audit fixes that live in C++: first-run language, toast kinds, RU labels.

@@ -227,6 +227,7 @@ Item {
                 required property var ticket
                 required property string searchText
                 required property var checklist
+                required property int attachmentCount
                 readonly property var st: root.statusInfo(row.status)
                 x: Theme.inset
                 width: archList.width - 2 * Theme.inset
@@ -283,7 +284,7 @@ Item {
                         labels: row.labels, dueAt: row.dueAt, hasTime: row.hasTime,
                         // Archived tickets keep their badge and key (HEAP-117).
                         ticket: row.ticket, searchText: row.searchText,
-                        checklist: row.checklist
+                        checklist: row.checklist, attachmentCount: row.attachmentCount
                     })
                     onClicked: root.taskClicked(row.id)
                     onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)

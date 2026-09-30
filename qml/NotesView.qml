@@ -5,6 +5,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Controls.Basic
+import QtQuick.Dialogs
 import TodoCpp
 import "Mention.js" as Mention
 
@@ -79,7 +80,106 @@ Item {
 
     // The header's counts, on the same pause.
     property var _stats: ({ lines: 0, mentions: 0, tickets: 0 })
-    Timer { id: statsTimer; interval: 300; onTriggered: root._stats = AppController.noteStats(editor.text) }
+    Timer {
+        id: statsTimer
+        interval: 300
+        onTriggered: {
+            root._stats = AppController.noteStats(editor.text);
+            root._refreshAttachments();
+        }
+    }
+
+    // ── Attachments ──────────────────────────────────────────────────
+    // A note's files are the ones its text links ("attachments/<id>"), so the
+    // chips are read from the text and removing one takes the link out.
+    property var _noteAttachments: []
+    function _refreshAttachments() {
+        root._noteAttachments = editor.text.indexOf("attachments/") >= 0
+            ? AppController.markdownAttachments(editor.text) : [];
+    }
+    // Puts markdown links to stored files at the caret, each in a paragraph of
+    // its own so an image renders as an image. One edit: one Ctrl+Z.
+    function insertAttachmentRefs(added) {
+        if (!added || added.length === 0) return 0;
+        const refs = added.map(a => a.ref).join("\n\n");
+        editor.remove(editor.selectionStart, editor.selectionEnd);
+        const pos = editor.cursorPosition;
+        const text = editor.text;
+        let before = "";
+        if (pos > 0 && text.charAt(pos - 1) !== "\n") before = "\n\n";
+        else if (pos > 1 && text.charAt(pos - 2) !== "\n") before = "\n";
+        const after = (pos < text.length && text.charAt(pos) !== "\n") ? "\n\n" : "\n";
+        editor.insert(pos, before + refs + after);
+        editor.cursorPosition = pos + before.length + refs.length + after.length;
+        root._refreshAttachments();
+        return added.length;
+    }
+    function attachUrls(urls) {
+        if (!urls || urls.length === 0) return 0;
+        const list = [];
+        for (let i = 0; i < urls.length; ++i) list.push(urls[i]);
+        return root.insertAttachmentRefs(AppController.importAttachments(list));
+    }
+    // Ctrl+V with a file or a bare image on the clipboard.
+    function pasteAttachment() {
+        if (!AppController.clipboardHasAttachment()) return false;
+        root.insertAttachmentRefs(AppController.importClipboardAttachments());
+        return true;
+    }
+    // Takes every link to the file out of the note. The file stays in the
+    // attachments folder (Settings → Data cleans up what nothing uses).
+    function removeAttachmentRefs(attachmentId) {
+        const needle = "attachments/" + attachmentId;
+        const text = editor.text;
+        const spans = [];
+        let at = text.indexOf(needle);
+        while (at >= 0) {
+            const lineStart = text.lastIndexOf("\n", at - 1) + 1;
+            const open = text.lastIndexOf("](", at);
+            let first = open >= lineStart ? text.lastIndexOf("[", open) : -1;
+            const close = text.indexOf(")", at);
+            if (first < lineStart || close < 0) { at = text.indexOf(needle, at + needle.length); continue; }
+            if (first > lineStart && text.charAt(first - 1) === "!") first--;
+            let last = close + 1;
+            if (text.charAt(last) === "\n") last++;
+            spans.push([first, last]);
+            at = text.indexOf(needle, last);
+        }
+        for (let i = spans.length - 1; i >= 0; --i) editor.remove(spans[i][0], spans[i][1]);
+        root._refreshAttachments();
+        return spans.length;
+    }
+    FileDialog {
+        id: attachDialog
+        fileMode: FileDialog.OpenFiles
+        title: I18n.t("att.dialog.title")
+        onAccepted: root.attachUrls(selectedFiles)
+    }
+    Shortcut {
+        sequence: "Ctrl+Shift+A"
+        enabled: editor.activeFocus
+        onActivated: attachDialog.open()
+    }
+    // Files dropped anywhere on Notes are linked into the open note.
+    DropArea {
+        id: noteFileDrop
+        objectName: "notes-file-drop"
+        anchors.fill: parent
+        z: 50
+        keys: ["text/uri-list"]
+        onEntered: (drag) => { drag.accepted = drag.hasUrls; }
+        onDropped: (drop) => {
+            if (drop.hasUrls && root.attachUrls(drop.urls) > 0) drop.accept(Qt.CopyAction);
+        }
+    }
+    Rectangle {
+        visible: noteFileDrop.containsDrag
+        anchors.fill: parent
+        z: 49
+        color: "transparent"
+        border.color: Theme.accent
+        border.width: 2
+    }
 
     // What the header calls the open note. m.data() is a call, not something
     // a binding can watch, so it is refreshed when the note or the list moves.
@@ -472,6 +572,42 @@ Item {
                     font.pixelSize: Theme.fsSm
                 }
 
+                // ── Attach files (Ctrl+Shift+A in the editor) ──────────
+                Rectangle {
+                    id: attachBtn
+                    objectName: "notes-attach"
+                    Layout.preferredHeight: 24
+                    radius: Theme.radiusMd
+                    color: attachMA.containsMouse ? Theme.panel3 : Theme.panel2
+                    border.color: Theme.border
+                    border.width: 1
+                    implicitWidth: attachTxt.implicitWidth + 20
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: I18n.t("att.button")
+                    Keys.onReturnPressed: attachDialog.open()
+                    Keys.onEnterPressed: attachDialog.open()
+                    Keys.onSpacePressed: attachDialog.open()
+                    FocusRing {}
+                    Text {
+                        id: attachTxt
+                        anchors.centerIn: parent
+                        text: "📎"
+                        color: Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                    }
+                    MouseArea {
+                        id: attachMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: attachDialog.open()
+                    }
+                    ToolTip.visible: attachMA.containsMouse
+                    ToolTip.delay: 500
+                    ToolTip.text: I18n.t("att.button.tip.note")
+                }
+
                 // ── List toggle ────────────────────────────────────────
                 Rectangle {
                     objectName: "notes-list-toggle"
@@ -571,6 +707,25 @@ Item {
                         }
                     }
                 }
+            }
+        }
+
+        // ── The note's files ──────────────────────────────────────
+        Rectangle {
+            objectName: "notes-attachments"
+            visible: root._noteAttachments.length > 0
+            Layout.fillWidth: true
+            Layout.preferredHeight: noteChips.implicitHeight + 2 * Theme.spSm
+            color: Theme.panel
+            Rectangle { anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom; height: 1; color: Theme.border }
+            AttachmentChips {
+                id: noteChips
+                objectName: "notes-attachment-chips"
+                anchors.left: parent.left; anchors.right: parent.right
+                anchors.verticalCenter: parent.verticalCenter
+                anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
+                model: root._noteAttachments
+                onRemoveRequested: (attachmentId) => root.removeAttachmentRefs(attachmentId)
             }
         }
 
@@ -693,6 +848,13 @@ Item {
                                 root._hideAutocomplete();
                                 event.accepted = true; return;
                             }
+                        }
+
+                        // A file or a bare image on the clipboard is attached
+                        // and linked; anything else pastes as text.
+                        if (event.matches(StandardKey.Paste) && root.pasteAttachment()) {
+                            event.accepted = true;
+                            return;
                         }
 
                         // Ctrl+Z with nothing left to undo in the text means the
@@ -1236,6 +1398,7 @@ Item {
         root._refreshTitle();
         root._stats = AppController.noteStats(editor.text);
         root._refreshLinks();
+        root._refreshAttachments();
     }
     // Markdown editing, in C++ so the rules can be tested directly rather
     // than only by driving the UI.

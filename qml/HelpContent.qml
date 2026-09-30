@@ -29,7 +29,7 @@ Item {
         {anchor: "help-people", label: root.tr2("People — contacts, mentions, state cycle", "Люди — контакты, упоминания, цикл состояний")},
         {anchor: "help-profiles", label: root.tr2("Profiles — workspaces, JSON", "Профили — рабочие пространства, JSON")},
         {anchor: "help-search", label: root.tr2("Search & Command Palette", "Поиск и палитра команд")},
-        {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done", "Фильтры — приоритеты, архив, выполненные")},
+        {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done, saved views", "Фильтры — приоритеты, архив, выполненные, сохранённые виды")},
         {anchor: "help-tweaks", label: root.tr2("Tweaks — theme, density, contrast", "Твики — тема, плотность, контраст")},
         {anchor: "help-hotkeys", label: root.tr2("Hotkeys — rebinding and conflicts", "Горячие клавиши — переназначение и конфликты")},
         {anchor: "help-automation", label: root.tr2("Automation & Notifications", "Автоматизация и уведомления")},
@@ -301,6 +301,11 @@ Item {
             Body {
                 text: root.tr2("Images render from disk: an absolute path (C:\\shots\\x.png, file:///…) anywhere, a relative one from the attachments folder in heap's data folder. A remote image is shown as a link, with Load images to fetch it on request — heap makes no network requests you did not ask for, and network shares are never opened.",
                               "Изображения с диска отрисовываются: абсолютный путь (C:\\shots\\x.png, file:///…) — откуда угодно, относительный — из папки attachments в папке данных heap. Удалённое изображение показывается ссылкой, а кнопка «Загрузить изображения» скачивает его по запросу — heap не делает сетевых запросов, о которых вы не просили, и никогда не открывает сетевые папки.")
+            }
+            Body {
+                objectName: "help-attachments-notes"
+                text: root.tr2("Attach a file to a note with 📎 in the header or Ctrl+Shift+A, by dropping it on Notes, or by pasting — Ctrl+V with a screenshot on the clipboard saves it as a PNG, with files copied in a file manager stores them. The note gets a link at the cursor: an image shows inline, any other file is a link that opens it. The note's files are listed as chips above the text; removing a chip takes the link out (Ctrl+Z puts it back).",
+                              "Файл прикрепляется к заметке кнопкой 📎 в шапке или Ctrl+Shift+A, перетаскиванием в «Заметки» или вставкой: Ctrl+V со снимком экрана в буфере сохраняет его как PNG, с файлами, скопированными в проводнике, — сохраняет их. В заметку на место курсора попадает ссылка: картинка видна сразу, любой другой файл открывается по ссылке. Файлы заметки показаны плашками над текстом; если убрать плашку, пропадёт и ссылка (Ctrl+Z вернёт её).")
             }
         }
 
@@ -651,6 +656,15 @@ Item {
             Body {
                 text: root.tr2("In the timeline, completed tasks are hidden by default. The toggle shows them as a dashed card.",
                               "В ленте выполненные задачи по умолчанию скрыты. Переключатель показывает их пунктирной карточкой.")
+            }
+
+            H3 {
+                text: root.tr2("Saved views",
+                              "Сохранённые виды")
+            }
+            Body {
+                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the palette asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the palette has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query heap can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
+                              "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в палитре спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; Alt+1…Alt+9 или щелчок применяет вид, а в палитре для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
             }
 
             H3 {
@@ -1018,6 +1032,11 @@ Item {
                 text: root.tr2("At most once per interval (hourly, daily — the default — or weekly; Settings → Data), checked on save, heap. copies state.json into the backups folder next to it. The newest 20 copies are kept, older ones are deleted.",
                               "Не чаще раза за интервал (час, день — по умолчанию — или неделя; Настройки → Данные), с проверкой при сохранении, heap. копирует state.json в папку backups рядом с ним. Хранятся 20 последних копий, более старые удаляются.")
             }
+            Body {
+                objectName: "help-attachments-backups"
+                text: root.tr2("Backups are copies of state.json only — attached files are not in them. The files stay in the attachments folder, so a restored backup finds them unless Clean up removed them since. To keep everything, copy the whole data folder (Settings → About shows where it is).",
+                              "Бэкапы — это копии только state.json, прикреплённых файлов в них нет. Файлы остаются в папке attachments, так что восстановленный бэкап их найдёт, если с тех пор их не удалила очистка. Чтобы сохранить всё, скопируйте всю папку данных (где она — видно в Настройки → О программе).")
+            }
 
             H3 {
                 text: root.tr2("Restore",
@@ -1053,6 +1072,16 @@ Item {
             Body {
                 text: root.tr2("Loads a .json into a new profile or over an existing one (with confirmation). Useful for migrating between machines or restoring from a backup.",
                               "Загружает .json в новый профиль или поверх существующего (с подтверждением). Пригодится для переезда между машинами или восстановления из бэкапа.")
+            }
+
+            H3 {
+                text: root.tr2("Attachments",
+                              "Вложения")
+            }
+            Body {
+                objectName: "help-attachments"
+                text: root.tr2("A task carries files: Attach files… in the editor (or Ctrl+Shift+A), a drop on the editor or on a card, and an image pasted into the description. The card shows 📎 and a count. In the editor each file is a chip — Tab to it, Enter opens it in its default app, Shift+Enter shows it in its folder, Delete detaches it; attaching and detaching are one undo step each. A program or a script asks before it opens, and a file that is gone shows as broken. Files are stored once, by content, in the attachments folder next to state.json (at most 100 MB each; links and shortcuts are never followed). Detaching keeps the file: Settings → Data → Unused attachments shows what nothing refers to any more and deletes it after a second press. A profile export carries the files (up to 64 MB, otherwise it says what it left out), and the notes-folder export copies them into an attachments folder beside the notes.",
+                              "К задаче можно прикрепить файлы: «Прикрепить файлы…» в редакторе (или Ctrl+Shift+A), перетаскиванием в редактор или на карточку, а картинку — вставкой в описание. На карточке видно 📎 и число. В редакторе каждый файл — плашка: Tab до неё, Enter открывает в программе по умолчанию, Shift+Enter показывает в папке, Delete открепляет; прикрепление и открепление — по одному шагу отмены. Программа или скрипт перед открытием спрашивают подтверждение, а пропавший файл показан как битый. Файлы хранятся один раз, по содержимому, в папке attachments рядом с state.json (до 100 МБ каждый; по ссылкам и ярлыкам heap не ходит). Открепление файл не удаляет: Настройки → Данные → «Неиспользуемые вложения» показывает, на что больше ничто не ссылается, и удаляет по второму нажатию. Экспорт профиля несёт файлы с собой (до 64 МБ, иначе говорит, что оставил), а экспорт заметок папкой копирует их в папку attachments рядом с заметками.")
             }
 
             H3 {
