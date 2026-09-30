@@ -39,6 +39,10 @@ namespace heap::platform {
 class GlobalHotkey;
 }
 
+namespace heap::notes {
+struct VaultPlanItem;
+}
+
 namespace heap::update {
 class Updater;
 }
@@ -265,6 +269,10 @@ class AppController : public QObject {
   }
 
   void setDocsState(const QString& v);
+  // The same write as one entry on the undo stack, labelled with what an undo
+  // says it restored. The docs catalogue's deletions go through here so they
+  // share Ctrl+Z and the stack with everything else.
+  Q_INVOKABLE void setDocsStateUndoable(const QString& v, const QString& label);
 
   NoteModel* notes() {
     return &m_notes;
@@ -289,14 +297,26 @@ class AppController : public QObject {
   Q_INVOKABLE void moveNoteToFolder(const QString& id, const QString& folder);
   // Every folder in use, sorted, for a tree or a picker.
   Q_INVOKABLE QStringList noteFolders() const;
+  // Re-file every note in `folder` (and its subfolders) under `newName`; an
+  // empty name files them at the root. One undo step; returns how many moved.
+  Q_INVOKABLE int renameNoteFolder(const QString& folder, const QString& newName);
+  // Remove the folder, keeping its notes: they move one level up.
+  Q_INVOKABLE int removeNoteFolder(const QString& folder);
 
   // ── Notes as a folder of .md files ──
   //
   // Import returns a summary rather than a bool, for the same reason .ics does:
   // a vault that brought in forty notes and skipped two is neither a success
-  // nor a failure. Keys: imported, updated, skipped, warnings.
+  // nor a failure. Keys: imported, updated, unchanged, kept (edited here, not
+  // on disk), conflicts (edited in both: the file arrives as a copy), skipped,
+  // files, folder, warnings. The whole import is one undo step.
   Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl);
-  Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl) const;
+  // The same summary without changing anything, for a confirm step.
+  Q_INVOKABLE QVariantMap previewNotesFolder(const QUrl& folderUrl);
+  // Writes into a new folder inside `folderUrl` — named `subfolder`, or dated
+  // when that is empty, with a suffix when the name is taken — so an export
+  // never overwrites a file. Keys: written, skipped, folder.
+  Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl, const QString& subfolder = QString());
 
   // ── Links between notes ──
   //
@@ -357,6 +377,9 @@ class AppController : public QObject {
   // timestamped horizontal-rule header. First entry gets the heading only
   // (no leading HR — there is nothing to separate from yet).
   Q_INVOKABLE void appendNoteEntry(const QString& text);
+  // The title of the note appendNoteEntry() writes into, so the quick-note
+  // popup can say where the text will land before it does.
+  Q_INVOKABLE QString quickNoteTarget() const;
 
   // Note wiki-links (HEAP-79). Headings feed [[…]] autocomplete; backlinks list
   // which lines reference each [[target]]; the offset lets the editor jump to a
@@ -365,6 +388,12 @@ class AppController : public QObject {
   Q_INVOKABLE QStringList noteHeadings(const QString& markdown) const;
   Q_INVOKABLE QVariantList noteBacklinks(const QString& markdown) const;
   Q_INVOKABLE int noteHeadingOffset(const QString& markdown, const QString& heading) const;
+  // The open note's own [[links]], grouped by target like noteBacklinks(), each
+  // resolved against every note: { target, kind: note|heading|missing, noteId,
+  // heading, resolved, refs: [{ line, text }] }.
+  Q_INVOKABLE QVariantList outgoingNoteLinks(const QString& markdown) const;
+  // { lines, mentions, tickets } for the editor's header.
+  Q_INVOKABLE QVariantMap noteStats(const QString& markdown) const;
 
   QString appSettingsJson() const {
     return m_appSettingsJson;
@@ -742,6 +771,8 @@ class AppController : public QObject {
   Q_INVOKABLE void setPersonState(const QString& id, const QString& state);
   Q_INVOKABLE QVariantMap newPersonDraft() const;
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
+  // The person an "@handle" in a note names, or empty.
+  Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
   Q_INVOKABLE void savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 
@@ -885,6 +916,15 @@ class AppController : public QObject {
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 
   Q_INVOKABLE QVariantList commandPaletteEntries() const;
+  // Full text over every note and every doc page of every profile, one row per
+  // section, in the palette's row shape: { kind: "note"|"docPage", label, sub,
+  // body, profileId, noteId|pageId, line, color }. Every word of `query` must
+  // appear; `limit` <= 0 means no limit.
+  Q_INVOKABLE QVariantList searchFullText(const QString& query, int limit = 50) const;
+  // Ids of the active profile's notes / doc pages whose title, folder or body
+  // contain every word of `query` — what the list filters show.
+  Q_INVOKABLE QStringList notesMatching(const QString& query) const;
+  Q_INVOKABLE QStringList docPagesMatching(const QString& query) const;
 
   // ---- Backups ----
   Q_INVOKABLE QVariantList listBackups() const;
@@ -990,6 +1030,10 @@ class AppController : public QObject {
   // only in the text field at this point; it flushes on this signal, and they
   // land in the note they were typed into instead of the one being opened.
   void aboutToChangeActiveNote();
+  // Asks every editor with a debounced write pending (notes, doc pages, the
+  // docs catalogue) to write it now. Emitted before anything that reads the
+  // whole profile — an export, a search — so it sees what is on screen.
+  void flushEditorsRequested();
   void activeDocPageChanged();
   void appSettingsJsonChanged();
   void statusesChanged();
@@ -1113,6 +1157,14 @@ class AppController : public QObject {
   // A note with no body, made active without announcing a new notesState:
   // callers write the body next and that is the one change the editor sees.
   QString createActiveNote(const QString& title);
+  // Reads a vault folder and decides what importing it would do (see
+  // heap::notes::planImport); the summary is what import and preview return.
+  QVariantMap planNotesImport(const QUrl& folderUrl, QVector<heap::notes::VaultPlanItem>* plan) const;
+  // Tells the contact importer about imported contacts that a docs change
+  // removed (dismiss) or brought back (restore).
+  void syncDismissedContacts(const QString& beforeJson, const QString& afterJson);
+  // The palette rows for one profile's notes and doc pages (see searchFullText).
+  QVariantList fullTextEntries(const Profile& p) const;
   QString m_appSettingsJson;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.

@@ -91,6 +91,9 @@ class MdBlockModel : public QAbstractListModel {
   Q_INVOKABLE int rowForLine(int line) const;
   Q_INVOKABLE int firstLineOfRow(int row) const;
   Q_INVOKABLE int lastLineOfRow(int row) const;
+  // The row holding footnote `id`'s definition, or -1: what a click on a
+  // footnote reference scrolls to.
+  Q_INVOKABLE int rowForFootnote(const QString& id) const;
 
  private:
   struct Row {

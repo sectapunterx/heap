@@ -310,6 +310,8 @@ heap_add_appcontroller_test(heap_audit_tasks_tests test_audit_tasks.cpp)
 # ── audit-time: begin ──
 # ── audit-time: end ──
 # ── audit-know: begin ──
+# Notes / docs / markdown regressions from the 2026-09-30 audit (KNOW-*, PLAT-21).
+heap_add_appcontroller_test(heap_know_audit_tests test_know_audit.cpp)
 # ── audit-know: end ──
 # ── audit-ux: begin ──
 # UX audit fixes that live in C++: first-run language, toast kinds, RU labels.

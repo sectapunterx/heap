@@ -176,9 +176,9 @@ var ASH = {
         nowLine: "#cf7a7c", synKeyword: "#a59bc6", synString: "#83b39b", synNumber: "#c9ab70",
         synComment: "#7e7e7e", synType: "#86a3c9", synBuiltin: "#d4d4d4", codeBg: "#121212",
         code: "#c4c4c4", mention: "#86a3c9", ticket: "#a3a3a3", tag: "#a59bc6",
-        math: "#c9ab70", heading: "#a3a3a3", highlightBg: "#14ffffff", mdLink: "#94add0",
+        math: "#c9ab70", heading: "#a3a3a3", highlightBg: "#4dc9ab70", mdLink: "#94add0",
         mdCode: "#d4d4d4", mdCodeBg: "#1f1f1f", mdMention: "#86a3c9", mdTicket: "#d4d4d4",
-        mdTag: "#a59bc6", mdMath: "#c9ab70", mdHighlight: "#14ffffff"
+        mdTag: "#a59bc6", mdMath: "#c9ab70", mdHighlight: "#4dc9ab70"
     }
 };
 
@@ -198,9 +198,9 @@ var STONE = {
         nowLine: "#c97b72", synKeyword: "#b09ba8", synString: "#95ad88", synNumber: "#c6a66c",
         synComment: "#847d77", synType: "#91a3b5", synBuiltin: "#d6d1cb", codeBg: "#131110",
         code: "#c9c3bc", mention: "#91a3b5", ticket: "#a8a29d", tag: "#b09ba8",
-        math: "#c6a66c", heading: "#a8a29d", highlightBg: "#14ffffff", mdLink: "#a3b1be",
+        math: "#c6a66c", heading: "#a8a29d", highlightBg: "#4dc6a66c", mdLink: "#a3b1be",
         mdCode: "#d6d1cb", mdCodeBg: "#211e1c", mdMention: "#91a3b5", mdTicket: "#d6d1cb",
-        mdTag: "#b09ba8", mdMath: "#c6a66c", mdHighlight: "#14ffffff"
+        mdTag: "#b09ba8", mdMath: "#c6a66c", mdHighlight: "#4dc6a66c"
     }
 };
 
@@ -220,9 +220,9 @@ var SLATE = {
         nowLine: "#c77c84", synKeyword: "#9d98c8", synString: "#80ad9d", synNumber: "#c2a772",
         synComment: "#747f8e", synType: "#84a0c6", synBuiltin: "#cdd3db", codeBg: "#0f1215",
         code: "#c0c7d0", mention: "#84a0c6", ticket: "#9da5b0", tag: "#9d98c8",
-        math: "#c2a772", heading: "#9da5b0", highlightBg: "#14ffffff", mdLink: "#90aad0",
+        math: "#c2a772", heading: "#9da5b0", highlightBg: "#4dc2a772", mdLink: "#90aad0",
         mdCode: "#cdd3db", mdCodeBg: "#1c2026", mdMention: "#84a0c6", mdTicket: "#cdd3db",
-        mdTag: "#9d98c8", mdMath: "#c2a772", mdHighlight: "#14ffffff"
+        mdTag: "#9d98c8", mdMath: "#c2a772", mdHighlight: "#4dc2a772"
     }
 };
 
@@ -242,9 +242,9 @@ var SAGE = {
         nowLine: "#c47d73", synKeyword: "#a79db6", synString: "#95b489", synNumber: "#c1a96f",
         synComment: "#788075", synType: "#8aa5b3", synBuiltin: "#d0d6cc", codeBg: "#101210",
         code: "#c3c9bf", mention: "#8aa5b3", ticket: "#a0a79c", tag: "#a79db6",
-        math: "#c1a96f", heading: "#a0a79c", highlightBg: "#14ffffff", mdLink: "#9db6c0",
+        math: "#c1a96f", heading: "#a0a79c", highlightBg: "#4dc1a96f", mdLink: "#9db6c0",
         mdCode: "#d0d6cc", mdCodeBg: "#1d201c", mdMention: "#8aa5b3", mdTicket: "#d0d6cc",
-        mdTag: "#a79db6", mdMath: "#c1a96f", mdHighlight: "#14ffffff"
+        mdTag: "#a79db6", mdMath: "#c1a96f", mdHighlight: "#4dc1a96f"
     }
 };
 
@@ -267,9 +267,9 @@ var MINIMAL_DARK = {
         nowLine: "#fb414a", synKeyword: "#a78bfa", synString: "#34d399", synNumber: "#fbbf24",
         synComment: "#7d7d7d", synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111",
         code: "#d4d4d4", mention: "#60a5fa", ticket: "#a3a3a3", tag: "#a78bfa",
-        math: "#fbbf24", heading: "#858585", highlightBg: "#14ffffff", mdLink: "#60a5fa",
+        math: "#fbbf24", heading: "#858585", highlightBg: "#4dfbbf24", mdLink: "#60a5fa",
         mdCode: "#e5e5e5", mdCodeBg: "#1c1c1c", mdMention: "#60a5fa", mdTicket: "#f5f5f5",
-        mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#14ffffff"
+        mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#4dfbbf24"
     }
 };
 

@@ -445,6 +445,17 @@ QJsonObject noteToJson(const Note& n) {
   o["pinned"] = n.pinned;
   o["created"] = dtToStr(n.created);
   o["updated"] = dtToStr(n.updated);
+  // Optional, written only when set: a note that never met a vault folder
+  // keeps the shape it always had.
+  if(!n.vaultPath.isEmpty()) {
+    o["vaultPath"] = n.vaultPath;
+  }
+  if(!n.vaultHash.isEmpty()) {
+    o["vaultHash"] = n.vaultHash;
+  }
+  if(!n.frontmatter.isEmpty()) {
+    o["frontmatter"] = n.frontmatter;
+  }
   return o;
 }
 
@@ -457,6 +468,9 @@ Note noteFromJson(const QJsonObject& o) {
   n.pinned = o["pinned"].toBool();
   n.created = dtFromStr(o["created"].toString());
   n.updated = dtFromStr(o["updated"].toString());
+  n.vaultPath = o["vaultPath"].toString();
+  n.vaultHash = o["vaultHash"].toString();
+  n.frontmatter = o["frontmatter"].toString();
   return n;
 }
 

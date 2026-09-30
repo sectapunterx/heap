@@ -44,12 +44,15 @@ Popup {
             root.close();
             return;
         }
+        // Named before the append: with no note open it lands in Inbox, and
+        // the confirmation should say so, not "Note saved" somewhere unseen.
+        const into = AppController.quickNoteTarget();
         AppController.appendNoteEntry(body);
         editor.text = "";
         at.dismiss();
         root.close();
         const flat = body.trim().replace(/\s+/g, " ");
-        root.captured(I18n.t("quickNote.done"), flat.length > 140 ? flat.substring(0, 139) + "…" : flat, "");
+        root.captured(I18n.t("quickNote.doneInto").arg(into), flat.length > 140 ? flat.substring(0, 139) + "…" : flat, "");
     }
 
     function _maybeDiscard() {
@@ -60,7 +63,9 @@ Popup {
         confirmDiscard.open();
     }
 
+    property string _target: ""
     onOpened: {
+        root._target = AppController.quickNoteTarget();
         editor.text = "";
         at.dismiss();
         editor.forceActiveFocus();
@@ -82,7 +87,11 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
-            text: I18n.t("quickNote.title")
+            objectName: "quick-note-target"
+            // Where it goes, before it goes there.
+            text: I18n.t("quickNote.titleInto").arg(root._target)
+            elide: Text.ElideRight
+            Layout.fillWidth: true
             color: Theme.textMuted
             font.pixelSize: Theme.fsXs
             font.weight: Font.DemiBold
@@ -198,6 +207,9 @@ Popup {
     MentionAutocomplete {
         id: at
         target: editor
+        // The text goes into a note, where the editor writes @Name_Like_This;
+        // an id-style @o.t for the same person read as somebody else.
+        insertNames: true
     }
 
     // ── Discard confirmation ──

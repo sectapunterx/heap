@@ -222,6 +222,16 @@ struct Note {
   bool pinned{};
   QDateTime created;
   QDateTime updated;
+  // Where the note last met a folder of .md files (see notes/MdVault.h): the
+  // file's path relative to that folder, and a hash of the title and body the
+  // file held then. The hash is what tells a re-import which side changed —
+  // without it an edit made in heap since the last import was overwritten by
+  // the older file. Empty for a note that never left heap.
+  QString vaultPath;
+  QString vaultHash;
+  // The frontmatter lines heap has no field for (Obsidian's tags, aliases, …),
+  // kept verbatim so an export writes them back instead of stripping them.
+  QString frontmatter;
 
   bool operator==(const Note&) const = default;
 };
@@ -310,7 +320,7 @@ class NoteModel : public QAbstractListModel {
     return m_items;
   }
 
-  int indexOfId(const QString& id) const;
+  Q_INVOKABLE int indexOfId(const QString& id) const;
   void upsert(const Note& n);
   // Undo puts a deleted note back in its old row, not at the end of the list.
   void insertAt(int row, const Note& n);

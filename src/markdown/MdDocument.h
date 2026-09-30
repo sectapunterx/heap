@@ -47,6 +47,13 @@ class MdDocument : public QObject {
   // honest about a document that has grown too large rather than just feeling
   // slow.
   Q_PROPERTY(int lastParseMs READ lastParseMs NOTIFY parsed)
+  // Parse as the text changes (true), or only when asked (false): an editor
+  // with its preview hidden has no use for a parse of every pause, and at
+  // megabytes each one is a visible stall. A query (rowForLine, flush, …)
+  // still parses on demand, and going live again catches up.
+  Q_PROPERTY(bool live READ live WRITE setLive NOTIFY liveChanged)
+  // Where relative image paths are looked up (see resolveImage()).
+  Q_PROPERTY(QString imageBaseDir READ imageBaseDir WRITE setImageBaseDir NOTIFY imageBaseDirChanged)
 
  public:
   explicit MdDocument(QObject* parent = nullptr);
@@ -73,6 +80,18 @@ class MdDocument : public QObject {
 
   void setAllowRemoteImages(bool allow);
 
+  bool live() const {
+    return m_live;
+  }
+
+  void setLive(bool live);
+
+  QString imageBaseDir() const {
+    return m_imageBaseDir;
+  }
+
+  void setImageBaseDir(const QString& dir);
+
   QVariantList outlineList() const {
     return m_outline;
   }
@@ -89,6 +108,7 @@ class MdDocument : public QObject {
   Q_INVOKABLE int rowForLine(int line);
   Q_INVOKABLE int firstLineOfRow(int row);
   Q_INVOKABLE int lastLineOfRow(int row);
+  Q_INVOKABLE int rowForFootnote(const QString& id);
   // 0-based line holding a UTF-16 cursor position, and the position at which
   // a line starts. The editor counts in cursor positions; the model counts in
   // lines.
@@ -115,6 +135,8 @@ class MdDocument : public QObject {
   void textChanged();
   void paletteChanged();
   void allowRemoteImagesChanged();
+  void liveChanged();
+  void imageBaseDirChanged();
   void parsed();
 
  private:
@@ -125,6 +147,8 @@ class MdDocument : public QObject {
   QString m_text;
   QVariantMap m_palette;
   bool m_allowRemoteImages = false;
+  bool m_live = true;
+  QString m_imageBaseDir;
 
   MdSourceMap m_src;
   MdAst m_ast;

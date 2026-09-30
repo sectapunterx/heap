@@ -274,9 +274,33 @@ TEST(MdHtmlTest, EmitsRemoteImagesOnceAllowed) {
 
 TEST(MdHtmlTest, LocalImagesAlwaysRender) {
   // An attachment is a file the author already has; nothing leaves the machine.
-  const QString html = renderParagraph(QStringLiteral("![diagram](attachments/abc.png)\n"));
-  EXPECT_TRUE(html.contains(QStringLiteral("<img")));
-  EXPECT_TRUE(html.contains(QStringLiteral("attachments/abc.png")));
+  // Relative to the base directory, as a file URL the view can load: handed
+  // over as-is it resolved against the QML file (qrc:) and never displayed.
+  MdHtmlOptions options = testOptions();
+  options.imageBaseDir = QStringLiteral("C:/data/attachments");
+  const QString html = renderFirst(QStringLiteral("![diagram](shots/abc.png)\n"), BlockType::Paragraph, options);
+  EXPECT_TRUE(html.contains(QStringLiteral("<img src=\"file:///C:/data/attachments/shots/abc.png\""))) << html.toStdString();
+}
+
+// Audit 2026-09-30 KNOW-25: local images never displayed.
+TEST(MdHtmlTest, ResolveImage_LocalDrivePathsAndFileUrlsAreLoadable) {
+  EXPECT_EQ(resolveImage(QStringLiteral("C:\\shots\\x.png"), {}).url, QStringLiteral("file:///C:/shots/x.png"));
+  EXPECT_FALSE(resolveImage(QStringLiteral("C:/shots/x.png"), {}).blocked);
+  EXPECT_EQ(resolveImage(QStringLiteral("file:///C:/shots/x.png"), {}).url, QStringLiteral("file:///C:/shots/x.png"));
+  EXPECT_TRUE(resolveImage(QStringLiteral("https://x/y.png"), {}).remote);
+}
+
+TEST(MdHtmlTest, ResolveImage_SharesAndHostsStayBlocked) {
+  EXPECT_TRUE(resolveImage(QStringLiteral("\\\\host\\share\\x.png"), {}).blocked);
+  EXPECT_TRUE(resolveImage(QStringLiteral("//host/x.png"), {}).blocked);
+  EXPECT_TRUE(resolveImage(QStringLiteral("file://host/share/x.png"), {}).blocked);
+  EXPECT_TRUE(resolveImage(QStringLiteral("smb://host/x.png"), {}).blocked);
+}
+
+TEST(MdHtmlTest, ResolveImage_RelativePathsNeedABaseAndCannotClimbOut) {
+  EXPECT_TRUE(resolveImage(QStringLiteral("a/x.png"), {}).url.isEmpty());
+  EXPECT_TRUE(resolveImage(QStringLiteral("../../x.png"), QStringLiteral("C:/data/attachments")).url.isEmpty());
+  EXPECT_EQ(resolveImage(QStringLiteral("a/x.png"), QStringLiteral("C:/data/attachments")).url, QStringLiteral("file:///C:/data/attachments/a/x.png"));
 }
 
 // ── Maths and plain text ────────────────────────────────────────────

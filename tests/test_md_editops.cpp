@@ -209,6 +209,28 @@ TEST(MdEditOpsTest, EnterContinuesAList) {
   EXPECT_EQ(editor.textWithCaret(), QStringLiteral("- first\n- |"));
 }
 
+// Audit 2026-09-30: splitting an item left the separating space behind the
+// new marker, "-  world".
+TEST(MdEditOpsTest, SplittingAListItemDoesNotDoubleTheSpace) {
+  Editor editor(QStringLiteral("- hello world"));
+  editor.caretAfter(QStringLiteral("- hello"));
+  bool handled = false;
+  editor.setSelection(continueLine(editor.document(), editor.selection(), &handled));
+  EXPECT_TRUE(handled);
+  EXPECT_EQ(editor.textWithCaret(), QStringLiteral("- hello\n- |world"));
+}
+
+// A multi-line selection is what Tab and heading cycling act on — every line
+// it touches, not just the caret's.
+TEST(MdEditOpsTest, TabIndentsEverySelectedLine) {
+  Editor editor(QStringLiteral("- a\n- b\n- c"));
+  editor.select(0, 9);
+  editor.setSelection(indentLines(editor.document(), editor.selection(), false));
+  EXPECT_EQ(editor.text(), QStringLiteral("  - a\n  - b\n  - c"));
+  editor.setSelection(indentLines(editor.document(), editor.selection(), true));
+  EXPECT_EQ(editor.text(), QStringLiteral("- a\n- b\n- c"));
+}
+
 TEST(MdEditOpsTest, EnterCountsAnOrderedList) {
   Editor editor(QStringLiteral("3. third"));
   editor.caretAfter(QStringLiteral("3. third"));

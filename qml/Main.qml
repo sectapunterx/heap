@@ -6,6 +6,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import QtQuick.Dialogs
 import TodoCpp
+import "DocsStarter.js" as DocsStarter
 
 ApplicationWindow {
     id: win
@@ -42,6 +43,48 @@ ApplicationWindow {
         if (v === "notes") return notesLoader.item;
         if (v === "docs") return docsLoader.item;
         return viewLoader.item;
+    }
+
+    // A #TICKET clicked in a note or doc page: the heap id, or a tracker key
+    // ("PROJ-123") that a mirrored task carries.
+    function openTaskById(key) {
+        const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
+        if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+        else toast.show(I18n.t("notes.link.noTask").arg(key), "warning");
+    }
+
+    // A profile that has never opened Docs has no docs blob yet, so the
+    // starter catalogue DocsView seeds on its first visit was unsearchable
+    // from Ctrl+K until then. Seeded here instead, the same content in the
+    // same language — DocsView reads it back as if it had written it.
+    function seedStarterDocs() {
+        if ((AppController.docsState || "").length > 0) return;
+        AppController.docsState = JSON.stringify({
+            sections: DocsStarter.sections(I18n.lang, [Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus]),
+            snippets: DocsStarter.snippets(I18n.lang),
+            contacts: DocsStarter.contacts(I18n.lang)
+        });
+    }
+
+    // The same link rules outside Notes: a doc page's [[note]] opens the note.
+    function followMdLink(kind, target) {
+        if (kind === "task") { win.openTaskById(target); return; }
+        if (kind === "person") {
+            const pid = AppController.personIdForHandle(target);
+            if (pid.length > 0) personEditor.showFor(AppController.personById(pid));
+            return;
+        }
+        if (kind === "note") {
+            const hit = AppController.resolveNoteLink(target);
+            if (hit.kind === "note" || hit.kind === "heading") {
+                AppController.activeNoteId = hit.noteId;
+                AppController.currentView = "notes";
+                return;
+            }
+            const t = AppController.taskById(String(target).trim());
+            if (t && t.id) { taskEditor.showFor(Object.assign({}, t)); return; }
+            toast.show(I18n.t("notes.link.noNote").arg(target), "warning");
+        }
     }
 
     function _settingsObject() {
@@ -271,6 +314,7 @@ ApplicationWindow {
     Component.onCompleted: {
         _restoreGeometry();
         _restoreFilters();
+        win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
         // First run: greet the user once the overlay is ready.
@@ -877,6 +921,7 @@ ApplicationWindow {
                     id: docsComp
                     DocsView {
                         id: docsView
+                        onLinkRequested: (kind, target) => win.followMdLink(kind, target)
                         Connections {
                             target: docsBridge
                             function onRequestedAnchorChanged() {
@@ -898,6 +943,8 @@ ApplicationWindow {
                         // same line be requested twice.
                         jumpToLine: notesBridge.requestedLine
                         onJumpConsumed: notesBridge.requestedLine = -1
+                        onTaskRequested: (id) => win.openTaskById(id)
+                        onPersonRequested: (id) => personEditor.showFor(AppController.personById(id))
                     }
                 }
                 Component {
@@ -1236,6 +1283,7 @@ ApplicationWindow {
         onNavigateToSnippets: docsBridge.requestedAnchor = "sec-snippets"
         onNavigateToContacts: docsBridge.requestedAnchor = "sec-contacts"
         onNavigateToNoteLine: (line) => notesBridge.requestedLine = line
+        onNavigateToDocPage: (pageId) => docsBridge.requestedAnchor = "page:" + pageId
     }
 
     // Anchor bridge — DocsView listens for changes and scrolls to the
@@ -1621,6 +1669,7 @@ ApplicationWindow {
             win.searchText = "";
             win.prioritiesFilter = ({});
             AppController.selectedDate = AppController.today;
+            Qt.callLater(win.seedStarterDocs);
         }
     }
 
@@ -1706,12 +1755,18 @@ ApplicationWindow {
         // hides the contents and people cannot tell which folder they are in.
         nameFilters: ["Markdown (*.md *.markdown)", "All files (*)"]
         title: I18n.t("dialog.importVault.title")
-        onAccepted: {
-            const r = AppController.importNotesFolder(currentFolder);
+        // Nothing is imported from here: the folder is previewed first, so
+        // what is about to change is visible before it does.
+        onAccepted: vaultImportConfirm.openFor(currentFolder)
+    }
+    VaultImportDialog {
+        id: vaultImportConfirm
+        onImported: (r) => {
             if (r.error) { toast.show(r.error, "error"); return; }
-            toast.show(I18n.t("toast.notes.imported")
-                       .arg(r.imported).arg(r.updated).arg(r.skipped),
-                       r.skipped > 0 ? "warning" : "success");
+            const trouble = r.skipped > 0 || r.conflicts > 0;
+            toast.show(I18n.t("toast.notes.importedFull")
+                       .arg(r.imported).arg(r.updated).arg(r.kept).arg(r.conflicts).arg(r.skipped),
+                       trouble ? "warning" : "success");
             for (let i = 0; i < r.warnings.length; i++) console.warn("[vault]", r.warnings[i]);
         }
     }
@@ -1720,10 +1775,14 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: ["All files (*)"]
         title: I18n.t("dialog.exportVault.title")
+        // The typed name becomes the new folder the notes go into; nothing
+        // already in the chosen directory is written over.
         onAccepted: {
-            const r = AppController.exportNotesFolder(currentFolder);
+            const file = String(selectedFile);
+            const name = decodeURIComponent(file.substring(file.lastIndexOf("/") + 1));
+            const r = AppController.exportNotesFolder(currentFolder, name);
             toast.show(r.error ? r.error
-                               : I18n.t("toast.notes.exported").arg(r.written),
+                               : I18n.t("toast.notes.exportedTo").arg(r.written).arg(r.folder),
                        r.error ? "error" : "success");
         }
     }

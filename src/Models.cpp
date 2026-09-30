@@ -591,23 +591,70 @@ int DocPageModel::roleOf(const QString& name) const {
 
 namespace {
 
-// The first line that is not the page's own title and not markdown
-// punctuation, so a tree row says something the heading does not.
-QString pageExcerpt(const DocPage& p) {
-  for(const QString& raw : p.body.split(QLatin1Char('\n'))) {
-    QString line = raw.trimmed();
-    if(line.isEmpty()) {
+// One line of markdown as a reader would say it: no list marker or checkbox,
+// no emphasis markers, a link as its label. A list row showed
+// "- [ ] **Ship** the [build](http://…)" verbatim.
+QString plainLine(QString line) {
+  static const QRegularExpression marker(QStringLiteral(R"(^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)"));
+  static const QRegularExpression labelledWiki(QStringLiteral(R"(\[\[[^\]|]*\|([^\]]+)\]\])"));
+  static const QRegularExpression wiki(QStringLiteral(R"(\[\[([^\]]*)\]\])"));
+  static const QRegularExpression link(QStringLiteral(R"(!?\[([^\]]*)\]\([^)]*\))"));
+  static const QRegularExpression emphasis(QStringLiteral(R"((\*\*|__|~~|==|`|\*|_)(?=\S)(.+?)(?<=\S)\1)"));
+  line.remove(marker);
+  line.replace(labelledWiki, QStringLiteral("\\1"));
+  line.replace(wiki, QStringLiteral("\\1"));
+  line.replace(link, QStringLiteral("\\1"));
+  for(int pass = 0; pass < 3 && line.contains(emphasis); ++pass) {
+    line.replace(emphasis, QStringLiteral("\\2"));
+  }
+  return line.trimmed();
+}
+
+// The first line of `body` that is not `title` and not markdown punctuation,
+// so a list or tree row says something the heading does not. Walks the text
+// line by line instead of splitting it: splitting a 3 MB note into a list of
+// lines for one excerpt, on every save, was part of what made it slow.
+QString excerptOf(const QString& body, const QString& title) {
+  qsizetype start = 0;
+  bool inFence = false;
+  bool inFrontmatter = body.startsWith(QStringLiteral("---\n")) || body.startsWith(QStringLiteral("---\r\n"));
+  bool first = true;
+  while(start <= body.size()) {
+    qsizetype end = body.indexOf(QLatin1Char('\n'), start);
+    if(end < 0) {
+      end = body.size();
+    }
+    QString line = body.mid(start, end - start).trimmed();
+    start = end + 1;
+    if(inFrontmatter) {
+      if(!first && line == QStringLiteral("---")) {
+        inFrontmatter = false;
+      }
+      first = false;
+      continue;
+    }
+    first = false;
+    if(line.startsWith(QStringLiteral("```")) || line.startsWith(QStringLiteral("~~~"))) {
+      inFence = !inFence;
+      continue;
+    }
+    if(inFence || line.isEmpty() || line == QStringLiteral("---")) {
       continue;
     }
     while(line.startsWith(QLatin1Char('#')) || line.startsWith(QLatin1Char('>'))) {
       line = line.mid(1).trimmed();
     }
-    if(line.isEmpty() || line == p.title) {
+    line = plainLine(line);
+    if(line.isEmpty() || line == title) {
       continue;
     }
     return line.left(120);
   }
   return {};
+}
+
+QString pageExcerpt(const DocPage& p) {
+  return excerptOf(p.body, p.title);
 }
 
 }  // namespace
@@ -712,21 +759,7 @@ namespace {
 // punctuation, so a list row says something about the note rather than
 // repeating its heading back.
 QString noteExcerpt(const Note& n) {
-  const QStringList lines = n.body.split(QLatin1Char('\n'));
-  for(const QString& raw : lines) {
-    QString line = raw.trimmed();
-    if(line.isEmpty()) {
-      continue;
-    }
-    while(line.startsWith(QLatin1Char('#')) || line.startsWith(QLatin1Char('>'))) {
-      line = line.mid(1).trimmed();
-    }
-    if(line.isEmpty() || line == n.title) {
-      continue;
-    }
-    return line.left(120);
-  }
-  return {};
+  return excerptOf(n.body, n.title);
 }
 
 }  // namespace

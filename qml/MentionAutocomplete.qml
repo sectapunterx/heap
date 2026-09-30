@@ -25,6 +25,8 @@ Popup {
     // corresponding flag to false from the owner.
     property bool enablePeople: true
     property bool enableTickets: true
+    // Insert a person as @Their_Name rather than @their-id (for note text).
+    property bool insertNames: false
 
     property var _suggestions: []
     property int _selectedIdx: 0
@@ -140,7 +142,10 @@ Popup {
         const r = _currentTriggerRange();
         if (!r) return false;
         const pick = _suggestions[_selectedIdx];
-        const insert = r.trigger + pick.id + " ";
+        // Notes write a person as @Their_Name (NotesView does the same), task
+        // text as the id the task parser matches.
+        const token = (insertNames && r.trigger === "@") ? String(pick.name || pick.id).replace(/\s+/g, "_") : pick.id;
+        const insert = r.trigger + token + " ";
         // Edit in place (remove + insert) rather than reassigning target.text:
         // a whole-text assignment resets the caret to 0 on a TextArea/TextField,
         // dropping the user back to the start of the document. (HEAP-65)

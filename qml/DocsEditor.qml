@@ -18,6 +18,9 @@ Popup {
     property bool   isNew: false
     property string sectionId: ""        // for doc / section (=original id)
     property string originalRef: ""      // for doc rename / move
+    // The entry being edited, by its own id. A Ref is typed by the user and
+    // may be empty or repeated, so it cannot say which entry a save is for.
+    property string originalId: ""
     property int    idx: -1              // for snippet / contact
     property var    sections: []
     property var    contactPalette: []

@@ -59,7 +59,32 @@ void MdDocument::setAllowRemoteImages(bool allow) {
   reparse();
 }
 
+void MdDocument::setImageBaseDir(const QString& dir) {
+  if(m_imageBaseDir == dir) {
+    return;
+  }
+  m_imageBaseDir = dir;
+  emit imageBaseDirChanged();
+  m_dirty = true;
+  scheduleParse();
+}
+
+void MdDocument::setLive(bool live) {
+  if(m_live == live) {
+    return;
+  }
+  m_live = live;
+  emit liveChanged();
+  if(m_live && m_dirty) {
+    scheduleParse();
+  }
+}
+
 void MdDocument::scheduleParse() {
+  if(!m_live) {
+    m_parseTimer.stop();
+    return;  // stays dirty; the next query or going live parses
+  }
   if(m_lastParseMs <= kSynchronousBudgetMs) {
     reparse();
     return;
@@ -86,6 +111,7 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.palette.tag = colorAt(m_palette, "tag");
   options.palette.math = colorAt(m_palette, "math");
   options.allowRemoteImages = m_allowRemoteImages;
+  options.imageBaseDir = m_imageBaseDir;
   return options;
 }
 
@@ -125,6 +151,11 @@ void MdDocument::reparse() {
 int MdDocument::rowForLine(int line) {
   flush();
   return m_model.rowForLine(line);
+}
+
+int MdDocument::rowForFootnote(const QString& id) {
+  flush();
+  return m_model.rowForFootnote(id);
 }
 
 int MdDocument::firstLineOfRow(int row) {

@@ -288,9 +288,25 @@ void MdHighlighter::highlightCodeLine(const QString& text, const QString& langua
 
   apply(keywordRx, m_codeKeyword);
   apply(numberRx, m_codeNumber);
-  // Strings and comments come last so a keyword inside one is not recoloured.
-  apply(stringRx, m_codeString);
-  apply(commentRx, m_codeComment);
+  // Strings and comments come last so a keyword inside one is not recoloured,
+  // and between the two, whichever starts first wins: the # in
+  // `echo "#1"` is inside a string, not the start of a comment.
+  qsizetype pos = 0;
+  while(pos < text.size()) {
+    const auto s = stringRx.match(text, pos);
+    const auto c = commentRx.match(text, pos);
+    const bool haveS = s.hasMatch() && s.capturedLength() > 0;
+    const bool haveC = c.hasMatch() && c.capturedLength() > 0;
+    if(!haveS && !haveC) {
+      break;
+    }
+    if(haveC && (!haveS || c.capturedStart() < s.capturedStart())) {
+      setFormat(static_cast<int>(c.capturedStart()), static_cast<int>(c.capturedLength()), m_codeComment);
+      break;  // a line comment runs to the end
+    }
+    setFormat(static_cast<int>(s.capturedStart()), static_cast<int>(s.capturedLength()), m_codeString);
+    pos = s.capturedEnd();
+  }
 }
 
 void MdHighlighter::highlightInline(const QString& text) {
@@ -309,9 +325,10 @@ void MdHighlighter::highlightInline(const QString& text) {
   static const QRegularExpression wikiRx(QStringLiteral("\\[\\[[^\\]\\n]+\\]\\]"));
   static const QRegularExpression urlRx(QStringLiteral("\\bhttps?://[^\\s)\\]]+"));
   static const QRegularExpression mathRx(QStringLiteral("(?<![\\\\$])\\$(?!\\s)[^$\\n]+\\$(?!\\$)"));
-  static const QRegularExpression mentionRx(QStringLiteral("(?<![A-Za-z0-9_])@[A-Za-z0-9_.-]+"));
+  // Names and tags in any script: "@Олег_Т" is as much a mention as "@oleg".
+  static const QRegularExpression mentionRx(QStringLiteral("(?<![\\p{L}\\p{N}_])@[\\p{L}\\p{N}_.-]+"));
   static const QRegularExpression ticketRx(QStringLiteral("(?<![A-Za-z0-9_])#[A-Z][A-Z0-9]*-\\d+"));
-  static const QRegularExpression tagRx(QStringLiteral("(?<![A-Za-z0-9_])#[A-Za-z][A-Za-z0-9_/-]*"));
+  static const QRegularExpression tagRx(QStringLiteral("(?<![\\p{L}\\p{N}_])#[\\p{L}][\\p{L}\\p{N}_/-]*"));
   static const QRegularExpression footnoteRx(QStringLiteral("\\[\\^[^\\]\\s]+\\]"));
 
   const Rule rules[] = {
