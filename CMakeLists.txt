@@ -263,6 +263,11 @@ qt_add_qml_module(heap_core
     # qmllint ratchet grew with each line of new QML. The app itself loads the
     # module from qrc, so only the tooling sees this path.
     OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/TodoCpp"
+    # The C++ models derive from QAbstractListModel, whose QML description is
+    # in QtQml.Models. Without the dependency qmllint on some Qts (CI's 6.9)
+    # cannot resolve the base: every model lost data()/rowCount()/index() and
+    # every Connections { target: AppController.tasks } read as a type error.
+    DEPENDENCIES QtQml.Models
     QML_FILES
         qml/Main.qml
         qml/Theme.qml
