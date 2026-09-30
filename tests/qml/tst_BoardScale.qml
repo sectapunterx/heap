@@ -44,7 +44,9 @@ TestCase {
 
     function countCards(item, acc) {
         if (!item) return acc;
-        if (String(item.objectName) === "tc-card") acc.n++;
+        // `shown` skips the cards a column keeps pooled for reuse: those are
+        // hidden, waiting for the next row, and are not on the board.
+        if (String(item.objectName) === "tc-card" && (!acc.shown || item.visible)) acc.n++;
         const kids = item.children || [];
         for (let i = 0; i < kids.length; i++) countCards(kids[i], acc);
         return acc;
@@ -110,10 +112,10 @@ TestCase {
 
         board.searchText = "task 1";
         wait(0);
-        const narrowed = countCards(board, { n: 0 }).n;
+        const narrowed = countCards(board, { n: 0, shown: true }).n;
         board.searchText = "";
         wait(0);
-        const full = countCards(board, { n: 0 }).n;
+        const full = countCards(board, { n: 0, shown: true }).n;
         verify(narrowed < full, "a search must narrow the board (" + narrowed + " vs " + full + ")");
         verify(narrowed > 0, "a search that matches something must leave something");
     }

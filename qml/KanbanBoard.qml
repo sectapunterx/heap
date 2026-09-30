@@ -549,12 +549,23 @@ Item {
                                 anchors.margins: Theme.spMd
                                 clip: true
                                 spacing: Theme.spMd
-                                cacheBuffer: 600
+                                // A couple of cards past each edge. Every card
+                                // in the cache is rebound when a filter change
+                                // reshuffles the column, and with pooled
+                                // delegates scrolling no longer needs a deep
+                                // pre-built margin to stay smooth.
+                                cacheBuffer: 200
                                 boundsBehavior: Flickable.StopAtBounds
                                 flickableDirection: Flickable.VerticalFlick
                                 // One proxy per column, so only the cards that
                                 // belong here are in the model at all.
                                 model: colFilter
+                                // A search or filter change swaps most of the
+                                // rows in every column at once; building a
+                                // fresh TaskCard for each was ~2.5 ms a card
+                                // and ~300 ms a keystroke at 3k tasks. Pooled
+                                // delegates are rebound instead.
+                                reuseItems: true
                                 // pressDelay: 0 — same rationale as the
                                 // outer hscroll: instant drag on cards.
                                 pressDelay: 0
@@ -630,6 +641,9 @@ Item {
                                             required property var    ticket
                                             required property string searchText
                                             width: bodyFlick.width
+                                            // A recycled card must not carry the
+                                            // menu it opened for another task.
+                                            ListView.onPooled: tc.releaseMenu()
 
                                             readonly property var taskData: ({
                                                 id: tc.id, title: tc.title, desc: tc.desc,

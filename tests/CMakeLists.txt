@@ -312,6 +312,10 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
 # ── audit-int: end ──
 # ── audit-perf: begin ──
+# Search/filter input latency at 3k tasks (TASKS-23). Wall-clock budgets, so it
+# runs alone like the other two benches.
+heap_add_appcontroller_test(heap_filter_bench_tests test_filter_bench.cpp)
+set_tests_properties(heap_filter_bench_tests PROPERTIES RUN_SERIAL TRUE)
 # ── audit-perf: end ──
 
 # ─── Regressions from the 0.5.0 end-to-end audit ───

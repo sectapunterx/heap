@@ -26,6 +26,8 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // The column this proxy belongs to. Empty shows every status.
   Q_PROPERTY(QString status READ status WRITE setStatus NOTIFY filterChanged)
   Q_PROPERTY(bool showArchived READ showArchived WRITE setShowArchived NOTIFY filterChanged)
+  // Only archived tasks — the archive view's feed. Implies showArchived.
+  Q_PROPERTY(bool archivedOnly READ archivedOnly WRITE setArchivedOnly NOTIFY filterChanged)
   // What the user typed in the search box. Clauses it recognises
   // (`status:blocked priority:P0 deadline:<friday tag:infra mention:@ada`) are
   // applied as filters; whatever is left over is matched against the model's
@@ -60,6 +62,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   }
 
   void setShowArchived(bool v);
+
+  bool archivedOnly() const {
+    return m_archivedOnly;
+  }
+
+  void setArchivedOnly(bool v);
 
   QString searchText() const {
     return m_rawSearch;
@@ -105,8 +113,13 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
 
  private:
+  // invalidateFilter() with the per-range countChanged() held back.
+  void refilter();
+
+  bool m_refiltering = false;
   QString m_status;
   bool m_showArchived = false;
+  bool m_archivedOnly = false;
   QString m_rawSearch;             // exactly what the user typed
   QString m_searchText;            // the free-text remainder, lowercased
   heap::query::TaskQuery m_query;  // compiled once per keystroke

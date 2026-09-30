@@ -528,7 +528,7 @@ Rectangle {
         property bool didDrag: false
         onPressed: (mouse) => {
             card.homeX = card.x; card.homeY = card.y; didDrag = false;
-            if (mouse.button === Qt.RightButton) taskMenu.popup();
+            if (mouse.button === Qt.RightButton) card.contextMenu().popup();
         }
         onPositionChanged: if (drag.active) didDrag = true
         onReleased: (mouse) => {
@@ -551,6 +551,23 @@ Rectangle {
         }
     }
 
+    // The context menu is built on the first right-click, not with the card:
+    // thirteen menu items per card were most of what a card cost, and the
+    // board, the timeline and the archive build a card for every row they
+    // show. contextMenu() makes it (once per card), releaseMenu() lets it go —
+    // a recycled list delegate calls that when it is pooled.
+    property var _menu: null
+    function contextMenu() {
+        if (!card._menu) card._menu = taskMenuComponent.createObject(card);
+        return card._menu;
+    }
+    function releaseMenu() {
+        if (!card._menu) return;
+        card._menu.destroy();
+        card._menu = null;
+    }
+    Component {
+        id: taskMenuComponent
     AppMenu {
         id: taskMenu
         objectName: "tc-menu"
@@ -637,5 +654,6 @@ Rectangle {
             glyph: "×"; danger: true
             text: I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
         }
+    }
     }
 }
