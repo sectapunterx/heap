@@ -109,7 +109,9 @@ ApplicationWindow {
     onWidthChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     onHeightChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     onVisibilityChanged: if (win._geometryRestored) geometrySaveTimer.restart()
-    title: "heap. — Work, in one place."
+    // Ends with the display name, so the OS title bar does not append it a
+    // second time ("heap. — Work, in one place. - heap.").
+    title: I18n.t("window.title")
     color: Theme.bg
     // The stock Basic controls (combo box lists, tooltips, scroll bars, and
     // anything not drawn by hand) take their colours from the palette. Left
@@ -144,7 +146,9 @@ ApplicationWindow {
     // narrow window left two board columns. It folds away below
     // _rightPanelMinWidth unless asked for, and the choice on a wide window is
     // remembered in settings.
-    readonly property int _rightPanelMinWidth: 1280
+    // 1440, not 1280: a 1080p screen at 150% is 1280 logical px, and with both
+    // side panels open that left the board about two columns.
+    readonly property int _rightPanelMinWidth: 1440
     readonly property bool _narrow: win.width < _rightPanelMinWidth
     property bool _rightPanelWanted: _settingsObject().rightPanel !== false
     property bool _rightPanelOnNarrow: false
@@ -199,7 +203,7 @@ ApplicationWindow {
     // Left sidebar: labelled (expanded) or the 56px icon rail. The choice is
     // remembered; below _sideRailMinWidth it folds to the rail on its own
     // without overwriting what was chosen, same as the right panel.
-    readonly property int _sideRailMinWidth: 1200
+    readonly property int _sideRailMinWidth: 1280
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
     readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
@@ -282,6 +286,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         width: 440
         padding: Theme.inset
+        topPadding: Theme.spMd
         title: I18n.t("close.ask.title")
         background: Rectangle {
             radius: Theme.radiusXl
@@ -289,13 +294,29 @@ ApplicationWindow {
             border.color: Theme.borderStrong
             border.width: 1
         }
+        // Drawn in the theme like every other dialog title; Basic's own
+        // header was an unstyled bar in the palette's window colour.
+        header: Text {
+            text: closeAsk.title
+            color: Theme.text
+            font.pixelSize: Theme.fsLg
+            font.weight: Font.DemiBold
+            leftPadding: Theme.inset; rightPadding: Theme.inset; topPadding: Theme.inset
+            wrapMode: Text.Wrap
+        }
         contentItem: Text {
             text: I18n.t("close.ask.body")
             color: Theme.textMuted
             font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
-        footer: RowLayout {
+        // Inset from the dialog's edge; the buttons sat flush on the bottom.
+        footer: Item {
+            implicitHeight: closeAskRow.implicitHeight + Theme.inset
+            RowLayout {
+            id: closeAskRow
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
             spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
@@ -318,7 +339,7 @@ ApplicationWindow {
                     win.hide();
                 }
             }
-            Item { Layout.preferredWidth: 10 }
+            }
         }
     }
 
@@ -345,7 +366,87 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened
+        || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
+
+    // ── Keyboard scope ────────────────────────────────────────────────
+    // Board and calendar keys (Return, Esc, the arrows, bare letters) are
+    // application shortcuts, so Qt offered them before the focused item —
+    // Return in the header search opened the card under the cursor, Down in a
+    // card's context menu moved the board cursor, Enter in "New column"
+    // opened the task editor. They belong to whatever holds focus unless that
+    // is the view itself.
+    //
+    // Focus in something that takes typed text: a search box, an inline
+    // rename, a breadcrumb being edited.
+    readonly property bool _typing: {
+        const f = win.activeFocusItem;
+        return !!f && typeof f.cursorPosition === "number" && f.readOnly !== true;
+    }
+    // Focus inside a popup, menu or dialog — including the ones a view owns
+    // (add column, WIP limit, delete confirm, a card's context menu), which
+    // Main has no id for. Every popup's item lives under the window overlay.
+    readonly property bool _focusInPopup: {
+        for (let p = win.activeFocusItem; p; p = p.parent)
+            if (p === Overlay.overlay) return true;
+        return false;
+    }
+    // A modal (or dimming) popup is up somewhere — even one that did not take
+    // focus, as most of the views' own confirm dialogs do not. Each puts its
+    // dimmer on the overlay next to the popup items, so a visible overlay child
+    // that is not a popup item is one.
+    readonly property bool _dimmerShown: {
+        const ov = Overlay.overlay;
+        if (!ov) return false;
+        const kids = ov.children;
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (k.visible && k.opacity > 0 && String(k).indexOf("QQuickPopupItem") !== 0) return true;
+        }
+        return false;
+    }
+    // …and that popup is one of the two side-rail popovers, which leave the
+    // app usable behind them.
+    readonly property bool _focusInPopover: {
+        for (let p = win.activeFocusItem; p; p = p.parent)
+            if (p === tweaks.contentItem || p === hotkeys.contentItem) return true;
+        return false;
+    }
+    // Focus on a control outside the view that was reached with Tab — a
+    // filter chip, the mini week, the day panel, the people list. Its arrows
+    // and Enter are its own; the board's cursor keys wait until focus goes
+    // back to the view.
+    readonly property bool _focusOnControl: {
+        const f = win.activeFocusItem;
+        if (!f) return false;
+        const v = win.activeViewItem();
+        for (let p = f; p; p = p.parent) {
+            if (p === v) return false;
+            if (p.activeFocusOnTab === true) return true;
+        }
+        return false;
+    }
+    // A view-local key (board cursor, calendar paging, Esc on the selection,
+    // Delete, the bare-letter shortcuts) stands down while any of this holds.
+    readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup || _dimmerShown
+                                             || _focusOnControl
+    // Global shortcuts (switch view, new task, palette, undo…) stand down
+    // behind a modal: Ctrl+3 used to switch the view under an open task
+    // editor, Ctrl+K opened the palette over the welcome tour. The side-rail
+    // popovers are not modal and keep them.
+    readonly property bool _modalOpen: taskEditor.opened || eventEditor.opened
+        || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
+        || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
+        || closeAsk.opened || goToDatePopup.opened
+        || (_focusInPopup && !_focusInPopover) || _dimmerShown
+    readonly property bool _globalKeysOn: !hotkeys.isCapturing && !_modalOpen
+
+    // Esc in the header search with nothing left to clear hands the keyboard
+    // back to the view, so J/K and Return work again without the mouse.
+    function focusActiveView() {
+        const v = win.activeViewItem();
+        if (v) v.forceActiveFocus();
+        else win.contentItem.forceActiveFocus();
+    }
 
     function _placePopover(pop, anchor) {
         const p = anchor.mapToItem(win.contentItem, 0, 0);
@@ -421,7 +522,7 @@ ApplicationWindow {
         }
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
-        function onToast(msg) { toast.show(msg) }
+        function onToast(msg, kind) { toast.show(msg, kind || "info") }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
@@ -472,6 +573,7 @@ ApplicationWindow {
                 interval: 120
                 onTriggered: win.searchText = topBar.searchText
             }
+            onLeaveRequested: win.focusActiveView()
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
@@ -1020,8 +1122,76 @@ ApplicationWindow {
         }
     }
 
+    // What a palette command does. Ids are the shortcut catalog's, so the
+    // palette offers exactly what the keys do; "settings:<section>" opens a
+    // Settings section, and a few have no key of their own.
+    function runCommand(id) {
+        if (id.indexOf("settings:") === 0) {
+            const section = id.slice(9);
+            AppController.currentView = "settings";
+            Qt.callLater(function () {
+                const v = win.activeViewItem();
+                if (v && v.openSection) v.openSection(section);
+            });
+            return;
+        }
+        if (id.indexOf("view.") === 0) {
+            AppController.currentView = id.slice(5);
+            return;
+        }
+        switch (id) {
+        case "task.new":             taskEditor.showFor(AppController.newTaskDraft("todo")); break;
+        case "quick-capture":        quickCapture.open(); break;
+        case "quick-capture-notes":  quickCaptureNotes.open(); break;
+        case "panel.right":          win.toggleRightPanel(); break;
+        case "rail.toggle":          win.toggleSideRail(); break;
+        case "theme.toggle":         AppController.theme = (AppController.theme === "dark" ? "light" : "dark"); break;
+        case "person.new":           personPicker.open_(); break;
+        case "profile.new":          profileEditor.showCreate(); break;
+        case "profile.next":         win._cycleProfile(1); break;
+        case "profile.prev":         win._cycleProfile(-1); break;
+        case "profile.exportMd":     AppController.copyActiveProfileMarkdownToClipboard(); break;
+        case "profile.weeklyReport": AppController.copyWeeklyReportToClipboard(); break;
+        case "tweaks.open":          rail.openTweaks(rail.tweaksAnchor); break;
+        case "hotkeys.open":         rail.openHotkeys(rail.hotkeysAnchor); break;
+        case "search.focus":         win._focusSearch(); break;
+        case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
+        case "welcome.replay":       AppController.replayWelcome(); break;
+        default:                     console.warn("palette: no command", id);
+        }
+    }
+
+    function _cycleProfile(step) {
+        const list = AppController.profiles;
+        if (list.length === 0) return;
+        let idx = -1;
+        for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
+        const base = idx >= 0 ? idx : 0;
+        AppController.activeProfileId = list[(base + step + list.length) % list.length].id;
+    }
+
+    // The top bar's box searches tasks. In a view that has a search of its
+    // own — Docs, and Notes once it grows one — Ctrl+F used to focus that
+    // task box anyway, where typing did nothing to what was on screen.
+    // Duck-typed so a view picks this up by declaring focusSearch().
+    function _focusSearch() {
+        const view = win.activeViewItem();
+        if (view && typeof view.focusSearch === "function") {
+            view.focusSearch();
+            return;
+        }
+        // Notes has no box of its own; the palette searches every note's
+        // text, which is what Ctrl+F in a note is reaching for.
+        if (AppController.currentView === "notes") {
+            cmdPalette.open();
+            return;
+        }
+        topBar.focusSearch();
+    }
+
     CommandPalette {
         id: cmdPalette
+        onCommandRequested: (id) => win.runCommand(id)
         onOpenTask: (taskId) => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)))
         onOpenPerson: (personId) => personEditor.showFor(AppController.personById(personId))
         onNavigateToDoc: (sectionId) => docsBridge.requestedAnchor = "sec-" + sectionId
@@ -1058,7 +1228,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("palette.open")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: cmdPalette.open()
     }
     // Built-in alias: Ctrl+P always opens the palette, independent of the
@@ -1066,190 +1236,165 @@ ApplicationWindow {
     Shortcut {
         sequence: "Ctrl+P"
         context: Qt.ApplicationShortcut
-        enabled: !hotkeys.isCapturing
+        enabled: win._globalKeysOn
         onActivated: cmdPalette.open()
     }
 
     Shortcut {
         sequence: _kbd("panel.right")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: win.toggleRightPanel()
     }
     Shortcut {
         sequence: _kbd("rail.toggle")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: win.toggleSideRail()
     }
     Shortcut {
         sequence: _kbd("task.new")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: taskEditor.showFor(AppController.newTaskDraft("todo"))
     }
     Shortcut {
         sequence: _kbd("quick-capture")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: quickCapture.open()
     }
     Shortcut {
         sequence: _kbd("quick-capture-notes")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: quickCaptureNotes.open()
     }
     Shortcut {
         sequence: _kbd("view.board")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "board"
     }
     Shortcut {
         sequence: _kbd("view.timeline")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "timeline"
     }
     Shortcut {
         sequence: _kbd("view.week")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "week"
     }
     Shortcut {
         sequence: _kbd("view.month")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "month"
     }
     Shortcut {
         sequence: _kbd("view.docs")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "docs"
     }
     Shortcut {
         sequence: _kbd("view.notes")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "notes"
     }
     Shortcut {
         sequence: _kbd("view.settings")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "settings"
     }
     Shortcut {
         sequence: _kbd("view.archive")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.currentView = "archive"
     }
     Shortcut {
         sequence: _kbd("theme.toggle")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.theme = (AppController.theme === "dark" ? "light" : "dark")
     }
     Shortcut {
         sequence: _kbd("person.new")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: personPicker.open_()
     }
     Shortcut {
         sequence: _kbd("profile.new")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: profileEditor.showCreate()
     }
     Shortcut {
         sequence: _kbd("profile.next")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
-        onActivated: {
-            const list = AppController.profiles;
-            if (list.length === 0) return;
-            let idx = -1;
-            for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
-            const next = list[((idx >= 0 ? idx : 0) + 1) % list.length];
-            AppController.activeProfileId = next.id;
-        }
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win._cycleProfile(1)
     }
     Shortcut {
         sequence: _kbd("profile.prev")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
-        onActivated: {
-            const list = AppController.profiles;
-            if (list.length === 0) return;
-            let idx = 0;
-            for (let i = 0; i < list.length; i++) if (list[i].id === AppController.activeProfileId) idx = i;
-            const prev = list[(idx - 1 + list.length) % list.length];
-            AppController.activeProfileId = prev.id;
-        }
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win._cycleProfile(-1)
     }
     Shortcut {
         sequence: _kbd("profile.exportMd")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyActiveProfileMarkdownToClipboard()
     }
     Shortcut {
         sequence: _kbd("profile.weeklyReport")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyWeeklyReportToClipboard()
     }
     Shortcut {
         sequence: _kbd("tweaks.open")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openTweaks(rail.tweaksAnchor)
     }
     Shortcut {
         sequence: _kbd("hotkeys.open")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openHotkeys(rail.hotkeysAnchor)
     }
     Shortcut {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo
+        enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo
         onActivated: AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.canRedo
+        enabled: sequence.length > 0 && win._globalKeysOn && AppController.canRedo
         onActivated: AppController.redo()
     }
     Shortcut {
         sequence: _kbd("search.focus")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
-        // The top bar's box searches tasks. In a view that has a search of its
-        // own — Docs, and Notes once it grows one — Ctrl+F used to focus that
-        // task box anyway, where typing did nothing to what was on screen.
-        // Duck-typed so a view picks this up by declaring focusSearch().
-        onActivated: {
-            const view = win.activeViewItem();
-            if (view && typeof view.focusSearch === "function") {
-                view.focusSearch();
-                return;
-            }
-            topBar.focusSearch();
-        }
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win._focusSearch()
     }
 
     Shortcut {
         sequence: _kbd("selection.selectAll")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "timeline"
                 || AppController.currentView === "week")
@@ -1259,24 +1404,35 @@ ApplicationWindow {
         }
     }
     // Esc lets go of the selection and, on the board, of the keyboard
-    // cursor. It stays out of the way (enabled only when there is something
-    // to let go of) so Esc still reaches popups and fields otherwise.
+    // cursor — last. It stays out of the way (enabled only when there is
+    // something to let go of, and never while a popup, menu, editor or text
+    // field holds the keyboard) so the innermost thing closes first: one Esc
+    // closes the editor or the menu, the next one lets go of the selection.
     Shortcut {
         sequence: _kbd("selection.clearSel")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
-                || (AppController.currentView === "board" && !win._overlayOpen
+                || (AppController.currentView === "board"
                     && !!boardLoader.item && boardLoader.item.cursorVisible === true))
         onActivated: {
             AppController.clearSelection();
             if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
         }
     }
+    // Esc on a tabbed-to control outside the view (filter chip, mini week, day
+    // panel…) hands the keyboard back to the view.
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: win._focusOnControl && !win._typing && !win._focusInPopup && !win._overlayOpen
+                 && !hotkeys.isCapturing
+        onActivated: win.focusActiveView()
+    }
     Shortcut {
         sequence: _kbd("selection.deleteSel")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && AppController.selectionCount > 0
         onActivated: AppController.deleteSelectedTasks()
     }
@@ -1296,7 +1452,7 @@ ApplicationWindow {
     // date, so moving it moves everything that is on screen.
     component CalKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequences.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "week" || AppController.currentView === "month")
     }
 
@@ -1322,12 +1478,16 @@ ApplicationWindow {
     DatePickerPopup {
         id: goToDatePopup
         objectName: "go-to-date"
+        // Centred over the window (a third of the way down, where the eye
+        // is), not pinned to its top-left corner over the logo.
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round((parent.height - height) / 3) : 0
         onPicked: (value) => AppController.selectedDate = value
     }
 
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequences.length > 0 && !win._viewKeysBlocked
             && AppController.currentView === "board"
     }
 
@@ -1375,7 +1535,7 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("task.openExternal")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "archive"
                 || AppController.currentView === "timeline"
@@ -1405,8 +1565,17 @@ ApplicationWindow {
     }
 
     // Tweaks + Hotkeys popovers (opened from the side rail)
-    TweaksPanel  { id: tweaks }
-    HotkeysPanel { id: hotkeys }
+    // Re-clamped whenever their height settles: on the first open the panel
+    // measures itself after it is placed, and the Tweaks panel hung 24px
+    // below a 720px window.
+    TweaksPanel  {
+        id: tweaks
+        onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
+    }
+    HotkeysPanel {
+        id: hotkeys
+        onHeightChanged: if (opened && parent) win._placePopover(hotkeys, parent)
+    }
 
     // ── Profile import / export via JSON file ──────────────────────────
     FileDialog {

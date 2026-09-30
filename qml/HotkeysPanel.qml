@@ -15,19 +15,63 @@ Popup {
     // Re-parented to the rail button by Main._togglePopover — see TweaksPanel.
     closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
 
-    // Tracks how many chip capture sessions are active (usually 0 or 1).
-    // While > 0, Main.qml disables every global Shortcut so the captured
-    // combination doesn't accidentally trigger its current owner.
-    property int _activeCaptures: 0
-    readonly property bool isCapturing: _activeCaptures > 0
+    // The action whose chip is recording, "" when none. While one is, Main.qml
+    // disables every global Shortcut so the captured combination doesn't
+    // trigger its current owner.
+    //
+    // Held here, not on the chip: committing a binding rewrites
+    // AppController.shortcuts, the list rebuilds its delegates, and the chip
+    // that was recording is destroyed mid-handler. A per-chip counter was then
+    // never decremented ("cancelCapture is not a function") and every global
+    // shortcut stayed dead until the panel closed.
+    property string capturingId: ""
+    readonly property bool isCapturing: capturingId.length > 0
 
-    onClosed: _activeCaptures = 0
+    onClosed: { capturingId = ""; resetAllArmed = false; }
+    // Keyboard in: the first binding takes focus, so Tab / arrows walk the
+    // list and Enter or Space starts recording on the focused one.
+    onOpened: Qt.callLater(function () {
+        if (listArea.count > 0) {
+            listArea.currentIndex = 0;
+            listArea.forceActiveFocus();
+        }
+    })
+
+    // "↺ all" wipes every custom binding. The first press arms it, the
+    // second (within 4 s) resets — the same two-step as Start fresh.
+    property bool resetAllArmed: false
+    function _pressResetAll() {
+        if (!resetAllArmed) {
+            resetAllArmed = true;
+            resetAllDisarm.restart();
+            return;
+        }
+        resetAllArmed = false;
+        resetAllDisarm.stop();
+        capturingId = "";
+        AppController.resetAllShortcuts();
+    }
+    Timer { id: resetAllDisarm; interval: 4000; onTriggered: root.resetAllArmed = false }
 
     background: Rectangle {
         radius: Theme.radiusXl
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
+    }
+
+    // After a commit the list is rebuilt; put the keyboard back on the row
+    // that was just bound so the next Tab continues from there.
+    function _refocusRow(actionId) {
+        const list = AppController.shortcuts;
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].id !== actionId) continue;
+            listArea.currentIndex = i;
+            listArea.positionViewAtIndex(i, ListView.Contain);
+            const row = listArea.itemAtIndex(i);
+            if (row && row.focusChip) row.focusChip();
+            return;
+        }
     }
 
     function _labelFor(actionId) {
@@ -56,18 +100,31 @@ Popup {
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
+                    id: resetAllBtn
+                    objectName: "hotkeys-reset-all"
                     radius: Theme.radiusSm; height: 22; implicitWidth: resetAllT.implicitWidth + 14
-                    color: resetAllMA.containsMouse ? Theme.panel3 : "transparent"
-                    border.color: Theme.border; border.width: 1
+                    color: root.resetAllArmed ? Theme.withAlpha(Theme.danger, 0.12)
+                         : resetAllMA.containsMouse ? Theme.panel3 : "transparent"
+                    border.color: resetAllBtn.activeFocus ? Theme.focusRing
+                                : root.resetAllArmed ? Theme.danger : Theme.border
+                    border.width: resetAllBtn.activeFocus ? 2 : 1
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: resetAllT.text
+                    Keys.onSpacePressed: root._pressResetAll()
+                    Keys.onReturnPressed: root._pressResetAll()
+                    Keys.onEnterPressed: root._pressResetAll()
                     Text { id: resetAllT; anchors.centerIn: parent
-                        text: I18n.t("hotkeys.allClear"); color: Theme.textMuted; font.pixelSize: Theme.fsSm
+                        text: root.resetAllArmed ? I18n.t("hotkeys.allClear.confirm") : I18n.t("hotkeys.allClear")
+                        color: root.resetAllArmed ? Theme.danger : Theme.textMuted
+                        font.pixelSize: Theme.fsSm
                     }
                     MouseArea {
                         id: resetAllMA
                         anchors.fill: parent
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
-                        onClicked: AppController.resetAllShortcuts()
+                        onClicked: root._pressResetAll()
                     }
                 }
                 Rectangle {
@@ -96,6 +153,10 @@ Popup {
             model: AppController.shortcuts
             spacing: 0
             boundsBehavior: Flickable.StopAtBounds
+            // Tab into the list lands on the current row's chip; Up/Down move
+            // between rows.
+            activeFocusOnTab: true
+            keyNavigationEnabled: true
             delegate: BindingRow {
                 required property var modelData
                 width: ListView.view.width
@@ -136,6 +197,10 @@ Popup {
 
         height: 60
         color: rowHover.containsMouse ? Theme.panel2 : "transparent"
+        // The ListView hands focus to its current row; the row passes it to
+        // its chip, so arrows + Enter work without the mouse.
+        function focusChip() { rowChip.focusField(); }
+        onActiveFocusChanged: if (activeFocus) rowChip.focusField()
 
         Rectangle {
             anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
@@ -170,6 +235,7 @@ Popup {
             }
 
             KeyCaptureChip {
+                id: rowChip
                 actionId:        row.actionId
                 sequence:        row.sequence
                 defaultSequence: row.defaultSequence
@@ -183,9 +249,10 @@ Popup {
         property string sequence: ""
         property string defaultSequence: ""
 
-        property bool   capturing: false
+        readonly property bool capturing: root.capturingId === chip.actionId && chip.actionId.length > 0
         property string candidate: ""
         property string conflictName: ""
+        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; }
 
         implicitWidth: 188
         implicitHeight: 46
@@ -260,20 +327,26 @@ Popup {
 
         function startCapture() {
             if (capturing) return;
-            capturing = true;
+            root.capturingId = actionId;
             candidate = sequence;
             conflictName = "";
-            root._activeCaptures++;
             captureField.forceActiveFocus();
         }
+        function focusField() { captureField.forceActiveFocus(); }
         function cancelCapture() {
-            if (!capturing) return;
-            capturing = false; candidate = ""; conflictName = "";
-            root._activeCaptures = Math.max(0, root._activeCaptures - 1);
+            if (root.capturingId === actionId) root.capturingId = "";
         }
+        // Capture what to store before letting go: setShortcut rebuilds the
+        // list, which may destroy this chip before the call returns.
         function commit() {
-            AppController.setShortcut(actionId, candidate);
-            cancelCapture();
+            const id = actionId;
+            const seq = candidate;
+            const hadFocus = captureField.activeFocus;
+            const panel = root;
+            panel.capturingId = "";
+            AppController.setShortcut(id, seq);
+            // `root` is gone from this context by now if the chip was rebuilt.
+            if (hadFocus) Qt.callLater(panel._refocusRow, id);
         }
 
         RowLayout {
@@ -287,10 +360,10 @@ Popup {
                 height: 26
                 radius: Theme.radiusMd
                 color: chip.capturing ? Theme.accentSoft : Theme.panel2
-                border.color: chip.capturing
-                    ? Theme.accent
+                border.color: captureField.activeFocus && !chip.capturing ? Theme.focusRing
+                    : chip.capturing ? Theme.accent
                     : (chip.conflictName.length > 0 ? Theme.danger : Theme.border)
-                border.width: 1
+                border.width: captureField.activeFocus && !chip.capturing ? 2 : 1
 
                 Text {
                     anchors.centerIn: parent
@@ -304,13 +377,29 @@ Popup {
                     font.pixelSize: Theme.fsSm
                 }
 
-                // Invisible focus receiver for Keys.onPressed during capture.
+                // Focus receiver: Tab lands here; Enter or Space starts
+                // recording, and while recording every key is captured.
                 Item {
                     id: captureField
+                    objectName: "hotkey-chip-" + chip.actionId
                     anchors.fill: parent
                     focus: chip.capturing
                     activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: chip.sequence
                     Keys.onPressed: (event) => {
+                        // Not recording: this is a button. Enter used to
+                        // commit an empty candidate and unbind the action, and
+                        // a letter followed by Enter bound that bare letter
+                        // with no capture UI showing.
+                        if (!chip.capturing) {
+                            if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter
+                                    || event.key === Qt.Key_Space) {
+                                chip.startCapture();
+                                event.accepted = true;
+                            }
+                            return;
+                        }
                         if (event.key === Qt.Key_Escape) {
                             chip.cancelCapture();
                             event.accepted = true; return;
@@ -381,7 +470,11 @@ Popup {
                     anchors.fill: parent
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: { AppController.resetShortcut(chip.actionId); chip.cancelCapture(); }
+                    onClicked: {
+                        const id = chip.actionId;
+                        chip.cancelCapture();
+                        AppController.resetShortcut(id);
+                    }
                 }
             }
         }

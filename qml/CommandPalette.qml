@@ -3,6 +3,7 @@ import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
+import "PaletteMatch.js" as Match
 
 Popup {
     id: root
@@ -26,35 +27,110 @@ Popup {
     // the reader where the words were rather than at the top of the note.
     signal navigateToNoteLine(int line)
 
+    // A command the palette cannot run itself (it needs a popup Main owns):
+    // Main.runCommand(id) handles it. Ids are the shortcut catalog's
+    // ("view.board", "task.new", "theme.toggle"…) plus "settings:<section>"
+    // and a few palette-only ones ("event.new", "welcome.replay").
+    signal commandRequested(string id)
+
     property var _entries: []           // cached full list
     property var _matches: []           // filtered + scored
     property int _selectedIdx: 0
 
+    // Views a task editor can open over without losing the reader's place.
+    readonly property var _taskViews: ["board", "timeline", "week", "month", "archive"]
+
+    // Catalog actions that only mean something on a surface, with a cursor or
+    // a selection — offered by the palette they would do nothing.
+    readonly property var _contextual: ["palette.open", "task.openExternal", "undo", "redo"]
+    function _isContextual(id) {
+        return _contextual.indexOf(id) >= 0 || id.indexOf("board.") === 0
+            || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0;
+    }
+
+    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "calendar",
+                                              "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
+
+    // Commands: every app-wide action in the shortcut catalog (so the palette
+    // and the keys never disagree on what exists or what it is called), each
+    // Settings section, and a few that have no key of their own.
+    function _commands() {
+        const out = [];
+        const list = AppController.shortcuts;
+        for (let i = 0; i < list.length; i++) {
+            const c = list[i];
+            if (_isContextual(c.id)) continue;
+            out.push({ kind: "command", commandId: c.id, label: c.label, sub: c.sequence || "",
+                       body: c.description || "" });
+        }
+        out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), sub: "" });
+        out.push({ kind: "command", commandId: "welcome.replay", label: I18n.t("palette.cmd.replayTour"), sub: "" });
+        for (let j = 0; j < _settingsSections.length; j++) {
+            const id = _settingsSections[j];
+            out.push({ kind: "setting", commandId: "settings:" + id,
+                       label: I18n.t("palette.cmd.settings").arg(I18n.t("settings.section." + id + ".title")),
+                       sub: I18n.t("settings.section." + id + ".sub") });
+        }
+        return out;
+    }
+
+    // ── Recents ──────────────────────────────────────────────────────
+    // An empty query used to list whatever came first (the docs catalogue);
+    // it shows what was opened last now, then the commands. Kept in the
+    // settings blob (paletteRecents), newest first, eight at most.
+    readonly property int _recentMax: 8
+    function _key(e) {
+        if (!e) return "";
+        const id = e.commandId || e.taskId || e.personId || e.templateName || e.eventId
+                || (e.kind === "note" ? (e.profileId || "") + "#" + (e.line || 0) : "")
+                || (e.kind === "doc" ? (e.sectionId || "") + "#" + e.label : "")
+                || (e.kind === "profile" ? e.profileId : "")
+                || e.label;
+        return e.kind + ":" + id;
+    }
+    function _settingsObj() {
+        const raw = AppController.appSettingsJson || "";
+        if (!raw.length) return ({});
+        try { return JSON.parse(raw) || ({}); } catch (err) { return ({}); }
+    }
+    function _recentKeys() {
+        const r = _settingsObj().paletteRecents;
+        return Array.isArray(r) ? r.filter(function (k) { return typeof k === "string"; }) : [];
+    }
+    function _remember(entry) {
+        const k = _key(entry);
+        if (!k.length) return;
+        const s = _settingsObj();
+        const keys = _recentKeys().filter(function (x) { return x !== k; });
+        keys.unshift(k);
+        s.paletteRecents = keys.slice(0, _recentMax);
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+    function _recents() {
+        const keys = _recentKeys();
+        const byKey = {};
+        for (let i = 0; i < _entries.length; i++) {
+            const k = _key(_entries[i]);
+            if (!byKey[k]) byKey[k] = _entries[i];
+        }
+        const out = [];
+        for (let j = 0; j < keys.length; j++) {
+            const e = byKey[keys[j]];
+            if (e) out.push(Object.assign({}, e, { _recent: true }));
+        }
+        return out;
+    }
+
     function _refresh() {
-        _entries = AppController.commandPaletteEntries();
+        _entries = AppController.commandPaletteEntries().concat(_commands());
         _matches = _filterAndScore("");
         _selectedIdx = 0;
     }
 
+    // Word-order independent, typo tolerant (PaletteMatch.js). Returns -1 for
+    // no match, otherwise >= 0.
     function _fuzzyScore(q, s) {
-        // subsequence match with proximity bonus; returns -1 if no match
-        if (q.length === 0) return 0;
-        const ql = q.toLowerCase();
-        const sl = s.toLowerCase();
-        let i = 0, j = 0, score = 0, lastPos = -2;
-        while (i < ql.length && j < sl.length) {
-            if (ql[i] === sl[j]) {
-                score += (lastPos + 1 === j ? 10 : 2);
-                lastPos = j;
-                i++;
-            }
-            j++;
-        }
-        if (i < ql.length) return -1;
-        score -= lastPos * 0.05;  // prefer early matches
-        // A late single-char match can push score below 0; clamp so a real match
-        // never collides with the -1 no-match sentinel the caller filters on.
-        return Math.max(0, score);
+        return Match.score(q, s);
     }
 
     function _escapeHtml(s) {
@@ -80,20 +156,30 @@ Popup {
     }
 
     function _filterAndScore(q) {
-        const out = [];
         const trimmed = (q || "").trim();
-        const ql = trimmed.toLowerCase();
+        if (trimmed.length === 0) {
+            // Recents, then every command — something to act on, never an
+            // arbitrary slice of the docs.
+            const rec = _recents();
+            const seen = {};
+            for (let r = 0; r < rec.length; r++) seen[_key(rec[r])] = true;
+            const out0 = rec.slice();
+            for (let i = 0; i < _entries.length; i++) {
+                const e = _entries[i];
+                if ((e.kind === "command" || e.kind === "setting") && !seen[_key(e)]) out0.push(e);
+            }
+            return out0.slice(0, 80).map(function (e) { const c = Object.assign({}, e); c._snippet = ""; return c; });
+        }
+        const out = [];
+        const firstWord = trimmed.split(/\s+/)[0];
         for (let i = 0; i < _entries.length; i++) {
             const e = _entries[i];
             let score = _fuzzyScore(trimmed, e.label + " " + (e.sub || ""));
             let snippet = "";
-            // Full-text (HEAP-80): match the body too, with a context snippet.
-            if (trimmed.length >= 2 && e.body && e.body.toLowerCase().indexOf(ql) >= 0) {
-                snippet = _snippetFor(e.body, trimmed);
-                // Body hit floors the entry at tier 5 (below head matches). Use
-                // max, not `if (score < 0)`, so a weak-label match that _fuzzyScore
-                // now clamps to 0 still gets the body tier and isn't ranked below
-                // a pure body-only hit.
+            // Full-text (HEAP-80): every word in the body, with a context
+            // snippet. A body hit floors the entry at tier 5, below head matches.
+            if (trimmed.length >= 2 && e.body && Match.bodyHit(trimmed, e.body)) {
+                snippet = _snippetFor(e.body, trimmed.toLowerCase().indexOf(" ") < 0 ? trimmed : firstWord);
                 score = Math.max(score, 5);
             }
             if (score < 0) continue;
@@ -111,13 +197,23 @@ Popup {
 
     function _activate(entry) {
         if (!entry) return;
+        _remember(entry);
         const switchProfile = (entry.profileId && entry.profileId !== AppController.activeProfileId);
         if (switchProfile) AppController.activeProfileId = entry.profileId;
         Qt.callLater(function () {
             if (entry.kind === "profile") {
                 // already switched above
+            } else if (entry.kind === "command" || entry.kind === "setting") {
+                // Closed first: a command often opens a popup of its own.
+                root.close();
+                root.commandRequested(entry.commandId);
+                return;
             } else if (entry.kind === "task") {
-                AppController.currentView = "board";
+                // The editor opens over any view that shows tasks; only a view
+                // with no tasks on it (notes, docs, settings) gives way to the
+                // board. It used to jump to the board from anywhere.
+                if (root._taskViews.indexOf(AppController.currentView) < 0)
+                    AppController.currentView = "board";
                 root.openTask(entry.taskId);
             } else if (entry.kind === "doc") {
                 AppController.currentView = "docs";
@@ -142,11 +238,37 @@ Popup {
                 if (entry.eventDate) AppController.selectedDate = entry.eventDate;
                 AppController.currentView = "week";
             } else if (entry.kind === "template") {
-                AppController.currentView = "board";
+                if (root._taskViews.indexOf(AppController.currentView) < 0)
+                    AppController.currentView = "board";
                 AppController.createTaskFromTemplate(entry.templateName);
             }
             root.close();
         });
+    }
+
+    // Badge glyph and the localized kind name, for every kind the palette
+    // lists; an unknown kind used to render "?".
+    function _kindGlyph(kind) {
+        switch (kind) {
+            case "task":      return "T";
+            case "doc":       return "D";
+            case "snippet":   return "S";
+            case "contact":   return "C";
+            case "profile":   return "●";
+            case "person":    return "P";
+            case "note":      return "N";
+            case "dailyNote": return "☼";
+            case "event":     return "E";
+            case "template":  return "✚";
+            case "command":   return "›";
+            case "setting":   return "⚙";
+        }
+        return "·";
+    }
+    function _kindLabel(kind) {
+        const k = "palette.kind." + kind;
+        const t = I18n.t(k);
+        return t === k ? kind : t;
     }
 
     onAboutToShow: {
@@ -222,8 +344,20 @@ Popup {
                 required property int index
                 width: ListView.view.width
                 height: (modelData._snippet && modelData._snippet.length > 0) ? 58 : 42
-                color: index === root._selectedIdx ? Theme.panel2 : "transparent"
+                color: index === root._selectedIdx ? Theme.rowHighlight : "transparent"
                 radius: Theme.radiusSm
+                // The selected row's marker: 3:1 against the panel on every
+                // theme (panel2 alone was 1.03:1).
+                Rectangle {
+                    objectName: "palette-row-marker"
+                    visible: index === root._selectedIdx
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 3
+                    height: parent.height - 2 * Theme.spSm
+                    radius: Theme.radiusXs
+                    color: Theme.focusRing
+                }
 
                 RowLayout {
                     anchors.fill: parent
@@ -237,19 +371,7 @@ Popup {
                         border.width: 1
                         Text {
                             anchors.centerIn: parent
-                            text: {
-                                switch (modelData.kind) {
-                                    case "task":    return "T";
-                                    case "doc":     return "D";
-                                    case "snippet": return "S";
-                                    case "contact": return "C";
-                                    case "profile": return "●";
-                                    case "person":  return "P";
-                                    case "note":    return "N";
-                                    case "template": return "✚";
-                                }
-                                return "?";
-                            }
+                            text: root._kindGlyph(modelData.kind)
                             color: modelData.color || Theme.accent
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
@@ -291,7 +413,7 @@ Popup {
                     }
 
                     Text {
-                        text: modelData.kind
+                        text: (modelData._recent ? "↺ " : "") + root._kindLabel(modelData.kind)
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsXs

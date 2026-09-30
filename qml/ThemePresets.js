@@ -137,19 +137,19 @@ var HEAP_LIGHT = {
         text: "#11151c", textMuted: "#4b5463", textDim: "#656e7d",
         textOnAccent: "#06121a", textOnDanger: "#0b0b0f", textOnBadge: "#ffffff",
         accent: "#178ea0", accentStrong: "#137888", accentSoft: "#1f178ea0", knob: "#ffffff",
-        danger: "#c34a36", warning: "#bd7530", success: "#3e8a5d", info: "#1f6fb0",
+        danger: "#be4835", warning: "#9c6128", success: "#387c54", info: "#1f6fb0",
         toastBg: "#f1f1f1", toastBorder: "#b8bdc5", toastText: "#11151c",
         scrim: "#8c000000",
-        p0: "#c34a36", p1: "#bd7530", p2: "#5f6878", p3: "#7a808c",
+        p0: "#be4835", p1: "#9c6128", p2: "#5f6878", p3: "#696f7a",
         stBacklog: "#8a909a", stTodo: "#6b7382", stProg: "#1f6fb0", stHalf: "#1f6fb0",
         stBlocked: "#c34a36", stReview: "#4b5463", stDone: "#3e8a5d",
         mStandup: "#1f6fb0", mOneone: "#7a3e91", mSync: "#317e74", mFocus: "#3e8a5d", nowLine: "#c34a36",
-        codeBg: "#eaecee", code: "#9a8237", synKeyword: "#178ea0", synString: "#9a8237",
-        synNumber: "#3e8a5d", synComment: "#656e7d", synType: "#317e74", synBuiltin: "#7a3e91",
-        mention: "#1f6fb0", ticket: "#9a8237", tag: "#7a3e91", math: "#7a3e91",
-        heading: "#b58ad7", highlightBg: "#1f178ea0",
-        mdLink: "#178ea0", mdCode: "#11151c", mdCodeBg: "#f8f8f8", mdMention: "#1f6fb0",
-        mdTicket: "#178ea0", mdTag: "#7a3e91", mdMath: "#9a8237", mdHighlight: "#1f178ea0"
+        codeBg: "#eaecee", code: "#7a672c", synKeyword: "#137382", synString: "#7a672c",
+        synNumber: "#35754f", synComment: "#616a78", synType: "#2d746b", synBuiltin: "#7a3e91",
+        mention: "#1f6fb0", ticket: "#806c2e", tag: "#7a3e91", math: "#7a3e91",
+        heading: "#9050c3", highlightBg: "#1f178ea0",
+        mdLink: "#147989", mdCode: "#11151c", mdCodeBg: "#f8f8f8", mdMention: "#1f6fb0",
+        mdTicket: "#147989", mdTag: "#7a3e91", mdMath: "#806c2e", mdHighlight: "#1f178ea0"
     }
 };
 
@@ -170,11 +170,11 @@ var ASH = {
         knob: "#a3a3a3", danger: "#cf7a7c", warning: "#c9ab70", success: "#83b39b",
         info: "#86a3c9", toastBg: "#1f1f1f", toastBorder: "#14ffffff", toastText: "#d4d4d4",
         scrim: "#99000000", p0: "#cf7a7c", p1: "#c99470", p2: "#a3a3a3",
-        p3: "#6e6e6e", stBacklog: "#6e6e6e", stTodo: "#a3a3a3", stProg: "#86a3c9",
+        p3: "#888888", stBacklog: "#6e6e6e", stTodo: "#a3a3a3", stProg: "#86a3c9",
         stHalf: "#c9ab70", stBlocked: "#cf7a7c", stReview: "#a59bc6", stDone: "#83b39b",
         mStandup: "#86a3c9", mOneone: "#a59bc6", mSync: "#7eaeaa", mFocus: "#83b39b",
         nowLine: "#cf7a7c", synKeyword: "#a59bc6", synString: "#83b39b", synNumber: "#c9ab70",
-        synComment: "#6e6e6e", synType: "#86a3c9", synBuiltin: "#d4d4d4", codeBg: "#121212",
+        synComment: "#7e7e7e", synType: "#86a3c9", synBuiltin: "#d4d4d4", codeBg: "#121212",
         code: "#c4c4c4", mention: "#86a3c9", ticket: "#a3a3a3", tag: "#a59bc6",
         math: "#c9ab70", heading: "#a3a3a3", highlightBg: "#14ffffff", mdLink: "#94add0",
         mdCode: "#d4d4d4", mdCodeBg: "#1f1f1f", mdMention: "#86a3c9", mdTicket: "#d4d4d4",
@@ -192,11 +192,11 @@ var STONE = {
         knob: "#a8a29d", danger: "#c97b72", warning: "#c6a66c", success: "#95ad88",
         info: "#91a3b5", toastBg: "#211e1c", toastBorder: "#14ffffff", toastText: "#d6d1cb",
         scrim: "#99000000", p0: "#c97b72", p1: "#c79166", p2: "#a8a29d",
-        p3: "#716b66", stBacklog: "#716b66", stTodo: "#a8a29d", stProg: "#91a3b5",
+        p3: "#8d8681", stBacklog: "#716b66", stTodo: "#a8a29d", stProg: "#91a3b5",
         stHalf: "#c6a66c", stBlocked: "#c97b72", stReview: "#b09ba8", stDone: "#95ad88",
         mStandup: "#91a3b5", mOneone: "#b09ba8", mSync: "#8dab9f", mFocus: "#95ad88",
         nowLine: "#c97b72", synKeyword: "#b09ba8", synString: "#95ad88", synNumber: "#c6a66c",
-        synComment: "#716b66", synType: "#91a3b5", synBuiltin: "#d6d1cb", codeBg: "#131110",
+        synComment: "#847d77", synType: "#91a3b5", synBuiltin: "#d6d1cb", codeBg: "#131110",
         code: "#c9c3bc", mention: "#91a3b5", ticket: "#a8a29d", tag: "#b09ba8",
         math: "#c6a66c", heading: "#a8a29d", highlightBg: "#14ffffff", mdLink: "#a3b1be",
         mdCode: "#d6d1cb", mdCodeBg: "#211e1c", mdMention: "#91a3b5", mdTicket: "#d6d1cb",
@@ -214,11 +214,11 @@ var SLATE = {
         knob: "#9da5b0", danger: "#c77c84", warning: "#c2a772", success: "#80ad9d",
         info: "#84a0c6", toastBg: "#1c2026", toastBorder: "#14ffffff", toastText: "#cdd3db",
         scrim: "#99000000", p0: "#c77c84", p1: "#c49174", p2: "#9da5b0",
-        p3: "#687280", stBacklog: "#687280", stTodo: "#9da5b0", stProg: "#84a0c6",
+        p3: "#808997", stBacklog: "#687280", stTodo: "#9da5b0", stProg: "#84a0c6",
         stHalf: "#c2a772", stBlocked: "#c77c84", stReview: "#9d98c8", stDone: "#80ad9d",
         mStandup: "#84a0c6", mOneone: "#9d98c8", mSync: "#7aa8ad", mFocus: "#80ad9d",
         nowLine: "#c77c84", synKeyword: "#9d98c8", synString: "#80ad9d", synNumber: "#c2a772",
-        synComment: "#687280", synType: "#84a0c6", synBuiltin: "#cdd3db", codeBg: "#0f1215",
+        synComment: "#747f8e", synType: "#84a0c6", synBuiltin: "#cdd3db", codeBg: "#0f1215",
         code: "#c0c7d0", mention: "#84a0c6", ticket: "#9da5b0", tag: "#9d98c8",
         math: "#c2a772", heading: "#9da5b0", highlightBg: "#14ffffff", mdLink: "#90aad0",
         mdCode: "#cdd3db", mdCodeBg: "#1c2026", mdMention: "#84a0c6", mdTicket: "#cdd3db",
@@ -236,11 +236,11 @@ var SAGE = {
         knob: "#a0a79c", danger: "#c47d73", warning: "#c1a96f", success: "#95b489",
         info: "#8aa5b3", toastBg: "#1d201c", toastBorder: "#14ffffff", toastText: "#d0d6cc",
         scrim: "#99000000", p0: "#c47d73", p1: "#c29269", p2: "#a0a79c",
-        p3: "#6b7268", stBacklog: "#6b7268", stTodo: "#a0a79c", stProg: "#8aa5b3",
+        p3: "#828a7f", stBacklog: "#6b7268", stTodo: "#a0a79c", stProg: "#8aa5b3",
         stHalf: "#c1a96f", stBlocked: "#c47d73", stReview: "#a79db6", stDone: "#95b489",
         mStandup: "#8aa5b3", mOneone: "#a79db6", mSync: "#89aea2", mFocus: "#95b489",
         nowLine: "#c47d73", synKeyword: "#a79db6", synString: "#95b489", synNumber: "#c1a96f",
-        synComment: "#6b7268", synType: "#8aa5b3", synBuiltin: "#d0d6cc", codeBg: "#101210",
+        synComment: "#788075", synType: "#8aa5b3", synBuiltin: "#d0d6cc", codeBg: "#101210",
         code: "#c3c9bf", mention: "#8aa5b3", ticket: "#a0a79c", tag: "#a79db6",
         math: "#c1a96f", heading: "#a0a79c", highlightBg: "#14ffffff", mdLink: "#9db6c0",
         mdCode: "#d0d6cc", mdCodeBg: "#1d201c", mdMention: "#8aa5b3", mdTicket: "#d0d6cc",
@@ -261,13 +261,13 @@ var MINIMAL_DARK = {
         knob: "#a3a3a3", danger: "#fb414a", warning: "#fbbf24", success: "#34d399",
         info: "#60a5fa", toastBg: "#1c1c1c", toastBorder: "#14ffffff", toastText: "#f5f5f5",
         scrim: "#99000000", p0: "#fb414a", p1: "#fb923c", p2: "#a3a3a3",
-        p3: "#737373", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
+        p3: "#858585", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
         stHalf: "#fbbf24", stBlocked: "#f87171", stReview: "#a78bfa", stDone: "#34d399",
         mStandup: "#60a5fa", mOneone: "#a78bfa", mSync: "#2dd4bf", mFocus: "#34d399",
         nowLine: "#fb414a", synKeyword: "#a78bfa", synString: "#34d399", synNumber: "#fbbf24",
-        synComment: "#737373", synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111",
+        synComment: "#7d7d7d", synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111",
         code: "#d4d4d4", mention: "#60a5fa", ticket: "#a3a3a3", tag: "#a78bfa",
-        math: "#fbbf24", heading: "#737373", highlightBg: "#14ffffff", mdLink: "#60a5fa",
+        math: "#fbbf24", heading: "#858585", highlightBg: "#14ffffff", mdLink: "#60a5fa",
         mdCode: "#e5e5e5", mdCodeBg: "#1c1c1c", mdMention: "#60a5fa", mdTicket: "#f5f5f5",
         mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#14ffffff"
     }
@@ -420,6 +420,9 @@ function desaturate(s, k) {
     else if (max === g) h = (b - r) / d + 2;
     else h = (r - g) / d + 4;
     h *= 60;
+    // JS `%` keeps the sign: magenta (#ff00ff) came out at -60°, fell into the
+    // red branch below and softened to #d2002d.
+    if (h < 0) h += 360;
     sat *= k;
     var C = (1 - Math.abs(2 * l - 1)) * sat, X = C * (1 - Math.abs((h / 60) % 2 - 1)), m = l - C / 2;
     var rgb = h < 60 ? [C, X, 0] : h < 120 ? [X, C, 0] : h < 180 ? [0, C, X]
@@ -448,6 +451,70 @@ function _fade(s, bg, t) {
     return _parse(s).a < 255 ? _scaleAlpha(s, 1 - t) : mix(s, bg, t);
 }
 
+// ── Contrast (WCAG 2.x) ─────────────────────────────────────────────────
+
+// A colour laid over an opaque surface, as the eye sees it.
+function _over(fg, bg) {
+    var f = _parse(fg), b = _parse(bg), a = f.a / 255;
+    return { a: 255, r: f.r * a + b.r * (1 - a), g: f.g * a + b.g * (1 - a), b: f.b * a + b.b * (1 - a) };
+}
+
+function _lum(c) {
+    function ch(v) { v /= 255; return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+    return 0.2126 * ch(c.r) + 0.7152 * ch(c.g) + 0.0722 * ch(c.b);
+}
+
+// Contrast ratio of `fg` drawn on `bg` (both "#rrggbb" / "#aarrggbb"; a
+// translucent bg is taken over black, a translucent fg over bg).
+function contrast(fg, bg) {
+    var b = _over(bg, "#000000");
+    var f = _over(fg, _fmt(b));
+    var la = _lum(f), lb = _lum(b);
+    return (Math.max(la, lb) + 0.05) / (Math.min(la, lb) + 0.05);
+}
+
+function _minContrast(fg, surfaces) {
+    var m = Infinity;
+    for (var i = 0; i < surfaces.length; i++) m = Math.min(m, contrast(fg, surfaces[i]));
+    return m;
+}
+
+// `fg`, moved toward white on a dark surface or black on a light one just
+// far enough to reach `min` against every surface. A colour that already
+// passes comes back unchanged, so this only ever repairs.
+function ensureContrast(fg, surfaces, min) {
+    if (!surfaces.length || _minContrast(fg, surfaces) >= min) return fg;
+    var darkSurface = _lum(_over(surfaces[0], "#000000")) < 0.18;
+    var target = darkSurface ? "#ffffff" : "#000000";
+    var solid = _fmt(_over(fg, surfaces[0]));
+    for (var t = 0.05; t <= 1.0001; t += 0.05) {
+        var c = mix(solid, target, t);
+        if (_minContrast(c, surfaces) >= min) return c;
+    }
+    return target;
+}
+
+// Tokens drawn as text on bg / panel / panel2, which WCAG AA holds to 4.5:1.
+var TEXT_ROLES = ["textMuted", "textDim", "p0", "p1", "p2", "p3",
+                  "danger", "warning", "success", "info", "accentStrong", "heading",
+                  "mention", "ticket", "tag", "math",
+                  "mdLink", "mdMention", "mdTicket", "mdTag", "mdMath"];
+// Tokens drawn as text on codeBg.
+var CODE_ROLES = ["synKeyword", "synString", "synNumber", "synComment", "synType", "synBuiltin", "code"];
+
+// Every text-role token of `colors` brought up to AA where it falls short.
+function ensureTextContrast(colors) {
+    var c = {};
+    for (var k in colors) c[k] = colors[k];
+    var surf = [colors.bg, _fmt(_over(colors.panel, colors.bg)), _fmt(_over(colors.panel2, colors.bg))];
+    for (var i = 0; i < TEXT_ROLES.length; i++)
+        c[TEXT_ROLES[i]] = ensureContrast(colors[TEXT_ROLES[i]], surf, 4.5);
+    var code = [_fmt(_over(colors.codeBg, colors.bg))];
+    for (var j = 0; j < CODE_ROLES.length; j++)
+        c[CODE_ROLES[j]] = ensureContrast(colors[CODE_ROLES[j]], code, 4.5);
+    return c;
+}
+
 function soften(colors) {
     var c = {};
     for (var k in colors) c[k] = colors[k];
@@ -462,5 +529,7 @@ function soften(colors) {
     c.scrim = _scaleAlpha(colors.scrim, 0.8);
     for (var i = 0; i < _COLOURED.length; i++)
         c[_COLOURED[i]] = desaturate(colors[_COLOURED[i]], 0.65);
-    return c;
+    // Losing saturation moves luminance too; a softened P1 or link must still
+    // read at AA on the panels it sits on.
+    return ensureTextContrast(c);
 }

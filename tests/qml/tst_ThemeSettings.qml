@@ -126,6 +126,21 @@ TestCase {
         compare(Theme.activePresetId, "heap-dark");
     }
 
+    // UX-28: deleting a copy lands the slot on the theme it was copied from,
+    // not on heap. dark — a copy of a copy included.
+    function test_deleting_a_copy_falls_back_to_its_source() {
+        const ts = make();
+        ts.pick("minimal-dark");
+        const copy = ts.duplicate("minimal-dark");
+        const copyOfCopy = ts.duplicate(copy);
+        compare(Theme.activePresetId, copyOfCopy);
+        ts.remove(copyOfCopy);
+        compare(ts.appearance.darkPreset, "minimal-dark");
+        ts.pick(copy);
+        ts.remove(copy);
+        compare(Theme.activePresetId, "minimal-dark");
+    }
+
     function test_rename_and_base() {
         const ts = make();
         ts.duplicate("heap-dark");

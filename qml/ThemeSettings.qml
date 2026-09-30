@@ -115,12 +115,32 @@ ColumnLayout {
         _updateCustom(currentId, (t) => { t.base = base; });
     }
 
+    // Where a slot showing theme `id` lands once `id` is gone: the theme it was
+    // copied from, followed back past other deleted copies, as long as that
+    // one belongs in the slot; otherwise the slot's default. It used to be the
+    // default every time, so deleting a copy of Minimal dark landed on heap.
+    function fallbackFor(id, slotName, remaining) {
+        const seen = {};
+        let cur = _custom(id);
+        while (cur && cur.from && !seen[cur.from]) {
+            seen[cur.from] = true;
+            const b = Presets.builtin(cur.from) || Presets.builtin(Presets.RETIRED[cur.from]);
+            if (b) return b.id;
+            const next = remaining.filter((t) => t.id === cur.from)[0];
+            if (next) return next.id;
+            cur = _custom(cur.from);
+        }
+        return slotName === "light" ? Presets.DEFAULT_LIGHT : Presets.DEFAULT_DARK;
+    }
+
     function remove(id) {
         if (Presets.builtin(id)) return;
-        _saveCustoms(customs.filter((t) => t.id !== id));
-        // A slot that pointed at it goes back to its default.
-        if (appearance.darkPreset === id) setKey("darkPreset", Presets.DEFAULT_DARK);
-        if (appearance.lightPreset === id) setKey("lightPreset", Presets.DEFAULT_LIGHT);
+        const remaining = customs.filter((t) => t.id !== id);
+        const darkNext = fallbackFor(id, "dark", remaining);
+        const lightNext = fallbackFor(id, "light", remaining);
+        _saveCustoms(remaining);
+        if (appearance.darkPreset === id) setKey("darkPreset", darkNext);
+        if (appearance.lightPreset === id) setKey("lightPreset", lightNext);
     }
 
     function exportCurrent() {

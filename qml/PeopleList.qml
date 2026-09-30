@@ -36,26 +36,38 @@ Rectangle {
                 color: Theme.panel3
                 implicitWidth: badge.implicitWidth + 12
                 implicitHeight: 18
+                // Counts come from calls the binding cannot watch, so the model
+                // signals bump a revision it does watch. They used to assign
+                // badge.text directly, which broke the binding to I18n: the
+                // badge stayed English after switching to Russian.
+                property int _rev: 0
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
+                    text: (parent._rev >= 0 ? I18n.t("people.badge") : "")
+                              .arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsXs
                 }
                 Connections {
                     target: AppController.activePeople
-                    function onDataChanged()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
-                    function onRowsInserted()   { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
-                    function onRowsRemoved()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
-                    function onModelReset()     { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
+                    function onDataChanged()    { badge.parent._rev++ }
+                    function onRowsInserted()   { badge.parent._rev++ }
+                    function onRowsRemoved()    { badge.parent._rev++ }
+                    function onModelReset()     { badge.parent._rev++ }
                 }
             }
             Item { Layout.fillWidth: true }
             Rectangle {
                 width: 22; height: 22; radius: Theme.radiusSm
                 color: addMA.containsMouse ? Theme.panel3 : "transparent"
+                activeFocusOnTab: true
+                Accessible.role: Accessible.Button
+                Accessible.name: I18n.t("people.tip.add")
+                Keys.onSpacePressed: root.pickPersonRequested()
+                Keys.onReturnPressed: root.pickPersonRequested()
+                FocusRing {}
                 Text {
                     anchors.centerIn: parent
                     text: "+"
@@ -86,6 +98,21 @@ Rectangle {
             // "idle". See ActivePeopleModel.
             model: AppController.activePeople
             boundsBehavior: Flickable.StopAtBounds
+            // Keyboard: Tab lands on the list, ↑/↓ walk it, Enter edits the
+            // person, the menu key (or Shift+F10) opens their menu.
+            activeFocusOnTab: true
+            keyNavigationEnabled: true
+            Accessible.role: Accessible.List
+            Keys.onReturnPressed: if (currentItem) root.personRequested(currentItem.id)
+            Keys.onEnterPressed: if (currentItem) root.personRequested(currentItem.id)
+            Keys.onPressed: (event) => {
+                if (currentItem && (event.key === Qt.Key_Menu
+                                    || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)))) {
+                    currentItem.openMenu();
+                    event.accepted = true;
+                }
+            }
+            onActiveFocusChanged: if (activeFocus && currentIndex < 0 && count > 0) currentIndex = 0
 
             // Empty is the resting state now, not an unfinished setup: the rail
             // is only ever as long as what is actually outstanding.
@@ -115,6 +142,16 @@ Rectangle {
                 readonly property string personState: prow.model.state
                 width: ListView.view ? ListView.view.width : 0
                 height: layout.implicitHeight + 12
+                function openMenu() { personMenu.popup(prow, 12, prow.height / 2); }
+                Rectangle {
+                    anchors.fill: parent
+                    radius: Theme.radius
+                    color: "transparent"
+                    border.color: Theme.focusRing
+                    border.width: 2
+                    visible: prow.ListView.isCurrentItem && peopleView.activeFocus
+                    z: 10
+                }
 
                 // Row hover drives the highlight and the ✎ affordance. It has to
                 // be a HoverHandler: hover delivery stops at the first item that

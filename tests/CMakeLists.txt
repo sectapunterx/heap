@@ -309,6 +309,9 @@ heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
 # ── audit-know: begin ──
 # ── audit-know: end ──
 # ── audit-ux: begin ──
+# UX audit fixes that live in C++: first-run language, toast kinds, RU labels.
+heap_add_appcontroller_test(heap_ux_audit_tests test_ux_audit.cpp)
+target_compile_definitions(heap_ux_audit_tests PRIVATE HEAP_DOCS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../docs")
 # ── audit-ux: end ──
 # ── audit-int: begin ──
 # ─── Integration / release fixes from the 2026-09-30 audit ───

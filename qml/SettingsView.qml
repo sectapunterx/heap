@@ -345,6 +345,7 @@ Item {
                         spacing: Theme.spSm
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
+                            objectName: "settings-search"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
                             color: Theme.text
@@ -353,6 +354,10 @@ Item {
                             font.pixelSize: Theme.fsMd
                             text: root.searchText
                             onTextChanged: root.searchText = text
+                            // Enter opens the first section that matches; ↓
+                            // moves into the list. Both were dead.
+                            onAccepted: root._openFirstMatch()
+                            Keys.onDownPressed: root._focusNav(0)
                         }
                     }
                 }
@@ -376,15 +381,25 @@ Item {
                         width: navScroll.width
                         spacing: Theme.sp2xs
                         Repeater {
+                            id: navRep
                             model: root.sections
                             delegate: Rectangle {
+                                id: navRow
                                 required property var modelData
-                                visible: {
-                                    const q = root.searchText.toLowerCase().trim();
-                                    if (q.length === 0) return true;
-                                    return (modelData.title.toLowerCase().indexOf(q) >= 0
-                                         || modelData.sub.toLowerCase().indexOf(q) >= 0);
-                                }
+                                required property int index
+                                objectName: "settings-nav-" + modelData.id
+                                visible: root._sectionMatches(modelData)
+                                // A list box: Tab lands on it, ↑/↓ move and open,
+                                // Enter / Space open.
+                                activeFocusOnTab: true
+                                Accessible.role: Accessible.PageTab
+                                Accessible.name: modelData.title
+                                Keys.onUpPressed: root._focusNav(index - 1, -1)
+                                Keys.onDownPressed: root._focusNav(index + 1, 1)
+                                Keys.onSpacePressed: root.activeSection = modelData.id
+                                Keys.onReturnPressed: root.activeSection = modelData.id
+                                onActiveFocusChanged: if (activeFocus) root.activeSection = modelData.id
+                                FocusRing {}
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 44
                                 Layout.minimumHeight: 44
@@ -661,6 +676,52 @@ Item {
     // Deep-link entry from the Welcome guide ("Learn more →"). Switch to the
     // Help section, then scroll to `anchor` once the body Loader has built
     // HelpContent (deferred a tick so _findChildByName can see it).
+    // Quiet hours are stored as HH:mm, which is all the C++ side parses.
+    readonly property var _hhmmRe: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
+    function _hhmm(t) {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+        return m ? m[1].padStart(2, "0") + ":" + m[2] : t;
+    }
+
+    // ── Settings search + keyboard nav ─────────────────────────────────
+    function _sectionMatches(sec) {
+        const q = root.searchText.toLowerCase().trim();
+        if (q.length === 0) return true;
+        return sec.title.toLowerCase().indexOf(q) >= 0 || sec.sub.toLowerCase().indexOf(q) >= 0;
+    }
+    function _openFirstMatch() {
+        for (let i = 0; i < sections.length; i++) {
+            if (_sectionMatches(sections[i])) {
+                activeSection = sections[i].id;
+                return true;
+            }
+        }
+        return false;
+    }
+    // Focus the nav row at `from`, skipping rows the search hides in the
+    // direction `dir` (1 down, -1 up).
+    function _focusNav(from, dir) {
+        const step = dir === -1 ? -1 : 1;
+        for (let i = from; i >= 0 && i < navRep.count; i += step) {
+            const it = navRep.itemAt(i);
+            if (it && it.visible) {
+                it.forceActiveFocus(Qt.TabFocusReason);
+                return;
+            }
+        }
+    }
+
+    // Deep link from the command palette ("Settings: Appearance").
+    function openSection(id) {
+        for (let i = 0; i < sections.length; i++) {
+            if (sections[i].id === id) {
+                activeSection = id;
+                return true;
+            }
+        }
+        return false;
+    }
+
     function openHelp(anchor) {
         activeSection = "help";
         if (anchor && anchor.length > 0)
@@ -806,6 +867,11 @@ Item {
         // "check what I pasted" case that justifies revealing it.
         property bool alwaysMasked: false
         property string value: ""
+        // Optional: text the field will not store. An edit that fails it is
+        // put back to the stored value instead of being saved ("xyz" as a
+        // quiet-hours time used to be).
+        property alias validator: textRowField.validator
+        readonly property bool invalid: textRowField.text.length > 0 && !textRowField.acceptableInput
         signal committed(string text)
         // What is typed right now, for fields that are never stored anywhere.
         function currentText() { return textRowField.text; }
@@ -820,7 +886,12 @@ Item {
         // straight after pasting a token would otherwise act on the old value.
         function commitPending() {
             const t = pendingText();
-            if (t !== null) textRow.committed(t);
+            if (t === null) return;
+            if (textRowField.validator && !textRowField.acceptableInput) {
+                textRowField.text = textRow.value;
+                return;
+            }
+            textRow.committed(t);
         }
         spacing: Theme.spXs
         Layout.fillWidth: true
@@ -835,7 +906,8 @@ Item {
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2
+                                    border.color: textRow.invalid ? Theme.danger : Theme.border; border.width: 1 }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
             // mid-edit text (no two-way binding → no loop, no per-keystroke
@@ -862,6 +934,13 @@ Item {
         // MouseArea because an Item child would become a layout cell.
         TapHandler { onTapped: switchRow.toggled(!switchRow.checked) }
         HoverHandler { cursorShape: Qt.PointingHandCursor }
+        // Keyboard: Tab to the row, Space / Enter flips it.
+        activeFocusOnTab: true
+        Accessible.role: Accessible.CheckBox
+        Accessible.name: switchRow.label
+        Accessible.checked: switchRow.checked
+        Keys.onSpacePressed: switchRow.toggled(!switchRow.checked)
+        Keys.onReturnPressed: switchRow.toggled(!switchRow.checked)
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -874,6 +953,7 @@ Item {
             color: switchRow.checked ? Theme.accent : Theme.panel3
             border.color: switchRow.checked ? Theme.accent : Theme.border
             border.width: 1
+            FocusRing { target: switchRow; radius: 13 }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
@@ -885,6 +965,7 @@ Item {
     }
 
     component SegRow: ColumnLayout {
+        id: segRow
         property string label: ""
         property string hint: ""
         property var options: []        // [{value,label}] or [string]
@@ -892,6 +973,18 @@ Item {
         signal selected(string value)
         spacing: Theme.spXs
         Layout.fillWidth: true
+        function _valueAt(i) {
+            const o = segRow.options[i];
+            return typeof o === "string" ? o : o.value;
+        }
+        // ←/→ pick the neighbouring option, like a radio group.
+        function _step(dir) {
+            const n = segRow.options.length;
+            if (n === 0) return;
+            let cur = 0;
+            for (let i = 0; i < n; i++) if (segRow._valueAt(i) === segRow.value) cur = i;
+            segRow.selected(segRow._valueAt(Math.max(0, Math.min(n - 1, cur + dir))));
+        }
         FieldLabel { label: parent.label; hint: parent.hint }
         Rectangle {
             Layout.fillWidth: true
@@ -899,6 +992,12 @@ Item {
             radius: Theme.radiusMd
             color: Theme.panel2
             border.color: Theme.border; border.width: 1
+            activeFocusOnTab: true
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: segRow.label
+            Keys.onLeftPressed: segRow._step(-1)
+            Keys.onRightPressed: segRow._step(1)
+            FocusRing {}
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.sp2xs
@@ -953,10 +1052,15 @@ Item {
         }
         Text { visible: parent.hint.length > 0; text: parent.hint; color: Theme.textDim; font.pixelSize: Theme.fsXs }
         Slider {
+            id: sliderCtl
             Layout.fillWidth: true
             from: parent.min; to: parent.max; stepSize: parent.step
             value: parent.value
             onMoved: parent.moved(value)
+            // Tab reaches it and ←/→ move it (Slider's own keys); the handle
+            // shows the focus ring while it has the keyboard.
+            focusPolicy: Qt.StrongFocus
+            Accessible.name: parent.label
             background: Rectangle {
                 x: parent.leftPadding; y: parent.topPadding + parent.availableHeight / 2 - 2
                 implicitWidth: 200; implicitHeight: 4
@@ -973,7 +1077,8 @@ Item {
                 y: parent.topPadding + parent.availableHeight / 2 - height / 2
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
-                border.color: Theme.border; border.width: 1
+                border.color: sliderCtl.activeFocus ? Theme.focusRing : Theme.border
+                border.width: sliderCtl.activeFocus ? 2 : 1
             }
         }
     }
@@ -997,6 +1102,13 @@ Item {
                     color: modelData
                     border.color: String(swRoot.value).toLowerCase() === modelData.toLowerCase() ? Theme.text : "transparent"
                     border.width: 2
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.RadioButton
+                    Accessible.name: modelData
+                    Accessible.checked: String(swRoot.value).toLowerCase() === modelData.toLowerCase()
+                    Keys.onSpacePressed: swRoot.selected(modelData)
+                    Keys.onReturnPressed: swRoot.selected(modelData)
+                    FocusRing {}
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: swRoot.selected(modelData) }
                 }
             }
@@ -1029,6 +1141,12 @@ Item {
             border.color: Theme.danger; border.width: 1
             implicitWidth: dangerTxt.implicitWidth + 24
             implicitHeight: 28
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: dangerTxt.text
+            Keys.onSpacePressed: dangerMA.press()
+            Keys.onReturnPressed: dangerMA.press()
+            FocusRing {}
             Text {
                 id: dangerTxt; anchors.centerIn: parent
                 text: dangerRow.armed ? dangerRow.confirmText : dangerRow.buttonText
@@ -1037,10 +1155,11 @@ Item {
             MouseArea {
                 id: dangerMA; objectName: "danger-row-button"
                 anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: {
+                function press() {
                     if (!dangerRow.armed) { dangerRow.armed = true; dangerDisarm.restart(); return; }
                     dangerRow.armed = false; dangerDisarm.stop(); dangerRow.triggered();
                 }
+                onClicked: press()
             }
         }
     }
@@ -1087,7 +1206,7 @@ Item {
                                 spacing: Theme.spLg
                                 TextRow {
                                     Layout.fillWidth: true
-                                    label: I18n.t("settings.profile.handle"); mono: true; placeholder: "alex.t"
+                                    label: I18n.t("settings.profile.handle"); mono: true; placeholder: I18n.t("settings.profile.handle.ph")
                                     value: (root.settings.profile && root.settings.profile.handle) || ""
                                     onCommitted: (text) => root.set("profile", "handle", text)
                                 }
@@ -1189,14 +1308,21 @@ Item {
                             root.set("appearance", "highContrast", value === "high");
                         }
                     }
-                    // Only where there is a tray to close into.
-                    SwitchRow {
+                    // Only where there is a tray to close into. Three states,
+                    // because there are three: a switch showed ON while the
+                    // choice was still unset, and the next close asked anyway.
+                    SegRow {
                         objectName: "settings-close-to-tray"
                         visible: Qt.platform.os === "windows" || Qt.platform.os === "osx"
                         label: I18n.t("settings.system.closeToTray")
                         hint: I18n.t("settings.system.closeToTray.hint")
-                        checked: !(root.settings.system && root.settings.system.closeToTray === false)
-                        onToggled: (checked) => root.set("system", "closeToTray", checked)
+                        readonly property var _pref: root.settings.system ? root.settings.system.closeToTray : undefined
+                        value: _pref === true ? "tray" : _pref === false ? "quit" : "ask"
+                        options: [ ({ value: "ask",  label: I18n.t("settings.system.closeToTray.ask") }),
+                                   ({ value: "tray", label: I18n.t("settings.system.closeToTray.tray") }),
+                                   ({ value: "quit", label: I18n.t("settings.system.closeToTray.quit") }) ]
+                        // "ask" drops the key: unset is what makes the next close ask.
+                        onSelected: (v) => root.set("system", "closeToTray", v === "ask" ? undefined : v === "tray")
                     }
                 }
             }
@@ -1252,7 +1378,7 @@ Item {
                     SliderRow {
                         visible: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
                         label: I18n.t("settings.notif.leadHours")
-                        unit: "h"; min: 1; max: 72; step: 1
+                        unit: I18n.t("common.hours"); min: 1; max: 72; step: 1
                         value: _num(root.settings.notifications && root.settings.notifications.deadlineLeadHours, 24)
                         onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
                     }
@@ -1270,7 +1396,7 @@ Item {
                     }
                     SliderRow {
                         label: I18n.t("settings.notif.meetingLead")
-                        unit: " min"; min: 0; max: 30; step: 1
+                        unit: " " + I18n.t("common.minutes"); min: 0; max: 30; step: 1
                         // Undefined-aware fallback: a stored 0 is a valid lead
                         // (min is 0) and must not collapse to 5 via a falsy `||`.
                         value: root.settings.notifications
@@ -1322,14 +1448,18 @@ Item {
                         TextRow {
                             Layout.fillWidth: true
                             label: I18n.t("common.from"); mono: true; placeholder: "19:00"
+                            hint: invalid ? I18n.t("settings.notif.quiet.invalid") : ""
+                            validator: RegularExpressionValidator { regularExpression: root._hhmmRe }
                             value: (root.settings.notifications && root.settings.notifications.quietFrom) || ""
-                            onCommitted: (text) => root.set("notifications", "quietFrom", text)
+                            onCommitted: (text) => root.set("notifications", "quietFrom", root._hhmm(text))
                         }
                         TextRow {
                             Layout.fillWidth: true
                             label: I18n.t("common.to"); mono: true; placeholder: "09:00"
+                            hint: invalid ? I18n.t("settings.notif.quiet.invalid") : ""
+                            validator: RegularExpressionValidator { regularExpression: root._hhmmRe }
                             value: (root.settings.notifications && root.settings.notifications.quietTo) || ""
-                            onCommitted: (text) => root.set("notifications", "quietTo", text)
+                            onCommitted: (text) => root.set("notifications", "quietTo", root._hhmm(text))
                         }
                     }
                 }
@@ -1386,7 +1516,7 @@ Item {
                     SegRow {
                         label: I18n.t("settings.cal.snap")
                         value: String(_num(root.settings.calendar && root.settings.calendar.snapMinutes, 15))
-                        options: [ ({ value: "5", label: "5 min" }), ({ value: "15", label: "15 min" }), ({ value: "30", label: "30 min" }) ]
+                        options: [ ({ value: "5", label: "5 " + I18n.t("common.minutes") }), ({ value: "15", label: "15 " + I18n.t("common.minutes") }), ({ value: "30", label: "30 " + I18n.t("common.minutes") }) ]
                         onSelected: (value) => root.set("calendar", "snapMinutes", parseInt(value))
                     }
                     SwitchRow {
@@ -1412,7 +1542,7 @@ Item {
                     SliderRow {
                         visible: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
                         label: I18n.t("settings.cal.focusDuration")
-                        unit: " min"; min: 30; max: 240; step: 15
+                        unit: " " + I18n.t("common.minutes"); min: 30; max: 240; step: 15
                         value: _num(root.settings.calendar && root.settings.calendar.focusBlockDuration, 90)
                         onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }

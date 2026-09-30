@@ -13,7 +13,11 @@ Rectangle {
     // Parse-only, so this costs nothing per keystroke — it never touches the
     // task list, unlike the filtering itself.
     readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
+    // The widest a breadcrumb or the profile name may get before it elides.
+    readonly property int crumbMaxWidth: 150
     signal newTaskRequested()
+    // Esc on an empty search box, or Return in it: give the keyboard back.
+    signal leaveRequested()
     signal rightPanelToggleRequested()
     // Whether the calendar/people column is on screen, for the toggle's look.
     property bool rightPanelShown: true
@@ -66,14 +70,14 @@ Rectangle {
             spacing: Theme.spXs
             EditableCrumb {
                 value: AppController.crumbProject
-                placeholder: "project"
+                placeholder: I18n.t("topbar.crumb.project")
                 bold: true
                 onCommitted: (v) => AppController.crumbProject = v
             }
             CrumbSep {}
             // sprint segment — derived; not editable
             Text {
-                text: AppController.sprintLabel()
+                text: I18n.relang(AppController.sprintLabel())
                 color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsMd
@@ -81,7 +85,7 @@ Rectangle {
             CrumbSep {}
             EditableCrumb {
                 value: AppController.crumbUser
-                placeholder: "you"
+                placeholder: I18n.t("topbar.crumb.user")
                 bold: true
                 onCommitted: (v) => AppController.crumbUser = v
             }
@@ -97,6 +101,14 @@ Rectangle {
                 border.color: profileMA.containsMouse ? Theme.borderStrong : Theme.border
                 border.width: 1
                 implicitWidth: pillRow.implicitWidth + 16
+                // Keyboard: Tab to it, Enter / Space / ↓ opens the profile menu.
+                activeFocusOnTab: true
+                Accessible.role: Accessible.ButtonMenu
+                Accessible.name: profilePill.active.name || I18n.t("topbar.profile.fallback")
+                Keys.onSpacePressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
+                Keys.onReturnPressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
+                Keys.onDownPressed: profileMenu.popup(profilePill, 0, profilePill.height + 4)
+                FocusRing {}
 
                 property var active: root._activeProfileMap()
 
@@ -110,11 +122,15 @@ Rectangle {
                         color: profilePill.active.color || Theme.accent
                     }
                     Text {
-                        text: profilePill.active.name || "Profile"
+                        text: profilePill.active.name || I18n.t("topbar.profile.fallback")
                         color: Theme.text
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsMd
                         font.weight: Font.Medium
+                        // A long profile name pushed "+ Task" and the panel
+                        // toggle off the window.
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: root.crumbMaxWidth
                     }
                     Text {
                         text: "▾"
@@ -255,8 +271,9 @@ Rectangle {
                             if (!prBadge.pr) return "";
                             const n = prBadge.pr.number || 0;
                             const s = String(prBadge.pr.state || "");
-                            const d = prBadge.pr.draft === true ? " · draft" : "";
-                            return "PR #" + n + " " + s + d;
+                            const d = prBadge.pr.draft === true ? " · " + I18n.t("topbar.pr.draft") : "";
+                            const st = s === "open" || s === "merged" || s === "closed" ? I18n.t("topbar.pr." + s) : s;
+                            return "PR #" + n + " " + st + d;
                         }
                         color: Theme.accentStrong
                         font.family: Theme.fontMono
@@ -358,9 +375,12 @@ Rectangle {
             }
         }
 
-        // Search
+        // Search: 280px when there is room, down to 160 when there is not.
         Rectangle {
+            Layout.fillWidth: true
             Layout.preferredWidth: 280
+            Layout.maximumWidth: 280
+            Layout.minimumWidth: 160
             Layout.preferredHeight: 28
             radius: Theme.radiusMd
             color: Theme.panel2
@@ -382,6 +402,7 @@ Rectangle {
                 }
                 TextField {
                     id: searchField
+                    objectName: "topbar-search"
                     Layout.fillWidth: true
                     placeholderText: I18n.t("topbar.search")
                     color: Theme.text
@@ -390,6 +411,16 @@ Rectangle {
                     font.pixelSize: Theme.fsMd
                     background: Item {}
                     selectByMouse: true
+                    // Esc clears what was typed, and a second Esc (or Return)
+                    // hands the keyboard back to the view, so the board cursor
+                    // can walk what the search left. It used to do neither.
+                    Keys.onEscapePressed: (event) => {
+                        if (searchField.text.length > 0) searchField.clear();
+                        else root.leaveRequested();
+                        event.accepted = true;
+                    }
+                    Keys.onReturnPressed: root.leaveRequested()
+                    Keys.onEnterPressed: root.leaveRequested()
                     // The syntax is only discoverable if something says it out
                     // loud; the field itself is the only place the user looks.
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0
@@ -444,6 +475,7 @@ Rectangle {
         }
 
         PillButton {
+            objectName: "topbar-new-task"
             text: I18n.t("topbar.newTask")
             primary: true
             onClicked: root.newTaskRequested()
@@ -474,8 +506,22 @@ Rectangle {
         property bool editing: false
         signal committed(string text)
 
-        implicitWidth: editing ? Math.max(60, edit.implicitWidth + 12) : Math.max(20, label.implicitWidth + 6)
+        implicitWidth: editing ? Math.max(60, Math.min(root.crumbMaxWidth + 60, edit.implicitWidth + 12))
+                               : Math.max(20, label.width + 6)
         implicitHeight: 22
+
+        // Keyboard: Tab to the crumb, Enter or F2 edits it.
+        activeFocusOnTab: !editing
+        Accessible.role: Accessible.Button
+        Accessible.name: label.text
+        function startEdit() {
+            ec.editing = true;
+            edit.forceActiveFocus();
+            edit.selectAll();
+        }
+        Keys.onReturnPressed: ec.startEdit()
+        Keys.onPressed: (event) => { if (event.key === Qt.Key_F2) { ec.startEdit(); event.accepted = true; } }
+        FocusRing { visible: ec.activeFocus && !ec.editing }
 
         Rectangle {
             anchors.fill: parent
@@ -489,6 +535,9 @@ Rectangle {
             id: label
             anchors.centerIn: parent
             visible: !ec.editing
+            // Capped and elided, like the profile name.
+            width: Math.min(implicitWidth, root.crumbMaxWidth)
+            elide: Text.ElideRight
             text: ec.value.length > 0 ? ec.value : ec.placeholder
             color: ec.value.length > 0 ? Theme.text : Theme.textDim
             font.family: Theme.fontMono
@@ -522,11 +571,7 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.IBeamCursor
             visible: !ec.editing
-            onClicked: {
-                ec.editing = true;
-                edit.forceActiveFocus();
-                edit.selectAll();
-            }
+            onClicked: ec.startEdit()
         }
     }
 }

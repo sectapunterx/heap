@@ -1,5 +1,5 @@
 // Tests for qml/HotkeysPanel.qml — the rebindable-hotkey catalog Popup.
-// Load-smoke + _labelFor() function contract + isCapturing/_activeCaptures
+// Load-smoke + _labelFor() function contract + isCapturing/capturingId
 // property contract + onClosed reset behaviour. The panel declares no custom
 // signals and no objectName, so there is no signal- or click-layer to cover.
 import QtQuick
@@ -53,34 +53,101 @@ TestCase {
         compare(panel._labelFor("__no_such_action__"), "");
     }
 
-    // isCapturing is the derived predicate _activeCaptures > 0. Drive the
-    // backing counter (a plain instance property on a throwaway object → no
-    // global state) and check the readonly predicate tracks it.
-    function test_is_capturing_tracks_active_captures() {
+    // isCapturing follows capturingId — the one action whose chip records.
+    function test_is_capturing_tracks_capturing_id() {
         const panel = make();
-        compare(panel._activeCaptures, 0, "fresh panel starts with no captures");
+        compare(panel.capturingId, "", "fresh panel records nothing");
         verify(!panel.isCapturing);
-
-        panel._activeCaptures = 2;
-        verify(panel.isCapturing, "isCapturing must be true while captures are active");
-
-        panel._activeCaptures = 0;
+        panel.capturingId = "task.new";
+        verify(panel.isCapturing);
+        panel.capturingId = "";
         verify(!panel.isCapturing);
     }
 
-    // Closing the panel resets the capture counter (source: onClosed:
-    // _activeCaptures = 0) so a chip left mid-capture cannot leave global
-    // Shortcuts disabled after the panel goes away.
-    function test_closed_resets_active_captures() {
+    // Closing the panel ends a capture, so global shortcuts come back.
+    function test_closed_resets_capture() {
         const panel = make();
-        panel.parent = host;              // give the Popup a window to open into
+        panel.parent = host;
         panel.open();
         tryVerify(function() { return panel.visible; }, 2000, "panel did not open");
-
-        panel._activeCaptures = 3;
+        panel.capturingId = "task.new";
         panel.close();
-        // onClosed fires when the close settles; wait for the counter to reset.
-        tryCompare(panel, "_activeCaptures", 0);
+        tryCompare(panel, "capturingId", "");
         verify(!panel.isCapturing);
+    }
+
+    function field(panel, id) {
+        const find = function (it) {
+            if (!it) return null;
+            if (it.objectName === "hotkey-chip-" + id) return it;
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) { const r = find(kids[i]); if (r) return r; }
+            return null;
+        };
+        return find(panel.contentItem);
+    }
+
+    function openPanel() {
+        AppController.resetAllShortcuts();
+        const panel = make();
+        panel.parent = host;
+        panel.open();
+        tryVerify(function() { return panel.opened; }, 2000);
+        return panel;
+    }
+
+    // UX-4: a rebind ends the capture even though committing rebuilds the list
+    // and destroys the chip that was recording. It used to throw
+    // "cancelCapture is not a function" and leave isCapturing stuck on, which
+    // kept every global shortcut dead until the panel was closed.
+    function test_commit_releases_capture() {
+        const panel = openPanel();
+        tryVerify(function () { return field(panel, "view.archive") !== null; }, 2000, "no chip for view.archive");
+        const f = field(panel, "view.archive");
+        verify(f !== null);
+        f.forceActiveFocus();
+        keyClick(Qt.Key_Return);                 // start recording
+        compare(panel.capturingId, "view.archive");
+        keyClick(Qt.Key_Y, Qt.ControlModifier | Qt.ShiftModifier);
+        keyClick(Qt.Key_Return);                 // save
+        compare(panel.capturingId, "");
+        verify(!panel.isCapturing);
+        compare(AppController.shortcutFor("view.archive"), "Ctrl+Shift+Y");
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
+    // UX-4: Enter on a focused chip starts recording — it used to commit an
+    // empty sequence and unbind the action — and a stray letter while not
+    // recording binds nothing.
+    function test_enter_on_chip_starts_capture_not_unbind() {
+        const panel = openPanel();
+        const before = AppController.shortcutFor("view.board");
+        verify(before.length > 0);
+        tryVerify(function () { return field(panel, "view.board") !== null; }, 2000, "no chip for view.board");
+        const f = field(panel, "view.board");
+        f.forceActiveFocus();
+        keyClick(Qt.Key_X);
+        compare(panel.capturingId, "", "a letter must not start a capture");
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("view.board"), before, "Enter unbound the action");
+        compare(panel.capturingId, "view.board", "Enter must start recording");
+        keyClick(Qt.Key_Escape);
+        compare(panel.capturingId, "");
+        compare(AppController.shortcutFor("view.board"), before);
+        panel.close();
+    }
+
+    // UX-4: "↺ all" asks first — one press arms, the second resets.
+    function test_reset_all_needs_a_second_press() {
+        const panel = openPanel();
+        AppController.setShortcut("view.archive", "Ctrl+Shift+Y");
+        panel._pressResetAll();
+        compare(AppController.shortcutFor("view.archive"), "Ctrl+Shift+Y", "one press reset everything");
+        verify(panel.resetAllArmed);
+        panel._pressResetAll();
+        verify(AppController.shortcutFor("view.archive") !== "Ctrl+Shift+Y");
+        verify(!panel.resetAllArmed);
+        panel.close();
     }
 }

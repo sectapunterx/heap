@@ -16,7 +16,9 @@ Button {
 
     // Reachable with Tab and named for screen readers; the focus ring below
     // is the only sign of where the keyboard is.
-    focusPolicy: Qt.StrongFocus
+    // Tab focus only: a pill clicked with the mouse must not keep the keyboard
+    // (the board cursor keys stand down while a tabbed-to control has it).
+    focusPolicy: Qt.TabFocus
     Accessible.role: Accessible.Button
     Accessible.name: root.text
     rightPadding: Theme.spXl
@@ -38,12 +40,24 @@ Button {
               : danger  ? Theme.withAlpha(Theme.danger, 0.12)
               : selected ? Theme.accentSoft
               : root.hovered ? Theme.panel3 : Theme.panel2
-        border.color: root.visualFocus ? Theme.accentStrong
-                   : primary ? "transparent"
+        border.color: primary ? "transparent"
                    : danger  ? Theme.withAlpha(Theme.danger, 0.4)
                    : selected ? Theme.withAlpha(Theme.accent, 0.5)
                    : (root.hovered ? Theme.borderStrong : Theme.border)
-        border.width: root.visualFocus ? 2 : 1
+        border.width: 1
+        // The focus ring sits outside the pill, on the surface around it: an
+        // accentStrong border on a primary button's accent fill was 1.1–1.4:1
+        // and could not be seen. Theme.focusRing holds 3:1 on every surface.
+        Rectangle {
+            objectName: "pill-focus-ring"
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: parent.radius + 3
+            color: "transparent"
+            visible: root.visualFocus
+            border.color: Theme.focusRing
+            border.width: 2
+        }
     }
     contentItem: Text {
         text: root.text

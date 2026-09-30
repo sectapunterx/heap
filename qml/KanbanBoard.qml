@@ -445,7 +445,10 @@ Item {
                                         selectByMouse: true
                                         onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
                                         onActiveFocusChanged: if (!activeFocus && col.renaming) { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
-                                        Keys.onEscapePressed: { col.renaming = false }
+                                        // Put the name back before letting go: hiding the
+                                        // field blurs it, and the blur handler above commits
+                                        // whatever is in it while renaming is still set.
+                                        Keys.onEscapePressed: { text = col.statusName; col.renaming = false }
                                     }
                                 }
                                 Rectangle {
@@ -841,6 +844,7 @@ Item {
 
     Popup {
         id: addColumnPopup
+        objectName: "add-column-popup"
         modal: true
         focus: true
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
@@ -873,8 +877,9 @@ Item {
             }
             TextField {
                 id: nameField
+                objectName: "add-column-name"
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-                placeholderText: "Review · QA · Stalled…"
+                placeholderText: I18n.t("kanban.colName.ph")
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
                 background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
@@ -1037,9 +1042,23 @@ Item {
         function onRowsInserted() { root._boardTotal = AppController.tasks.rowCount() }
         function onRowsRemoved()  { root._boardTotal = AppController.tasks.rowCount() }
     }
-    Column {
+    // On a card of its own: laid straight over the columns, the text crossed
+    // their borders and read as part of whichever column it touched.
+    Rectangle {
+        objectName: "board-empty"
         anchors.centerIn: parent
-        width: Math.min(parent.width - 48, 360)
+        width: boardEmptyCol.width + 2 * Theme.sp3xl
+        height: boardEmptyCol.implicitHeight + 2 * Theme.sp2xl
+        radius: Theme.radiusXl
+        color: Theme.panel
+        border.color: Theme.borderStrong
+        border.width: 1
+        visible: root._boardTotal === 0
+    }
+    Column {
+        id: boardEmptyCol
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 96, 360)
         spacing: Theme.spMd
         visible: root._boardTotal === 0
         Text {
@@ -1077,6 +1096,9 @@ Item {
     QQC.Dialog {
         id: confirmDelete
         objectName: "confirm-delete-column"
+        // Takes the keyboard, so Esc and Tab work in it and the board keys
+        // behind it stand down.
+        focus: true
         property string statusId: ""
         property string statusName: ""
         property int cardCount: 0
