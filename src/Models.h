@@ -148,6 +148,24 @@ struct CalEvent {
   QVector<QDate> exdates;
   QString masterId;
   QDate originalDate;
+  // The IANA zone the wall-clock fields above are written in. Empty — the
+  // common case — means floating local time: the event is at 10:00 wherever
+  // the user is. A series imported from another zone keeps it, so each
+  // occurrence is converted on its own day and a New York meeting follows
+  // New York's DST, not the viewer's. Exdates and an override's originalDate
+  // are dates in this zone too. See src/cal/Occurrences.h.
+  QString tz;
+  // Where, what for and a link to join. `context` stays the short label drawn
+  // before the title; it used to double as the location.
+  QString location;
+  QString notes;
+  QString url;
+  // Minutes before the start to remind, per event. kReminderDefault uses the
+  // notifications setting; kReminderOff never reminds.
+  int reminderMinutes = -1;
+
+  static constexpr int kReminderDefault = -1;
+  static constexpr int kReminderOff = -2;
 
   bool operator==(const CalEvent&) const = default;
 };

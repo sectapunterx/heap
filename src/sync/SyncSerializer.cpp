@@ -26,7 +26,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 16,
+static_assert(heap::meta::fieldCount<CalEvent>() == 21,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -264,6 +264,11 @@ QJsonObject SyncSerializer::eventToJson(const CalEvent& e) {
   o[QStringLiteral("exdates")] = ex;
   o[QStringLiteral("masterId")] = e.masterId;
   o[QStringLiteral("originalDate")] = dateToStr(e.originalDate);
+  o[QStringLiteral("tz")] = e.tz;
+  o[QStringLiteral("location")] = e.location;
+  o[QStringLiteral("notes")] = e.notes;
+  o[QStringLiteral("url")] = e.url;
+  o[QStringLiteral("reminderMinutes")] = e.reminderMinutes;
   return o;
 }
 
@@ -290,6 +295,11 @@ CalEvent SyncSerializer::eventFromJson(const QJsonObject& o) {
   }
   e.masterId = o.value(QStringLiteral("masterId")).toString();
   e.originalDate = dateFromStr(o.value(QStringLiteral("originalDate")).toString());
+  e.tz = o.value(QStringLiteral("tz")).toString();
+  e.location = o.value(QStringLiteral("location")).toString();
+  e.notes = o.value(QStringLiteral("notes")).toString();
+  e.url = o.value(QStringLiteral("url")).toString();
+  e.reminderMinutes = o.value(QStringLiteral("reminderMinutes")).toInt(CalEvent::kReminderDefault);
   return e;
 }
 
