@@ -1028,9 +1028,23 @@ Item {
         function onRowsInserted() { root._boardTotal = AppController.tasks.rowCount() }
         function onRowsRemoved()  { root._boardTotal = AppController.tasks.rowCount() }
     }
-    Column {
+    // On a card of its own: laid straight over the columns, the text crossed
+    // their borders and read as part of whichever column it touched.
+    Rectangle {
+        objectName: "board-empty"
         anchors.centerIn: parent
-        width: Math.min(parent.width - 48, 360)
+        width: boardEmptyCol.width + 2 * Theme.sp3xl
+        height: boardEmptyCol.implicitHeight + 2 * Theme.sp2xl
+        radius: Theme.radiusXl
+        color: Theme.panel
+        border.color: Theme.borderStrong
+        border.width: 1
+        visible: root._boardTotal === 0
+    }
+    Column {
+        id: boardEmptyCol
+        anchors.centerIn: parent
+        width: Math.min(parent.width - 96, 360)
         spacing: Theme.spMd
         visible: root._boardTotal === 0
         Text {

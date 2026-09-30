@@ -89,4 +89,18 @@ TestCase {
         verify(Qt.colorEqual(bl.monoColor, Brand.text),
                "monoColor should default to Brand.text");
     }
+
+    // UX-24: the wordmark stays inside the lockup's box, so centring the logo
+    // centres what is drawn (the splash had it ~100px off to the right).
+    function test_wordmark_fits_the_lockup_box() {
+        const bl = make('import TodoCpp; BrandLogo { height: 92; width: implicitWidth }');
+        const word = (function find(it) {
+            if (it.objectName === "brand-wordmark") return it;
+            for (let i = 0; i < it.children.length; i++) { const r = find(it.children[i]); if (r) return r; }
+            return null;
+        })(bl);
+        verify(word !== null);
+        const right = word.x + word.contentWidth;
+        verify(right <= bl.width + 1, "wordmark ends at " + right + ", box is " + bl.width);
+    }
 }

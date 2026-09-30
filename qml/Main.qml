@@ -109,7 +109,9 @@ ApplicationWindow {
     onWidthChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     onHeightChanged: if (win._geometryRestored) geometrySaveTimer.restart()
     onVisibilityChanged: if (win._geometryRestored) geometrySaveTimer.restart()
-    title: "heap. — Work, in one place."
+    // Ends with the display name, so the OS title bar does not append it a
+    // second time ("heap. — Work, in one place. - heap.").
+    title: I18n.t("window.title")
     color: Theme.bg
     // The stock Basic controls (combo box lists, tooltips, scroll bars, and
     // anything not drawn by hand) take their colours from the palette. Left
@@ -144,7 +146,9 @@ ApplicationWindow {
     // narrow window left two board columns. It folds away below
     // _rightPanelMinWidth unless asked for, and the choice on a wide window is
     // remembered in settings.
-    readonly property int _rightPanelMinWidth: 1280
+    // 1440, not 1280: a 1080p screen at 150% is 1280 logical px, and with both
+    // side panels open that left the board about two columns.
+    readonly property int _rightPanelMinWidth: 1440
     readonly property bool _narrow: win.width < _rightPanelMinWidth
     property bool _rightPanelWanted: _settingsObject().rightPanel !== false
     property bool _rightPanelOnNarrow: false
@@ -199,7 +203,7 @@ ApplicationWindow {
     // Left sidebar: labelled (expanded) or the 56px icon rail. The choice is
     // remembered; below _sideRailMinWidth it folds to the rail on its own
     // without overwriting what was chosen, same as the right panel.
-    readonly property int _sideRailMinWidth: 1200
+    readonly property int _sideRailMinWidth: 1280
     property bool _sideRailWanted: _settingsObject().sideRailExpanded !== false
     property bool _sideRailOnNarrow: false
     readonly property bool sideRailExpanded: win.width < _sideRailMinWidth ? _sideRailOnNarrow : _sideRailWanted
@@ -282,6 +286,7 @@ ApplicationWindow {
         anchors.centerIn: parent
         width: 440
         padding: Theme.inset
+        topPadding: Theme.spMd
         title: I18n.t("close.ask.title")
         background: Rectangle {
             radius: Theme.radiusXl
@@ -289,13 +294,29 @@ ApplicationWindow {
             border.color: Theme.borderStrong
             border.width: 1
         }
+        // Drawn in the theme like every other dialog title; Basic's own
+        // header was an unstyled bar in the palette's window colour.
+        header: Text {
+            text: closeAsk.title
+            color: Theme.text
+            font.pixelSize: Theme.fsLg
+            font.weight: Font.DemiBold
+            leftPadding: Theme.inset; rightPadding: Theme.inset; topPadding: Theme.inset
+            wrapMode: Text.Wrap
+        }
         contentItem: Text {
             text: I18n.t("close.ask.body")
             color: Theme.textMuted
             font.pixelSize: Theme.fsMd
             wrapMode: Text.Wrap
         }
-        footer: RowLayout {
+        // Inset from the dialog's edge; the buttons sat flush on the bottom.
+        footer: Item {
+            implicitHeight: closeAskRow.implicitHeight + Theme.inset
+            RowLayout {
+            id: closeAskRow
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            anchors.leftMargin: Theme.inset; anchors.rightMargin: Theme.inset
             spacing: Theme.spMd
             Item { Layout.fillWidth: true }
             PillButton {
@@ -318,7 +339,7 @@ ApplicationWindow {
                     win.hide();
                 }
             }
-            Item { Layout.preferredWidth: 10 }
+            }
         }
     }
 
@@ -1425,6 +1446,10 @@ ApplicationWindow {
     DatePickerPopup {
         id: goToDatePopup
         objectName: "go-to-date"
+        // Centred over the window (a third of the way down, where the eye
+        // is), not pinned to its top-left corner over the logo.
+        x: parent ? Math.round((parent.width - width) / 2) : 0
+        y: parent ? Math.round((parent.height - height) / 3) : 0
         onPicked: (value) => AppController.selectedDate = value
     }
 
@@ -1508,8 +1533,17 @@ ApplicationWindow {
     }
 
     // Tweaks + Hotkeys popovers (opened from the side rail)
-    TweaksPanel  { id: tweaks }
-    HotkeysPanel { id: hotkeys }
+    // Re-clamped whenever their height settles: on the first open the panel
+    // measures itself after it is placed, and the Tweaks panel hung 24px
+    // below a 720px window.
+    TweaksPanel  {
+        id: tweaks
+        onHeightChanged: if (opened && parent) win._placePopover(tweaks, parent)
+    }
+    HotkeysPanel {
+        id: hotkeys
+        onHeightChanged: if (opened && parent) win._placePopover(hotkeys, parent)
+    }
 
     // ── Profile import / export via JSON file ──────────────────────────
     FileDialog {

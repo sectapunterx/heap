@@ -148,8 +148,8 @@ QtObject {
             "close.ask.body": "heap can stay in the tray so the capture hotkeys keep working. You can change this later in Settings → Appearance.",
             "close.ask.tray": "Keep in tray",
             "close.ask.quit": "Quit",
-            "settings.system.closeToTray": "Close to tray",
-            "settings.system.closeToTray.hint": "The window's close button hides heap to the tray instead of quitting.",
+            "settings.system.closeToTray": "When the window closes",
+            "settings.system.closeToTray.hint": "Hidden in the tray, heap keeps the global capture keys and reminders working. Ask: the next close asks.",
             "settings.integrations.secretsFile": "Tokens are stored in secrets.json in the data folder (no system keychain here). Anyone who can read that folder can read them.",
             "settings.integrations.secretsFileWin": "Tokens are stored in secrets.json in the data folder, encrypted for this Windows account. Copying the folder to another account or PC does not carry them over.",
             "docs.cat.snippets.sub": "Commands and code you reach for again and again",
@@ -961,7 +961,7 @@ QtObject {
             // Data section
             "settings.data.backups": "Backups",
             "settings.data.autoBackup": "Auto backup",
-            "settings.data.autoBackup.hint": "Save snapshots of state.json to <AppData>/backups (every 5 min, up to 20 copies).",
+            "settings.data.autoBackup.hint": "Save snapshots of state.json to <AppData>/backups at the interval below; the last 20 are kept.",
             "settings.data.interval": "Interval",
             "settings.data.interval.hourly": "Every hour",
             "settings.data.interval.daily": "Every day",
@@ -1033,6 +1033,14 @@ QtObject {
             "palette.kind.template": "template",
             "palette.kind.command": "command",
             "palette.kind.setting": "settings",
+            "window.title": "Work, in one place — heap.",
+            "settings.system.closeToTray.ask": "Ask",
+            "settings.system.closeToTray.tray": "Hide to tray",
+            "settings.system.closeToTray.quit": "Quit",
+            "settings.notif.quiet.invalid": "Use HH:MM, e.g. 19:00",
+            "settings.profile.handle.ph": "your.handle",
+            "timeline.empty.none.title": "Nothing with a deadline yet.",
+            "timeline.empty.none.hint": "Give a task a deadline and it shows up here (Ctrl+N).",
             // ── audit-ux: end ──
             // ── audit-int: begin ──
             // ── audit-int: end ──
@@ -1180,8 +1188,8 @@ QtObject {
             "close.ask.body": "heap может остаться в трее, чтобы работали горячие клавиши захвата. Это можно изменить в Настройки → Внешний вид.",
             "close.ask.tray": "Оставить в трее",
             "close.ask.quit": "Выйти",
-            "settings.system.closeToTray": "Сворачивать в трей",
-            "settings.system.closeToTray.hint": "Кнопка закрытия окна прячет heap в трей, а не завершает его.",
+            "settings.system.closeToTray": "При закрытии окна",
+            "settings.system.closeToTray.hint": "Из трея heap продолжает ловить глобальные клавиши захвата и напоминания. «Спрашивать» — спросит при следующем закрытии.",
             "settings.integrations.secretsFile": "Токены хранятся в secrets.json в папке данных (системного хранилища ключей нет). Их может прочитать любой, у кого есть доступ к папке.",
             "settings.integrations.secretsFileWin": "Токены хранятся в secrets.json в папке данных и зашифрованы для этой учётной записи Windows. При копировании папки на другую учётную запись или ПК они не переносятся.",
             "docs.cat.snippets.sub": "Команды и код, которые нужны снова и снова",
@@ -1970,7 +1978,7 @@ QtObject {
 
             "settings.data.backups": "Резервные копии",
             "settings.data.autoBackup": "Авто-бэкап",
-            "settings.data.autoBackup.hint": "Сохранять снапшоты state.json в <AppData>/backups (раз в 5 минут, до 20 копий).",
+            "settings.data.autoBackup.hint": "Сохранять снапшоты state.json в <AppData>/backups с интервалом ниже; хранятся последние 20.",
             "settings.data.interval": "Интервал",
             "settings.data.interval.hourly": "Каждый час",
             "settings.data.interval.daily": "Каждый день",
@@ -2041,6 +2049,14 @@ QtObject {
             "palette.kind.template": "шаблон",
             "palette.kind.command": "команда",
             "palette.kind.setting": "настройки",
+            "window.title": "Вся работа в одном месте — heap.",
+            "settings.system.closeToTray.ask": "Спрашивать",
+            "settings.system.closeToTray.tray": "Прятать в трей",
+            "settings.system.closeToTray.quit": "Выходить",
+            "settings.notif.quiet.invalid": "Формат ЧЧ:ММ, например 19:00",
+            "settings.profile.handle.ph": "ваш.ник",
+            "timeline.empty.none.title": "Пока нет задач со сроком.",
+            "timeline.empty.none.hint": "Задайте задаче срок — и она появится здесь (Ctrl+N).",
             // ── audit-ux: end ──
             // ── audit-int: begin ──
             // ── audit-int: end ──

@@ -12,6 +12,9 @@ Item {
     property var scheduleMap: ({})
     property bool showDone: false
     property bool showArchived: false
+    // Something is narrowing what the timeline shows.
+    readonly property bool _filtering: searchText.trim().length > 0
+        || Object.keys(prioritiesFilter || {}).some(function (k) { return prioritiesFilter[k] === true; })
 
     signal taskClicked(string id)
     signal toggleShowDone()
@@ -349,11 +352,18 @@ Item {
                     anchors.centerIn: parent
                     spacing: Theme.spSm
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: Theme.fs2xl }
+                    // "No tasks match the filters" only when something is
+                    // filtering; an empty timeline is not a filter's fault.
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: Theme.fsMd
+                        objectName: "timeline-empty-title"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: I18n.t(root._filtering ? "timeline.empty.title" : "timeline.empty.none.title")
+                        color: Theme.text; font.pixelSize: Theme.fsMd
                     }
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: Theme.fsMd
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: I18n.t(root._filtering ? "timeline.empty.hint" : "timeline.empty.none.hint")
+                        color: Theme.textDim; font.pixelSize: Theme.fsMd
                     }
                 }
             }

@@ -475,6 +475,7 @@ Rectangle {
         }
 
         PillButton {
+            objectName: "topbar-new-task"
             text: I18n.t("topbar.newTask")
             primary: true
             onClicked: root.newTaskRequested()

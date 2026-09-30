@@ -674,6 +674,13 @@ Item {
     // Deep-link entry from the Welcome guide ("Learn more →"). Switch to the
     // Help section, then scroll to `anchor` once the body Loader has built
     // HelpContent (deferred a tick so _findChildByName can see it).
+    // Quiet hours are stored as HH:mm, which is all the C++ side parses.
+    readonly property var _hhmmRe: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
+    function _hhmm(t) {
+        const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+        return m ? m[1].padStart(2, "0") + ":" + m[2] : t;
+    }
+
     // ── Settings search + keyboard nav ─────────────────────────────────
     function _sectionMatches(sec) {
         const q = root.searchText.toLowerCase().trim();
@@ -858,6 +865,11 @@ Item {
         // "check what I pasted" case that justifies revealing it.
         property bool alwaysMasked: false
         property string value: ""
+        // Optional: text the field will not store. An edit that fails it is
+        // put back to the stored value instead of being saved ("xyz" as a
+        // quiet-hours time used to be).
+        property alias validator: textRowField.validator
+        readonly property bool invalid: textRowField.text.length > 0 && !textRowField.acceptableInput
         signal committed(string text)
         // What is typed right now, for fields that are never stored anywhere.
         function currentText() { return textRowField.text; }
@@ -872,7 +884,12 @@ Item {
         // straight after pasting a token would otherwise act on the old value.
         function commitPending() {
             const t = pendingText();
-            if (t !== null) textRow.committed(t);
+            if (t === null) return;
+            if (textRowField.validator && !textRowField.acceptableInput) {
+                textRowField.text = textRow.value;
+                return;
+            }
+            textRow.committed(t);
         }
         spacing: Theme.spXs
         Layout.fillWidth: true
@@ -887,7 +904,8 @@ Item {
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2
+                                    border.color: textRow.invalid ? Theme.danger : Theme.border; border.width: 1 }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
             // mid-edit text (no two-way binding → no loop, no per-keystroke
@@ -1167,7 +1185,7 @@ Item {
                                 spacing: Theme.spLg
                                 TextRow {
                                     Layout.fillWidth: true
-                                    label: I18n.t("settings.profile.handle"); mono: true; placeholder: "alex.t"
+                                    label: I18n.t("settings.profile.handle"); mono: true; placeholder: I18n.t("settings.profile.handle.ph")
                                     value: (root.settings.profile && root.settings.profile.handle) || ""
                                     onCommitted: (text) => root.set("profile", "handle", text)
                                 }
@@ -1269,14 +1287,21 @@ Item {
                             root.set("appearance", "highContrast", value === "high");
                         }
                     }
-                    // Only where there is a tray to close into.
-                    SwitchRow {
+                    // Only where there is a tray to close into. Three states,
+                    // because there are three: a switch showed ON while the
+                    // choice was still unset, and the next close asked anyway.
+                    SegRow {
                         objectName: "settings-close-to-tray"
                         visible: Qt.platform.os === "windows" || Qt.platform.os === "osx"
                         label: I18n.t("settings.system.closeToTray")
                         hint: I18n.t("settings.system.closeToTray.hint")
-                        checked: !(root.settings.system && root.settings.system.closeToTray === false)
-                        onToggled: (checked) => root.set("system", "closeToTray", checked)
+                        readonly property var _pref: root.settings.system ? root.settings.system.closeToTray : undefined
+                        value: _pref === true ? "tray" : _pref === false ? "quit" : "ask"
+                        options: [ ({ value: "ask",  label: I18n.t("settings.system.closeToTray.ask") }),
+                                   ({ value: "tray", label: I18n.t("settings.system.closeToTray.tray") }),
+                                   ({ value: "quit", label: I18n.t("settings.system.closeToTray.quit") }) ]
+                        // "ask" drops the key: unset is what makes the next close ask.
+                        onSelected: (v) => root.set("system", "closeToTray", v === "ask" ? undefined : v === "tray")
                     }
                 }
             }
@@ -1402,14 +1427,18 @@ Item {
                         TextRow {
                             Layout.fillWidth: true
                             label: I18n.t("common.from"); mono: true; placeholder: "19:00"
+                            hint: invalid ? I18n.t("settings.notif.quiet.invalid") : ""
+                            validator: RegularExpressionValidator { regularExpression: root._hhmmRe }
                             value: (root.settings.notifications && root.settings.notifications.quietFrom) || ""
-                            onCommitted: (text) => root.set("notifications", "quietFrom", text)
+                            onCommitted: (text) => root.set("notifications", "quietFrom", root._hhmm(text))
                         }
                         TextRow {
                             Layout.fillWidth: true
                             label: I18n.t("common.to"); mono: true; placeholder: "09:00"
+                            hint: invalid ? I18n.t("settings.notif.quiet.invalid") : ""
+                            validator: RegularExpressionValidator { regularExpression: root._hhmmRe }
                             value: (root.settings.notifications && root.settings.notifications.quietTo) || ""
-                            onCommitted: (text) => root.set("notifications", "quietTo", text)
+                            onCommitted: (text) => root.set("notifications", "quietTo", root._hhmm(text))
                         }
                     }
                 }

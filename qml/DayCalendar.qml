@@ -880,9 +880,23 @@ Item {
 
     // No-events hint for an empty day — faint, non-interactive so drag-to-create
     // on the grid underneath still works.
+    // On a chip of the panel's colour, so it does not print over an hour
+    // label and read as "19:00 No events".
+    Rectangle {
+        objectName: "day-empty"
+        anchors.centerIn: dayEmptyText
+        width: dayEmptyText.contentWidth + 2 * Theme.spXl
+        height: dayEmptyText.contentHeight + 2 * Theme.spSm
+        radius: Theme.radiusMd
+        color: Theme.panel
+        border.color: Theme.border
+        border.width: 1
+        visible: dayEmptyText.visible
+    }
     Text {
+        id: dayEmptyText
         anchors.centerIn: parent
-        width: parent.width - 48
+        width: parent.width - 96
         visible: root._eventsToday === 0
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
