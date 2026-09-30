@@ -200,6 +200,7 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
+    src/platform/Accessibility.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
@@ -295,6 +296,8 @@ qt_add_qml_module(heap_core
         qml/FieldFrame.qml
         qml/IconButton.qml
         qml/ClickArea.qml
+        qml/DialogHeader.qml
+        qml/DialogFooter.qml
         qml/ActionButton.qml
         qml/IntegrationActivity.qml
         # ── audit-ux: end ──

@@ -214,23 +214,23 @@ Popup {
                         height: 6
                         radius: 3
                         color: index <= root.step ? Theme.accent : Theme.border
-                        Behavior on width { NumberAnimation { duration: 120 } }
+                        Behavior on width { NumberAnimation { duration: Theme.scaledMs(120) } }
                     }
                 }
             }
 
-            // Close = opt out (marks welcome seen).
+            // Close = opt out (marks welcome seen). The same ✕ as the
+            // Hotkeys and Tweaks panels, 22px (design audit DES-24).
             Rectangle {
+                objectName: "welcome-close"
                 Layout.alignment: Qt.AlignVCenter
-                width: 26; height: 26; radius: Theme.radiusMd
-                color: closeMa.containsMouse ? Theme.panel2 : "transparent"
-                Text { anchors.centerIn: parent; text: "✕"; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
-                MouseArea {
+                width: 22; height: 22; radius: Theme.radiusSm
+                color: closeMa.hovered ? Theme.panel3 : "transparent"
+                Text { anchors.centerIn: parent; text: "✕"; color: closeMa.hovered ? Theme.text : Theme.textDim; font.pixelSize: Theme.fsSm }
+                ClickArea {
                     id: closeMa
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: root._finish()
+                    label: I18n.t("welcome.skip")
+                    onActivated: root._finish()
                 }
             }
         }
@@ -340,15 +340,17 @@ Popup {
                     Text {
                         visible: root.cur.help !== ""
                         text: I18n.t("welcome.learnMore")
-                        color: learnMa.containsMouse ? Theme.accent : Theme.accentStrong
+                        // Hover underlines rather than lightening to accent,
+                        // which is 3.7:1 in heap. light (design audit DES-25).
+                        color: Theme.accentStrong
+                        font.underline: learnMa.hovered
                         font.pixelSize: Theme.fsMd
                         font.weight: Font.DemiBold
-                        MouseArea {
+                        ClickArea {
                             id: learnMa
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root._learnMore(root.cur.help)
+                            label: I18n.t("welcome.learnMore")
+                            showTip: false
+                            onActivated: root._learnMore(root.cur.help)
                         }
                     }
 

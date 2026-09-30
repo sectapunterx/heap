@@ -33,6 +33,7 @@
 #include "notes/NoteGraph.h"
 #include "notes/NoteLinks.h"
 #include "notify/NotificationCenter.h"
+#include "platform/Accessibility.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
 #include "query/TaskQuery.h"
@@ -5081,11 +5082,13 @@ void AppController::seedExampleProfile() {
   // Seed a single "Example" profile from SampleData + turn on the first-run
   // onboarding. Called on a genuine fresh install and by resetToFirstRun().
 
-  // A new user starts on Minimal dark / heap. light with soft contrast. Written into
-  // the settings rather than made the built-in fallback, so someone who has
-  // been on heap. dark without ever opening Appearance keeps it.
+  // A new user starts on Minimal dark / heap. light with soft contrast — or
+  // high contrast and no motion when the system asks for them (design audit
+  // DES-23). Written into the settings rather than made the built-in
+  // fallback, so someone who has been on heap. dark without ever opening
+  // Appearance keeps it, and the Appearance switches show what is in effect.
   if(m_appSettingsJson.isEmpty()) {
-    m_appSettingsJson = QStringLiteral(R"({"appearance":{"darkPreset":"minimal-dark","lightPreset":"heap-light","contrast":"soft"}})");
+    m_appSettingsJson = heap::platform::firstRunAppearanceJson(heap::platform::systemAccessibilityPrefs());
     emit appSettingsJsonChanged();
   }
   Profile p;

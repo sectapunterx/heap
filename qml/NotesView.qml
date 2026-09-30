@@ -613,7 +613,7 @@ Item {
                     objectName: "notes-list-toggle"
                     Layout.preferredHeight: 24
                     radius: Theme.radiusMd
-                    color: root._listShown ? Theme.accentSoft : (listToggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                    color: root._listShown ? Theme.accentSoft : (listToggleMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root._listShown ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: listToggleTxt.implicitWidth + 20
@@ -624,23 +624,21 @@ Item {
                         color: root._listShown ? Theme.accentStrong : Theme.textMuted
                         font.pixelSize: Theme.fsSm
                     }
-                    MouseArea {
+                    ClickArea {
                         id: listToggleMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.toggleList()
+                        label: I18n.t("notes.toggleList")
+                        role: Accessible.CheckBox
+                        checkable: true
+                        checked: root._listShown
+                        onActivated: root.toggleList()
                     }
-                    ToolTip.visible: listToggleMA.containsMouse
-                    ToolTip.delay: 500
-                    ToolTip.text: I18n.t("notes.toggleList")
                 }
 
                 // ── Backlinks pane toggle (HEAP-79) ────────────────────
                 Rectangle {
                     Layout.preferredHeight: 24
                     radius: Theme.radiusMd
-                    color: root.showBacklinks ? Theme.accent : (blToggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                    color: root.showBacklinks ? Theme.accent : (blToggleMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root.showBacklinks ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: blToggleTxt.implicitWidth + 20
@@ -652,12 +650,14 @@ Item {
                         font.pixelSize: Theme.fsSm
                         font.weight: Font.Medium
                     }
-                    MouseArea {
+                    ClickArea {
                         id: blToggleMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.showBacklinks = !root.showBacklinks
+                        label: I18n.t("notes.links")
+                        showTip: false
+                        role: Accessible.CheckBox
+                        checkable: true
+                        checked: root.showBacklinks
+                        onActivated: root.showBacklinks = !root.showBacklinks
                     }
                 }
 
@@ -682,26 +682,30 @@ Item {
                                 { id: "preview", label: I18n.t("notes.mode.preview") }
                             ]
                             delegate: Rectangle {
+                                id: segBtn
                                 required property var modelData
                                 readonly property bool active: root.viewMode === modelData.id
                                 width: 64
                                 height: parent.height
                                 radius: Theme.radiusSm
                                 color: active ? Theme.accentSoft
-                                     : (segMA.containsMouse ? Theme.panel3 : "transparent")
+                                     : (segMA.hovered ? Theme.panel3 : "transparent")
                                 Text {
+                                    id: segTxt
                                     anchors.centerIn: parent
                                     text: modelData.label
                                     color: parent.active ? Theme.accentStrong : Theme.text
                                     font.pixelSize: Theme.fsSm
                                     font.weight: parent.active ? Font.DemiBold : Font.Medium
                                 }
-                                MouseArea {
+                                ClickArea {
                                     id: segMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.viewMode = modelData.id
+                                    label: segTxt.text
+                                    showTip: false
+                                    role: Accessible.RadioButton
+                                    checkable: true
+                                    checked: segBtn.active
+                                    onActivated: root.viewMode = segBtn.modelData.id
                                 }
                             }
                         }
@@ -987,16 +991,20 @@ Item {
                                 Layout.fillWidth: true
                                 spacing: Theme.sp2xs
                                 Text {
+                                    id: incomingTxt
                                     Layout.fillWidth: true
                                     text: "← " + modelData.title
                                     color: Theme.mdTicket
                                     font.pixelSize: Theme.fsSm
                                     font.weight: Font.DemiBold
+                                    font.underline: incomingMA.hovered
                                     elide: Text.ElideRight
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
+                                    ClickArea {
+                                        id: incomingMA
+                                        label: incomingTxt.text
+                                        showTip: false
+                                        role: Accessible.Link
+                                        onActivated: {
                                             root._flushPending();
                                             AppController.activeNoteId = modelData.noteId;
                                         }
@@ -1041,18 +1049,22 @@ Item {
                                     Layout.fillWidth: true
                                     spacing: Theme.spSm
                                     Text {
+                                        id: outgoingTxt
                                         text: (modelData.resolved ? "→ " : "△ ") + modelData.target
                                         color: modelData.resolved ? Theme.mdTicket : Theme.warning
                                         font.pixelSize: Theme.fsSm
                                         font.weight: Font.DemiBold
+                                        font.underline: outgoingMA.hovered
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
+                                        ClickArea {
+                                            id: outgoingMA
+                                            label: outgoingTxt.text
+                                            showTip: false
+                                            role: Accessible.Link
                                             // Where a click in the preview would go: the
                                             // note, the heading, or the offer to write it.
-                                            onClicked: root._followLink("note", modelData.target)
+                                            onActivated: root._followLink("note", modelData.target)
                                         }
                                     }
                                     Text {
@@ -1074,17 +1086,21 @@ Item {
                                 Repeater {
                                     model: modelData.refs
                                     delegate: Text {
+                                        id: refTxt
                                         required property var modelData
                                         Layout.fillWidth: true
                                         Layout.leftMargin: Theme.spLg
                                         text: "└ " + modelData.text
                                         color: Theme.textMuted
                                         font.pixelSize: Theme.fsXs
+                                        font.underline: refMA.hovered
                                         elide: Text.ElideRight
-                                        MouseArea {
-                                            anchors.fill: parent
-                                            cursorShape: Qt.PointingHandCursor
-                                            onClicked: root._jumpToLine(modelData.line)
+                                        ClickArea {
+                                            id: refMA
+                                            label: refTxt.text
+                                            showTip: false
+                                            role: Accessible.Link
+                                            onActivated: root._jumpToLine(refTxt.modelData.line)
                                         }
                                     }
                                 }
@@ -1194,12 +1210,25 @@ Item {
             model: acMatches
             spacing: 0
             delegate: Rectangle {
+                id: acRow
                 required property var modelData
                 required property int index
+                readonly property bool selected: index === root.acSelected
                 width: ListView.view.width
                 height: 36
                 radius: Theme.radiusSm
-                color: index === root.acSelected ? Theme.panel2 : "transparent"
+                // rowHighlight and a focusRing bar, like a menu row: panel2 on
+                // the popup's panel was 1.05:1 (design audit DES-21).
+                color: acRow.selected ? Theme.rowHighlight : "transparent"
+                Rectangle {
+                    visible: acRow.selected
+                    anchors.left: parent.left
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 3
+                    height: parent.height - 2 * Theme.spXs
+                    radius: Theme.radiusXs
+                    color: Theme.focusRing
+                }
 
                 RowLayout {
                     anchors.fill: parent
