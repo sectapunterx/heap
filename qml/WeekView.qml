@@ -213,10 +213,14 @@ Item {
     }
     readonly property var spans: buildSpans()
 
-    function buildDays() {
+    // The event half of the week, on its own binding: it depends on the
+    // events and the week only, so a task that changes mid-drag (a running
+    // timer ticks every second) does not rebuild the event delegates and
+    // drop the block out from under the pointer.
+    function buildEventDays() {
         const start = weekStart;
         const days = [];
-        const _t = root.taskRev; const _e = root.eventRev;
+        const _e = root.eventRev;
         const showWeekends = Theme.showWeekends;
         // Column of each day of the week, by its offset from weekStart; -1
         // for a hidden weekend.
@@ -225,7 +229,7 @@ Item {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
             if (!showWeekends && (d.getDay() === 0 || d.getDay() === 6)) { colOf.push(-1); continue; }
             colOf.push(days.length);
-            days.push({ date: d, tasks: [], events: [], blocks: [] });
+            days.push({ date: d, events: [] });
         }
         // An event is no longer pinned to one day: it may be all-day, or run
         // past midnight. Each day takes the piece that lands on it, so a
@@ -255,6 +259,19 @@ Item {
                 });
             }
         }
+        return { days: days, colOf: colOf, linked: linked };
+    }
+    readonly property var eventDays: buildEventDays()
+
+    function buildDays() {
+        const start = weekStart;
+        const _t = root.taskRev;
+        const ev = root.eventDays;
+        const colOf = ev.colOf;
+        const linked = ev.linked;
+        const days = [];
+        for (let k = 0; k < ev.days.length; k++)
+            days.push({ date: ev.days[k].date, tasks: [], events: ev.days[k].events, blocks: [] });
         // Tasks: C++ hands over only those due or scheduled this week, with
         // the day already worked out — reading ten roles of every task in the
         // profile to find the few that are this week took seconds at 10k.
@@ -308,6 +325,7 @@ Item {
     // can position them absolutely (and move across day columns).
     function buildFlatEvents() {
         const out = [];
+        const days = root.eventDays.days;
         for (let i = 0; i < days.length; i++) {
             for (let j = 0; j < days[i].events.length; j++) {
                 const e = days[i].events[j];
@@ -1099,7 +1117,7 @@ Item {
                                                                            root.days[weEv.effDayIndex].date);
                                         didDrag = false;
                                         root._commitMove(weEv.modelData.occ, (ns - weEv.modelData.start) + dayShift * 24,
-                                                         () => { weEv.dragDx = 0; weEv.dragDy = 0; });
+                                                         () => { if (weEv) { weEv.dragDx = 0; weEv.dragDy = 0; } });
                                         return;
                                     }
                                     root.eventClicked(weEv.modelData.id, weEv.modelData.occ);
@@ -1134,7 +1152,7 @@ Item {
                                     resizing = false;
                                     const ns = weEv.pendingStartH;
                                     if (Math.abs(ns - weEv.modelData.start) < 1e-9) { weEv.pendingStartH = NaN; return; }
-                                    root._commitResize(weEv.modelData.occ, ns, weEv.modelData.end, () => { weEv.pendingStartH = NaN; });
+                                    root._commitResize(weEv.modelData.occ, ns, weEv.modelData.end, () => { if (weEv) weEv.pendingStartH = NaN; });
                                 }
                                 onCanceled: { resizing = false; weEv.pendingStartH = NaN; }
                             }
@@ -1162,7 +1180,7 @@ Item {
                                     resizing = false;
                                     const ne = weEv.pendingEndH;
                                     if (Math.abs(ne - weEv.modelData.end) < 1e-9) { weEv.pendingEndH = NaN; return; }
-                                    root._commitResize(weEv.modelData.occ, weEv.modelData.start, ne, () => { weEv.pendingEndH = NaN; });
+                                    root._commitResize(weEv.modelData.occ, weEv.modelData.start, ne, () => { if (weEv) weEv.pendingEndH = NaN; });
                                 }
                                 onCanceled: { resizing = false; weEv.pendingEndH = NaN; }
                             }

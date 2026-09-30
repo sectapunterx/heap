@@ -67,6 +67,16 @@ TestCase {
         wait(0);
         return dc;
     }
+    function scrollToTop(root) {
+        const stack = [root];
+        while (stack.length > 0) {
+            const it = stack.pop();
+            if (it.contentY !== undefined && it.contentHeight > it.height) { it.contentY = 0; }
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) stack.push(kids[i]);
+        }
+        wait(20);
+    }
     // In the test's own coordinates: the block follows the pointer, so moves
     // relative to it would add up.
     function dragBy(item, dx, dy) {
@@ -117,6 +127,35 @@ TestCase {
         fuzzyCompare(occOn(day).start, 12, 0.01);
         fuzzyCompare(occOn(first).start, 10, 0.01);
         compare(AppController.eventOccurrences(first, probeDay(1216)).length, 5, "no occurrence vanished");
+    }
+
+    // ── TIME-10: the after-midnight piece moves the event by the drag ──
+
+    function test_dragging_an_overnight_tail_shifts_the_hours() {
+        const day = probeDay(1218);
+        const eve = probeDay(1217);
+        clearRange(eve, day);
+        const ev = AppController.newEventDraft(22, eve);
+        ev.title = "overnight";
+        ev.date = eve;
+        ev.endDate = day;
+        ev.end = 2;
+        AppController.saveEvent(ev);
+        tc.seeded.push(ev.id);
+        const dc = makeDay(day);
+        const block = findChild(dc, "event-" + ev.id);
+        verify(block !== null && block.visible);
+        verify(!block.wholeEvent);
+        // The day opens on the working hours; the tail sits at 00:00.
+        scrollToTop(dc);
+
+        dragBy(block, 0, Theme.hourH);
+        wait(20);
+
+        const back = AppController.eventById(ev.id);
+        fuzzyCompare(back.start, 23, 0.01);
+        fuzzyCompare(back.end, 3, 0.01);
+        verify(sameDay(back.date, eve), "the event still starts the evening before");
     }
 
     // ── TIME-4: the week grid's vertical drag reaches the model ──

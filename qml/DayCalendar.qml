@@ -169,6 +169,10 @@ Item {
         }
         _linkedTaskIds = map;
     }
+    function _recomputeTasksOnly() {
+        _recomputeTaskBlocks();
+        _recomputeOverlaps();
+    }
     function _recomputeDay() {
         _recomputeSpans();
         _recountEventsToday();
@@ -187,10 +191,13 @@ Item {
     }
     Connections {
         target: AppController.tasks
-        function onRowsInserted() { root._recomputeDay() }
-        function onRowsRemoved()  { root._recomputeDay() }
-        function onDataChanged()  { root._recomputeDay() }
-        function onModelReset()   { root._recomputeDay() }
+        // Only the task blocks: rebuilding the event list would recreate the
+        // event delegates, and a task that changes mid-drag (a running timer
+        // ticks every second) would drop the block out from under the pointer.
+        function onRowsInserted() { root._recomputeTasksOnly() }
+        function onRowsRemoved()  { root._recomputeTasksOnly() }
+        function onDataChanged()  { root._recomputeTasksOnly() }
+        function onModelReset()   { root._recomputeTasksOnly() }
     }
     Connections {
         target: AppController
@@ -764,7 +771,7 @@ Item {
                                             const newAbs = moveArea.baseY + evRect.dragDy;
                                             let ns = root.snapHour(root.yToHour(newAbs));
                                             ns = Math.max(root.hoursStart, Math.min(ns, root.hoursEnd - (pieceEnd - pieceStart)));
-                                            root._commitMove(evRect.modelData, ns - pieceStart, () => { evRect.dragDy = 0; });
+                                            root._commitMove(evRect.modelData, ns - pieceStart, () => { if (evRect) evRect.dragDy = 0; });
                                         } else {
                                             root.eventClicked(evRect.id, evRect.modelData);
                                         }
@@ -799,7 +806,7 @@ Item {
                                         resizing = false;
                                         const ns = evRect.pendingStartH;
                                         if (Math.abs(ns - evRect.start) < 1e-9) { evRect.pendingStartH = NaN; return; }
-                                        root._commitResize(evRect.modelData, ns, evRect.end, () => { evRect.pendingStartH = NaN; });
+                                        root._commitResize(evRect.modelData, ns, evRect.end, () => { if (evRect) evRect.pendingStartH = NaN; });
                                     }
                                     onCanceled: { resizing = false; evRect.pendingStartH = NaN; }
                                 }
@@ -828,7 +835,7 @@ Item {
                                         resizing = false;
                                         const ne = evRect.pendingEndH;
                                         if (Math.abs(ne - evRect.end) < 1e-9) { evRect.pendingEndH = NaN; return; }
-                                        root._commitResize(evRect.modelData, evRect.start, ne, () => { evRect.pendingEndH = NaN; });
+                                        root._commitResize(evRect.modelData, evRect.start, ne, () => { if (evRect) evRect.pendingEndH = NaN; });
                                     }
                                     onCanceled: { resizing = false; evRect.pendingEndH = NaN; }
                                 }
