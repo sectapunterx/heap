@@ -1115,6 +1115,7 @@ class AppController : public QObject {
   bool reminderSent(const QString& key) const;
   QSet<QString> sentReminderKeys() const;
   void markReminderSent(const QString& key, const QDateTime& at);
+  void holdNotification(const HeldNotification& n);
   void flushHeldNotifications();
   // settings.calendar.workDays, Monday to Friday by default.
   bool isWorkDay(const QDate& day) const;

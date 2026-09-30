@@ -503,7 +503,7 @@ AppController::AppController(QObject* parent) :
     // it. A meeting or the standup is an appointment and goes through.
     const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
     if(!appointment && inQuietHours(QDateTime::currentDateTime())) {
-      m_heldNotifications.append({title, body, kind, QString()});
+      holdNotification({title, body, kind, QString()});
       return;
     }
     const QVariantMap notif = settingsMap().value("notifications").toMap();
@@ -8365,6 +8365,21 @@ void AppController::markReminderSent(const QString& key, const QDateTime& at) {
   saveSentReminders();
 }
 
+void AppController::holdNotification(const HeldNotification& n) {
+  // A night of git branch switches is not worth fifty toasts in the morning:
+  // the newest few are kept, and one of each is enough.
+  for(const HeldNotification& h : m_heldNotifications) {
+    if(h.title == n.title && h.body == n.body && h.kind == n.kind && h.taskId == n.taskId) {
+      return;
+    }
+  }
+  constexpr int kMaxHeld = 20;
+  if(m_heldNotifications.size() >= kMaxHeld) {
+    m_heldNotifications.removeFirst();
+  }
+  m_heldNotifications.append(n);
+}
+
 void AppController::flushHeldNotifications() {
   const QVector<HeldNotification> held = std::exchange(m_heldNotifications, {});
   for(const HeldNotification& h : held) {
@@ -8626,7 +8641,7 @@ void AppController::onGitCommits(const QString& repo, const QVariantMap& commits
 
 void AppController::notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind) {
   if(inQuietHours(QDateTime::currentDateTime())) {
-    m_heldNotifications.append({title, body, kind, taskId});
+    holdNotification({title, body, kind, taskId});
     return;
   }
   const QString inApp = title.isEmpty() ? body : title + QStringLiteral(" · ") + body;
