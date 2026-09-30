@@ -299,8 +299,8 @@ Item {
                               "Клавиши форматирования работают, пока курсор в заметке или на странице Docs: Ctrl+B — жирный, Ctrl+I — курсив, Ctrl+E — код, Ctrl+K — ссылка, Ctrl+Shift+X — зачёркивание, Ctrl+Shift+H — выделение, Ctrl+Shift+L — уровень заголовка, Tab и Shift+Tab — отступ в списке, Ctrl+Enter — отметить чекбокс. Если выделен текст, они оборачивают выделение и действуют на каждую выделенную строку. Enter продолжает список или цитату, в которой вы находитесь.")
             }
             Body {
-                text: root.tr2("Images render from disk: an absolute path (C:\shots\x.png, file:///…) anywhere, a relative one from the attachments folder in heap's data folder. A remote image is shown as a link, with Load images to fetch it on request — heap makes no network requests you did not ask for, and network shares are never opened.",
-                              "Изображения с диска отрисовываются: абсолютный путь (C:\shots\x.png, file:///…) — откуда угодно, относительный — из папки attachments в папке данных heap. Удалённое изображение показывается ссылкой, а кнопка «Загрузить изображения» скачивает его по запросу — heap не делает сетевых запросов, о которых вы не просили, и никогда не открывает сетевые папки.")
+                text: root.tr2("Images render from disk: an absolute path (C:\\shots\\x.png, file:///…) anywhere, a relative one from the attachments folder in heap's data folder. A remote image is shown as a link, with Load images to fetch it on request — heap makes no network requests you did not ask for, and network shares are never opened.",
+                              "Изображения с диска отрисовываются: абсолютный путь (C:\\shots\\x.png, file:///…) — откуда угодно, относительный — из папки attachments в папке данных heap. Удалённое изображение показывается ссылкой, а кнопка «Загрузить изображения» скачивает его по запросу — heap не делает сетевых запросов, о которых вы не просили, и никогда не открывает сетевые папки.")
             }
         }
 
