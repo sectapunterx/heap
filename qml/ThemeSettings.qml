@@ -260,7 +260,7 @@ ColumnLayout {
             color: Theme.text
             font.pixelSize: Theme.fsMd
             selectByMouse: true
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
+            background: FieldFrame {}
             onAccepted: ts.rename(text)
             onActiveFocusChanged: if (!activeFocus && text !== ts.current.name) ts.rename(text)
         }
@@ -325,7 +325,7 @@ ColumnLayout {
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSm
                 selectByMouse: true
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: ts.importError.length ? Theme.danger : Theme.fieldBorder; border.width: 1 }
+                background: FieldFrame { border.color: ts.importError.length ? Theme.danger : (focused ? Theme.focusRing : Theme.fieldBorder) }
                 onAccepted: if (ts.importText(text)) text = ""
             }
             PillButton {
@@ -362,7 +362,7 @@ ColumnLayout {
             color: Theme.text
             font.pixelSize: Theme.fsSm
             selectByMouse: true
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
+            background: FieldFrame {}
             onTextChanged: ts.filter = text.toLowerCase()
         }
     }
@@ -454,7 +454,7 @@ ColumnLayout {
                             color: acceptableInput ? Theme.text : Theme.danger
                             selectByMouse: true
                             validator: RegularExpressionValidator { regularExpression: /#([0-9a-fA-F]{6}|[0-9a-fA-F]{8})/ }
-                            background: Rectangle { radius: Theme.radiusSm; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
+                            background: FieldFrame { radius: Theme.radiusSm }
                             onAccepted: ts.setToken(tokRow.key, text.toLowerCase())
                             onActiveFocusChanged: {
                                 if (!activeFocus && acceptableInput && text.toLowerCase() !== tokRow.value.toLowerCase())

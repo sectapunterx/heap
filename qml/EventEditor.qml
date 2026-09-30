@@ -460,7 +460,7 @@ Popup {
         font.letterSpacing: 1
     }
     component Field: TextField {
-        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
+        background: FieldFrame {}
         color: Theme.text
         placeholderTextColor: Theme.textDim
         selectByMouse: true
@@ -498,7 +498,7 @@ Popup {
                 id: typeBox
                 Layout.fillWidth: true
                 model: root.types.map(t => I18n.t("event.type." + t))
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
             Field {
@@ -760,7 +760,7 @@ Popup {
                 model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekdays"), I18n.t("repeat.weekly"),
                         I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
                         I18n.t("repeat.custom")]
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                 onActivated: {
                     // A weekly rule starts from the event's own weekday.
@@ -788,7 +788,7 @@ Popup {
                             root.untilDate = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate());
                         }
                     }
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: FieldFrame {}
                     contentItem: Text { text: endBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                 }
                 Field {
@@ -845,13 +845,28 @@ Popup {
                         width: 36; height: 26; radius: Theme.radiusMd
                         color: dayChip.on ? Theme.accentSoft : (chipMA.containsMouse ? Theme.panel3 : Theme.panel2)
                         border.color: dayChip.on ? Theme.accent : Theme.border; border.width: 1
+                        // A toggle the keyboard can reach and a screen reader
+                        // can read as one (design audit DES-3): Tab to it,
+                        // Space or Enter flips the day.
+                        activeFocusOnTab: true
+                        Accessible.role: Accessible.CheckBox
+                        Accessible.name: I18n.dayName(dayChip.day % 7)
+                        Accessible.checkable: true
+                        Accessible.checked: dayChip.on
+                        function toggle() { root._toggleDay(dayChip.day); }
+                        Accessible.onToggleAction: dayChip.toggle()
+                        Accessible.onPressAction: dayChip.toggle()
+                        Keys.onSpacePressed: dayChip.toggle()
+                        Keys.onReturnPressed: dayChip.toggle()
+                        Keys.onEnterPressed: dayChip.toggle()
                         Text {
                             anchors.centerIn: parent
                             text: I18n.dayName(dayChip.day % 7)
                             color: dayChip.on ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsXs
                         }
-                        MouseArea { id: chipMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root._toggleDay(dayChip.day) }
+                        MouseArea { id: chipMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: dayChip.toggle() }
+                        FocusRing {}
                     }
                 }
             }
@@ -910,7 +925,7 @@ Popup {
                 objectName: "event-reminder"
                 Layout.fillWidth: true
                 model: root.reminderChoices.map(v => root._reminderLabel(v))
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                background: FieldFrame {}
                 contentItem: Text { text: reminderBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
             }
         }
@@ -930,7 +945,7 @@ Popup {
                     color: Theme.text
                     wrapMode: TextArea.Wrap
                     selectByMouse: true
-                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    background: FieldFrame {}
                 }
             }
         }

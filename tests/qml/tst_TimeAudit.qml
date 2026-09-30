@@ -286,6 +286,26 @@ TestCase {
         ed.close();
     }
 
+    // Design audit DES-3: the days of a weekly rule are toggles the keyboard
+    // can reach — Tab to a day, Space or Enter flips it — and read as checkboxes.
+    function test_weekday_chips_toggle_from_the_keyboard() {
+        const ed = createTemporaryQmlObject('import TodoCpp; EventEditor { }', host);
+        ed.showForDraft(AppController.newEventDraft(10, probeDay(1262)));
+        ed._loadRule("FREQ=WEEKLY;BYDAY=MO");
+        const tue = findChild(ed.contentItem, "event-repeat-day-2");
+        verify(tue !== null);
+        verify(tue.activeFocusOnTab, "a weekday chip is not on the Tab path");
+        compare(tue.Accessible.role, Accessible.CheckBox);
+        verify(!tue.Accessible.checked);
+        tue.forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Space);
+        compare(ed.repeatDays.join(","), "1,2");
+        verify(tue.Accessible.checked);
+        keyClick(Qt.Key_Return);
+        compare(ed.repeatDays.join(","), "1");
+        ed.close();
+    }
+
     function test_editor_saves_notes_link_and_reminder() {
         const day = probeDay(1265);
         clearRange(day, day);

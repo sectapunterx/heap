@@ -338,13 +338,15 @@ Item {
                     Layout.topMargin: Theme.spSm
                     radius: Theme.radiusMd
                     color: Theme.panel2
-                    border.color: Theme.fieldBorder; border.width: 1
+                    border.color: settingsSearch.activeFocus ? Theme.focusRing : Theme.fieldBorder
+                    border.width: settingsSearch.activeFocus ? 2 : 1
                     RowLayout {
                         anchors.fill: parent
                         anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
                         spacing: Theme.spSm
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
+                            id: settingsSearch
                             objectName: "settings-search"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
@@ -906,8 +908,7 @@ Item {
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2
-                                    border.color: textRow.invalid ? Theme.danger : Theme.fieldBorder; border.width: 1 }
+            background: FieldFrame { border.color: textRow.invalid ? Theme.danger : (focused ? Theme.focusRing : Theme.fieldBorder) }
             selectByMouse: true
             // Re-sync from external value changes without breaking the user's
             // mid-edit text (no two-way binding → no loop, no per-keystroke
@@ -2619,12 +2620,7 @@ Item {
                             placeholderTextColor: Theme.textDim
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsSm
-                            background: Rectangle {
-                                radius: Theme.radiusMd
-                                color: Theme.panel2
-                                border.color: Theme.fieldBorder
-                                border.width: 1
-                            }
+                            background: FieldFrame {}
                             selectByMouse: true
                         }
                         Rectangle {

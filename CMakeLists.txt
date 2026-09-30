@@ -291,6 +291,8 @@ qt_add_qml_module(heap_core
         # ── audit-ux: begin ──
         qml/PaletteMatch.js
         qml/FocusRing.qml
+        qml/FieldFrame.qml
+        qml/IconButton.qml
         # ── audit-ux: end ──
         # ── audit-int: begin ──
         # ── audit-int: end ──

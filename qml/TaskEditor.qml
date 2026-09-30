@@ -862,11 +862,11 @@ Popup {
                                 radius: Theme.radiusMd
                                 color: Theme.panel2
                                 border.color: deadlineField.text.length === 0
-                                    ? Theme.fieldBorder
+                                    ? (deadlineField.activeFocus ? Theme.focusRing : Theme.fieldBorder)
                                     : (root._deadlinePreview && root._deadlinePreview.ok
                                         ? Theme.accent
                                         : Theme.danger)
-                                border.width: 1
+                                border.width: deadlineField.activeFocus ? 2 : 1
                             }
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
@@ -1585,12 +1585,7 @@ Popup {
         font.letterSpacing: 1
         topPadding: Theme.sp2xs
     }
-    component FieldBg: Rectangle {
-        radius: Theme.radiusMd
-        color: Theme.panel2
-        border.color: Theme.fieldBorder
-        border.width: 1
-    }
+    component FieldBg: FieldFrame {}
     // Parses the description for the preview. Same engine the notes editor
     // uses, so a checklist behaves the same in both places.
     MdDocument {

@@ -110,7 +110,7 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spXl
             Layout.fillWidth: true
             placeholderText: I18n.t("people.pick.ph")
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
+            background: FieldFrame {}
             color: Theme.text
             placeholderTextColor: Theme.textDim
             onTextChanged: { root.query = text; root.current = 0; }

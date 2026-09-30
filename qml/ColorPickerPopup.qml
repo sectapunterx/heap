@@ -212,7 +212,7 @@ Popup {
                 color: acceptableInput ? Theme.text : Theme.danger
                 selectByMouse: true
                 validator: RegularExpressionValidator { regularExpression: /#?([0-9a-fA-F]{6}|[0-9a-fA-F]{8})/ }
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.fieldBorder; border.width: 1 }
+                background: FieldFrame {}
                 onAccepted: {
                     // Emit what was typed, not the HSV round trip, which can
                     // move a channel by one.

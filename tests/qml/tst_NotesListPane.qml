@@ -216,6 +216,30 @@ TestCase {
         compare(got, b);
     }
 
+    // Design audit DES-3: the list is on the Tab path, the arrows walk it and
+    // the menu key opens the open note's menu (pin, rename, delete).
+    function test_the_keyboard_walks_the_list_and_opens_the_menu() {
+        const a = note("aaa keys probe");
+        const b = note("bbb keys probe");
+        const pane = makePane();
+        pane.filter = "keys probe";
+        let got = "";
+        pane.noteActivated.connect(function (x) { got = x; AppController.activeNoteId = x; });
+        AppController.activeNoteId = a;
+
+        const list = findChild(pane, "note-list");
+        verify(list.activeFocusOnTab, "the note list is not on the Tab path");
+        list.forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Down);
+        compare(got, b);
+
+        const row = pane._activeRowItem();
+        verify(row !== null);
+        keyClick(Qt.Key_Menu);
+        tryVerify(function () { return row.menu.opened; }, 1000, "the menu key did not open the note's menu");
+        row.menu.close();
+    }
+
     function test_stepping_stops_at_the_ends() {
         const a = note("only step probe");
         const pane = makePane();
