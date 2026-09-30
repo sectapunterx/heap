@@ -1698,7 +1698,7 @@ class AppController : public QObject {
   // refresh the banner. Needed because a prefix change (settings/profile) does
   // not move HEAD, so no branchChanged fires to re-run the match on its own.
   void refreshFocusedTaskId();
-  void onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId);
+  void onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
 };

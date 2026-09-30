@@ -10534,7 +10534,11 @@ void AppController::refreshFocusedTaskId() {
   emit focusedGitChanged();
 }
 
-void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& taskId) {
+void AppController::onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId) {
+  // The watcher reports the key it found in the branch name. A tracker-mirrored
+  // task is stored under its provider-prefixed id (jira-LUX-1 for LUX-1), so
+  // resolve it the way the banner refresh and the git badges do (PLAT-14).
+  const QString taskId = taskIdForBranchMatch(matchedId);
   m_focusedRepo = repo;
   m_focusedBranch = branch;
   m_focusedTaskId = taskId;

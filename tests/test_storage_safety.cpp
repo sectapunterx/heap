@@ -739,6 +739,29 @@ TEST_F(StorageSafety, AnImportedProfileNeverReusesATaskIdAndItsEventsFollow) {
   EXPECT_TRUE(sawEvent);
 }
 
+// ── PLAT-14 (2026-09-30-1): a branch named by a tracker key ──
+
+TEST_F(StorageSafety, ABranchNamedByATrackerKeyMovesTheMirroredTask) {
+  QTemporaryDir repos;
+  const QString dir = repos.path() + "/lux";
+  QDir().mkpath(dir + "/.git/refs/heads");
+  writeRaw(dir + "/.git/HEAD", "ref: refs/heads/LUX-1-skeleton\n");
+  QJsonObject mirrored = taskJson("jira-LUX-1", "todo");
+  mirrored["externalId"] = QStringLiteral("LUX-1");
+  mirrored["externalProvider"] = QStringLiteral("jira");
+  mirrored["externalUrl"] = QStringLiteral("https://x.invalid/browse/LUX-1");
+  writeRaw(statePath(), stateDoc({profileJson("a", {mirrored, taskJson("APP-110", "todo")})}, "a"));
+  AppController app;
+  const QJsonObject settings{{"git", QJsonObject{{"watchedRepos", QJsonArray{dir}}, {"watchPrState", false}}},
+                             {"tasks", QJsonObject{{"idPrefix", "APP"}}}};
+  app.setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  QCoreApplication::processEvents();
+  const int row = app.tasks()->indexOfId(QStringLiteral("jira-LUX-1"));
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app.tasks()->items().at(row).status, QStringLiteral("prog"));
+  EXPECT_EQ(app.focusedTaskId(), QStringLiteral("jira-LUX-1")) << "the banner's Open must open the mirrored task";
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {
