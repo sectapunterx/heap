@@ -855,6 +855,45 @@ target_compile_definitions(heap_state_fixture_tests PRIVATE
 # RUN_SERIAL runs each one alone; everything else stays parallel.
 set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── CI's qmllint, locally ───
+# CI judges QML with Qt 6.9.1's qmllint (the qmllint ratchet). A newer local
+# Qt reports different findings, so a PR that built and tested green here
+# went red on its first CI run nearly every time. With a Qt 6.9 install
+# present (HEAP_QMLLINT_QT, or found under ~/Qt or C:/Qt), ctest runs the
+# same ratchet on the lines changed since origin/master: green here, green
+# there. Install: see .github/scripts/qmllint_local.py --help.
+if (NOT HEAP_QMLLINT_QT)
+    set(_heap_qt69_globs "C:/Qt/6.9.1/*/bin/qmllint*")
+    foreach (_root IN ITEMS "$ENV{USERPROFILE}" "$ENV{HOME}")
+        if (_root)
+            list(APPEND _heap_qt69_globs "${_root}/Qt/6.9.1/*/bin/qmllint*")
+        endif ()
+    endforeach ()
+    set(_heap_qt69_lint "")
+    if (DEFINED ENV{HEAP_QMLLINT_QT})
+        set(_heap_qt69_lint "$ENV{HEAP_QMLLINT_QT}/bin/qmllint")
+    else ()
+        file(GLOB _heap_qt69_lint ${_heap_qt69_globs})
+    endif ()
+    if (_heap_qt69_lint)
+        list(GET _heap_qt69_lint 0 _heap_qt69_lint)
+        get_filename_component(_heap_qt69_lint "${_heap_qt69_lint}" DIRECTORY)
+        get_filename_component(_heap_qt69_lint "${_heap_qt69_lint}" DIRECTORY)
+    endif ()
+    set(HEAP_QMLLINT_QT "${_heap_qt69_lint}" CACHE PATH "Qt 6.9 install whose qmllint ctest runs as CI does (empty = skip)")
+endif ()
+if (HEAP_QMLLINT_QT AND EXISTS "${HEAP_QMLLINT_QT}/qml" AND NOT CMAKE_PROJECT_NAME STREQUAL "heap_tests")
+    find_package(Python3 COMPONENTS Interpreter)
+    if (Python3_Interpreter_FOUND)
+        add_test(NAME heap_qmllint_qt69
+                COMMAND Python3::Interpreter "${PROJECT_SOURCE_DIR}/.github/scripts/qmllint_local.py"
+                --build "${PROJECT_BINARY_DIR}" --qt "${HEAP_QMLLINT_QT}" --base origin/master
+                WORKING_DIRECTORY "${PROJECT_SOURCE_DIR}")
+        # It swaps the build's heap_core.qmltypes for Qt 6.9's while it runs.
+        set_tests_properties(heap_qmllint_qt69 PROPERTIES RUN_SERIAL TRUE)
+    endif ()
+endif ()
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in
