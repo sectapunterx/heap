@@ -7,6 +7,7 @@
 
 #include <QDate>
 #include <QHash>
+#include <QSet>
 #include <QVector>
 
 // Turning stored events into the ones a calendar actually shows.
@@ -66,9 +67,11 @@ inline QString overrideKey(const QString& masterId, const QDate& date) {
 // Wednesday when that is when it is. Exdates and overrides are keyed by the
 // source-zone date, which is also what `occurrenceDate` reports.
 //
-// Overrides are never emitted on their own: one whose master is gone would
-// otherwise appear as a ghost the user cannot explain, and one whose occurrence
-// falls outside the range has no business being drawn.
+// An override is shown on the date it now sits on, whatever the date it
+// replaced: a Friday meeting moved to next Monday is on Monday's page although
+// that Friday is not. It is never emitted on its own authority, though: its
+// master must still produce the date it replaces (not deleted, not past the
+// end), or it would appear as a ghost the user cannot explain.
 //
 // A range longer than kMaxExpandDays is cut short. `coveredUntil`, when given,
 // receives the last day actually expanded, so a caller can tell a quiet stretch
@@ -102,6 +105,21 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
     const QDate endDate = (e.endDate.isValid() && e.endDate > startDate) ? e.endDate : startDate;
     return startDate <= last && endDate >= from;
   };
+  // Whether a date the rule produced is still one of the series': not deleted
+  // and not past an exact UNTIL instant.
+  const auto live = [&](const CalEvent& e, const RRule& rule, const QTimeZone& zone, const QDate& day) {
+    if(e.exdates.contains(day)) {
+      return false;
+    }
+    // An exact UNTIL instant ends the series at the occurrence that starts
+    // after it, not at the end of that UTC day.
+    if(rule.untilAt.isValid() && !e.allDay) {
+      return wallInstant(day, e.start, zone.isValid() ? zone : display) <= rule.untilAt;
+    }
+    return !rule.untilAt.isValid() || day <= rule.untilAt.date();
+  };
+  // Overrides already met while expanding their master's window.
+  QSet<const CalEvent*> handled;
 
   for(const CalEvent& e : stored) {
     // An override is emitted through its master, so that an occurrence the
@@ -136,22 +154,13 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
     const QDate searchFrom = from.addDays(-lengthDays - slack);
     const QDate searchTo = last.addDays(slack);
     for(const QDate& day : expand(rule, e.date, searchFrom, searchTo)) {
-      if(e.exdates.contains(day)) {
-        continue;
-      }
-      // An exact UNTIL instant ends the series at the occurrence that starts
-      // after it, not at the end of that UTC day.
-      if(rule.untilAt.isValid() && !e.allDay) {
-        const QDateTime startsAt = wallInstant(day, e.start, zone.isValid() ? zone : display);
-        if(startsAt > rule.untilAt) {
-          continue;
-        }
-      } else if(rule.untilAt.isValid() && day > rule.untilAt.date()) {
+      if(!live(e, rule, zone, day)) {
         continue;
       }
       const auto it = overrides.constFind(detail::overrideKey(e.id, day));
       if(it != overrides.constEnd()) {
         const CalEvent& ov = *it.value();
+        handled.insert(&ov);
         const CalEvent shownOv = zoneOf(ov).isValid() ? localized(ov, display) : ov;
         if(shownOv.date.isValid() && overlaps(shownOv, shownOv.date)) {
           out.append({shownOv, day, false});
@@ -175,6 +184,36 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
         out.append({inst, day, true});
       }
     }
+  }
+
+  // Overrides moved into the range from a date outside the window expanded
+  // above. Each is checked against its master for that one date.
+  QHash<QString, const CalEvent*> masters;
+  for(const CalEvent* ov : std::as_const(overrides)) {
+    if(handled.contains(ov)) {
+      continue;
+    }
+    const CalEvent shownOv = zoneOf(*ov).isValid() ? localized(*ov, display) : *ov;
+    if(!shownOv.date.isValid() || !overlaps(shownOv, shownOv.date)) {
+      continue;
+    }
+    if(masters.isEmpty()) {
+      for(const CalEvent& e : stored) {
+        if(e.masterId.isEmpty() && !e.rrule.isEmpty()) {
+          masters.insert(e.id, &e);
+        }
+      }
+    }
+    const CalEvent* master = masters.value(ov->masterId, nullptr);
+    if(master == nullptr || !master->date.isValid()) {
+      continue;
+    }
+    const RRule rule = parseRRule(master->rrule);
+    const QDate day = ov->originalDate;
+    if(!rule.isValid() || !expand(rule, master->date, day, day).contains(day) || !live(*master, rule, zoneOf(*master), day)) {
+      continue;
+    }
+    out.append({shownOv, day, false});
   }
   return out;
 }

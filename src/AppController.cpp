@@ -2542,10 +2542,16 @@ QVariantMap occurrenceToVariant(const CalEvent& e) {
 // The rule without its end: two rules that differ only in COUNT or UNTIL put
 // occurrences on the same days, so deletions and moved occurrences still
 // line up with the new one.
-QString rulePattern(const QString& text) {
+//
+// Given the series' start, a weekly rule's implicit weekday is spelled out, so
+// "FREQ=WEEKLY" and "FREQ=WEEKLY;BYDAY=MO" on a Monday series read the same.
+QString rulePattern(const QString& text, const QDate& anchor = QDate()) {
   heap::cal::RRule r = heap::cal::parseRRule(text);
   if(!r.isValid()) {
     return text;
+  }
+  if(anchor.isValid() && r.freq == heap::cal::RRule::Weekly && r.byDay.isEmpty()) {
+    r.byDay = {heap::cal::WeekdayNum{0, anchor.dayOfWeek()}};
   }
   r.count = 0;
   r.until = QDate();
@@ -2720,29 +2726,111 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       storeEvent(m);
       return;
     }
+    // A moved occurrence (a stored override) is measured against where it
+    // sits now, not the date it replaced: renaming Monday's meeting that was
+    // moved to Wednesday is not a request to make the series a Wednesday one.
+    // Its time only becomes the series' when the edit changed it.
+    std::optional<CalEvent> moved;
+    {
+      const int editedRow = m_events.indexOfId(draft.value("id").toString());
+      if(editedRow >= 0 && m_events.items().at(editedRow).masterId == masterId) {
+        moved = m_events.items().at(editedRow);
+      }
+    }
+    const QDate draftDate = draft.value("date").toDate();
+    const QDate draftEndDate = draft.value("endDate").toDate();
+    const double draftStart = draft.value("start").toDouble();
+    const double draftEnd = draft.value("end").toDouble();
+    qint64 shift = dayShift;
+    qint64 seriesLength = lengthDays;
+    if(moved.has_value()) {
+      shift = (moved->date.isValid() && draftDate.isValid()) ? moved->date.daysTo(draftDate) : 0;
+      const qint64 movedSpan = (moved->endDate.isValid() && moved->endDate > moved->date) ? moved->date.daysTo(moved->endDate) : 0;
+      const qint64 draftSpan =
+          (draftDate.isValid() && draftEndDate.isValid() && draftEndDate > draftDate) ? draftDate.daysTo(draftEndDate) : 0;
+      const bool timeKept = allDay == moved->allDay && movedSpan == draftSpan &&
+                            (allDay || (std::abs(draftStart - moved->start) < 1e-9 && std::abs(draftEnd - moved->end) < 1e-9));
+      if(timeKept) {
+        m.allDay = master.allDay;
+        m.start = master.start;
+        m.end = master.end;
+        seriesLength = (master.endDate.isValid() && master.endDate > master.date) ? master.date.daysTo(master.endDate) : 0;
+      }
+    }
     // Moving one occurrence of "all" moves the anchor by the same number of
     // days, and the end with it — the end used to stay behind, so every
     // occurrence became a multi-day event.
-    m.date = master.date.addDays(dayShift);
-    m.endDate = lengthDays > 0 ? m.date.addDays(lengthDays) : QDate();
-    const QString shiftedOld = shiftWeekdays(master.rrule, dayShift);
-    const bool patternChanged = rulePattern(draftRule) != rulePattern(master.rrule) && rulePattern(draftRule) != rulePattern(shiftedOld);
-    m.rrule = (draftRule == master.rrule) ? shiftedOld : draftRule;
+    m.date = master.date.addDays(shift);
+    m.endDate = seriesLength > 0 ? m.date.addDays(seriesLength) : QDate();
+    const QString shiftedOld = shiftWeekdays(master.rrule, shift);
+    // Compared by the days they produce: "FREQ=WEEKLY;BYDAY=MO" on a Monday
+    // series (how Google and Outlook store it) is the editor's "FREQ=WEEKLY".
+    const bool likeShifted = rulePattern(draftRule, m.date) == rulePattern(shiftedOld, m.date);
+    const bool patternChanged = !likeShifted && rulePattern(draftRule, m.date) != rulePattern(master.rrule, master.date);
+    if(patternChanged || (!likeShifted && draftRule != master.rrule)) {
+      m.rrule = draftRule;
+    } else {
+      // The same days: the series keeps its own spelling of the rule and
+      // takes only the end the editor may have changed.
+      m.rrule = shiftedOld;
+      heap::cal::RRule kept = heap::cal::parseRRule(shiftedOld);
+      const heap::cal::RRule edited = heap::cal::parseRRule(draftRule);
+      if(draftRule != master.rrule && kept.isValid() && edited.isValid() &&
+         (kept.count != edited.count || kept.until != edited.until || kept.untilAt != edited.untilAt)) {
+        kept.count = edited.count;
+        kept.until = edited.until;
+        kept.untilAt = edited.untilAt;
+        m.rrule = heap::cal::toRRuleText(kept);
+      }
+    }
     if(patternChanged) {
       // New days: the old deletions and moves were about other dates.
       m.exdates.clear();
       for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
         m_events.removeById(id);
       }
-    } else if(dayShift != 0) {
-      // The same series a few days later: its exceptions move with it, or a
-      // deleted occurrence would come back and a moved one would revert.
+    } else {
+      // The same series, maybe a few days later: its exceptions move with it,
+      // or a deleted occurrence would come back and a moved one would revert.
+      // A moved occurrence also takes what the edit changed — a new title is
+      // the whole series' — unless it had its own value there already.
       for(QDate& d : m.exdates) {
-        d = d.addDays(dayShift);
+        d = d.addDays(shift);
       }
+      const auto follow = [](QString& own, const QString& was, const QString& now) {
+        if(now != was && own == was) {
+          own = now;
+        }
+      };
       for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
-        CalEvent ov = m_events.items().at(m_events.indexOfId(id));
-        ov.originalDate = ov.originalDate.addDays(dayShift);
+        const CalEvent before = m_events.items().at(m_events.indexOfId(id));
+        CalEvent ov = before;
+        ov.originalDate = ov.originalDate.addDays(shift);
+        follow(ov.title, master.title, m.title);
+        follow(ov.type, master.type, m.type);
+        follow(ov.attendees, master.attendees, m.attendees);
+        follow(ov.context, master.context, m.context);
+        follow(ov.location, master.location, m.location);
+        follow(ov.notes, master.notes, m.notes);
+        follow(ov.url, master.url, m.url);
+        if(m.reminderMinutes != master.reminderMinutes && ov.reminderMinutes == master.reminderMinutes) {
+          ov.reminderMinutes = m.reminderMinutes;
+        }
+        if(ov != before) {
+          m_events.upsert(ov);
+        }
+      }
+      // The moved occurrence that was edited is part of "all" too: it takes
+      // the edit as it stands in the editor, in the viewer's clock like any
+      // override, and stays where it was moved unless the edit moved it.
+      const int movedRow = moved.has_value() ? m_events.indexOfId(moved->id) : -1;
+      if(movedRow >= 0) {
+        CalEvent ov = m_events.items().at(movedRow);
+        applyDraftFields(ov);
+        ov.start = draftStart;
+        ov.end = draftEnd;
+        ov.date = draftDate.isValid() ? draftDate : ov.date;
+        ov.endDate = (draftEndDate.isValid() && draftEndDate > ov.date) ? draftEndDate : QDate();
         m_events.upsert(ov);
       }
     }
