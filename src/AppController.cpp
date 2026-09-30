@@ -336,11 +336,15 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
-       {"Your data file was damaged — recovered from backup %1. The damaged file was kept as %2.",
-        "Файл данных был повреждён — восстановлено из бэкапа %1. Повреждённый файл сохранён как %2."}},
+       {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
+        "The damaged file is kept in the data folder as %2.",
+        "Файл данных был повреждён, heap открыл бэкап %1 — изменений, сделанных после него, здесь нет. "
+        "Повреждённый файл сохранён в папке данных как %2."}},
       {"data.corruptKept",
-       {"Your data file was damaged and no backup was found. The damaged file was kept as %1.",
-        "Файл данных был повреждён, бэкап не найден. Повреждённый файл сохранён как %1."}},
+       {"Your data file was damaged and there is no backup, so this is an empty workspace, not a new install. "
+        "The damaged file is kept in the data folder as %1.",
+        "Файл данных был повреждён, бэкапа нет, поэтому открыто пустое пространство — это не новая установка. "
+        "Повреждённый файл сохранён в папке данных как %1."}},
       {"data.schemaTooNew",
        {"Read-only: this data file was written by a newer heap (schema v%1, this build reads v%2). "
         "Nothing you change now is saved — update heap to edit it.",
@@ -692,16 +696,6 @@ AppController::AppController(QObject* parent) :
   m_globalHotkey = heap::platform::GlobalHotkey::create(this);
   connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
   registerGlobalHotkeys();
-
-  // If loadStateOnStart() had to recover from a backup or quarantine a corrupt
-  // file, surface it once the QML toast bar exists (singleShot fires after the
-  // engine has loaded Main.qml and this event loop starts).
-  if(!m_recoveryNotice.isEmpty()) {
-    QTimer::singleShot(0, this, [this]() {
-      emit toast(m_recoveryNotice);
-      m_recoveryNotice.clear();
-    });
-  }
 
   // ---- Git watcher ----
   m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
@@ -8019,6 +8013,12 @@ void AppController::setStorageState(const QString& state, const QString& message
   emit storageStateChanged();
 }
 
+void AppController::dismissStorageNotice() {
+  if(m_storageState == QLatin1String("recovered") || m_storageState == QLatin1String("damaged")) {
+    setStorageState(QStringLiteral("ok"), QString());
+  }
+}
+
 void AppController::retryStorage() {
   if(m_storageState == QLatin1String("writeFailed")) {
     if(m_saveTimer) {
@@ -8066,10 +8066,6 @@ void AppController::reloadStateFromDisk() {
   loadStateOnStart();
   if(m_profiles.isEmpty()) {
     seedExampleProfile();
-  }
-  if(!m_recoveryNotice.isEmpty()) {
-    emit toast(m_recoveryNotice);
-    m_recoveryNotice.clear();
   }
 }
 
@@ -8157,17 +8153,38 @@ void AppController::loadStateOnStart() {
       if(!heap::storage::writeAtomically(path, QJsonDocument(recovered).toJson(QJsonDocument::Indented), &error)) {
         qWarning("todocpp: could not promote backup %s: %s", qUtf8Printable(recoveredFrom), qUtf8Printable(error));
       }
-      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept);
       heap::recovery::append(QString::fromLatin1(heap::recovery::kRecovered),
                              {{QStringLiteral("from"), recoveredFrom}, {QStringLiteral("reason"), shapeError}});
       loadStateDocument(recovered, /*viewOnly=*/false);
+      // A banner that stays up, not a toast (PLAT-6): whatever changed after
+      // the backup was taken is not in it, and the user has to know where the
+      // damaged file went to look for it. A newer-schema backup has already
+      // raised its own read-only banner, which says more.
+      if(m_storageState == QLatin1String("ok")) {
+        setStorageState(QStringLiteral("recovered"), tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept));
+      }
     } else {
-      // No usable backup. The damaged file is preserved under a distinct name
-      // and the caller seeds a fresh profile — the user keeps a recoverable
-      // copy and a visible warning instead of a silent wipe.
-      m_recoveryNotice = tr_("data.corruptKept").arg(kept);
+      // No usable backup. The damaged file is preserved under a distinct name.
+      // What opens is an empty workspace with a banner saying so — never the
+      // demo and the welcome tour, which read as "a new install" and invited
+      // working on in sample data (PLAT-6).
       heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered),
                              {{QStringLiteral("path"), path}, {QStringLiteral("reason"), shapeError}});
+      Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+      p.id = QStringLiteral("default");
+      m_profiles.push_back(p);
+      m_activeProfileId = p.id;
+      applyProfileToModels(p);
+      m_welcomeSeen = true;
+      m_demoActive = false;
+      emit onboardingChanged();
+      emit profilesChanged();
+      emit activeProfileChanged();
+      setStorageState(QStringLiteral("damaged"), tr_("data.corruptKept").arg(kept));
+      // Written now, so the next launch opens this workspace too rather than
+      // taking the missing file for a first run. The damaged bytes are safe in
+      // the quarantined copy.
+      scheduleSave();
     }
     return;
   }

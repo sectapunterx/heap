@@ -136,8 +136,12 @@ heap never replaces a `state.json` it could not read with anything else:
   into the read-only session are not kept).
 - **Damaged** (not JSON, or JSON without any profile): the file is kept as
   `state.corrupt-<time>.json` next to it (moved, or copied when a lock forbids
-  moving), the newest usable backup is loaded, and a notice names both files.
-  If the damaged file cannot be set aside at all, the session is read-only.
+  moving) and the newest usable backup is loaded. A banner that stays up until
+  you dismiss it names both files, with **Open data folder**: whatever changed
+  after that backup is not in it. With no backup at all, heap opens an empty
+  workspace under the same banner — not the demo and the welcome tour, since
+  this is not a new install. If the damaged file cannot be set aside at all,
+  the session is read-only.
 - **From a newer heap** (a higher `schemaVersion`): opens read-only with a
   banner that stays up; a copy is kept once as
   `backups/state-premigration-v<N>-<time>.json`. Update heap to edit it.

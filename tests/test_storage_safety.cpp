@@ -628,6 +628,53 @@ TEST(GitWorktree, ShaAndUpstreamComeFromTheCommonDir) {
   EXPECT_EQ(heap::git::BranchTaskMatcher::resolveCommonDir(main), main) << "a plain clone is its own common dir";
 }
 
+// ── PLAT-6 (2026-09-30-1): a damaged file is a banner, not a first run ──
+
+TEST_F(StorageSafety, ADamagedFileWithNoBackupOpensAnEmptyWorkspaceUnderABanner) {
+  const QByteArray damaged = stateDoc({profileJson("a", {taskJson("T-1", "todo")})}, "a").left(40);
+  writeRaw(statePath(), damaged);
+  {
+    AppController app;
+    const QStringList kept = corruptFiles();
+    ASSERT_EQ(kept.size(), 1);
+    EXPECT_EQ(readRaw(appDataDir() + "/" + kept.first()), damaged) << "the damaged bytes must be kept as they were";
+    EXPECT_EQ(app.storageState(), QStringLiteral("damaged"));
+    EXPECT_TRUE(app.storageMessage().contains(kept.first())) << app.storageMessage().toStdString();
+    // Not a new install: no welcome tour, no demo board to work on in.
+    EXPECT_TRUE(app.welcomeSeen());
+    EXPECT_FALSE(app.demoActive());
+    EXPECT_EQ(app.tasks()->rowCount(), 0);
+    EXPECT_FALSE(app.statuses().isEmpty());
+    app.dismissStorageNotice();
+    EXPECT_EQ(app.storageState(), QStringLiteral("ok"));
+    app.flushSave();
+  }
+  // The next launch opens the same empty workspace, not a first run either.
+  AppController reopened;
+  EXPECT_EQ(reopened.storageState(), QStringLiteral("ok"));
+  EXPECT_TRUE(reopened.welcomeSeen());
+  EXPECT_FALSE(reopened.demoActive());
+  EXPECT_EQ(reopened.tasks()->rowCount(), 0);
+  EXPECT_EQ(corruptFiles().size(), 1);
+}
+
+TEST_F(StorageSafety, ADamagedFileRestoredFromABackupSaysWhichOneAndStaysUp) {
+  writeRaw(backupDir() + "/state-20260101-000000.json", stateDoc({profileJson("a", {taskJson("T-1", "todo")})}, "a"));
+  writeRaw(statePath(), QByteArray("{ truncated"));
+  AppController app;
+  EXPECT_TRUE(hasTask(app, "T-1"));
+  EXPECT_EQ(app.storageState(), QStringLiteral("recovered"));
+  EXPECT_TRUE(app.storageMessage().contains(QStringLiteral("state-20260101-000000.json"))) << app.storageMessage().toStdString();
+  ASSERT_EQ(corruptFiles().size(), 1);
+  EXPECT_TRUE(app.storageMessage().contains(corruptFiles().first()));
+  // An ordinary save does not take the notice down; only the user does.
+  QVariantMap d = app.newTaskDraft(QStringLiteral("todo"));
+  d["title"] = QStringLiteral("after");
+  app.saveTask(d);
+  app.flushSave();
+  EXPECT_EQ(app.storageState(), QStringLiteral("recovered"));
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

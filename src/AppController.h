@@ -183,6 +183,10 @@ class AppController : public QObject {
   // The banner's Retry: re-reads an unreadable state.json (and loads it), or
   // writes a failed save again now.
   Q_INVOKABLE void retryStorage();
+  // The banner's Dismiss, for the two states that only report what happened
+  // at startup ("recovered" from a backup, "damaged" with none): nothing is
+  // wrong any more, so the user may put the message away (PLAT-6).
+  Q_INVOKABLE void dismissStorageNotice();
 
   TaskModel* tasks() {
     return &m_tasks;
@@ -1418,7 +1422,6 @@ class AppController : public QObject {
   // ladder rewrites it. Exempt from retention pruning: it is the only pre-v4
   // image of the user's data.
   void retainPreMigrationBackup(const QString& path, int fromVersion);
-  QString m_recoveryNotice;  // deferred toast shown once the UI is up
   // Set when state.json was written by a newer build than this one. Every save
   // path is a no-op while it is true: this build cannot represent the fields it
   // did not parse, so writing would drop them.
