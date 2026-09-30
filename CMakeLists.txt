@@ -207,6 +207,8 @@ qt_add_library(heap_core STATIC
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
     src/AppControllerTaskEdits.cpp
+    src/AppControllerSavedViews.cpp
+    src/views/SavedViewMatch.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
     # ── audit-time: end ──

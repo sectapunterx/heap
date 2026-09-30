@@ -306,6 +306,9 @@ heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
 # Regressions from the 2026-09-30 audit, tasks area (undo, ranks, recurrence,
 # the per-field clock flags of schema v10).
 heap_add_appcontroller_test(heap_audit_tasks_tests test_audit_tasks.cpp)
+# Saved views: storage round-trip and profile export/import, apply/modify/
+# update semantics, the count badges, undo and the Alt+N catalog entries.
+heap_add_appcontroller_test(heap_saved_views_tests test_saved_views.cpp)
 # ── audit-tasks: end ──
 # ── audit-time: begin ──
 # Calendar fixes from the 2026-09-30 audit: series drags and edits, reminders,

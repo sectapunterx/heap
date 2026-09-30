@@ -264,6 +264,10 @@ struct Entry {
   bool docsStateTouched = false;
   QString docsStateBefore;
   QString docsStateAfter;
+  // Saved views, a short ordered list: kept whole, like the statuses.
+  bool savedViewsTouched = false;
+  QVector<heap::savedviews::SavedView> savedViewsBefore;
+  QVector<heap::savedviews::SavedView> savedViewsAfter;
   // A deleted profile is not a diff: restoring it swaps the whole workspace,
   // including which tasks the models hold. Such an entry stands alone — see
   // UndoStack::pushProfileRemoval.
@@ -275,8 +279,8 @@ struct Entry {
   QStringList profileEventIds;
 
   bool isEmpty() const {
-    return !profileRemoved && !statusesTouched && !docsStateTouched && tasks.isEmpty() && events.isEmpty() && people.isEmpty() &&
-           docPages.isEmpty() && notes.isEmpty();
+    return !profileRemoved && !statusesTouched && !docsStateTouched && !savedViewsTouched && tasks.isEmpty() && events.isEmpty() &&
+           people.isEmpty() && docPages.isEmpty() && notes.isEmpty();
   }
 };
 
