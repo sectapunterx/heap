@@ -6,6 +6,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import QtQuick.Dialogs
 import TodoCpp
+import "DocsStarter.js" as DocsStarter
 
 ApplicationWindow {
     id: win
@@ -50,6 +51,19 @@ ApplicationWindow {
         const t = AppController.taskById(AppController.taskIdForBranchMatch(key));
         if (t && t.id) taskEditor.showFor(Object.assign({}, t));
         else toast.show(I18n.t("notes.link.noTask").arg(key), "warning");
+    }
+
+    // A profile that has never opened Docs has no docs blob yet, so the
+    // starter catalogue DocsView seeds on its first visit was unsearchable
+    // from Ctrl+K until then. Seeded here instead, the same content in the
+    // same language — DocsView reads it back as if it had written it.
+    function seedStarterDocs() {
+        if ((AppController.docsState || "").length > 0) return;
+        AppController.docsState = JSON.stringify({
+            sections: DocsStarter.sections(I18n.lang, [Theme.mStandup, Theme.mOneone, Theme.mSync, Theme.mFocus]),
+            snippets: DocsStarter.snippets(I18n.lang),
+            contacts: DocsStarter.contacts(I18n.lang)
+        });
     }
 
     // The same link rules outside Notes: a doc page's [[note]] opens the note.
@@ -266,6 +280,7 @@ ApplicationWindow {
 
     Component.onCompleted: {
         _restoreGeometry();
+        win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
         // First run: greet the user once the overlay is ready.
@@ -1416,6 +1431,7 @@ ApplicationWindow {
             win.searchText = "";
             win.prioritiesFilter = ({});
             AppController.selectedDate = AppController.today;
+            Qt.callLater(win.seedStarterDocs);
         }
     }
 

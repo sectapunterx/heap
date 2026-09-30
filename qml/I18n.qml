@@ -1021,6 +1021,9 @@ QtObject {
             "notes.saved": "saved",
             "notes.toggleList": "Show or hide the list of notes (Ctrl+Alt+L)",
             "notes.nav.hint": "Ctrl+Alt+N new · Ctrl+PgUp/PgDn previous/next · F2 rename",
+            "quickNote.titleInto": "Quick note → %1",
+            "quickNote.doneInto": "Added to %1",
+            "notes.image.load": "Load images",
             // ── audit-know: end ──
             // ── audit-ux: begin ──
             // ── audit-ux: end ──
@@ -2019,6 +2022,9 @@ QtObject {
             "notes.saved": "сохранено",
             "notes.toggleList": "Показать или скрыть список заметок (Ctrl+Alt+L)",
             "notes.nav.hint": "Ctrl+Alt+N новая · Ctrl+PgUp/PgDn предыдущая/следующая · F2 переименовать",
+            "quickNote.titleInto": "Быстрая заметка → %1",
+            "quickNote.doneInto": "Добавлено в «%1»",
+            "notes.image.load": "Загрузить картинки",
             // ── audit-know: end ──
             // ── audit-ux: begin ──
             // ── audit-ux: end ──

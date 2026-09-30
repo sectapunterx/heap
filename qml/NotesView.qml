@@ -1258,6 +1258,8 @@ Item {
         id: mdDocument
         text: editor.text
         allowRemoteImages: false
+        // Relative image paths resolve here; absolute local paths work anywhere.
+        imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
         // No preview on screen, no parse per pause; lookups still parse.
         live: preview.visible

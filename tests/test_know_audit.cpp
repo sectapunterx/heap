@@ -5,9 +5,12 @@
 // AppController and, for the vault, through the disk.
 
 #include "AppController.h"
+#include "CodeHighlighter.h"
 #include "Models.h"
 
 #include <QApplication>
+#include <QClipboard>
+#include <QGuiApplication>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -18,6 +21,9 @@
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QTextBlock>
+#include <QTextDocument>
+#include <QTextLayout>
 #include <QUrl>
 
 #include <gtest/gtest.h>
@@ -374,6 +380,72 @@ TEST_F(KnowAuditTest, Know12_MentionsResolveToPeopleInAnyScript) {
   app_->people()->upsert(p);
   EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@Олег_Т.")), QStringLiteral("p-oleg"));
   EXPECT_EQ(app_->personIdForHandle(QStringLiteral("олег")), QStringLiteral("p-oleg"));
+}
+
+// ── KNOW-20: copy as Markdown takes every note and every doc page ──
+
+TEST_F(KnowAuditTest, Know20_CopyAsMarkdownHasAllNotesAndPages) {
+  const QString a = app_->newNote(QStringLiteral("Alpha"));
+  app_->setNoteBody(a, QStringLiteral("# Alpha\n\nalpha body"));
+  const QString b = app_->newNote(QStringLiteral("Bravo"));
+  app_->setNoteBody(b, QStringLiteral("bravo body"));
+  const QString parent = app_->newDocPage(QStringLiteral("Runbook"));
+  app_->setDocPageBody(parent, QStringLiteral("page body"));
+  app_->newDocPage(QStringLiteral("Child"), parent);
+
+  app_->copyActiveProfileMarkdownToClipboard();
+  const QString md = QGuiApplication::clipboard()->text();
+
+  EXPECT_TRUE(md.contains(QStringLiteral("### Alpha\n\nalpha body"))) << md.toStdString();
+  EXPECT_TRUE(md.contains(QStringLiteral("bravo body")));
+  EXPECT_TRUE(md.contains(QStringLiteral("## Docs")));
+  EXPECT_TRUE(md.contains(QStringLiteral("### Runbook")));
+  EXPECT_TRUE(md.contains(QStringLiteral("### › Child")));
+}
+
+// ── C: code highlighting in the preview ──
+
+namespace {
+
+// The format the highlighter left at `pos` in the first block.
+QTextCharFormat formatAt(QTextDocument& doc, int pos) {
+  const QTextBlock block = doc.firstBlock();
+  for(const QTextLayout::FormatRange& r : block.layout()->formats()) {
+    if(pos >= r.start && pos < r.start + r.length) {
+      return r.format;
+    }
+  }
+  return {};
+}
+
+}  // namespace
+
+TEST(KnowCodeHighlight, AHashInsideABashStringIsNotAComment) {
+  QTextDocument doc;
+  CodeHighlighter h;
+  h.setLanguage(QStringLiteral("Bash"));  // any case
+  h.setDocument(&doc);
+  doc.setPlainText(QStringLiteral("echo \"#1 not a comment\" # a comment"));
+  h.rehighlight();
+  EXPECT_FALSE(formatAt(doc, 7).fontItalic()) << "inside the string";
+  EXPECT_TRUE(formatAt(doc, 27).fontItalic()) << "the real comment";
+}
+
+TEST(KnowCodeHighlight, LanguageNamesAreCaseInsensitiveWithAliases) {
+  EXPECT_EQ(CodeHighlighter::canonicalLanguage(QStringLiteral("C++")), QStringLiteral("cpp"));
+  EXPECT_EQ(CodeHighlighter::canonicalLanguage(QStringLiteral("YML")), QStringLiteral("yaml"));
+  EXPECT_EQ(CodeHighlighter::canonicalLanguage(QStringLiteral("Golang")), QStringLiteral("go"));
+  EXPECT_EQ(CodeHighlighter::canonicalLanguage(QStringLiteral("zsh")), QStringLiteral("sh"));
+  // And the languages beyond the original five get colour at all.
+  for(const char* lang : {"go", "rust", "java", "sql", "json", "css", "xml", "powershell", "lua"}) {
+    QTextDocument doc;
+    CodeHighlighter h;
+    h.setLanguage(QString::fromLatin1(lang));
+    h.setDocument(&doc);
+    doc.setPlainText(QStringLiteral("select \"s\" + 1 // x -- y # z <a b=\"c\"> +add"));
+    h.rehighlight();
+    EXPECT_FALSE(doc.firstBlock().layout()->formats().isEmpty()) << lang;
+  }
 }
 
 int main(int argc, char** argv) {

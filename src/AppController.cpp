@@ -1203,6 +1203,12 @@ QStringList AppController::noteFolders() const {
   return out;
 }
 
+QString AppController::quickNoteTarget() const {
+  // Where appendNoteEntry() will write: the open note, or Inbox.
+  const int row = m_notes.indexOfId(m_activeNoteId);
+  return row >= 0 ? m_notes.items().at(row).title : tr_("notes.inbox");
+}
+
 void AppController::appendNoteEntry(const QString& text) {
   const QString body = text.trimmed();
   if(body.isEmpty()) {
@@ -2734,7 +2740,10 @@ QString AppController::openDailyNote() {
   const int row = m_notes.indexOfId(id);
   if(row >= 0) {
     Note n = m_notes.items().at(row);
-    n.body = QStringLiteral("# %1\n\n").arg(today.toString(QStringLiteral("dddd, d MMMM yyyy")));
+    // In the UI language: QDate::toString is always English, so a Russian
+    // profile's daily notes were headed "Tuesday, 30 September 2026".
+    const QLocale locale(m_language == QLatin1String("ru") ? QLocale::Russian : QLocale::English);
+    n.body = QStringLiteral("# %1\n\n").arg(locale.toString(today, QStringLiteral("dddd, d MMMM yyyy")));
     m_notes.upsert(n);
     m_notesState = n.body;
     emit notesStateChanged();
@@ -3835,6 +3844,7 @@ void AppController::copyToClipboard(const QString& text) {
 }
 
 void AppController::copyActiveProfileMarkdownToClipboard() {
+  emit flushEditorsRequested();
   snapshotActiveProfile();  // flush live models into the active Profile first
   const int pi = profileIndexOf(m_activeProfileId);
   if(pi < 0) {
@@ -3919,10 +3929,47 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
     }
   }
 
-  // Notes (raw markdown of the active profile).
-  const QString notes = p.notesState.trimmed();
-  if(!notes.isEmpty()) {
-    md += QStringLiteral("\n## Notes\n\n") + notes + QStringLiteral("\n");
+  // Every note and every doc page, not just the note that happened to be
+  // open. Each under its own heading; a leading H1 that only repeats the
+  // title is dropped so the outline stays one document.
+  const auto withoutTitleH1 = [](const QString& body, const QString& title) {
+    const QString h1 = firstH1(body);
+    if(h1.isEmpty() || h1 != title) {
+      return body.trimmed();
+    }
+    const qsizetype nl = body.indexOf(QLatin1Char('\n'), body.indexOf(QStringLiteral("# ")));
+    return nl < 0 ? QString() : body.mid(nl + 1).trimmed();
+  };
+  QStringList noteBlocks;
+  for(const Note& n : p.notes) {
+    const QString body = withoutTitleH1(n.body, n.title);
+    QString block = QStringLiteral("### ") + n.title + QStringLiteral("\n");
+    if(!n.folder.isEmpty()) {
+      block += QStringLiteral("_") + n.folder + QStringLiteral("_\n");
+    }
+    if(!body.isEmpty()) {
+      block += QStringLiteral("\n") + body + QStringLiteral("\n");
+    }
+    noteBlocks << block;
+  }
+  if(!noteBlocks.isEmpty()) {
+    md += QStringLiteral("\n## Notes\n\n") + noteBlocks.join(QStringLiteral("\n"));
+  }
+  QStringList pageBlocks;
+  std::function<void(const QString&, int)> walk = [&](const QString& parent, int depth) {
+    for(const DocPage& d : childrenOf(p.docPages, parent)) {
+      const QString body = withoutTitleH1(d.body, d.title);
+      QString block = QStringLiteral("### ") + QStringLiteral("› ").repeated(depth) + d.title + QStringLiteral("\n");
+      if(!body.isEmpty()) {
+        block += QStringLiteral("\n") + body + QStringLiteral("\n");
+      }
+      pageBlocks << block;
+      walk(d.id, depth + 1);
+    }
+  };
+  walk(QString(), 0);
+  if(!pageBlocks.isEmpty()) {
+    md += QStringLiteral("\n## Docs\n\n") + pageBlocks.join(QStringLiteral("\n"));
   }
 
   copyToClipboard(md);

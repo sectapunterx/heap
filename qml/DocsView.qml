@@ -75,6 +75,10 @@ Item {
 
     // Focused by the global search shortcut when Docs is the active view.
     function focusSearch() {
+        if (root.tab === "pages") {
+            pagesPane.focusFilter();
+            return;
+        }
         docsSearch.forceActiveFocus();
         docsSearch.selectAll();
     }

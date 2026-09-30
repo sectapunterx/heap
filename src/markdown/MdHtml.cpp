@@ -1,5 +1,6 @@
 #include "markdown/MdHtml.h"
 
+#include <QDir>
 #include <QRegularExpression>
 #include <QUrl>
 
@@ -219,14 +220,15 @@ void appendInline(const MdAst& ast, int index, const MdHtmlOptions& options, QSt
       if(alt.isEmpty()) {
         alt = escapeHtml(node.href);
       }
-      if(!isLocalSource(node.href) && !(options.allowRemoteImages && isWebSource(node.href))) {
+      const ResolvedImage img = resolveImage(node.href, options.imageBaseDir);
+      if(img.blocked || img.url.isEmpty() || (img.remote && !options.allowRemoteImages)) {
         // Emitting <img> here would make Qt fetch the URL as soon as the note
         // is opened, on behalf of whoever wrote it. Offer it as a link and let
         // the reader decide.
         *out += QStringLiteral("<a href=\"%1\" style=\"color:%2;\">%3</a>")
                     .arg(escapeHtml(node.href), colorOr(options.palette.link, QStringLiteral("inherit")), alt);
       } else {
-        *out += QStringLiteral("<img src=\"%1\" alt=\"%2\"/>").arg(escapeHtml(node.href), alt);
+        *out += QStringLiteral("<img src=\"%1\" alt=\"%2\"/>").arg(escapeHtml(img.url), alt);
       }
       break;
     }
@@ -346,6 +348,64 @@ bool isLocalSource(const QString& source) {
   const qsizetype colon = src.indexOf(QChar(':'));
   const qsizetype slash = src.indexOf(QChar('/'));
   return colon < 0 || (slash >= 0 && slash < colon);
+}
+
+ResolvedImage resolveImage(const QString& source, const QString& baseDir) {
+  ResolvedImage out;
+  const QString src = source.trimmed();
+  const QString lower = src.toLower();
+  if(src.isEmpty()) {
+    return out;
+  }
+  if(lower.startsWith(QStringLiteral("qrc:")) || lower.startsWith(QStringLiteral("data:image/"))) {
+    out.url = src;
+    return out;
+  }
+  if(isWebSource(src)) {
+    out.url = src;
+    out.remote = true;
+    return out;
+  }
+  // \\host\share and //host/share: a network share.
+  if(src.startsWith(QStringLiteral("\\\\")) || src.startsWith(QStringLiteral("//"))) {
+    out.url = src;
+    out.blocked = true;
+    return out;
+  }
+  if(lower.startsWith(QStringLiteral("file:"))) {
+    const QUrl url(src);
+    if(!url.host().isEmpty() || !url.isLocalFile()) {
+      out.url = src;
+      out.blocked = true;
+      return out;
+    }
+    out.url = QUrl::fromLocalFile(url.toLocalFile()).toString();
+    return out;
+  }
+  const bool drive = src.size() >= 3 && src.at(0).isLetter() && src.at(1) == QLatin1Char(':') &&
+                     (src.at(2) == QLatin1Char('/') || src.at(2) == QLatin1Char('\\'));
+  if(drive || src.startsWith(QLatin1Char('/'))) {
+    out.url = QUrl::fromLocalFile(QDir::fromNativeSeparators(src)).toString();
+    return out;
+  }
+  // Any other scheme ("smb:", "ftp:") is outside; a relative path has no
+  // colon before its first slash.
+  const qsizetype colon = src.indexOf(QLatin1Char(':'));
+  const qsizetype slash = src.indexOf(QLatin1Char('/'));
+  if(colon >= 0 && (slash < 0 || colon < slash)) {
+    out.url = src;
+    out.blocked = true;
+    return out;
+  }
+  if(!baseDir.isEmpty()) {
+    // Clean the path, and refuse one that climbs out of the base: "../../"
+    // could reach a share mounted somewhere above.
+    const QString joined = QDir::cleanPath(QDir(baseDir).filePath(QDir::fromNativeSeparators(src)));
+    if(joined.startsWith(QDir::cleanPath(baseDir) + QLatin1Char('/'), Qt::CaseInsensitive)) {
+      out.url = QUrl::fromLocalFile(joined).toString();
+    }
+  }
+  return out;
 }
 
 bool isWebSource(const QString& source) {

@@ -52,6 +52,8 @@ class MdDocument : public QObject {
   // megabytes each one is a visible stall. A query (rowForLine, flush, …)
   // still parses on demand, and going live again catches up.
   Q_PROPERTY(bool live READ live WRITE setLive NOTIFY liveChanged)
+  // Where relative image paths are looked up (see resolveImage()).
+  Q_PROPERTY(QString imageBaseDir READ imageBaseDir WRITE setImageBaseDir NOTIFY imageBaseDirChanged)
 
  public:
   explicit MdDocument(QObject* parent = nullptr);
@@ -83,6 +85,12 @@ class MdDocument : public QObject {
   }
 
   void setLive(bool live);
+
+  QString imageBaseDir() const {
+    return m_imageBaseDir;
+  }
+
+  void setImageBaseDir(const QString& dir);
 
   QVariantList outlineList() const {
     return m_outline;
@@ -128,6 +136,7 @@ class MdDocument : public QObject {
   void paletteChanged();
   void allowRemoteImagesChanged();
   void liveChanged();
+  void imageBaseDirChanged();
   void parsed();
 
  private:
@@ -139,6 +148,7 @@ class MdDocument : public QObject {
   QVariantMap m_palette;
   bool m_allowRemoteImages = false;
   bool m_live = true;
+  QString m_imageBaseDir;
 
   MdSourceMap m_src;
   MdAst m_ast;

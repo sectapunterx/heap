@@ -59,6 +59,16 @@ void MdDocument::setAllowRemoteImages(bool allow) {
   reparse();
 }
 
+void MdDocument::setImageBaseDir(const QString& dir) {
+  if(m_imageBaseDir == dir) {
+    return;
+  }
+  m_imageBaseDir = dir;
+  emit imageBaseDirChanged();
+  m_dirty = true;
+  scheduleParse();
+}
+
 void MdDocument::setLive(bool live) {
   if(m_live == live) {
     return;
@@ -101,6 +111,7 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.palette.tag = colorAt(m_palette, "tag");
   options.palette.math = colorAt(m_palette, "math");
   options.allowRemoteImages = m_allowRemoteImages;
+  options.imageBaseDir = m_imageBaseDir;
   return options;
 }
 

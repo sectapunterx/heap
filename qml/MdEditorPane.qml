@@ -287,6 +287,8 @@ Item {
         // keeps up while typing instead of lagging by the debounce.
         text: area.text
         allowRemoteImages: false
+        // Relative image paths resolve here; absolute local paths work anywhere.
+        imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
     }
 }

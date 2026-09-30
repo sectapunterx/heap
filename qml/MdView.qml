@@ -523,6 +523,24 @@ ListView {
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
                     }
+                    // The reader's own choice, for this document: remote
+                    // images could never be turned on at all. A web image
+                    // only — a share or file:// host stays behind the link.
+                    Text {
+                        objectName: "mdRemoteImageLoad"
+                        visible: /^https?:\/\//i.test(rowItem.model.imageSource)
+                        text: I18n.t("notes.image.load")
+                        color: loadArea.containsMouse ? Theme.accent : Theme.textDim
+                        font.family: Theme.fontUi
+                        font.pixelSize: Theme.fsMd
+                        MouseArea {
+                            id: loadArea
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            onClicked: view.document.allowRemoteImages = true
+                        }
+                    }
                     Text {
                         text: I18n.t("notes.image.open")
                         color: openArea.containsMouse ? Theme.accent : Theme.textDim

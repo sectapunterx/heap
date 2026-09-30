@@ -346,6 +346,9 @@ class AppController : public QObject {
   // timestamped horizontal-rule header. First entry gets the heading only
   // (no leading HR — there is nothing to separate from yet).
   Q_INVOKABLE void appendNoteEntry(const QString& text);
+  // The title of the note appendNoteEntry() writes into, so the quick-note
+  // popup can say where the text will land before it does.
+  Q_INVOKABLE QString quickNoteTarget() const;
 
   // Note wiki-links (HEAP-79). Headings feed [[…]] autocomplete; backlinks list
   // which lines reference each [[target]]; the offset lets the editor jump to a
