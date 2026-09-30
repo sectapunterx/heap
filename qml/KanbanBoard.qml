@@ -527,6 +527,14 @@ Item {
                                 AppMenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
                                 AppMenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
                                 AppMenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
+                                // A "doing" column books a focus block for a card
+                                // that enters it, like In Progress (always on).
+                                AppMenuItem {
+                                    enabled: col.statusId !== "prog"
+                                    text: (AppController.statuses, AppController.isDoingStatus(col.statusId))
+                                          ? I18n.t("kanban.doing.off") : I18n.t("kanban.doing.on")
+                                    onTriggered: AppController.setStatusDoing(col.statusId, !AppController.isDoingStatus(col.statusId))
+                                }
                                 AppMenuSeparator {}
                                 AppMenuItem { text: I18n.t("kanban.moveLeft");  enabled: !col.isFirst; onTriggered: AppController.moveStatus(col.statusId, col.index - 1) }
                                 AppMenuItem { text: I18n.t("kanban.moveRight"); enabled: !col.isLast;  onTriggered: AppController.moveStatus(col.statusId, col.index + 1) }

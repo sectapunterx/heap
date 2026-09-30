@@ -657,6 +657,9 @@ class AppController : public QObject {
   Q_INVOKABLE void resizeOccurrence(const QVariantMap& occurrence, double start, double end, const QString& scope);
   // The stored event as the editor reads it: every field, zone included.
   Q_INVOKABLE QVariantMap eventById(const QString& id) const;
+  // Whether heap can expand this RRULE body — what the editor's custom field
+  // checks before it saves.
+  Q_INVOKABLE bool isValidRRule(const QString& rule) const;
 
   // ── .ics ──
   //

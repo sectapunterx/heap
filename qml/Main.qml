@@ -345,7 +345,7 @@ ApplicationWindow {
     readonly property bool _overlayOpen: taskEditor.opened || eventEditor.opened
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
-        || tweaks.opened || hotkeys.opened
+        || tweaks.opened || hotkeys.opened || goToDatePopup.opened
 
     function _placePopover(pop, anchor) {
         const p = anchor.mapToItem(win.contentItem, 0, 0);
@@ -838,6 +838,13 @@ ApplicationWindow {
                         SplitView.fillHeight: true
                         SplitView.minimumHeight: 120
                         onEventClicked: (id, occurrence) => occurrence ? eventEditor.showForOccurrence(occurrence) : eventEditor.showForId(id)
+                        // A click or a drag on an empty slot opens the editor,
+                        // the same as the week grid.
+                        onCreateRequested: (startHour, endHour, day) => {
+                            const draft = AppController.newEventDraft(startHour, day);
+                            draft.end = endHour;
+                            eventEditor.showForDraft(draft);
+                        }
                         onTaskClicked: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
                     }
                     PeopleList {
@@ -1282,9 +1289,43 @@ ApplicationWindow {
             && (AppController.currentView === "week" || AppController.currentView === "month")
     }
 
-    CalKey {
+    // The day panel follows the selected date in every view it sits beside,
+    // so today, go-to-date and a day at a time work from those too — they
+    // used to be week/month only.
+    component DayKey: Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+            && ["board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
+    }
+    DayKey {
         sequences: [_kbd("cal.today")]
         onActivated: AppController.selectedDate = AppController.today
+    }
+    DayKey {
+        sequences: [_kbd("cal.prevDay")]
+        onActivated: {
+            const d = AppController.selectedDate;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() - 1);
+        }
+    }
+    DayKey {
+        sequences: [_kbd("cal.nextDay")]
+        onActivated: {
+            const d = AppController.selectedDate;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + 1);
+        }
+    }
+    // A new event from the keyboard: the editor opens on the next free slot
+    // of the selected day, named before it exists.
+    Shortcut {
+        sequences: [_kbd("cal.newEvent")]
+        context: Qt.ApplicationShortcut
+        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        onActivated: {
+            const day = AppController.selectedDate;
+            const draft = AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day);
+            eventEditor.showForDraft(draft);
+        }
     }
     CalKey {
         sequences: [_kbd("cal.prev")]
@@ -1294,7 +1335,7 @@ ApplicationWindow {
         sequences: [_kbd("cal.next")]
         onActivated: { const v = win.activeViewItem(); if (v && v.step) v.step(1); }
     }
-    CalKey {
+    DayKey {
         sequences: [_kbd("cal.goToDate")]
         onActivated: goToDatePopup.openAt(AppController.selectedDate, win.contentItem)
     }
@@ -1431,10 +1472,14 @@ ApplicationWindow {
             }
             // Counts, not a bare "done": a file that brought in nine events
             // and skipped one is neither a success nor a failure.
-            toast.show(I18n.t("toast.ics.imported")
-                       .arg(r.imported).arg(r.updated).arg(r.skipped),
-                       r.skipped > 0 ? "warning" : "success");
-            for (let i = 0; i < r.warnings.length; i++) console.warn("[ics]", r.warnings[i]);
+            // What was degraded is said, not only logged: an unsupported
+            // rule means a series that shows as a single event.
+            const warns = r.warnings || [];
+            let msg = I18n.t("toast.ics.imported").arg(r.imported).arg(r.updated).arg(r.skipped);
+            if (warns.length > 0)
+                msg += " · " + (warns.length === 1 ? warns[0] : I18n.t("toast.ics.warnings").arg(warns.length).arg(warns[0]));
+            toast.show(msg, (r.skipped > 0 || warns.length > 0) ? "warning" : "success");
+            for (let i = 0; i < warns.length; i++) console.warn("[ics]", warns[i]);
         }
     }
     FileDialog {

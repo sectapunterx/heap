@@ -31,14 +31,14 @@ Rectangle {
         for (let i = 0; i < 7; i++) out.push(I18n.dayNameUpper(i));
         return out;
     }
+    // How many occurrences touch `d`. The stored rows were counted before, so
+    // a daily standup put a dot on its first day only and a multi-day trip on
+    // the day it started.
     function eventCountFor(d) {
-        let n = 0;
-        for (let i = 0; i < AppController.events.rowCount(); i++) {
-            const idx = AppController.events.index(i, 0);
-            const ed = AppController.events.data(idx, /*DateRole*/ Qt.UserRole + 1 + 6);
-            if (isSameDay(ed, d)) n++;
-        }
-        return n;
+        const _r = root._eventsRev;
+        if (!d || !d.getFullYear) return 0;
+        const occ = AppController.eventOccurrences(d, d);
+        return occ.length;
     }
     function dayList() {
         const start = startOfWeek(refDate);
@@ -53,6 +53,7 @@ Rectangle {
         function onRowsInserted() { _bumpRev() }
         function onRowsRemoved()  { _bumpRev() }
         function onDataChanged()  { _bumpRev() }
+        function onModelReset()   { _bumpRev() }
     }
     property int _eventsRev: 0
     function _bumpRev() { _eventsRev++ }

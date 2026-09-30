@@ -1005,6 +1005,33 @@ QtObject {
             // ── audit-tasks: begin ──
             // ── audit-tasks: end ──
             // ── audit-time: begin ──
+            "repeat.scope.moveTitle": "Move a repeating event",
+            "repeat.weekdays": "Every weekday (Mon–Fri)",
+            "repeat.ends": "Ends",
+            "repeat.ends.never": "Never",
+            "repeat.ends.on": "On date",
+            "repeat.ends.after": "After N times",
+            "repeat.custom.ph": "RRULE, e.g. FREQ=MONTHLY;BYDAY=-1FR",
+            "reminder.default": "Default (%1 min)",
+            "reminder.none": "No reminder",
+            "reminder.atStart": "When it starts",
+            "reminder.before": "%1 min before",
+            "editor.err.title": "Give the event a title.",
+            "editor.err.time": "\"%1\" is not a time. Try 9:30, 930 or 14-15.",
+            "editor.err.endBeforeStart": "The end is before the start. For an overnight event, set the end date.",
+            "editor.err.rule": "heap cannot read that repeat rule.",
+            "editor.unsaved": "Unsaved changes. Esc again (or click outside) discards them; Ctrl+Enter saves.",
+            "editor.label.location": "Location",
+            "editor.label.link": "Link",
+            "editor.label.notes": "Notes",
+            "editor.label.reminder": "Reminder",
+            "event.ph.location": "Room, address",
+            "event.ph.link": "https://meet…",
+            "event.ph.notes": "Agenda, notes",
+            "datePicker.clear": "Clear",
+            "toast.ics.warnings": "%1 warnings, first: %2",
+            "kanban.doing.on": "Book focus time on entry",
+            "kanban.doing.off": "Stop booking focus time",
             // ── audit-time: end ──
             // ── audit-know: begin ──
             // ── audit-know: end ──
@@ -1989,6 +2016,33 @@ QtObject {
             // ── audit-tasks: begin ──
             // ── audit-tasks: end ──
             // ── audit-time: begin ──
+            "repeat.scope.moveTitle": "Перенести повторяющееся событие",
+            "repeat.weekdays": "По будням (пн–пт)",
+            "repeat.ends": "Окончание",
+            "repeat.ends.never": "Никогда",
+            "repeat.ends.on": "В дату",
+            "repeat.ends.after": "После N раз",
+            "repeat.custom.ph": "RRULE, например FREQ=MONTHLY;BYDAY=-1FR",
+            "reminder.default": "По умолчанию (%1 мин)",
+            "reminder.none": "Без напоминания",
+            "reminder.atStart": "В момент начала",
+            "reminder.before": "За %1 мин",
+            "editor.err.title": "Дайте событию название.",
+            "editor.err.time": "«%1» — не время. Например: 9:30, 930 или 14-15.",
+            "editor.err.endBeforeStart": "Конец раньше начала. Для ночного события укажите дату окончания.",
+            "editor.err.rule": "heap не понимает это правило повтора.",
+            "editor.unsaved": "Есть несохранённые изменения. Ещё раз Esc (или клик снаружи) — отменить; Ctrl+Enter — сохранить.",
+            "editor.label.location": "Место",
+            "editor.label.link": "Ссылка",
+            "editor.label.notes": "Заметки",
+            "editor.label.reminder": "Напоминание",
+            "event.ph.location": "Комната, адрес",
+            "event.ph.link": "https://meet…",
+            "event.ph.notes": "Повестка, заметки",
+            "datePicker.clear": "Очистить",
+            "toast.ics.warnings": "предупреждений: %1, первое: %2",
+            "kanban.doing.on": "Бронировать фокус-время при входе",
+            "kanban.doing.off": "Не бронировать фокус-время",
             // ── audit-time: end ──
             // ── audit-know: begin ──
             // ── audit-know: end ──

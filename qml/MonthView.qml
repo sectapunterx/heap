@@ -48,7 +48,7 @@ Item {
     function passesFilter(t) {
         if (t.status === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
-        if (!Search.accepts(AppController, root.searchText, root.taskRev, t)) return false;
+        if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { any = true; break; }
         if (any && !root.prioritiesFilter[t.priority]) return false;
@@ -92,50 +92,44 @@ Item {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
             cells.push({ date: d, tasks: [], events: [] });
         }
-        // The deadline decides whether a task is in the grid at all, so it is
-        // read first and the cell found by arithmetic. Reading nine roles for
-        // every task and then scanning 42 cells per task is what made opening
-        // Month take seconds on a large profile.
-        const tm = AppController.tasks;
-        const first = new Date(start.getFullYear(), start.getMonth(), start.getDate());
-        const dayMs = 86400000;
-        for (let i = 0; i < tm.rowCount(); i++) {
-            const idx = tm.index(i, 0);
-            const deadline = tm.data(idx, Qt.UserRole + 6);
-            if (!deadline || !deadline.getTime) continue;
-            const day = new Date(deadline.getFullYear(), deadline.getMonth(), deadline.getDate());
-            // Round, not floor: a DST change makes one day 23 or 25 hours long.
-            const k = Math.round((day.getTime() - first.getTime()) / dayMs);
-            // Written so NaN fails it too: an invalid date gives no cell.
-            if (!(k >= 0 && k < n)) continue;
-            if (tm.data(idx, Qt.UserRole + 9) && !root.showArchived) continue;  // archived
-            const t = {
-                id:       tm.data(idx, Qt.UserRole + 1),
-                title:    tm.data(idx, Qt.UserRole + 2),
-                desc:     tm.data(idx, Qt.UserRole + 3),
-                priority: tm.data(idx, Qt.UserRole + 4),
-                status:   tm.data(idx, Qt.UserRole + 5),
-                deadline: deadline,
-                // The one haystack passesFilter() searches (HEAP-117).
-                searchText: tm.data(idx, Qt.UserRole + 32),
-                ticket:     tm.data(idx, Qt.UserRole + 31),
-            };
+        // C++ hands over only the tasks due or scheduled inside the grid, with
+        // their cell already worked out: reading nine roles of every task and
+        // scanning 42 cells per task is what made opening Month take seconds
+        // on a large profile. A task planned for a day (scheduledAt) shows on
+        // it too, not only one with a deadline there.
+        const last = cells[n - 1].date;
+        const list = AppController.calendarTasks(start, last, root.showArchived);
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
             if (!root.passesFilter(t)) continue;
-            cells[k].tasks.push(t);
+            if (t.dueDay >= 0 && t.dueDay < n) cells[t.dueDay].tasks.push(t);
+            if (t.schedDay >= 0 && t.schedDay < n && t.schedDay !== t.dueDay)
+                cells[t.schedDay].tasks.push(Object.assign({ scheduled: true }, t));
         }
         // The expansion, not the rows: a repeating event is stored once, and
         // a month is the view most likely to be showing a whole series at
         // once. A multi-day event is listed on every day it covers, which is
-        // what a month grid is for.
-        const occ = AppController.eventOccurrences(cells[0].date, cells[cells.length - 1].date);
+        // what a month grid is for — found by arithmetic, not by testing every
+        // occurrence against every cell.
+        const occ = AppController.eventOccurrences(cells[0].date, last);
+        const first = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+        const dayOf = (d) => Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - first) / 86400000);
         for (let i = 0; i < occ.length; i++) {
             const e = occ[i];
-            for (let k = 0; k < cells.length; k++)
-                if (Seg.covers(e, cells[k].date)) cells[k].events.push(e);
+            if (!e.date || !e.date.getFullYear) continue;
+            const a = Math.max(0, dayOf(e.date));
+            const endD = (e.endDate && e.endDate.getFullYear) ? e.endDate : e.date;
+            const b = Math.min(n - 1, dayOf(endD));
+            for (let k = a; k <= b; k++) cells[k].events.push(e);
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
-        for (let k = 0; k < cells.length; k++)
+        // Events in time order, all-day first: the 16:00 meeting used to be
+        // the one shown and the 09:00 and 12:00 ones hidden behind "+2".
+        const evKey = (e) => e.allDay ? -1 : e.start;
+        for (let k = 0; k < cells.length; k++) {
             cells[k].tasks.sort((a, b) => (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9));
+            cells[k].events.sort((a, b) => evKey(a) - evKey(b));
+        }
         return cells;
     }
     readonly property var cells: buildCells()
@@ -145,19 +139,30 @@ Item {
     // rolls into March) but lossy in one direction only: stepping off the 31st
     // landed on the 28th and every step after that stayed there, so a month of
     // paging left the selection three days adrift.
-    function _sameDayNextMonth(d, dir) {
+    function _sameDayNextMonth(d, dir, day) {
         const y = d.getFullYear();
         const m = d.getMonth() + dir;
         const lastDay = new Date(y, m + 1, 0).getDate();   // day 0 = last of month m
-        return new Date(y, m, Math.min(d.getDate(), lastDay));
+        return new Date(y, m, Math.min(day, lastDay));
     }
 
+    // The day of the month paging keeps to. Stepping from the 31st lands on
+    // Feb 28 and then must go back to the 31st in March, not stay on the 28th
+    // — it is remembered until the selection is moved some other way.
+    property int _stickyDay: 0
+    property var _steppedTo: null
     function step(dir) {
         const d = AppController.selectedDate;
-        if (mode === "month")
-            AppController.selectedDate = _sameDayNextMonth(d, dir);
-        else
+        if (mode === "month") {
+            const kept = root._steppedTo && root.isSameDay(root._steppedTo, d) && root._stickyDay > 0;
+            const day = kept ? root._stickyDay : d.getDate();
+            root._stickyDay = day;
+            const next = _sameDayNextMonth(d, dir, day);
+            root._steppedTo = next;
+            AppController.selectedDate = next;
+        } else {
             AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dir * rows * 7);
+        }
     }
     function rangeTitle() {
         if (mode === "month")
@@ -295,6 +300,9 @@ Item {
                     opacity: _inMonth ? 1.0 : 0.55
                     border.color: _sel ? Theme.accent : (_today ? Theme.accentStrong : Theme.border)
                     border.width: _sel || _today ? 2 : 1
+                    // A busy day is clipped to its cell instead of drawing
+                    // over the row below.
+                    clip: true
 
                     MouseArea {
                         anchors.fill: parent
@@ -327,7 +335,7 @@ Item {
                                 Row {
                                     anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: root.priColor(cell.tasks[index].priority) }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
+                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? "◷ " : "") + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.taskClicked(cell.tasks[index].id) }
                             }
@@ -343,7 +351,12 @@ Item {
                                 Row {
                                     anchors.fill: parent; anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs; spacing: Theme.spXs
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: Theme.accent }
-                                    Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: cell.events[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
+                                    Text {
+                                        anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight
+                                        // The time first: a month cell is read as "what is when".
+                                        text: (cell.events[index].allDay ? "" : Theme.fmtHour(cell.events[index].start) + " ") + cell.events[index].title
+                                        color: Theme.text; font.pixelSize: Theme.fsXs
+                                    }
                                 }
                                 MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.eventClicked(cell.events[index].id, cell.events[index]) }
                             }

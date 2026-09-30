@@ -7,6 +7,11 @@
 //   DatePickerPopup { id: dp; onPicked: (d) => field.text = fmt(d) }
 //   // open it anchored to a button:
 //   dp.openAt(existingDateOrNull, anchorItem)
+//
+// Keyboard-first: arrows move the day (a week up/down), PageUp/PageDown a
+// month (Shift: a year), Home/End the month's ends, T today, Return picks,
+// Esc closes, Delete clears when `clearable`. `minimumDate`/`maximumDate`
+// grey out and refuse what is outside them.
 
 import QtQuick
 import QtQuick.Controls
@@ -19,6 +24,42 @@ Popup {
     // The date the grid opens on / highlights. Emitted value on selection.
     property date selected: new Date()
     signal picked(date value)
+    // Offered only where "no date" is a meaningful answer.
+    property bool clearable: false
+    signal cleared()
+    // Invalid (the default) = unbounded.
+    property date minimumDate: new Date(NaN)
+    property date maximumDate: new Date(NaN)
+
+    function _inRange(d) {
+        if (!d || isNaN(d.getTime())) return false;
+        const day = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+        const lo = pop.minimumDate, hi = pop.maximumDate;
+        if (lo && !isNaN(lo.getTime()) && day < new Date(lo.getFullYear(), lo.getMonth(), lo.getDate()).getTime()) return false;
+        if (hi && !isNaN(hi.getTime()) && day > new Date(hi.getFullYear(), hi.getMonth(), hi.getDate()).getTime()) return false;
+        return true;
+    }
+    // Moves the highlighted day and keeps the grid on its month.
+    function _moveTo(d) {
+        if (!pop._inRange(d)) return;
+        pop.selected = d;
+        pop._month = d.getMonth();
+        pop._year = d.getFullYear();
+    }
+    function _moveDays(n) {
+        const s0 = pop.selected;
+        pop._moveTo(new Date(s0.getFullYear(), s0.getMonth(), s0.getDate() + n));
+    }
+    function _moveMonths(n) {
+        const s0 = pop.selected;
+        const last = new Date(s0.getFullYear(), s0.getMonth() + n + 1, 0).getDate();
+        pop._moveTo(new Date(s0.getFullYear(), s0.getMonth() + n, Math.min(s0.getDate(), last)));
+    }
+    function _pick(d) {
+        if (!pop._inRange(d)) return;
+        pop.picked(d);
+        pop.close();
+    }
 
     // Visible month (0-11) + year — driven by the header nav.
     property int _month: selected.getMonth()
@@ -49,6 +90,7 @@ Popup {
         if (anchor !== undefined && anchor !== null)
             parent = anchor;
         open();
+        keyCatcher.forceActiveFocus();
     }
 
     modal: true
@@ -65,6 +107,48 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: Theme.spSm
+
+        // Takes the keys while the popup is open, so the arrows move the
+        // day here instead of paging the calendar behind it.
+        Item {
+            id: keyCatcher
+            focus: true
+            Layout.preferredWidth: 0
+            Layout.preferredHeight: 0
+            Keys.onPressed: (e) => {
+                const shift = (e.modifiers & Qt.ShiftModifier) !== 0;
+                switch (e.key) {
+                case Qt.Key_Left:  pop._moveDays(-1); break;
+                case Qt.Key_Right: pop._moveDays(1); break;
+                case Qt.Key_Up:    pop._moveDays(-7); break;
+                case Qt.Key_Down:  pop._moveDays(7); break;
+                case Qt.Key_PageUp:   pop._moveMonths(shift ? -12 : -1); break;
+                case Qt.Key_PageDown: pop._moveMonths(shift ? 12 : 1); break;
+                case Qt.Key_Home: {
+                    const s0 = pop.selected;
+                    pop._moveTo(new Date(s0.getFullYear(), s0.getMonth(), 1));
+                    break;
+                }
+                case Qt.Key_End: {
+                    const s0 = pop.selected;
+                    pop._moveTo(new Date(s0.getFullYear(), s0.getMonth() + 1, 0));
+                    break;
+                }
+                case Qt.Key_T: pop._moveTo(new Date()); break;
+                case Qt.Key_Return:
+                case Qt.Key_Enter: pop._pick(pop.selected); break;
+                case Qt.Key_Delete:
+                case Qt.Key_Backspace:
+                    if (!pop.clearable) return;
+                    pop.cleared();
+                    pop.close();
+                    break;
+                case Qt.Key_Escape: pop.close(); break;
+                default: return;
+                }
+                e.accepted = true;
+            }
+        }
 
         // ── Header: ‹  Month YYYY  › ──────────────────────────────
         RowLayout {
@@ -119,11 +203,12 @@ Popup {
                 required property var model
                 readonly property bool _inMonth: model.month === pop._month
                 readonly property bool _isSel: pop._sameDay(model.date, pop.selected)
+                readonly property bool _allowed: pop._inRange(model.date)
                 width: 32; height: 26; radius: Theme.radiusMd
                 color: _isSel ? Theme.accent
                      : model.today ? Theme.accentSoft
                      : (dayMA.containsMouse ? Theme.panel3 : "transparent")
-                opacity: _inMonth ? 1.0 : 0.32
+                opacity: !_allowed ? 0.18 : (_inMonth ? 1.0 : 0.32)
                 Text {
                     anchors.centerIn: parent
                     text: model.day
@@ -132,13 +217,17 @@ Popup {
                     font.weight: parent._isSel ? Font.DemiBold : Font.Normal
                 }
                 MouseArea {
-                    id: dayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: { pop.picked(model.date); pop.close(); }
+                    id: dayMA; anchors.fill: parent; hoverEnabled: true
+                    cursorShape: parent._allowed ? Qt.PointingHandCursor : Qt.ArrowCursor
+                    onClicked: pop._pick(model.date)
                 }
             }
         }
 
-        // ── Footer: Today ─────────────────────────────────────────
+        // ── Footer: Today (and Clear) ─────────────────────────────
+        RowLayout {
+            Layout.fillWidth: true
+            spacing: Theme.spSm
         Rectangle {
             Layout.fillWidth: true
             implicitHeight: 26
@@ -148,8 +237,23 @@ Popup {
             Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: Theme.fsSm }
             MouseArea {
                 id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: { pop.picked(new Date()); pop.close(); }
+                onClicked: pop._pick(new Date())
             }
+        }
+        Rectangle {
+            objectName: "date-picker-clear"
+            visible: pop.clearable
+            Layout.fillWidth: true
+            implicitHeight: 26
+            radius: Theme.radiusMd
+            color: clearMA.containsMouse ? Theme.panel3 : Theme.panel2
+            border.color: Theme.border; border.width: 1
+            Text { anchors.centerIn: parent; text: I18n.t("datePicker.clear"); color: Theme.text; font.pixelSize: Theme.fsSm }
+            MouseArea {
+                id: clearMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: { pop.cleared(); pop.close(); }
+            }
+        }
         }
     }
 }

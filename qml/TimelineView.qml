@@ -100,6 +100,8 @@ Item {
     }
 
     function buildGroups() {
+        // Buckets are relative to today, which moves at midnight.
+        const _today = AppController.today;
         const _rev = root.modelRev; // dependency
         const groups = { overdue: [], today: [], tomorrow: [], thisweek: [], nextweek: [], later: [], nodl: [] };
         const m = AppController.tasks;
@@ -513,7 +515,7 @@ Item {
                             }
                         }
                         Text {
-                            text: (I18n.lang, AppController.deadlineDiffLabel(tlRow.t.deadline))
+                            text: (I18n.lang, AppController.today, AppController.deadlineDiffLabel(tlRow.t.deadline))
                             color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.danger
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning

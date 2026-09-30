@@ -217,6 +217,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.cal.next.desc", {"Step forward one week or month.", "Шаг вперёд на неделю или месяц."}},
       {"shortcut.cal.goToDate.label", {"Calendar: go to date", "Календарь: перейти к дате"}},
       {"shortcut.cal.goToDate.desc", {"Open a date picker and jump straight there.", "Открыть выбор даты и перейти сразу к ней."}},
+      {"shortcut.cal.prevDay.label", {"Calendar: previous day", "Календарь: предыдущий день"}},
+      {"shortcut.cal.prevDay.desc", {"Move the selected day back by one.", "Сдвинуть выбранный день на один назад."}},
+      {"shortcut.cal.nextDay.label", {"Calendar: next day", "Календарь: следующий день"}},
+      {"shortcut.cal.nextDay.desc", {"Move the selected day forward by one.", "Сдвинуть выбранный день на один вперёд."}},
+      {"shortcut.cal.newEvent.label", {"New event", "Новое событие"}},
+      {"shortcut.cal.newEvent.desc",
+       {"Open the event editor at the next free slot of the selected day.",
+        "Открыть редактор события на ближайшем свободном слоте выбранного дня."}},
       {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
       {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
       {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
@@ -2019,6 +2027,10 @@ QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to)
 QVariantMap AppController::eventSeriesMaster(const QString& masterId) const {
   const int row = m_events.indexOfId(masterId);
   return row >= 0 ? occurrenceToVariant(m_events.items().at(row)) : QVariantMap();
+}
+
+bool AppController::isValidRRule(const QString& rule) const {
+  return heap::cal::parseRRule(rule).isValid();
 }
 
 QVariantMap AppController::eventById(const QString& id) const {
@@ -7500,6 +7512,11 @@ void AppController::seedShortcutCatalog() {
   add("cal.prev", "Left");
   add("cal.next", "Right");
   add("cal.goToDate", "G");
+  // A day at a time, in any view the day panel sits beside; and a new event
+  // from the keyboard, at the next free slot of the selected day.
+  add("cal.prevDay", "Alt+Left");
+  add("cal.nextDay", "Alt+Right");
+  add("cal.newEvent", "Ctrl+E");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;
