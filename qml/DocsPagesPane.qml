@@ -156,19 +156,15 @@ Item {
                     Rectangle {
                         objectName: "docpage-new"
                         width: 22; height: 22; radius: Theme.radiusSm
-                        color: newMA.containsMouse ? Theme.panel3 : Theme.panel2
+                        color: newMA.hovered ? Theme.panel3 : Theme.panel2
                         border.color: Theme.border; border.width: 1
                         Text { anchors.centerIn: parent; text: "+"; color: Theme.text; font.pixelSize: Theme.fsLg }
-                        MouseArea {
+                        ClickArea {
                             id: newMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: AppController.newDocPage()
+                            objectName: "docpage-new-button"
+                            label: I18n.t("docs.newPage")
+                            onActivated: AppController.newDocPage()
                         }
-                        QQC.ToolTip.visible: newMA.containsMouse
-                        QQC.ToolTip.delay: 500
-                        QQC.ToolTip.text: I18n.t("docs.newPage")
                     }
                 }
 

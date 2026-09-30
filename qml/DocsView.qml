@@ -591,7 +591,7 @@ Item {
                             objectName: "docs-tab-" + modelData
                             width: 96; height: 26
                             color: root.tab === modelData ? Theme.withAlpha(Theme.accent, 0.16)
-                                 : tabMA.containsMouse ? Theme.panel3 : Theme.panel2
+                                 : tabMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: root.tab === modelData ? Theme.accent : Theme.border
                             border.width: 1
                             Text {
@@ -601,12 +601,14 @@ Item {
                                 font.pixelSize: Theme.fsSm
                                 font.weight: root.tab === modelData ? Font.DemiBold : Font.Normal
                             }
-                            MouseArea {
+                            ClickArea {
                                 id: tabMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.tab = modelData
+                                label: I18n.t("docs.tab." + modelData)
+                                role: Accessible.PageTab
+                                checkable: true
+                                checked: root.tab === modelData
+                                showTip: false
+                                onActivated: root.tab = modelData
                             }
                         }
                     }
@@ -644,14 +646,13 @@ Item {
                         Rectangle {
                             visible: root.searchText.length > 0
                             width: 18; height: 18; radius: 9
-                            color: clearMA.containsMouse ? Theme.panel3 : "transparent"
+                            color: clearMA.hovered ? Theme.panel3 : "transparent"
                             Text { anchors.centerIn: parent; text: "×"; color: Theme.textDim; font.pixelSize: Theme.fsLg }
-                            MouseArea {
+                            ClickArea {
                                 id: clearMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: { root.searchText = ""; docsSearch.text = "" }
+                                objectName: "docs-search-clear"
+                                label: I18n.t("docs.a11y.clearSearch")
+                                onActivated: { root.searchText = ""; docsSearch.text = "" }
                             }
                         }
                     }
@@ -730,7 +731,7 @@ Item {
                         width: navCol.width
                         height: 28
                         radius: Theme.radiusMd
-                        color: addSecMA.containsMouse ? Theme.accentSoft : Theme.panel2
+                        color: addSecMA.hovered ? Theme.accentSoft : Theme.panel2
                         border.color: Theme.border
                         border.width: 1
                         RowLayout {
@@ -739,22 +740,22 @@ Item {
                             spacing: Theme.spSm
                             Text {
                                 text: "+"
-                                color: addSecMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                                color: addSecMA.hovered ? Theme.accentStrong : Theme.textDim
                                 font.pixelSize: Theme.fsLg
                             }
                             Text {
                                 Layout.fillWidth: true
                                 text: I18n.t("docs.newSection")
-                                color: addSecMA.containsMouse ? Theme.accentStrong : Theme.text
+                                color: addSecMA.hovered ? Theme.accentStrong : Theme.text
                                 font.pixelSize: Theme.fsMd
                             }
                         }
-                        MouseArea {
+                        ClickArea {
                             id: addSecMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.openSectionCreate()
+                            objectName: "docs-new-section"
+                            label: I18n.t("docs.newSection")
+                            showTip: false
+                            onActivated: root.openSectionCreate()
                         }
                     }
                 }
@@ -973,7 +974,7 @@ Item {
                                            : cardGrid.width
                                     height: 100
                                     radius: Theme.radiusLg
-                                    color: addCardMA.containsMouse ? Theme.panel2 : "transparent"
+                                    color: addCardMA.hovered ? Theme.panel2 : "transparent"
                                     border.color: Theme.border
                                     border.width: 1
                                     Column {
@@ -982,12 +983,11 @@ Item {
                                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: "+"; color: Theme.textDim; font.pixelSize: Theme.fsXl }
                                         Text { anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("docs.addEntry"); color: Theme.textDim; font.pixelSize: Theme.fsSm }
                                     }
-                                    MouseArea {
+                                    ClickArea {
                                         id: addCardMA
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.openDocCreate(secCol.section.id)
+                                        label: I18n.t("docs.addEntry")
+                                        showTip: false
+                                        onActivated: root.openDocCreate(secCol.section.id)
                                     }
                                 }
                             }
@@ -1222,6 +1222,18 @@ Item {
         radius: Theme.radiusMd
         color: navMA.containsMouse ? Theme.panel2 : "transparent"
         opacity: navDragMA.drag.active ? 0.5 : 1.0
+        // The drag stays a pointer thing (the section menu moves sections);
+        // jumping to a section is on the Tab path too (design audit DES-19).
+        signal jump()
+        onJump: root.scrollToAnchor(nav.anchorId)
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Link
+        Accessible.name: nav.label
+        Accessible.onPressAction: nav.jump()
+        Keys.onReturnPressed: nav.jump()
+        Keys.onEnterPressed: nav.jump()
+        Keys.onSpacePressed: nav.jump()
+        FocusRing {}
 
         Drag.active: navDragMA.drag.active
         Drag.dragType: Drag.Internal
@@ -1379,6 +1391,7 @@ Item {
 
         property real homeX: 0
         property real homeY: 0
+        function openDoc() { root.openExternal(card.item.url); }
 
         ColumnLayout {
             id: cardCol
@@ -1478,14 +1491,21 @@ Item {
             }
         }
 
-        MouseArea {
+        // The card opens its document from the keyboard too: Tab to it,
+        // Return opens, the menu key or Shift+F10 opens its menu.
+        ClickArea {
             id: cardMA
-            anchors.fill: parent
+            objectName: "docs-card-open"
+            label: (card.item.ref ? card.item.ref + " " : "") + (card.item.title || "")
+            showTip: false
             acceptedButtons: Qt.LeftButton | Qt.RightButton
-            cursorShape: Qt.PointingHandCursor
-            onClicked: (mouse) => {
-                if (mouse.button === Qt.RightButton) docCardMenu.popup();
-                else root.openExternal(card.item.url);
+            onActivated: card.openDoc()
+            onContextRequested: docCardMenu.popup()
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_Menu || (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier))) {
+                    docCardMenu.popup(card, Theme.spXl, Theme.spXl);
+                    event.accepted = true;
+                }
             }
         }
 
@@ -1599,6 +1619,12 @@ Item {
         border.color: cardHovered ? Theme.borderStrong : Theme.border
         border.width: 1
         implicitHeight: sCol.implicitHeight + 20
+        function copyCode() {
+            AppController.copyToClipboard(sCard.snip.code || "");
+            root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
+        }
+        function editSnippet() { root.openSnippetEdit(sCard.idx); }
+        function deleteSnippet() { root.deleteSnippet(sCard.idx); }
 
         MouseArea {
             id: snHover
@@ -1627,45 +1653,34 @@ Item {
                 }
                 Rectangle {
                     radius: Theme.radiusSm
-                    color: copySnMA.containsMouse ? Theme.accentSoft : Theme.panel2
-                    border.color: copySnMA.containsMouse ? Theme.accent : Theme.border
+                    color: copySnMA.hovered ? Theme.accentSoft : Theme.panel2
+                    border.color: copySnMA.hovered ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: copyT.implicitWidth + 14
                     implicitHeight: 22
-                    Text { id: copyT; anchors.centerIn: parent; text: I18n.t("docs.copyShort"); color: copySnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsSm }
-                    MouseArea {
+                    Text { id: copyT; anchors.centerIn: parent; text: I18n.t("docs.copyShort"); color: copySnMA.hovered ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsSm }
+                    ClickArea {
                         id: copySnMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            AppController.copyToClipboard(sCard.snip.code || "");
-                            root.showToast(I18n.t("docs.toast.copied").arg(sCard.snip.title || ""));
-                        }
+                        objectName: "docs-snippet-copy"
+                        label: I18n.t("docs.a11y.copySnippet").arg(sCard.snip.title || "")
+                        showTip: false
+                        onActivated: sCard.copyCode()
                     }
                 }
-                Rectangle {
-                    opacity: sCard.cardHovered ? 1 : 0
-                    enabled: sCard.cardHovered
-                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                    radius: Theme.radiusSm
-                    color: editSnMA.containsMouse ? Theme.accentSoft : Theme.panel2
-                    border.color: editSnMA.containsMouse ? Theme.accent : Theme.border
-                    border.width: 1
-                    implicitWidth: 26; implicitHeight: 22
-                    Text { anchors.centerIn: parent; text: "✎"; color: editSnMA.containsMouse ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsSm }
-                    MouseArea { id: editSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.openSnippetEdit(sCard.idx) }
+                IconButton {
+                    objectName: "docs-snippet-edit"
+                    glyph: "✎"
+                    label: I18n.t("docs.menu.edit")
+                    revealed: sCard.cardHovered
+                    onActivated: sCard.editSnippet()
                 }
-                Rectangle {
-                    opacity: sCard.cardHovered ? 1 : 0
-                    enabled: sCard.cardHovered
-                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-                    radius: Theme.radiusSm
-                    color: delSnMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
-                    border.color: delSnMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                    implicitWidth: 26; implicitHeight: 22
-                    Text { anchors.centerIn: parent; text: "×"; color: delSnMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
-                    MouseArea { id: delSnMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.deleteSnippet(sCard.idx) }
+                IconButton {
+                    objectName: "docs-snippet-delete"
+                    glyph: "×"
+                    danger: true
+                    label: I18n.t("common.delete")
+                    revealed: sCard.cardHovered
+                    onActivated: sCard.deleteSnippet()
                 }
             }
             Rectangle {

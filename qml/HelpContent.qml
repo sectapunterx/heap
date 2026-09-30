@@ -156,12 +156,13 @@ Item {
             Repeater {
                 model: root.tocModel
                 delegate: Rectangle {
+                    id: tocRow
                     required property var modelData
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
                     radius: Theme.radiusMd
-                    color: tocMa.containsMouse ? Theme.panel2 : "transparent"
-                    border.color: tocMa.containsMouse ? Theme.border : "transparent"
+                    color: tocMa.hovered ? Theme.panel2 : "transparent"
+                    border.color: tocMa.hovered ? Theme.border : "transparent"
                     border.width: 1
                     RowLayout {
                         anchors.fill: parent
@@ -176,18 +177,19 @@ Item {
                         }
                         Text {
                             text: modelData.label
-                            color: tocMa.containsMouse ? Theme.accentStrong : Theme.text
+                            color: tocMa.hovered ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsMd
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
                     }
-                    MouseArea {
+                    ClickArea {
                         id: tocMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.anchorRequested(modelData.anchor)
+                        objectName: "help-toc-" + tocRow.modelData.anchor
+                        role: Accessible.Link
+                        label: tocRow.modelData.label
+                        showTip: false
+                        onActivated: root.anchorRequested(tocRow.modelData.anchor)
                     }
                 }
             }

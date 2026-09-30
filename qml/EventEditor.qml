@@ -620,11 +620,44 @@ Popup {
                     id: allDayRow
                     anchors.left: parent.left; anchors.right: parent.right
                     spacing: Theme.spMd
+                    // Themed (design audit DES-20): the stock Basic track was
+                    // 1.09:1 against the popup.
                     Switch {
                         id: allDaySwitch
                         objectName: "event-allday"
                         checked: root.allDay
                         onToggled: root.allDay = checked
+                        Accessible.name: I18n.t("editor.label.allDay")
+                        indicator: Rectangle {
+                            objectName: "event-allday-track"
+                            implicitWidth: 36
+                            implicitHeight: 20
+                            x: allDaySwitch.leftPadding
+                            y: (allDaySwitch.height - height) / 2
+                            radius: height / 2
+                            color: allDaySwitch.checked ? Theme.accent : Theme.panel3
+                            border.color: allDaySwitch.checked ? Theme.accent : Theme.fieldBorder
+                            border.width: 1
+                            Rectangle {
+                                objectName: "event-allday-knob"
+                                width: 16; height: 16; radius: 8
+                                x: allDaySwitch.checked ? parent.width - width - 2 : 2
+                                y: 2
+                                color: Theme.knob
+                                border.color: Theme.fieldBorder
+                                border.width: 1
+                                Behavior on x { NumberAnimation { duration: Theme.scaledMs(90) } }
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                anchors.margins: -3
+                                radius: parent.radius + 3
+                                color: "transparent"
+                                border.color: Theme.focusRing
+                                border.width: 2
+                                visible: allDaySwitch.visualFocus
+                            }
+                        }
                     }
                     Text {
                         text: I18n.t("editor.label.allDay")
@@ -670,7 +703,7 @@ Popup {
                 Layout.fillWidth: true
                 implicitHeight: 34
                 radius: Theme.radiusMd
-                color: dateMA.containsMouse ? Theme.panel3 : Theme.panel2
+                color: dateMA.hovered ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
@@ -686,10 +719,14 @@ Popup {
                         Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
                     }
                 }
-                MouseArea {
+                ClickArea {
                     id: dateMA
-                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: eventDatePicker.openAt(root.pickedDate, dateBtn)
+                    objectName: "event-date-pick"
+                    label: I18n.t("editor.a11y.dateValue").arg(I18n.t("editor.label.date"))
+                                                          .arg(root.pickedDate && root.pickedDate.toLocaleDateString
+                                                               ? root.pickedDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                    tip: I18n.t("editor.a11y.pickDate")
+                    onActivated: eventDatePicker.openAt(root.pickedDate, dateBtn)
                 }
                 DatePickerPopup {
                     id: eventDatePicker
@@ -713,7 +750,7 @@ Popup {
                 Layout.fillWidth: true
                 implicitHeight: 34
                 radius: Theme.radiusMd
-                color: endDateMA.containsMouse ? Theme.panel3 : Theme.panel2
+                color: endDateMA.hovered ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 RowLayout {
                     anchors.fill: parent; anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spMd
@@ -731,10 +768,13 @@ Popup {
                         Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
                     }
                 }
-                MouseArea {
+                ClickArea {
                     id: endDateMA
-                    anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                    onClicked: endDatePicker.openAt(root.pickedEndDate, endDateBtn)
+                    label: I18n.t("editor.a11y.dateValue").arg(I18n.t("editor.label.endDate"))
+                                                          .arg(root.pickedEndDate && root.pickedEndDate.getFullYear
+                                                               ? root.pickedEndDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                    tip: I18n.t("editor.a11y.pickDate")
+                    onActivated: endDatePicker.openAt(root.pickedEndDate, endDateBtn)
                 }
                 DatePickerPopup {
                     id: endDatePicker
@@ -807,17 +847,21 @@ Popup {
                     Layout.preferredWidth: 110
                     implicitHeight: 34
                     radius: Theme.radiusMd
-                    color: untilMA.containsMouse ? Theme.panel3 : Theme.panel2
+                    color: untilMA.hovered ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border; border.width: 1
                     Text {
                         anchors.centerIn: parent
                         text: root.untilDate && root.untilDate.getFullYear ? root.untilDate.toLocaleDateString(I18n.locale, "d MMM yyyy") : ""
                         color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm
                     }
-                    MouseArea {
+                    ClickArea {
                         id: untilMA
-                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                        onClicked: untilPicker.openAt(root.untilDate, untilBtn)
+                        objectName: "event-until-pick"
+                        label: I18n.t("editor.a11y.dateValue").arg(I18n.t("repeat.ends"))
+                                                              .arg(root.untilDate && root.untilDate.getFullYear
+                                                                   ? root.untilDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                        tip: I18n.t("editor.a11y.pickDate")
+                        onActivated: untilPicker.openAt(root.untilDate, untilBtn)
                     }
                     DatePickerPopup {
                         id: untilPicker
@@ -903,8 +947,13 @@ Popup {
                     placeholderText: I18n.t("event.ph.link")
                 }
                 PillButton {
+                    objectName: "event-link-open"
                     visible: /^https?:\/\//i.test(linkField.text.trim())
                     text: "↗"
+                    Accessible.name: I18n.t("event.a11y.openLink")
+                    ToolTip.visible: hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: I18n.t("event.a11y.openLink")
                     onClicked: Qt.openUrlExternally(linkField.text.trim())
                 }
             }
