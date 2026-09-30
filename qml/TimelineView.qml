@@ -46,7 +46,6 @@ Item {
         else root.moveCursor(0);
     }
     onVisibleChanged: if (visible) rowList.forceActiveFocus()
-    Component.onCompleted: rowList.forceActiveFocus()
 
     // Selection plumbing — flat across buckets (reading order).
     property string shiftAnchorId: ""
@@ -224,7 +223,7 @@ Item {
         interval: 0
         onTriggered: root._rebuild()
     }
-    Component.onCompleted: root._rebuild()
+    Component.onCompleted: { root._rebuild(); rowList.forceActiveFocus(); }
     onModelRevChanged: _scheduleRebuild()
     onSearchTextChanged: _scheduleRebuild()
     onPrioritiesFilterChanged: _scheduleRebuild()

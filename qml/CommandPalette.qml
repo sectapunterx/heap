@@ -173,6 +173,7 @@ Popup {
         }
         const out = [];
         const firstWord = trimmed.split(/\s+/)[0];
+        const ql = trimmed.toLowerCase();
         for (let i = 0; i < _entries.length; i++) {
             const e = _entries[i];
             let score = _fuzzyScore(trimmed, e.label + " " + (e.sub || ""));

@@ -344,7 +344,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Read-only: this data file was written by a newer heap (schema v%1, this build reads v%2). "
         "Nothing you change now is saved — update heap to edit it.",
         "Только чтение: файл данных записан более новой версией heap (схема v%1, эта сборка знает v%2). "
-        "Изменения сейчас не сохраняются — обнови heap, чтобы редактировать."}},
+        "Изменения сейчас не сохраняются — обновите heap, чтобы редактировать."}},
       // ── audit-plat: storage health banner (PLAT-1/4) ──
       {"storage.unreadable",
        {"Read-only: heap could not open %1 (%2). Nothing is saved over it until it opens — changes made now "

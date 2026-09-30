@@ -128,7 +128,9 @@ TestCase {
         const title = find(te.contentItem, function (it) { return it.placeholderText === I18n.t("editor.ph.titleShort"); });
         verify(title !== null);
         compare(title.text, "abc");
+        // A typed title is an edit: Esc asks, D discards (TASKS-9).
         keyClick(Qt.Key_Escape);
+        keyClick(Qt.Key_D);
         tryCompare(te, "opened", false);
     }
 
@@ -152,6 +154,7 @@ TestCase {
         keyClick(Qt.Key_Backtab, Qt.ShiftModifier);
         compare(desc.text, "- item");
         keyClick(Qt.Key_Escape);
+        keyClick(Qt.Key_D);
         tryCompare(te, "opened", false);
     }
 
@@ -204,7 +207,7 @@ TestCase {
         const card = find(b, function (it) { return it.objectName === "tc-card" && it.visible && it.taskId === cursor; })
                   || find(b, function (it) { return it.objectName === "tc-card" && it.visible; });
         verify(card !== null);
-        const menu = dataByName(card, "tc-menu");
+        const menu = card.contextMenu();  // built on first use
         verify(menu !== null);
         menu.popup(card, 10, 10);
         tryCompare(menu, "opened", true);

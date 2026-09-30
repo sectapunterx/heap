@@ -415,7 +415,7 @@ TEST_F(TimeAudit, ADeadlineInQuietHoursIsHeldNotDropped) {
   t.title = QStringLiteral("ship it");
   t.status = QStringLiteral("todo");
   t.dueAt = QDateTime(kMon, QTime(12, 0));
-  t.hasTime = true;
+  t.dueHasTime = true;
   app_->tasks()->reset({t});
   QSignalSpy spy(app_.get(), &AppController::toast);
 
@@ -506,11 +506,11 @@ TEST_F(TimeAudit, DeletingAFocusBlockUnschedulesTheTask) {
 TEST_F(TimeAudit, SchedulingKeepsADateOnlyDeadlineDateOnly) {
   Task t = task(QStringLiteral("T-1"), QStringLiteral("todo"));
   t.dueAt = QDateTime(kMon.addDays(3), QTime(0, 0));
-  t.hasTime = false;
+  t.dueHasTime = false;
   app_->tasks()->reset({t});
   app_->scheduleTask(QStringLiteral("T-1"), 10.0, kMon);
 
-  EXPECT_FALSE(app_->tasks()->items().first().hasTime) << "the deadline must not become 00:00";
+  EXPECT_FALSE(app_->tasks()->items().first().dueHasTime) << "the deadline must not become 00:00";
 }
 
 TEST_F(TimeAudit, LeavingInProgressGivesTheBlockBack) {
@@ -576,7 +576,7 @@ TEST_F(TimeAudit, AnAllDayEventDoesNotFillTheDay) {
 TEST_F(TimeAudit, CalendarTasksCarryScheduledOnes) {
   Task a = task(QStringLiteral("T-1"), QStringLiteral("todo"));
   a.scheduledAt = QDateTime(kMon.addDays(3), QTime(14, 0));
-  a.hasTime = true;
+  a.scheduledHasTime = true;
   Task b = task(QStringLiteral("T-2"), QStringLiteral("todo"));
   b.dueAt = QDateTime(kMon.addDays(1), QTime(0, 0));
   Task c = task(QStringLiteral("T-3"), QStringLiteral("todo"));

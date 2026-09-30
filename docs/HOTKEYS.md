@@ -114,9 +114,9 @@ archive). None of them fires while a dialog or a text field has the keys.
 |--------|---------|
 | Go to today | `T` |
 | Previous / next period | `←` / `→` |
-| Previous / next day | `Alt+←` / `Alt+→` |
+| Previous / next day | `Alt+Left` / `Alt+Right` |
 | Go to a date… | `G` |
-| New event at the next free slot | `Ctrl+E` |
+| New event at the next free slot | `Ctrl+Alt+E` |
 
 In the date picker: arrows move the day (↑/↓ a week), `PgUp`/`PgDn` a month
 (`Shift` a year), `Home`/`End` the month's ends, `T` today, `Enter` picks,
