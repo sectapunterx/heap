@@ -30,8 +30,14 @@ Popup {
     signal captured(string title, string body, string taskId)
 
     property var _preview: ({ok: false})
-    property var _meta: ({title: "", desc: "", handles: [], ticketKey: "", priority: ""})
+    property var _meta: ({title: "", desc: "", handles: [], ticketKey: "", priority: "", labels: []})
     property string _title: ""
+    // Ctrl+Enter adds and stays open for the next item; this is what the
+    // last one became, shown in place of a toast the popup would cover.
+    property bool keepOpen: false
+    property string _lastAdded: ""
+    // Enter with nothing but a date ("tomorrow") used to do nothing at all.
+    property string _hint: ""
 
     // Single source of truth lives in heap::text::extractMeta (C++) and is
     // unit-tested. QML just forwards.
@@ -136,8 +142,13 @@ Popup {
             "every:day": "daily", "every:week": "weekly", "every:weekday": "weekdays",
             "every:mon": "everyMon", "every:tue": "everyTue", "every:wed": "everyWed",
             "every:thu": "everyThu", "every:fri": "everyFri", "every:sat": "everySat",
-            "every:sun": "everySun"
+            "every:sun": "everySun", "every:month": "monthly"
         };
+        const monthly = /^every:month:(\d+)$/.exec(String(r || ""));
+        if (monthly) {
+            const l = I18n.t("editor.recur.monthlyOn").arg(monthly[1]);
+            return l.charAt(0).toLowerCase() + l.slice(1);
+        }
         // Mid-sentence: "Повтор: по будням", not "Повтор: По будням".
         const label = keys[r] ? I18n.t("editor.recur." + keys[r]) : r;
         return label.charAt(0).toLowerCase() + label.slice(1);
@@ -169,13 +180,15 @@ Popup {
         } else {
             title = I18n.t("quick.done.task").arg(root._statusName(draft.status));
             if (draft.dueAt && draft.dueAt.getTime && !isNaN(draft.dueAt.getTime()))
-                lines.push(I18n.t("quick.done.due").arg(root._when(draft.dueAt, draft.hasTime)));
+                lines.push(I18n.t("quick.done.due").arg(root._when(draft.dueAt, draft.dueHasTime)));
             if (kind === "untimedMeeting") lines.push(I18n.t("quick.done.noTime"));
         }
         if (draft.recurrence)
             lines.push(I18n.t("quick.done.repeat").arg(root._recurLabel(draft.recurrence)));
         if (root._meta.priority)
             lines.push(I18n.t("quick.done.priority").arg(draft.priority));
+        if (draft.labels && draft.labels.length > 0)
+            lines.push(I18n.t("quick.done.labels").arg(draft.labels.join(", ")));
         if (root._meta.ticketKey && draft.id === root._meta.ticketKey)
             lines.push(I18n.t("quick.done.ticket").arg(draft.id));
         if (draft.desc) lines.push(I18n.t("quick.done.note").arg(draft.desc));
@@ -186,8 +199,20 @@ Popup {
 
     function _finish(summary) {
         inputField.clear();
-        root.close();
+        root._hint = "";
+        if (root.keepOpen) {
+            root._lastAdded = summary ? summary.title + " — " + String(summary.body || "").split("\n")[0] : "";
+            inputField.forceActiveFocus();
+        } else {
+            root.close();
+        }
         if (summary) root.captured(summary.title, summary.body, summary.taskId || "");
+    }
+
+    // Enter adds and closes; Ctrl+Enter adds and stays open for the next one.
+    function _submitFromKey(keep) {
+        root.keepOpen = keep;
+        root._submit();
     }
 
     function _submit() {
@@ -198,7 +223,11 @@ Popup {
         // time/handles can lag a keystroke behind. Refreshing here makes submit a
         // pure function of what is on screen.
         _refreshPreview();
-        if (_title.length === 0) return;
+        if (_title.length === 0) {
+            // Say why nothing happened: a date alone is not a task.
+            root._hint = (_preview && _preview.ok) ? I18n.t("quick.hint.onlyDate") : "";
+            return;
+        }
 
         // ── Contact-ping path ──
         // "написать @viktor про релиз" routes to PeopleList (bottom-right),
@@ -246,6 +275,7 @@ Popup {
         draft._isNew = true;
         draft.title = _title;
         if (_meta.priority) draft.priority = _meta.priority;
+        if (_meta.labels && _meta.labels.length > 0) draft.labels = _meta.labels;
         if (_meta && _meta.desc && _meta.desc.length > 0) {
             draft.desc = _meta.desc;
         }
@@ -254,13 +284,24 @@ Popup {
         if (_preview && _preview.ok && _preview.start) {
             draft.scheduledAt = _preview.start;
             draft.dueAt = _preview.start;
-            draft.hasTime = !!_preview.hasTime;
+            draft.scheduledHasTime = !!_preview.hasTime;
+            draft.dueHasTime = !!_preview.hasTime;
         }
         // Persist a parsed recurrence ("every weekday…") so completing the task
         // regenerates it (HEAP-77).
         if (_preview && _preview.recurrence && _preview.recurrence.length > 0) {
             draft.recurrence = _preview.recurrence;
         }
+        // A meeting is a task and its calendar event: one undo step for both.
+        AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
+        try {
+            root._submitTask(draft, kindEarly);
+        } finally {
+            AppController.endUndoGroup();
+        }
+    }
+
+    function _submitTask(draft, kindEarly) {
         AppController.saveTask(draft);
 
         // Calendar entry rules. A parsed time is already stored on the task and
@@ -324,6 +365,9 @@ Popup {
         inputField.text = "";
         _preview = {ok: false};
         _title = "";
+        _hint = "";
+        _lastAdded = "";
+        keepOpen = false;
         at.dismiss();
         inputField.forceActiveFocus();
     }
@@ -361,7 +405,7 @@ Popup {
             }
             color: Theme.text
             placeholderTextColor: Theme.textDim
-            onTextChanged: { previewTimer.restart(); at.refresh(); }
+            onTextChanged: { previewTimer.restart(); at.refresh(); root._hint = ""; }
             onCursorPositionChanged: at.refresh()
             Keys.onPressed: (e) => {
                 if (at.isOpen) {
@@ -390,19 +434,25 @@ Popup {
                     }
                 }
             }
-            Keys.onReturnPressed: {
-                if (at.isOpen) {
+            // Enter takes a suggestion only once the arrows have picked one:
+            // "#backend" is a label and "@maria" a person as typed, and Enter
+            // used to rewrite them into whichever task or id came first in the
+            // list (#TASK-2700). Tab always takes the highlighted one.
+            Keys.onReturnPressed: (e) => {
+                if (at.isOpen && at.navigated) {
                     at.accept();
                     return;
                 }
-                root._submit();
+                at.dismiss();
+                root._submitFromKey((e.modifiers & Qt.ControlModifier) !== 0);
             }
-            Keys.onEnterPressed: {
-                if (at.isOpen) {
+            Keys.onEnterPressed: (e) => {
+                if (at.isOpen && at.navigated) {
                     at.accept();
                     return;
                 }
-                root._submit();
+                at.dismiss();
+                root._submitFromKey((e.modifiers & Qt.ControlModifier) !== 0);
             }
         }
 
@@ -456,9 +506,28 @@ Popup {
             }
         }
 
+        // Why Enter did nothing, or what the last Ctrl+Enter added.
+        Text {
+            objectName: "qc-hint"
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            visible: text.length > 0
+            text: root._hint.length > 0 ? root._hint
+                                        : (root._lastAdded.length > 0 ? "✓ " + root._lastAdded : "")
+            textFormat: Text.PlainText
+            color: root._hint.length > 0 ? Theme.warning : Theme.textMuted
+            font.pixelSize: Theme.fsSm
+            elide: Text.ElideRight
+        }
+
         RowLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.bottomMargin: Theme.sp2xl
             spacing: Theme.spMd
+            Text {
+                text: I18n.t("quick.keysHint")
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+            }
             Item {
                 Layout.fillWidth: true
             }

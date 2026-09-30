@@ -224,6 +224,37 @@ ApplicationWindow {
     // the other.
     property string boardSortMode: "manual"
 
+    // Search, priority chips, sort and the archived / done toggles survive a
+    // restart (TASKS-22): they lived only on the window, so every launch
+    // started from an unfiltered board. Kept in the UI settings blob, written
+    // a moment after the last change rather than on every keystroke.
+    property bool _filtersRestored: false
+    function _restoreFilters() {
+        const f = _settingsObject().filters || {};
+        win.searchText = typeof f.search === "string" ? f.search : "";
+        win.prioritiesFilter = (f.priorities && typeof f.priorities === "object") ? f.priorities : ({});
+        win.boardSortMode = typeof f.sort === "string" && f.sort.length > 0 ? f.sort : "manual";
+        win.showArchived = f.archived === true;
+        win.showDoneTimeline = f.showDone === true;
+        win._filtersRestored = true;
+    }
+    function _saveFiltersSoon() { if (win._filtersRestored) filterSaveTimer.restart(); }
+    onSearchTextChanged: _saveFiltersSoon()
+    onPrioritiesFilterChanged: _saveFiltersSoon()
+    onBoardSortModeChanged: _saveFiltersSoon()
+    onShowArchivedChanged: _saveFiltersSoon()
+    onShowDoneTimelineChanged: _saveFiltersSoon()
+    Timer {
+        id: filterSaveTimer
+        interval: 400
+        onTriggered: {
+            const s = win._settingsObject();
+            s.filters = { search: win.searchText, priorities: win.prioritiesFilter, sort: win.boardSortMode,
+                          archived: win.showArchived, showDone: win.showDoneTimeline };
+            AppController.appSettingsJson = JSON.stringify(s);
+        }
+    }
+
     // Reactive task / status counts. statusCounts is one pass over the model,
     // recomputed when the model changes; these used to be four separate full
     // scans, re-run from all four of the model's signals.
@@ -231,16 +262,15 @@ ApplicationWindow {
     readonly property int _activeCount:  (_counts["prog"] || 0) + (_counts["half"] || 0)
     readonly property int _blockedCount: _counts["blocked"] || 0
     readonly property int _reviewCount:  _counts["review"] || 0
-    property int _taskCount: AppController.tasks.rowCount()
-    Connections {
-        target: AppController.tasks
-        function onModelReset()   { win._taskCount = AppController.tasks.rowCount() }
-        function onRowsInserted() { win._taskCount = AppController.tasks.rowCount() }
-        function onRowsRemoved()  { win._taskCount = AppController.tasks.rowCount() }
+    readonly property var _activePriorities: {
+        const out = [];
+        for (const k in win.prioritiesFilter) if (win.prioritiesFilter[k]) out.push(k);
+        return out;
     }
 
     Component.onCompleted: {
         _restoreGeometry();
+        _restoreFilters();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
         // First run: greet the user once the overlay is ready.
@@ -534,8 +564,11 @@ ApplicationWindow {
             });
         }
         function onUndoableToast(msg, secs) {
+            // Undo takes back the action this toast names — not whatever was
+            // done last, which after a silent reorder is something else.
+            const serial = AppController.undoSerialForToast();
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
-                AppController.undoLastDeletion()
+                AppController.undoEntry(serial)
             });
         }
         // A newer release was found — offer a one-click jump to the release page.
@@ -693,10 +726,15 @@ ApplicationWindow {
                              : AppController.currentView === "month" ? I18n.t("siderail.month")
                              : I18n.t("siderail.board")
                     priorities: win.prioritiesFilter
-                    totalCount: win._taskCount
-                    activeCount: win._activeCount
-                    blockedCount: win._blockedCount
-                    reviewCount: win._reviewCount
+                    // Under the filters the bar itself shows (TASKS-20): the
+                    // counts used to include archived tasks and ignore the
+                    // search and the priority chips.
+                    readonly property var _fc: AppController.filteredCounts(win.searchText, win._activePriorities,
+                        win.showArchived, AppController.currentView === "timeline" && !win.showDoneTimeline, win._counts)
+                    totalCount: _fc.total
+                    activeCount: _fc.active
+                    blockedCount: _fc.blocked
+                    reviewCount: _fc.review
                     showArchived: win.showArchived
                     showSort: AppController.currentView === "board"
                     sortMode: win.boardSortMode
@@ -1375,13 +1413,18 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo
+        // Not behind an open editor or dialog: it would change what the dialog
+        // is showing (and could delete the task being edited). Inside a text
+        // field Ctrl+Z belongs to the field, which takes it first.
+        enabled: sequence.length > 0 && win._globalKeysOn && AppController.hasPendingUndo && !win._overlayOpen
+            && !(boardLoader.item && boardLoader.item.dialogOpen === true)
         onActivated: AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && win._globalKeysOn && AppController.canRedo
+        enabled: sequence.length > 0 && win._globalKeysOn && AppController.canRedo && !win._overlayOpen
+            && !(boardLoader.item && boardLoader.item.dialogOpen === true)
         onActivated: AppController.redo()
     }
     Shortcut {
@@ -1397,7 +1440,8 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.currentView === "board"
                 || AppController.currentView === "timeline"
-                || AppController.currentView === "week")
+                || AppController.currentView === "week"
+                || AppController.currentView === "archive")
         onActivated: {
             const v = win.activeViewItem();
             if (v && v.selectAllVisible) v.selectAllVisible();
@@ -1487,8 +1531,10 @@ ApplicationWindow {
 
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
+        // Not while a card's menu is up: its arrows and letters belong to it.
         enabled: sequences.length > 0 && !win._viewKeysBlocked
             && AppController.currentView === "board"
+            && !(boardLoader.item && boardLoader.item.cardMenuOpen === true)
     }
 
     BoardKey {
@@ -1530,6 +1576,20 @@ ApplicationWindow {
     BoardKey {
         sequences: [_kbd("board.moveRight"), "Shift+Right"]
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(1, 0); }
+    }
+    // The card menu, archive and fold, for the card/column the keyboard is on
+    // (TASKS-32 / UX-26).
+    BoardKey {
+        sequences: [_kbd("board.cardMenu"), "Menu"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.openCursorMenu) b.openCursorMenu(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.archive")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.archiveCursor) b.archiveCursor(); }
+    }
+    BoardKey {
+        sequences: [_kbd("board.collapseColumn")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorColumn) b.toggleCursorColumn(); }
     }
 
     Shortcut {

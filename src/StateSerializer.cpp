@@ -2,10 +2,12 @@
 #include "StateSerializer.h"
 
 #include <QColor>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QTime>
 
+#include <algorithm>
 #include <functional>
 
 namespace heap::state {
@@ -20,7 +22,7 @@ static_assert(heap::meta::fieldCount<TaskLink>() == 2,
               "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 24,
+static_assert(heap::meta::fieldCount<Task>() == 25,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -222,8 +224,11 @@ QJsonObject taskToJson(const Task& t) {
   if(t.dueAt.isValid()) {
     o["dueAt"] = dtToStr(t.dueAt);
   }
-  if(t.hasTime) {
-    o["hasTime"] = true;
+  if(t.scheduledHasTime) {
+    o["scheduledHasTime"] = true;
+  }
+  if(t.dueHasTime) {
+    o["dueHasTime"] = true;
   }
   // Time tracking (HEAP-78) — omitted when zero/stopped so untimed task JSON
   // stays byte-identical.
@@ -289,7 +294,13 @@ Task taskFromJson(const QJsonObject& o) {
   t.archived = o["archived"].toBool(false);
   t.scheduledAt = dtFromStr(o["scheduledAt"].toString());
   t.dueAt = dtFromStr(o["dueAt"].toString());
-  t.hasTime = o["hasTime"].toBool(false);
+  if(o.contains("dueHasTime") || o.contains("scheduledHasTime")) {
+    t.scheduledHasTime = t.scheduledAt.isValid() && o["scheduledHasTime"].toBool(false);
+    t.dueHasTime = t.dueAt.isValid() && o["dueHasTime"].toBool(false);
+  } else {
+    // A profile exported by a schema ≤ 9 build: imports carry no ladder.
+    applyLegacyHasTime(t, o["hasTime"].toBool(false));
+  }
   // Legacy bare-date deadline (schema ≤ 3, and any profile exported by an older
   // build). state.json itself is migrated by migrateState() before it reaches
   // here; this covers imports, which carry no schema ladder.
@@ -298,7 +309,8 @@ Task taskFromJson(const QJsonObject& o) {
     if(legacy.isValid()) {
       t.scheduledAt = QDateTime(legacy, QTime(0, 0));
       t.dueAt = t.scheduledAt;
-      t.hasTime = false;
+      t.scheduledHasTime = false;
+      t.dueHasTime = false;
     }
   }
   t.trackedSeconds = o["trackedSeconds"].toInt(0);
@@ -688,7 +700,6 @@ void migrateTaskV3ToV4(QJsonObject& task) {
     const QString at = dtToStr(QDateTime(legacy, QTime(0, 0)));
     task["scheduledAt"] = at;
     task["dueAt"] = at;
-    task["hasTime"] = false;
   }
 }
 
@@ -722,6 +733,68 @@ QJsonArray migratedTaskArrayV4ToV5(const QJsonArray& tasks) {
     QJsonObject t = v.toObject();
     migrateTaskV4ToV5(t, index++);
     out.append(t);
+  }
+  return out;
+}
+
+// v9→v10, part one: the shared `hasTime` becomes one flag per datetime. The
+// rule lives in applyLegacyHasTime(), which imports use as well.
+void migrateTaskV9ToV10(QJsonObject& task) {
+  if(!task.contains("hasTime")) {
+    return;
+  }
+  const bool legacy = task["hasTime"].toBool(false);
+  task.remove("hasTime");
+  Task t;
+  t.scheduledAt = dtFromStr(task["scheduledAt"].toString());
+  t.dueAt = dtFromStr(task["dueAt"].toString());
+  applyLegacyHasTime(t, legacy);
+  if(t.scheduledHasTime) {
+    task["scheduledHasTime"] = true;
+  }
+  if(t.dueHasTime) {
+    task["dueHasTime"] = true;
+  }
+}
+
+// v9→v10, part two: ranks. The v4→v5 rung numbered every task, but the demo
+// seed, every synced issue and every task saved through the editor still came
+// out at rank 0, where ties fall back to the id and a drop "to the top" has no
+// room above 0. Each column that holds a tie is renumbered in the order the
+// board showed it (rank, then id), so nothing visibly moves.
+QJsonArray migratedTaskArrayV9ToV10(const QJsonArray& tasks) {
+  QVector<QJsonObject> objs;
+  objs.reserve(tasks.size());
+  for(const QJsonValue& v : tasks) {
+    QJsonObject t = v.toObject();
+    migrateTaskV9ToV10(t);
+    objs.append(t);
+  }
+  QHash<QString, QVector<int>> byStatus;
+  for(int i = 0; i < objs.size(); ++i) {
+    byStatus[objs[i]["status"].toString()].append(i);
+  }
+  for(auto it = byStatus.begin(); it != byStatus.end(); ++it) {
+    QVector<int>& rows = it.value();
+    std::sort(rows.begin(), rows.end(), [&](int a, int b) {
+      const double ra = objs[a]["rank"].toDouble(0.0);
+      const double rb = objs[b]["rank"].toDouble(0.0);
+      return ra != rb ? ra < rb : objs[a]["id"].toString() < objs[b]["id"].toString();
+    });
+    bool tie = false;
+    for(int k = 1; k < rows.size() && !tie; ++k) {
+      tie = objs[rows[k - 1]]["rank"].toDouble(0.0) == objs[rows[k]]["rank"].toDouble(0.0);
+    }
+    if(!tie) {
+      continue;
+    }
+    for(int k = 0; k < rows.size(); ++k) {
+      objs[rows[k]]["rank"] = (k + 1) * kRankStep;
+    }
+  }
+  QJsonArray out;
+  for(const QJsonObject& o : objs) {
+    out.append(o);
   }
   return out;
 }
@@ -819,6 +892,11 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   }
   // v8 -> v9 added Profile::docPages. No rung: a v8 profile simply has none,
   // and its `docs` catalog is untouched and still read the same way.
+  //
+  // v9 -> v10 split Task.hasTime per datetime and spread tied ranks.
+  if(fromVersion < 10) {
+    forEachTaskArray(root, migratedTaskArrayV9ToV10);
+  }
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

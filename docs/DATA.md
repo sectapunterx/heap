@@ -112,3 +112,26 @@ stable, diff-friendly per-entity files already exists
 (`src/sync/SyncSerializer`); the git backend, scheduler and conflict resolver
 land in a later release. Until then, the export/import flow above is the
 supported way to move work between machines.
+
+## File format versions
+
+`state.json` carries a `schemaVersion`. A newer build upgrades an older file in
+place on first launch (keeping a pre-migration copy in `backups/`); an older
+build refuses to save over a file written by a newer one, so nothing is lost by
+running an old version by mistake.
+
+**v10** (after 0.5.2) changed how a task records its times:
+
+- `dueAt` and `scheduledAt` each say for themselves whether their clock time is
+  real: `dueHasTime` / `scheduledHasTime` replace the single `hasTime` flag. A
+  date-only deadline on a task scheduled for 14:00 used to read as "due at
+  00:00" and reminded at midnight; it now stays a date and reminds at the end
+  of that day. On upgrade a field keeps the old flag unless it sat at exactly
+  00:00 next to a timed partner.
+- Every task has a distinct `rank` (its manual place in the column). Columns
+  where cards shared a rank — the demo seed, synced issues, cards saved from
+  the editor — are renumbered once, in the order the board already showed.
+- Recurrence may be monthly: `every:month` (this day each month) or
+  `every:month:15` (the 15th, the last day in a shorter month).
+
+Exported profiles from older builds (`hasTime`) import with the same rule.

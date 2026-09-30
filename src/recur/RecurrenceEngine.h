@@ -22,6 +22,29 @@ inline QDate nextOccurrence(const QString& recurrence, const QDate& from) {
   if(r == QStringLiteral("every:week")) {
     return from.addDays(7);
   }
+  // Monthly. "every:month:15" is the 15th of every month, clamped to the last
+  // day of a shorter month and back on the 15th the month after; plain
+  // "every:month" keeps the day of `from` the same way addMonths does.
+  if(r == QStringLiteral("every:month")) {
+    return from.addMonths(1);
+  }
+  if(r.startsWith(QStringLiteral("every:month:"))) {
+    bool ok = false;
+    const int day = r.mid(12).toInt(&ok);
+    if(!ok || day < 1 || day > 31) {
+      return {};
+    }
+    // The first such day strictly after `from`: this month's if it is still
+    // ahead, else next month's.
+    for(int k = 0; k < 2; ++k) {
+      const QDate first = QDate(from.year(), from.month(), 1).addMonths(k);
+      const QDate cand(first.year(), first.month(), qMin(day, first.daysInMonth()));
+      if(cand > from) {
+        return cand;
+      }
+    }
+    return {};
+  }
   if(r == QStringLiteral("every:weekday")) {
     QDate d = from.addDays(1);
     while(d.dayOfWeek() > 5) {  // Qt::Saturday=6, Qt::Sunday=7 → skip
@@ -48,6 +71,23 @@ inline QDate nextOccurrence(const QString& recurrence, const QDate& from) {
     }
   }
   return {};
+}
+
+// The first occurrence after `from` that is also after `today`. Completing a
+// weekly task three weeks late must not spawn a copy that is born overdue; it
+// skips to the next one still ahead. Always at least one step past `from`.
+inline QDate nextOccurrenceAfter(const QString& recurrence, const QDate& from, const QDate& today) {
+  QDate d = nextOccurrence(recurrence, from);
+  // Daily over ten years is the longest walk that can be asked for; the cap
+  // only guards against a token that stops advancing.
+  for(int guard = 0; d.isValid() && today.isValid() && d <= today && guard < 4000; ++guard) {
+    const QDate n = nextOccurrence(recurrence, d);
+    if(!n.isValid() || n <= d) {
+      break;
+    }
+    d = n;
+  }
+  return d;
 }
 
 // True when `recurrence` is a token this engine understands.

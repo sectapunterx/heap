@@ -10,7 +10,8 @@ person and the note come through, and survive a save and the next launch.
 |---|---|---|
 | `v0.4.7.json` | 3 | up to 0.4.7 |
 | `v0.4.9.json` | 4 | 0.4.8 – 0.4.9 |
-| `v0.5.1.json` | 9 | 0.5.x |
+| `v0.5.1.json` | 9 | 0.5.0 – 0.5.2 |
+| `v0.5.3.json` | 10 | the release after 0.5.2 (per-field clock flags, spread ranks) |
 
 **A release that bumps `heap::state::kSchemaVersion` adds its own file** before
 it ships, so the version after it is tested against it. To make one: build the

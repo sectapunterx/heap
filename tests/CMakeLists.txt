@@ -303,6 +303,9 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
 # ── audit-plat: end ──
 # ── audit-tasks: begin ──
+# Regressions from the 2026-09-30 audit, tasks area (undo, ranks, recurrence,
+# the per-field clock flags of schema v10).
+heap_add_appcontroller_test(heap_audit_tasks_tests test_audit_tasks.cpp)
 # ── audit-tasks: end ──
 # ── audit-time: begin ──
 # ── audit-time: end ──

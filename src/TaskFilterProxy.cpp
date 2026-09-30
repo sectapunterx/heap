@@ -69,7 +69,23 @@ void TaskFilterProxy::setSearchText(const QString& v) {
   m_rawSearch = v;
   // Compiled once per keystroke, not once per row: resolving `deadline:<friday`
   // runs the date parser, which has no business being in a per-row predicate.
-  m_query = heap::query::TaskQuery::compile(v, QDate::currentDate());
+  m_query = heap::query::TaskQuery::compile(v, QDate::currentDate(), m_statuses);
+  m_searchText = m_query.freeText();
+  invalidateFilter();
+  emit filterChanged();
+  emit countChanged();
+}
+
+void TaskFilterProxy::setStatuses(const QVariantList& v) {
+  if(m_statuses == v) {
+    return;
+  }
+  m_statuses = v;
+  if(m_rawSearch.isEmpty()) {
+    emit filterChanged();
+    return;
+  }
+  m_query = heap::query::TaskQuery::compile(m_rawSearch, QDate::currentDate(), m_statuses);
   m_searchText = m_query.freeText();
   refilter();
   emit filterChanged();

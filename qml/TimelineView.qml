@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
 import "Search.js" as Search
+import "PlainText.js" as MdPlain
 
 Item {
     id: root
@@ -18,6 +19,34 @@ Item {
 
     signal taskClicked(string id)
     signal toggleShowDone()
+
+    // ── Keyboard (TASKS-30) ──────────────────────────────────────────
+    // J/K or the arrows walk the rows, Enter opens, Space selects; "O" (the
+    // app-wide open-in-tracker key) acts on the row the cursor is on.
+    property string cursorTaskId: ""
+    property string _hoverId: ""
+    readonly property string hoveredTaskId: cursorTaskId.length > 0 ? cursorTaskId : _hoverId
+    function _taskRowIndexes() {
+        const out = [];
+        for (let i = 0; i < root.flatRows.length; i++) if (root.flatRows[i].kind === "task") out.push(i);
+        return out;
+    }
+    function moveCursor(dy) {
+        const rows = _taskRowIndexes();
+        if (rows.length === 0) return;
+        let at = -1;
+        for (let k = 0; k < rows.length; k++)
+            if (root.flatRows[rows[k]].task.id === root.cursorTaskId) { at = k; break; }
+        at = at < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, at + dy));
+        root.cursorTaskId = root.flatRows[rows[at]].task.id;
+        rowList.positionViewAtIndex(rows[at], ListView.Contain);
+    }
+    function openCursor() {
+        if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
+        else root.moveCursor(0);
+    }
+    onVisibleChanged: if (visible) rowList.forceActiveFocus()
+    Component.onCompleted: rowList.forceActiveFocus()
 
     // Selection plumbing — flat across buckets (reading order).
     property string shiftAnchorId: ""
@@ -131,9 +160,19 @@ Item {
             // The one haystack passesFilter() searches (HEAP-117).
             searchText: m.data(idx, Qt.UserRole + 32),
             ticket:     m.data(idx, Qt.UserRole + 31),
+            dueAt:      m.data(idx, m.roleOf("dueAt")),
+            dueHasTime: !!m.data(idx, m.roleOf("dueHasTime")),
+            scheduledAt: m.data(idx, m.roleOf("scheduledAt")),
+            scheduledHasTime: !!m.data(idx, m.roleOf("scheduledHasTime")),
         };
-        t.bucket = AppController.deadlineBucket(t.deadline);
-        t.dueMs = t.deadline && t.deadline.getTime && !isNaN(t.deadline.getTime()) ? t.deadline.getTime() : 9e15;
+        // A task with only a schedule is not "No deadline" work: it goes
+        // under the day it is planned for (TASKS-12).
+        const valid = (d) => d && d.getTime && !isNaN(d.getTime());
+        t.scheduledOnly = !valid(t.deadline) && valid(t.scheduledAt);
+        t.when = valid(t.deadline) ? t.deadline
+               : (t.scheduledOnly ? new Date(t.scheduledAt.getFullYear(), t.scheduledAt.getMonth(), t.scheduledAt.getDate()) : t.deadline);
+        t.bucket = AppController.deadlineBucket(t.when);
+        t.dueMs = valid(t.when) ? t.when.getTime() : 9e15;
         return t;
     }
 
@@ -204,7 +243,7 @@ Item {
         let lastKey = "__none__";
         for (let i = 0; i < list.length; i++) {
             const t = list[i];
-            const dl = t.deadline;
+            const dl = t.when;
             const key = (dl && dl.getFullYear) ? (dl.getFullYear() + "-" + (dl.getMonth()+1) + "-" + dl.getDate()) : "";
             if (key !== lastKey) {
                 const label = (dl && dl.getFullYear) ? AppController.shortDate(dl) : I18n.t("timeline.noDate");
@@ -317,6 +356,17 @@ Item {
             model: root.flatRows.length
             cacheBuffer: 400
             reuseItems: true
+            focus: true
+            activeFocusOnTab: true
+            Keys.onPressed: (e) => {
+                if (e.modifiers & (Qt.ControlModifier | Qt.AltModifier)) return;
+                if (e.key === Qt.Key_J || e.key === Qt.Key_Down) { root.moveCursor(1); e.accepted = true; }
+                else if (e.key === Qt.Key_K || e.key === Qt.Key_Up) { root.moveCursor(-1); e.accepted = true; }
+                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.openCursor(); e.accepted = true; }
+                else if (e.key === Qt.Key_Space && root.cursorTaskId) {
+                    AppController.toggleTaskSelection(root.cursorTaskId); e.accepted = true;
+                }
+            }
             footer: Item { width: rowList.width; height: 24 }
 
             delegate: Item {
@@ -369,9 +419,9 @@ Item {
                         Text {
                             visible: rowItem.first
                                      && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
-                                     && rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
-                            text: rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
-                                  ? I18n.relang(AppController.shortDate(rowItem.list[0].deadline)) : ""
+                                     && rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                            text: rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                                  ? I18n.relang(AppController.shortDate(rowItem.list[0].when)) : ""
                             color: Theme.textMuted
                             font.pixelSize: Theme.fsSm
                             leftPadding: 34
@@ -463,13 +513,15 @@ Item {
                     readonly property var st: t ? root.statusInfo(t.status) : null
                     readonly property bool _selected: t && AppController.selectionCount >= 0
                         && AppController.isTaskSelected(t.id)
+                    readonly property bool _cursored: !!t && root.cursorTaskId === t.id
                     width: parent ? parent.width : 0
                     radius: Theme.radius
                     color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
                         : rowMA.containsMouse ? Theme.panel2 : Theme.panel
                     border.color: _selected ? Theme.accent
+                        : _cursored ? Theme.accentStrong
                         : rowMA.containsMouse ? Theme.borderStrong : Theme.border
-                    border.width: _selected ? 2 : 1
+                    border.width: _selected || _cursored ? 2 : 1
                     implicitHeight: rowContent.implicitHeight + 16
 
                     // Left accent stripe
@@ -533,7 +585,8 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
-                                text: String(tlRow.t.desc || "").substring(0, 90) + (String(tlRow.t.desc || "").length > 90 ? "…" : "")
+                                // Markdown read as prose, not as "**Steps:** - [ ]".
+                                text: MdPlain.plain(tlRow.t.desc, 120)
                                 color: Theme.textMuted
                                 font.pixelSize: Theme.fsSm
                                 elide: Text.ElideRight
@@ -575,8 +628,23 @@ Item {
                                 font.pixelSize: Theme.fsXs
                             }
                         }
+                        // The clock time of a timed deadline, and the day of a
+                        // task that only has a schedule.
                         Text {
-                            text: I18n.relang(AppController.deadlineDiffLabel(tlRow.t.deadline))
+                            objectName: "tl-when"
+                            readonly property var at: tlRow.t.scheduledOnly ? tlRow.t.scheduledAt : tlRow.t.dueAt
+                            readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
+                            visible: text.length > 0
+                            text: (tlRow.t.scheduledOnly ? "▸ " : "")
+                                  + (timed && at && at.getHours
+                                     ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
+                                     : "")
+                            color: Theme.textMuted
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsSm
+                        }
+                        Text {
+                            text: I18n.relang(AppController.deadlineDiffLabel(tlRow.t.when))
                             color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.danger
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
@@ -591,6 +659,10 @@ Item {
                         id: rowMA
                         anchors.fill: parent
                         hoverEnabled: true
+                        onContainsMouseChanged: {
+                            if (containsMouse) root._hoverId = tlRow.t.id;
+                            else if (root._hoverId === tlRow.t.id) root._hoverId = "";
+                        }
                         cursorShape: Qt.PointingHandCursor
                         acceptedButtons: Qt.LeftButton
                         onClicked: (mouse) => {
@@ -602,8 +674,10 @@ Item {
                                 root._rangeSelect(tlRow.t.id);
                             } else {
                                 if (AppController.selectionCount > 0) AppController.clearSelection();
+                                root.cursorTaskId = tlRow.t.id;
                                 root.taskClicked(tlRow.t.id);
                             }
+                            rowList.forceActiveFocus();
                         }
                     }
                 }

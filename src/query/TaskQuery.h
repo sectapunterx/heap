@@ -5,32 +5,47 @@
 #include "query/QueryParser.h"
 
 #include <QDate>
+#include <QSet>
 #include <QString>
 #include <QStringList>
+#include <QVariantList>
+#include <QVector>
 
 namespace heap::query {
 
-// A ParsedQuery with its date literals resolved and its free text separated
-// out, ready to test rows against.
+// A search-box query with its date literals resolved and its free text
+// separated out, ready to test rows against.
 //
-// QueryParser has been in the tree, finished and unit-tested, without a single
-// production caller: it turns `status:blocked priority:P0,P1 deadline:<friday`
-// into clauses but never says whether a given task satisfies them. This is that
-// half, plus the two things a search box needs that the grammar does not model:
+// The grammar, as the board's search box reads it:
 //
-//  - Date values are resolved ONCE, here, not per row. `deadline:<friday` costs
-//    one chrono parse for the whole filter pass rather than one per task.
-//  - Tokens that are not clauses are kept as free text, so `status:blocked
-//    login` narrows by status *and* by the word "login". Typing a query and
-//    typing a search are the same act.
+//   status:blocked            a column, by id, by name or by the name's slug —
+//   status:"code review"      what the board shows, not only the internal id
+//   status:in-progress
+//   priority:P0,P1            comma = any of
+//   tag:infra   #infra        a label
+//   mention:@ada              the assignee, or an @name in the text
+//   due:today  due:overdue    (deadline: is the same field) today, overdue,
+//   due:week   due:<7d        this week, relative/absolute comparisons,
+//   due:friday due:none       anything the date parser reads, or no date
+//   is:open  is:done  is:archived  is:overdue  is:recurring
+//   -clause   -#tag  -word    negation
+//   a OR b    a | b           either side (clauses on each side are ANDed)
+//
+// Tokens that are not clauses stay free text, so `status:blocked login`
+// narrows by status *and* by the word "login". A `word:word` token whose field
+// is not one of the above is kept as text too (a URL, "note:foo"), but it is
+// reported, as is a clause whose value cannot mean anything (an unknown column,
+// P9, an unreadable date): unknownClauses() is what the search box shows, so a
+// typo reads as a typo rather than as an empty board.
 class TaskQuery {
  public:
-  // `today` anchors relative dates ("friday", "3d"); pass the app's notion of
-  // today rather than the system clock so a test can pin it.
-  static TaskQuery compile(const QString& text, const QDate& today);
+  // `today` anchors relative dates ("friday", "3d"). `statuses` is the board's
+  // column list ([{id, name}]) so a status can be named as the UI shows it;
+  // without it only ids match.
+  static TaskQuery compile(const QString& text, const QDate& today, const QVariantList& statuses = {});
 
-  // True when at least one clause was recognised. False means the text was
-  // ordinary search terms and `freeText()` is all of it.
+  // True when at least one clause (or a negated word) was recognised. False
+  // means the text was ordinary search terms and `freeText()` is all of it.
   bool isQuery() const {
     return m_isQuery;
   }
@@ -41,7 +56,13 @@ class TaskQuery {
     return m_freeText;
   }
 
-  // Does this task satisfy every clause? A query with no clauses matches
+  // What the user typed that looks like a clause but means nothing — each
+  // entry is the token as typed. Empty for a clean query.
+  QStringList unknownClauses() const {
+    return m_unknown;
+  }
+
+  // Does this task satisfy the query? A query with no clauses matches
   // everything, so free-text-only input leaves the caller to do its own
   // substring test.
   bool matches(const Task& t) const;
@@ -50,13 +71,22 @@ class TaskQuery {
   struct Clause {
     QString field;
     Op op = Op::Eq;
-    QStringList values;        // lowercased
-    QDate date;                // resolved for `deadline`; invalid otherwise
-    bool wantsNoDate = false;  // `deadline:none`
+    QStringList values;       // lowercased
+    QSet<QString> statusIds;  // `status`: the column ids the values named
+    QDate date;               // resolved for `deadline`; invalid otherwise
+    QDate dateTo;             // `deadline:week`: the end of the range
+    QString special;          // `deadline`: "none" | "overdue" | "range"
+    bool negate = false;
   };
 
-  QVector<Clause> m_clauses;
+  bool clauseMatches(const Clause& c, const Task& t) const;
+
+  // OR of AND-groups.
+  QVector<QVector<Clause>> m_groups;
+  QStringList m_negatedWords;
   QString m_freeText;
+  QStringList m_unknown;
+  QDate m_today;
   bool m_isQuery = false;
 };
 

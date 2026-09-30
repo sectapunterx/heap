@@ -13,23 +13,95 @@ const QSet<QString>& knownFields() {
   static const QSet<QString> f = {QStringLiteral("status"),
                                   QStringLiteral("priority"),
                                   QStringLiteral("deadline"),
+                                  QStringLiteral("due"),
                                   QStringLiteral("profile"),
                                   QStringLiteral("mention"),
                                   QStringLiteral("tag"),
+                                  QStringLiteral("is"),
                                   QStringLiteral("sort"),
                                   QStringLiteral("limit")};
   return f;
 }
 
-// Is this token a clause the parser would recognise, as opposed to a search
-// word that happens to contain a colon? Mirrors QueryParser's own test so the
-// two never disagree about what counts as free text.
-bool looksLikeClause(const QString& token) {
-  const int sep = token.indexOf(QLatin1Char(':'));
-  if(sep <= 0 || sep == token.size() - 1) {
+// Whitespace-separated tokens, except that a double-quoted run stays one token
+// with its quotes removed: status:"code review".
+QStringList tokenize(const QString& text) {
+  QStringList out;
+  QString cur;
+  bool quoted = false;
+  bool any = false;
+  for(const QChar c : text) {
+    if(c == QLatin1Char('"')) {
+      quoted = !quoted;
+      any = true;
+      continue;
+    }
+    if(c.isSpace() && !quoted) {
+      if(any) {
+        out << cur;
+      }
+      cur.clear();
+      any = false;
+      continue;
+    }
+    cur.append(c);
+    any = true;
+  }
+  if(any) {
+    out << cur;
+  }
+  return out;
+}
+
+// "Code Review" → "code-review": how a column name is typed without quotes.
+QString slug(const QString& s) {
+  QString out;
+  for(const QChar c : s.toLower()) {
+    out.append(c.isLetterOrNumber() ? c : QChar('-'));
+  }
+  static const QRegularExpression dashes(QStringLiteral("-+"));
+  out.replace(dashes, QStringLiteral("-"));
+  while(out.startsWith(QLatin1Char('-'))) {
+    out.remove(0, 1);
+  }
+  while(out.endsWith(QLatin1Char('-'))) {
+    out.chop(1);
+  }
+  return out;
+}
+
+// A token of the shape `field:value` with a word for a field — as opposed to a
+// URL ("https://…"), a time ("10:30") or a lone colon.
+bool looksLikeFieldToken(const QString& token, QString* field, QString* value) {
+  static const QRegularExpression rx(QStringLiteral("^([A-Za-z]+):(.+)$"));
+  const QRegularExpressionMatch m = rx.match(token);
+  if(!m.hasMatch() || m.captured(2).startsWith(QStringLiteral("//"))) {
     return false;
   }
-  return knownFields().contains(token.left(sep).toLower());
+  *field = m.captured(1).toLower();
+  *value = m.captured(2);
+  return true;
+}
+
+// Strip a leading comparison operator from `spec`.
+Op takeOp(QString& spec) {
+  if(spec.startsWith(QLatin1String("<="))) {
+    spec = spec.mid(2);
+    return Op::Le;
+  }
+  if(spec.startsWith(QLatin1String(">="))) {
+    spec = spec.mid(2);
+    return Op::Ge;
+  }
+  if(spec.startsWith(QLatin1Char('<'))) {
+    spec = spec.mid(1);
+    return Op::Lt;
+  }
+  if(spec.startsWith(QLatin1Char('>'))) {
+    spec = spec.mid(1);
+    return Op::Gt;
+  }
+  return Op::Eq;
 }
 
 // Resolve a `deadline:` value to a date. Accepts what the app's own date
@@ -41,7 +113,6 @@ QDate resolveDate(const QString& raw, const QDate& today, bool& ok) {
   if(v.isEmpty()) {
     return {};
   }
-  // "7d" / "2w" — offsets from today, which chrono does not read on their own.
   static const QRegularExpression offset(QStringLiteral("^(\\d+)\\s*([dwm])$"), QRegularExpression::CaseInsensitiveOption);
   const QRegularExpressionMatch m = offset.match(v);
   if(m.hasMatch()) {
@@ -56,8 +127,10 @@ QDate resolveDate(const QString& raw, const QDate& today, bool& ok) {
     }
     return today.addMonths(n);
   }
-  // Everything else goes through the parser the rest of the app uses, so a
-  // query understands exactly the dates the task editor does.
+  if(v.compare(QStringLiteral("today"), Qt::CaseInsensitive) == 0) {
+    ok = true;
+    return today;
+  }
   const heap::chrono::ChronoParser parser;
   const heap::chrono::ParseResult r = parser.parse(v, QDateTime(today, QTime(0, 0)));
   if(r.ok && r.start.isValid()) {
@@ -84,6 +157,14 @@ bool compareDate(const QDate& lhs, Op op, const QDate& rhs) {
   return false;
 }
 
+QString haystackOf(const Task& t) {
+  QStringList parts{t.title, t.id, t.desc, t.assignee, t.externalMeta.project};
+  for(const Label& l : t.labels) {
+    parts << l.id;
+  }
+  return parts.join(QChar(' ')).toLower();
+}
+
 }  // namespace
 
 QStringList queryFields() {
@@ -92,109 +173,244 @@ QStringList queryFields() {
   return out;
 }
 
-TaskQuery TaskQuery::compile(const QString& text, const QDate& today) {
+TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses) {
   TaskQuery q;
-  const ParsedQuery parsed = QueryParser::parse(text);
-
+  q.m_today = today;
+  q.m_groups.append(QVector<Clause>());
   QStringList free;
-  for(const QString& token : text.split(QRegularExpression(QStringLiteral("\\s+")), Qt::SkipEmptyParts)) {
-    if(looksLikeClause(token)) {
-      // Recognised as a clause, so it is never also matched as a search word —
-      // otherwise "status:blocked" would have to appear in the task's text too.
-      q.m_isQuery = true;
-    } else {
-      free << token.toLower();
-    }
-  }
-  q.m_freeText = free.join(QChar(' '));
 
-  for(const Condition& c : parsed.conditions) {
-    Clause cl;
-    cl.field = c.field;
-    cl.op = c.op;
-    for(const QString& v : c.values) {
-      cl.values << v.toLower();
+  for(QString token : tokenize(text)) {
+    if(token == QStringLiteral("OR") || token == QStringLiteral("|")) {
+      if(!q.m_groups.constLast().isEmpty()) {
+        q.m_groups.append(QVector<Clause>());
+      }
+      q.m_isQuery = true;
+      continue;
     }
-    if(c.field == QLatin1String("deadline")) {
-      // "none" is the one value that is about the absence of a date.
-      if(cl.values.size() == 1 && cl.values.first() == QLatin1String("none")) {
-        cl.wantsNoDate = true;
+    bool negate = false;
+    if(token.size() > 1 && token.startsWith(QLatin1Char('-'))) {
+      negate = true;
+      token = token.mid(1);
+    }
+    QString field;
+    QString spec;
+    // "#infra" is a label; "#42" is an issue number, searched for as text.
+    static const QRegularExpression kIssueNo(QStringLiteral("^#\\d+$"));
+    if(token.size() > 1 && token.startsWith(QLatin1Char('#')) && !kIssueNo.match(token).hasMatch()) {
+      field = QStringLiteral("tag");
+      spec = token.mid(1);
+    } else if(!looksLikeFieldToken(token, &field, &spec)) {
+      if(negate) {
+        q.m_negatedWords << token.toLower();
+        q.m_isQuery = true;
       } else {
-        bool ok = false;
-        cl.date = resolveDate(c.values.first(), today, ok);
-        if(!ok) {
-          continue;  // an unreadable date is a clause that cannot mean anything
-        }
+        free << token.toLower();
+      }
+      continue;
+    }
+    const QString typed = (negate ? QStringLiteral("-") : QString()) + token;
+    if(!knownFields().contains(field)) {
+      // Not a field: searched for as typed, and said so.
+      q.m_unknown << typed;
+      free << (negate ? QStringLiteral("-") : QString()) + token.toLower();
+      continue;
+    }
+    // Recognised as a clause, so it is never also matched as a search word.
+    q.m_isQuery = true;
+    if(field == QLatin1String("sort") || field == QLatin1String("limit") || field == QLatin1String("profile")) {
+      // A saved view's business, or meaningful only across profiles: parsed so
+      // it is not substring-matched, and steers nothing on one board.
+      continue;
+    }
+
+    Clause cl;
+    cl.field = field == QLatin1String("due") ? QStringLiteral("deadline") : field;
+    cl.negate = negate;
+    cl.op = takeOp(spec);
+    for(const QString& raw : spec.split(QLatin1Char(','), Qt::SkipEmptyParts)) {
+      QString v = raw.trimmed().toLower();
+      if(cl.field == QLatin1String("mention") && v.startsWith(QLatin1Char('@'))) {
+        v = v.mid(1);
+      }
+      if(!v.isEmpty()) {
+        cl.values << v;
       }
     }
-    q.m_clauses.append(cl);
+    if(cl.values.isEmpty()) {
+      q.m_unknown << typed;
+      continue;
+    }
+    if(cl.op == Op::Eq && cl.values.size() > 1) {
+      cl.op = Op::In;
+    }
+
+    bool ok = true;
+    if(cl.field == QLatin1String("status")) {
+      for(const QString& v : cl.values) {
+        const QString vs = slug(v);
+        bool hit = false;
+        for(const QVariant& sv : statuses) {
+          const QVariantMap m = sv.toMap();
+          const QString id = m.value(QStringLiteral("id")).toString();
+          const QString name = m.value(QStringLiteral("name")).toString();
+          if(id.toLower() == v || name.toLower() == v || slug(name) == vs || slug(id) == vs) {
+            cl.statusIds.insert(id);
+            hit = true;
+          }
+        }
+        if(statuses.isEmpty()) {
+          cl.statusIds.insert(v);  // no catalog: ids as typed
+          hit = true;
+        }
+        ok = ok && hit;
+      }
+      ok = ok && !cl.statusIds.isEmpty();
+    } else if(cl.field == QLatin1String("priority")) {
+      QStringList norm;
+      for(const QString& v : cl.values) {
+        const QString p = v.startsWith(QLatin1Char('p')) ? v : QStringLiteral("p") + v;
+        static const QRegularExpression kPri(QStringLiteral("^p[0-3]$"));
+        if(!kPri.match(p).hasMatch()) {
+          ok = false;
+          continue;
+        }
+        norm << p;
+      }
+      cl.values = norm;
+      ok = ok && !norm.isEmpty();
+    } else if(cl.field == QLatin1String("is")) {
+      static const QSet<QString> kIs = {QStringLiteral("open"),
+                                        QStringLiteral("done"),
+                                        QStringLiteral("closed"),
+                                        QStringLiteral("archived"),
+                                        QStringLiteral("overdue"),
+                                        QStringLiteral("recurring")};
+      for(const QString& v : cl.values) {
+        ok = ok && kIs.contains(v);
+      }
+    } else if(cl.field == QLatin1String("deadline")) {
+      const QString v = cl.values.first();
+      if(v == QLatin1String("none")) {
+        cl.special = QStringLiteral("none");
+      } else if(v == QLatin1String("overdue")) {
+        cl.special = QStringLiteral("overdue");
+      } else if(v == QLatin1String("week") || v == QLatin1String("thisweek") || v == QLatin1String("this week")) {
+        cl.special = QStringLiteral("range");
+        cl.date = today;
+        cl.dateTo = today.addDays(7 - today.dayOfWeek());  // through Sunday
+      } else {
+        cl.date = resolveDate(v, today, ok);
+      }
+    }
+    if(!ok) {
+      // A clause that cannot mean anything is dropped rather than matching
+      // nothing — "deadline:banana" is a typo, not a request for an empty
+      // board — and reported.
+      q.m_unknown << typed;
+      continue;
+    }
+    q.m_groups.last().append(cl);
   }
-  // `sort:` and `limit:` parse but steer nothing here — they belong to a saved
-  // view rather than to a filter, so they are recognised (and thus not
-  // substring-matched) without adding a clause.
+  if(q.m_groups.size() > 1 && q.m_groups.constLast().isEmpty()) {
+    q.m_groups.removeLast();  // a trailing OR
+  }
+  q.m_freeText = free.join(QChar(' '));
   return q;
 }
 
-bool TaskQuery::matches(const Task& t) const {
-  for(const Clause& c : m_clauses) {
-    if(c.field == QLatin1String("status")) {
-      if(!c.values.contains(t.status.toLower())) {
-        return false;
+bool TaskQuery::clauseMatches(const Clause& c, const Task& t) const {
+  if(c.field == QLatin1String("status")) {
+    return c.statusIds.contains(t.status) || c.statusIds.contains(t.status.toLower());
+  }
+  if(c.field == QLatin1String("priority")) {
+    return c.values.contains(t.priority.toLower());
+  }
+  if(c.field == QLatin1String("tag")) {
+    for(const Label& l : t.labels) {
+      if(c.values.contains(l.id.toLower())) {
+        return true;
       }
-      continue;
     }
-    if(c.field == QLatin1String("priority")) {
-      if(!c.values.contains(t.priority.toLower())) {
-        return false;
+    return false;
+  }
+  if(c.field == QLatin1String("mention")) {
+    // Who it is about: the tracker's assignee, or an @name in the text.
+    for(const QString& v : c.values) {
+      if(t.assignee.toLower() == v || t.desc.toLower().contains(QChar('@') + v) || t.title.toLower().contains(QChar('@') + v)) {
+        return true;
       }
-      continue;
     }
-    if(c.field == QLatin1String("tag")) {
+    return false;
+  }
+  if(c.field == QLatin1String("is")) {
+    const bool done = t.status == QStringLiteral("done");
+    for(const QString& v : c.values) {
       bool hit = false;
-      for(const Label& l : t.labels) {
-        if(c.values.contains(l.id.toLower())) {
-          hit = true;
-          break;
-        }
+      if(v == QLatin1String("open")) {
+        hit = !done && !t.archived;
+      } else if(v == QLatin1String("done") || v == QLatin1String("closed")) {
+        hit = done;
+      } else if(v == QLatin1String("archived")) {
+        hit = t.archived;
+      } else if(v == QLatin1String("overdue")) {
+        hit = !done && t.dueAt.isValid() && t.dueAt.date() < m_today;
+      } else if(v == QLatin1String("recurring")) {
+        hit = !t.recurrence.isEmpty();
       }
-      if(!hit) {
-        return false;
+      if(hit) {
+        return true;
       }
-      continue;
     }
-    if(c.field == QLatin1String("mention")) {
-      // Who it is about: the tracker's assignee, or an @name in the text.
-      bool hit = false;
-      for(const QString& v : c.values) {
-        if(t.assignee.toLower() == v || t.desc.toLower().contains(QChar('@') + v) || t.title.toLower().contains(QChar('@') + v)) {
-          hit = true;
-          break;
-        }
-      }
-      if(!hit) {
-        return false;
-      }
-      continue;
+    return false;
+  }
+  if(c.field == QLatin1String("deadline")) {
+    const QDate due = t.dueAt.isValid() ? t.dueAt.date() : QDate();
+    if(c.special == QLatin1String("none")) {
+      return !due.isValid();
     }
-    if(c.field == QLatin1String("deadline")) {
-      const QDate due = t.dueAt.isValid() ? t.dueAt.date() : QDate();
-      if(c.wantsNoDate) {
-        if(due.isValid()) {
-          return false;
-        }
-        continue;
-      }
-      // An undated task satisfies no comparison — it is not "before Friday",
-      // it is simply not scheduled.
-      if(!due.isValid() || !compareDate(due, c.op, c.date)) {
-        return false;
-      }
-      continue;
+    // An undated task satisfies no comparison — it is not "before Friday",
+    // it is simply not scheduled.
+    if(!due.isValid()) {
+      return false;
     }
-    // `profile` is meaningful across profiles, which a single board is not;
-    // it parses and is ignored here rather than silently matching nothing.
+    if(c.special == QLatin1String("overdue")) {
+      return due < m_today && t.status != QStringLiteral("done");
+    }
+    if(c.special == QLatin1String("range")) {
+      return due >= c.date && due <= c.dateTo;
+    }
+    return compareDate(due, c.op, c.date);
   }
   return true;
+}
+
+bool TaskQuery::matches(const Task& t) const {
+  if(!m_negatedWords.isEmpty()) {
+    const QString hay = haystackOf(t);
+    for(const QString& w : m_negatedWords) {
+      if(hay.contains(w)) {
+        return false;
+      }
+    }
+  }
+  bool anyClauses = false;
+  for(const QVector<Clause>& group : m_groups) {
+    if(group.isEmpty()) {
+      continue;
+    }
+    anyClauses = true;
+    bool all = true;
+    for(const Clause& c : group) {
+      if(clauseMatches(c, t) == c.negate) {
+        all = false;
+        break;
+      }
+    }
+    if(all) {
+      return true;
+    }
+  }
+  return !anyClauses;
 }
 
 }  // namespace heap::query

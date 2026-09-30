@@ -72,7 +72,8 @@ Rectangle {
             if (String(root._data(tm, idx, "status") || "") === "done") continue;
             const due = root._data(tm, idx, "deadline");
             if (!due || !due.getFullYear || !root._inRange(due)) continue;
-            if (root._data(tm, idx, "hasTime")) continue;
+            // Either clock puts it on the grid already (schema v10 keeps one per field).
+            if (root._data(tm, idx, "scheduledHasTime") || root._data(tm, idx, "dueHasTime")) continue;
             if (needle.length > 0) {
                 const hay = String(root._data(tm, idx, "searchText") || "");
                 if (hay.indexOf(needle) < 0) continue;

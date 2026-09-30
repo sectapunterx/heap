@@ -10,6 +10,8 @@
 
 #include <QDate>
 #include <QDateTime>
+#include <QVariantList>
+#include <QVariantMap>
 
 #include <gtest/gtest.h>
 
@@ -179,4 +181,101 @@ TEST(TaskQuery, TheFieldListIsWhatTheParserAccepts) {
   for(const char* f : {"status", "priority", "deadline", "tag", "mention", "profile", "sort", "limit"}) {
     EXPECT_TRUE(fields.contains(QLatin1String(f))) << f << " is missing from the advertised field list";
   }
+}
+
+// ─── The audit's TASKS-21: the query speaks the board's language ───
+
+namespace {
+
+const QVariantList kColumns = {
+    QVariantMap{{"id", "todo"}, {"name", "To Do"}},
+    QVariantMap{{"id", "prog"}, {"name", "In Progress"}},
+    QVariantMap{{"id", "review"}, {"name", "Code Review"}},
+    QVariantMap{{"id", "done"}, {"name", "Done"}},
+};
+
+TaskQuery qc(const QString& text) {
+  return TaskQuery::compile(text, kToday, kColumns);
+}
+
+}  // namespace
+
+TEST(TaskQuery, StatusIsNamedAsTheBoardShowsIt) {
+  const Task review = mk(QStringLiteral("A"), QStringLiteral("review"));
+  const Task prog = mk(QStringLiteral("B"), QStringLiteral("prog"));
+  EXPECT_TRUE(qc(QStringLiteral("status:review")).matches(review));
+  EXPECT_TRUE(qc(QStringLiteral("status:\"Code Review\"")).matches(review));
+  EXPECT_TRUE(qc(QStringLiteral("status:code-review")).matches(review));
+  EXPECT_TRUE(qc(QStringLiteral("status:in-progress")).matches(prog));
+  EXPECT_TRUE(qc(QStringLiteral("status:\"in progress\"")).matches(prog));
+  EXPECT_FALSE(qc(QStringLiteral("status:in-progress")).matches(review));
+}
+
+TEST(TaskQuery, HashIsALabelButANumberIsAnIssue) {
+  Task t = mk(QStringLiteral("A"));
+  t.labels = {Label{QStringLiteral("infra"), QString()}};
+  EXPECT_TRUE(qc(QStringLiteral("#infra")).matches(t));
+  EXPECT_FALSE(qc(QStringLiteral("#infra")).matches(mk(QStringLiteral("B"))));
+  const TaskQuery issue = qc(QStringLiteral("#42"));
+  EXPECT_FALSE(issue.isQuery());
+  EXPECT_EQ(issue.freeText(), QStringLiteral("#42"));
+}
+
+TEST(TaskQuery, DueTodayOverdueAndWeek) {
+  Task today = mk(QStringLiteral("A"));
+  today.dueAt = QDateTime(kToday, QTime(0, 0));
+  Task late = mk(QStringLiteral("B"));
+  late.dueAt = QDateTime(kToday.addDays(-3), QTime(0, 0));
+  Task lateDone = late;
+  lateDone.status = QStringLiteral("done");
+  Task next = mk(QStringLiteral("C"));
+  next.dueAt = QDateTime(kToday.addDays(1), QTime(0, 0));  // kToday is a Sunday
+
+  EXPECT_TRUE(qc(QStringLiteral("due:today")).matches(today));
+  EXPECT_FALSE(qc(QStringLiteral("due:today")).matches(late));
+  EXPECT_TRUE(qc(QStringLiteral("due:overdue")).matches(late));
+  EXPECT_FALSE(qc(QStringLiteral("due:overdue")).matches(lateDone)) << "done is not overdue";
+  EXPECT_TRUE(qc(QStringLiteral("due:week")).matches(today));
+  EXPECT_FALSE(qc(QStringLiteral("due:week")).matches(next)) << "Monday is next week";
+  EXPECT_TRUE(qc(QStringLiteral("deadline:overdue")).matches(late)) << "due: and deadline: are one field";
+}
+
+TEST(TaskQuery, IsOpenDoneArchived) {
+  Task done = mk(QStringLiteral("A"), QStringLiteral("done"));
+  Task archived = mk(QStringLiteral("B"));
+  archived.archived = true;
+  EXPECT_TRUE(qc(QStringLiteral("is:open")).matches(mk(QStringLiteral("C"))));
+  EXPECT_FALSE(qc(QStringLiteral("is:open")).matches(done));
+  EXPECT_FALSE(qc(QStringLiteral("is:open")).matches(archived));
+  EXPECT_TRUE(qc(QStringLiteral("is:done")).matches(done));
+  EXPECT_TRUE(qc(QStringLiteral("is:archived")).matches(archived));
+}
+
+TEST(TaskQuery, NegationAndOr) {
+  const Task p0 = mk(QStringLiteral("A"), QStringLiteral("todo"), QStringLiteral("P0"));
+  const Task blocked = mk(QStringLiteral("B"), QStringLiteral("blocked"), QStringLiteral("P3"));
+  const Task other = mk(QStringLiteral("C"), QStringLiteral("todo"), QStringLiteral("P3"));
+  const TaskQuery either = TaskQuery::compile(QStringLiteral("priority:p0 OR status:blocked"), kToday);
+  EXPECT_TRUE(either.matches(p0));
+  EXPECT_TRUE(either.matches(blocked));
+  EXPECT_FALSE(either.matches(other));
+
+  EXPECT_FALSE(qc(QStringLiteral("-status:done")).matches(mk(QStringLiteral("D"), QStringLiteral("done"))));
+  EXPECT_TRUE(qc(QStringLiteral("-status:done")).matches(other));
+  // A negated word excludes on the task's text.
+  const TaskQuery noTitle = qc(QStringLiteral("-title"));
+  EXPECT_TRUE(noTitle.isQuery());
+  EXPECT_FALSE(noTitle.matches(other)) << "every mk() title contains 'title'";
+}
+
+TEST(TaskQuery, NonsenseIsReportedNotSilentlySearched) {
+  const TaskQuery query = qc(QStringLiteral("stauts:done status:nope priority:p9 due:banana is:weird login"));
+  const QStringList bad = query.unknownClauses();
+  for(const char* tok : {"stauts:done", "status:nope", "priority:p9", "due:banana", "is:weird"}) {
+    EXPECT_TRUE(bad.contains(QLatin1String(tok))) << tok << " was not reported";
+  }
+  EXPECT_FALSE(bad.contains(QStringLiteral("login")));
+  EXPECT_TRUE(qc(QStringLiteral("status:done #infra")).unknownClauses().isEmpty());
+  // A URL is text, not a clause.
+  EXPECT_TRUE(qc(QStringLiteral("https://x/y")).unknownClauses().isEmpty());
 }

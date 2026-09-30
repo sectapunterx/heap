@@ -98,12 +98,14 @@ struct Task {
   QString status;    // backlog/todo/prog/half/blocked/review/done
   // Time-aware scheduling (HEAP-115). `scheduledAt` is when the work is meant
   // to happen, `dueAt` is when it is owed; either may be invalid (= none).
-  // `hasTime` says whether the clock component of both is meaningful — a bare
-  // date lands at 00:00 with hasTime=false, which is how a legacy QDate
-  // deadline migrates in.
+  // Each carries its own flag for whether its clock component is meaningful —
+  // a bare date lands at 00:00 with the flag false. There used to be one
+  // `hasTime` for both (schema ≤ 9), so a date-only deadline on a task
+  // scheduled at 14:00 read as due at midnight.
   QDateTime scheduledAt;
   QDateTime dueAt;
-  bool hasTime = false;
+  bool scheduledHasTime = false;
+  bool dueHasTime = false;
   QString branch;
   QDateTime statusChangedAt;  // last time `status` was mutated
   bool archived = false;      // hidden from Board/Timeline once auto-archived
@@ -413,6 +415,10 @@ class TaskModel : public QAbstractListModel {
     // { done, total } for the task list in the description, so a card can show
     // 2/5 without every delegate re-scanning the text in JS.
     ChecklistRole,
+    // Schema v10 split hasTime per field. HasTimeRole ("hasTime") keeps
+    // answering for the deadline, which is what every reader of it meant.
+    ScheduledHasTimeRole,
+    DueHasTimeRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
@@ -468,6 +474,9 @@ class TaskModel : public QAbstractListModel {
   void upsert(const Task& t);
   void insertAt(int row, const Task& t);
   void removeById(const QString& id);
+  // Re-rank many tasks with one dataChanged: rebalancing a column one upsert
+  // at a time re-sorted the board proxy once per card (seconds at 1k tasks).
+  void setRanks(const QHash<QString, double>& ranks);
 
  private:
   struct GitInfo {

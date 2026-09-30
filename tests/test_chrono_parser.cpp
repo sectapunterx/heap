@@ -1033,3 +1033,134 @@ TEST_F(Chrono, OneOnOneIsNotATime) {
   EXPECT_DATE(r, 2026, 5, 21);
   EXPECT_TIME(r, 12, 0);
 }
+
+// ── The audit's TASKS-14: a bare time that has passed means tomorrow ─────
+
+namespace {
+// Wednesday evening, after most times of the day have gone by.
+const QDateTime kLate(QDate(2026, 5, 20), QTime(23, 49));
+}  // namespace
+
+TEST_F(Chrono, APassedBareTimeIsTomorrow) {
+  auto r = parserEn.parse("call mom at 5", kLate);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 5, 0);
+
+  r = parserEn.parse("lunch at noon", kLate);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+
+  r = parserRu.parse(QString::fromUtf8("отчёт к 18:00"), kLate);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 18, 0);
+}
+
+TEST_F(Chrono, AComingBareTimeStaysToday) {
+  auto r = parserEn.parse("call mom at 17:00", kRef);  // 10:00
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 20);
+}
+
+TEST_F(Chrono, AnExplicitTodayIsKeptEvenWhenPassed) {
+  auto r = parserEn.parse("today at 9am", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 20) << "the user said today";
+}
+
+TEST_F(Chrono, ARecurringTimeThatPassedStartsAtTheNextOccurrence) {
+  // Wednesday 10:30: today's 10:00 has gone, Thursday is the next workday.
+  auto r = parserEn.parse("standup every weekday 10:00", QDateTime(kRefDate, QTime(10, 30)));
+  EXPECT_OK(r);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:weekday"));
+  EXPECT_DATE(r, 2026, 5, 21);
+  // Friday evening → Monday.
+  r = parserEn.parse("standup every weekday 10:00", QDateTime(QDate(2026, 5, 22), QTime(18, 0)));
+  EXPECT_DATE(r, 2026, 5, 25);
+  // Before 10:00 it is still today.
+  r = parserEn.parse("standup every weekday 10:00", QDateTime(kRefDate, QTime(9, 0)));
+  EXPECT_DATE(r, 2026, 5, 20);
+}
+
+// ── TASKS-24: phrases that went unparsed or stayed in the title ─────────
+
+TEST_F(Chrono, HalfAnHour) {
+  auto r = parserRu.parse(QString::fromUtf8("перезвонить через полчаса"), kRef);
+  EXPECT_OK(r);
+  EXPECT_TRUE(r.hasTime);
+  EXPECT_EQ(r.start, kRef.addSecs(30 * 60));
+  EXPECT_EQ(r.consumed, QString::fromUtf8("через полчаса"));
+
+  r = parserEn.parse("ping in half an hour", kRef);
+  EXPECT_OK(r);
+  EXPECT_EQ(r.start, kRef.addSecs(30 * 60));
+}
+
+TEST_F(Chrono, NextWeekAndNextMonth) {
+  auto r = parserEn.parse("plan the offsite next week", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 25);  // Monday
+  EXPECT_FALSE(r.hasTime);
+  EXPECT_EQ(r.consumed, QStringLiteral("next week"));
+
+  r = parserRu.parse(QString::fromUtf8("отпуск на следующей неделе"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 25);
+
+  r = parserEn.parse("renew cert next month", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 6, 1);
+}
+
+TEST_F(Chrono, DayPartsAreTimesAndLeaveTheTitle) {
+  auto r = parserEn.parse("deploy tonight", kRef);
+  EXPECT_OK(r);
+  EXPECT_TRUE(r.hasTime);
+  EXPECT_TIME(r, 20, 0);
+  EXPECT_EQ(r.consumed, QStringLiteral("tonight"));
+
+  r = parserEn.parse("call Bob tomorrow morning", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 9, 0);
+  EXPECT_EQ(r.consumed, QStringLiteral("tomorrow morning"));
+
+  r = parserRu.parse(QString::fromUtf8("позвонить маме завтра вечером"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 19, 0);
+  EXPECT_EQ(r.consumed, QString::fromUtf8("завтра вечером"));
+
+  r = parserRu.parse(QString::fromUtf8("утром проверить логи"), kRef);  // 10:00: morning passed
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 21);
+  EXPECT_TIME(r, 9, 0);
+
+  r = parserEn.parse("review PRs in the evening", kRef);
+  EXPECT_OK(r);
+  EXPECT_TIME(r, 19, 0);
+  EXPECT_EQ(r.consumed, QStringLiteral("in the evening"));
+}
+
+TEST_F(Chrono, MonthlyRecurrence) {
+  auto r = parserEn.parse("pay rent every month on the 15th", kRef);
+  EXPECT_OK(r);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:month:15"));
+  EXPECT_DATE(r, 2026, 6, 15);  // the 15th of May has passed
+  EXPECT_EQ(r.consumed, QStringLiteral("every month on the 15th"));
+
+  r = parserEn.parse("invoice monthly", kRef);
+  EXPECT_OK(r);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:month:20"));
+  EXPECT_DATE(r, 2026, 5, 20);
+
+  r = parserRu.parse(QString::fromUtf8("отчёт каждый месяц"), kRef);
+  EXPECT_OK(r);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:month:20"));
+
+  r = parserRu.parse(QString::fromUtf8("аренда каждое 25 число"), kRef);
+  EXPECT_OK(r);
+  EXPECT_EQ(r.recurrence, QStringLiteral("every:month:25"));
+  EXPECT_DATE(r, 2026, 5, 25);
+}
