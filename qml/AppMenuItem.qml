@@ -68,8 +68,19 @@ MenuItem {
         implicitHeight: 28
         radius: Theme.radiusSm
         color: !item.enabled ? "transparent"
-             : item.down ? Theme.panel3
-             : item.highlighted ? Theme.panel2
+             : (item.down || item.highlighted) ? Theme.rowHighlight
              : "transparent"
+        // panel2 on the menu's panel was 1.03:1 — the keyboard's place in a
+        // menu could not be seen. A focusRing bar marks the highlighted row.
+        Rectangle {
+            objectName: "menu-row-marker"
+            visible: item.enabled && item.highlighted
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: 3
+            height: parent.height - 2 * Theme.spXs
+            radius: Theme.radiusXs
+            color: Theme.focusRing
+        }
     }
 }

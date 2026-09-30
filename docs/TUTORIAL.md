@@ -57,6 +57,8 @@ Everything is optional and order-independent, in **English and Russian**.
 | `pay invoice // net-30, portal is slow` | text after `//` becomes the task **description** |
 | `review PR @andrey @lena` | keeps the `@mentions` and links them to matching people |
 | `urgent fix prod` / `p1 fix prod` / `fix prod !!` | sets the **priority**: `p0`–`p3`, `!!` (P1), `!!!` (P0), `urgent`/`asap`/`срочно` (P1), `critical`/`blocker` (P0), `не срочно` (P3) |
+| `fix login #backend #auth` | adds the **labels** `backend` and `auth` (and they leave the title); `#42` stays text |
+| `ticket: rotate keys` / `задача: …` | the leading marker says what it is and leaves the title |
 
 **When**
 
@@ -64,9 +66,15 @@ Everything is optional and order-independent, in **English and Russian**.
 |----------|-----------|
 | `ship v1 tomorrow` / `ship v1 завтра 14:00` | a deadline: the date, and the time when given |
 | `report by friday` / `отчёт к пятнице` / `до понедельника` | a deadline on that day |
-| `tomorrow morning`, `tonight`, `завтра утром`, `вечером` | a time from the part of the day (morning 9:00, afternoon 15:00, evening 19:00, tonight 20:00) |
-| `every weekday`, `every monday`, `по будням`, `каждый будний день` | a **repeating** task |
-| `in 2 days`, `через 3 дня`, `end of month` | relative dates |
+| `tomorrow morning`, `tonight`, `in the evening`, `завтра утром`, `вечером` | a time from the part of the day (morning 9:00, afternoon 15:00, evening 19:00, tonight 20:00) |
+| `call mom at 5`, `lunch at noon`, `к 18:00` | a time with no day is its **next** occurrence: today if it is still ahead, else tomorrow |
+| `every weekday`, `every monday`, `по будням`, `каждый будний день` | a **repeating** task; a time that has passed today starts at the next occurrence |
+| `every month on the 15th`, `monthly`, `каждый месяц`, `каждое 25 число` | a **monthly** task |
+| `in 2 days`, `через 3 дня`, `через полчаса`, `next week`, `на следующей неделе`, `end of month` | relative dates (next week is its Monday) |
+
+`Return` adds the task and closes; `Ctrl+Return` adds it and stays open for the
+next one. A line that is only a date (`tomorrow`) says so instead of doing
+nothing.
 
 **Where it lands**
 
@@ -156,19 +164,24 @@ labels, assignee, project and milestone. Typing `field:value` filters instead:
 
 | Clause | Means |
 | --- | --- |
-| `status:blocked` | one status, or `status:todo,prog` for several |
+| `status:blocked` | one status, or `status:todo,prog` for several — by id or by the column's name: `status:"Code Review"`, `status:in-progress` |
 | `priority:P0,P1` | any of these priorities |
-| `deadline:<friday` | before a date. `<` `<=` `>` `>=` and a bare date all work |
+| `deadline:<friday` / `due:<friday` | before a date. `<` `<=` `>` `>=` and a bare date all work |
+| `due:today`, `due:overdue`, `due:week` | due today, overdue (and not done), due by Sunday |
 | `deadline:7d` | offsets too: `3d`, `2w`, `1m` — and `deadline:none` for unscheduled |
-| `tag:infra` | any of the task's labels |
+| `tag:infra` / `#infra` | any of the task's labels |
 | `mention:@ada` | the assignee, or an `@name` in the title or description |
+| `is:open`, `is:done`, `is:archived`, `is:overdue`, `is:recurring` | the task's state |
+| `-status:done`, `-#infra`, `-draft` | anything, negated |
+| `priority:P0 OR status:blocked` | either side (`\|` works too) |
 
 Clauses combine with AND, and mix freely with ordinary words:
 `status:blocked priority:P0 login` is the blocked P0 tasks whose text mentions
 login. Dates understand what the task editor understands, so `deadline:<friday`
-and `deadline:<2026-09-24` are both fine. A typo in a date drops that clause
-rather than emptying the board. The magnifier turns accent-coloured when what
-you typed is being read as a query.
+and `deadline:<2026-09-24` are both fine. A typo — an unknown field, column or
+priority, an unreadable date — drops that clause rather than emptying the
+board, and the search box shows a `?` badge naming what it could not read. The
+magnifier turns accent-coloured when what you typed is being read as a query.
 
 This works the same on the board, the timeline, the week and month calendars
 and the archive.
@@ -185,9 +198,11 @@ and the archive.
 ## 9. It nudges you
 
 A background tick (every 60 s) auto-archives long-done tasks, flags tasks that
-have been *blocked* too long, and fires **deadline** and **standup** reminders
-through the system tray — all muted during **quiet hours** (Settings →
-Notifications).
+have been *blocked* too long, and fires **deadline**, **meeting** and
+**standup** reminders through the system tray. During **quiet hours**
+(Settings → Notifications) a reminder is held and delivered when the quiet
+window ends; a meeting or the standup is an appointment and still reminds.
+A reminder is never repeated, not even after a restart.
 
 ---
 

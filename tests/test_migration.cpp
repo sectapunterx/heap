@@ -110,7 +110,8 @@ TEST_F(MigrationTest, V3DeadlineBecomesMidnightScheduledAndDue) {
   ASSERT_NE(dated, nullptr);
   EXPECT_EQ(dated->scheduledAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
   EXPECT_EQ(dated->dueAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
-  EXPECT_FALSE(dated->hasTime);
+  EXPECT_FALSE(dated->dueHasTime);
+  EXPECT_FALSE(dated->scheduledHasTime);
 
   const Task* undated = taskById(app, QStringLiteral("T-2"));
   ASSERT_NE(undated, nullptr);
@@ -217,7 +218,10 @@ TEST_F(MigrationTest, LadderSkipsRungsBelowTheEntryVersion) {
   const QJsonObject task = root["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(0).toObject();
   EXPECT_EQ(task["scheduledAt"].toString(), QStringLiteral("2026-07-08T14:30:00"))
       << "a rung below the entry version must not rewrite scheduledAt";
-  EXPECT_TRUE(task["hasTime"].toBool()) << "a rung below the entry version must not clear hasTime";
+  // The v9->v10 rung does run, and turns the shared flag into one per field.
+  EXPECT_FALSE(task.contains(QStringLiteral("hasTime")));
+  EXPECT_TRUE(task["dueHasTime"].toBool()) << "a rung below the entry version must not clear the clock time";
+  EXPECT_TRUE(task["scheduledHasTime"].toBool());
   EXPECT_TRUE(task.contains(QStringLiteral("deadline"))) << "the v3->v4 rung consumes `deadline`; entering at v4 it must be left alone";
   // The v4→v5 rung, on the other hand, is at the entry version and does run.
   EXPECT_TRUE(task.contains(QStringLiteral("rank")));
@@ -487,4 +491,90 @@ int main(int argc, char** argv) {
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+// ── v9 → v10: one clock flag per datetime, and no rank ties ──
+
+namespace {
+QJsonObject v10Task(const QJsonObject& root, int i) {
+  return root["profiles"].toArray().at(0).toObject()["tasks"].toArray().at(i).toObject();
+}
+}  // namespace
+
+// The 0.5.0 audit's #7: a date-only deadline next to a timed schedule shared
+// one hasTime, so the deadline read as due at 00:00 (and reminded then).
+TEST_F(MigrationTest, V9HasTimeSplitsPerDatetime) {
+  QJsonObject root = QJsonDocument::fromJson(R"({
+    "schemaVersion": 9,
+    "profiles": [{"id": "default", "tasks": [
+      {"id": "A", "status": "todo", "rank": 1024, "scheduledAt": "2026-07-08T14:00:00", "dueAt": "2026-07-20T00:00:00", "hasTime": true},
+      {"id": "B", "status": "todo", "rank": 2048, "scheduledAt": "2026-07-08T00:00:00", "dueAt": "2026-07-08T17:30:00", "hasTime": true},
+      {"id": "C", "status": "todo", "rank": 3072, "scheduledAt": "2026-07-08T09:00:00", "dueAt": "2026-07-08T09:00:00", "hasTime": true},
+      {"id": "D", "status": "todo", "rank": 4096, "dueAt": "2026-07-08T00:00:00", "hasTime": true},
+      {"id": "E", "status": "todo", "rank": 5120, "scheduledAt": "2026-07-08T00:00:00", "dueAt": "2026-07-08T00:00:00"}
+    ]}]
+  })")
+                         .object();
+  ASSERT_TRUE(heap::state::migrateState(root, 9));
+  EXPECT_EQ(root["schemaVersion"].toInt(), 10);
+
+  const QJsonObject a = v10Task(root, 0);
+  EXPECT_TRUE(a["scheduledHasTime"].toBool());
+  EXPECT_FALSE(a["dueHasTime"].toBool()) << "the date-only deadline must not become 00:00";
+  const QJsonObject b = v10Task(root, 1);
+  EXPECT_FALSE(b["scheduledHasTime"].toBool());
+  EXPECT_TRUE(b["dueHasTime"].toBool());
+  const QJsonObject c = v10Task(root, 2);
+  EXPECT_TRUE(c["scheduledHasTime"].toBool());
+  EXPECT_TRUE(c["dueHasTime"].toBool());
+  // Alone, a midnight with the flag set is what the user typed.
+  EXPECT_TRUE(v10Task(root, 3)["dueHasTime"].toBool());
+  const QJsonObject e = v10Task(root, 4);
+  EXPECT_FALSE(e["dueHasTime"].toBool());
+  EXPECT_FALSE(e["scheduledHasTime"].toBool());
+  for(int i = 0; i < 5; ++i) {
+    EXPECT_FALSE(v10Task(root, i).contains(QStringLiteral("hasTime")));
+  }
+
+  // The live reader agrees with what the rung wrote.
+  const Task live = heap::state::taskFromJson(a);
+  EXPECT_TRUE(live.scheduledHasTime);
+  EXPECT_FALSE(live.dueHasTime);
+}
+
+// An exported profile from a v9 build carries `hasTime` and no ladder.
+TEST_F(MigrationTest, V9HasTimeIsReadByTheSameRuleOnImport) {
+  QJsonObject o;
+  o["id"] = "IMP-1";
+  o["scheduledAt"] = "2026-07-08T14:00:00";
+  o["dueAt"] = "2026-07-20T00:00:00";
+  o["hasTime"] = true;
+  const Task t = heap::state::taskFromJson(o);
+  EXPECT_TRUE(t.scheduledHasTime);
+  EXPECT_FALSE(t.dueHasTime);
+}
+
+// Rank-0 cards (demo seed, synced issues, editor saves before the fix) tie,
+// and a tie is a gap no drop can land in. The rung spreads every column that
+// has one, in the order the board showed it.
+TEST_F(MigrationTest, V9RankTiesAreSpreadInBoardOrder) {
+  QJsonObject root = QJsonDocument::fromJson(R"({
+    "schemaVersion": 9,
+    "profiles": [{"id": "default", "tasks": [
+      {"id": "T-3", "status": "todo"},
+      {"id": "T-1", "status": "todo"},
+      {"id": "T-2", "status": "todo", "rank": 5},
+      {"id": "D-1", "status": "done", "rank": 7},
+      {"id": "D-2", "status": "done", "rank": 9}
+    ]}]
+  })")
+                         .object();
+  ASSERT_TRUE(heap::state::migrateState(root, 9));
+  // Board order was T-1, T-3 (both 0, by id), then T-2 (5).
+  EXPECT_LT(v10Task(root, 1)["rank"].toDouble(), v10Task(root, 0)["rank"].toDouble());
+  EXPECT_LT(v10Task(root, 0)["rank"].toDouble(), v10Task(root, 2)["rank"].toDouble());
+  EXPECT_GT(v10Task(root, 1)["rank"].toDouble(), 0.0);
+  // A column without a tie keeps its ranks.
+  EXPECT_EQ(v10Task(root, 3)["rank"].toDouble(), 7.0);
+  EXPECT_EQ(v10Task(root, 4)["rank"].toDouble(), 9.0);
 }

@@ -40,6 +40,19 @@ Rectangle {
             text: I18n.t("selection.bar.move")
             onClicked: moveMenu.popup()
         }
+        // Priority and labels for the whole selection (TASKS-32): the two
+        // edits a triage pass makes most, which took one editor per card.
+        PillButton {
+            objectName: "sel-priority"
+            text: I18n.t("selection.bar.priority")
+            onClicked: priorityMenu.popup()
+        }
+        PillButton {
+            id: labelBtn
+            objectName: "sel-label"
+            text: I18n.t("selection.bar.label")
+            onClicked: labelPopup.open()
+        }
         PillButton {
             // Archive view operates on already-archived tickets — the only
             // sensible bulk action is to restore (unarchive). Elsewhere we
@@ -56,6 +69,63 @@ Rectangle {
         PillButton {
             text: I18n.t("selection.bar.clear")
             onClicked: AppController.clearSelection()
+        }
+    }
+
+    AppMenu {
+        id: priorityMenu
+        objectName: "sel-priority-menu"
+        Repeater {
+            model: ["P0", "P1", "P2", "P3"]
+            AppMenuItem {
+                required property string modelData
+                text: modelData
+                onTriggered: AppController.setSelectedTasksPriority(modelData)
+            }
+        }
+    }
+
+    // Type a label: Enter adds it to every selected card, Shift+Enter takes
+    // it off them.
+    Popup {
+        id: labelPopup
+        objectName: "sel-label-popup"
+        parent: labelBtn
+        y: -height - Theme.spSm
+        padding: Theme.spMd
+        focus: true
+        closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
+        background: Rectangle {
+            radius: Theme.radiusLg
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+        onOpened: { labelField.text = ""; labelField.forceActiveFocus(); }
+        function apply(present) {
+            const name = labelField.text.trim();
+            if (name.length === 0) return;
+            AppController.setSelectedTasksLabel(name, present);
+            labelPopup.close();
+        }
+        contentItem: ColumnLayout {
+            spacing: Theme.spSm
+            TextField {
+                id: labelField
+                objectName: "sel-label-field"
+                Layout.preferredWidth: 220
+                placeholderText: I18n.t("selection.bar.labelPh")
+                color: Theme.text
+                placeholderTextColor: Theme.textDim
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                Keys.onReturnPressed: (e) => labelPopup.apply((e.modifiers & Qt.ShiftModifier) === 0)
+                Keys.onEnterPressed: (e) => labelPopup.apply((e.modifiers & Qt.ShiftModifier) === 0)
+            }
+            Text {
+                text: I18n.t("selection.bar.labelHint")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+            }
         }
     }
 

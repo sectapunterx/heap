@@ -5,10 +5,12 @@
 #include <QDate>
 #include <QDateTime>
 #include <QHash>
+#include <QJsonObject>
 #include <qqmlregistration.h>
 #include <QSet>
 #include <QSortFilterProxyModel>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -57,6 +59,23 @@ struct ExternalMeta {
   // The issue was missing from the last complete pull: deleted upstream, or
   // moved somewhere this connection cannot see.
   bool goneUpstream = false;
+  // The filter the issue was last pulled under (a digest of the card's scope
+  // fields: repo, JQL, project…). A complete pull under a different filter
+  // that no longer carries the issue says nothing about the issue itself, so
+  // the card is only "out of scope" — "gone" needs the same filter.
+  QString scope;
+  bool outOfScope = false;
+  // What the tracker said last time for priority (already mapped to P0..P3)
+  // and for labels, so both merge three-way like title and body.
+  QString priority;
+  QStringList labels;
+  // Fields ("title", "body", "priority") that changed both here and in the
+  // tracker since the last pull. The local value is kept until the user picks
+  // a side in the editor.
+  QStringList conflicts;
+  // The move in unsyncedStatus was never sent — the tracker was disconnected
+  // or unreachable — so it goes out after the next successful pull.
+  bool pushQueued = false;
 
   bool operator==(const ExternalMeta&) const = default;
 };
@@ -79,12 +98,14 @@ struct Task {
   QString status;    // backlog/todo/prog/half/blocked/review/done
   // Time-aware scheduling (HEAP-115). `scheduledAt` is when the work is meant
   // to happen, `dueAt` is when it is owed; either may be invalid (= none).
-  // `hasTime` says whether the clock component of both is meaningful — a bare
-  // date lands at 00:00 with hasTime=false, which is how a legacy QDate
-  // deadline migrates in.
+  // Each carries its own flag for whether its clock component is meaningful —
+  // a bare date lands at 00:00 with the flag false. There used to be one
+  // `hasTime` for both (schema ≤ 9), so a date-only deadline on a task
+  // scheduled at 14:00 read as due at midnight.
   QDateTime scheduledAt;
   QDateTime dueAt;
-  bool hasTime = false;
+  bool scheduledHasTime = false;
+  bool dueHasTime = false;
   QString branch;
   QDateTime statusChangedAt;  // last time `status` was mutated
   bool archived = false;      // hidden from Board/Timeline once auto-archived
@@ -148,6 +169,24 @@ struct CalEvent {
   QVector<QDate> exdates;
   QString masterId;
   QDate originalDate;
+  // The IANA zone the wall-clock fields above are written in. Empty — the
+  // common case — means floating local time: the event is at 10:00 wherever
+  // the user is. A series imported from another zone keeps it, so each
+  // occurrence is converted on its own day and a New York meeting follows
+  // New York's DST, not the viewer's. Exdates and an override's originalDate
+  // are dates in this zone too. See src/cal/Occurrences.h.
+  QString tz;
+  // Where, what for and a link to join. `context` stays the short label drawn
+  // before the title; it used to double as the location.
+  QString location;
+  QString notes;
+  QString url;
+  // Minutes before the start to remind, per event. kReminderDefault uses the
+  // notifications setting; kReminderOff never reminds.
+  int reminderMinutes = -1;
+
+  static constexpr int kReminderDefault = -1;
+  static constexpr int kReminderOff = -2;
 
   bool operator==(const CalEvent&) const = default;
 };
@@ -201,6 +240,16 @@ struct Note {
   bool pinned{};
   QDateTime created;
   QDateTime updated;
+  // Where the note last met a folder of .md files (see notes/MdVault.h): the
+  // file's path relative to that folder, and a hash of the title and body the
+  // file held then. The hash is what tells a re-import which side changed —
+  // without it an edit made in heap since the last import was overwritten by
+  // the older file. Empty for a note that never left heap.
+  QString vaultPath;
+  QString vaultHash;
+  // The frontmatter lines heap has no field for (Obsidian's tags, aliases, …),
+  // kept verbatim so an export writes them back instead of stripping them.
+  QString frontmatter;
 
   bool operator==(const Note&) const = default;
 };
@@ -245,6 +294,9 @@ struct Profile {
   QString activeNoteId;
   QVector<DocPage> docPages;
   QString activeDocPageId;
+  // Keys of the profile object this build does not read, carried through a
+  // save untouched (PLAT-26). Only filled for a document at the current schema.
+  QJsonObject extra;
 };
 
 // Notes, without their bodies.
@@ -286,7 +338,7 @@ class NoteModel : public QAbstractListModel {
     return m_items;
   }
 
-  int indexOfId(const QString& id) const;
+  Q_INVOKABLE int indexOfId(const QString& id) const;
   void upsert(const Note& n);
   // Undo puts a deleted note back in its old row, not at the end of the list.
   void insertAt(int row, const Note& n);
@@ -391,6 +443,10 @@ class TaskModel : public QAbstractListModel {
     // { done, total } for the task list in the description, so a card can show
     // 2/5 without every delegate re-scanning the text in JS.
     ChecklistRole,
+    // Schema v10 split hasTime per field. HasTimeRole ("hasTime") keeps
+    // answering for the deadline, which is what every reader of it meant.
+    ScheduledHasTimeRole,
+    DueHasTimeRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
@@ -434,6 +490,10 @@ class TaskModel : public QAbstractListModel {
   }
 
   int indexOfId(const QString& id) const;
+  // SearchTextRole without the QVariant: the row's cached lowercase haystack.
+  // TaskFilterProxy reads it once per row per keystroke per column.
+  const QString& searchTextAt(int row) const;
+  static QString searchTextOf(const Task& t);
   // Moves a task to `status`. statusChangedAt is stamped with the current time
   // unless `changedAt` is given — undo passes the original back so restoring a
   // task does not look like a fresh move (the "stuck in this column" badge is
@@ -442,6 +502,9 @@ class TaskModel : public QAbstractListModel {
   void upsert(const Task& t);
   void insertAt(int row, const Task& t);
   void removeById(const QString& id);
+  // Re-rank many tasks with one dataChanged: rebalancing a column one upsert
+  // at a time re-sorted the board proxy once per card (seconds at 1k tasks).
+  void setRanks(const QHash<QString, double>& ranks);
 
  private:
   struct GitInfo {
@@ -460,6 +523,11 @@ class TaskModel : public QAbstractListModel {
   // replaced wholesale. Mutable so the lookup can stay const.
   mutable QHash<QString, int> m_index;
   mutable bool m_indexDirty = true;
+  // searchTextAt()'s per-row haystacks, parallel to m_items. A null entry has
+  // not been built yet (or was invalidated by an upsert). If the sizes ever
+  // disagree the whole cache is dropped and rebuilt lazily, so a mutation path
+  // that forgets to maintain it costs speed, never correctness.
+  mutable QVector<QString> m_searchCache;
 };
 
 class EventModel : public QAbstractListModel {

@@ -48,7 +48,8 @@ QVector<Task> makeTasks(int n) {
     t.status = (i % 3 == 0) ? QStringLiteral("todo") : QStringLiteral("prog");
     t.scheduledAt = base.addDays(i % 90);
     t.dueAt = base.addDays((i % 90) + 1);
-    t.hasTime = (i % 2) == 0;
+    t.scheduledHasTime = (i % 2) == 0;
+    t.dueHasTime = (i % 2) == 0;
     t.branch = QStringLiteral("feature/bench-") + QString::number(i);
     t.statusChangedAt = base;
     t.trackedSeconds = i;

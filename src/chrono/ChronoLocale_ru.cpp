@@ -78,15 +78,19 @@ ChronoLocale buildRussian() {
       h.insert(QString::fromUtf8(n), 1);
     }
   };
-  fillSet(loc.weekUnits, {"неделя", "недели", "недель", "неделю", "нед"});
-  fillSet(loc.monthUnits, {"месяц", "месяца", "месяцев", "мес"});
-  fillSet(loc.yearUnits, {"год", "года", "лет", "г"});
+  fillSet(loc.weekUnits, {"неделя", "недели", "недель", "неделю", "неделе", "нед"});
+  fillSet(loc.monthUnits, {"месяц", "месяца", "месяцев", "месяце", "мес"});
+  fillSet(loc.yearUnits, {"год", "года", "году", "лет", "г"});
 
   // ── Prefixes / connectors ──
   loc.relPrefixes << QString::fromUtf8("через");
   loc.nextAdjectives << QString::fromUtf8("след") << QString::fromUtf8("следующий") << QString::fromUtf8("следующая")
                      << QString::fromUtf8("следующую") << QString::fromUtf8("следующее") << QString::fromUtf8("буд")
-                     << QString::fromUtf8("будущий") << QString::fromUtf8("будущую");
+                     << QString::fromUtf8("будущий")
+                     << QString::fromUtf8("будущую")
+                     // "на следующей неделе", "в следующем месяце", "в следующем году"
+                     << QString::fromUtf8("следующей") << QString::fromUtf8("следующем") << QString::fromUtf8("будущей")
+                     << QString::fromUtf8("будущем");
   loc.thisAdjectives << QString::fromUtf8("эта") << QString::fromUtf8("этот") << QString::fromUtf8("этой") << QString::fromUtf8("эту")
                      << QString::fromUtf8("текущий") << QString::fromUtf8("текущая");
   loc.everyAdjectives << QString::fromUtf8("каждый") << QString::fromUtf8("каждая") << QString::fromUtf8("каждую")

@@ -57,6 +57,10 @@ Popup {
         function onAppSettingsJsonChanged() { root._reload(); }
     }
 
+    // Name shown under the theme dots (hovered / focused one).
+    property string _focusedThemeName: ""
+    onClosed: _focusedThemeName = ""
+
     background: Rectangle {
         radius: Theme.radiusXl
         color: Theme.panel
@@ -163,6 +167,15 @@ Popup {
                             color: t.colors.bg
                             border.width: 2
                             border.color: modelData.id === Theme.activePresetId ? Theme.text : Theme.border
+                            // Tab / Space like the rest of the panel, and named.
+                            activeFocusOnTab: true
+                            Accessible.role: Accessible.RadioButton
+                            Accessible.name: chip.t.name
+                            Accessible.checked: modelData.id === Theme.activePresetId
+                            Keys.onSpacePressed: root._setAppearance(Theme.slot === "light" ? "lightPreset" : "darkPreset", chip.modelData.id)
+                            Keys.onReturnPressed: root._setAppearance(Theme.slot === "light" ? "lightPreset" : "darkPreset", chip.modelData.id)
+                            onActiveFocusChanged: if (activeFocus) root._focusedThemeName = chip.t.name
+                            FocusRing {}
                             Rectangle {
                                 anchors.centerIn: parent
                                 width: 12; height: 12; radius: 6
@@ -170,7 +183,7 @@ Popup {
                             }
                             ToolTip.visible: chipHover.hovered
                             ToolTip.text: chip.t.name
-                            HoverHandler { id: chipHover }
+                            HoverHandler { id: chipHover; onHoveredChanged: if (hovered) root._focusedThemeName = chip.t.name }
                             MouseArea {
                                 anchors.fill: parent
                                 cursorShape: Qt.PointingHandCursor
@@ -179,6 +192,16 @@ Popup {
                             }
                         }
                     }
+                }
+                // The dots had no names: the one hovered or focused, else the
+                // theme in use.
+                Text {
+                    objectName: "tweaks-theme-name"
+                    Layout.fillWidth: true
+                    text: root._focusedThemeName.length ? root._focusedThemeName : Theme.active.name
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fsSm
+                    elide: Text.ElideRight
                 }
             }
 
@@ -240,12 +263,21 @@ Popup {
     }
 
     component SegButton: Rectangle {
+        id: segBtn
         property string text: ""
         property bool active: false
         signal clicked()
         Layout.fillWidth: true
         Layout.preferredHeight: 26
         radius: Theme.radiusMd
+        // Tab moves through the panel; it used to stay on the popup itself.
+        activeFocusOnTab: true
+        Accessible.role: Accessible.RadioButton
+        Accessible.name: segBtn.text
+        Accessible.checked: segBtn.active
+        Keys.onSpacePressed: segBtn.clicked()
+        Keys.onReturnPressed: segBtn.clicked()
+        FocusRing {}
         color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : Theme.panel2)
         border.color: active ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border
         border.width: 1
@@ -277,6 +309,12 @@ Popup {
         // target. Handlers, not a MouseArea: an Item here would become a cell.
         TapHandler { onTapped: toggleRow.toggled(!toggleRow.checked) }
         HoverHandler { cursorShape: Qt.PointingHandCursor }
+        activeFocusOnTab: true
+        Accessible.role: Accessible.CheckBox
+        Accessible.name: toggleRow.label
+        Accessible.checked: toggleRow.checked
+        Keys.onSpacePressed: toggleRow.toggled(!toggleRow.checked)
+        Keys.onReturnPressed: toggleRow.toggled(!toggleRow.checked)
 
         Text {
             Layout.fillWidth: true
@@ -290,6 +328,7 @@ Popup {
             border.color: toggleRow.checked ? "transparent" : Theme.border
             border.width: 1
             Behavior on color { ColorAnimation { duration: Theme.animMs } }
+            FocusRing { target: toggleRow; radius: 12 }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 y: 2

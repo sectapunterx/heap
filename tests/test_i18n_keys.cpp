@@ -97,6 +97,12 @@ TEST(I18n, Tr_EveryKeyUsedInAppController_IsInTheTable) {
   while(rows.hasNext()) {
     table.insert(rows.next().captured(1));
   }
+  // tr_ falls back to the integrations' own table (IntegrationI18n.cpp).
+  static const QRegularExpression ownEntry(QStringLiteral(R"re(\{QStringLiteral\("([^"]+)"\),\s*\{)re"));
+  auto own = ownEntry.globalMatch(readFile(QStringLiteral(HEAP_SRC_DIR "/integrations/IntegrationI18n.cpp")));
+  while(own.hasNext()) {
+    table.insert(own.next().captured(1));
+  }
   static const QRegularExpression use(QStringLiteral(R"re(tr_\("([^"]+)"\))re"));
   QStringList missing;
   auto it = use.globalMatch(src);

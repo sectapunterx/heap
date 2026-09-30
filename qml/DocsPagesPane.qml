@@ -14,6 +14,15 @@ Item {
 
     property string filter: ""
 
+    // A [[note]], #TICKET or @person clicked in a page's preview.
+    signal linkActivated(string kind, string target)
+
+    // Ctrl+F on the Pages tab: the page filter, not the catalogue search.
+    function focusFilter() {
+        pageFilter.forceActiveFocus();
+        pageFilter.selectAll();
+    }
+
     // Bumped by the model so the tree rebuilds.
     property int rev: 0
 
@@ -49,12 +58,17 @@ Item {
         const needle = root.filter.trim().toLowerCase();
 
         if (needle.length > 0) {
+            // Title and the whole body, not a one-line excerpt: a word from
+            // the middle of a page has to find it.
+            const hits = AppController.docPagesMatching(needle);
+            const allowed = ({});
+            for (let h = 0; h < hits.length; h++) allowed[hits[h]] = true;
             const flat = [];
             for (let i = 0; i < m.rowCount(); i++) {
                 const idx = m.index(i, 0);
                 const title = String(root._data(idx, "title") || "");
                 const excerpt = String(root._data(idx, "excerpt") || "");
-                if ((title + " " + excerpt).toLowerCase().indexOf(needle) < 0) continue;
+                if (!allowed[String(root._data(idx, "id"))]) continue;
                 flat.push({
                     id: String(root._data(idx, "id")),
                     title: title,
@@ -152,6 +166,7 @@ Item {
                 }
 
                 QQC.TextField {
+                    id: pageFilter
                     objectName: "docpage-filter"
                     Layout.fillWidth: true
                     placeholderText: I18n.t("docs.filterPages")
@@ -278,6 +293,7 @@ Item {
             Layout.fillHeight: true
             pageId: AppController.activeDocPageId
             emptyText: I18n.t("docs.noPageOpen")
+            onInternalLinkActivated: (kind, target) => root.linkActivated(kind, target)
         }
     }
 

@@ -303,7 +303,7 @@ Rectangle {
                 id: cntT
                 anchors.centerIn: parent
                 text: btn.countText
-                color: Theme.textOnBadge
+                color: Theme.textOn(btn.countColor)
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold

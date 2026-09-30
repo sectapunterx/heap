@@ -58,15 +58,10 @@ TestCase {
         AppController.deleteTask(p1.id);
     }
 
-    // `items` is a binding over buildItems(), and buildItems() reads searchText
-    // and prioritiesFilter through passesFilter(). Two handlers used to bump
-    // modelRev on those properties to "re-evaluate buildItems via binding",
-    // which was both redundant and a loop: prioritiesFilter's own default
-    // binding is evaluated on its first read — inside this very binding — and
-    // the change signal it emits bumped modelRev while items was still being
-    // computed. Qt reported a binding loop and abandoned the evaluation.
-    //
-    // This pins both halves: no warning, and the list still tracks the filters.
+    // The feed tracks the search box and the priority chips on its own, with
+    // no binding loop. (It used to be a JS `items` binding over buildItems(),
+    // where a modelRev bump inside the evaluation looped; it is a C++ proxy
+    // now, and this pins that it still narrows and widens with the filters.)
     function test_items_track_the_filters_without_a_binding_loop() {
         // Armed before anything is built: failOnWarning only catches what is
         // emitted after the call, and the loop fires during construction.
@@ -81,25 +76,79 @@ TestCase {
         const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
 
         function has(id) {
-            for (let i = 0; i < av.items.length; i++) if (av.items[i].id === id) return true;
+            const items = av.buildItems();
+            for (let i = 0; i < items.length; i++) if (items[i].id === id) return true;
             return false;
         }
 
         verify(has(t.id), "an archived task must be listed");
 
-        // Read through the binding, not buildItems(): the point is that the
-        // binding re-evaluates on its own.
         av.searchText = "zulu";
-        verify(has(t.id), "the binding must re-run when searchText moves");
+        verify(has(t.id), "the feed must follow searchText");
         av.searchText = "nothingmatchesthis";
         verify(!has(t.id), "and must narrow, not stay stale");
         av.searchText = "";
 
         av.prioritiesFilter = ({ P0: true });
-        verify(!has(t.id), "the binding must re-run when prioritiesFilter moves");
+        verify(!has(t.id), "the feed must follow prioritiesFilter");
         av.prioritiesFilter = ({ P1: true });
         verify(has(t.id));
 
         AppController.deleteTask(t.id);
+    }
+
+    // Audit 2026-09-30 (TASKS-4 / PLAT-12): the archive built a full TaskCard —
+    // each with its own 13-item menu — for every archived task, up front:
+    // 1561 archived tasks took 2.4 GB and 12 s. It is a ListView now, so the
+    // number of cards is bounded by the viewport, not by the archive, and no
+    // card has built a menu until one is opened.
+    function test_archive_builds_only_the_cards_on_screen() {
+        const ids = [];
+        for (let i = 0; i < 300; i++) {
+            const t = AppController.newTaskDraft("done");
+            t.title = "arch scale probe " + i;
+            AppController.saveTask(t);
+            ids.push(t.id);
+        }
+        AppController.setSelectedTaskIds(ids);
+        AppController.setSelectedTasksArchived(true);
+        AppController.clearSelection();
+
+        const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
+        const list = findChild(av, "archive-list");
+        verify(list !== null, "the archive is not a ListView");
+        tryVerify(() => list.count >= 300, 2000, "the feed lost archived rows");
+        compare(av.count, list.count);
+
+        let cards = 0, menus = 0;
+        function walk(o) {
+            if (!o) return;
+            if (o.objectName === "tc-card") {
+                cards++;
+                if (findChild(o, "tc-menu")) menus++;
+            }
+            for (let i = 0; i < o.children.length; i++) walk(o.children[i]);
+        }
+        walk(list.contentItem);
+        verify(cards > 0, "no card on screen");
+        verify(cards < 60, "the archive built " + cards + " cards for a 500px viewport");
+        compare(menus, 0, "cards built their context menus up front");
+
+        // Restoring one card drops one row; the rest stay.
+        AppController.setArchived(ids[0], false);
+        compare(av.buildItems().some(r => r.id === ids[0]), false, "a restored task stayed in the archive");
+        compare(av.count, list.count);
+
+        // Undo puts it back.
+        AppController.undo();
+        verify(av.buildItems().some(r => r.id === ids[0]), "undo of a restore did not re-archive");
+
+        // Select-all takes the whole feed, not just the cards on screen.
+        av.selectAllVisible();
+        compare(AppController.selectionCount, av.count);
+        AppController.clearSelection();
+
+        for (let i = 0; i < ids.length; i++) AppController.deleteTask(ids[i]);
+        AppController.clearPendingUndo();
     }
 }

@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "PlainText.js" as MdPlain
 
 Rectangle {
     id: card
@@ -10,8 +11,8 @@ Rectangle {
     property var task         // QVariantMap-like with id,title,desc,priority,status,deadline,branch,archived,blockedStuck
     property string scheduled
     property string taskId: task ? task.id : ""
-    readonly property bool _isStuck: card.task && card.task.blockedStuck === true
-    readonly property bool _isArchived: card.task && card.task.archived === true
+    readonly property bool _isStuck: !!(card.task && card.task.blockedStuck === true)
+    readonly property bool _isArchived: !!(card.task && card.task.archived === true)
     // Selection state — re-evaluates via AppController.selectedTaskIdsChanged
     // (selectionCount is read in the binding so QML tracks the dependency).
     // The keyboard cursor is on this card. Distinct from selection: the cursor
@@ -30,7 +31,47 @@ Rectangle {
     // Read by the views so a bare "O" can open whichever card is under the
     // cursor when nothing is selected.
     readonly property bool hovered: hoverArea.containsMouse
+    // Any of the card's menus is up. The board holds its arrow/letter keys
+    // back while one is, or Down moved the board cursor under the menu.
+    // `visible`, not `opened`: opened only turns true once the fade-in ends,
+    // and a key pressed during it would still reach the board.
+    readonly property bool menuOpen: !!(card._menu && card._menu.visible)
+        || !!(card._statusMenu && card._statusMenu.visible)
+        || !!(card._priorityMenu && card._priorityMenu.visible)
+    readonly property bool _done: !!(card.task && card.task.status === "done")
     signal clicked()
+
+    // Open the card's menu from the keyboard (board key M, or the Menu key),
+    // anchored on the card rather than on a pointer that may be elsewhere.
+    function openMenu() {
+        const menu = card.contextMenu();
+        menu.popup(card, Theme.spLg, Math.min(card.height, 28));
+        menu.currentIndex = 1;
+    }
+    Keys.onMenuPressed: card.openMenu()
+
+    // When the work is planned, for a task that has a scheduledAt of its own
+    // worth showing: no deadline, a different day, or a clock time. Before,
+    // a task with only a schedule looked undated (TASKS-12).
+    function _schedLabel() {
+        if (card.scheduled && card.scheduled.length > 0) return card.scheduled;
+        const t = card.task;
+        if (!t || !t.scheduledAt || !t.scheduledAt.getTime || isNaN(t.scheduledAt.getTime())) return "";
+        const s = t.scheduledAt;
+        const dl = t.deadline;
+        const sameDay = dl && dl.getTime && !isNaN(dl.getTime())
+            && dl.getFullYear() === s.getFullYear() && dl.getMonth() === s.getMonth() && dl.getDate() === s.getDate();
+        if (sameDay && !t.scheduledHasTime) return "";
+        const today = AppController.today;
+        const days = Math.round((new Date(s.getFullYear(), s.getMonth(), s.getDate()).getTime()
+            - new Date(today.getFullYear(), today.getMonth(), today.getDate()).getTime()) / 86400000);
+        let day = days === 0 ? I18n.t("task.due.today")
+                : days === 1 ? I18n.t("task.due.tomorrow")
+                : AppController.shortDate(s);
+        if (t.scheduledHasTime)
+            day += " " + String(s.getHours()).padStart(2, "0") + ":" + String(s.getMinutes()).padStart(2, "0");
+        return day;
+    }
 
     signal rangeSelectRequested(string anchorId)
 
@@ -39,7 +80,7 @@ Rectangle {
     property int _timerTick: 0
     Timer {
         interval: 1000; repeat: true
-        running: card.task && card.task.isTiming === true
+        running: !!(card.task && card.task.isTiming === true)
         onTriggered: card._timerTick++
     }
     function _fmtElapsed(s) {
@@ -60,7 +101,10 @@ Rectangle {
             case "every:fri":     return "Fridays";
             case "every:sat":     return "Saturdays";
             case "every:sun":     return "Sundays";
+            case "every:month":   return "monthly";
         }
+        const monthly = /^every:month:(\d+)$/.exec(String(r || ""));
+        if (monthly) return "monthly · " + monthly[1];
         return r ? String(r).replace("every:", "") : "";
     }
 
@@ -106,15 +150,29 @@ Rectangle {
     // can be dropped on. Without one it drags inside its own parent, which
     // clips it and draws it under later siblings.
     property Item dragLayer: null
-    states: State {
-        name: "lifted"
-        when: dragArea.drag.active && card.dragLayer !== null
-        ParentChange { target: card; parent: card.dragLayer }
+    // Reparented by hand rather than with a State + ParentChange: undoing a
+    // ParentChange also restores the card's stacking order against the
+    // sibling it was lifted from, and in a list that recycles its delegates
+    // that sibling may since have gone back to the pool — Qt warned on every
+    // drop into another column.
+    readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
+    property Item _homeParent: null
+    on_LiftedChanged: {
+        if (card._lifted) {
+            const p = card.mapToItem(card.dragLayer, 0, 0);
+            card._homeParent = card.parent;
+            card.parent = card.dragLayer;
+            card.x = p.x;
+            card.y = p.y;
+        } else if (card._homeParent) {
+            card.parent = card._homeParent;
+            card._homeParent = null;
+            // Back in the list: the list owns x/y, so put the card where it
+            // was pressed rather than where the drag left it.
+            card.x = card.homeX;
+            card.y = card.homeY;
+        }
     }
-    // Back in the list: the list owns x/y, so put the card where it was
-    // pressed rather than where ParentChange's restore left it (a drag
-    // threshold's worth off).
-    onStateChanged: if (state === "") { card.x = card.homeX; card.y = card.homeY; }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any
     // alert that needs the user), the title, how far along it is, the
@@ -197,12 +255,56 @@ Rectangle {
                     font.weight: Font.DemiBold
                 }
                 QQC.ToolTip.visible: syncStateHover.hovered
-                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip") : I18n.t("taskcard.unsynced.tip")
+                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip")
+                                  : (card._ticket.queued ? I18n.t("taskcard.queued.tip") : I18n.t("taskcard.unsynced.tip"))
                 HoverHandler { id: syncStateHover }
                 TapHandler {
                     enabled: !!card._ticket.unsynced && !card._ticket.gone
                     onTapped: AppController.retryTrackerPush(card.task.id)
                 }
+            }
+            // Both heap and the tracker changed the same field since the last
+            // sync. The local value is kept; the editor offers the other one.
+            Rectangle {
+                objectName: "tc-conflict"
+                visible: card._isTicket && !!card._ticket.conflict
+                radius: Theme.radiusSm
+                color: Theme.withAlpha(Theme.warning, 0.14)
+                implicitWidth: conflictT.implicitWidth + 10
+                implicitHeight: conflictT.implicitHeight + 2
+                Text {
+                    id: conflictT
+                    anchors.centerIn: parent
+                    text: I18n.t("taskcard.conflict")
+                    textFormat: Text.PlainText
+                    color: Theme.warning
+                    font.pixelSize: Theme.fsXs
+                    font.weight: Font.DemiBold
+                }
+                QQC.ToolTip.visible: conflictHover.hovered
+                QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
+                HoverHandler { id: conflictHover }
+            }
+            // Left behind by a filter change: still a live issue, just not one
+            // this connection pulls any more. Quiet on purpose.
+            Rectangle {
+                objectName: "tc-out-of-scope"
+                visible: card._isTicket && !!card._ticket.outOfScope && !card._ticket.gone
+                radius: Theme.radiusSm
+                color: Theme.panel2
+                implicitWidth: scopeT.implicitWidth + 10
+                implicitHeight: scopeT.implicitHeight + 2
+                Text {
+                    id: scopeT
+                    anchors.centerIn: parent
+                    text: I18n.t("taskcard.outOfScope")
+                    textFormat: Text.PlainText
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsXs
+                }
+                QQC.ToolTip.visible: scopeHover.hovered
+                QQC.ToolTip.text: I18n.t("taskcard.outOfScope.tip")
+                HoverHandler { id: scopeHover }
             }
             Rectangle {
                 objectName: "tc-stuck"
@@ -243,7 +345,11 @@ Rectangle {
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
             font.weight: Font.Medium
-            wrapMode: Text.WordWrap
+            // Wrap, not WordWrap: a URL or a long identifier has no space to
+            // break at and ran off the card (TASKS-27).
+            wrapMode: Text.Wrap
+            maximumLineCount: 6
+            elide: Text.ElideRight
         }
 
         // Checklist progress. A template ships its steps as markdown task
@@ -284,12 +390,12 @@ Rectangle {
 
         Text {
             Layout.fillWidth: true
-            visible: !!(card.task && card.task.desc && String(card.task.desc).length > 0)
-            text: card.task ? (card.task.desc || "") : ""
+            visible: text.length > 0
+            text: card.task ? MdPlain.plain(card.task.desc) : ""
             textFormat: Text.PlainText
             color: Theme.textMuted
             font.pixelSize: Theme.fsSm
-            wrapMode: Text.WordWrap
+            wrapMode: Text.Wrap
             maximumLineCount: 2
             elide: Text.ElideRight
         }
@@ -299,8 +405,13 @@ Rectangle {
         Flow {
             id: metaFlow
             Layout.fillWidth: true
-            visible: dueT.visible || schedT.visible || timerT.visible || recurT.visible
-                     || commentsT.visible || labelRep.count > 0 || prT.visible
+            // From each fact's own condition, not from the children's
+            // `visible`: that reads false while this row is hidden, so a card
+            // given its task after creation never showed its facts.
+            visible: dueT.dlText.length > 0 || schedT.label.length > 0 || prT.state.length > 0
+                     || !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
+                     || !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
+                     || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
             spacing: Theme.spLg
 
             Text {
@@ -318,9 +429,14 @@ Rectangle {
                 }
                 readonly property string dlText: {
                     if (days === 99999) return "";
+                    // Finished or archived work is not overdue (PLAT-24).
+                    if ((card._done || card._isArchived) && days < 0) return "";
                     // A task due at a clock time shows it; a bare date does not.
                     let clock = "";
-                    if (card.task.hasTime && card.task.dueAt && card.task.dueAt.getHours) {
+                    // dueHasTime since schema v10; views that still hand over the
+                    // old single flag keep working.
+                    const timed = card.task.dueHasTime !== undefined ? card.task.dueHasTime : card.task.hasTime;
+                    if (timed && card.task.dueAt && card.task.dueAt.getHours) {
                         clock = " " + String(card.task.dueAt.getHours()).padStart(2, "0")
                               + ":" + String(card.task.dueAt.getMinutes()).padStart(2, "0");
                     }
@@ -331,14 +447,17 @@ Rectangle {
                 }
                 visible: dlText.length > 0
                 text: "◷ " + dlText
-                color: days <= 0 ? Theme.danger : days <= 3 ? Theme.warning : Theme.textDim
+                color: (card._done || card._isArchived) ? Theme.textDim
+                     : days <= 0 ? Theme.danger : days <= 3 ? Theme.warning : Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
             }
             Text {
                 id: schedT
-                visible: !!(card.scheduled && card.scheduled.length > 0)
-                text: "▸ " + (card.scheduled || "")
+                objectName: "tc-scheduled"
+                readonly property string label: (AppController.today, I18n.lang, card._schedLabel())
+                visible: label.length > 0
+                text: "▸ " + label
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
@@ -428,6 +547,8 @@ Rectangle {
                         textFormat: Text.PlainText
                         color: Theme.textMuted
                         font.pixelSize: Theme.fsXs
+                        width: Math.min(implicitWidth, card.width * 0.5)
+                        elide: Text.ElideRight
                     }
                 }
             }
@@ -484,7 +605,7 @@ Rectangle {
         property bool didDrag: false
         onPressed: (mouse) => {
             card.homeX = card.x; card.homeY = card.y; didDrag = false;
-            if (mouse.button === Qt.RightButton) taskMenu.popup();
+            if (mouse.button === Qt.RightButton) card.contextMenu().popup();
         }
         onPositionChanged: if (drag.active) didDrag = true
         onReleased: (mouse) => {
@@ -507,6 +628,36 @@ Rectangle {
         }
     }
 
+    // The context menu is built on the first right-click, not with the card:
+    // thirteen menu items per card were most of what a card cost, and the
+    // board, the timeline and the archive build a card for every row they
+    // show. contextMenu() makes it (once per card), releaseMenu() lets it go —
+    // a recycled list delegate calls that when it is pooled.
+    property var _menu: null
+    function contextMenu() {
+        if (!card._menu) card._menu = taskMenuComponent.createObject(card);
+        return card._menu;
+    }
+    // The status and priority lists are built the same way, on first use.
+    property var _statusMenu: null
+    property var _priorityMenu: null
+    function statusMenu() {
+        if (!card._statusMenu) card._statusMenu = statusMenuComponent.createObject(card);
+        return card._statusMenu;
+    }
+    function priorityMenu() {
+        if (!card._priorityMenu) card._priorityMenu = priorityMenuComponent.createObject(card);
+        return card._priorityMenu;
+    }
+    function releaseMenu() {
+        for (const k of ["_menu", "_statusMenu", "_priorityMenu"]) {
+            if (!card[k]) continue;
+            card[k].destroy();
+            card[k] = null;
+        }
+    }
+    Component {
+        id: taskMenuComponent
     AppMenu {
         id: taskMenu
         objectName: "tc-menu"
@@ -525,6 +676,32 @@ Rectangle {
         }
         AppMenuItem {
             glyph: "✎"; text: I18n.t("taskcard.edit"); onTriggered: card.clicked()
+        }
+        // Status and priority without opening the editor (UX-26). Each opens
+        // its own list at the card, so the keyboard can walk it too.
+        AppMenuItem {
+            objectName: "tc-menu-status"
+            glyph: "⇥"; text: I18n.t("taskcard.setStatus") + "  ›"
+            onTriggered: Qt.callLater(function () {
+                const sub = card.statusMenu();
+                sub.popup(card, Theme.spLg, Math.min(card.height, 28));
+                sub.currentIndex = 0;
+            })
+        }
+        AppMenuItem {
+            objectName: "tc-menu-priority"
+            glyph: "!"; text: I18n.t("taskcard.setPriority") + "  ›"
+            onTriggered: Qt.callLater(function () {
+                const sub = card.priorityMenu();
+                sub.popup(card, Theme.spLg, Math.min(card.height, 28));
+                sub.currentIndex = 0;
+            })
+        }
+        AppMenuItem {
+            objectName: "tc-menu-archive"
+            glyph: card._isArchived ? "↺" : "▣"
+            text: card._isArchived ? I18n.t("taskcard.unarchive") : I18n.t("taskcard.archive")
+            onTriggered: AppController.setArchived(card.taskId, !card._isArchived)
         }
         AppMenuItem {
             glyph: card.task && card.task.isTiming ? "■" : "▸"
@@ -561,9 +738,10 @@ Rectangle {
                 // 14:00 used to be hardcoded here, so every task scheduled from
                 // the card landed on top of the last one — and on a time that
                 // had already passed for most of the afternoon.
-                const est = card.task.estimateMinutes > 0 ? card.task.estimateMinutes / 60 : 1;
-                const at = AppController.nextFreeSlot(AppController.selectedDate, est);
-                AppController.scheduleTask(card.task.id, at, AppController.selectedDate);
+                // The gap is looked for with the block's real length (the
+                // estimate, else the focus-block setting); it used to search
+                // for an hour and then book ninety minutes over a meeting.
+                AppController.scheduleTaskAtNextFreeSlot(card.task.id, AppController.selectedDate);
             }
         }
         AppMenuItem {
@@ -593,5 +771,44 @@ Rectangle {
             glyph: "×"; danger: true
             text: I18n.t("common.delete"); onTriggered: AppController.deleteTask(card.taskId)
         }
+    }
+    }
+
+    Component {
+        id: statusMenuComponent
+    AppMenu {
+        id: statusMenu
+        objectName: "tc-status-menu"
+        Instantiator {
+            model: AppController.statuses
+            delegate: AppMenuItem {
+                required property var modelData
+                text: modelData.name
+                marked: !!(card.task && card.task.status === modelData.id)
+                onTriggered: AppController.moveTaskTo(card.taskId, modelData.id, "")
+            }
+            onObjectAdded: (index, object) => statusMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => statusMenu.removeItem(object)
+        }
+    }
+    }
+
+    Component {
+        id: priorityMenuComponent
+    AppMenu {
+        id: priorityMenu
+        objectName: "tc-priority-menu"
+        Instantiator {
+            model: ["P0", "P1", "P2", "P3"]
+            delegate: AppMenuItem {
+                required property string modelData
+                text: modelData
+                marked: !!(card.task && card.task.priority === modelData)
+                onTriggered: AppController.setTaskPriority(card.taskId, modelData)
+            }
+            onObjectAdded: (index, object) => priorityMenu.insertItem(index, object)
+            onObjectRemoved: (index, object) => priorityMenu.removeItem(object)
+        }
+    }
     }
 }

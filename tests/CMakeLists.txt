@@ -297,6 +297,41 @@ heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 # ─── Docs as a tree of pages ───
 heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 
+# ── audit-plat: begin ──
+# Storage safety (locked/damaged/newer state.json, failed saves, restore),
+# profile-scoped undo and task ids, automation across profiles, worktrees.
+heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
+# ── audit-plat: end ──
+# ── audit-tasks: begin ──
+# Regressions from the 2026-09-30 audit, tasks area (undo, ranks, recurrence,
+# the per-field clock flags of schema v10).
+heap_add_appcontroller_test(heap_audit_tasks_tests test_audit_tasks.cpp)
+# ── audit-tasks: end ──
+# ── audit-time: begin ──
+# Calendar fixes from the 2026-09-30 audit: series drags and edits, reminders,
+# today, focus blocks, free slots (TIME-*, PLAT-10/11/13/18/19, TASKS-17/29).
+heap_add_appcontroller_test(heap_time_audit_tests test_time_audit.cpp)
+# ── audit-time: end ──
+# ── audit-know: begin ──
+# Notes / docs / markdown regressions from the 2026-09-30 audit (KNOW-*, PLAT-21).
+heap_add_appcontroller_test(heap_know_audit_tests test_know_audit.cpp)
+# ── audit-know: end ──
+# ── audit-ux: begin ──
+# UX audit fixes that live in C++: first-run language, toast kinds, RU labels.
+heap_add_appcontroller_test(heap_ux_audit_tests test_ux_audit.cpp)
+target_compile_definitions(heap_ux_audit_tests PRIVATE HEAP_DOCS_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../docs")
+# ── audit-ux: end ──
+# ── audit-int: begin ──
+# ─── Integration / release fixes from the 2026-09-30 audit ───
+heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
+# ── audit-int: end ──
+# ── audit-perf: begin ──
+# Search/filter input latency at 3k tasks (TASKS-23). Wall-clock budgets, so it
+# runs alone like the other two benches.
+heap_add_appcontroller_test(heap_filter_bench_tests test_filter_bench.cpp)
+set_tests_properties(heap_filter_bench_tests PROPERTIES RUN_SERIAL TRUE)
+# ── audit-perf: end ──
+
 # ─── Regressions from the 0.5.0 end-to-end audit ───
 heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
 

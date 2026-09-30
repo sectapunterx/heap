@@ -9,6 +9,9 @@ namespace heap::git {
 struct RepoConfig {
   QString path;            // worktree root (absolute)
   QString resolvedGitDir;  // <repo>/.git OR worktree gitdir target
+  // Where refs, packed-refs and config live: the same as resolvedGitDir for a
+  // plain clone, the main repository's .git for a linked worktree (PLAT-17).
+  QString commonGitDir;
 };
 
 struct PrInfo {

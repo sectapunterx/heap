@@ -227,6 +227,7 @@ Defaults — every entry is rebindable from **Settings → Shortcuts** or the fl
 | Board / Timeline / Week / Month | `Ctrl+1` … `4` | Archive / Docs / Notes / Settings | `Ctrl+5` … `8` |
 | Board cursor      | `J` `K` `H` `L` | Move the card     | `Shift`+ the same |
 | Calendar: today   | `T`          | Calendar: go to date | `G`          |
+| Calendar: prev / next day | `Alt+←` / `Alt+→` | New event    | `Ctrl+E`     |
 | Next / prev profile | `Ctrl+]` / `Ctrl+[` | Export profile → Markdown | `Ctrl+Shift+E` |
 | Focus search      | `Ctrl+F`     | Undo / redo       | `Ctrl+Z` / `Ctrl+Shift+Z` |
 | Tweaks / Hotkeys  | `Ctrl+,` / `Ctrl+/` | Select all / clear / delete | `Ctrl+A` / `Esc` / `Del` |

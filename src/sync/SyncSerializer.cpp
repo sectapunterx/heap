@@ -1,4 +1,5 @@
 #include "FieldCount.h"
+#include "StateSerializer.h"
 
 #include "sync/SyncSerializer.h"
 
@@ -18,15 +19,15 @@ static_assert(heap::meta::fieldCount<TaskLink>() == 2,
               "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 24,
+static_assert(heap::meta::fieldCount<Task>() == 25,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/StateSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 16,
+static_assert(heap::meta::fieldCount<CalEvent>() == 21,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/StateSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -123,7 +124,8 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   o[QStringLiteral("status")] = t.status;
   o[QStringLiteral("scheduledAt")] = dateTimeToStr(t.scheduledAt);
   o[QStringLiteral("dueAt")] = dateTimeToStr(t.dueAt);
-  o[QStringLiteral("hasTime")] = t.hasTime;
+  o[QStringLiteral("scheduledHasTime")] = t.scheduledHasTime;
+  o[QStringLiteral("dueHasTime")] = t.dueHasTime;
   o[QStringLiteral("branch")] = t.branch;
   o[QStringLiteral("statusChangedAt")] = dateTimeToStr(t.statusChangedAt);
   o[QStringLiteral("archived")] = t.archived;
@@ -159,6 +161,12 @@ QJsonObject SyncSerializer::taskToJson(const Task& t) {
   meta[QStringLiteral("remoteColumn")] = t.externalMeta.column;
   meta[QStringLiteral("unsyncedStatus")] = t.externalMeta.unsyncedStatus;
   meta[QStringLiteral("goneUpstream")] = t.externalMeta.goneUpstream;
+  meta[QStringLiteral("remoteScope")] = t.externalMeta.scope;
+  meta[QStringLiteral("outOfScope")] = t.externalMeta.outOfScope;
+  meta[QStringLiteral("remotePriority")] = t.externalMeta.priority;
+  meta[QStringLiteral("remoteLabels")] = QJsonArray::fromStringList(t.externalMeta.labels);
+  meta[QStringLiteral("conflicts")] = QJsonArray::fromStringList(t.externalMeta.conflicts);
+  meta[QStringLiteral("pushQueued")] = t.externalMeta.pushQueued;
   o[QStringLiteral("externalMeta")] = meta;
   return o;
 }
@@ -172,7 +180,13 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.status = o.value(QStringLiteral("status")).toString();
   t.scheduledAt = dateTimeFromStr(o.value(QStringLiteral("scheduledAt")).toString());
   t.dueAt = dateTimeFromStr(o.value(QStringLiteral("dueAt")).toString());
-  t.hasTime = o.value(QStringLiteral("hasTime")).toBool();
+  if(o.contains(QStringLiteral("dueHasTime")) || o.contains(QStringLiteral("scheduledHasTime"))) {
+    t.scheduledHasTime = o.value(QStringLiteral("scheduledHasTime")).toBool();
+    t.dueHasTime = o.value(QStringLiteral("dueHasTime")).toBool();
+  } else {
+    // Written by a schema ≤ 9 build: one flag for both datetimes.
+    heap::state::applyLegacyHasTime(t, o.value(QStringLiteral("hasTime")).toBool());
+  }
   // A document written before HEAP-115 carries a bare date instead.
   if(!t.scheduledAt.isValid() && !t.dueAt.isValid()) {
     const QDate legacy = dateFromStr(o.value(QStringLiteral("deadline")).toString());
@@ -210,6 +224,16 @@ Task SyncSerializer::taskFromJson(const QJsonObject& o) {
   t.externalMeta.column = meta.value(QStringLiteral("remoteColumn")).toString();
   t.externalMeta.unsyncedStatus = meta.value(QStringLiteral("unsyncedStatus")).toString();
   t.externalMeta.goneUpstream = meta.value(QStringLiteral("goneUpstream")).toBool();
+  t.externalMeta.scope = meta.value(QStringLiteral("remoteScope")).toString();
+  t.externalMeta.outOfScope = meta.value(QStringLiteral("outOfScope")).toBool();
+  t.externalMeta.priority = meta.value(QStringLiteral("remotePriority")).toString();
+  for(const QJsonValue& v : meta.value(QStringLiteral("remoteLabels")).toArray()) {
+    t.externalMeta.labels.append(v.toString());
+  }
+  for(const QJsonValue& v : meta.value(QStringLiteral("conflicts")).toArray()) {
+    t.externalMeta.conflicts.append(v.toString());
+  }
+  t.externalMeta.pushQueued = meta.value(QStringLiteral("pushQueued")).toBool();
   t.rank = o.value(QStringLiteral("rank")).toDouble();
   t.links = linksFromJson(o.value(QStringLiteral("links")).toArray());
   return t;
@@ -264,6 +288,11 @@ QJsonObject SyncSerializer::eventToJson(const CalEvent& e) {
   o[QStringLiteral("exdates")] = ex;
   o[QStringLiteral("masterId")] = e.masterId;
   o[QStringLiteral("originalDate")] = dateToStr(e.originalDate);
+  o[QStringLiteral("tz")] = e.tz;
+  o[QStringLiteral("location")] = e.location;
+  o[QStringLiteral("notes")] = e.notes;
+  o[QStringLiteral("url")] = e.url;
+  o[QStringLiteral("reminderMinutes")] = e.reminderMinutes;
   return o;
 }
 
@@ -290,6 +319,11 @@ CalEvent SyncSerializer::eventFromJson(const QJsonObject& o) {
   }
   e.masterId = o.value(QStringLiteral("masterId")).toString();
   e.originalDate = dateFromStr(o.value(QStringLiteral("originalDate")).toString());
+  e.tz = o.value(QStringLiteral("tz")).toString();
+  e.location = o.value(QStringLiteral("location")).toString();
+  e.notes = o.value(QStringLiteral("notes")).toString();
+  e.url = o.value(QStringLiteral("url")).toString();
+  e.reminderMinutes = o.value(QStringLiteral("reminderMinutes")).toInt(CalEvent::kReminderDefault);
   return e;
 }
 

@@ -7,10 +7,10 @@ Popup {
     id: root
     modal: true
     focus: true
-    // CloseOnPressOutside, not …OutsideParent: the popup's parent is the window
-    // content item, so "outside the parent" never happens and a click on the
-    // dimmed backdrop did nothing.
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // Esc and a click on the backdrop go through requestClose(), which asks
+    // before throwing edits away (TASKS-9); Qt's own close-on-Escape would
+    // drop them without a word.
+    closePolicy: Popup.NoAutoClose
     padding: 0
     // Wide enough for a description to be read, wider still while it is
     // expanded for writing; never taller than the window, with the body
@@ -23,9 +23,15 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: Rectangle {
         color: Theme.scrim
+        TapHandler { onTapped: root.requestClose() }
     }
 
     property var draft: ({})
+    // What the fields held when the editor opened; anything else is an edit.
+    property string _baseline: ""
+    // Why the last Save did not go through, shown above the footer.
+    property string _error: ""
+    readonly property bool _archived: !!(root.draft && root.draft.archived)
     property bool isNew: false
     // "edit" | "preview" for the description. Starts on edit — the editor is
     // where you go to change things.
@@ -85,6 +91,37 @@ Popup {
         return out;
     }
 
+    // A field both heap and the tracker changed since the last sync (audit
+    // INT-4). Resolving it hides the panel for the rest of this dialog.
+    property bool _conflictResolved: false
+    readonly property bool _hasConflict: root._isTicket && !!root._ticket.conflict && !root._conflictResolved
+    // The tracker's side of each conflicting field, as label/value pairs.
+    readonly property var _conflictRows: {
+        if (!root._hasConflict) return [];
+        const t = root._ticket;
+        const fields = t.conflicts || [];
+        const out = [];
+        for (let i = 0; i < fields.length; ++i) {
+            const f = fields[i];
+            if (f === "title") out.push({ label: I18n.t("ticket.conflict.title"), value: String(t.remoteTitle || "") });
+            else if (f === "body") out.push({ label: I18n.t("ticket.conflict.body"), value: String(t.remoteBody || "") || "—" });
+            else if (f === "priority") out.push({ label: I18n.t("ticket.conflict.priority"), value: String(t.remotePriority || "") });
+        }
+        return out;
+    }
+    // Put the tracker's values in the fields (so Save keeps them) and on the
+    // stored card, in one undoable step.
+    function _takeTrackerVersion() {
+        const t = root._ticket;
+        const fields = t.conflicts || [];
+        if (fields.indexOf("title") >= 0 && String(t.remoteTitle || "").length > 0) titleField.text = t.remoteTitle;
+        if (fields.indexOf("body") >= 0) descField.text = String(t.remoteBody || "");
+        if (fields.indexOf("priority") >= 0 && String(t.remotePriority || "").length > 0)
+            priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(t.remotePriority));
+        AppController.resolveTrackerConflict(root._originalId, true);
+        root._conflictResolved = true;
+    }
+
     // Comments, held only while this dialog is open (HEAP-117).
     property var _comments: []
     property string _commentsError: ""
@@ -106,6 +143,7 @@ Popup {
         _comments = [];
         _commentsError = "";
         _commentsRequested = false;
+        _conflictResolved = false;
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
@@ -117,17 +155,48 @@ Popup {
         statusBox.currentIndex = Math.max(0, statusList().indexOf(draft.status));
         priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(draft.priority || "P2"));
         branchField.text = draft.branch || "";
-        deadlineField.text = formatWhen(draft.dueAt, draft.hasTime);
-        scheduledField.text = formatWhen(draft.scheduledAt, draft.hasTime);
+        // Each datetime has its own clock flag (schema v10): a date-only
+        // deadline next to a timed schedule stays date-only.
+        deadlineField.text = formatWhen(draft.dueAt, draft.dueHasTime);
+        scheduledField.text = formatWhen(draft.scheduledAt, draft.scheduledHasTime);
         labelsField.text = labelsToText(draft.labels);
         estimateField.text = draft.estimateMinutes > 0 ? String(draft.estimateMinutes) : "";
         somedayBox.checked = !!draft.someday;
-        recurBox.currentIndex = Math.max(0, recurBox._vals.indexOf(draft.recurrence || ""));
+        recurBox.setRecurrence(draft.recurrence || "");
+        _error = "";
+        discardPrompt.close();
+        _baseline = _snapshot();
         open();
+        // Keyboard-first: Ctrl+N and type. Nothing had focus, so whatever was
+        // typed before reaching for the mouse went nowhere and the task was
+        // saved without a title. Focus lands now, not after the enter
+        // transition, so the first keystroke is not lost either. An existing
+        // task opens with the caret at the end of its title.
+        titleField.forceActiveFocus();
+        if (isNew) titleField.selectAll();
+        else titleField.cursorPosition = titleField.text.length;
         // Kick a one-shot PR/state refresh for this task's branch across all
         // watched repos. Result lands on TaskModel via repoStateUpdated and
         // chips on the underlying TaskCard update without re-opening.
         if (draft.id && !isNew) AppController.refreshGitForTaskBranch(draft.id);
+    }
+
+    // Everything the user can change, as one comparable string.
+    function _snapshot() {
+        return JSON.stringify([idField.text, titleField.text, descField.text, statusBox.currentIndex,
+                               priBox.currentIndex, branchField.text, deadlineField.text, scheduledField.text,
+                               labelsField.text, estimateField.text, somedayBox.checked, recurBox.currentIndex]);
+    }
+    function isDirty() {
+        return root.opened && root._snapshot() !== root._baseline;
+    }
+
+    // Esc and the backdrop. Clean: close. Edited: ask, keyboard first —
+    // Enter saves, D discards, Esc keeps editing.
+    function requestClose() {
+        if (discardPrompt.opened) return;
+        if (!root.isDirty()) { root.close(); return; }
+        discardPrompt.open();
     }
 
     function statusList() {
@@ -187,6 +256,32 @@ Popup {
         const out = [];
         for (let i = 0; i < labels.length; ++i) out.push(labels[i].id);
         return out.join(", ");
+    }
+
+    // Tab on a markdown list line ("- a", "* [ ] b", "1. c") nests the item two
+    // spaces deeper; Shift+Tab takes up to two back out. Returns false off a
+    // list line, where Tab moves focus instead.
+    readonly property var _listLineRe: /^(\s*)([-*+]|\d+[.)])\s/
+
+    function indentListLine(field, outdent) {
+        const text = field.text;
+        const pos = field.cursorPosition;
+        const start = text.lastIndexOf("\n", pos - 1) + 1;
+        const endNl = text.indexOf("\n", pos);
+        const line = text.substring(start, endNl < 0 ? text.length : endNl);
+        const m = root._listLineRe.exec(line);
+        if (!m) return false;
+        if (outdent) {
+            const n = Math.min(2, m[1].length);
+            if (n > 0) {
+                field.remove(start, start + n);
+                field.cursorPosition = Math.max(start, pos - n);
+            }
+        } else {
+            field.insert(start, "  ");
+            field.cursorPosition = pos + 2;
+        }
+        return true;
     }
 
     function labelsFromText(s) {
@@ -249,8 +344,35 @@ Popup {
         return AppController.classifyTaskKind(text || "");
     }
 
-    // Shared by the Save button and the Ctrl+Return shortcut.
+    // Shared by the Save button and the Ctrl+Return shortcut. Returns whether
+    // the task was saved (and the editor closed).
     function _save() {
+        if (!root._commit()) return false;
+        root.close();
+        return true;
+    }
+
+    // Validates and saves without closing. A refusal says why and keeps the
+    // draft: an unreadable date used to be saved as no date, an empty title
+    // did nothing at all.
+    function _commit() {
+        root._error = "";
+        if (titleField.text.trim().length === 0) {
+            root._error = I18n.t("editor.err.title");
+            titleField.forceActiveFocus();
+            return false;
+        }
+        if (deadlineField.text.trim().length > 0 && root.parseDate(deadlineField.text) === undefined) {
+            root._error = I18n.t("editor.err.date").arg(deadlineField.text.trim());
+            deadlineField.forceActiveFocus();
+            return false;
+        }
+        if (scheduledField.text.trim().length > 0 && root.parseDate(scheduledField.text) === undefined) {
+            root._error = I18n.t("editor.err.date").arg(scheduledField.text.trim());
+            root.detailsOpen = true;
+            scheduledField.forceActiveFocus();
+            return false;
+        }
         // New tasks: if user left idField blank, fall back to the
         // auto-generated id captured in the draft. Edit: take the
         // (possibly renamed) text from idField.
@@ -274,8 +396,8 @@ Popup {
         const dueAt = root.parseDate(deadlineField.text);
         const schedTyped = root.parseDate(scheduledField.text);
         const scheduledAt = schedTyped || dueAt;
-        const hasTime = root.parseHasTime(scheduledField.text)
-                     || root.parseHasTime(deadlineField.text);
+        const dueHasTime = !!dueAt && root.parseHasTime(deadlineField.text);
+        const scheduledHasTime = schedTyped ? root.parseHasTime(scheduledField.text) : dueHasTime;
 
         const d = {
             _isNew: root.isNew,
@@ -295,17 +417,32 @@ Popup {
             status: root.statusList()[statusBox.currentIndex],
             scheduledAt: scheduledAt,
             dueAt: dueAt,
-            hasTime: hasTime,
+            dueHasTime: dueHasTime,
+            scheduledHasTime: scheduledHasTime,
             branch: branchField.text,
-            recurrence: recurBox._vals[recurBox.currentIndex] || "",
+            recurrence: recurBox.value(),
+            // Plain names; saveTask keeps each existing label's colour.
             labels: root.labelsFromText(labelsField.text),
             estimateMinutes: parseInt(estimateField.text || "0") || 0,
             someday: somedayBox.checked
         };
-        // A refused save (id taken, no title) keeps the editor open on the
-        // draft; closing it threw the user's edits away.
-        if (!AppController.saveTask(d))
-            return;
+        // A task and the meeting it books are one undo step.
+        AppController.beginUndoGroup(I18n.t("editor.undo.save").arg(finalId));
+        try {
+            return root._saveDraft(d, cleanedTitle, handleNames);
+        } finally {
+            AppController.endUndoGroup();
+        }
+    }
+
+    function _saveDraft(d, cleanedTitle, handleNames) {
+        // A refused save (id taken, review without a branch) keeps the editor
+        // open on the draft; closing it threw the user's edits away. The
+        // controller's toast says why.
+        if (!AppController.saveTask(d)) {
+            root._error = I18n.t("editor.err.refused");
+            return false;
+        }
         // The parsed clock time now lives on the task itself, so a
         // focus block is no longer needed to keep it. A "sync" still
         // means a meeting, and a meeting is a calendar event.
@@ -336,9 +473,10 @@ Popup {
                 ev.attendees = handleNames.join(", ");
                 AppController.saveEvent(ev);
             }
-            if (kind !== "ticket") AppController.selectedDate = dt;
+            // The calendar stays on the day the user was looking at: jumping
+            // it to the task's date on save was a surprise, not a feature.
         }
-        root.close();
+        return true;
     }
 
     anchors.centerIn: Overlay.overlay
@@ -348,7 +486,7 @@ Popup {
     // (and would fight the multi-line description), so Ctrl+Enter saves.
     Shortcut {
         sequences: ["Ctrl+Return", "Ctrl+Enter"]
-        enabled: root.opened
+        enabled: root.opened && !discardPrompt.opened
         onActivated: root._save()
     }
 
@@ -365,6 +503,8 @@ Popup {
     // the description, so a real ticket's text was read through a slot.
     contentItem: ColumnLayout {
         spacing: 0
+        // Esc from any field bubbles up to here (text fields do not take it).
+        Keys.onEscapePressed: (e) => { e.accepted = true; root.requestClose(); }
 
         // ── Header: what this is, and where it lives ──
         RowLayout {
@@ -457,6 +597,54 @@ Popup {
                             font.pixelSize: Theme.fsXs
                             wrapMode: Text.WordWrap
                         }
+                        // Both sides changed a field since the last sync: show
+                        // the tracker's version and let the user pick one.
+                        ColumnLayout {
+                            objectName: "te-ticket-conflict"
+                            visible: root._hasConflict
+                            Layout.fillWidth: true
+                            Layout.topMargin: Theme.spSm
+                            spacing: Theme.spXs
+                            Text {
+                                Layout.fillWidth: true
+                                text: I18n.t("ticket.conflict.head")
+                                textFormat: Text.PlainText
+                                color: Theme.warning
+                                font.pixelSize: Theme.fsSm
+                                font.weight: Font.DemiBold
+                                wrapMode: Text.WordWrap
+                            }
+                            Repeater {
+                                model: root._conflictRows
+                                delegate: Text {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.label + ": " + modelData.value
+                                    textFormat: Text.PlainText
+                                    color: Theme.text
+                                    font.pixelSize: Theme.fsSm
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 4
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            RowLayout {
+                                spacing: Theme.spSm
+                                PillButton {
+                                    objectName: "te-conflict-use-tracker"
+                                    text: I18n.t("ticket.conflict.useTracker")
+                                    onClicked: root._takeTrackerVersion()
+                                }
+                                PillButton {
+                                    objectName: "te-conflict-keep-mine"
+                                    text: I18n.t("ticket.conflict.keepMine")
+                                    onClicked: {
+                                        AppController.resolveTrackerConflict(root._originalId, false);
+                                        root._conflictResolved = true;
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
 
@@ -488,6 +676,20 @@ Popup {
                         objectName: "te-status"
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
+                        // Never narrower than its longest column name: "In
+                        // Progress" read "In Prog…" (UX-25).
+                        Layout.minimumWidth: Math.min(240, statusMetrics.widest + 2 * Theme.spLg + 24)
+                        FontMetrics { id: statusMetricsFont; font.pixelSize: Theme.fsMd }
+                        QtObject {
+                            id: statusMetrics
+                            readonly property real widest: {
+                                let w = 0;
+                                const names = root.statusNames();
+                                for (let i = 0; i < names.length; i++)
+                                    w = Math.max(w, statusMetricsFont.advanceWidth(names[i]));
+                                return Math.ceil(w);
+                            }
+                        }
                         model: root.statusNames()
                         background: FieldBg {}
                         contentItem: Text {
@@ -516,6 +718,7 @@ Popup {
                     RowLayout {
                         Layout.fillWidth: true
                         Layout.preferredWidth: 2
+                        Layout.minimumWidth: 160
                         spacing: Theme.spSm
                         TextField {
                             id: deadlineField
@@ -605,8 +808,7 @@ Popup {
                             if (root._deadlinePreview.hasTime) {
                                 const hh = String(d.getHours()).padStart(2, "0");
                                 const mm = String(d.getMinutes()).padStart(2, "0");
-                                // ◷: a focus block will be created
-                                return "↑ " + iso + " " + hh + ":" + mm + (root.isNew ? " ◷" : "");
+                                return "↑ " + iso + " " + hh + ":" + mm;
                             }
                             return "↑ " + iso;
                         }
@@ -668,6 +870,27 @@ Popup {
                             color: Theme.text
                             placeholderTextColor: Theme.textDim
                             selectByMouse: true
+                            // Tab leaves the description, so Details, Save and
+                            // Delete can be reached from the keyboard; it used to
+                            // type a tab character and trap focus here. On a
+                            // list line Tab / Shift+Tab indent and outdent the
+                            // item, and Ctrl+Tab always inserts indentation.
+                            Keys.onPressed: (event) => {
+                                if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
+                                const back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier);
+                                if (event.modifiers & Qt.ControlModifier) {
+                                    descField.insert(descField.cursorPosition, "  ");
+                                    event.accepted = true;
+                                    return;
+                                }
+                                if (root.indentListLine(descField, back)) {
+                                    event.accepted = true;
+                                    return;
+                                }
+                                const next = descField.nextItemInFocusChain(!back);
+                                if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
+                                event.accepted = true;
+                            }
                         }
                     }
                     // The checkbox write goes through the editor's own document,
@@ -698,10 +921,27 @@ Popup {
                     color: Theme.border
                 }
                 Item {
+                    id: detailsToggle
                     objectName: "te-details-toggle"
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     implicitHeight: detailsRow.implicitHeight + Theme.spSm
+                    // On the Tab path between the description and the footer.
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.Button
+                    Accessible.name: I18n.t("editor.details")
+                    Keys.onSpacePressed: root.detailsOpen = !root.detailsOpen
+                    Keys.onReturnPressed: root.detailsOpen = !root.detailsOpen
+                    Keys.onEnterPressed: root.detailsOpen = !root.detailsOpen
+                    Rectangle {
+                        anchors.fill: parent
+                        anchors.margins: -Theme.sp2xs
+                        radius: Theme.radiusSm
+                        color: "transparent"
+                        visible: detailsToggle.activeFocus
+                        border.color: Theme.focusRing
+                        border.width: 2
+                    }
                     RowLayout {
                         id: detailsRow
                         anchors.left: parent.left; anchors.right: parent.right
@@ -797,15 +1037,30 @@ Popup {
                         objectName: "te-recurrence"
                         Layout.fillWidth: true
                         Layout.preferredWidth: 1
-                        readonly property var _vals: ["", "every:day", "every:week", "every:weekday",
+                        readonly property var _base: ["", "every:day", "every:week", "every:weekday",
                                                       "every:mon", "every:tue", "every:wed", "every:thu", "every:fri",
-                                                      "every:sat", "every:sun"]
+                                                      "every:sat", "every:sun", "every:month"]
+                        // A rule the list does not name ("every:month:15", from
+                        // capture) is shown as itself, so saving the editor
+                        // does not quietly turn it into "none".
+                        property string _extra: ""
+                        readonly property var _vals: _extra.length > 0 ? _base.concat([_extra]) : _base
+                        function setRecurrence(r) {
+                            _extra = (r.length > 0 && _base.indexOf(r) < 0) ? r : "";
+                            currentIndex = Math.max(0, _vals.indexOf(r));
+                        }
+                        function value() { return _vals[currentIndex] || ""; }
+                        function _label(r) {
+                            const m = /^every:month:(\d+)$/.exec(r);
+                            return m ? I18n.t("editor.recur.monthlyOn").arg(m[1]) : r;
+                        }
                         model: [I18n.t("editor.recur.none"), I18n.t("editor.recur.daily"),
                                 I18n.t("editor.recur.weekly"), I18n.t("editor.recur.weekdays"),
                                 I18n.t("editor.recur.everyMon"), I18n.t("editor.recur.everyTue"),
                                 I18n.t("editor.recur.everyWed"), I18n.t("editor.recur.everyThu"),
                                 I18n.t("editor.recur.everyFri"), I18n.t("editor.recur.everySat"),
-                                I18n.t("editor.recur.everySun")]
+                                I18n.t("editor.recur.everySun"), I18n.t("editor.recur.monthly")]
+                               .concat(_extra.length > 0 ? [_label(_extra)] : [])
                         background: FieldBg {}
                         contentItem: Text {
                             text: recurBox.displayText
@@ -978,6 +1233,18 @@ Popup {
             implicitHeight: 1
             color: Theme.border
         }
+        Text {
+            objectName: "te-error"
+            visible: root._error.length > 0
+            Layout.fillWidth: true
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+            Layout.topMargin: Theme.spMd
+            text: root._error
+            textFormat: Text.PlainText
+            color: Theme.danger
+            font.pixelSize: Theme.fsSm
+            wrapMode: Text.Wrap
+        }
         RowLayout {
             Layout.fillWidth: true
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
@@ -993,6 +1260,20 @@ Popup {
                     // open-time id — NOT the live idField, which the user may
                     // have edited (Save threads _originalId for the same reason).
                     AppController.deleteTask(root._originalId);
+                    root.close();
+                }
+            }
+            // Archive one task without leaving the editor for a menu. Pending
+            // edits are saved first, so the archived task is the edited one.
+            PillButton {
+                objectName: "te-archive"
+                visible: !root.isNew
+                text: root._archived ? I18n.t("editor.btn.unarchive") : I18n.t("editor.btn.archive")
+                onClicked: {
+                    const wasArchived = root._archived;
+                    if (root.isDirty() && !root._commit()) return;
+                    const id = idField.text.trim().length > 0 ? idField.text.trim() : root._originalId;
+                    AppController.setArchived(id, !wasArchived);
                     root.close();
                 }
             }
@@ -1015,6 +1296,77 @@ Popup {
         }
     }
 
+    // ── Unsaved changes: save, discard or keep editing ──
+    Popup {
+        id: discardPrompt
+        objectName: "te-discard-prompt"
+        parent: root.contentItem
+        anchors.centerIn: parent
+        modal: true
+        focus: true
+        closePolicy: Popup.NoAutoClose
+        padding: Theme.inset
+        width: Math.min(380, root.width - 2 * Theme.inset)
+        background: Rectangle {
+            radius: Theme.radiusXl
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+        Overlay.modal: Rectangle { color: Theme.scrim }
+        onOpened: promptBody.forceActiveFocus()
+        function keep() { discardPrompt.close(); titleField.forceActiveFocus(); }
+        function discard() { discardPrompt.close(); root.close(); }
+        function save() { discardPrompt.close(); root._save(); }
+        contentItem: ColumnLayout {
+            id: promptBody
+            spacing: Theme.spLg
+            focus: true
+            Keys.onPressed: (e) => {
+                if (e.key === Qt.Key_Escape || e.key === Qt.Key_K) { discardPrompt.keep(); e.accepted = true; }
+                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter || e.key === Qt.Key_S) { discardPrompt.save(); e.accepted = true; }
+                else if (e.key === Qt.Key_D) { discardPrompt.discard(); e.accepted = true; }
+            }
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("editor.dirty.title")
+                color: Theme.text
+                font.pixelSize: Theme.fsLg
+                font.weight: Font.DemiBold
+                wrapMode: Text.Wrap
+            }
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("editor.dirty.body")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsMd
+                wrapMode: Text.Wrap
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spMd
+                PillButton {
+                    objectName: "te-dirty-discard"
+                    text: I18n.t("editor.dirty.discard") + "  D"
+                    danger: true
+                    onClicked: discardPrompt.discard()
+                }
+                Item { Layout.fillWidth: true }
+                PillButton {
+                    objectName: "te-dirty-keep"
+                    text: I18n.t("editor.dirty.keep") + "  Esc"
+                    onClicked: discardPrompt.keep()
+                }
+                PillButton {
+                    objectName: "te-dirty-save"
+                    text: I18n.t("editor.btn.save") + "  ↵"
+                    primary: true
+                    onClicked: discardPrompt.save()
+                }
+            }
+        }
+    }
+
     // A small toggle chip for the description's mode row.
     component SegChip: Rectangle {
         id: seg
@@ -1023,8 +1375,13 @@ Popup {
         signal clicked()
         radius: Theme.radiusPill
         color: active ? Theme.accentSoft : (segMA.containsMouse ? Theme.panel3 : "transparent")
-        border.color: active ? Theme.withAlpha(Theme.accent, 0.5) : "transparent"
-        border.width: 1
+        border.color: activeFocus ? Theme.focusRing : active ? Theme.withAlpha(Theme.accent, 0.5) : "transparent"
+        border.width: activeFocus ? 2 : 1
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: seg.text
+        Keys.onSpacePressed: seg.clicked()
+        Keys.onReturnPressed: seg.clicked()
         implicitWidth: segT.implicitWidth + 16
         implicitHeight: segT.implicitHeight + 6
         Text {

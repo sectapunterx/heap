@@ -4,6 +4,7 @@
 
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QTime>
 #include <QVariantList>
 #include <QVector>
 
@@ -19,12 +20,31 @@ namespace heap::state {
 //   v3  events hoisted to the top level
 //   v4  Task.deadline (QDate) split into scheduledAt/dueAt (QDateTime) + hasTime
 //   v5  Task.rank — manual order within a status column
-inline constexpr int kSchemaVersion = 9;
+//   v10 Task.hasTime split into dueHasTime / scheduledHasTime; every task
+//       gets a distinct rank (rank-0 ties are spread out in board order)
+inline constexpr int kSchemaVersion = 10;
 
 // Gap between consecutive ranks handed out by the v4→v5 migration and by
 // "add to the end". Large enough that a long run of midpoint inserts between
 // the same two neighbours never needs a rebalance in practice.
 inline constexpr double kRankStep = 1024.0;
+
+// The one `hasTime` of schema ≤ 9 said "the clock of these datetimes is real"
+// for both fields at once. Each field keeps it unless it sits at exactly
+// midnight while the other field carries a real clock time: that is the
+// date-only deadline next to a timed schedule (or the reverse) the shared flag
+// could not express, and midnight was never typed there.
+// Inline so the sync serializer, which is built without this file in some
+// test targets, reads old documents by the same rule.
+inline void applyLegacyHasTime(Task& t, bool hasTime) {
+  const auto atMidnight = [](const QDateTime& dt) {
+    return dt.time() == QTime(0, 0);
+  };
+  const bool dueClock = t.dueAt.isValid() && !atMidnight(t.dueAt);
+  const bool schedClock = t.scheduledAt.isValid() && !atMidnight(t.scheduledAt);
+  t.dueHasTime = hasTime && t.dueAt.isValid() && (dueClock || !schedClock);
+  t.scheduledHasTime = hasTime && t.scheduledAt.isValid() && (schedClock || !dueClock);
+}
 
 QJsonObject taskToJson(const Task& t);
 Task taskFromJson(const QJsonObject& o);

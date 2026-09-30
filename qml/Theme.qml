@@ -81,8 +81,16 @@ QtObject {
     readonly property color panel3: _c.panel3
 
     // ── Lines + text — highContrast strengthens both ──────────────────
-    readonly property color border:       highContrast ? (dark ? Qt.lighter(_solidBorder, 1.6) : Qt.darker(_solidBorder, 1.4)) : _c.border
-    readonly property color borderStrong: highContrast ? (dark ? Qt.lighter(_solidBorder, 2.2) : Qt.darker(_solidBorder, 1.8)) : _c.borderStrong
+    // High contrast is the accessibility mode, so its lines — field outlines
+    // included — reach WCAG's 3:1 for UI against bg and panel on every theme;
+    // lightening Minimal's hairline left them at about 2:1.
+    readonly property var _lineSurfaces: [String(_c.bg), String(Qt.tint(_c.bg, _c.panel)), String(Qt.tint(_c.bg, _c.panel2))]
+    readonly property color border:       highContrast
+        ? Presets.ensureContrast(String(dark ? Qt.lighter(_solidBorder, 1.6) : Qt.darker(_solidBorder, 1.4)), _lineSurfaces, 3.0)
+        : _c.border
+    readonly property color borderStrong: highContrast
+        ? Presets.ensureContrast(String(dark ? Qt.lighter(_solidBorder, 2.2) : Qt.darker(_solidBorder, 1.8)), _lineSurfaces, 3.5)
+        : _c.borderStrong
     readonly property color text:         highContrast ? (dark ? "#ffffff" : "#000000") : _c.text
     readonly property color textMuted:    _c.textMuted
     // The smallest text in the app uses this; every built-in theme keeps it
@@ -100,6 +108,19 @@ QtObject {
     readonly property color accentSoft:   _legacyAccent ? Qt.rgba(accent.r, accent.g, accent.b, dark ? 0.18 : 0.12) : _c.accentSoft
     // Switch and slider handles.
     readonly property color knob:         _c.knob
+
+    // ── Keyboard focus ────────────────────────────────────────────────
+    // The ring around whatever has keyboard focus, and the marker on the
+    // highlighted row of a menu or the palette. Both must stand out at 3:1
+    // (WCAG 1.4.11) from every surface they are drawn on: accentStrong on a
+    // primary button's accent fill was 1.1–1.4:1, and a highlighted menu row
+    // was panel2 on panel, 1.03:1. The ring is drawn outside the control, on
+    // the surface, so it is measured against the surfaces — and a theme
+    // whose accentStrong is too faint for that gets a stronger one.
+    readonly property color focusRing: Presets.ensureContrast(String(accentStrong),
+        [String(bg), String(panel), String(panel2), String(panel3)], 3.0)
+    // Fill of the highlighted menu / palette row; focusRing marks it.
+    readonly property color rowHighlight: panel3
 
     // ── Alerts ────────────────────────────────────────────────────────
     readonly property color danger:      _c.danger
@@ -179,6 +200,21 @@ QtObject {
 
     // Token by key, for the theme editor and alert kinds.
     function token(key) { return _c[key]; }
+    // Text for a label on a coloured fill (count badges): the theme's own
+    // textOnBadge when it reads at AA there, else whichever of the dark and
+    // light on-colours reads better. White on heap. dark's cyan was 1.9:1.
+    function textOn(fill) {
+        const f = String(fill);
+        const pref = String(textOnBadge);
+        if (Presets.contrast(pref, f) >= 4.5) return textOnBadge;
+        const alt = [String(textOnAccent), String(textOnDanger), "#ffffff", "#000000"];
+        let best = pref, bestRatio = Presets.contrast(pref, f);
+        for (let i = 0; i < alt.length; i++) {
+            const r = Presets.contrast(alt[i], f);
+            if (r > bestRatio) { best = alt[i]; bestRatio = r; }
+        }
+        return best;
+    }
     function alertColor(kind) {
         switch (kind) {
             case "error":   return danger;

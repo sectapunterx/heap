@@ -1,6 +1,7 @@
 #pragma once
 
 #include "EventSpan.h"
+#include "EventZone.h"
 #include "Models.h"
 #include "RRule.h"
 
@@ -59,6 +60,12 @@ inline QString overrideKey(const QString& masterId, const QDate& date) {
 // replaced if an override claims it, and otherwise dated forward — keeping the
 // master's length, so a two-day event repeats as a two-day event.
 //
+// A master that names a time zone is expanded in that zone's dates and each
+// occurrence converted to `display` on its own day, so a New York meeting
+// follows New York's DST and a Tuesday-evening one lands on the viewer's
+// Wednesday when that is when it is. Exdates and overrides are keyed by the
+// source-zone date, which is also what `occurrenceDate` reports.
+//
 // Overrides are never emitted on their own: one whose master is gone would
 // otherwise appear as a ghost the user cannot explain, and one whose occurrence
 // falls outside the range has no business being drawn.
@@ -69,7 +76,8 @@ inline QString overrideKey(const QString& masterId, const QDate& date) {
 inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
                                         const QDate& from,
                                         const QDate& to,
-                                        QDate* coveredUntil = nullptr) {
+                                        QDate* coveredUntil = nullptr,
+                                        const QTimeZone& display = QTimeZone::systemTimeZone()) {
   QVector<Occurrence> out;
   if(!from.isValid() || !to.isValid() || to < from) {
     if(coveredUntil != nullptr) {
@@ -102,10 +110,15 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
       continue;
     }
 
+    const QTimeZone zone = zoneOf(e);
     const RRule rule = parseRRule(e.rrule);
     if(!rule.isValid()) {
-      if(e.date.isValid() && overlaps(e, e.date)) {
-        out.append({e, e.date, false});
+      if(!e.date.isValid()) {
+        continue;
+      }
+      const CalEvent shown = zone.isValid() ? localized(e, display) : e;
+      if(overlaps(shown, shown.date)) {
+        out.append({shown, shown.date, false});
       }
       continue;
     }
@@ -117,25 +130,37 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
     const qint64 lengthDays = (e.endDate.isValid() && e.endDate > e.date) ? e.date.daysTo(e.endDate) : 0;
 
     // Widened at the front by the event's own length: an occurrence that
-    // started before the range can still reach into it.
-    const QDate searchFrom = from.addDays(-lengthDays);
-    for(const QDate& day : expand(rule, e.date, searchFrom, last)) {
+    // started before the range can still reach into it. A zoned series is
+    // widened a day either way as well, because its dates are the source's.
+    const int slack = zone.isValid() ? 1 : 0;
+    const QDate searchFrom = from.addDays(-lengthDays - slack);
+    const QDate searchTo = last.addDays(slack);
+    for(const QDate& day : expand(rule, e.date, searchFrom, searchTo)) {
       if(e.exdates.contains(day)) {
+        continue;
+      }
+      // An exact UNTIL instant ends the series at the occurrence that starts
+      // after it, not at the end of that UTC day.
+      if(rule.untilAt.isValid() && !e.allDay) {
+        const QDateTime startsAt = wallInstant(day, e.start, zone.isValid() ? zone : display);
+        if(startsAt > rule.untilAt) {
+          continue;
+        }
+      } else if(rule.untilAt.isValid() && day > rule.untilAt.date()) {
         continue;
       }
       const auto it = overrides.constFind(detail::overrideKey(e.id, day));
       if(it != overrides.constEnd()) {
         const CalEvent& ov = *it.value();
-        if(ov.date.isValid() && overlaps(ov, ov.date)) {
-          out.append({ov, day, false});
+        const CalEvent shownOv = zoneOf(ov).isValid() ? localized(ov, display) : ov;
+        if(shownOv.date.isValid() && overlaps(shownOv, shownOv.date)) {
+          out.append({shownOv, day, false});
         }
         continue;
       }
       CalEvent inst = e;
       inst.date = day;
-      if(lengthDays > 0) {
-        inst.endDate = day.addDays(lengthDays);
-      }
+      inst.endDate = lengthDays > 0 ? day.addDays(lengthDays) : QDate();
       // The instance is not the master: it carries no rule of its own, and it
       // points back at what it came from, so an editor can ask "this one, or
       // all of them?" and a click can find the series again.
@@ -143,7 +168,10 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
       inst.exdates.clear();
       inst.masterId = e.id;
       inst.originalDate = day;
-      if(overlaps(inst, day)) {
+      if(zone.isValid()) {
+        inst = localized(inst, display);
+      }
+      if(overlaps(inst, inst.date)) {
         out.append({inst, day, true});
       }
     }
@@ -154,9 +182,12 @@ inline QVector<Occurrence> expandEvents(const QVector<CalEvent>& stored,
 // The stored events an expansion is built from, as plain CalEvents. The views
 // want this shape; the two extra facts ride along on the events themselves
 // (`masterId` and `originalDate` are set on every generated instance).
-inline QVector<CalEvent> expandedEvents(const QVector<CalEvent>& stored, const QDate& from, const QDate& to) {
+inline QVector<CalEvent> expandedEvents(const QVector<CalEvent>& stored,
+                                        const QDate& from,
+                                        const QDate& to,
+                                        const QTimeZone& display = QTimeZone::systemTimeZone()) {
   QVector<CalEvent> out;
-  for(const Occurrence& o : expandEvents(stored, from, to)) {
+  for(const Occurrence& o : expandEvents(stored, from, to, nullptr, display)) {
     out.append(o.event);
   }
   return out;

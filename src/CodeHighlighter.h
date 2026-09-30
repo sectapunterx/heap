@@ -28,7 +28,11 @@ public:
     QVariantMap palette() const { return m_palette; }
     void        setPalette(const QVariantMap &p);
 
-signals:
+    // The rule set a fence's language name selects: case-insensitive, with
+    // the usual aliases ("Bash", "zsh", "C++", "yml", "golang", …).
+    static QString canonicalLanguage(const QString& lang);
+
+   signals:
     void targetChanged();
     void languageChanged();
     void paletteChanged();

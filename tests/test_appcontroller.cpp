@@ -200,7 +200,7 @@ TEST_F(AppControllerTest, ScheduleTaskSchedulesTheTaskItself) {
   const Task& t = app_->tasks()->items().at(0);
   EXPECT_EQ(t.scheduledAt.date(), QDate(2026, 5, 15));
   EXPECT_EQ(t.scheduledAt.time(), QTime(14, 30));
-  EXPECT_TRUE(t.hasTime);
+  EXPECT_TRUE(t.scheduledHasTime);
 }
 
 TEST_F(AppControllerTest, ScheduleTaskLateInTheDayStaysInsideIt) {
@@ -611,7 +611,10 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   Task t = mkTask(QStringLiteral("REC-1"), QStringLiteral("Daily standup"));
   t.status = QStringLiteral("todo");
   t.recurrence = QStringLiteral("every:day");
-  t.dueAt = QDateTime(QDate(2026, 7, 4), QTime(0, 0));
+  // Due today: the next one is tomorrow. (Fixed past dates would be skipped
+  // forward to the first occurrence after today — see the test below.)
+  const QDate today = QDate::currentDate();
+  t.dueAt = QDateTime(today, QTime(0, 0));
   t.scheduledAt = t.dueAt;
   app_->tasks()->reset({t});
   const int before = app_->tasks()->rowCount();
@@ -623,7 +626,7 @@ TEST_F(AppControllerTest, CompletingRecurringTaskSpawnsNext) {
   for(const Task& x : app_->tasks()->items()) {
     if(x.id != QStringLiteral("REC-1") && x.recurrence == QStringLiteral("every:day")) {
       EXPECT_EQ(x.status, QString("todo"));
-      EXPECT_EQ(x.dueAt.date(), QDate(2026, 7, 5));  // next day
+      EXPECT_EQ(x.dueAt.date(), today.addDays(1));  // next day
       foundNext = true;
     }
   }
@@ -638,7 +641,8 @@ TEST_F(AppControllerTest, RecurringScheduledOnlyTaskKeepsAnInvalidDueDate) {
   Task t = mkTask(QStringLiteral("REC-2"), QStringLiteral("Focus block"));
   t.status = QStringLiteral("todo");
   t.recurrence = QStringLiteral("every:day");
-  t.scheduledAt = QDateTime(QDate(2026, 7, 4), QTime(9, 0));
+  const QDate today = QDate::currentDate();
+  t.scheduledAt = QDateTime(today, QTime(9, 0));
   t.dueAt = QDateTime();  // scheduled, never owed
   app_->tasks()->reset({t});
 
@@ -649,7 +653,7 @@ TEST_F(AppControllerTest, RecurringScheduledOnlyTaskKeepsAnInvalidDueDate) {
     if(x.id != QStringLiteral("REC-2") && x.recurrence == QStringLiteral("every:day")) {
       foundNext = true;
       EXPECT_FALSE(x.dueAt.isValid()) << "recurrence manufactured a due date the task never had";
-      EXPECT_EQ(x.scheduledAt, QDateTime(QDate(2026, 7, 5), QTime(9, 0))) << "the scheduled clock time must roll onto the next occurrence";
+      EXPECT_EQ(x.scheduledAt, QDateTime(today.addDays(1), QTime(9, 0))) << "the scheduled clock time must roll onto the next occurrence";
     }
   }
   EXPECT_TRUE(foundNext);
@@ -733,7 +737,8 @@ TEST_F(AppControllerTest, EditingAnExistingTaskKeepsTheParsedClockTime) {
   const Task& after = app_->tasks()->items().at(row);
   EXPECT_EQ(after.scheduledAt, QDateTime(QDate(2026, 7, 10), QTime(9, 0)));
   EXPECT_EQ(after.dueAt, QDateTime(QDate(2026, 7, 10), QTime(9, 0)));
-  EXPECT_TRUE(after.hasTime);
+  EXPECT_TRUE(after.dueHasTime);
+  EXPECT_TRUE(after.scheduledHasTime);
 }
 
 // A caller that only knows a date (an old draft, an import) still works.
@@ -749,7 +754,7 @@ TEST_F(AppControllerTest, ALegacyDeadlineDraftKeyLandsAtMidnight) {
   ASSERT_GE(row, 0);
   const Task& t = app_->tasks()->items().at(row);
   EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
-  EXPECT_FALSE(t.hasTime);
+  EXPECT_FALSE(t.dueHasTime);
 }
 
 // snoozeDeadline shifts by whole days and keeps the clock time.
@@ -757,7 +762,8 @@ TEST_F(AppControllerTest, SnoozeShiftsBothDatetimesAndKeepsTheTime) {
   Task t = mkTask(QStringLiteral("SNZ-1"), QStringLiteral("ship"));
   t.dueAt = QDateTime(QDate(2026, 7, 10), QTime(16, 0));
   t.scheduledAt = t.dueAt;
-  t.hasTime = true;
+  t.dueHasTime = true;
+  t.scheduledHasTime = true;
   app_->tasks()->reset({t});
 
   app_->snoozeDeadline(QStringLiteral("SNZ-1"), 3600);
@@ -1074,7 +1080,7 @@ TEST_F(AppControllerTest, TrackerDueDateFillsAnEmptyDeadline) {
   app_->mergeExternalTasks(QStringLiteral("github"), QStringLiteral("github-"), {issue});
   const Task& t = app_->tasks()->items().at(app_->tasks()->indexOfId(QStringLiteral("github-9")));
   EXPECT_EQ(t.dueAt, QDateTime(QDate(2026, 8, 15), QTime(0, 0)));
-  EXPECT_FALSE(t.hasTime);
+  EXPECT_FALSE(t.dueHasTime);
 }
 
 // The whole point of storing the tracker's due date: telling "the user moved
@@ -1542,7 +1548,7 @@ TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
 
   const Task& afterEdit = app_->tasks()->items().at(app_->tasks()->indexOfId(id));
   EXPECT_EQ(afterEdit.dueAt, at) << "the edit dropped the clock time";
-  EXPECT_TRUE(afterEdit.hasTime);
+  EXPECT_TRUE(afterEdit.dueHasTime);
 
   // Save, then reload from disk in a fresh controller.
   app_->flushSave();
@@ -1553,7 +1559,8 @@ TEST_F(AppControllerTest, ThreePmSurvivesCaptureEditSaveReloadAndExport) {
     const Task& t = reloaded.tasks()->items().at(row);
     EXPECT_EQ(t.dueAt, at) << "the clock time did not survive a reload";
     EXPECT_EQ(t.scheduledAt, at);
-    EXPECT_TRUE(t.hasTime);
+    EXPECT_TRUE(t.dueHasTime);
+    EXPECT_TRUE(t.scheduledHasTime);
   }
 
   // Export carries it too.

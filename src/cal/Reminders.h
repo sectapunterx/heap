@@ -4,61 +4,139 @@
 #include "Models.h"
 
 #include <QDateTime>
+#include <QSet>
+#include <QTime>
 #include <QVector>
 
-// Which meetings are due to be announced, and when.
+#include <cmath>
+
+// Which meetings, deadlines and standups are due to be announced, and when.
 //
 // This was a block inside runAutomation(), which reads the wall clock. That
 // made the rule untestable: a test can only put an event a few minutes out,
 // saveEvent() snaps it to the calendar's grid, and whether the snapped slot
 // lands before or after "now" depends on what time the test happens to run.
-// The window logic is the part worth pinning, so it is pulled out here where
-// `now` is an argument.
+// The rules are pulled out here where `now` is an argument.
 //
-// The once-per-day bookkeeping stays with AppController, which owns the
-// sentinel map that survives across ticks.
+// A reminder is due from the moment it should fire until a little after the
+// thing it is about starts, not only inside a one-minute window. That is what
+// lets quiet hours delay a reminder instead of swallowing it — the 08:55 call
+// for a 09:00 meeting arrives at 09:00 when the quiet window ends then — and
+// lets a reminder whose minute fell while the app was busy or asleep still
+// arrive. Each one has a key; AppController remembers the keys it has sent
+// (on disk, so a restart does not repeat them) and skips those.
 namespace heap::cal {
 
+// How long after an occurrence starts its reminder may still be delivered.
+inline constexpr int kReminderGraceMinutes = 5;
+
 struct DueReminder {
+  // Identifies this reminder for this occurrence at this time: moving the
+  // meeting or the next day's occurrence gets a new one.
+  QString key;
   QString eventId;
   QString title;
-  // Whole minutes until the event starts. 0 means it is starting now; never
-  // negative, because a meeting that already began is not something to be
-  // reminded about.
+  // Whole minutes until the event starts, rounded up: 0 only once it has
+  // started, so "starting now" is never said a minute early.
   int minutesLeft = 0;
 };
 
-// Events on `now`'s date that start within `leadMinutes` of it.
+// The key of a meeting reminder: the event and the instant it starts.
+inline QString meetingReminderKey(const QString& eventId, const QDateTime& startsAt) {
+  return QStringLiteral("ev:%1@%2").arg(eventId, startsAt.toString(Qt::ISODate));
+}
+
+// Occurrences (already expanded, in the viewer's clock) whose reminder is
+// due at `now` and not yet in `sent`.
 //
 // A focus block is excluded: it is the user's own time, put there on purpose,
 // and they are already in it. An all-day event is excluded too — it has no
-// start to count down to, and announcing it "in 0 minutes" at midnight is
-// noise rather than a reminder.
-inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& events, const QDateTime& now, int leadMinutes) {
+// start to count down to. An event's own lead (CalEvent::reminderMinutes)
+// beats `defaultLead`; kReminderOff silences it.
+inline QVector<DueReminder> dueMeetingReminders(const QVector<CalEvent>& occurrences,
+                                                const QDateTime& now,
+                                                int defaultLead,
+                                                const QSet<QString>& sent = {}) {
   QVector<DueReminder> out;
   if(!now.isValid()) {
     return out;
   }
-  const int lead = qMax(0, leadMinutes);
-  const QDate today = now.date();
-  for(const CalEvent& e : events) {
-    if(e.date != today) {
+  for(const CalEvent& e : occurrences) {
+    if(e.allDay || !e.date.isValid() || e.type == QStringLiteral("focus")) {
       continue;
     }
-    if(e.allDay) {
+    if(e.reminderMinutes == CalEvent::kReminderOff) {
       continue;
     }
-    if(e.type == QStringLiteral("focus")) {
-      continue;
-    }
+    const int lead = qMax(0, e.reminderMinutes >= 0 ? e.reminderMinutes : defaultLead);
     const QDateTime startsAt(e.date, hourToTime(e.start));
-    const qint64 minsLeft = now.secsTo(startsAt) / 60;
-    if(minsLeft < 0 || minsLeft > lead) {
+    const QDateTime fireAt = startsAt.addSecs(-60LL * lead);
+    if(now < fireAt || now > startsAt.addSecs(60LL * kReminderGraceMinutes)) {
       continue;
     }
-    out.append({e.id, e.title, static_cast<int>(minsLeft)});
+    const QString key = meetingReminderKey(e.id, startsAt);
+    if(sent.contains(key)) {
+      continue;
+    }
+    const qint64 secs = now.secsTo(startsAt);
+    const int minutes = secs <= 0 ? 0 : static_cast<int>((secs + 59) / 60);
+    out.append({key, e.id, e.title, minutes});
   }
   return out;
+}
+
+// A deadline reminder: whether it is due, and what to say.
+struct DeadlineCall {
+  bool due = false;
+  bool overdue = false;
+  // Whole hours left, rounded up (1 = "within the hour"); for an overdue
+  // task, whole hours past it, rounded down.
+  int hours = 0;
+  QString key;
+};
+
+// Once when the deadline comes inside `leadHours`, and once more when it has
+// passed — the old integer division said "due within the hour" 30 minutes
+// after the deadline and nothing at all three hours after it. Keys carry the
+// deadline itself, so moving it re-arms both.
+inline DeadlineCall deadlineReminder(const QString& taskId, const QDateTime& deadlineAt, const QDateTime& now, int leadHours) {
+  DeadlineCall out;
+  if(!deadlineAt.isValid() || !now.isValid()) {
+    return out;
+  }
+  const qint64 secs = now.secsTo(deadlineAt);
+  const QString stamp = deadlineAt.toString(Qt::ISODate);
+  if(secs < 0) {
+    // Only a deadline that passed recently: a profile full of month-old
+    // overdue work must not answer an update with a flood of reminders.
+    if(-secs > 24LL * 3600) {
+      return out;
+    }
+    out.due = true;
+    out.overdue = true;
+    out.hours = static_cast<int>(-secs / 3600);
+    out.key = QStringLiteral("dl-over:%1@%2").arg(taskId, stamp);
+    return out;
+  }
+  if(secs > 3600LL * qMax(1, leadHours)) {
+    return out;
+  }
+  out.due = true;
+  out.hours = qMax(1, static_cast<int>((secs + 3599) / 3600));
+  out.key = QStringLiteral("dl:%1@%2").arg(taskId, stamp);
+  return out;
+}
+
+// The quiet window [from, to) as it applies to `when`: true inside it. A
+// window that wraps midnight (19:00–09:00) is the usual case.
+inline bool inQuietWindow(const QTime& from, const QTime& to, const QTime& when) {
+  if(!from.isValid() || !to.isValid() || from == to) {
+    return false;
+  }
+  if(from < to) {
+    return when >= from && when < to;
+  }
+  return when >= from || when < to;
 }
 
 }  // namespace heap::cal

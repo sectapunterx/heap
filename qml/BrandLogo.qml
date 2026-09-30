@@ -29,7 +29,9 @@ Item {
     readonly property real markAspect:     1.0
 
     implicitHeight: 28
-    implicitWidth: implicitHeight * (variant === "lockup"   ? lockupAspect
+    // From the height actually set, not the default: the splash sets 92 and
+    // got a 106px-wide box (28 × 3.8) that the wordmark ran far out of.
+    implicitWidth: (height > 0 ? height : implicitHeight) * (variant === "lockup"   ? lockupAspect
                                   : variant === "wordmark" ? wordmarkAspect
                                                            : markAspect)
 
@@ -80,14 +82,24 @@ Item {
 
     // ── Wordmark — "heap" with a slightly brighter period ──────────────
     Text {
+        id: word
+        objectName: "brand-wordmark"
         visible: root.variant !== "mark"
         anchors.left: markBox.visible ? markBox.right : parent.left
         anchors.leftMargin: markBox.visible ? Math.round(parent.height * 0.18) : 0
         anchors.verticalCenter: parent.verticalCenter
-        // RichText so the period can carry the brighter crown tone while
-        // "heap" follows the surface text color.
-        textFormat: Text.RichText
-        text: "heap<span style=\"color:" + root._crownColor + "\">.</span>"
+        // Fits the lockup's own box. At the natural size the wordmark ran up
+        // to 166px past it, so anything centring the logo (the splash) put it
+        // off-centre by half of that.
+        width: root.width - (markBox.visible ? markBox.width + anchors.leftMargin : 0)
+        height: root.height
+        verticalAlignment: Text.AlignVCenter
+        fontSizeMode: Text.HorizontalFit
+        minimumPixelSize: 6
+        // StyledText so the period can carry the brighter crown tone while
+        // "heap" follows the surface text colour (and so the fit applies).
+        textFormat: Text.StyledText
+        text: "heap<font color=\"" + root._crownColor + "\">.</font>"
         color: root._textColor
         font.family: Brand.fontMono
         font.weight: Font.DemiBold

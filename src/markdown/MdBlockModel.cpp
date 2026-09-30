@@ -299,8 +299,13 @@ void MdBlockModel::setDocument(const MdSourceMap& src, const MdAst& ast, const M
       case BlockType::Paragraph: {
         if(const MdInline* image = soleImage(ast, block); image != nullptr) {
           Row row = makeRow(Image);
-          row.imageSource = image->href;
-          row.imageIsRemote = !isLocalSource(image->href);
+          // Resolved here, so the view gets something it can load: a relative
+          // path used to reach the Image element as-is and resolve against
+          // qrc:, and a local drive path was treated as remote, so no local
+          // image ever displayed. UNC stays blocked (see resolveImage).
+          const ResolvedImage resolved = resolveImage(image->href, options.imageBaseDir);
+          row.imageSource = (resolved.blocked || resolved.remote || resolved.url.isEmpty()) ? image->href : resolved.url;
+          row.imageIsRemote = resolved.blocked || resolved.remote;
           row.imageAlt = image->text.isEmpty() ? image->href : image->text;
           for(const int child : image->children) {
             row.imageAlt += ast.inlines.at(child).text;
@@ -344,7 +349,16 @@ void MdBlockModel::setDocument(const MdSourceMap& src, const MdAst& ast, const M
 
       case BlockType::MathBlock: {
         Row row = makeRow(Math);
-        row.code = src.textForLines(row.firstLine, row.lastLine);
+        // The formula, not its fences: "$$" on the lines above and below is
+        // markup, and the preview showed it as part of the maths.
+        QString code = src.textForLines(row.firstLine, row.lastLine).trimmed();
+        if(code.startsWith(QStringLiteral("$$"))) {
+          code = code.mid(2);
+        }
+        if(code.endsWith(QStringLiteral("$$"))) {
+          code.chop(2);
+        }
+        row.code = code.trimmed();
         rows.append(row);
         return;
       }
@@ -498,6 +512,15 @@ void MdBlockModel::applyRows(QVector<Row> rows) {
   for(int i = 0; i < suffix; ++i) {
     m_rows[m_rows.size() - 1 - i] = rows.at(rows.size() - 1 - i);
   }
+}
+
+int MdBlockModel::rowForFootnote(const QString& id) const {
+  for(int i = 0; i < m_rows.size(); ++i) {
+    if(m_rows.at(i).type == FootnoteDef && m_rows.at(i).footnoteId == id) {
+      return i;
+    }
+  }
+  return -1;
 }
 
 int MdBlockModel::rowForLine(int line) const {

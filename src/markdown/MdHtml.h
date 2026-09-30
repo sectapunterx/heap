@@ -48,7 +48,29 @@ struct MdHtmlOptions {
   // Numbers assigned to footnote ids, by first reference. Build it once per
   // document with footnoteNumbers() so every block agrees.
   QHash<QString, int> footnoteNumbers;
+
+  // Where a relative image path ("attachments/x.png") is looked up. Empty: a
+  // relative path cannot be resolved, and the image says so.
+  QString imageBaseDir;
 };
+
+// An image source, made loadable where that is safe.
+struct ResolvedImage {
+  // What to hand the Image element: a file:/// URL for a local file, the
+  // source itself for qrc:/data:/http(s). Empty when a relative path has no
+  // base to resolve against.
+  QString url;
+  // http(s): loaded only when the reader allows remote images.
+  bool remote = false;
+  // Never loaded: a UNC path, a file: URL with a host, any other scheme.
+  bool blocked = false;
+};
+
+// A local drive path ("C:\shots\x.png", "/home/me/x.png") and a host-less
+// file:/// URL are files on this machine and render. Relative paths resolve
+// against `baseDir`. UNC paths and file://host/ URLs stay blocked: opening one
+// makes Windows start an SMB session that hands the host the user's NTLM hash.
+ResolvedImage resolveImage(const QString& source, const QString& baseDir);
 
 // True for an image source that names nothing outside the note: a relative
 // path, a qrc: resource or a data: URI. Everything else — http(s), file:, a

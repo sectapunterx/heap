@@ -49,6 +49,12 @@ ExternalMeta makeFullMeta() {
   m.column = QStringLiteral("review");
   m.unsyncedStatus = QStringLiteral("blocked");
   m.goneUpstream = true;
+  m.scope = QStringLiteral("3f9a0c1e7b2d");
+  m.outOfScope = true;
+  m.priority = QStringLiteral("P1");
+  m.labels = {QStringLiteral("bug"), QStringLiteral("ui")};
+  m.conflicts = {QStringLiteral("title"), QStringLiteral("priority")};
+  m.pushQueued = true;
   return m;
 }
 
@@ -62,7 +68,8 @@ Task makeFullTask() {
   t.status = QStringLiteral("prog");
   t.scheduledAt = QDateTime(QDate(2026, 7, 10), QTime(9, 0, 0, 250));
   t.dueAt = QDateTime(QDate(2026, 7, 11), QTime(16, 0, 0, 750));
-  t.hasTime = true;
+  t.scheduledHasTime = true;
+  t.dueHasTime = true;
   t.branch = QStringLiteral("heap-104-lossless-task-model");
   t.statusChangedAt = QDateTime(QDate(2026, 7, 9), QTime(14, 30, 5, 125));
   t.archived = true;
@@ -104,6 +111,11 @@ CalEvent makeFullEvent() {
   e.exdates = {QDate(2026, 7, 20), QDate(2026, 8, 3)};
   e.masterId = QStringLiteral("ev-master");
   e.originalDate = QDate(2026, 7, 13);
+  e.tz = QStringLiteral("America/New_York");
+  e.location = QStringLiteral("Room 4");
+  e.notes = QStringLiteral("agenda:\n- one");
+  e.url = QStringLiteral("https://meet.example/abc");
+  e.reminderMinutes = 15;
   return e;
 }
 
@@ -155,7 +167,9 @@ class Gen {
     t.status = text();
     t.scheduledAt = dateTime();
     t.dueAt = dateTime();
-    t.hasTime = boolean();
+    // The live reader drops a clock flag on a datetime that is not there.
+    t.scheduledHasTime = t.scheduledAt.isValid() && boolean();
+    t.dueHasTime = t.dueAt.isValid() && boolean();
     t.branch = text();
     // Never invalid: taskFromJson heals a missing status stamp to "now", which
     // is deliberate (old files must not sort to the epoch) and unmatchable.
@@ -234,6 +248,11 @@ class Gen {
     }
     e.masterId = boolean() ? text() : QString();
     e.originalDate = boolean() ? date() : QDate();
+    e.tz = boolean() ? QStringLiteral("Europe/Berlin") : QString();
+    e.location = text();
+    e.notes = text();
+    e.url = boolean() ? text() : QString();
+    e.reminderMinutes = pick(-2, 60);
     return e;
   }
 
@@ -249,14 +268,14 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 24u);
-  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 16u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 25u);
+  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 21u);
 }
 
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole
 // object — this is what stops a field added in there from being dropped.
 TEST(FieldCountGuard, ExternalMetaArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 15u);
+  EXPECT_EQ(heap::meta::fieldCount<ExternalMeta>(), 21u);
 }
 
 // ── The runtime half: one emitted key per declared field ──
@@ -434,11 +453,13 @@ TEST(RoundTrip, LegacyBareDateDeadlineLandsAtMidnightWithoutTime) {
   const Task live = heap::state::taskFromJson(o);
   EXPECT_EQ(live.scheduledAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
   EXPECT_EQ(live.dueAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
-  EXPECT_FALSE(live.hasTime);
+  EXPECT_FALSE(live.dueHasTime);
+  EXPECT_FALSE(live.scheduledHasTime);
 
   const Task synced = heap::sync::SyncSerializer::taskFromJson(o);
   EXPECT_EQ(synced.scheduledAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
-  EXPECT_FALSE(synced.hasTime);
+  EXPECT_FALSE(synced.dueHasTime);
+  EXPECT_FALSE(synced.scheduledHasTime);
 }
 
 TEST(RoundTrip, LegacyEmptyDeadlineStaysUnset) {

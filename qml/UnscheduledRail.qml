@@ -41,15 +41,6 @@ Rectangle {
         return !!x && !!y && x.getTime() === y.getTime();
     }
 
-    // Roles by name. Counting offsets from Qt.UserRole by hand is how a filter
-    // silently starts reading a different field — written that way first, the
-    // `hasTime` check came out as the board's rank. roleNames() is not
-    // invokable from QML, so TaskModel exposes roleOf() for exactly this.
-    function _data(model, idx, name) {
-        const r = model.roleOf(name);
-        return r < 0 ? undefined : model.data(idx, r);
-    }
-
     function _inRange(d) {
         for (let i = 0; i < root.days.length; i++) if (_sameDay(root.days[i], d)) return true;
         return false;
@@ -57,30 +48,39 @@ Rectangle {
 
     // Tasks due in the visible range that have no time on them yet.
     //
-    // `hasTime` is the whole question: a deadline is a date, and a task only
-    // counts as blocked out once it has an hour. A task already standing in
-    // the grid must not also stand in the list of what is missing from it.
+    // A task has its slot once it has an hour (`hasTime`) or a block on the
+    // calendar that stands for it (a focus block or a linked meeting in the
+    // range). The block is what counts for a task with a date-only deadline:
+    // scheduling it no longer marks that deadline as timed (it read 00:00).
+    // A task already standing in the grid must not also stand in the list of
+    // what is missing from it.
+    //
+    // The candidates come from C++ (calendarTasks): reading roles of every
+    // task in the profile for a week's worth was the slow part at 10k tasks.
     function buildItems() {
         const _t = root.taskRev;
         const _e = root.eventRev;
-        const tm = AppController.tasks;
         const out = [];
+        if (root.days.length === 0) return out;
+        const first = root.days[0];
+        const last = root.days[root.days.length - 1];
+        const slotted = {};
+        const occ = AppController.eventOccurrences(first, last);
+        for (let i = 0; i < occ.length; i++) if (occ[i].taskId) slotted[String(occ[i].taskId)] = true;
         const needle = root.searchText.trim().toLowerCase();
-        for (let i = 0; i < tm.rowCount(); i++) {
-            const idx = tm.index(i, 0);
-            if (root._data(tm, idx, "archived")) continue;
-            if (String(root._data(tm, idx, "status") || "") === "done") continue;
-            const due = root._data(tm, idx, "deadline");
+        const list = AppController.calendarTasks(first, last, false);
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            if (t.status === "done" || t.dueDay < 0) continue;
+            const due = t.deadline;
             if (!due || !due.getFullYear || !root._inRange(due)) continue;
-            if (root._data(tm, idx, "hasTime")) continue;
-            if (needle.length > 0) {
-                const hay = String(root._data(tm, idx, "searchText") || "");
-                if (hay.indexOf(needle) < 0) continue;
-            }
+            // Either clock puts it on the grid already (schema v10 keeps one per field).
+            if (t.scheduledHasTime || t.dueHasTime || slotted[t.id]) continue;
+            if (needle.length > 0 && String(t.searchText || "").indexOf(needle) < 0) continue;
             out.push({
-                id:       String(root._data(tm, idx, "id")),
-                title:    String(root._data(tm, idx, "title") || ""),
-                priority: String(root._data(tm, idx, "priority") || "P3"),
+                id:       String(t.id),
+                title:    String(t.title || ""),
+                priority: String(t.priority || "P3"),
                 deadline: due
             });
         }
@@ -191,7 +191,7 @@ Rectangle {
                         Layout.fillWidth: true
                     }
                     Text {
-                        text: chip.modelData.id + " · " + Qt.formatDate(chip.modelData.deadline, "ddd d MMM")
+                        text: chip.modelData.id + " · " + chip.modelData.deadline.toLocaleDateString(I18n.locale, "ddd d MMM")
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsXs

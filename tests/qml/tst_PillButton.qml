@@ -142,7 +142,9 @@ TestCase {
     // presses it, and it is announced by its text.
     function test_keyboard_focus_and_accessible_name() {
         const b = make('import TodoCpp; PillButton { text: "Save" }');
-        compare(b.focusPolicy, Qt.StrongFocus);
+        // Tab, not click: a click on "+ Task" must not keep the keyboard
+        // away from the board once the editor closes.
+        compare(b.focusPolicy, Qt.TabFocus);
         compare(b.Accessible.name, "Save");
         let clicks = 0;
         b.clicked.connect(function () { clicks++; });

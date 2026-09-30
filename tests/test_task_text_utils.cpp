@@ -359,3 +359,28 @@ TEST(ExtractMeta, Priority) {
   EXPECT_EQ(extractMeta(QStringLiteral("не срочно: почистить логи")).priority, QStringLiteral("P3"));
   EXPECT_TRUE(extractMeta(QStringLiteral("купить хлеб")).priority.isEmpty());
 }
+
+// ─── The audit's TASKS-13: capture understands priority and labels ───
+
+TEST(ExtractMeta, PriorityLabelsAndHandleTogether) {
+  const auto m = extractMeta(QStringLiteral("Fix login bug p1 #backend @maria"));
+  EXPECT_EQ(m.priority, QString("P1"));
+  ASSERT_EQ(m.labels.size(), 1);
+  EXPECT_EQ(m.labels.at(0), QString("backend"));
+  ASSERT_EQ(m.handles.size(), 1);
+  EXPECT_EQ(m.handles.at(0), QString("maria")) << "the person is kept";
+  EXPECT_EQ(m.title, QString("Fix login bug @maria"));
+}
+
+TEST(ExtractMeta, IssueNumbersAndWordsWithHashAreNotLabels) {
+  const auto m = extractMeta(QStringLiteral("port C# client, see #42 #infra."));
+  ASSERT_EQ(m.labels.size(), 1);
+  EXPECT_EQ(m.labels.at(0), QString("infra"));
+  EXPECT_EQ(m.title, QString("port C# client, see #42"));
+}
+
+TEST(ExtractMeta, ALeadingTicketMarkerLeavesTheTitle) {
+  EXPECT_EQ(extractMeta(QStringLiteral("ticket: rotate keys")).title, QString("rotate keys"));
+  EXPECT_EQ(extractMeta(QStringLiteral("задача: обновить сертификат")).title, QString("обновить сертификат"));
+  EXPECT_EQ(extractMeta(QStringLiteral("Bug: crash on start")).title, QString("Bug: crash on start"));
+}

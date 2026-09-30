@@ -40,10 +40,14 @@ Item {
     // caret goes to that line and the property is handed back for clearing.
     property int jumpToLine: -1
     signal jumpConsumed()
-    onJumpToLineChanged: {
+    onJumpToLineChanged: _consumeJump()
+    function _consumeJump() {
         if (jumpToLine < 0) return;
         _jumpToOffset(mdDocument.positionForLine(jumpToLine));
-        jumpConsumed();
+        // Later, not from inside the change handler: the caller clears the
+        // line it bound this to, which re-entered the binding while it was
+        // still being evaluated and logged a binding loop.
+        Qt.callLater(root.jumpConsumed);
     }
 
     // ── State for autocomplete popup ─────────────────────────────────
@@ -53,11 +57,78 @@ Item {
     property var    acMatches: []
     property int    acSelected: 0
 
-    // ── Backlinks pane (HEAP-79) ─────────────────────────────────────
-    // Recomputed live from the editor text (not the saved blob) so links show
-    // up as you type. Empty (and uncomputed) while the pane is hidden.
+    // ── Links pane (HEAP-79) ─────────────────────────────────────────
+    // Two lists: the notes that link here (what "backlinks" means — it used to
+    // show this note's own links under that name, and flag a link to an
+    // existing note as broken because no heading here carried its name), and
+    // this note's own links, each resolved against every note.
+    //
+    // Both are computed after typing pauses, not on every keystroke: over a
+    // 3 MB note the live binding cost seconds per character. Empty (and
+    // uncomputed) while the pane is hidden.
     property bool showBacklinks: false
-    property var  _backlinks: showBacklinks ? AppController.noteBacklinks(editor.text) : []
+    property var  _incoming: []
+    property var  _outgoing: []
+    function _refreshLinks() {
+        if (!root.showBacklinks) { root._incoming = []; root._outgoing = []; return; }
+        root._incoming = AppController.backlinksToNote(AppController.activeNoteId);
+        root._outgoing = AppController.outgoingNoteLinks(editor.text);
+    }
+    onShowBacklinksChanged: _refreshLinks()
+    Timer { id: linksTimer; interval: 400; onTriggered: root._refreshLinks() }
+
+    // The header's counts, on the same pause.
+    property var _stats: ({ lines: 0, mentions: 0, tickets: 0 })
+    Timer { id: statsTimer; interval: 300; onTriggered: root._stats = AppController.noteStats(editor.text) }
+
+    // What the header calls the open note. m.data() is a call, not something
+    // a binding can watch, so it is refreshed when the note or the list moves.
+    property string _activeTitle: ""
+    function _refreshTitle() {
+        const m = AppController.notes;
+        const row = m.indexOfId(AppController.activeNoteId);
+        root._activeTitle = row >= 0 ? String(m.data(m.index(row, 0), m.roleOf("title")) || "") : "";
+    }
+    Connections {
+        target: AppController.notes
+        function onDataChanged() { root._refreshTitle() }
+        function onModelReset() { root._refreshTitle() }
+        function onRowsRemoved() { root._refreshTitle() }
+    }
+
+    // The list of notes beside the editor. "auto" shows it when there is room
+    // for both; the toggle (and Ctrl+Alt+L) pins it open or shut. At 1440 px
+    // with the right panel open it used to be hidden with no way back, which
+    // left no way to reach another note at all.
+    property string _listPref: "auto"
+    readonly property bool _listShown: _listPref === "auto" ? root.width > 560 : _listPref === "shown"
+    function toggleList() { root._listPref = root._listShown ? "hidden" : "shown"; }
+
+    // Same lookup Main uses, so a rebinding in Settings → Hotkeys applies here.
+    function _kbd(id) {
+        const list = AppController.shortcuts;
+        for (let i = 0; i < list.length; i++)
+            if (list[i].id === id) return list[i].sequence;
+        return "";
+    }
+
+    function newNoteAndEdit() {
+        root._flushPending();
+        AppController.newNote();
+        root._focusEditorAtEnd();
+    }
+    function _focusEditorAtEnd() {
+        Qt.callLater(function () {
+            if (root.viewMode === "preview") root.viewMode = "split";
+            editor.forceActiveFocus();
+            editor.cursorPosition = editor.length;
+        });
+    }
+    // Ctrl+F in Notes filters the notes, not the task search in the top bar.
+    function focusSearch() {
+        if (!root._listShown) root._listPref = "shown";
+        notesList.focusFilter();
+    }
 
     // ── Scroll sync between the two panes ────────────────────────────
     // Which pane last moved under the reader's hand. The follower's own
@@ -148,13 +219,42 @@ Item {
         return out;
     }
 
+    // [[ offers the notes first — linking another note is what [[ is for now
+    // that a profile has many — then this note's own headings. It offered
+    // only the headings.
     function _headingEntries() {
         const out = [];
-        const hs = AppController.noteHeadings(editor.text);
+        const m = AppController.notes;
+        const rTitle = m.roleOf("title"), rFolder = m.roleOf("folder"), rId = m.roleOf("id");
+        for (let i = 0; i < m.rowCount(); i++) {
+            const idx = m.index(i, 0);
+            if (String(m.data(idx, rId)) === AppController.activeNoteId) continue;
+            out.push({ kind: "note", id: "", label: String(m.data(idx, rTitle) || ""),
+                       sub: String(m.data(idx, rFolder) || ""), color: Theme.accent });
+        }
+        // From the document's own outline, already parsed: asking for the
+        // headings of editor.text parsed the whole note on every keystroke
+        // typed inside [[ ]], 150 ms a key at 3 MB.
+        // Fresh for an ordinary note; a huge one keeps its last parse.
+        if (mdDocument.lastParseMs < 30) mdDocument.flush();
+        const hs = mdDocument.outline;
+        const seen = ({});
         for (let i = 0; i < hs.length; i++) {
-            out.push({ kind: "heading", id: "", label: hs[i], sub: "", color: Theme.accent });
+            const h = hs[i].text;
+            if (!h || seen[h]) continue;
+            seen[h] = true;
+            out.push({ kind: "heading", id: "", label: h, sub: "", color: Theme.accent });
         }
         return out;
+    }
+
+    // A character that can be part of an @name or #tag: letters of any
+    // script, digits, and _ . - — the ASCII-only test made Cyrillic names
+    // impossible to mention from the editor.
+    function _isNameChar(ch) {
+        if (!ch) return false;
+        if (/[0-9_.\-]/.test(ch)) return true;
+        return ch.toLowerCase() !== ch.toUpperCase();
     }
 
     function _rebuildMatches() {
@@ -201,25 +301,29 @@ Item {
 
     function _detectAutocomplete() {
         const pos = editor.cursorPosition;
-        const txt = editor.text;
         if (pos <= 0) { _hideAutocomplete(); return; }
+        // Only the text just before the caret. Reading `editor.text` here
+        // copied the whole note on every keystroke and every caret move.
+        const base = Math.max(0, pos - 512);
+        const txt = editor.getText(base, pos);
+        const end = txt.length;
 
         // [[wiki-link]] trigger (HEAP-79) — filter may contain spaces, so scan
         // to the nearest "[[" on the current line rather than a single word.
-        const lineStart = txt.lastIndexOf("\n", pos - 1) + 1;
-        const before = txt.substring(lineStart, pos);
+        const lineStart = txt.lastIndexOf("\n", end - 1) + 1;
+        const before = txt.substring(lineStart, end);
         const openIdx = before.lastIndexOf("[[");
         if (openIdx >= 0 && before.substring(openIdx + 2).indexOf("]]") < 0) {
             acTrigger    = "[[";
-            acTriggerPos = lineStart + openIdx;   // index of the first '['
+            acTriggerPos = base + lineStart + openIdx;   // index of the first '['
             acFilter     = before.substring(openIdx + 2);
             _rebuildMatches();
             _openAcPopup();
             return;
         }
 
-        let i = pos - 1;
-        while (i >= 0 && /[A-Za-z0-9_.\-]/.test(txt[i])) i--;
+        let i = end - 1;
+        while (i >= 0 && end - i < 64 && root._isNameChar(txt[i])) i--;
         if (i < 0) { _hideAutocomplete(); return; }
         const ch = txt[i];
         if (ch !== "@" && ch !== "#") { _hideAutocomplete(); return; }
@@ -228,18 +332,14 @@ Item {
             return;
         }
         acTrigger    = ch;
-        acTriggerPos = i;
-        acFilter     = txt.substring(i + 1, pos);
+        acTriggerPos = base + i;
+        acFilter     = txt.substring(i + 1, end);
         _rebuildMatches();
         if (acMatches.length === 0) {
             acPopup.close();
             return;
         }
-        const cr = editor.cursorRectangle;
-        const p  = editor.mapToItem(root, cr.x, cr.y + cr.height);
-        acPopup.x = Math.min(p.x, root.width - acPopup.width - 8);
-        acPopup.y = Math.max(0, Math.min(p.y + 4, root.height - acPopup.height - 8));
-        if (!acPopup.opened) acPopup.open();
+        _openAcPopup();
     }
 
     function _slugifyName(s) { return (s || "").replace(/\s+/g, "_"); }
@@ -258,6 +358,45 @@ Item {
         // the caret stays at the edit point instead of resetting to 0. (HEAP-65)
         Mention.commit(editor, acTriggerPos, pos, insert);
         _hideAutocomplete();
+    }
+
+    // "/today", "/fri" typed as a word of its own becomes an ISO date. Only
+    // as a word of its own: "http://x.com/now" and "src/mon/main.c" are a URL
+    // and a path, and rewriting them on Enter mangled both.
+    function _expandSlashDate() {
+        const pos = editor.cursorPosition;
+        const txt = editor.text;
+        const lineStart = txt.lastIndexOf("\n", pos - 1) + 1;
+        const m = txt.substring(lineStart, pos).match(/(^|[\s(\[{])\/([A-Za-zА-Яа-яЁё]+)$/);
+        if (!m) return false;
+        const word = m[2];
+        const parsed = AppController.parseDateTime(word, new Date());
+        if (!parsed || !parsed.ok || !parsed.start) return false;
+        const d = parsed.start;
+        const iso = d.getFullYear() + "-" +
+                    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+                    String(d.getDate()).padStart(2, "0");
+        const slashPos = pos - (word.length + 1);
+        editor.remove(slashPos, pos);
+        editor.insert(slashPos, iso);
+        return true;
+    }
+
+    // Ctrl+Z / Ctrl+Shift+Z when the text field has nothing of its own left to
+    // undo: hand the key to the app's undo, which holds note deletes and
+    // imports. Returns true when it did.
+    function _globalUndoFallback(field, event) {
+        if (event.matches(StandardKey.Undo) && !field.canUndo && AppController.hasPendingUndo) {
+            AppController.undo();
+            event.accepted = true;
+            return true;
+        }
+        if (event.matches(StandardKey.Redo) && !field.canRedo && AppController.canRedo) {
+            AppController.redo();
+            event.accepted = true;
+            return true;
+        }
+        return false;
     }
 
     // Move the caret to `off` and scroll the editor so it is visible.
@@ -300,20 +439,22 @@ Item {
                 Rectangle { width: 4; height: 28; radius: 2; color: Theme.accent }
                 ColumnLayout {
                     spacing: 1
+                    // Which note this is: the header used to say
+                    // "Notes · scratchpad" whatever was open.
                     Text {
-                        text: I18n.t("notes.header")
+                        objectName: "notes-title"
+                        text: root._activeTitle.length > 0 ? root._activeTitle : I18n.t("notes.header")
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
                         font.weight: Font.DemiBold
+                        elide: Text.ElideRight
+                        Layout.maximumWidth: root.width * 0.4
                     }
                     Text {
                         text: {
-                            const t = editor.text || "";
-                            const lines = t.length === 0 ? 0 : t.split("\n").length;
-                            const mentions = (t.match(/(^|[\s.,;:!?()\[\]{}])@[A-Za-z0-9_.\-]+/g) || []).length;
-                            const tickets  = (t.match(/(^|[\s.,;:!?()\[\]{}])#[A-Z][A-Z0-9]*-\d+/g) || []).length;
+                            const s = root._stats;
                             const saved = root._savedAgo;
-                            const parts = [I18n.t("notes.summary").arg(lines).arg(mentions).arg(tickets)];
+                            const parts = [I18n.t("notes.summary").arg(s.lines).arg(s.mentions).arg(s.tickets)];
                             if (saved.length > 0) parts.push(saved);
                             return parts.join(" · ");
                         }
@@ -324,11 +465,39 @@ Item {
                 }
                 Item { Layout.fillWidth: true }
                 Text {
-                    visible: editor.text.length > 0 && root.viewMode !== "preview"
+                    visible: editor.length > 0 && root.viewMode !== "preview" && root.width > 900
                     text: I18n.t("notes.legend")
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsSm
+                }
+
+                // ── List toggle ────────────────────────────────────────
+                Rectangle {
+                    objectName: "notes-list-toggle"
+                    Layout.preferredHeight: 24
+                    radius: Theme.radiusMd
+                    color: root._listShown ? Theme.accentSoft : (listToggleMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                    border.color: root._listShown ? Theme.accent : Theme.border
+                    border.width: 1
+                    implicitWidth: listToggleTxt.implicitWidth + 20
+                    Text {
+                        id: listToggleTxt
+                        anchors.centerIn: parent
+                        text: "☰"
+                        color: root._listShown ? Theme.accentStrong : Theme.textMuted
+                        font.pixelSize: Theme.fsSm
+                    }
+                    MouseArea {
+                        id: listToggleMA
+                        anchors.fill: parent
+                        hoverEnabled: true
+                        cursorShape: Qt.PointingHandCursor
+                        onClicked: root.toggleList()
+                    }
+                    ToolTip.visible: listToggleMA.containsMouse
+                    ToolTip.delay: 500
+                    ToolTip.text: I18n.t("notes.toggleList")
                 }
 
                 // ── Backlinks pane toggle (HEAP-79) ────────────────────
@@ -416,8 +585,8 @@ Item {
             NotesListPane {
                 id: notesList
                 objectName: "notes-list-pane"
-                visible: root.width > 820
-                Layout.preferredWidth: visible ? 240 : 0
+                visible: root._listShown
+                Layout.preferredWidth: visible ? Math.min(240, root.width * 0.35) : 0
                 Layout.fillHeight: true
                 onNoteActivated: (id) => {
                     // Flush first: the editor debounces its saves, so the last
@@ -426,6 +595,8 @@ Item {
                     root._flushPending();
                     AppController.activeNoteId = id;
                 }
+                // "+" makes a note to write in: the cursor goes there.
+                onNoteCreated: (id) => root._focusEditorAtEnd()
             }
 
             // Editor pane — visible in edit + split modes.
@@ -483,7 +654,12 @@ Item {
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsMd
                     background: Item {}
-                    onTextChanged: { root._scheduleSave(); root._detectAutocomplete(); }
+                    onTextChanged: {
+                        root._scheduleSave();
+                        root._detectAutocomplete();
+                        statsTimer.restart();
+                        if (root.showBacklinks) linksTimer.restart();
+                    }
                     onCursorPositionChanged: root._detectAutocomplete()
                     Keys.priority: Keys.BeforeItem
 
@@ -493,21 +669,7 @@ Item {
                     // editor has focus is what makes them editor-scoped: they
                     // still mean what they always did everywhere else.
                     Keys.onShortcutOverride: (event) => {
-                        const mods = event.modifiers & ~Qt.KeypadModifier;
-                        if (mods === Qt.ControlModifier) {
-                            switch (event.key) {
-                            case Qt.Key_B: case Qt.Key_I: case Qt.Key_E: case Qt.Key_K:
-                                event.accepted = true;
-                                return;
-                            }
-                        }
-                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
-                            switch (event.key) {
-                            case Qt.Key_X: case Qt.Key_H: case Qt.Key_L:
-                                event.accepted = true;
-                                return;
-                            }
-                        }
+                        if (mdEditor.claimsShortcut(event.key, event.modifiers)) event.accepted = true;
                     }
 
                     Keys.onPressed: (event) => {
@@ -533,6 +695,12 @@ Item {
                             }
                         }
 
+                        // Ctrl+Z with nothing left to undo in the text means the
+                        // last thing done to the notes themselves — a delete, an
+                        // import. The field is always focused here, so without
+                        // this the app-wide undo was unreachable from Notes.
+                        if (root._globalUndoFallback(editor, event)) return;
+
                         // Slash-commands — /today, /tomorrow, /завтра, etc.
                         // Tab or Enter replaces "/<word>" with a parsed ISO
                         // date when the chrono parser recognises the word.
@@ -540,76 +708,23 @@ Item {
                             || event.key === Qt.Key_Return
                             || event.key === Qt.Key_Enter)
                         {
-                            const beforeCmd = editor.text.substring(0, editor.cursorPosition);
-                            const slashM = beforeCmd.match(/\/([A-Za-zА-Яа-яЁё]+)$/);
-                            if (slashM) {
-                                const word = slashM[1];
-                                const parsed = AppController.parseDateTime(word, new Date());
-                                if (parsed && parsed.ok && parsed.start) {
-                                    const d = parsed.start;
-                                    const iso = d.getFullYear() + "-" +
-                                                String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                                                String(d.getDate()).padStart(2, "0");
-                                    const slashPos = editor.cursorPosition - (word.length + 1);
-                                    editor.remove(slashPos, editor.cursorPosition);
-                                    editor.insert(slashPos, iso);
-                                    event.accepted = true;
-                                    return;
-                                }
+                            if (root._expandSlashDate() && event.key === Qt.Key_Tab) {
+                                event.accepted = true;
+                                return;
                             }
+                            // Enter still ends the line after expanding: the
+                            // reader pressed it to get a new one.
                         }
 
                         // Everything below is markdown editing, which lives
-                        // in C++ so it can be tested without driving the UI.
-                        // See MdEditOps: each operation is one undo step.
-                        const mods = event.modifiers & ~Qt.KeypadModifier;
-
-                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
-                            if (mods === Qt.ControlModifier) {
-                                mdEditor.toggleTask();
-                                event.accepted = true;
-                                return;
-                            }
-                            if (mods === Qt.NoModifier && mdEditor.handleReturn()) {
-                                event.accepted = true;
-                                return;
-                            }
-                        }
-
-                        if (event.key === Qt.Key_Tab && mods === Qt.NoModifier) {
-                            mdEditor.indent();
-                            event.accepted = true;
-                            return;
-                        }
-                        if (event.key === Qt.Key_Backtab
-                            || (event.key === Qt.Key_Tab && mods === Qt.ShiftModifier)) {
-                            mdEditor.outdent();
-                            event.accepted = true;
-                            return;
-                        }
-
-                        // Formatting. These are editor-scoped: Ctrl+K is the
-                        // command palette everywhere else in the app, and it
-                        // stays that way outside this field.
-                        if (mods === Qt.ControlModifier) {
-                            switch (event.key) {
-                            case Qt.Key_B: mdEditor.toggleBold();          event.accepted = true; return;
-                            case Qt.Key_I: mdEditor.toggleItalic();        event.accepted = true; return;
-                            case Qt.Key_E: mdEditor.toggleCode();          event.accepted = true; return;
-                            case Qt.Key_K: mdEditor.insertLink("");        event.accepted = true; return;
-                            }
-                        }
-                        if (mods === (Qt.ControlModifier | Qt.ShiftModifier)) {
-                            switch (event.key) {
-                            case Qt.Key_X: mdEditor.toggleStrikethrough(); event.accepted = true; return;
-                            case Qt.Key_H: mdEditor.toggleHighlight();     event.accepted = true; return;
-                            case Qt.Key_L: mdEditor.cycleHeading();        event.accepted = true; return;
-                            }
-                        }
+                        // in C++ so it can be tested without driving the UI,
+                        // and is shared with the doc page editor. See
+                        // MdEditOps: each operation is one undo step.
+                        mdEditor.setSelection(editor.selectionStart, editor.selectionEnd);
+                        if (mdEditor.handleKey(event.key, event.modifiers)) event.accepted = true;
                     }
                 }
             }
-
             // Vertical divider — only in split mode.
             Rectangle {
                 visible: root.viewMode === "split"
@@ -667,79 +782,148 @@ Item {
                 onContentYChanged: if (root.viewMode === "split") root._syncFrom("preview")
             }
 
-            // ── Backlinks pane (HEAP-79) ──────────────────────────────
+            // ── Links pane (HEAP-79) ──────────────────────────────────
             Rectangle {
+                objectName: "notes-links-pane"
                 visible: root.showBacklinks
                 Layout.preferredWidth: 240
                 Layout.fillHeight: true
                 color: Theme.panel
                 Rectangle { anchors.top: parent.top; anchors.bottom: parent.bottom; anchors.left: parent.left; width: 1; color: Theme.border }
-                ColumnLayout {
+                Flickable {
                     anchors.fill: parent
                     anchors.margins: Theme.spXl
-                    spacing: Theme.spMd
-                    Text {
-                        text: I18n.t("notes.backlinks")
-                        color: Theme.text
-                        font.pixelSize: Theme.fsMd
-                        font.weight: Font.DemiBold
-                    }
-                    Text {
-                        visible: root._backlinks.length === 0
-                        text: I18n.t("notes.backlinks.empty")
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsSm
-                        wrapMode: Text.WordWrap
-                        Layout.fillWidth: true
-                    }
-                    ListView {
-                        Layout.fillWidth: true
-                        Layout.fillHeight: true
-                        clip: true
-                        model: root._backlinks
+                    clip: true
+                    contentHeight: linksCol.implicitHeight
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ThinScrollBar {}
+                    ColumnLayout {
+                        id: linksCol
+                        width: parent.width
                         spacing: Theme.spMd
-                        ScrollBar.vertical: ThinScrollBar {}
-                        delegate: ColumnLayout {
-                            required property var modelData
-                            width: ListView.view.width
-                            spacing: Theme.sp2xs
-                            RowLayout {
+
+                        // What else refers to this note.
+                        Text {
+                            text: I18n.t("notes.backlinks")
+                            color: Theme.text
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            visible: root._incoming.length === 0
+                            text: I18n.t("notes.backlinks.empty")
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsSm
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Repeater {
+                            model: root._incoming
+                            delegate: ColumnLayout {
+                                required property var modelData
+                                objectName: "incoming-" + modelData.noteId
                                 Layout.fillWidth: true
-                                spacing: Theme.spSm
+                                spacing: Theme.sp2xs
                                 Text {
-                                    text: (modelData.resolved ? "⌗ " : "△ ") + modelData.target
-                                    color: modelData.resolved ? Theme.mdTicket : Theme.warning
+                                    Layout.fillWidth: true
+                                    text: "← " + modelData.title
+                                    color: Theme.mdTicket
                                     font.pixelSize: Theme.fsSm
                                     font.weight: Font.DemiBold
                                     elide: Text.ElideRight
-                                    Layout.fillWidth: true
                                     MouseArea {
                                         anchors.fill: parent
-                                        cursorShape: modelData.resolved ? Qt.PointingHandCursor : Qt.ArrowCursor
-                                        onClicked: if (modelData.resolved) root._jumpToHeading(modelData.target)
+                                        cursorShape: Qt.PointingHandCursor
+                                        onClicked: {
+                                            root._flushPending();
+                                            AppController.activeNoteId = modelData.noteId;
+                                        }
                                     }
                                 }
                                 Text {
-                                    text: modelData.refs.length
-                                    color: Theme.textDim
-                                    font.family: Theme.fontMono
-                                    font.pixelSize: Theme.fsXs
-                                }
-                            }
-                            Repeater {
-                                model: modelData.refs
-                                delegate: Text {
-                                    required property var modelData
                                     Layout.fillWidth: true
                                     Layout.leftMargin: Theme.spLg
                                     text: "└ " + modelData.text
                                     color: Theme.textMuted
                                     font.pixelSize: Theme.fsXs
                                     elide: Text.ElideRight
-                                    MouseArea {
-                                        anchors.fill: parent
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root._jumpToLine(modelData.line)
+                                }
+                            }
+                        }
+
+                        Item { Layout.preferredHeight: Theme.spMd }
+
+                        // Where this note points.
+                        Text {
+                            text: I18n.t("notes.outgoing")
+                            color: Theme.text
+                            font.pixelSize: Theme.fsMd
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            visible: root._outgoing.length === 0
+                            text: I18n.t("notes.outgoing.empty")
+                            color: Theme.textDim
+                            font.pixelSize: Theme.fsSm
+                            wrapMode: Text.WordWrap
+                            Layout.fillWidth: true
+                        }
+                        Repeater {
+                            model: root._outgoing
+                            delegate: ColumnLayout {
+                                required property var modelData
+                                objectName: "outgoing-" + modelData.target
+                                Layout.fillWidth: true
+                                spacing: Theme.sp2xs
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: Theme.spSm
+                                    Text {
+                                        text: (modelData.resolved ? "→ " : "△ ") + modelData.target
+                                        color: modelData.resolved ? Theme.mdTicket : Theme.warning
+                                        font.pixelSize: Theme.fsSm
+                                        font.weight: Font.DemiBold
+                                        elide: Text.ElideRight
+                                        Layout.fillWidth: true
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            // Where a click in the preview would go: the
+                                            // note, the heading, or the offer to write it.
+                                            onClicked: root._followLink("note", modelData.target)
+                                        }
+                                    }
+                                    Text {
+                                        text: modelData.count !== undefined ? modelData.count : modelData.refs.length
+                                        color: Theme.textDim
+                                        font.family: Theme.fontMono
+                                        font.pixelSize: Theme.fsXs
+                                    }
+                                }
+                                Text {
+                                    visible: !modelData.resolved
+                                    Layout.fillWidth: true
+                                    Layout.leftMargin: Theme.spLg
+                                    text: I18n.t("notes.outgoing.missing")
+                                    color: Theme.textDim
+                                    font.pixelSize: Theme.fsXs
+                                    elide: Text.ElideRight
+                                }
+                                Repeater {
+                                    model: modelData.refs
+                                    delegate: Text {
+                                        required property var modelData
+                                        Layout.fillWidth: true
+                                        Layout.leftMargin: Theme.spLg
+                                        text: "└ " + modelData.text
+                                        color: Theme.textMuted
+                                        font.pixelSize: Theme.fsXs
+                                        elide: Text.ElideRight
+                                        MouseArea {
+                                            anchors.fill: parent
+                                            cursorShape: Qt.PointingHandCursor
+                                            onClicked: root._jumpToLine(modelData.line)
+                                        }
                                     }
                                 }
                             }
@@ -763,6 +947,39 @@ Item {
             else if (root.viewMode === "split")   root.viewMode = "preview";
             else                                   root.viewMode = "edit";
         }
+    }
+
+    // Notes navigation from the keyboard. step() existed and nothing was bound
+    // to it; a new note needed the mouse. Rebindable in Settings → Hotkeys.
+    Shortcut {
+        sequence: root._kbd("notes.new")
+        context: Qt.WindowShortcut
+        enabled: root.visible && sequence.length > 0
+        onActivated: root.newNoteAndEdit()
+    }
+    Shortcut {
+        sequence: root._kbd("notes.next")
+        context: Qt.WindowShortcut
+        enabled: root.visible && sequence.length > 0
+        onActivated: notesList.step(1)
+    }
+    Shortcut {
+        sequence: root._kbd("notes.prev")
+        context: Qt.WindowShortcut
+        enabled: root.visible && sequence.length > 0
+        onActivated: notesList.step(-1)
+    }
+    Shortcut {
+        sequence: root._kbd("notes.rename")
+        context: Qt.WindowShortcut
+        enabled: root.visible && sequence.length > 0 && AppController.activeNoteId.length > 0
+        onActivated: notesList.renameActive()
+    }
+    Shortcut {
+        sequence: root._kbd("notes.toggleList")
+        context: Qt.WindowShortcut
+        enabled: root.visible && sequence.length > 0
+        onActivated: root.toggleList()
     }
 
     // ── Markdown highlighter ─────────────────────────────────────
@@ -932,7 +1149,7 @@ Item {
         _persisting = true;
         AppController.notesState = editor.text;
         _persisting = false;
-        _savedAgo = "saved";
+        _savedAgo = I18n.t("notes.saved");
         savedAgoTimer.restart();
     }
     // Following a [[link]] or a #TICKET from the preview.
@@ -942,16 +1159,26 @@ Item {
     // when it means neither it is an offer to write the note somebody clearly
     // expected to exist.
     signal taskRequested(string taskId)
+    signal personRequested(string personId)
 
     function _followLink(kind, target) {
-        if (kind !== "note") {
-            // A ticket in a note is a task: opening it is the whole reason for
-            // writing #HEAP-12 rather than the title.
-            if (kind === "ticket") root.taskRequested(target);
-            // People, tags and footnote jumps stay where they are; ignoring
-            // them beats opening a heap:// URL in a browser.
+        // A ticket in a note is a task: opening it is the whole reason for
+        // writing #HEAP-12 rather than the title. MdHtml calls it "task".
+        if (kind === "task" || kind === "ticket") {
+            root.taskRequested(target);
             return;
         }
+        if (kind === "person") {
+            const pid = AppController.personIdForHandle(target);
+            if (pid.length > 0) root.personRequested(pid);
+            return;
+        }
+        // A #tag lists the notes that carry it.
+        if (kind === "tag") {
+            notesList.setFilter("#" + target);
+            return;
+        }
+        if (kind !== "note") return;
         const hit = AppController.resolveNoteLink(target);
         if (hit.kind === "note") {
             root._flushPending();
@@ -959,17 +1186,56 @@ Item {
             return;
         }
         if (hit.kind === "heading") {
+            // [[Note#Heading]] can name another note; open it first.
+            if (hit.noteId && hit.noteId !== AppController.activeNoteId) {
+                root._flushPending();
+                AppController.activeNoteId = hit.noteId;
+            }
             const off = AppController.noteHeadingOffset(editor.text, hit.heading);
             if (off >= 0) root._jumpToOffset(off);
+            return;
+        }
+        // [[APP-101]] with no note of that name is the task of that id.
+        const t = AppController.taskById(String(target).trim());
+        if (t && t.id) {
+            root.taskRequested(t.id);
             return;
         }
         missingLinkPopup.openFor(hit.title);
     }
 
+    property string _loadedNoteId: ""
     function _loadFromController() {
         _reloading = true;
-        editor.text = AppController.notesState || "";
+        const next = AppController.notesState || "";
+        if (root._loadedNoteId === AppController.activeNoteId && root._loadedNoteId.length > 0 && editor.length > 0) {
+            // The same note, changed from outside — a quick-capture append, an
+            // import. Replace only what differs, so the caret stays where the
+            // reader left it and Ctrl+Z still has the history (and can take the
+            // outside change back too). Setting `text` reset both.
+            const old = editor.text;
+            if (old !== next) {
+                let p = 0;
+                const max = Math.min(old.length, next.length);
+                while (p < max && old.charCodeAt(p) === next.charCodeAt(p)) p++;
+                let s = 0;
+                while (s < max - p && old.charCodeAt(old.length - 1 - s) === next.charCodeAt(next.length - 1 - s)) s++;
+                const caret = editor.cursorPosition;
+                if (old.length - s > p) editor.remove(p, old.length - s);
+                const inserted = next.substring(p, next.length - s);
+                if (inserted.length > 0) editor.insert(p, inserted);
+                // Typing at the end of the note stays at the end; anywhere
+                // else the caret keeps its place in the text it was in.
+                if (caret <= p) editor.cursorPosition = caret;
+            }
+        } else {
+            editor.text = next;
+        }
+        root._loadedNoteId = AppController.activeNoteId;
         _reloading = false;
+        root._refreshTitle();
+        root._stats = AppController.noteStats(editor.text);
+        root._refreshLinks();
     }
     // Markdown editing, in C++ so the rules can be tested directly rather
     // than only by driving the UI.
@@ -992,7 +1258,11 @@ Item {
         id: mdDocument
         text: editor.text
         allowRemoteImages: false
+        // Relative image paths resolve here; absolute local paths work anywhere.
+        imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
+        // No preview on screen, no parse per pause; lookups still parse.
+        live: preview.visible
     }
 
     // A pending edit is only in the editor until the 250 ms debounce fires.
@@ -1009,6 +1279,9 @@ Item {
         viewMode = _readViewMode();
         _loadFromController();
         _loadedOnce = true;
+        // A palette hit that opened Notes for the first time: the binding's
+        // first value does not fire the change handler.
+        if (jumpToLine >= 0) Qt.callLater(root._consumeJump);
     }
     Component.onDestruction: _flushPending()
     // Quit is not covered by onDestruction: the engine tears down its root
@@ -1079,6 +1352,8 @@ Item {
         // one about to be opened. Without this a "+" pressed inside the 250 ms
         // window moved the draft into the new note and emptied the old one.
         function onAboutToChangeActiveNote() { root._flushPending() }
+        // An export or a search is about to read the whole profile.
+        function onFlushEditorsRequested() { root._flushPending() }
         function onNotesStateChanged() {
             if (!root._loadedOnce || root._persisting) return;
             root._loadFromController();

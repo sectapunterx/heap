@@ -1,8 +1,9 @@
 #include "CodeHighlighter.h"
 
+#include <QColor>
+#include <QHash>
 #include <QQuickTextDocument>
 #include <QTextDocument>
-#include <QColor>
 
 CodeHighlighter::CodeHighlighter(QObject *parent)
     : QSyntaxHighlighter(parent)
@@ -68,176 +69,470 @@ void CodeHighlighter::appendKeywordRule(QVector<Rule> &out, const QStringList &w
     out.push_back(r);
 }
 
-void CodeHighlighter::rebuildRules() {
-    m_comments.clear();
-    m_strings.clear();
-    m_others.clear();
-
-    const QTextCharFormat fComment = fmt("comment", false, true);
-    const QTextCharFormat fString  = fmt("string");
-    const QTextCharFormat fKeyword = fmt("keyword", true);
-    const QTextCharFormat fNumber  = fmt("number");
-    const QTextCharFormat fType    = fmt("type", true);
-    const QTextCharFormat fBuiltin = fmt("builtin");
-
-    Rule numRule;
-    numRule.pattern = QRegularExpression(QStringLiteral("\\b\\d+(?:\\.\\d+)?\\b"));
-    numRule.format = fNumber;
-
-    if (m_language == "sh" || m_language == "bash") {
-        Rule c; c.pattern = QRegularExpression("#[^\n]*"); c.format = fComment;
-        m_comments.push_back(c);
-
-        Rule s1; s1.pattern = QRegularExpression("\"[^\"\\n]*\""); s1.format = fString;
-        Rule s2; s2.pattern = QRegularExpression("'[^'\\n]*'");     s2.format = fString;
-        m_strings.push_back(s1);
-        m_strings.push_back(s2);
-
-        appendKeywordRule(m_others, {
-            "if","then","else","elif","fi","case","esac","for","in","while","do","done",
-            "function","return","break","continue","exit","local","export","readonly",
-            "unset","set","shift","source","trap","echo","printf","read","cd","pushd","popd"
-        }, fKeyword);
-        appendKeywordRule(m_others, {
-            "bazel","cmake","make","gdb","tcpdump","pgrep","perf","valgrind","sudo",
-            "git","grep","awk","sed","cat","ls","mkdir","rm","mv","cp","ssh","scp",
-            "curl","wget","docker","kubectl","systemctl","journalctl"
-        }, fBuiltin);
-
-        Rule var; var.pattern = QRegularExpression("\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?"); var.format = fType;
-        m_others.push_back(var);
-        m_others.push_back(numRule);
-    }
-    else if (m_language == "cpp" || m_language == "c" || m_language == "h" || m_language == "hpp") {
-        Rule lc; lc.pattern = QRegularExpression("//[^\n]*"); lc.format = fComment;
-        Rule bc; bc.pattern = QRegularExpression("/\\*.*?\\*/"); bc.format = fComment;
-        bc.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
-        m_comments.push_back(lc);
-        m_comments.push_back(bc);
-
-        Rule s1; s1.pattern = QRegularExpression("\"(?:\\\\.|[^\"\\\\\\n])*\""); s1.format = fString;
-        Rule s2; s2.pattern = QRegularExpression("'(?:\\\\.|[^'\\\\\\n])'");      s2.format = fString;
-        Rule s3; s3.pattern = QRegularExpression("R\"\\(.*?\\)\"");                s3.format = fString;
-        s3.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
-        m_strings.push_back(s1);
-        m_strings.push_back(s2);
-        m_strings.push_back(s3);
-
-        appendKeywordRule(m_others, {
-            "alignas","alignof","asm","auto","break","case","catch","class","co_await",
-            "co_return","co_yield","concept","const","consteval","constexpr","constinit",
-            "const_cast","continue","decltype","default","delete","do","dynamic_cast",
-            "else","enum","explicit","export","extern","false","final","for","friend",
-            "goto","if","inline","mutable","namespace","new","noexcept","nullptr",
-            "operator","override","private","protected","public","register",
-            "reinterpret_cast","requires","return","sizeof","static","static_assert",
-            "static_cast","struct","switch","template","this","thread_local","throw",
-            "true","try","typedef","typeid","typename","union","using","virtual","void",
-            "volatile","while","#include","#define","#ifdef","#ifndef","#endif","#pragma"
-        }, fKeyword);
-        appendKeywordRule(m_others, {
-            "bool","char","char8_t","char16_t","char32_t","double","float","int","long",
-            "short","signed","unsigned","wchar_t","int8_t","int16_t","int32_t","int64_t",
-            "uint8_t","uint16_t","uint32_t","uint64_t","size_t","ptrdiff_t",
-            "std","string","string_view","vector","array","map","unordered_map","set",
-            "unordered_set","optional","variant","tuple","pair","shared_ptr","unique_ptr",
-            "weak_ptr","function","span","chrono","filesystem","atomic","mutex","thread"
-        }, fType);
-        appendKeywordRule(m_others, {
-            "LOG_BIN","LOG_WARN","LOG_INFO","LOG_ERROR","Q_OBJECT","Q_PROPERTY","Q_INVOKABLE","QML_ELEMENT","QML_SINGLETON",
-            "emit","slots","signals","Q_SLOTS","Q_SIGNALS"
-        }, fBuiltin);
-        m_others.push_back(numRule);
-    }
-    else if (m_language == "py" || m_language == "python") {
-        Rule c; c.pattern = QRegularExpression("#[^\n]*"); c.format = fComment;
-        m_comments.push_back(c);
-
-        Rule s1; s1.pattern = QRegularExpression("\"\"\".*?\"\"\""); s1.format = fString;
-        s1.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
-        Rule s2; s2.pattern = QRegularExpression("'''.*?'''"); s2.format = fString;
-        s2.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
-        Rule s3; s3.pattern = QRegularExpression("\"(?:\\\\.|[^\"\\\\\\n])*\""); s3.format = fString;
-        Rule s4; s4.pattern = QRegularExpression("'(?:\\\\.|[^'\\\\\\n])*'");      s4.format = fString;
-        m_strings.push_back(s1);
-        m_strings.push_back(s2);
-        m_strings.push_back(s3);
-        m_strings.push_back(s4);
-
-        appendKeywordRule(m_others, {
-            "and","as","assert","async","await","break","class","continue","def","del",
-            "elif","else","except","False","finally","for","from","global","if","import",
-            "in","is","lambda","None","nonlocal","not","or","pass","raise","return",
-            "True","try","while","with","yield","match","case"
-        }, fKeyword);
-        appendKeywordRule(m_others, {
-            "print","len","range","int","str","float","bool","list","dict","set","tuple",
-            "self","cls","open","map","filter","zip","enumerate","sorted","sum","min","max",
-            "abs","any","all","type","isinstance","getattr","setattr","hasattr","super"
-        }, fBuiltin);
-        m_others.push_back(numRule);
-    }
-    else if (m_language == "js" || m_language == "ts" || m_language == "javascript" || m_language == "typescript") {
-        Rule lc; lc.pattern = QRegularExpression("//[^\n]*"); lc.format = fComment;
-        Rule bc; bc.pattern = QRegularExpression("/\\*.*?\\*/"); bc.format = fComment;
-        bc.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
-        m_comments.push_back(lc);
-        m_comments.push_back(bc);
-
-        Rule s1; s1.pattern = QRegularExpression("\"(?:\\\\.|[^\"\\\\\\n])*\""); s1.format = fString;
-        Rule s2; s2.pattern = QRegularExpression("'(?:\\\\.|[^'\\\\\\n])*'");      s2.format = fString;
-        Rule s3; s3.pattern = QRegularExpression("`(?:\\\\.|[^`\\\\])*`");          s3.format = fString;
-        s3.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
-        m_strings.push_back(s1);
-        m_strings.push_back(s2);
-        m_strings.push_back(s3);
-
-        appendKeywordRule(m_others, {
-            "async","await","break","case","catch","class","const","continue","debugger",
-            "default","delete","do","else","enum","export","extends","false","finally",
-            "for","from","function","if","implements","import","in","instanceof","interface",
-            "let","new","null","of","package","private","protected","public","return",
-            "static","super","switch","this","throw","true","try","typeof","var","void",
-            "while","with","yield"
-        }, fKeyword);
-        appendKeywordRule(m_others, {
-            "console","window","document","Math","JSON","Object","Array","String","Number",
-            "Boolean","Promise","Map","Set","Symbol","undefined","NaN","Infinity"
-        }, fBuiltin);
-        m_others.push_back(numRule);
-    }
-    else if (m_language == "yaml" || m_language == "yml") {
-        Rule c; c.pattern = QRegularExpression("#[^\n]*"); c.format = fComment;
-        m_comments.push_back(c);
-
-        Rule s1; s1.pattern = QRegularExpression("\"[^\"\\n]*\""); s1.format = fString;
-        Rule s2; s2.pattern = QRegularExpression("'[^'\\n]*'");     s2.format = fString;
-        m_strings.push_back(s1);
-        m_strings.push_back(s2);
-
-        Rule key; key.pattern = QRegularExpression("^\\s*([A-Za-z_][A-Za-z0-9_-]*)\\s*:"); key.format = fKeyword;
-        key.captureGroup = 1;
-        m_others.push_back(key);
-
-        appendKeywordRule(m_others, {"true","false","null","yes","no","on","off"}, fBuiltin);
-        m_others.push_back(numRule);
-    }
-    // unknown language → leave all rule lists empty so the text renders plain
+QString CodeHighlighter::canonicalLanguage(const QString& lang) {
+  // What people actually write after ```: case varies ("Bash", "C++",
+  // "JSON") and so do the names. Matching them exactly left most fences
+  // uncoloured.
+  const QString l = lang.trimmed().toLower();
+  static const QHash<QString, QString> aliases = {
+      {"sh", "sh"},         {"bash", "sh"},       {"zsh", "sh"},        {"shell", "sh"},    {"console", "sh"},     {"shellsession", "sh"},
+      {"fish", "sh"},       {"ksh", "sh"},        {"cpp", "cpp"},       {"c++", "cpp"},     {"cxx", "cpp"},        {"cc", "cpp"},
+      {"hpp", "cpp"},       {"hxx", "cpp"},       {"h", "cpp"},         {"c", "cpp"},       {"objc", "cpp"},       {"cuda", "cpp"},
+      {"qml", "js"},        {"py", "py"},         {"python", "py"},     {"python3", "py"},  {"py3", "py"},         {"js", "js"},
+      {"javascript", "js"}, {"jsx", "js"},        {"mjs", "js"},        {"cjs", "js"},      {"ts", "js"},          {"typescript", "js"},
+      {"tsx", "js"},        {"yaml", "yaml"},     {"yml", "yaml"},      {"json", "json"},   {"jsonc", "json"},     {"json5", "json"},
+      {"go", "go"},         {"golang", "go"},     {"rust", "rust"},     {"rs", "rust"},     {"java", "java"},      {"kotlin", "java"},
+      {"kt", "java"},       {"scala", "java"},    {"cs", "cs"},         {"csharp", "cs"},   {"c#", "cs"},          {"swift", "java"},
+      {"dart", "java"},     {"sql", "sql"},       {"psql", "sql"},      {"mysql", "sql"},   {"sqlite", "sql"},     {"plsql", "sql"},
+      {"toml", "ini"},      {"ini", "ini"},       {"cfg", "ini"},       {"conf", "ini"},    {"properties", "ini"}, {"dockerfile", "docker"},
+      {"docker", "docker"}, {"makefile", "make"}, {"make", "make"},     {"cmake", "cmake"}, {"ps1", "ps"},         {"powershell", "ps"},
+      {"pwsh", "ps"},       {"lua", "lua"},       {"ruby", "ruby"},     {"rb", "ruby"},     {"php", "php"},        {"html", "xml"},
+      {"xml", "xml"},       {"svg", "xml"},       {"css", "css"},       {"scss", "css"},    {"less", "css"},       {"diff", "diff"},
+      {"patch", "diff"},    {"proto", "java"},    {"protobuf", "java"}, {"graphql", "js"},  {"gql", "js"},         {"hcl", "ini"},
+      {"terraform", "ini"}, {"tf", "ini"},        {"nginx", "ini"},     {"bat", "bat"},     {"cmd", "bat"},        {"batch", "bat"},
+  };
+  return aliases.value(l, l);
 }
 
-void CodeHighlighter::highlightBlock(const QString &text) {
-    auto apply = [&](const QVector<Rule> &rules) {
-        for (const Rule &r : rules) {
-            auto it = r.pattern.globalMatch(text);
-            while (it.hasNext()) {
-                const auto m = it.next();
-                const int start = m.capturedStart(r.captureGroup);
-                const int len   = m.capturedLength(r.captureGroup);
-                if (len > 0) setFormat(start, len, r.format);
-            }
-        }
+void CodeHighlighter::rebuildRules() {
+  m_comments.clear();
+  m_strings.clear();
+  m_others.clear();
+
+  const QTextCharFormat fComment = fmt("comment", false, true);
+  const QTextCharFormat fString = fmt("string");
+  const QTextCharFormat fKeyword = fmt("keyword", true);
+  const QTextCharFormat fNumber = fmt("number");
+  const QTextCharFormat fType = fmt("type", true);
+  const QTextCharFormat fBuiltin = fmt("builtin");
+
+  Rule numRule;
+  numRule.pattern = QRegularExpression(QStringLiteral("\\b(?:0x[0-9A-Fa-f]+|\\d+(?:\\.\\d+)?)\\b"));
+  numRule.format = fNumber;
+
+  const auto comment = [&](const QString& pattern, bool multiline = false) {
+    Rule r;
+    r.pattern = QRegularExpression(pattern);
+    if(multiline) {
+      r.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
+    }
+    r.format = fComment;
+    m_comments.push_back(r);
+  };
+  const auto string = [&](const QString& pattern, bool multiline = false) {
+    Rule r;
+    r.pattern = QRegularExpression(pattern);
+    if(multiline) {
+      r.pattern.setPatternOptions(QRegularExpression::DotMatchesEverythingOption);
+    }
+    r.format = fString;
+    m_strings.push_back(r);
+  };
+  const auto other = [&](const QString& pattern, const QTextCharFormat& f, int group = 0, bool caseInsensitive = false) {
+    Rule r;
+    r.pattern =
+        QRegularExpression(pattern, caseInsensitive ? QRegularExpression::CaseInsensitiveOption : QRegularExpression::NoPatternOption);
+    r.format = f;
+    r.captureGroup = group;
+    m_others.push_back(r);
+  };
+  const QString dq = QStringLiteral("\"(?:\\\\.|[^\"\\\\\\n])*\"");
+  const QString sq = QStringLiteral("'(?:\\\\.|[^'\\\\\\n])*'");
+  const QString cLineComment = QStringLiteral("//[^\\n]*");
+  const QString cBlockComment = QStringLiteral("/\\*.*?\\*/");
+
+  const QString lang = canonicalLanguage(m_language);
+
+  if(lang == "sh") {
+    // A # starts a comment only as a word of its own: "${#arr}" and the #
+    // inside "echo '#1'" are not comments (strings win, see highlightBlock).
+    comment(QStringLiteral("(?:^|(?<=\\s))#[^\\n]*"));
+    string(QStringLiteral("\"(?:\\\\.|[^\"\\\\\\n])*\""));
+    string(QStringLiteral("'[^'\\n]*'"));
+    appendKeywordRule(m_others,
+                      {"if",    "then",     "else",   "elif",  "fi",       "case", "esac",  "for",    "in",       "while", "do",
+                       "done",  "function", "return", "break", "continue", "exit", "local", "export", "readonly", "unset", "set",
+                       "shift", "source",   "trap",   "echo",  "printf",   "read", "cd",    "pushd",  "popd"},
+                      fKeyword);
+    appendKeywordRule(
+        m_others,
+        {"bazel",   "cmake",     "make",       "gdb",   "tcpdump", "pgrep", "perf", "valgrind", "sudo", "git",  "grep", "awk",
+         "sed",     "cat",       "ls",         "mkdir", "rm",      "mv",    "cp",   "ssh",      "scp",  "curl", "wget", "docker",
+         "kubectl", "systemctl", "journalctl", "npm",   "npx",     "yarn",  "pip",  "cargo",    "go",   "ninja"},
+        fBuiltin);
+    other(QStringLiteral("\\$\\{?[A-Za-z_][A-Za-z0-9_]*\\}?"), fType);
+    m_others.push_back(numRule);
+  } else if(lang == "cpp" || lang == "cs" || lang == "java" || lang == "go" || lang == "rust" || lang == "js" || lang == "php") {
+    comment(cLineComment);
+    comment(cBlockComment, true);
+    string(dq);
+    if(lang == "js") {
+      string(sq);
+      string(QStringLiteral("`(?:\\\\.|[^`\\\\])*`"), true);
+    } else if(lang == "rust" || lang == "cpp" || lang == "java" || lang == "cs") {
+      string(QStringLiteral("'(?:\\\\.|[^'\\\\\\n])'"));
+    } else {
+      string(sq);
+    }
+    if(lang == "cpp") {
+      string(QStringLiteral("R\"\\(.*?\\)\""), true);
+      other(QStringLiteral("^\\s*#\\s*[a-z]+"), fKeyword);
+    }
+    if(lang == "go") {
+      string(QStringLiteral("`[^`]*`"));
+    }
+    if(lang == "php") {
+      comment(QStringLiteral("(?:^|(?<=\\s))#[^\\n]*"));
+      other(QStringLiteral("\\$[A-Za-z_][A-Za-z0-9_]*"), fType);
+    }
+    static const QHash<QString, QStringList> keywords = {
+        {"cpp",
+         {"alignas",
+          "alignof",
+          "asm",
+          "auto",
+          "break",
+          "case",
+          "catch",
+          "class",
+          "co_await",
+          "co_return",
+          "co_yield",
+          "concept",
+          "const",
+          "consteval",
+          "constexpr",
+          "constinit",
+          "const_cast",
+          "continue",
+          "decltype",
+          "default",
+          "delete",
+          "do",
+          "dynamic_cast",
+          "else",
+          "enum",
+          "explicit",
+          "export",
+          "extern",
+          "false",
+          "final",
+          "for",
+          "friend",
+          "goto",
+          "if",
+          "inline",
+          "mutable",
+          "namespace",
+          "new",
+          "noexcept",
+          "nullptr",
+          "operator",
+          "override",
+          "private",
+          "protected",
+          "public",
+          "register",
+          "reinterpret_cast",
+          "requires",
+          "return",
+          "sizeof",
+          "static",
+          "static_assert",
+          "static_cast",
+          "struct",
+          "switch",
+          "template",
+          "this",
+          "thread_local",
+          "throw",
+          "true",
+          "try",
+          "typedef",
+          "typeid",
+          "typename",
+          "union",
+          "using",
+          "virtual",
+          "void",
+          "volatile",
+          "while"}},
+        {"cs", {"abstract", "as",        "async",    "await",     "base",     "break",     "case",   "catch", "checked",  "class",
+                "const",    "continue",  "default",  "delegate",  "do",       "else",      "enum",   "event", "explicit", "extern",
+                "false",    "finally",   "fixed",    "for",       "foreach",  "get",       "goto",   "if",    "implicit", "in",
+                "init",     "interface", "internal", "is",        "lock",     "namespace", "new",    "null",  "operator", "out",
+                "override", "params",    "private",  "protected", "public",   "readonly",  "record", "ref",   "return",   "sealed",
+                "set",      "sizeof",    "static",   "struct",    "switch",   "this",      "throw",  "true",  "try",      "typeof",
+                "using",    "var",       "virtual",  "void",      "volatile", "when",      "where",  "while", "yield"}},
+        {"java",
+         {"abstract",   "assert",   "break",   "case",         "catch",     "class",    "const",  "continue", "data",   "default", "do",
+          "else",       "enum",     "extends", "false",        "final",     "finally",  "for",    "fun",      "func",   "guard",   "if",
+          "implements", "import",   "in",      "instanceof",   "interface", "is",       "let",    "message",  "native", "new",     "null",
+          "object",     "override", "package", "private",      "protected", "public",   "return", "rpc",      "sealed", "service", "static",
+          "struct",     "super",    "switch",  "synchronized", "this",      "throw",    "throws", "true",     "try",    "val",     "var",
+          "void",       "when",     "while",   "syntax",       "repeated",  "optional", "oneof"}},
+        {"go", {"break",   "case",  "chan",   "const",  "continue", "default", "defer",     "else", "fallthrough", "false",
+                "for",     "func",  "go",     "goto",   "if",       "import",  "interface", "iota", "map",         "nil",
+                "package", "range", "return", "select", "struct",   "switch",  "true",      "type", "var"}},
+        {"rust", {"as",   "async", "await",  "break",  "const", "continue", "crate", "dyn",  "else",   "enum", "extern", "false", "fn",
+                  "for",  "if",    "impl",   "in",     "let",   "loop",     "match", "mod",  "move",   "mut",  "pub",    "ref",   "return",
+                  "self", "Self",  "static", "struct", "super", "trait",    "true",  "type", "unsafe", "use",  "where",  "while"}},
+        {"js", {"async",    "await",   "break",      "case",     "catch",     "class",      "const",     "continue", "debugger", "default",
+                "delete",   "do",      "else",       "enum",     "export",    "extends",    "false",     "finally",  "for",      "from",
+                "function", "if",      "implements", "import",   "in",        "instanceof", "interface", "let",      "new",      "null",
+                "of",       "package", "private",    "property", "protected", "public",     "readonly",  "return",   "signal",   "static",
+                "super",    "switch",  "this",       "throw",    "true",      "try",        "type",      "typeof",   "var",      "void",
+                "while",    "with",    "yield",      "query",    "mutation",  "fragment"}},
+        {"php", {"abstract", "and",       "array",  "as",      "break",    "case",    "catch",      "class",   "const",
+                 "continue", "default",   "do",     "echo",    "else",     "elseif",  "extends",    "false",   "final",
+                 "finally",  "fn",        "for",    "foreach", "function", "if",      "implements", "include", "interface",
+                 "match",    "namespace", "new",    "null",    "or",       "private", "protected",  "public",  "require",
+                 "return",   "static",    "switch", "throw",   "trait",    "true",    "try",        "use",     "while"}},
     };
-    apply(m_others);
-    apply(m_strings);
-    apply(m_comments);
+    static const QHash<QString, QStringList> types = {
+        {"cpp",
+         {"bool",       "char",       "char8_t",       "char16_t", "char32_t",      "double",   "float",      "int",         "long",
+          "short",      "signed",     "unsigned",      "wchar_t",  "int8_t",        "int16_t",  "int32_t",    "int64_t",     "uint8_t",
+          "uint16_t",   "uint32_t",   "uint64_t",      "size_t",   "ptrdiff_t",     "std",      "string",     "string_view", "vector",
+          "array",      "map",        "unordered_map", "set",      "unordered_set", "optional", "variant",    "tuple",       "pair",
+          "shared_ptr", "unique_ptr", "weak_ptr",      "function", "span",          "chrono",   "filesystem", "atomic",      "mutex",
+          "thread",     "QString",    "QStringList",   "QVariant", "QObject"}},
+        {"cs", {"bool",  "byte",  "char",   "decimal", "double", "dynamic", "float", "int",        "long", "object",
+                "sbyte", "short", "string", "uint",    "ulong",  "ushort",  "List",  "Dictionary", "Task", "IEnumerable"}},
+        {"java",
+         {"boolean",  "byte", "char", "double", "float",  "int",     "long",  "short", "String", "Integer", "List",  "Map",    "Set",
+          "Optional", "Any",  "Unit", "Int",    "Double", "Boolean", "int32", "int64", "uint32", "uint64",  "bytes", "string", "bool"}},
+        {"go", {"bool",  "byte", "complex64", "complex128", "error", "float32", "float64", "int",    "int8",    "int16", "int32",
+                "int64", "rune", "string",    "uint",       "uint8", "uint16",  "uint32",  "uint64", "uintptr", "any"}},
+        {"rust", {"bool", "char", "f32",  "f64",   "i8",     "i16", "i32",    "i64",    "i128", "isize", "str", "u8",     "u16",
+                  "u32",  "u64",  "u128", "usize", "String", "Vec", "Option", "Result", "Box",  "Rc",    "Arc", "HashMap"}},
+        {"js",
+         {"string",
+          "number",
+          "boolean",
+          "any",
+          "unknown",
+          "never",
+          "object",
+          "bigint",
+          "symbol",
+          "var",
+          "int",
+          "real",
+          "bool",
+          "list",
+          "color",
+          "url",
+          "Item",
+          "Rectangle",
+          "Text"}},
+    };
+    static const QHash<QString, QStringList> builtins = {
+        {"cpp",
+         {"Q_OBJECT", "Q_PROPERTY", "Q_INVOKABLE", "QML_ELEMENT", "QML_SINGLETON", "emit", "slots", "signals", "Q_SLOTS", "Q_SIGNALS"}},
+        {"cs", {"Console", "Math", "String", "Guid", "DateTime"}},
+        {"java", {"System", "println", "Math", "Object", "Thread", "Exception"}},
+        {"go", {"append", "cap", "close", "copy", "delete", "len", "make", "new", "panic", "print", "println", "recover", "fmt"}},
+        {"rust", {"println", "format", "vec", "panic", "assert", "assert_eq", "Some", "None", "Ok", "Err"}},
+        {"js",
+         {"console",
+          "window",
+          "document",
+          "Math",
+          "JSON",
+          "Object",
+          "Array",
+          "String",
+          "Number",
+          "Boolean",
+          "Promise",
+          "Map",
+          "Set",
+          "Symbol",
+          "undefined",
+          "NaN",
+          "Infinity",
+          "Qt",
+          "parent"}},
+        {"php", {"isset", "empty", "count", "strlen", "print", "var_dump", "die"}},
+    };
+    appendKeywordRule(m_others, keywords.value(lang), fKeyword);
+    appendKeywordRule(m_others, types.value(lang), fType);
+    appendKeywordRule(m_others, builtins.value(lang), fBuiltin);
+    if(lang == "rust") {
+      other(QStringLiteral("\\b[a-z_][a-z0-9_]*!"), fBuiltin);
+    }
+    m_others.push_back(numRule);
+  } else if(lang == "py" || lang == "ruby") {
+    comment(QStringLiteral("#[^\\n]*"));
+    string(QStringLiteral("\"\"\".*?\"\"\""), true);
+    string(QStringLiteral("'''.*?'''"), true);
+    string(dq);
+    string(sq);
+    if(lang == "py") {
+      appendKeywordRule(
+          m_others,
+          {"and",   "as",      "assert", "async",  "await",  "break", "class",  "continue", "def",   "del",    "elif", "else",     "except",
+           "False", "finally", "for",    "from",   "global", "if",    "import", "in",       "is",    "lambda", "None", "nonlocal", "not",
+           "or",    "pass",    "raise",  "return", "True",   "try",   "while",  "with",     "yield", "match",  "case"},
+          fKeyword);
+      appendKeywordRule(m_others,
+                        {"print", "len", "range", "int",  "str",        "float",   "bool",      "list",    "dict", "set", "tuple",
+                         "self",  "cls", "open",  "map",  "filter",     "zip",     "enumerate", "sorted",  "sum",  "min", "max",
+                         "abs",   "any", "all",   "type", "isinstance", "getattr", "setattr",   "hasattr", "super"},
+                        fBuiltin);
+    } else {
+      appendKeywordRule(
+          m_others,
+          {"alias", "and",   "begin", "break", "case",   "class",  "def",   "defined", "do",    "else",  "elsif",   "end",   "ensure",
+           "false", "for",   "if",    "in",    "module", "next",   "nil",   "not",     "or",    "redo",  "rescue",  "retry", "return",
+           "self",  "super", "then",  "true",  "undef",  "unless", "until", "when",    "while", "yield", "require", "puts"},
+          fKeyword);
+      other(QStringLiteral(":[A-Za-z_][A-Za-z0-9_]*"), fType);
+    }
+    m_others.push_back(numRule);
+  } else if(lang == "lua") {
+    comment(QStringLiteral("--[^\\n]*"));
+    string(dq);
+    string(sq);
+    appendKeywordRule(m_others,
+                      {"and", "break", "do",  "else", "elseif", "end",    "false",  "for",  "function", "goto",  "if",
+                       "in",  "local", "nil", "not",  "or",     "repeat", "return", "then", "true",     "until", "while"},
+                      fKeyword);
+    m_others.push_back(numRule);
+  } else if(lang == "sql") {
+    comment(QStringLiteral("--[^\\n]*"));
+    comment(cBlockComment, true);
+    string(QStringLiteral("'(?:''|[^'\\n])*'"));
+    string(dq);
+    // SQL keywords are case-insensitive, and people write them both ways.
+    other(QStringLiteral("\\b(?:select|from|where|and|or|not|insert|into|values|update|set|delete|create|table|index|"
+                         "view|drop|alter|add|column|primary|key|foreign|references|join|inner|left|right|outer|full|on|"
+                         "group|by|order|having|limit|offset|union|all|distinct|as|in|is|null|like|between|exists|case|"
+                         "when|then|else|end|with|returning|begin|commit|rollback|transaction|default|unique|check|"
+                         "cascade|asc|desc|count|sum|avg|min|max|coalesce|true|false)\\b"),
+          fKeyword,
+          0,
+          true);
+    other(QStringLiteral("\\b(?:int|integer|bigint|smallint|text|varchar|char|boolean|bool|date|timestamp|timestamptz|"
+                         "numeric|decimal|real|float|double|serial|uuid|json|jsonb|blob)\\b"),
+          fType,
+          0,
+          true);
+    m_others.push_back(numRule);
+  } else if(lang == "yaml") {
+    comment(QStringLiteral("(?:^|(?<=\\s))#[^\\n]*"));
+    string(QStringLiteral("\"[^\"\\n]*\""));
+    string(QStringLiteral("'[^'\\n]*'"));
+    other(QStringLiteral("^\\s*-?\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*:"), fKeyword, 1);
+    appendKeywordRule(m_others, {"true", "false", "null", "yes", "no", "on", "off"}, fBuiltin);
+    m_others.push_back(numRule);
+  } else if(lang == "json") {
+    string(dq);
+    other(QStringLiteral("(\"(?:\\\\.|[^\"\\\\\\n])*\")\\s*:"), fKeyword, 1);
+    appendKeywordRule(m_others, {"true", "false", "null"}, fBuiltin);
+    m_others.push_back(numRule);
+  } else if(lang == "ini" || lang == "docker" || lang == "make" || lang == "cmake") {
+    comment(QStringLiteral("(?:^|(?<=\\s))[#;][^\\n]*"));
+    string(dq);
+    string(sq);
+    other(QStringLiteral("^\\s*\\[[^\\]]+\\]"), fType);
+    other(QStringLiteral("^\\s*([A-Za-z_][A-Za-z0-9_.-]*)\\s*[=:]"), fKeyword, 1);
+    if(lang == "docker") {
+      other(QStringLiteral("^\\s*(?:FROM|RUN|CMD|LABEL|EXPOSE|ENV|ADD|COPY|ENTRYPOINT|VOLUME|USER|WORKDIR|ARG|ONBUILD|"
+                           "STOPSIGNAL|HEALTHCHECK|SHELL|AS)\\b"),
+            fKeyword,
+            0,
+            true);
+    }
+    if(lang == "cmake") {
+      other(QStringLiteral("^\\s*([A-Za-z_][A-Za-z0-9_]*)\\s*\\("), fBuiltin, 1);
+      other(QStringLiteral("\\$\\{[^}]+\\}"), fType);
+    }
+    if(lang == "make") {
+      other(QStringLiteral("\\$[({][^)}]+[)}]"), fType);
+    }
+    m_others.push_back(numRule);
+  } else if(lang == "ps" || lang == "bat") {
+    comment(lang == "ps" ? QStringLiteral("#[^\\n]*") : QStringLiteral("^\\s*(?:rem\\b|::)[^\\n]*"));
+    if(lang == "ps") {
+      comment(QStringLiteral("<#.*?#>"), true);
+    }
+    string(dq);
+    string(sq);
+    other(lang == "ps" ? QStringLiteral("\\$[A-Za-z_][A-Za-z0-9_:]*") : QStringLiteral("%[A-Za-z0-9_~]+%?"), fType);
+    other(lang == "ps" ? QStringLiteral("\\b(?:if|else|elseif|foreach|for|while|do|function|param|return|try|catch|"
+                                        "finally|throw|switch|break|continue|begin|process|end|in)\\b")
+                       : QStringLiteral("\\b(?:echo|set|if|else|goto|call|exit|for|in|do|not|exist|errorlevel|setlocal|"
+                                        "endlocal)\\b"),
+          fKeyword,
+          0,
+          true);
+    other(QStringLiteral("\\b[A-Z][a-z]+-[A-Z][A-Za-z]+\\b"), fBuiltin);
+    m_others.push_back(numRule);
+  } else if(lang == "xml") {
+    comment(QStringLiteral("<!--.*?-->"), true);
+    string(dq);
+    string(sq);
+    other(QStringLiteral("</?([A-Za-z][A-Za-z0-9:_-]*)"), fKeyword, 1);
+    other(QStringLiteral("\\s([A-Za-z_:][A-Za-z0-9_:.-]*)\\s*="), fType, 1);
+  } else if(lang == "css") {
+    comment(cBlockComment, true);
+    comment(cLineComment);
+    string(dq);
+    string(sq);
+    other(QStringLiteral("([A-Za-z-]+)\\s*:"), fKeyword, 1);
+    other(QStringLiteral("#[0-9A-Fa-f]{3,8}\\b"), fNumber);
+    other(QStringLiteral("^\\s*[.#]?[A-Za-z][A-Za-z0-9_-]*"), fType);
+    m_others.push_back(numRule);
+  } else if(lang == "diff") {
+    other(QStringLiteral("^\\+[^\\n]*"), fString);
+    other(QStringLiteral("^-[^\\n]*"), fBuiltin);
+    other(QStringLiteral("^@@[^\\n]*"), fKeyword);
+  }
+  // unknown language → leave all rule lists empty so the text renders plain
+}
+
+void CodeHighlighter::highlightBlock(const QString& text) {
+  // Words first, then strings and comments on top — but strings and comments
+  // decided left to right, whichever starts first wins. Applying comments
+  // last used to colour the # inside "echo '#1'" as the start of a comment.
+  for(const Rule& r : m_others) {
+    auto it = r.pattern.globalMatch(text);
+    while(it.hasNext()) {
+      const auto m = it.next();
+      const int start = static_cast<int>(m.capturedStart(r.captureGroup));
+      const int len = static_cast<int>(m.capturedLength(r.captureGroup));
+      if(len > 0) {
+        setFormat(start, len, r.format);
+      }
+    }
+  }
+  int pos = 0;
+  while(pos < text.size()) {
+    int bestStart = -1;
+    int bestLen = 0;
+    const Rule* best = nullptr;
+    const auto consider = [&](const QVector<Rule>& rules) {
+      for(const Rule& r : rules) {
+        const auto m = r.pattern.match(text, pos);
+        if(!m.hasMatch() || m.capturedLength() == 0) {
+          continue;
+        }
+        const int start = static_cast<int>(m.capturedStart());
+        if(bestStart < 0 || start < bestStart) {
+          bestStart = start;
+          bestLen = static_cast<int>(m.capturedLength());
+          best = &r;
+        }
+      }
+    };
+    consider(m_strings);
+    consider(m_comments);
+    if(best == nullptr) {
+      break;
+    }
+    setFormat(bestStart, bestLen, best->format);
+    pos = bestStart + bestLen;
+  }
 }

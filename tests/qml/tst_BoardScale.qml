@@ -44,7 +44,11 @@ TestCase {
 
     function countCards(item, acc) {
         if (!item) return acc;
-        if (String(item.objectName) === "tc-card") acc.n++;
+        // `shown` skips the cards a column keeps pooled for reuse: a pooled
+        // card stays a child of the list until a row needs it, and hides
+        // itself while it waits. Counting it would make a search that
+        // narrowed every column look like it narrowed nothing.
+        if (String(item.objectName) === "tc-card" && (!acc.shown || item.visible)) acc.n++;
         const kids = item.children || [];
         for (let i = 0; i < kids.length; i++) countCards(kids[i], acc);
         return acc;
@@ -108,13 +112,49 @@ TestCase {
         for (const k in seen) summed += seen[k];
         compare(summed, total, "every task belongs to exactly one column");
 
+        // The lists lay their cards out on their next polish, not inside the
+        // property write, so every count below waits for the board to settle
+        // rather than sampling it after a single event-loop turn — which was
+        // whatever the previous run had left in the pool.
+        const shown = () => countCards(board, { n: 0, shown: true }).n;
+        tryVerify(() => shown() > 0, 2000, "the board shows no cards");
+        wait(50);
+        const full = shown();
+
         board.searchText = "task 1";
-        wait(0);
-        const narrowed = countCards(board, { n: 0 }).n;
+        const matching = shownIdsAllowed(board);
+        verify(matching.count > 0, "a search that matches something must leave something");
+        tryVerify(() => shown() < full && shown() > 0, 2000,
+                  "a search must narrow the board (" + shown() + " vs " + full + ")");
+        // Every card still on the board is one the columns kept.
+        const stray = [];
+        forEachShownCard(board, c => { if (!matching.ids[c.taskId]) stray.push(c.taskId); });
+        compare(stray.length, 0, "cards the search filtered out are still on the board: " + stray.join(", "));
+
         board.searchText = "";
-        wait(0);
-        const full = countCards(board, { n: 0 }).n;
-        verify(narrowed < full, "a search must narrow the board (" + narrowed + " vs " + full + ")");
-        verify(narrowed > 0, "a search that matches something must leave something");
+        tryVerify(() => shown() >= full, 2000, "clearing the search did not bring the cards back");
+    }
+
+    // The ids every column's proxy admits, i.e. what the board may show.
+    function shownIdsAllowed(board) {
+        const out = { ids: {}, count: 0 };
+        function rec(o) {
+            if (!o) return;
+            if (o.taskFilter !== undefined && o.statusId !== undefined) {
+                const ids = o.taskFilter.ids();
+                for (let i = 0; i < ids.length; i++) { out.ids[ids[i]] = true; out.count++; }
+            }
+            const kids = o.children || [];
+            for (let i = 0; i < kids.length; i++) rec(kids[i]);
+        }
+        rec(board);
+        return out;
+    }
+
+    function forEachShownCard(item, fn) {
+        if (!item) return;
+        if (String(item.objectName) === "tc-card" && item.visible) fn(item);
+        const kids = item.children || [];
+        for (let i = 0; i < kids.length; i++) forEachShownCard(kids[i], fn);
     }
 }

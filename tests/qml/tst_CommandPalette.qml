@@ -34,8 +34,7 @@ TestCase {
         const cp = make('import TodoCpp; CommandPalette { }');
         const late = "a".repeat(41) + "z";           // only 'z' at index 41
         verify(cp._fuzzyScore("z", late) >= 0, "a present char must score >= 0");
-        // Boundary: index 40 lands exactly on 0 (survives even unpatched).
-        compare(cp._fuzzyScore("z", "a".repeat(40) + "z"), 0.0);
+        verify(cp._fuzzyScore("z", "a".repeat(40) + "z") >= 0);
         // A genuinely absent char must still return the negative no-match sentinel.
         verify(cp._fuzzyScore("z", "aaa") < 0, "absent char must score < 0");
     }
@@ -63,5 +62,112 @@ TestCase {
         const out = cp._filterAndScore("zz");
         compare(out.length, 2, "both body-containing entries must be kept");
         compare(out[0].id, "W", "weak-label+body must not rank below a pure body-only hit");
+    }
+
+    // ── Matching (audit TASKS-25) ────────────────────────────────────
+
+    // Words in any order: "ingress kubernetes" finds "Kubernetes ingress".
+    function test_word_order_does_not_matter() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        verify(cp._fuzzyScore("ingress kubernetes", "TASK-7 · Kubernetes ingress rules") >= 0);
+        verify(cp._fuzzyScore("ingress kubernetes", "TASK-8 · Kubernetes egress") < 0,
+               "every word has to land somewhere");
+    }
+
+    // One swapped or missing letter still finds it.
+    function test_typos_are_tolerated() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        verify(cp._fuzzyScore("kubrenetes", "Kubernetes ingress") >= 0, "transposition");
+        verify(cp._fuzzyScore("kubernets", "Kubernetes ingress") >= 0, "deletion");
+        verify(cp._fuzzyScore("ingres", "Kubernetes ingress") >= 0, "prefix");
+        verify(cp._fuzzyScore("xylophone", "Kubernetes ingress") < 0);
+    }
+
+    // A whole-word hit outranks a scattered one.
+    function test_whole_words_rank_first() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._entries = [
+            { kind: "task", taskId: "A", label: "d-a-r-k scattered", sub: "" },
+            { kind: "task", taskId: "B", label: "dark mode toggle", sub: "" }
+        ];
+        const out = cp._filterAndScore("dark");
+        compare(out[0].taskId, "B");
+    }
+
+    // ── Commands (audit UX-20) ───────────────────────────────────────
+
+    function _has(list, pred) {
+        for (let i = 0; i < list.length; i++) if (pred(list[i])) return true;
+        return false;
+    }
+
+    function test_commands_are_searchable() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._refresh();
+        const dark = cp._filterAndScore("dark");
+        verify(_has(dark, function (e) { return e.kind === "command" && e.commandId === "theme.toggle"; }),
+               "\"dark\" must find the theme toggle");
+        const settings = cp._filterAndScore("settings appearance");
+        verify(_has(settings, function (e) { return e.commandId === "settings:appearance"; }));
+        const board = cp._filterAndScore("board");
+        verify(_has(board, function (e) { return e.commandId === "view.board"; }));
+        // Contextual keys are not offered.
+        verify(!_has(cp._entries, function (e) { return e.commandId === "board.cursorDown"; }));
+    }
+
+    function test_command_activation_is_forwarded() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        let got = "";
+        cp.commandRequested.connect(function (id) { got = id; });
+        cp._activate({ kind: "command", commandId: "theme.toggle", label: "Toggle" });
+        tryVerify(function () { return got === "theme.toggle"; });
+    }
+
+    // ── Recents ──────────────────────────────────────────────────────
+
+    function test_empty_query_shows_recents_then_commands() {
+        const saved = AppController.appSettingsJson;
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._entries = [
+            { kind: "doc", sectionId: "s1", label: "Some doc", sub: "" },
+            { kind: "task", taskId: "RECENT-1", label: "RECENT-1 · a task", sub: "" },
+            { kind: "command", commandId: "view.week", label: "Go to Week", sub: "Ctrl+3" }
+        ];
+        cp._remember(cp._entries[1]);
+        const out = cp._filterAndScore("");
+        AppController.appSettingsJson = saved;
+        compare(out[0].taskId, "RECENT-1", "the recent entry comes first");
+        verify(out[0]._recent);
+        verify(!_has(out, function (e) { return e.kind === "doc"; }), "no arbitrary docs on an empty query");
+        verify(_has(out, function (e) { return e.commandId === "view.week"; }));
+    }
+
+    // ── Badges and opening (audit TASKS-25) ─────────────────────────
+
+    function test_every_kind_has_a_badge_and_a_name() {
+        const cp = make('import TodoCpp; CommandPalette { }');
+        const kinds = ["task", "doc", "snippet", "contact", "profile", "person", "note", "dailyNote",
+                       "event", "template", "command", "setting"];
+        for (const k of kinds) {
+            verify(cp._kindGlyph(k) !== "?" && cp._kindGlyph(k) !== "·", k + " has no badge");
+            verify(cp._kindLabel(k) !== "palette.kind." + k, k + " has no name");
+        }
+    }
+
+    function test_opening_a_task_keeps_a_view_that_shows_tasks() {
+        const savedView = AppController.currentView;
+        const cp = make('import TodoCpp; CommandPalette { }');
+        let opened = "";
+        cp.openTask.connect(function (id) { opened = id; });
+        AppController.currentView = "week";
+        cp._activate({ kind: "task", taskId: "ANY-1", label: "ANY-1 · x" });
+        tryVerify(function () { return opened === "ANY-1"; });
+        compare(AppController.currentView, "week", "the palette forced the board");
+        AppController.currentView = "notes";
+        opened = "";
+        cp._activate({ kind: "task", taskId: "ANY-1", label: "ANY-1 · x" });
+        tryVerify(function () { return opened === "ANY-1"; });
+        compare(AppController.currentView, "board", "notes shows no tasks; the board takes over");
+        AppController.currentView = savedView;
     }
 }

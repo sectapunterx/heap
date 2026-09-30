@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls.Basic
 import TodoCpp
 import "Search.js" as Search
+import "PlainText.js" as MdPlain
 
 Item {
     id: root
@@ -12,9 +13,39 @@ Item {
     property var scheduleMap: ({})
     property bool showDone: false
     property bool showArchived: false
+    // Something is narrowing what the timeline shows.
+    readonly property bool _filtering: searchText.trim().length > 0
+        || Object.keys(prioritiesFilter || {}).some(function (k) { return prioritiesFilter[k] === true; })
 
     signal taskClicked(string id)
     signal toggleShowDone()
+
+    // ── Keyboard (TASKS-30) ──────────────────────────────────────────
+    // J/K or the arrows walk the rows, Enter opens, Space selects; "O" (the
+    // app-wide open-in-tracker key) acts on the row the cursor is on.
+    property string cursorTaskId: ""
+    property string _hoverId: ""
+    readonly property string hoveredTaskId: cursorTaskId.length > 0 ? cursorTaskId : _hoverId
+    function _taskRowIndexes() {
+        const out = [];
+        for (let i = 0; i < root.flatRows.length; i++) if (root.flatRows[i].kind === "task") out.push(i);
+        return out;
+    }
+    function moveCursor(dy) {
+        const rows = _taskRowIndexes();
+        if (rows.length === 0) return;
+        let at = -1;
+        for (let k = 0; k < rows.length; k++)
+            if (root.flatRows[rows[k]].task.id === root.cursorTaskId) { at = k; break; }
+        at = at < 0 ? 0 : Math.max(0, Math.min(rows.length - 1, at + dy));
+        root.cursorTaskId = root.flatRows[rows[at]].task.id;
+        rowList.positionViewAtIndex(rows[at], ListView.Contain);
+    }
+    function openCursor() {
+        if (root.cursorTaskId) root.taskClicked(root.cursorTaskId);
+        else root.moveCursor(0);
+    }
+    onVisibleChanged: if (visible) rowList.forceActiveFocus()
 
     // Selection plumbing — flat across buckets (reading order).
     property string shiftAnchorId: ""
@@ -93,53 +124,111 @@ Item {
     property int modelRev: 0
     Connections {
         target: AppController.tasks
-        function onDataChanged()  { root.modelRev++ }
+        function onDataChanged(topLeft, bottomRight) {
+            root._forgetRows(topLeft.row, bottomRight.row);
+            root.modelRev++;
+        }
         function onRowsInserted() { root.modelRev++ }
         function onRowsRemoved()  { root.modelRev++ }
-        function onModelReset()   { root.modelRev++ }
+        function onModelReset()   { root._rowCache = ({}); root.modelRev++ }
+    }
+
+    // One snapshot row per task id, kept between rebuilds. A rebuild used to
+    // read ten roles and ask C++ for the bucket of every task — 3k tasks,
+    // ~85 ms — for every change anywhere, a single card's move included. Now
+    // only the rows the model says changed are read again. Rows are keyed by
+    // id, not position, so an insert or a removal leaves the rest valid; the
+    // entries of removed tasks are simply never looked up again. The bucket
+    // depends on today, so a new day starts a new cache.
+    property var _rowCache: ({})
+    property string _rowCacheDay: ""
+    function _forgetRows(first, last) {
+        const m = AppController.tasks;
+        for (let i = first; i <= last; i++) delete root._rowCache[m.data(m.index(i, 0), Qt.UserRole + 1)];
+    }
+    function _rowAt(m, idx) {
+        const t = {
+            id:       m.data(idx, Qt.UserRole + 1),
+            title:    m.data(idx, Qt.UserRole + 2),
+            desc:     m.data(idx, Qt.UserRole + 3),
+            priority: m.data(idx, Qt.UserRole + 4),
+            status:   m.data(idx, Qt.UserRole + 5),
+            deadline: m.data(idx, Qt.UserRole + 6),
+            branch:   m.data(idx, Qt.UserRole + 7),
+            archived: m.data(idx, Qt.UserRole + 9),
+            // The one haystack passesFilter() searches (HEAP-117).
+            searchText: m.data(idx, Qt.UserRole + 32),
+            ticket:     m.data(idx, Qt.UserRole + 31),
+            dueAt:      m.data(idx, m.roleOf("dueAt")),
+            dueHasTime: !!m.data(idx, m.roleOf("dueHasTime")),
+            scheduledAt: m.data(idx, m.roleOf("scheduledAt")),
+            scheduledHasTime: !!m.data(idx, m.roleOf("scheduledHasTime")),
+        };
+        // A task with only a schedule is not "No deadline" work: it goes
+        // under the day it is planned for (TASKS-12).
+        const valid = (d) => d && d.getTime && !isNaN(d.getTime());
+        t.scheduledOnly = !valid(t.deadline) && valid(t.scheduledAt);
+        t.when = valid(t.deadline) ? t.deadline
+               : (t.scheduledOnly ? new Date(t.scheduledAt.getFullYear(), t.scheduledAt.getMonth(), t.scheduledAt.getDate()) : t.deadline);
+        t.bucket = AppController.deadlineBucket(t.when);
+        t.dueMs = valid(t.when) ? t.when.getTime() : 9e15;
+        return t;
     }
 
     function buildGroups() {
+        // Buckets are relative to today, which moves at midnight.
+        const _today = AppController.today;
         const _rev = root.modelRev; // dependency
         const groups = { overdue: [], today: [], tomorrow: [], thisweek: [], nextweek: [], later: [], nodl: [] };
         const m = AppController.tasks;
+        const day = String(AppController.today);
+        if (root._rowCacheDay !== day) {
+            root._rowCache = ({});
+            root._rowCacheDay = day;
+        }
+        const cache = root._rowCache;
         for (let i = 0; i < m.rowCount(); i++) {
             const idx = m.index(i, 0);
-            const archived = m.data(idx, Qt.UserRole + 9);
-            if (archived && !root.showArchived) continue;
-            const t = {
-                id:       m.data(idx, Qt.UserRole + 1),
-                title:    m.data(idx, Qt.UserRole + 2),
-                desc:     m.data(idx, Qt.UserRole + 3),
-                priority: m.data(idx, Qt.UserRole + 4),
-                status:   m.data(idx, Qt.UserRole + 5),
-                deadline: m.data(idx, Qt.UserRole + 6),
-                branch:   m.data(idx, Qt.UserRole + 7),
-                // The one haystack passesFilter() searches (HEAP-117).
-                searchText: m.data(idx, Qt.UserRole + 32),
-                ticket:     m.data(idx, Qt.UserRole + 31),
-            };
+            const id = m.data(idx, Qt.UserRole + 1);
+            let t = cache[id];
+            if (!t) {
+                t = root._rowAt(m, idx);
+                cache[id] = t;
+            }
+            if (t.archived && !root.showArchived) continue;
             if (!root.passesFilter(t)) continue;
-            const b = AppController.deadlineBucket(t.deadline);
-            groups[b].push(t);
+            groups[t.bucket].push(t);
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
         for (const k in groups) {
             groups[k].sort((a, b) => {
-                const ad = a.deadline && a.deadline.getTime ? a.deadline.getTime() : 9e15;
-                const bd = b.deadline && b.deadline.getTime ? b.deadline.getTime() : 9e15;
-                if (ad !== bd) return ad - bd;
+                if (a.dueMs !== b.dueMs) return a.dueMs - b.dueMs;
                 return (priRank[a.priority] ?? 9) - (priRank[b.priority] ?? 9);
             });
         }
         return groups;
     }
-    property var groups: buildGroups()
-    onModelRevChanged: groups = buildGroups()
-    onSearchTextChanged: groups = buildGroups()
-    onPrioritiesFilterChanged: groups = buildGroups()
-    onShowDoneChanged: groups = buildGroups()
-    onShowArchivedChanged: groups = buildGroups()
+    // Rebuilt once per event-loop pass, not once per signal. One status change
+    // emits several model signals (the move, its timestamp, the focus block it
+    // books), and each used to rebuild the whole timeline — 3k tasks, ~100 ms a
+    // pass. It was also a binding on top of the handlers, so the first change
+    // rebuilt twice. A zero-interval timer folds repeated requests into one
+    // (and, unlike Qt.callLater, dies with the view instead of calling into a
+    // destroyed one after a view switch).
+    property var groups: ({})
+    function _rebuild() { root.groups = root.buildGroups(); }
+    function _scheduleRebuild() { rebuildTimer.restart(); }
+    Timer {
+        id: rebuildTimer
+        interval: 0
+        onTriggered: root._rebuild()
+    }
+    Component.onCompleted: { root._rebuild(); rowList.forceActiveFocus(); }
+    onModelRevChanged: _scheduleRebuild()
+    onSearchTextChanged: _scheduleRebuild()
+    onPrioritiesFilterChanged: _scheduleRebuild()
+    onShowDoneChanged: _scheduleRebuild()
+    onShowArchivedChanged: _scheduleRebuild()
 
     // Expand a bucket's flat task list into a mixed array of
     // {kind:"header", label, date} / {kind:"task", task} rows. Buckets that
@@ -155,7 +244,7 @@ Item {
         let lastKey = "__none__";
         for (let i = 0; i < list.length; i++) {
             const t = list[i];
-            const dl = t.deadline;
+            const dl = t.when;
             const key = (dl && dl.getFullYear) ? (dl.getFullYear() + "-" + (dl.getMonth()+1) + "-" + dl.getDate()) : "";
             if (key !== lastKey) {
                 const label = (dl && dl.getFullYear) ? AppController.shortDate(dl) : I18n.t("timeline.noDate");
@@ -176,7 +265,9 @@ Item {
             if (list.length === 0) continue;
             const rows = root.bucketRows(k, list);
             for (let i = 0; i < rows.length; i++) {
-                const r = Object.assign({ bucketId: k, first: i === 0 }, rows[i]);
+                const r = rows[i];
+                r.bucketId = k;
+                r.first = i === 0;
                 out.push(r);
             }
         }
@@ -258,15 +349,31 @@ Item {
             clip: true
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
-            model: root.flatRows
+            // A row count, not the array. Every rebuild makes a new array, and
+            // an array model is reset whenever it is replaced: all rows torn
+            // down and laid out again for a single card's move. With a count
+            // the list stays put while it is unchanged, and each row on screen
+            // just re-reads its entry below.
+            model: root.flatRows.length
             cacheBuffer: 400
+            reuseItems: true
+            focus: true
+            activeFocusOnTab: true
+            Keys.onPressed: (e) => {
+                if (e.modifiers & (Qt.ControlModifier | Qt.AltModifier)) return;
+                if (e.key === Qt.Key_J || e.key === Qt.Key_Down) { root.moveCursor(1); e.accepted = true; }
+                else if (e.key === Qt.Key_K || e.key === Qt.Key_Up) { root.moveCursor(-1); e.accepted = true; }
+                else if (e.key === Qt.Key_Return || e.key === Qt.Key_Enter) { root.openCursor(); e.accepted = true; }
+                else if (e.key === Qt.Key_Space && root.cursorTaskId) {
+                    AppController.toggleTaskSelection(root.cursorTaskId); e.accepted = true;
+                }
+            }
             footer: Item { width: rowList.width; height: 24 }
 
             delegate: Item {
                 id: rowItem
-                required property var modelData
                 required property int index
-                readonly property var rd: modelData
+                readonly property var rd: root.flatRows[index] ?? null
                 readonly property bool first: !!(rd && rd.first)
                 readonly property var meta: rd ? root.bucketMeta[rd.bucketId] : null
                 readonly property var list: rd ? (root.groups[rd.bucketId] || []) : []
@@ -313,9 +420,9 @@ Item {
                         Text {
                             visible: rowItem.first
                                      && (rowItem.rd.bucketId === "overdue" || rowItem.rd.bucketId === "today" || rowItem.rd.bucketId === "tomorrow")
-                                     && rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
-                            text: rowItem.list.length > 0 && rowItem.list[0].deadline && rowItem.list[0].deadline.getTime
-                                  ? (I18n.lang, AppController.shortDate(rowItem.list[0].deadline)) : ""
+                                     && rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                            text: rowItem.list.length > 0 && rowItem.list[0].when && rowItem.list[0].when.getTime
+                                  ? I18n.relang(AppController.shortDate(rowItem.list[0].when)) : ""
                             color: Theme.textMuted
                             font.pixelSize: Theme.fsSm
                             leftPadding: 34
@@ -349,11 +456,18 @@ Item {
                     anchors.centerIn: parent
                     spacing: Theme.spSm
                     Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: Theme.fs2xl }
+                    // "No tasks match the filters" only when something is
+                    // filtering; an empty timeline is not a filter's fault.
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.title"); color: Theme.text; font.pixelSize: Theme.fsMd
+                        objectName: "timeline-empty-title"
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: I18n.t(root._filtering ? "timeline.empty.title" : "timeline.empty.none.title")
+                        color: Theme.text; font.pixelSize: Theme.fsMd
                     }
                     Text {
-                        anchors.horizontalCenter: parent.horizontalCenter; text: I18n.t("timeline.empty.hint"); color: Theme.textDim; font.pixelSize: Theme.fsMd
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: I18n.t(root._filtering ? "timeline.empty.hint" : "timeline.empty.none.hint")
+                        color: Theme.textDim; font.pixelSize: Theme.fsMd
                     }
                 }
             }
@@ -400,13 +514,15 @@ Item {
                     readonly property var st: t ? root.statusInfo(t.status) : null
                     readonly property bool _selected: t && AppController.selectionCount >= 0
                         && AppController.isTaskSelected(t.id)
+                    readonly property bool _cursored: !!t && root.cursorTaskId === t.id
                     width: parent ? parent.width : 0
                     radius: Theme.radius
                     color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
                         : rowMA.containsMouse ? Theme.panel2 : Theme.panel
                     border.color: _selected ? Theme.accent
+                        : _cursored ? Theme.accentStrong
                         : rowMA.containsMouse ? Theme.borderStrong : Theme.border
-                    border.width: _selected ? 2 : 1
+                    border.width: _selected || _cursored ? 2 : 1
                     implicitHeight: rowContent.implicitHeight + 16
 
                     // Left accent stripe
@@ -470,7 +586,8 @@ Item {
                             Text {
                                 Layout.fillWidth: true
                                 visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
-                                text: String(tlRow.t.desc || "").substring(0, 90) + (String(tlRow.t.desc || "").length > 90 ? "…" : "")
+                                // Markdown read as prose, not as "**Steps:** - [ ]".
+                                text: MdPlain.plain(tlRow.t.desc, 120)
                                 color: Theme.textMuted
                                 font.pixelSize: Theme.fsSm
                                 elide: Text.ElideRight
@@ -512,8 +629,23 @@ Item {
                                 font.pixelSize: Theme.fsXs
                             }
                         }
+                        // The clock time of a timed deadline, and the day of a
+                        // task that only has a schedule.
                         Text {
-                            text: (I18n.lang, AppController.deadlineDiffLabel(tlRow.t.deadline))
+                            objectName: "tl-when"
+                            readonly property var at: tlRow.t.scheduledOnly ? tlRow.t.scheduledAt : tlRow.t.dueAt
+                            readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
+                            visible: text.length > 0
+                            text: (tlRow.t.scheduledOnly ? "▸ " : "")
+                                  + (timed && at && at.getHours
+                                     ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
+                                     : "")
+                            color: Theme.textMuted
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsSm
+                        }
+                        Text {
+                            text: I18n.relang((AppController.today, AppController.deadlineDiffLabel(tlRow.t.when)))
                             color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.danger
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
                                  : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
@@ -528,6 +660,10 @@ Item {
                         id: rowMA
                         anchors.fill: parent
                         hoverEnabled: true
+                        onContainsMouseChanged: {
+                            if (containsMouse) root._hoverId = tlRow.t.id;
+                            else if (root._hoverId === tlRow.t.id) root._hoverId = "";
+                        }
                         cursorShape: Qt.PointingHandCursor
                         acceptedButtons: Qt.LeftButton
                         onClicked: (mouse) => {
@@ -539,8 +675,10 @@ Item {
                                 root._rangeSelect(tlRow.t.id);
                             } else {
                                 if (AppController.selectionCount > 0) AppController.clearSelection();
+                                root.cursorTaskId = tlRow.t.id;
                                 root.taskClicked(tlRow.t.id);
                             }
+                            rowList.forceActiveFocus();
                         }
                     }
                 }

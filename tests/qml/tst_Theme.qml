@@ -370,7 +370,7 @@ TestCase {
         compare(l.panel2, String(Qt.darker(Brand.lightPanel, 1.03)));
         compare(l.accent, String(Brand.lightAccent));
         compare(l.accentStrong, String(Qt.darker(Brand.lightAccent, 1.18)));
-        compare(l.p0, "#c34a36");
+        compare(l.p0, "#be4835");
     }
 
     // Each slot shows its own theme; flipping AppController.theme flips slot.
@@ -569,5 +569,105 @@ TestCase {
         compare(Presets.newId([]), "custom-1");
         compare(Presets.newId([{ id: "custom-1" }, { id: "custom-2" }]), "custom-3");
         compare(Presets.newId([{ id: "custom-2" }]), "custom-1");
+    }
+
+    // ── Contrast (audit UX-8 / UX-15) ───────────────────────────────────
+
+    // Runs `fn` once per built-in theme in each contrast mode, with that
+    // theme active, and collects what it reports.
+    function _eachThemeAndContrast(fn) {
+        const saved = AppController.appSettingsJson;
+        const savedTheme = AppController.theme;
+        const fails = [];
+        for (const t of Presets.PRESETS) {
+            for (const contrast of ["soft", "normal", "high"]) {
+                AppController.theme = t.base;
+                AppController.appSettingsJson = JSON.stringify({ appearance: {
+                    darkPreset: t.id, lightPreset: t.id, contrast: contrast } });
+                fn(t.id + "/" + contrast, fails);
+            }
+        }
+        AppController.appSettingsJson = saved;
+        AppController.theme = savedTheme;
+        return fails;
+    }
+
+    // Everything drawn as text — priorities, alerts, headings, links, code
+    // comments — reads at WCAG AA (4.5:1) on bg, panel and panel2, in every
+    // built-in theme and contrast mode. heap. light had P1 at 3.3:1, headings
+    // at 2.5:1, links at 3.5:1; the dark kaneo themes had P3 and comments
+    // near 3.5:1.
+    function test_text_roles_meet_aa_everywhere() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            const surfaces = [Theme.bg, Qt.tint(Theme.bg, Theme.panel), Qt.tint(Theme.bg, Theme.panel2)];
+            for (const key of Presets.TEXT_ROLES) {
+                for (const s of surfaces) {
+                    const r = Presets.contrast(String(Theme[key]), String(s));
+                    if (r < 4.5) out.push(tag + " " + key + " on " + s + " = " + r.toFixed(2));
+                }
+            }
+            for (const key of Presets.CODE_ROLES) {
+                const r = Presets.contrast(String(Theme[key]), String(Qt.tint(Theme.bg, Theme.codeBg)));
+                if (r < 4.5) out.push(tag + " " + key + " on codeBg = " + r.toFixed(2));
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // The keyboard focus ring and the highlighted-row marker stand out at
+    // 3:1 from every surface they are drawn on.
+    function test_focus_ring_is_visible_everywhere() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            for (const s of [Theme.bg, Theme.panel, Theme.panel2, Theme.panel3]) {
+                const r = Presets.contrast(String(Theme.focusRing), String(Qt.tint(Theme.bg, s)));
+                if (r < 3) out.push(tag + " focusRing on " + s + " = " + r.toFixed(2));
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // Count badges: the label on a danger or accent fill reads at 4.5:1.
+    function test_badge_text_reads_on_its_fill() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            for (const fill of [Theme.danger, Theme.accent]) {
+                const r = Presets.contrast(String(Theme.textOn(fill)), String(Qt.tint(Theme.bg, fill)));
+                if (r < 4.5) out.push(tag + " badge on " + fill + " = " + r.toFixed(2));
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // High contrast: lines, field outlines included, reach 3:1 for UI.
+    function test_high_contrast_lines_reach_three_to_one() {
+        const fails = _eachThemeAndContrast(function (tag, out) {
+            if (tag.indexOf("/high") < 0) return;
+            for (const line of ["border", "borderStrong"]) {
+                for (const s of [Theme.bg, Theme.panel]) {
+                    const r = Presets.contrast(String(Theme[line]), String(Qt.tint(Theme.bg, s)));
+                    if (r < 3) out.push(tag + " " + line + " on " + s + " = " + r.toFixed(2));
+                }
+            }
+        });
+        compare(fails.length, 0, fails.join("; "));
+    }
+
+    // Soft contrast keeps a hue whose HSL angle comes out negative: magenta
+    // softened to red (#d2002d) because JS `%` keeps the sign.
+    function test_soften_keeps_magenta_magenta() {
+        const c = Qt.color(Presets.desaturate("#ff00ff", 0.65));
+        fuzzyCompare(c.hslHue * 360, 300, 2);
+        fuzzyCompare(c.r, c.b, 0.02);
+        verify(c.g < c.r, "green must stay the low channel: " + c);
+        const pink = Qt.color(Presets.desaturate("#ff0080", 0.65));
+        verify(pink.b > pink.g, "pink must keep its blue: " + pink);
+    }
+
+    // ensureContrast only repairs: a passing colour comes back unchanged.
+    function test_ensure_contrast_only_repairs() {
+        compare(Presets.ensureContrast("#ffffff", ["#000000"], 4.5), "#ffffff");
+        const fixed = Presets.ensureContrast("#333333", ["#000000"], 4.5);
+        verify(Presets.contrast(fixed, "#000000") >= 4.5, fixed);
+        const onLight = Presets.ensureContrast("#dddddd", ["#ffffff"], 3);
+        verify(Presets.contrast(onLight, "#ffffff") >= 3, onLight);
     }
 }

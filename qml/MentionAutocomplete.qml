@@ -25,11 +25,16 @@ Popup {
     // corresponding flag to false from the owner.
     property bool enablePeople: true
     property bool enableTickets: true
+    // Insert a person as @Their_Name rather than @their-id (for note text).
+    property bool insertNames: false
 
     property var _suggestions: []
     property int _selectedIdx: 0
     property string _trigger: ""  // "@" or "#" while a suggestion list is live
     readonly property bool isOpen: visible && _suggestions.length > 0
+    // True once the arrows have moved the highlight since the list opened —
+    // the owner's cue that Enter means "take this one" rather than "submit".
+    property bool navigated: false
 
     readonly property var _handleCharRe: /[A-Za-zА-Яа-яЁё0-9_.\-]/
 
@@ -128,6 +133,7 @@ Popup {
         _suggestions = (r.trigger === "@") ? _peopleSuggestions(q)
             : _ticketSuggestions(q);
         _selectedIdx = 0;
+        navigated = false;
         if (_suggestions.length > 0) _reposition();
     }
 
@@ -136,7 +142,10 @@ Popup {
         const r = _currentTriggerRange();
         if (!r) return false;
         const pick = _suggestions[_selectedIdx];
-        const insert = r.trigger + pick.id + " ";
+        // Notes write a person as @Their_Name (NotesView does the same), task
+        // text as the id the task parser matches.
+        const token = (insertNames && r.trigger === "@") ? String(pick.name || pick.id).replace(/\s+/g, "_") : pick.id;
+        const insert = r.trigger + token + " ";
         // Edit in place (remove + insert) rather than reassigning target.text:
         // a whole-text assignment resets the caret to 0 on a TextArea/TextField,
         // dropping the user back to the start of the document. (HEAP-65)
@@ -152,6 +161,7 @@ Popup {
         if (!isOpen) return;
         _selectedIdx = Math.max(0, Math.min(_suggestions.length - 1,
             _selectedIdx + delta));
+        navigated = true;
     }
 
     function dismiss() {

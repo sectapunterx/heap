@@ -281,3 +281,162 @@ TEST(MdVault, ABodyWithItsOwnDashesSurvives) {
 TEST(MdVault, AnEmptyVaultExportsNothing) {
   EXPECT_TRUE(exportVault({}).isEmpty());
 }
+
+// ── Audit 2026-09-30: round trips that lost or renamed things ──
+
+TEST(MdVault, TheIdTravelsInTheFrontmatter) {
+  const auto files = exportVault({note(QStringLiteral("Meeting"))});
+  EXPECT_EQ(importFile(files.at(0).path, files.at(0).contents).id, QStringLiteral("n-Meeting"));
+}
+
+TEST(MdVault, ABodyStartingWithABlankLineKeepsIt) {
+  const Note original = note(QStringLiteral("Gap"), QString(), QStringLiteral("\nafter a blank line\n"));
+  const auto files = exportVault({original});
+  EXPECT_EQ(importFile(files.at(0).path, files.at(0).contents).body, original.body);
+}
+
+TEST(MdVault, ASanitisedFolderComesBackUnderItsRealName) {
+  const Note original = note(QStringLiteral("Plan"), QStringLiteral("Q3: plan"));
+  const auto files = exportVault({original});
+  EXPECT_EQ(files.at(0).path, QStringLiteral("Q3 plan/Plan.md"));
+  EXPECT_EQ(importFile(files.at(0).path, files.at(0).contents).folder, QStringLiteral("Q3: plan"));
+}
+
+TEST(MdVault, AFileMovedOnDiskKeepsItsNewFolder) {
+  const auto files = exportVault({note(QStringLiteral("Plan"), QStringLiteral("Q3: plan"))});
+  EXPECT_EQ(importFile(QStringLiteral("archive/Plan.md"), files.at(0).contents).folder, QStringLiteral("archive"));
+}
+
+TEST(MdVault, WindowsReservedNamesAreNotUsedAsFileNames) {
+  const auto files = exportVault({note(QStringLiteral("CON")), note(QStringLiteral("nul.txt")), note(QStringLiteral("LPT1"))});
+  for(const VaultFile& f : files) {
+    EXPECT_FALSE(heap::notes::detail::isReservedWindowsName(f.path.chopped(3))) << f.path.toStdString();
+  }
+}
+
+TEST(MdVault, ForeignFrontmatterIsKeptAndWrittenBack) {
+  const QString file = QStringLiteral("---\ntags:\n  - work\n  - q3\naliases: [Plan B]\ntitle: Plan\n---\nbody");
+  const Note n = importFile(QStringLiteral("Plan.md"), file);
+  EXPECT_EQ(n.title, QStringLiteral("Plan"));
+  EXPECT_EQ(n.body, QStringLiteral("body"));
+  EXPECT_TRUE(n.frontmatter.contains(QStringLiteral("  - q3")));
+  EXPECT_TRUE(n.frontmatter.contains(QStringLiteral("aliases: [Plan B]")));
+  const auto files = exportVault({n});
+  EXPECT_TRUE(files.at(0).contents.contains(QStringLiteral("tags:\n  - work\n  - q3")));
+}
+
+TEST(MdVault, Latin1BytesAreNotMangled) {
+  const QByteArray latin1("caf\xE9 cr\xE8me", 10);
+  EXPECT_EQ(heap::notes::decodeVaultBytes(latin1), QString::fromUtf8("café crème"));
+  EXPECT_EQ(heap::notes::decodeVaultBytes(QByteArray("\xEF\xBB\xBFhi")), QStringLiteral("hi"));
+}
+
+TEST(MdVault, BinaryBytesAreRefused) {
+  bool binary = false;
+  heap::notes::decodeVaultBytes(QByteArray("PK\x03\x04\0\0", 6), &binary);
+  EXPECT_TRUE(binary);
+}
+
+namespace {
+
+using heap::notes::planImport;
+using heap::notes::VaultAction;
+using heap::notes::VaultSource;
+
+std::function<QString()> counterIds() {
+  auto n = std::make_shared<int>(0);
+  return [n]() {
+    return QStringLiteral("fresh-%1").arg(++*n);
+  };
+}
+
+}  // namespace
+
+// Three notes titled Meeting / Meeting / meeting go out as three files and
+// must come back as three notes, each with its own body.
+TEST(MdVaultPlan, DuplicateTitlesSurviveTheRoundTrip) {
+  QVector<Note> notes = {note(QStringLiteral("Meeting"), {}, QStringLiteral("one")),
+                         note(QStringLiteral("Meeting"), {}, QStringLiteral("two")),
+                         note(QStringLiteral("meeting"), {}, QStringLiteral("three"))};
+  notes[1].id = QStringLiteral("n-2");
+  notes[2].id = QStringLiteral("n-3");
+  QVector<VaultSource> sources;
+  for(const VaultFile& f : exportVault(notes)) {
+    sources.append({f.path, f.contents});
+  }
+  const auto plan = planImport({}, sources, counterIds(), QStringLiteral(" (copy)"));
+  ASSERT_EQ(plan.size(), 3);
+  QStringList bodies;
+  QSet<QString> ids;
+  for(const auto& it : plan) {
+    EXPECT_EQ(it.action, VaultAction::Create);
+    bodies << it.note.body;
+    ids.insert(it.note.id);
+  }
+  bodies.sort();
+  EXPECT_EQ(bodies, (QStringList{QStringLiteral("one"), QStringLiteral("three"), QStringLiteral("two")}));
+  EXPECT_EQ(ids.size(), 3);
+}
+
+TEST(MdVaultPlan, TwoFilesWithOneFrontmatterTitleStayTwoNotes) {
+  const QVector<VaultSource> sources = {{QStringLiteral("dup/Meeting.md"), QStringLiteral("---\ntitle: Meeting\n---\nA")},
+                                        {QStringLiteral("dup/Meeting 2.md"), QStringLiteral("---\ntitle: Meeting\n---\nB")}};
+  const auto first = planImport({}, sources, counterIds(), {});
+  ASSERT_EQ(first.size(), 2);
+  EXPECT_EQ(first.at(0).note.body, QStringLiteral("A"));
+  EXPECT_EQ(first.at(1).note.body, QStringLiteral("B"));
+
+  // Imported, then imported again: each file finds its own note by path.
+  const QVector<Note> existing = {first.at(0).note, first.at(1).note};
+  const auto again = planImport(existing, sources, counterIds(), {});
+  EXPECT_EQ(again.at(0).action, VaultAction::Unchanged);
+  EXPECT_EQ(again.at(1).action, VaultAction::Unchanged);
+  EXPECT_EQ(again.at(0).note.id, existing.at(0).id);
+  EXPECT_EQ(again.at(1).note.id, existing.at(1).id);
+}
+
+TEST(MdVaultPlan, AFileChangedOnDiskOnlyUpdatesTheNote) {
+  const auto first = planImport({}, {{QStringLiteral("S.md"), QStringLiteral("v1")}}, counterIds(), {});
+  const auto again = planImport({first.at(0).note}, {{QStringLiteral("S.md"), QStringLiteral("v2")}}, counterIds(), {});
+  ASSERT_EQ(again.size(), 1);
+  EXPECT_EQ(again.at(0).action, VaultAction::Update);
+  EXPECT_EQ(again.at(0).note.body, QStringLiteral("v2"));
+}
+
+TEST(MdVaultPlan, ANoteEditedInHeapIsNotOverwrittenByAnUnchangedFile) {
+  auto first = planImport({}, {{QStringLiteral("S.md"), QStringLiteral("v1")}}, counterIds(), {});
+  Note edited = first.at(0).note;
+  edited.body = QStringLiteral("edited in heap");
+  const auto again = planImport({edited}, {{QStringLiteral("S.md"), QStringLiteral("v1")}}, counterIds(), {});
+  EXPECT_EQ(again.at(0).action, VaultAction::KeepLocal);
+  EXPECT_EQ(again.at(0).note.body, QStringLiteral("edited in heap"));
+}
+
+TEST(MdVaultPlan, EditedOnBothSidesKeepsBoth) {
+  auto first = planImport({}, {{QStringLiteral("S.md"), QStringLiteral("v1")}}, counterIds(), {});
+  Note edited = first.at(0).note;
+  edited.body = QStringLiteral("heap side");
+  const auto again =
+      planImport({edited}, {{QStringLiteral("S.md"), QStringLiteral("disk side")}}, counterIds(), QStringLiteral(" (from disk)"));
+  ASSERT_EQ(again.at(0).action, VaultAction::Conflict);
+  EXPECT_EQ(again.at(0).note.body, QStringLiteral("heap side"));
+  EXPECT_EQ(again.at(0).copy.body, QStringLiteral("disk side"));
+  EXPECT_EQ(again.at(0).copy.title, QStringLiteral("S (from disk)"));
+  EXPECT_NE(again.at(0).copy.id, again.at(0).note.id);
+
+  // The same file a third time is not another conflict: heap has seen it.
+  const auto third =
+      planImport({again.at(0).note, again.at(0).copy}, {{QStringLiteral("S.md"), QStringLiteral("disk side")}}, counterIds(), {});
+  EXPECT_EQ(third.at(0).action, VaultAction::KeepLocal);
+}
+
+// A note that predates vault bookkeeping has no baseline: a differing file
+// is a conflict, never a silent overwrite.
+TEST(MdVaultPlan, ALegacyNoteWithoutABaselineIsNeverOverwritten) {
+  const Note legacy = note(QStringLiteral("Standup"), {}, QStringLiteral("mine"));
+  const auto plan =
+      planImport({legacy}, {{QStringLiteral("Standup.md"), QStringLiteral("theirs")}}, counterIds(), QStringLiteral(" (from disk)"));
+  ASSERT_EQ(plan.size(), 1);
+  EXPECT_EQ(plan.at(0).action, VaultAction::Conflict);
+  EXPECT_EQ(plan.at(0).note.body, QStringLiteral("mine"));
+}

@@ -152,12 +152,39 @@ TestCase {
 
         const id = note("late probe");
 
-        compare(titlesOf(pane).length, before + 1);
+        // Coalesced into one rebuild per event-loop turn (see rebuildNow).
+        tryVerify(function () { return titlesOf(pane).length === before + 1; });
 
         AppController.deleteNote(id);
         tc.seeded.splice(tc.seeded.indexOf(id), 1);
 
-        compare(titlesOf(pane).length, before);
+        tryVerify(function () { return titlesOf(pane).length === before; });
+    }
+
+    // Audit KNOW-17: every debounced save of the open note rebuilt the list
+    // and threw the reader back to the top. A save that changes nothing the
+    // list shows must leave the rows — and the scroll — alone.
+    function test_a_body_save_does_not_rebuild_or_scroll_the_list() {
+        for (let i = 0; i < 40; i++) note("scroll probe " + (i < 10 ? "0" + i : i));
+        const id = note("scroll probe zz", { body: "# scroll probe zz\n\nfirst line" });
+        const pane = makePane();
+        const list = findChild(pane, "note-list");
+        list.contentY = 300;
+        const before = pane.rows;
+        AppController.setNoteBody(id, "# scroll probe zz\n\nfirst line\n\nmore typed below");
+        wait(50);
+        verify(pane.rows === before, "the rows were rebuilt for a change the list does not show");
+        compare(list.contentY, 300);
+    }
+
+    // Creating many notes in a row rebuilds the list once, not once per note.
+    function test_many_inserts_rebuild_once() {
+        const pane = makePane();
+        let rebuilt = 0;
+        pane.rowsChanged.connect(function () { rebuilt++; });
+        for (let i = 0; i < 30; i++) note("bulk probe " + i);
+        tryVerify(function () { return titlesOf(pane).indexOf("bulk probe 29") >= 0; });
+        verify(rebuilt <= 2, "rebuilt " + rebuilt + " times");
     }
 
     function test_activating_a_note_reports_its_id() {

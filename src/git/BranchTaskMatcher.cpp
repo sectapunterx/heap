@@ -208,6 +208,22 @@ QString BranchTaskMatcher::branchFromHeadText(QStringView headFileContents) {
   return QString();
 }
 
+QString BranchTaskMatcher::resolveCommonDir(const QString& gitDir) {
+  if(gitDir.isEmpty()) {
+    return QString();
+  }
+  QFile f(QDir(gitDir).filePath(QStringLiteral("commondir")));
+  if(!f.open(QIODevice::ReadOnly | QIODevice::Text)) {
+    return gitDir;
+  }
+  const QString p = QString::fromUtf8(f.readLine()).trimmed();
+  if(p.isEmpty()) {
+    return gitDir;
+  }
+  const QString resolved = QDir::cleanPath(QFileInfo(p).isAbsolute() ? p : QDir(gitDir).absoluteFilePath(p));
+  return QFileInfo(resolved).isDir() ? resolved : gitDir;
+}
+
 QString BranchTaskMatcher::resolveGitDir(const QString& repoPath) {
   if(repoPath.isEmpty()) {
     return QString();

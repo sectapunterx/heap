@@ -2,6 +2,8 @@
 
 #include <QTextDocument>
 
+#include <algorithm>
+
 namespace heap::md {
 
 MarkdownEditorController::MarkdownEditorController(QObject* parent) : QObject(parent) {
@@ -23,8 +25,89 @@ void MarkdownEditorController::setCursorPosition(int position) {
   if(m_selection.end == position && m_selection.start == position) {
     return;
   }
+  // The editor reports caret and selection as three separate bindings, in an
+  // order nobody controls. With text selected the caret sits at one end of
+  // the selection, and collapsing it here — when the caret binding happened to
+  // arrive last — turned "select, Ctrl+B" into `word****`. A caret at an end
+  // of the current selection is part of it; anywhere else it is a new caret.
+  if(!m_selection.isEmpty() && (position == m_selection.start || position == m_selection.end)) {
+    return;
+  }
   m_selection = Selection::at(position);
   emit selectionChanged();
+}
+
+void MarkdownEditorController::setSelection(int start, int end) {
+  const Selection next{std::min(start, end), std::max(start, end)};
+  if(next.start == m_selection.start && next.end == m_selection.end) {
+    return;
+  }
+  m_selection = next;
+  emit selectionChanged();
+}
+
+bool MarkdownEditorController::claimsShortcut(int key, int modifiers) const {
+  const int mods = modifiers & ~Qt::KeypadModifier;
+  if(mods == Qt::ControlModifier) {
+    return key == Qt::Key_B || key == Qt::Key_I || key == Qt::Key_E || key == Qt::Key_K;
+  }
+  if(mods == static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)) {
+    return key == Qt::Key_X || key == Qt::Key_H || key == Qt::Key_L;
+  }
+  return false;
+}
+
+bool MarkdownEditorController::handleKey(int key, int modifiers) {
+  const int mods = modifiers & ~Qt::KeypadModifier;
+  if(key == Qt::Key_Return || key == Qt::Key_Enter) {
+    if(mods == Qt::ControlModifier) {
+      toggleTask();
+      return true;
+    }
+    return mods == Qt::NoModifier && handleReturn();
+  }
+  if(key == Qt::Key_Tab && mods == Qt::NoModifier) {
+    indent();
+    return true;
+  }
+  if(key == Qt::Key_Backtab || (key == Qt::Key_Tab && mods == Qt::ShiftModifier)) {
+    outdent();
+    return true;
+  }
+  if(mods == Qt::ControlModifier) {
+    switch(key) {
+      case Qt::Key_B:
+        toggleBold();
+        return true;
+      case Qt::Key_I:
+        toggleItalic();
+        return true;
+      case Qt::Key_E:
+        toggleCode();
+        return true;
+      case Qt::Key_K:
+        insertLink();
+        return true;
+      default:
+        break;
+    }
+  }
+  if(mods == static_cast<int>(Qt::ControlModifier | Qt::ShiftModifier)) {
+    switch(key) {
+      case Qt::Key_X:
+        toggleStrikethrough();
+        return true;
+      case Qt::Key_H:
+        toggleHighlight();
+        return true;
+      case Qt::Key_L:
+        cycleHeading();
+        return true;
+      default:
+        break;
+    }
+  }
+  return false;
 }
 
 void MarkdownEditorController::setSelectionStart(int position) {

@@ -37,17 +37,22 @@ Item {
 
     signal finished()
 
-    // Background
-    Rectangle { anchors.fill: parent; color: Brand.bg }
+    // Background — the user's theme, not always heap. dark: a light-theme
+    // user got a dark flash on every launch.
+    Rectangle { anchors.fill: parent; color: Theme.bg }
 
-    // Subtle grid pattern
+    // Subtle grid pattern, in the theme's text colour at a whisper.
     Canvas {
+        id: grid
         anchors.fill: parent
         opacity: 0.6
+        readonly property color ink: Theme.text
+        onInkChanged: requestPaint()
         onPaint: {
             var ctx = getContext("2d");
             ctx.clearRect(0, 0, width, height);
-            ctx.strokeStyle = "rgba(255,255,255,0.025)";
+            ctx.strokeStyle = "rgba(" + Math.round(ink.r * 255) + "," + Math.round(ink.g * 255) + ","
+                              + Math.round(ink.b * 255) + ",0.025)";
             ctx.lineWidth = 1;
             var step = 48;
             for (var x = 0; x <= width; x += step) {
@@ -80,6 +85,7 @@ Item {
         BrandLogo {
             anchors.horizontalCenter: parent.horizontalCenter
             variant: "lockup"
+            theme: Theme.dark ? "dark" : "light"
             height: 92
         }
 
@@ -87,7 +93,7 @@ Item {
         Text {
             anchors.horizontalCenter: parent.horizontalCenter
             text: Brand.tagline
-            color: Brand.brandInk
+            color: Theme.textMuted
             font.family: Brand.fontSans
             font.pixelSize: 14
             font.letterSpacing: 0.2
@@ -101,7 +107,7 @@ Item {
             Rectangle {                          // track
                 anchors.fill: parent
                 radius: 1.5
-                color: Brand.border
+                color: Theme.border
             }
 
             Rectangle {                          // fill
@@ -112,7 +118,7 @@ Item {
                 gradient: Gradient {
                     orientation: Gradient.Horizontal
                     GradientStop { position: 0.0; color: Theme.withAlpha(Theme.accent, 0) }
-                    GradientStop { position: 0.5; color: Brand.accent }
+                    GradientStop { position: 0.5; color: Theme.accent }
                     GradientStop { position: 1.0; color: Theme.withAlpha(Theme.accent, 0) }
                 }
                 Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
@@ -123,8 +129,8 @@ Item {
         Row {
             anchors.horizontalCenter: parent.horizontalCenter
             spacing: 6
-            Text { text: "$"; color: Brand.text4; font.family: Brand.fontMono; font.pixelSize: 11 }
-            Text { text: root.status; color: Brand.text3; font.family: Brand.fontMono; font.pixelSize: 11 }
+            Text { text: "$"; color: Theme.textDim; font.family: Brand.fontMono; font.pixelSize: 11 }
+            Text { text: root.status; color: Theme.textMuted; font.family: Brand.fontMono; font.pixelSize: 11 }
         }
     }
 
@@ -133,7 +139,7 @@ Item {
         anchors.left: parent.left; anchors.bottom: parent.bottom
         anchors.margins: 32
         text: root.buildInfo.toUpperCase()
-        color: Brand.text4
+        color: Theme.textDim
         font.family: Brand.fontMono
         font.pixelSize: 10
         font.letterSpacing: 1
@@ -142,7 +148,7 @@ Item {
         anchors.right: parent.right; anchors.bottom: parent.bottom
         anchors.margins: 32
         text: root.channel.toUpperCase()
-        color: Brand.text4
+        color: Theme.textDim
         font.family: Brand.fontMono
         font.pixelSize: 10
         font.letterSpacing: 1

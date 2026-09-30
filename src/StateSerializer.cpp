@@ -2,10 +2,12 @@
 #include "StateSerializer.h"
 
 #include <QColor>
+#include <QHash>
 #include <QJsonDocument>
 #include <QJsonValue>
 #include <QTime>
 
+#include <algorithm>
 #include <functional>
 
 namespace heap::state {
@@ -20,15 +22,15 @@ static_assert(heap::meta::fieldCount<TaskLink>() == 2,
               "TaskLink gained or lost a field. Update linksToJson/linksFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<Task>() == 24,
+static_assert(heap::meta::fieldCount<Task>() == 25,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 16,
+static_assert(heap::meta::fieldCount<CalEvent>() == 21,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -145,7 +147,35 @@ QJsonObject externalMetaToJson(const ExternalMeta& m) {
   if(m.goneUpstream) {
     o["goneUpstream"] = true;
   }
+  if(!m.scope.isEmpty()) {
+    o["remoteScope"] = m.scope;
+  }
+  if(m.outOfScope) {
+    o["outOfScope"] = true;
+  }
+  if(!m.priority.isEmpty()) {
+    o["remotePriority"] = m.priority;
+  }
+  if(!m.labels.isEmpty()) {
+    o["remoteLabels"] = QJsonArray::fromStringList(m.labels);
+  }
+  if(!m.conflicts.isEmpty()) {
+    o["conflicts"] = QJsonArray::fromStringList(m.conflicts);
+  }
+  if(m.pushQueued) {
+    o["pushQueued"] = true;
+  }
   return o;
+}
+
+QStringList stringsFromJson(const QJsonValue& v) {
+  QStringList out;
+  for(const QJsonValue& s : v.toArray()) {
+    if(s.isString()) {
+      out.append(s.toString());
+    }
+  }
+  return out;
 }
 
 ExternalMeta externalMetaFromJson(const QJsonObject& o) {
@@ -165,6 +195,12 @@ ExternalMeta externalMetaFromJson(const QJsonObject& o) {
   m.column = o["remoteColumn"].toString();
   m.unsyncedStatus = o["unsyncedStatus"].toString();
   m.goneUpstream = o["goneUpstream"].toBool(false);
+  m.scope = o["remoteScope"].toString();
+  m.outOfScope = o["outOfScope"].toBool(false);
+  m.priority = o["remotePriority"].toString();
+  m.labels = stringsFromJson(o["remoteLabels"]);
+  m.conflicts = stringsFromJson(o["conflicts"]);
+  m.pushQueued = o["pushQueued"].toBool(false);
   return m;
 }
 
@@ -188,8 +224,11 @@ QJsonObject taskToJson(const Task& t) {
   if(t.dueAt.isValid()) {
     o["dueAt"] = dtToStr(t.dueAt);
   }
-  if(t.hasTime) {
-    o["hasTime"] = true;
+  if(t.scheduledHasTime) {
+    o["scheduledHasTime"] = true;
+  }
+  if(t.dueHasTime) {
+    o["dueHasTime"] = true;
   }
   // Time tracking (HEAP-78) — omitted when zero/stopped so untimed task JSON
   // stays byte-identical.
@@ -255,7 +294,13 @@ Task taskFromJson(const QJsonObject& o) {
   t.archived = o["archived"].toBool(false);
   t.scheduledAt = dtFromStr(o["scheduledAt"].toString());
   t.dueAt = dtFromStr(o["dueAt"].toString());
-  t.hasTime = o["hasTime"].toBool(false);
+  if(o.contains("dueHasTime") || o.contains("scheduledHasTime")) {
+    t.scheduledHasTime = t.scheduledAt.isValid() && o["scheduledHasTime"].toBool(false);
+    t.dueHasTime = t.dueAt.isValid() && o["dueHasTime"].toBool(false);
+  } else {
+    // A profile exported by a schema ≤ 9 build: imports carry no ladder.
+    applyLegacyHasTime(t, o["hasTime"].toBool(false));
+  }
   // Legacy bare-date deadline (schema ≤ 3, and any profile exported by an older
   // build). state.json itself is migrated by migrateState() before it reaches
   // here; this covers imports, which carry no schema ladder.
@@ -264,7 +309,8 @@ Task taskFromJson(const QJsonObject& o) {
     if(legacy.isValid()) {
       t.scheduledAt = QDateTime(legacy, QTime(0, 0));
       t.dueAt = t.scheduledAt;
-      t.hasTime = false;
+      t.scheduledHasTime = false;
+      t.dueHasTime = false;
     }
   }
   t.trackedSeconds = o["trackedSeconds"].toInt(0);
@@ -347,6 +393,13 @@ QJsonObject eventToJson(const CalEvent& e) {
   o["exdates"] = datesToJson(e.exdates);
   o["masterId"] = e.masterId;
   o["originalDate"] = e.originalDate.isValid() ? e.originalDate.toString(Qt::ISODate) : QString();
+  // Optional since 0.5.3 (audit-time); an older file lacks them and reads the
+  // defaults — floating local time, no notes, the settings' reminder lead.
+  o["tz"] = e.tz;
+  o["location"] = e.location;
+  o["notes"] = e.notes;
+  o["url"] = e.url;
+  o["reminderMinutes"] = e.reminderMinutes;
   return o;
 }
 
@@ -368,6 +421,11 @@ CalEvent eventFromJson(const QJsonObject& o, const QString& fallbackProfileId) {
   e.exdates = datesFromJson(o["exdates"].toArray());
   e.masterId = o["masterId"].toString();
   e.originalDate = QDate::fromString(o["originalDate"].toString(), Qt::ISODate);
+  e.tz = o["tz"].toString();
+  e.location = o["location"].toString();
+  e.notes = o["notes"].toString();
+  e.url = o["url"].toString();
+  e.reminderMinutes = o["reminderMinutes"].toInt(CalEvent::kReminderDefault);
   return e;
 }
 
@@ -399,6 +457,17 @@ QJsonObject noteToJson(const Note& n) {
   o["pinned"] = n.pinned;
   o["created"] = dtToStr(n.created);
   o["updated"] = dtToStr(n.updated);
+  // Optional, written only when set: a note that never met a vault folder
+  // keeps the shape it always had.
+  if(!n.vaultPath.isEmpty()) {
+    o["vaultPath"] = n.vaultPath;
+  }
+  if(!n.vaultHash.isEmpty()) {
+    o["vaultHash"] = n.vaultHash;
+  }
+  if(!n.frontmatter.isEmpty()) {
+    o["frontmatter"] = n.frontmatter;
+  }
   return o;
 }
 
@@ -411,6 +480,9 @@ Note noteFromJson(const QJsonObject& o) {
   n.pinned = o["pinned"].toBool();
   n.created = dtFromStr(o["created"].toString());
   n.updated = dtFromStr(o["updated"].toString());
+  n.vaultPath = o["vaultPath"].toString();
+  n.vaultHash = o["vaultHash"].toString();
+  n.frontmatter = o["frontmatter"].toString();
   return n;
 }
 
@@ -545,7 +617,8 @@ QVariantList statusesFromJson(const QJsonArray& a) {
 // ───────────────── Profile ─────────────────
 
 QJsonObject profileToJson(const Profile& p) {
-  QJsonObject o;
+  // Unknown keys first, so every key this build owns overwrites a stale copy.
+  QJsonObject o = p.extra;
   o["id"] = p.id;
   o["name"] = p.name;
   o["color"] = p.color;
@@ -609,6 +682,27 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
   }
+  // Whatever else the object carries passes through a save (PLAT-26). A key
+  // added to profileToJson must be listed here too, or a stale copy of it
+  // would come back from `extra` when the new code omits it.
+  static const QStringList kKnown = {QStringLiteral("id"),
+                                     QStringLiteral("name"),
+                                     QStringLiteral("color"),
+                                     QStringLiteral("createdAt"),
+                                     QStringLiteral("tasks"),
+                                     QStringLiteral("people"),
+                                     QStringLiteral("statuses"),
+                                     QStringLiteral("docs"),
+                                     QStringLiteral("notes"),
+                                     QStringLiteral("activeNoteId"),
+                                     QStringLiteral("docPages"),
+                                     QStringLiteral("activeDocPageId"),
+                                     QStringLiteral("events")};
+  for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
+    if(!kKnown.contains(it.key())) {
+      p.extra.insert(it.key(), it.value());
+    }
+  }
   return p;
 }
 
@@ -632,7 +726,6 @@ void migrateTaskV3ToV4(QJsonObject& task) {
     const QString at = dtToStr(QDateTime(legacy, QTime(0, 0)));
     task["scheduledAt"] = at;
     task["dueAt"] = at;
-    task["hasTime"] = false;
   }
 }
 
@@ -666,6 +759,68 @@ QJsonArray migratedTaskArrayV4ToV5(const QJsonArray& tasks) {
     QJsonObject t = v.toObject();
     migrateTaskV4ToV5(t, index++);
     out.append(t);
+  }
+  return out;
+}
+
+// v9→v10, part one: the shared `hasTime` becomes one flag per datetime. The
+// rule lives in applyLegacyHasTime(), which imports use as well.
+void migrateTaskV9ToV10(QJsonObject& task) {
+  if(!task.contains("hasTime")) {
+    return;
+  }
+  const bool legacy = task["hasTime"].toBool(false);
+  task.remove("hasTime");
+  Task t;
+  t.scheduledAt = dtFromStr(task["scheduledAt"].toString());
+  t.dueAt = dtFromStr(task["dueAt"].toString());
+  applyLegacyHasTime(t, legacy);
+  if(t.scheduledHasTime) {
+    task["scheduledHasTime"] = true;
+  }
+  if(t.dueHasTime) {
+    task["dueHasTime"] = true;
+  }
+}
+
+// v9→v10, part two: ranks. The v4→v5 rung numbered every task, but the demo
+// seed, every synced issue and every task saved through the editor still came
+// out at rank 0, where ties fall back to the id and a drop "to the top" has no
+// room above 0. Each column that holds a tie is renumbered in the order the
+// board showed it (rank, then id), so nothing visibly moves.
+QJsonArray migratedTaskArrayV9ToV10(const QJsonArray& tasks) {
+  QVector<QJsonObject> objs;
+  objs.reserve(tasks.size());
+  for(const QJsonValue& v : tasks) {
+    QJsonObject t = v.toObject();
+    migrateTaskV9ToV10(t);
+    objs.append(t);
+  }
+  QHash<QString, QVector<int>> byStatus;
+  for(int i = 0; i < objs.size(); ++i) {
+    byStatus[objs[i]["status"].toString()].append(i);
+  }
+  for(auto it = byStatus.begin(); it != byStatus.end(); ++it) {
+    QVector<int>& rows = it.value();
+    std::sort(rows.begin(), rows.end(), [&](int a, int b) {
+      const double ra = objs[a]["rank"].toDouble(0.0);
+      const double rb = objs[b]["rank"].toDouble(0.0);
+      return ra != rb ? ra < rb : objs[a]["id"].toString() < objs[b]["id"].toString();
+    });
+    bool tie = false;
+    for(int k = 1; k < rows.size() && !tie; ++k) {
+      tie = objs[rows[k - 1]]["rank"].toDouble(0.0) == objs[rows[k]]["rank"].toDouble(0.0);
+    }
+    if(!tie) {
+      continue;
+    }
+    for(int k = 0; k < rows.size(); ++k) {
+      objs[rows[k]]["rank"] = (k + 1) * kRankStep;
+    }
+  }
+  QJsonArray out;
+  for(const QJsonObject& o : objs) {
+    out.append(o);
   }
   return out;
 }
@@ -763,6 +918,11 @@ bool migrateState(QJsonObject& root, int fromVersion) {
   }
   // v8 -> v9 added Profile::docPages. No rung: a v8 profile simply has none,
   // and its `docs` catalog is untouched and still read the same way.
+  //
+  // v9 -> v10 split Task.hasTime per datetime and spread tied ranks.
+  if(fromVersion < 10) {
+    forEachTaskArray(root, migratedTaskArrayV9ToV10);
+  }
 
   root["schemaVersion"] = kSchemaVersion;
   return true;

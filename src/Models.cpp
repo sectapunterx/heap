@@ -43,6 +43,15 @@ QVariantMap ticketToVariant(const Task& t) {
       {QStringLiteral("updatedAt"), t.externalMeta.updatedAt},
       {QStringLiteral("unsynced"), !t.externalMeta.unsyncedStatus.isEmpty()},
       {QStringLiteral("gone"), t.externalMeta.goneUpstream},
+      {QStringLiteral("outOfScope"), t.externalMeta.outOfScope},
+      {QStringLiteral("queued"), t.externalMeta.pushQueued},
+      // A field both sides changed: the editor shows the tracker's version
+      // next to the local one and lets the user pick.
+      {QStringLiteral("conflict"), !t.externalMeta.conflicts.isEmpty()},
+      {QStringLiteral("conflicts"), t.externalMeta.conflicts},
+      {QStringLiteral("remoteTitle"), t.externalMeta.title},
+      {QStringLiteral("remoteBody"), t.externalMeta.body},
+      {QStringLiteral("remotePriority"), t.externalMeta.priority},
   };
 }
 
@@ -72,10 +81,12 @@ QVariantMap checklistOf(const Task& t) {
   return {{QStringLiteral("done"), done}, {QStringLiteral("total"), total}};
 }
 
+}  // namespace
+
 // One lowercase haystack per task, so the five views that filter on a search
 // box each read one role instead of concatenating four themselves — and so a
 // ticket is findable by its key, its labels and its owner, not just its title.
-QString searchTextOf(const Task& t) {
+QString TaskModel::searchTextOf(const Task& t) {
   QStringList parts{t.title, t.id, t.desc, externalKeyOf(t), t.assignee, t.externalMeta.project, t.externalMeta.milestone};
   for(const Label& l : t.labels) {
     parts.append(l.id);
@@ -83,7 +94,22 @@ QString searchTextOf(const Task& t) {
   return parts.join(QChar(' ')).toLower();
 }
 
-}  // namespace
+const QString& TaskModel::searchTextAt(int row) const {
+  // Built on first read and kept until the row's text can have changed
+  // (upsert, reset). Every board column is a proxy over the whole model and
+  // re-tests every row on each keystroke; rebuilding the haystack there —
+  // title, description, labels, joined and lowercased — cost ~250 ms per
+  // keystroke at 3k tasks. The status/archive/timer setters leave it alone:
+  // none of the fields it is made of move there.
+  if(m_searchCache.size() != m_items.size()) {
+    m_searchCache = QVector<QString>(m_items.size());
+  }
+  QString& hay = m_searchCache[row];
+  if(hay.isNull()) {
+    hay = searchTextOf(m_items[row]);
+  }
+  return hay;
+}
 
 QVariantList labelsToVariant(const QVector<Label>& labels) {
   QVariantList out;
@@ -153,6 +179,8 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {RankRole, "rank"},
       {BlocksRole, "blocks"},
       {ChecklistRole, "checklist"},
+      {ScheduledHasTimeRole, "scheduledHasTime"},
+      {DueHasTimeRole, "dueHasTime"},
   };
 }
 
@@ -218,7 +246,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case DueAtRole:
       return t.dueAt;
     case HasTimeRole:
-      return t.hasTime;
+    case DueHasTimeRole:
+      return t.dueHasTime;
+    case ScheduledHasTimeRole:
+      return t.scheduledHasTime;
     case EstimateMinutesRole:
       return t.estimateMinutes;
     case SomedayRole:
@@ -238,7 +269,7 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case TicketRole:
       return ticketToVariant(t);
     case SearchTextRole:
-      return searchTextOf(t);
+      return searchTextAt(idx.row());
     case RankRole:
       return t.rank;
     case ChecklistRole:
@@ -259,6 +290,7 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
 void TaskModel::reset(QVector<Task> items) {
   beginResetModel();
   m_items = std::move(items);
+  m_searchCache = QVector<QString>(m_items.size());
   m_git.clear();
   m_indexDirty = true;
   endResetModel();
@@ -340,6 +372,23 @@ void TaskModel::stampStatusChange(const QString& id) {
   emit dataChanged(mi, mi, {StatusChangedAtRole});
 }
 
+void TaskModel::setRanks(const QHash<QString, double>& ranks) {
+  int first = -1;
+  int last = -1;
+  for(auto it = ranks.constBegin(); it != ranks.constEnd(); ++it) {
+    const int row = indexOfId(it.key());
+    if(row < 0 || m_items[row].rank == it.value()) {
+      continue;
+    }
+    m_items[row].rank = it.value();
+    first = first < 0 ? row : qMin(first, row);
+    last = qMax(last, row);
+  }
+  if(first >= 0) {
+    emit dataChanged(index(first, 0), index(last, 0), {RankRole});
+  }
+}
+
 void TaskModel::startTiming(const QString& id) {
   const int row = indexOfId(id);
   if(row < 0 || m_items[row].timerStartedAt.isValid()) {
@@ -408,11 +457,17 @@ void TaskModel::upsert(const Task& t) {
   const int row = indexOfId(t.id);
   if(row >= 0) {
     m_items[row] = t;
+    if(row < m_searchCache.size()) {
+      m_searchCache[row] = QString();
+    }
     const QModelIndex mi = index(row, 0);
     emit dataChanged(mi, mi);
   } else {
     beginInsertRows({}, m_items.size(), m_items.size());
     m_items.push_back(t);
+    if(m_searchCache.size() == m_items.size() - 1) {
+      m_searchCache.push_back(QString());
+    }
     m_indexDirty = true;
     endInsertRows();
   }
@@ -422,6 +477,9 @@ void TaskModel::insertAt(int row, const Task& t) {
   row = qBound(0, row, m_items.size());
   beginInsertRows({}, row, row);
   m_items.insert(row, t);
+  if(row <= m_searchCache.size() && m_searchCache.size() == m_items.size() - 1) {
+    m_searchCache.insert(row, QString());
+  }
   m_indexDirty = true;  // every row at or after this one shifted
   endInsertRows();
 }
@@ -433,6 +491,9 @@ void TaskModel::removeById(const QString& id) {
   }
   beginRemoveRows({}, row, row);
   m_items.removeAt(row);
+  if(row < m_searchCache.size() && m_searchCache.size() == m_items.size() + 1) {
+    m_searchCache.removeAt(row);
+  }
   m_indexDirty = true;  // every row after this one shifted
   endRemoveRows();
 }
@@ -530,23 +591,70 @@ int DocPageModel::roleOf(const QString& name) const {
 
 namespace {
 
-// The first line that is not the page's own title and not markdown
-// punctuation, so a tree row says something the heading does not.
-QString pageExcerpt(const DocPage& p) {
-  for(const QString& raw : p.body.split(QLatin1Char('\n'))) {
-    QString line = raw.trimmed();
-    if(line.isEmpty()) {
+// One line of markdown as a reader would say it: no list marker or checkbox,
+// no emphasis markers, a link as its label. A list row showed
+// "- [ ] **Ship** the [build](http://…)" verbatim.
+QString plainLine(QString line) {
+  static const QRegularExpression marker(QStringLiteral(R"(^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)"));
+  static const QRegularExpression labelledWiki(QStringLiteral(R"(\[\[[^\]|]*\|([^\]]+)\]\])"));
+  static const QRegularExpression wiki(QStringLiteral(R"(\[\[([^\]]*)\]\])"));
+  static const QRegularExpression link(QStringLiteral(R"(!?\[([^\]]*)\]\([^)]*\))"));
+  static const QRegularExpression emphasis(QStringLiteral(R"((\*\*|__|~~|==|`|\*|_)(?=\S)(.+?)(?<=\S)\1)"));
+  line.remove(marker);
+  line.replace(labelledWiki, QStringLiteral("\\1"));
+  line.replace(wiki, QStringLiteral("\\1"));
+  line.replace(link, QStringLiteral("\\1"));
+  for(int pass = 0; pass < 3 && line.contains(emphasis); ++pass) {
+    line.replace(emphasis, QStringLiteral("\\2"));
+  }
+  return line.trimmed();
+}
+
+// The first line of `body` that is not `title` and not markdown punctuation,
+// so a list or tree row says something the heading does not. Walks the text
+// line by line instead of splitting it: splitting a 3 MB note into a list of
+// lines for one excerpt, on every save, was part of what made it slow.
+QString excerptOf(const QString& body, const QString& title) {
+  qsizetype start = 0;
+  bool inFence = false;
+  bool inFrontmatter = body.startsWith(QStringLiteral("---\n")) || body.startsWith(QStringLiteral("---\r\n"));
+  bool first = true;
+  while(start <= body.size()) {
+    qsizetype end = body.indexOf(QLatin1Char('\n'), start);
+    if(end < 0) {
+      end = body.size();
+    }
+    QString line = body.mid(start, end - start).trimmed();
+    start = end + 1;
+    if(inFrontmatter) {
+      if(!first && line == QStringLiteral("---")) {
+        inFrontmatter = false;
+      }
+      first = false;
+      continue;
+    }
+    first = false;
+    if(line.startsWith(QStringLiteral("```")) || line.startsWith(QStringLiteral("~~~"))) {
+      inFence = !inFence;
+      continue;
+    }
+    if(inFence || line.isEmpty() || line == QStringLiteral("---")) {
       continue;
     }
     while(line.startsWith(QLatin1Char('#')) || line.startsWith(QLatin1Char('>'))) {
       line = line.mid(1).trimmed();
     }
-    if(line.isEmpty() || line == p.title) {
+    line = plainLine(line);
+    if(line.isEmpty() || line == title) {
       continue;
     }
     return line.left(120);
   }
   return {};
+}
+
+QString pageExcerpt(const DocPage& p) {
+  return excerptOf(p.body, p.title);
 }
 
 }  // namespace
@@ -651,21 +759,7 @@ namespace {
 // punctuation, so a list row says something about the note rather than
 // repeating its heading back.
 QString noteExcerpt(const Note& n) {
-  const QStringList lines = n.body.split(QLatin1Char('\n'));
-  for(const QString& raw : lines) {
-    QString line = raw.trimmed();
-    if(line.isEmpty()) {
-      continue;
-    }
-    while(line.startsWith(QLatin1Char('#')) || line.startsWith(QLatin1Char('>'))) {
-      line = line.mid(1).trimmed();
-    }
-    if(line.isEmpty() || line == n.title) {
-      continue;
-    }
-    return line.left(120);
-  }
-  return {};
+  return excerptOf(n.body, n.title);
 }
 
 }  // namespace

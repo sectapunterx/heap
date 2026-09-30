@@ -105,9 +105,13 @@ class GitWatcher : public QObject {
   void fetchPrAsync(const QString& repoPath, const QString& branch, bool emitOneShot);
 
   static QString cacheKey(const QString& repo, const QString& branch);
-  static QString upstreamForBranch(const QString& gitDir, const QString& branch);
   static QString readHeadText(const QString& gitDir);
-  static QString readShaForBranch(const QString& gitDir, const QString& branch);
+
+ public:
+  // Read from the COMMON git dir (see BranchTaskMatcher::resolveCommonDir):
+  // a linked worktree keeps no refs or config of its own.
+  static QString upstreamForBranch(const QString& commonGitDir, const QString& branch);
+  static QString readShaForBranch(const QString& commonGitDir, const QString& branch);
 };
 
 }  // namespace heap::git

@@ -7,6 +7,8 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 
+#include <mutex>
+
 namespace heap::recovery {
 
 QString recoveryLogPath() {
@@ -19,6 +21,8 @@ void append(const QString& kind, const QVariantMap& details) {
   record.insert(QStringLiteral("kind"), kind);
   record.insert(QStringLiteral("version"), QCoreApplication::applicationVersion());
 
+  static std::mutex appendMutex;
+  const std::lock_guard lock(appendMutex);
   QFile f(recoveryLogPath());
   if(!f.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
     return;

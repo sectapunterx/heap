@@ -14,6 +14,7 @@
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSignalSpy>
@@ -176,6 +177,9 @@ void writeLegacyStateWithShortcuts(const QJsonObject& entries) {
   QJsonObject root;
   root["schemaVersion"] = heap::state::kSchemaVersion;
   root["settings"] = settings;
+  // A file with no profile is not a state file (PLAT-7): it would be set
+  // aside as damaged, shortcuts and all.
+  root["profiles"] = QJsonArray{QJsonObject{{"id", "default"}, {"name", "Example"}}};
 
   QFile f(appDataDir() + "/state.json");
   ASSERT_TRUE(f.open(QIODevice::WriteOnly));

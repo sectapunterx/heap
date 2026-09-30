@@ -26,11 +26,16 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // The column this proxy belongs to. Empty shows every status.
   Q_PROPERTY(QString status READ status WRITE setStatus NOTIFY filterChanged)
   Q_PROPERTY(bool showArchived READ showArchived WRITE setShowArchived NOTIFY filterChanged)
+  // Only archived tasks — the archive view's feed. Implies showArchived.
+  Q_PROPERTY(bool archivedOnly READ archivedOnly WRITE setArchivedOnly NOTIFY filterChanged)
   // What the user typed in the search box. Clauses it recognises
   // (`status:blocked priority:P0 deadline:<friday tag:infra mention:@ada`) are
   // applied as filters; whatever is left over is matched against the model's
   // prebuilt lowercase haystack, so a query and a search compose.
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY filterChanged)
+  // The board's columns ([{id, name}]), so `status:"Code Review"` means the
+  // column the user sees by that name, not only an internal id.
+  Q_PROPERTY(QVariantList statuses READ statuses WRITE setStatuses NOTIFY filterChanged)
   // True when the text contained at least one clause — the search field uses
   // it to show that it is filtering structurally, not just by substring.
   Q_PROPERTY(bool isQuery READ isQuery NOTIFY filterChanged)
@@ -45,6 +50,10 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // whatever the last sort left behind.
   //   manual | priority | due | updated | title
   Q_PROPERTY(QString sortMode READ sortMode WRITE setSortMode NOTIFY sortModeChanged)
+  // The day `deadline:today` and friends are relative to. Bound to
+  // AppController.today, so the board agrees with every other view and moves
+  // at midnight; unset means the system date.
+  Q_PROPERTY(QDate today READ today WRITE setToday NOTIFY filterChanged)
 
  public:
   explicit TaskFilterProxy(QObject* parent = nullptr);
@@ -61,11 +70,29 @@ class TaskFilterProxy : public QSortFilterProxyModel {
 
   void setShowArchived(bool v);
 
+  bool archivedOnly() const {
+    return m_archivedOnly;
+  }
+
+  void setArchivedOnly(bool v);
+
   QString searchText() const {
     return m_rawSearch;
   }
 
   void setSearchText(const QString& v);
+
+  QVariantList statuses() const {
+    return m_statuses;
+  }
+
+  void setStatuses(const QVariantList& v);
+
+  QDate today() const {
+    return m_today;
+  }
+
+  void setToday(const QDate& d);
 
   bool isQuery() const {
     return m_query.isQuery();
@@ -105,9 +132,16 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
 
  private:
+  // invalidateFilter() with the per-range countChanged() held back.
+  void refilter();
+
+  bool m_refiltering = false;
   QString m_status;
   bool m_showArchived = false;
+  bool m_archivedOnly = false;
+  QVariantList m_statuses;
   QString m_rawSearch;             // exactly what the user typed
+  QDate m_today;                   // invalid = QDate::currentDate()
   QString m_searchText;            // the free-text remainder, lowercased
   heap::query::TaskQuery m_query;  // compiled once per keystroke
   QStringList m_priorities;
