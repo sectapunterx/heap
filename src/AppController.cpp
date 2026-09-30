@@ -320,6 +320,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"person.added", {"Added: %1", "Добавлен: %1"}},
       {"person.deleted", {"Removed: %1", "Удалён: %1"}},
       {"person.restored", {"Restored: %1", "Восстановлён: %1"}},
+      {"person.idTaken", {"%1 is already taken by %2 — pick another id", "%1 уже занят: %2 — выберите другой id"}},
+      {"person.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+      {"person.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
       {"status.added", {"Column added: %1", "Колонка добавлена: %1"}},
       {"status.deleted", {"Column removed: %1", "Удалена колонка: %1"}},
       {"status.restored", {"Column restored: %1", "Восстановлена колонка: %1"}},
@@ -3999,7 +4002,7 @@ QVariantMap AppController::personById(const QString& id) const {
   return m;
 }
 
-void AppController::savePerson(const QVariantMap& draft) {
+bool AppController::savePerson(const QVariantMap& draft) {
   Person p;
   p.id = draft.value("id").toString();
   p.name = draft.value("name").toString();
@@ -4009,7 +4012,7 @@ void AppController::savePerson(const QVariantMap& draft) {
     if(!draft.value("_isNew").toBool()) {
       emit toast(tr_("person.nameRequired"));
     }
-    return;
+    return false;
   }
   p.role = draft.value("role").toString();
   p.question = draft.value("question").toString();
@@ -4034,6 +4037,16 @@ void AppController::savePerson(const QVariantMap& draft) {
     p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
   }
   const bool isNew = draft.value("_isNew").toBool();
+  // upsert() on an id someone else holds replaces that person whole — name,
+  // role, question — with no undo (SHELL-24). A new person, or an edit that
+  // moves to another id, must pick a free one.
+  const QString originalId = draft.value("_originalId").toString();
+  const int holder = m_people.indexOfId(p.id);
+  if(holder >= 0 && (isNew || (!originalId.isEmpty() && originalId != p.id))) {
+    emit toast(tr_("person.idTaken").arg(p.id, m_people.items().at(holder).name), QStringLiteral("warning"));
+    return false;
+  }
+  const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
   m_people.upsert(p);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
@@ -4046,9 +4059,10 @@ void AppController::savePerson(const QVariantMap& draft) {
     linkDocsContact(draft.value("_contactKey").toString(), p.id);
   }
   if(isNew) {
-    emit toast(tr_("person.added").arg(p.name));
+    emit undoableToast(tr_("person.added").arg(p.name), 5);
   }
   scheduleSave();
+  return true;
 }
 
 QString AppController::docsContactKey(const QJsonObject& contact) {

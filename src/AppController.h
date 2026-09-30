@@ -850,7 +850,7 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
   // The person an "@handle" in a note names, or empty.
   Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
-  Q_INVOKABLE void savePerson(const QVariantMap& draft);
+  Q_INVOKABLE bool savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 
   // ---- People picker ----
