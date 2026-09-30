@@ -200,6 +200,20 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
+    # ── audit-plat: begin ──
+    # ── audit-plat: end ──
+    # ── audit-tasks: begin ──
+    # ── audit-tasks: end ──
+    # ── audit-time: begin ──
+    # ── audit-time: end ──
+    # ── audit-know: begin ──
+    # ── audit-know: end ──
+    # ── audit-ux: begin ──
+    # ── audit-ux: end ──
+    # ── audit-int: begin ──
+    # ── audit-int: end ──
+    # ── audit-perf: begin ──
+    # ── audit-perf: end ──
     src/markdown/MdDocument.cpp
     src/markdown/MarkdownEditorController.cpp
     src/markdown/MdHighlighter.cpp
@@ -236,6 +250,20 @@ qt_add_qml_module(heap_core
         qml/Main.qml
         qml/Theme.qml
         qml/ThemePresets.js
+        # ── audit-plat: begin ──
+        # ── audit-plat: end ──
+        # ── audit-tasks: begin ──
+        # ── audit-tasks: end ──
+        # ── audit-time: begin ──
+        # ── audit-time: end ──
+        # ── audit-know: begin ──
+        # ── audit-know: end ──
+        # ── audit-ux: begin ──
+        # ── audit-ux: end ──
+        # ── audit-int: begin ──
+        # ── audit-int: end ──
+        # ── audit-perf: begin ──
+        # ── audit-perf: end ──
         qml/I18n.qml
         qml/TopBar.qml
         qml/SideRail.qml

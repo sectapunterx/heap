@@ -297,6 +297,21 @@ heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
 # ─── Docs as a tree of pages ───
 heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 
+# ── audit-plat: begin ──
+# ── audit-plat: end ──
+# ── audit-tasks: begin ──
+# ── audit-tasks: end ──
+# ── audit-time: begin ──
+# ── audit-time: end ──
+# ── audit-know: begin ──
+# ── audit-know: end ──
+# ── audit-ux: begin ──
+# ── audit-ux: end ──
+# ── audit-int: begin ──
+# ── audit-int: end ──
+# ── audit-perf: begin ──
+# ── audit-perf: end ──
+
 # ─── Regressions from the 0.5.0 end-to-end audit ───
 heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
 

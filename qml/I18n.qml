@@ -1000,6 +1000,21 @@ QtObject {
             "update.available": "Update available: %1",
             "update.download": "Download",
 
+            // ── audit-plat: begin ──
+            // ── audit-plat: end ──
+            // ── audit-tasks: begin ──
+            // ── audit-tasks: end ──
+            // ── audit-time: begin ──
+            // ── audit-time: end ──
+            // ── audit-know: begin ──
+            // ── audit-know: end ──
+            // ── audit-ux: begin ──
+            // ── audit-ux: end ──
+            // ── audit-int: begin ──
+            // ── audit-int: end ──
+            // ── audit-perf: begin ──
+            // ── audit-perf: end ──
+
             // ── Selection action bar ──
             "selection.bar.count": "%1 selected",
             "selection.bar.move": "Move to…",
@@ -1968,6 +1983,21 @@ QtObject {
             "settings.about.autoCheck": "Проверять обновления автоматически",
             "update.available": "Доступно обновление: %1",
             "update.download": "Скачать",
+
+            // ── audit-plat: begin ──
+            // ── audit-plat: end ──
+            // ── audit-tasks: begin ──
+            // ── audit-tasks: end ──
+            // ── audit-time: begin ──
+            // ── audit-time: end ──
+            // ── audit-know: begin ──
+            // ── audit-know: end ──
+            // ── audit-ux: begin ──
+            // ── audit-ux: end ──
+            // ── audit-int: begin ──
+            // ── audit-int: end ──
+            // ── audit-perf: begin ──
+            // ── audit-perf: end ──
 
             // ── Selection action bar ──
             "selection.bar.count": "Выделено: %1",
