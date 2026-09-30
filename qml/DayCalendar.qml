@@ -51,6 +51,57 @@ Item {
     }
     function _allSpans() { return root._spans; }
 
+    // ── Keyboard (audit UX-9) ────────────────────────────────────────
+    // The day panel was mouse-only. Tab lands on it; ←/→ change the day, Home
+    // goes to today, ↑/↓ walk the day's events in time order and Enter opens
+    // the one marked.
+    activeFocusOnTab: true
+    Accessible.role: Accessible.Pane
+    Accessible.name: AppController.humanDate(AppController.selectedDate)
+    property int _kbIndex: -1
+    function _dayEvents() {
+        const d = AppController.selectedDate;
+        const out = [];
+        const all = root._allSpans();
+        for (let i = 0; i < all.length; i++) if (Seg.covers(all[i], d)) out.push(all[i]);
+        out.sort(function (x, y) { return (x.allDay ? -1 : x.start) - (y.allDay ? -1 : y.start); });
+        return out;
+    }
+    function _kbKey(ev) {
+        if (!ev) return "";
+        const od = ev.occurrenceDate && ev.occurrenceDate.getTime ? ev.occurrenceDate.getTime() : 0;
+        return ev.id + "@" + od;
+    }
+    readonly property string _kbEventKey: {
+        if (!root.activeFocus || root._kbIndex < 0) return "";
+        const list = root._dayEvents();
+        return root._kbIndex < list.length ? root._kbKey(list[root._kbIndex]) : "";
+    }
+    on_SpansChanged: root._kbIndex = -1
+    Keys.onPressed: (event) => {
+        const d = AppController.selectedDate;
+        const list = root._dayEvents();
+        if (event.key === Qt.Key_Left || event.key === Qt.Key_Right) {
+            const step = event.key === Qt.Key_Left ? -1 : 1;
+            AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + step);
+        } else if (event.key === Qt.Key_Home) {
+            AppController.selectedDate = AppController.today;
+        } else if (event.key === Qt.Key_Down || event.key === Qt.Key_Up) {
+            if (list.length === 0) return;
+            const step = event.key === Qt.Key_Down ? 1 : -1;
+            root._kbIndex = root._kbIndex < 0 ? (step > 0 ? 0 : list.length - 1)
+                                              : (root._kbIndex + step + list.length) % list.length;
+        } else if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+            if (root._kbIndex < 0 || root._kbIndex >= list.length) return;
+            const ev = list[root._kbIndex];
+            root.eventClicked(ev.id, ev);
+        } else {
+            return;
+        }
+        event.accepted = true;
+    }
+    FocusRing { anchors.margins: 1; radius: Theme.radiusSm; visible: root.activeFocus && root._kbEventKey === "" }
+
     // Reactive event count for the selected day; refreshed on every
     // events-model mutation so the "N events" header stays in sync.
     property int _eventsToday: 0
@@ -499,6 +550,19 @@ Item {
                                 readonly property string masterId: evRect.modelData.masterId || ""
                                 readonly property var occurrenceDate: evRect.modelData.occurrenceDate
                                 readonly property bool repeating: evRect.masterId.length > 0
+
+                                // Marked by the keyboard (↑/↓ on the panel).
+                                Rectangle {
+                                    objectName: "event-kb-ring"
+                                    anchors.fill: parent
+                                    anchors.margins: -2
+                                    radius: Theme.radiusSm + 2
+                                    color: "transparent"
+                                    border.color: Theme.focusRing
+                                    border.width: 2
+                                    visible: root._kbEventKey !== "" && root._kbEventKey === root._kbKey(evRect.modelData)
+                                    z: 50
+                                }
 
                                 // The piece of this event that lands on the
                                 // selected day. An event may now run past

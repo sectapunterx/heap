@@ -343,6 +343,7 @@ Item {
                         spacing: Theme.spSm
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
+                            objectName: "settings-search"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
                             color: Theme.text
@@ -351,6 +352,10 @@ Item {
                             font.pixelSize: Theme.fsMd
                             text: root.searchText
                             onTextChanged: root.searchText = text
+                            // Enter opens the first section that matches; ↓
+                            // moves into the list. Both were dead.
+                            onAccepted: root._openFirstMatch()
+                            Keys.onDownPressed: root._focusNav(0)
                         }
                     }
                 }
@@ -374,15 +379,25 @@ Item {
                         width: navScroll.width
                         spacing: Theme.sp2xs
                         Repeater {
+                            id: navRep
                             model: root.sections
                             delegate: Rectangle {
+                                id: navRow
                                 required property var modelData
-                                visible: {
-                                    const q = root.searchText.toLowerCase().trim();
-                                    if (q.length === 0) return true;
-                                    return (modelData.title.toLowerCase().indexOf(q) >= 0
-                                         || modelData.sub.toLowerCase().indexOf(q) >= 0);
-                                }
+                                required property int index
+                                objectName: "settings-nav-" + modelData.id
+                                visible: root._sectionMatches(modelData)
+                                // A list box: Tab lands on it, ↑/↓ move and open,
+                                // Enter / Space open.
+                                activeFocusOnTab: true
+                                Accessible.role: Accessible.PageTab
+                                Accessible.name: modelData.title
+                                Keys.onUpPressed: root._focusNav(index - 1, -1)
+                                Keys.onDownPressed: root._focusNav(index + 1, 1)
+                                Keys.onSpacePressed: root.activeSection = modelData.id
+                                Keys.onReturnPressed: root.activeSection = modelData.id
+                                onActiveFocusChanged: if (activeFocus) root.activeSection = modelData.id
+                                FocusRing {}
                                 Layout.fillWidth: true
                                 Layout.preferredHeight: 44
                                 Layout.minimumHeight: 44
@@ -659,6 +674,34 @@ Item {
     // Deep-link entry from the Welcome guide ("Learn more →"). Switch to the
     // Help section, then scroll to `anchor` once the body Loader has built
     // HelpContent (deferred a tick so _findChildByName can see it).
+    // ── Settings search + keyboard nav ─────────────────────────────────
+    function _sectionMatches(sec) {
+        const q = root.searchText.toLowerCase().trim();
+        if (q.length === 0) return true;
+        return sec.title.toLowerCase().indexOf(q) >= 0 || sec.sub.toLowerCase().indexOf(q) >= 0;
+    }
+    function _openFirstMatch() {
+        for (let i = 0; i < sections.length; i++) {
+            if (_sectionMatches(sections[i])) {
+                activeSection = sections[i].id;
+                return true;
+            }
+        }
+        return false;
+    }
+    // Focus the nav row at `from`, skipping rows the search hides in the
+    // direction `dir` (1 down, -1 up).
+    function _focusNav(from, dir) {
+        const step = dir === -1 ? -1 : 1;
+        for (let i = from; i >= 0 && i < navRep.count; i += step) {
+            const it = navRep.itemAt(i);
+            if (it && it.visible) {
+                it.forceActiveFocus(Qt.TabFocusReason);
+                return;
+            }
+        }
+    }
+
     // Deep link from the command palette ("Settings: Appearance").
     function openSection(id) {
         for (let i = 0; i < sections.length; i++) {
@@ -871,6 +914,13 @@ Item {
         // MouseArea because an Item child would become a layout cell.
         TapHandler { onTapped: switchRow.toggled(!switchRow.checked) }
         HoverHandler { cursorShape: Qt.PointingHandCursor }
+        // Keyboard: Tab to the row, Space / Enter flips it.
+        activeFocusOnTab: true
+        Accessible.role: Accessible.CheckBox
+        Accessible.name: switchRow.label
+        Accessible.checked: switchRow.checked
+        Keys.onSpacePressed: switchRow.toggled(!switchRow.checked)
+        Keys.onReturnPressed: switchRow.toggled(!switchRow.checked)
 
         ColumnLayout {
             Layout.fillWidth: true
@@ -883,6 +933,7 @@ Item {
             color: switchRow.checked ? Theme.accent : Theme.panel3
             border.color: switchRow.checked ? Theme.accent : Theme.border
             border.width: 1
+            FocusRing { target: switchRow; radius: 13 }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
@@ -894,6 +945,7 @@ Item {
     }
 
     component SegRow: ColumnLayout {
+        id: segRow
         property string label: ""
         property string hint: ""
         property var options: []        // [{value,label}] or [string]
@@ -901,6 +953,18 @@ Item {
         signal selected(string value)
         spacing: Theme.spXs
         Layout.fillWidth: true
+        function _valueAt(i) {
+            const o = segRow.options[i];
+            return typeof o === "string" ? o : o.value;
+        }
+        // ←/→ pick the neighbouring option, like a radio group.
+        function _step(dir) {
+            const n = segRow.options.length;
+            if (n === 0) return;
+            let cur = 0;
+            for (let i = 0; i < n; i++) if (segRow._valueAt(i) === segRow.value) cur = i;
+            segRow.selected(segRow._valueAt(Math.max(0, Math.min(n - 1, cur + dir))));
+        }
         FieldLabel { label: parent.label; hint: parent.hint }
         Rectangle {
             Layout.fillWidth: true
@@ -908,6 +972,12 @@ Item {
             radius: Theme.radiusMd
             color: Theme.panel2
             border.color: Theme.border; border.width: 1
+            activeFocusOnTab: true
+            Accessible.role: Accessible.RadioButton
+            Accessible.name: segRow.label
+            Keys.onLeftPressed: segRow._step(-1)
+            Keys.onRightPressed: segRow._step(1)
+            FocusRing {}
             RowLayout {
                 anchors.fill: parent
                 anchors.margins: Theme.sp2xs
@@ -962,10 +1032,15 @@ Item {
         }
         Text { visible: parent.hint.length > 0; text: parent.hint; color: Theme.textDim; font.pixelSize: Theme.fsXs }
         Slider {
+            id: sliderCtl
             Layout.fillWidth: true
             from: parent.min; to: parent.max; stepSize: parent.step
             value: parent.value
             onMoved: parent.moved(value)
+            // Tab reaches it and ←/→ move it (Slider's own keys); the handle
+            // shows the focus ring while it has the keyboard.
+            focusPolicy: Qt.StrongFocus
+            Accessible.name: parent.label
             background: Rectangle {
                 x: parent.leftPadding; y: parent.topPadding + parent.availableHeight / 2 - 2
                 implicitWidth: 200; implicitHeight: 4
@@ -982,7 +1057,8 @@ Item {
                 y: parent.topPadding + parent.availableHeight / 2 - height / 2
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
-                border.color: Theme.border; border.width: 1
+                border.color: sliderCtl.activeFocus ? Theme.focusRing : Theme.border
+                border.width: sliderCtl.activeFocus ? 2 : 1
             }
         }
     }
@@ -1006,6 +1082,13 @@ Item {
                     color: modelData
                     border.color: String(swRoot.value).toLowerCase() === modelData.toLowerCase() ? Theme.text : "transparent"
                     border.width: 2
+                    activeFocusOnTab: true
+                    Accessible.role: Accessible.RadioButton
+                    Accessible.name: modelData
+                    Accessible.checked: String(swRoot.value).toLowerCase() === modelData.toLowerCase()
+                    Keys.onSpacePressed: swRoot.selected(modelData)
+                    Keys.onReturnPressed: swRoot.selected(modelData)
+                    FocusRing {}
                     MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: swRoot.selected(modelData) }
                 }
             }
@@ -1031,6 +1114,12 @@ Item {
             border.color: Theme.danger; border.width: 1
             implicitWidth: dangerTxt.implicitWidth + 24
             implicitHeight: 28
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Button
+            Accessible.name: dangerTxt.text
+            Keys.onSpacePressed: parent.triggered()
+            Keys.onReturnPressed: parent.triggered()
+            FocusRing {}
             Text { id: dangerTxt; anchors.centerIn: parent; text: parent.parent.buttonText; color: Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
             MouseArea { id: dangerMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.triggered() }
         }

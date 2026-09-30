@@ -260,6 +260,7 @@ qt_add_qml_module(heap_core
         # ── audit-know: end ──
         # ── audit-ux: begin ──
         qml/PaletteMatch.js
+        qml/FocusRing.qml
         # ── audit-ux: end ──
         # ── audit-int: begin ──
         # ── audit-int: end ──

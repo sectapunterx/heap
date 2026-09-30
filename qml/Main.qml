@@ -376,9 +376,24 @@ ApplicationWindow {
             if (p === tweaks.contentItem || p === hotkeys.contentItem) return true;
         return false;
     }
+    // Focus on a control outside the view that was reached with Tab — a
+    // filter chip, the mini week, the day panel, the people list. Its arrows
+    // and Enter are its own; the board's cursor keys wait until focus goes
+    // back to the view.
+    readonly property bool _focusOnControl: {
+        const f = win.activeFocusItem;
+        if (!f) return false;
+        const v = win.activeViewItem();
+        for (let p = f; p; p = p.parent) {
+            if (p === v) return false;
+            if (p.activeFocusOnTab === true) return true;
+        }
+        return false;
+    }
     // A view-local key (board cursor, calendar paging, Esc on the selection,
     // Delete, the bare-letter shortcuts) stands down while any of this holds.
     readonly property bool _viewKeysBlocked: hotkeys.isCapturing || _overlayOpen || _typing || _focusInPopup
+                                             || _focusOnControl
     // Global shortcuts (switch view, new task, palette, undo…) stand down
     // behind a modal: Ctrl+3 used to switch the view under an open task
     // editor, Ctrl+K opened the palette over the welcome tour. The side-rail
@@ -1351,6 +1366,15 @@ ApplicationWindow {
             AppController.clearSelection();
             if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
         }
+    }
+    // Esc on a tabbed-to control outside the view (filter chip, mini week, day
+    // panel…) hands the keyboard back to the view.
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: win._focusOnControl && !win._typing && !win._focusInPopup && !win._overlayOpen
+                 && !hotkeys.isCapturing
+        onActivated: win.focusActiveView()
     }
     Shortcut {
         sequence: _kbd("selection.deleteSel")

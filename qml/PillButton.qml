@@ -16,7 +16,9 @@ Button {
 
     // Reachable with Tab and named for screen readers; the focus ring below
     // is the only sign of where the keyboard is.
-    focusPolicy: Qt.StrongFocus
+    // Tab focus only: a pill clicked with the mouse must not keep the keyboard
+    // (the board cursor keys stand down while a tabbed-to control has it).
+    focusPolicy: Qt.TabFocus
     Accessible.role: Accessible.Button
     Accessible.name: root.text
     rightPadding: Theme.spXl

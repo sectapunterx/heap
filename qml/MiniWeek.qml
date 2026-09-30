@@ -100,7 +100,31 @@ Rectangle {
             }
         }
 
+        // One Tab stop for the whole strip: ←/→ move a day, PgUp/PgDn a week,
+        // Home jumps to today. It was mouse-only.
+        Item {
+            id: daysBox
+            objectName: "miniweek-days"
+            Layout.fillWidth: true
+            implicitHeight: daysRow.implicitHeight
+            activeFocusOnTab: true
+            Accessible.role: Accessible.List
+            Accessible.name: AppController.humanDate(AppController.selectedDate)
+            function shift(days) {
+                const d = AppController.selectedDate;
+                AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + days);
+            }
+            Keys.onLeftPressed: shift(-1)
+            Keys.onRightPressed: shift(1)
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_PageUp) { shift(-7); event.accepted = true; }
+                else if (event.key === Qt.Key_PageDown) { shift(7); event.accepted = true; }
+                else if (event.key === Qt.Key_Home) { AppController.selectedDate = AppController.today; event.accepted = true; }
+            }
+            FocusRing { radius: Theme.radius + 3 }
         RowLayout {
+            id: daysRow
+            anchors.fill: parent
             spacing: Theme.spXs
             Repeater {
                 model: root._days
@@ -162,6 +186,7 @@ Rectangle {
                 }
             }
         }
+        }
     }
 
     Rectangle {
@@ -180,6 +205,12 @@ Rectangle {
         implicitWidth: 24; implicitHeight: 24
         radius: Theme.radiusSm
         color: navMA.containsMouse ? Theme.panel2 : "transparent"
+        activeFocusOnTab: true
+        Accessible.role: Accessible.Button
+        Accessible.name: nav.tip
+        Keys.onSpacePressed: nav.clicked()
+        Keys.onReturnPressed: nav.clicked()
+        FocusRing {}
         Text {
             anchors.centerIn: parent
             text: nav.text

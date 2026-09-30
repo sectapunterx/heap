@@ -69,6 +69,14 @@ Rectangle {
                 border.width: 1
                 implicitWidth: chRow.implicitWidth + 20
                 implicitHeight: 24
+                // Tab-reachable: the filter bar was mouse-only.
+                activeFocusOnTab: true
+                Accessible.role: Accessible.CheckBox
+                Accessible.name: modelData
+                Accessible.checked: active
+                Keys.onSpacePressed: root.togglePriority(modelData)
+                Keys.onReturnPressed: root.togglePriority(modelData)
+                FocusRing {}
                 RowLayout {
                     id: chRow
                     anchors.centerIn: parent
@@ -106,6 +114,12 @@ Rectangle {
             color: clrMA.containsMouse ? Theme.panel3 : Theme.panel2
             implicitWidth: clrT.implicitWidth + 16
             implicitHeight: 24
+            activeFocusOnTab: visible
+            Accessible.role: Accessible.Button
+            Accessible.name: clrT.text
+            Keys.onSpacePressed: root.clearPriorities()
+            Keys.onReturnPressed: root.clearPriorities()
+            FocusRing {}
             Text {
                 id: clrT
                 anchors.centerIn: parent
@@ -151,6 +165,13 @@ Rectangle {
             border.width: 1
             implicitWidth: sortRow.implicitWidth + 20
             implicitHeight: 24
+            activeFocusOnTab: visible
+            Accessible.role: Accessible.ComboBox
+            Accessible.name: I18n.t("filter.sortBy") + " " + sortBtn.label
+            Keys.onSpacePressed: sortMenu.popup(sortBtn, 0, sortBtn.height + 4)
+            Keys.onReturnPressed: sortMenu.popup(sortBtn, 0, sortBtn.height + 4)
+            Keys.onDownPressed: sortMenu.popup(sortBtn, 0, sortBtn.height + 4)
+            FocusRing {}
             RowLayout {
                 id: sortRow
                 anchors.centerIn: parent
@@ -204,6 +225,13 @@ Rectangle {
             border.width: 1
             implicitWidth: archRow.implicitWidth + 16
             implicitHeight: 24
+            activeFocusOnTab: true
+            Accessible.role: Accessible.CheckBox
+            Accessible.name: I18n.t("filter.archived")
+            Accessible.checked: root.showArchived
+            Keys.onSpacePressed: root.toggleArchived()
+            Keys.onReturnPressed: root.toggleArchived()
+            FocusRing {}
             RowLayout {
                 id: archRow
                 anchors.centerIn: parent
