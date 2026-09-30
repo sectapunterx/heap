@@ -106,15 +106,29 @@ Rectangle {
     // can be dropped on. Without one it drags inside its own parent, which
     // clips it and draws it under later siblings.
     property Item dragLayer: null
-    states: State {
-        name: "lifted"
-        when: dragArea.drag.active && card.dragLayer !== null
-        ParentChange { target: card; parent: card.dragLayer }
+    // Reparented by hand rather than with a State + ParentChange: undoing a
+    // ParentChange also restores the card's stacking order against the
+    // sibling it was lifted from, and in a list that recycles its delegates
+    // that sibling may since have gone back to the pool — Qt warned on every
+    // drop into another column.
+    readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
+    property Item _homeParent: null
+    on_LiftedChanged: {
+        if (card._lifted) {
+            const p = card.mapToItem(card.dragLayer, 0, 0);
+            card._homeParent = card.parent;
+            card.parent = card.dragLayer;
+            card.x = p.x;
+            card.y = p.y;
+        } else if (card._homeParent) {
+            card.parent = card._homeParent;
+            card._homeParent = null;
+            // Back in the list: the list owns x/y, so put the card where it
+            // was pressed rather than where the drag left it.
+            card.x = card.homeX;
+            card.y = card.homeY;
+        }
     }
-    // Back in the list: the list owns x/y, so put the card where it was
-    // pressed rather than where ParentChange's restore left it (a drag
-    // threshold's worth off).
-    onStateChanged: if (state === "") { card.x = card.homeX; card.y = card.homeY; }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any
     // alert that needs the user), the title, how far along it is, the

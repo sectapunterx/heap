@@ -232,9 +232,15 @@ Item {
                 width: archList.width - 2 * Theme.inset
                 height: archCard.implicitHeight
 
-                // A pooled delegate keeps its card, and the card its context
-                // menu; let the menu go with the row it was opened for.
-                ListView.onPooled: archCard.releaseMenu()
+                // A pooled row waits, culled but still a child of the list,
+                // until another row needs it: hide it so it is not taken for a
+                // row on screen, and let the menu go with the task it was
+                // opened for.
+                ListView.onPooled: {
+                    archCard.releaseMenu();
+                    row.visible = false;
+                }
+                ListView.onReused: row.visible = true
 
                 // Status pill — gives context for "from which column".
                 Rectangle {
