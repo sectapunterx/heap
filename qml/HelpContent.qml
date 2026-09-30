@@ -733,14 +733,16 @@ Item {
             }
             Body {
                 text: "N hours before a deadline (24 by default, configurable in Settings → Notifications) — "
-                    + "it pushes a notification. The notification has a 'Snooze 1h' action."
+                    + "it pushes a notification, and once more if the deadline passes. The notification has a "
+                    + "'Snooze 1h' action."
             }
 
             H3 {
                 text: "Standup reminder"
             }
             Body {
-                text: "Daily at standup-time (default 10:00). The time is changed in Settings → Notifications."
+                text: "At standup-time (default 10:00) on working days — Monday to Friday unless changed in "
+                    + "Settings → Calendar → Working days. The time is changed in Settings → Notifications."
             }
 
             H3 {
@@ -764,8 +766,9 @@ Item {
                 text: "Quiet hours"
             }
             Body {
-                text: "The quiet window (default 19:00–09:00) suppresses desktop notifications, but not the "
-                    + "reminders themselves — inside the app the toast still appears."
+                text: "The quiet window (default 19:00–09:00) holds notifications back and delivers them "
+                    + "when it ends, instead of dropping them. Meeting and standup reminders are appointments "
+                    + "and still come through. Every reminder is sent once, even across a restart."
             }
 
             H3 {

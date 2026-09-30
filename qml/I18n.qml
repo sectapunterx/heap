@@ -1032,6 +1032,7 @@ QtObject {
             "toast.ics.warnings": "%1 warnings, first: %2",
             "kanban.doing.on": "Book focus time on entry",
             "kanban.doing.off": "Stop booking focus time",
+            "settings.cal.workDays": "Working days",
             // ── audit-time: end ──
             // ── audit-know: begin ──
             // ── audit-know: end ──
@@ -2043,6 +2044,7 @@ QtObject {
             "toast.ics.warnings": "предупреждений: %1, первое: %2",
             "kanban.doing.on": "Бронировать фокус-время при входе",
             "kanban.doing.off": "Не бронировать фокус-время",
+            "settings.cal.workDays": "Рабочие дни",
             // ── audit-time: end ──
             // ── audit-know: begin ──
             // ── audit-know: end ──

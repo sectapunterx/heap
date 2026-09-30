@@ -10,6 +10,7 @@
 
 #include <QApplication>
 #include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonDocument>
@@ -577,6 +578,27 @@ TEST_F(TimeAudit, CalendarTasksCarryScheduledOnes) {
   EXPECT_EQ(got.at(0).toMap().value("schedDay").toInt(), 3);
   EXPECT_NEAR(got.at(0).toMap().value("schedHour").toDouble(), 14.0, 1e-6);
   EXPECT_EQ(got.at(1).toMap().value("dueDay").toInt(), 1);
+}
+
+// PLAT-13: the week asked every task in the profile for ten roles on every
+// rebuild (2.9 s at 10k). The candidate list is built in C++ now.
+TEST_F(TimeAudit, CalendarTasksIsCheapAtTenThousandTasks) {
+  QVector<Task> many;
+  many.reserve(10000);
+  for(int i = 0; i < 10000; ++i) {
+    Task t = task(QStringLiteral("T-%1").arg(i), QStringLiteral("todo"));
+    t.dueAt = QDateTime(kMon.addDays(i % 365), QTime(0, 0));
+    many.append(t);
+  }
+  app_->tasks()->reset(many);
+
+  QElapsedTimer timer;
+  timer.start();
+  const QVariantList week = app_->calendarTasks(kMon, kMon.addDays(6), false);
+  const qint64 ms = timer.elapsed();
+
+  EXPECT_GT(week.size(), 100);
+  EXPECT_LT(ms, 250) << "a week's candidates took " << ms << " ms";
 }
 
 int main(int argc, char** argv) {

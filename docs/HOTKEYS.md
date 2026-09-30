@@ -51,13 +51,23 @@ alongside each one.
 
 ## Calendar
 
-Live on the week and month views only, where the board's own letters are not.
+Previous / next period is live on the week and month views only; the rest
+works in every view the day panel sits beside (board, timeline, week, month,
+archive). None of them fires while a dialog or a text field has the keys.
 
 | Action | Default |
 |--------|---------|
 | Go to today | `T` |
 | Previous / next period | `←` / `→` |
+| Previous / next day | `Alt+←` / `Alt+→` |
 | Go to a date… | `G` |
+| New event at the next free slot | `Ctrl+E` |
+
+In the date picker: arrows move the day (↑/↓ a week), `PgUp`/`PgDn` a month
+(`Shift` a year), `Home`/`End` the month's ends, `T` today, `Enter` picks,
+`Esc` closes. In the event editor, `Ctrl+Enter` saves; with unsaved changes
+the first `Esc` warns and the second discards. When a drag or an edit touches
+a repeating event, `Enter` answers "This event".
 
 ## Profiles
 

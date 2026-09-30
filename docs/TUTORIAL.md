@@ -185,9 +185,11 @@ and the archive.
 ## 9. It nudges you
 
 A background tick (every 60 s) auto-archives long-done tasks, flags tasks that
-have been *blocked* too long, and fires **deadline** and **standup** reminders
-through the system tray — all muted during **quiet hours** (Settings →
-Notifications).
+have been *blocked* too long, and fires **deadline**, **meeting** and
+**standup** reminders through the system tray. During **quiet hours**
+(Settings → Notifications) a reminder is held and delivered when the quiet
+window ends; a meeting or the standup is an appointment and still reminds.
+A reminder is never repeated, not even after a restart.
 
 ---
 
