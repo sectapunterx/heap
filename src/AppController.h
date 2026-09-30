@@ -1461,6 +1461,11 @@ class AppController : public QObject {
   QString mintTaskId(const QString& stem) const;
   // Records that `id` was taken, so it is never handed out again.
   void noteTaskIdUsed(const QString& id);
+  // Gives every task of `p` (a profile about to be added) whose id another
+  // profile already holds a fresh one, and points the references inside `p`
+  // — links, #KEY-1 mentions — and `events`' task links at it. Returns
+  // old id -> new id (PLAT-9).
+  QHash<QString, QString> reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;

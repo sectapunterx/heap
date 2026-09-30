@@ -480,8 +480,16 @@ TEST_F(AttachmentAppTest, ProfileExportCarriesTheFilesAndImportBringsThemBack) {
   QFile f(store().pathFor(taskAtt));
   ASSERT_TRUE(f.open(QIODevice::ReadOnly));
   EXPECT_EQ(f.readAll(), taskBytes);
-  const Task* imported = task(id);
+  // The import is a profile beside the exported one, so its copy of the task
+  // has an id of its own (PLAT-9): find it by what it carries.
+  const Task* imported = nullptr;
+  for(const Task& t : app_->tasks()->items()) {
+    if(t.title == QStringLiteral("export probe") && !t.attachments.isEmpty() && t.attachments.at(0).id == taskAtt) {
+      imported = &t;
+    }
+  }
   ASSERT_NE(imported, nullptr);
+  EXPECT_NE(imported->id, id);
   ASSERT_EQ(imported->attachments.size(), 1);
   EXPECT_EQ(imported->attachments.at(0).id, taskAtt);
   EXPECT_EQ(imported->attachments.at(0).name, QStringLiteral("spec.pdf"));
@@ -518,7 +526,14 @@ TEST_F(AttachmentAppTest, ImportedBytesThatDoNotMatchTheirIdAreRekeyed) {
   root["attachments"] = QJsonArray({blob, bad});
   ASSERT_TRUE(app_->importProfileFromJson(QString::fromUtf8(QJsonDocument(root).toJson()), true).isEmpty());
 
-  const Task* t = this->task(QStringLiteral("REKEY-1"));
+  // REKEY-1 unless an earlier run of this suite left one in the profile, in
+  // which case the import gets the next id (PLAT-9).
+  const Task* t = nullptr;
+  for(const Task& x : app_->tasks()->items()) {
+    if(x.title == QStringLiteral("rekey")) {
+      t = &x;
+    }
+  }
   ASSERT_NE(t, nullptr);
   ASSERT_EQ(t->attachments.size(), 1);
   const QString real = t->attachments.at(0).id;

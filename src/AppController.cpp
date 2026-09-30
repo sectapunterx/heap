@@ -8629,6 +8629,108 @@ QVariantMap AppController::profileById(const QString& id) const {
   return m;
 }
 
+QHash<QString, QString> AppController::reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events) {
+  // A task id is a key across the whole app, not per profile (TASKS-1): the
+  // reminder log, notification actions, undo and event links all look a task
+  // up by id alone. A copied or imported profile that kept its ids silenced
+  // the other profile's reminders and let "Mark done" close the wrong task
+  // (PLAT-9). Every id another profile already holds is given a fresh one.
+  QSet<QString> taken;
+  for(const Task& t : m_tasks.items()) {
+    taken.insert(t.id);
+  }
+  for(const Profile& other : m_profiles) {
+    for(const Task& t : other.tasks) {
+      taken.insert(t.id);
+    }
+  }
+  // The ids that stay are claimed first, so no fresh one lands on them.
+  for(const Task& t : p.tasks) {
+    if(!taken.contains(t.id)) {
+      noteTaskIdUsed(t.id);
+    }
+  }
+  QSet<QString> used = taken;
+  for(const Task& t : p.tasks) {
+    used.insert(t.id);
+  }
+  QHash<QString, QString> remap;
+  for(Task& t : p.tasks) {
+    if(!taken.contains(t.id)) {
+      continue;
+    }
+    QString stem;
+    int n = 0;
+    QString fresh;
+    if(t.externalId.isEmpty() && splitTaskId(t.id, stem, n)) {
+      // The next number under the same prefix, the way a new task gets one.
+      do {
+        fresh = mintTaskId(stem);
+        noteTaskIdUsed(fresh);
+      } while(used.contains(fresh));
+    } else {
+      // A mirrored issue's id spells its tracker key (jira-LUX-1), and
+      // renumbering it would name another issue: suffix it instead, the way
+      // a second pull of the same key is told apart.
+      int k = 2;
+      do {
+        fresh = t.id + QChar('-') + QString::number(k++);
+      } while(used.contains(fresh));
+    }
+    used.insert(fresh);
+    remap.insert(t.id, fresh);
+    t.id = fresh;
+  }
+  if(remap.isEmpty()) {
+    return remap;
+  }
+
+  // Everything inside the profile that names a task by id follows it: the
+  // dependency links, and the #KEY-1 references of descriptions, notes and
+  // pages (the same pattern the markdown renderer turns into a task link).
+  static const QRegularExpression kTicketRef(QStringLiteral("(?<![A-Za-z0-9_])#([A-Z][A-Z0-9]*-\\d+)"));
+  const auto rewrite = [&remap](QString& text) {
+    if(!text.contains(QLatin1Char('#'))) {
+      return;
+    }
+    QString out;
+    qsizetype last = 0;
+    for(auto it = kTicketRef.globalMatch(text); it.hasNext();) {
+      const QRegularExpressionMatch m = it.next();
+      const auto hit = remap.constFind(m.captured(1));
+      if(hit == remap.constEnd()) {
+        continue;
+      }
+      out += QStringView(text).mid(last, m.capturedStart(1) - last);
+      out += hit.value();
+      last = m.capturedEnd(1);
+    }
+    if(last > 0) {
+      out += QStringView(text).mid(last);
+      text = out;
+    }
+  };
+  for(Task& t : p.tasks) {
+    for(TaskLink& l : t.links) {
+      l.targetId = remap.value(l.targetId, l.targetId);
+    }
+    rewrite(t.desc);
+  }
+  for(Note& n : p.notes) {
+    rewrite(n.body);
+  }
+  rewrite(p.notesState);
+  for(DocPage& d : p.docPages) {
+    rewrite(d.body);
+  }
+  if(events) {
+    for(CalEvent& e : *events) {
+      e.taskId = remap.value(e.taskId, e.taskId);
+    }
+  }
+  return remap;
+}
+
 QString AppController::duplicateProfile(const QString& id, const QString& newName) {
   const int i = profileIndexOf(id);
   if(i < 0) {
@@ -8641,6 +8743,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
+  reissueSharedTaskIds(copy, nullptr);  // the copy's tasks are new tasks (PLAT-9)
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
@@ -9250,6 +9353,9 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   if(activate) {
     snapshotActiveProfile();
   }
+  // Before the profile joins the list, and with the events it brought, whose
+  // task links follow the renamed tasks (PLAT-9).
+  reissueSharedTaskIds(imported, &importedEvents);
   m_profiles.push_back(imported);
 
   // Hoist the imported calendar events into the global pool, re-attributed to

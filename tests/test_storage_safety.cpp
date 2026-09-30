@@ -675,6 +675,70 @@ TEST_F(StorageSafety, ADamagedFileRestoredFromABackupSaysWhichOneAndStaysUp) {
   EXPECT_EQ(app.storageState(), QStringLiteral("recovered"));
 }
 
+// ── PLAT-9 (2026-09-30-1): a copied or imported profile gets its own task ids ──
+
+TEST_F(StorageSafety, ADuplicatedProfileGetsFreshTaskIdsWithItsReferences) {
+  QJsonObject blocker = taskJson("TASK-1", "todo");
+  blocker["desc"] = QStringLiteral("see #TASK-2 and #TASK-20");
+  blocker["links"] = QJsonArray{QJsonObject{{"type", "blocks"}, {"targetId", "TASK-2"}}};
+  QJsonObject p = profileJson("a", {blocker, taskJson("TASK-2", "todo"), taskJson("TASK-20", "todo")});
+  writeRaw(statePath(), stateDoc({p, profileJson("other", {taskJson("TASK-20", "todo")})}, "a"));
+  AppController app;
+  const QString copyId = app.duplicateProfile(QStringLiteral("a"), QStringLiteral("A copy"));
+  ASSERT_FALSE(copyId.isEmpty());
+  ASSERT_EQ(app.activeProfileId(), copyId);
+  QSet<QString> ids;
+  const Task* first = nullptr;
+  for(const Task& t : app.tasks()->items()) {
+    ids.insert(t.id);
+    if(t.title == QStringLiteral("TASK-1 title")) {
+      first = &t;
+    }
+  }
+  ASSERT_EQ(ids.size(), 3);
+  for(const char* shared : {"TASK-1", "TASK-2", "TASK-20"}) {
+    EXPECT_FALSE(ids.contains(QString::fromLatin1(shared))) << shared << " is still shared with the original";
+  }
+  ASSERT_NE(first, nullptr);
+  ASSERT_EQ(first->links.size(), 1);
+  const QString newTwo = first->links.first().targetId;
+  EXPECT_TRUE(ids.contains(newTwo)) << "the link must follow its target";
+  EXPECT_TRUE(first->desc.contains(QStringLiteral("#") + newTwo)) << first->desc.toStdString();
+  EXPECT_FALSE(first->desc.contains(QStringLiteral("#TASK-2 "))) << first->desc.toStdString();
+  // A new task in the copy is not handed an id the copy just took either.
+  EXPECT_FALSE(ids.contains(app.newTaskDraft(QStringLiteral("todo")).value("id").toString()));
+
+  app.setActiveProfileId(QStringLiteral("a"));
+  EXPECT_TRUE(hasTask(app, "TASK-1"));
+  EXPECT_TRUE(hasTask(app, "TASK-2")) << "the original keeps its ids";
+}
+
+TEST_F(StorageSafety, AnImportedProfileNeverReusesATaskIdAndItsEventsFollow) {
+  writeRaw(statePath(), stateDoc({profileJson("a", {taskJson("TASK-1", "todo")})}, "a"));
+  AppController app;
+  QJsonObject exported = profileJson("b", {taskJson("TASK-1", "todo"), taskJson("ZED-9", "todo")});
+  exported["events"] = QJsonArray{
+      QJsonObject{{"id", "ev-x"}, {"title", "pairing"}, {"date", "2026-09-30"}, {"start", 10}, {"end", 11}, {"taskId", "TASK-1"}}};
+  ASSERT_TRUE(app.importProfileFromJson(QString::fromUtf8(QJsonDocument(QJsonObject{{"profile", exported}}).toJson())).isEmpty());
+  EXPECT_FALSE(hasTask(app, "TASK-1")) << "the import took an id profile A holds";
+  EXPECT_TRUE(hasTask(app, "ZED-9")) << "an id nobody holds is kept";
+  QString renamed;
+  for(const Task& t : app.tasks()->items()) {
+    if(t.title == QStringLiteral("TASK-1 title")) {
+      renamed = t.id;
+    }
+  }
+  ASSERT_FALSE(renamed.isEmpty());
+  bool sawEvent = false;
+  for(const CalEvent& e : app.events()->items()) {
+    if(e.title == QStringLiteral("pairing")) {
+      sawEvent = true;
+      EXPECT_EQ(e.taskId, renamed);
+    }
+  }
+  EXPECT_TRUE(sawEvent);
+}
+
 }  // namespace
 
 int main(int argc, char** argv) {

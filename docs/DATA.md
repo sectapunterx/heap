@@ -181,6 +181,13 @@ Each profile can be exported and re-imported independently:
 Export/import is content-only — it never carries settings or other profiles, so
 importing is always non-destructive.
 
+A task id is unique across all profiles (reminders, notification actions and
+event links find a task by id alone). An imported task whose id another profile
+already holds gets the next free one under its prefix — `TASK-1` becomes, say,
+`TASK-8` — and its dependency links, `#TASK-1` mentions in descriptions, notes
+and pages, and the imported events follow it. **Duplicate profile** does the
+same for every task of the copy.
+
 The export carries the profile's attached files too, base64-encoded in a
 top-level `attachments` array next to `profile`, so the file stands on its own
 on another machine. Up to 64 MB of files are included; past that the export
