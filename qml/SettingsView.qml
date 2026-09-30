@@ -1956,6 +1956,18 @@ Item {
                         readonly property var liveState: AppController.integrationStates[intCard.intKey] || ({})
                         readonly property bool offline: !!intCard.liveState.offline
                         readonly property int outOfScope: intCard.liveState.outOfScope || 0
+                        // Which actions are waiting on the provider, the last
+                        // error it answered with and the last sync (DES-5).
+                        readonly property var act: IntegrationActivity.states[intCard.intKey] || ({})
+                        readonly property var busy: intCard.act.busy || ({})
+                        readonly property string lastError: intCard.act.error || ""
+                        function run(action) {
+                            intCard.commitFields()
+                            IntegrationActivity.start(intCard.intKey, action)
+                            if (action === "sync") AppController.syncProvider(intCard.intKey)
+                            else if (action === "test") AppController.testIntegration(intCard.intKey)
+                            else if (action === "oauth") AppController.connectOAuth(intCard.intKey)
+                        }
                         readonly property bool isOAuth: modelData.oauth === true
                         // One-click browser sign-in is only offered when a client ID
                         // exists — baked into the build (oauthReady) or entered under
@@ -2180,18 +2192,16 @@ Item {
                             // One-click browser connect: the primary action for
                             // OAuth providers. No fields to fill — credentials come
                             // from the app's registered OAuth app (or Advanced).
-                            Rectangle {
+                            ActionButton {
+                                objectName: "int-oauth-" + intCard.intKey
                                 visible: intCard.canOneClick && !intCard.isConn
                                 Layout.fillWidth: true
-                                radius: Theme.radiusMd
-                                color: oauthMA.containsMouse ? Theme.accentHover : Theme.accent
-                                border.color: Theme.accent; border.width: 1
+                                kind: "primary"
                                 implicitHeight: 34
-                                Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.browserSignIn"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
-                                MouseArea {
-                                    id: oauthMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                    onClicked: { intCard.commitFields(); AppController.connectOAuth(intCard.intKey) }
-                                }
+                                text: I18n.t("settings.integrations.browserSignIn")
+                                busy: !!intCard.busy.oauth
+                                busyText: I18n.t("settings.integrations.waitingBrowser")
+                                onActivated: intCard.run("oauth")
                             }
                             Text {
                                 visible: intCard.canOneClick && !intCard.isConn
@@ -2452,24 +2462,48 @@ Item {
                                         value: (intSection.loginRev, "")
                                     }
                                 }
-                                Rectangle {
+                                ActionButton {
+                                    objectName: "int-signin-" + intCard.intKey
                                     Layout.fillWidth: true
-                                    radius: Theme.radiusMd
-                                    color: signInMA.containsMouse ? Theme.accentHover : Theme.accent
-                                    border.color: Theme.accent; border.width: 1
-                                    implicitHeight: 30
-                                    Text { anchors.centerIn: parent; text: I18n.t("settings.integrations.signIn"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
-                                    MouseArea {
-                                        id: signInMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            intCard.commitFields()   // the host URL, not the password
-                                            AppController.connectWithCredentials(intCard.intKey, loginBlock.credentials())
-                                        }
+                                    kind: "primary"
+                                    text: I18n.t("settings.integrations.signIn")
+                                    busy: !!intCard.busy.signin
+                                    busyText: I18n.t("settings.integrations.signingIn")
+                                    onActivated: {
+                                        intCard.commitFields()   // the host URL, not the password
+                                        IntegrationActivity.start(intCard.intKey, "signin")
+                                        AppController.connectWithCredentials(intCard.intKey, loginBlock.credentials())
                                     }
                                 }
                             }
 
+                            // What the last attempt said and when the last sync
+                            // came back. The toast is gone in a few seconds;
+                            // this stays until the next success (DES-5).
+                            Text {
+                                objectName: "int-last-error-" + intCard.intKey
+                                visible: intCard.lastError.length > 0
+                                Layout.fillWidth: true
+                                wrapMode: Text.WordWrap
+                                color: Theme.danger
+                                font.pixelSize: Theme.fsSm
+                                text: intCard.lastError.length > 0 && intCard.act.errorAt
+                                      ? I18n.t("settings.integrations.lastError").replace("%1", AppController.eventHourLabel(intCard.act.errorAt.getHours() + intCard.act.errorAt.getMinutes() / 60)).replace("%2", intCard.lastError)
+                                      : intCard.lastError
+                            }
+                            Text {
+                                objectName: "int-last-sync-" + intCard.intKey
+                                visible: intCard.isConn && !!intCard.act.syncedAt
+                                Layout.fillWidth: true
+                                color: Theme.textDim
+                                font.pixelSize: Theme.fsXs
+                                text: intCard.act.syncedAt ? I18n.t("settings.integrations.lastSync").replace("%1", AppController.eventHourLabel(intCard.act.syncedAt.getHours() + intCard.act.syncedAt.getMinutes() / 60)) : ""
+                            }
+
                             // Actions: manual connect (non-OAuth) / test / sync / disconnect.
+                            // ActionButtons: on the Tab path, named, run on
+                            // Return / Space (DES-8), busy while the provider
+                            // has not answered (DES-5).
                             RowLayout {
                                 Layout.topMargin: Theme.sp2xs
                                 spacing: Theme.spMd
@@ -2481,57 +2515,45 @@ Item {
                                 // gateway has never heard of), and leaving it
                                 // with only "Test connection" meant a card that
                                 // tested green could never be connected.
-                                Rectangle {
+                                ActionButton {
                                     objectName: "int-connect-" + intCard.intKey
                                     visible: !intCard.isConn && (!intCard.canOneClick || intCard.advanced)
-                                    radius: Theme.radiusMd
-                                    color: connMA.containsMouse ? Theme.accentHover : Theme.accent
-                                    border.color: Theme.accent; border.width: 1
-                                    implicitWidth: connTxt.implicitWidth + 28; implicitHeight: 30
-                                    Text { id: connTxt; anchors.centerIn: parent; text: I18n.t("common.connect"); color: Theme.textOnAccent; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
-                                    MouseArea {
-                                        id: connMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        // Not a bare `connected = true`: the
-                                        // controller checks the required fields
-                                        // are filled and clears any leftover
-                                        // browser session, so the typed
-                                        // credentials are the ones that go out.
-                                        onClicked: { intCard.commitFields(); AppController.connectIntegrationManually(intCard.intKey) }
-                                    }
+                                    kind: "primary"
+                                    text: I18n.t("common.connect")
+                                    // Not a bare `connected = true`: the
+                                    // controller checks the required fields
+                                    // are filled and clears any leftover
+                                    // browser session, so the typed
+                                    // credentials are the ones that go out.
+                                    onActivated: { intCard.commitFields(); AppController.connectIntegrationManually(intCard.intKey) }
                                 }
-                                Rectangle {
+                                ActionButton {
+                                    objectName: "int-test-" + intCard.intKey
                                     visible: intCard.advanced || intCard.isConn || !intCard.canOneClick
-                                    radius: Theme.radiusMd
-                                    color: testMA.containsMouse ? Theme.panel3 : Theme.panel2
-                                    border.color: Theme.border; border.width: 1
-                                    implicitWidth: testTxt.implicitWidth + 28; implicitHeight: 30
-                                    Text { id: testTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.testConnection"); color: Theme.text; font.pixelSize: Theme.fsMd }
-                                    MouseArea {
-                                        id: testMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: { intCard.commitFields(); AppController.testIntegration(intCard.intKey) }
-                                    }
+                                    text: I18n.t("settings.integrations.testConnection")
+                                    busy: !!intCard.busy.test
+                                    busyText: I18n.t("settings.integrations.testing")
+                                    onActivated: intCard.run("test")
                                 }
-                                Rectangle {
+                                ActionButton {
+                                    objectName: "int-sync-" + intCard.intKey
                                     visible: intCard.isConn
-                                    radius: Theme.radiusMd
-                                    color: syncMA.containsMouse ? Theme.panel3 : Theme.panel2
-                                    border.color: Theme.border; border.width: 1
-                                    implicitWidth: syncTxt.implicitWidth + 28; implicitHeight: 30
-                                    Text { id: syncTxt; anchors.centerIn: parent; text: I18n.t("settings.integrations.syncNow"); color: Theme.text; font.pixelSize: Theme.fsMd }
-                                    MouseArea {
-                                        id: syncMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                        onClicked: { intCard.commitFields(); AppController.syncProvider(intCard.intKey) }
-                                    }
+                                    text: I18n.t("settings.integrations.syncNow")
+                                    busy: !!intCard.busy.sync
+                                    busyText: I18n.t("settings.integrations.syncing")
+                                    onActivated: intCard.run("sync")
                                 }
                                 Item { Layout.fillWidth: true }
-                                Rectangle {
+                                ActionButton {
+                                    objectName: "int-disconnect-" + intCard.intKey
                                     visible: intCard.isConn
-                                    radius: Theme.radiusMd
-                                    color: discMA.containsMouse ? Theme.panel3 : Theme.panel2
-                                    border.color: Theme.border; border.width: 1
-                                    implicitWidth: discTxt.implicitWidth + 28; implicitHeight: 30
-                                    Text { id: discTxt; anchors.centerIn: parent; text: I18n.t("common.disconnect"); color: Theme.textDim; font.pixelSize: Theme.fsMd }
-                                    MouseArea { id: discMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.disconnectIntegration(intCard.intKey) }
+                                    kind: "quiet"
+                                    text: I18n.t("common.disconnect")
+                                    onActivated: {
+                                        // A deliberate disconnect starts the card over.
+                                        IntegrationActivity.clear(intCard.intKey)
+                                        AppController.disconnectIntegration(intCard.intKey)
+                                    }
                                 }
                             }
                         }
@@ -2754,38 +2776,21 @@ Item {
                             // Two-step confirm: first click arms (restore
                             // overwrites the live state), second within 3.5 s
                             // performs it. Auto-disarms so a stray click is safe.
-                            Rectangle {
+                            ActionButton {
                                 id: restoreBtn
-                                property bool armed: false
-                                radius: Theme.radiusMd
-                                color: restoreMA.containsMouse ? Theme.panel3 : Theme.panel2
-                                border.color: restoreBtn.armed ? Theme.danger : Theme.border
-                                border.width: 1
-                                implicitWidth: restoreTxt.implicitWidth + 24
+                                objectName: "settings-restore-backup"
                                 implicitHeight: 28
-                                Text {
-                                    id: restoreTxt
-                                    anchors.centerIn: parent
-                                    text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
-                                    color: restoreBtn.armed ? Theme.danger : Theme.text
-                                    font.pixelSize: Theme.fsMd
-                                }
+                                text: restoreBtn.armed ? I18n.t("settings.data.restore.confirm") : I18n.t("settings.data.restore.button")
                                 Timer { id: restoreDisarm; interval: 3500; onTriggered: restoreBtn.armed = false }
-                                MouseArea {
-                                    id: restoreMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
-                                        if (!restoreBtn.armed) {
-                                            restoreBtn.armed = true;
-                                            restoreDisarm.restart();
-                                        } else {
-                                            restoreBtn.armed = false;
-                                            restoreDisarm.stop();
-                                            AppController.restoreFromBackup(modelData.fileName);
-                                            dataRoot.refreshBackups();
-                                        }
+                                onActivated: {
+                                    if (!restoreBtn.armed) {
+                                        restoreBtn.armed = true;
+                                        restoreDisarm.restart();
+                                    } else {
+                                        restoreBtn.armed = false;
+                                        restoreDisarm.stop();
+                                        AppController.restoreFromBackup(modelData.fileName);
+                                        dataRoot.refreshBackups();
                                     }
                                 }
                             }
@@ -2809,27 +2814,15 @@ Item {
                     }
                     RowLayout {
                         spacing: Theme.spMd
-                        Rectangle {
-                            radius: Theme.radiusMd
-                            color: expMA.containsMouse ? Theme.panel3 : Theme.panel2
-                            border.color: Theme.border; border.width: 1
-                            implicitWidth: expTxt.implicitWidth + 24; implicitHeight: 30
-                            Text {
-                                id:
-                                    expTxt; anchors.centerIn: parent; text: I18n.t("settings.data.exportJson"); color: Theme.text; font.pixelSize: Theme.fsMd
-                            }
-                            MouseArea { id: expMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.exportJsonRequested() }
+                        ActionButton {
+                            objectName: "settings-export-json"
+                            text: I18n.t("settings.data.exportJson")
+                            onActivated: settingsBridge.exportJsonRequested()
                         }
-                        Rectangle {
-                            radius: Theme.radiusMd
-                            color: impMA.containsMouse ? Theme.panel3 : Theme.panel2
-                            border.color: Theme.border; border.width: 1
-                            implicitWidth: impTxt.implicitWidth + 24; implicitHeight: 30
-                            Text {
-                                id:
-                                    impTxt; anchors.centerIn: parent; text: I18n.t("settings.data.importJson"); color: Theme.text; font.pixelSize: Theme.fsMd
-                            }
-                            MouseArea { id: impMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.importJsonRequested() }
+                        ActionButton {
+                            objectName: "settings-import-json"
+                            text: I18n.t("settings.data.importJson")
+                            onActivated: settingsBridge.importJsonRequested()
                         }
                     }
                 }
@@ -2910,24 +2903,15 @@ Item {
                             Text { text: I18n.t("settings.data.wipe"); color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
                             Text { text: I18n.t("settings.data.wipe.hint"); color: Theme.textMuted; font.pixelSize: Theme.fsXs; wrapMode: Text.WordWrap; Layout.fillWidth: true }
                         }
-                        Rectangle {
-                            radius: Theme.radiusMd
-                            color: wipeRow.armed ? Theme.danger
-                                 : (wipeMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10))
-                            border.color: Theme.danger; border.width: 1
-                            implicitWidth: wipeTxt.implicitWidth + 24
+                        ActionButton {
+                            objectName: "settings-wipe"
+                            kind: "danger"
+                            armed: wipeRow.armed
                             implicitHeight: 28
-                            Text {
-                                id: wipeTxt; anchors.centerIn: parent
-                                text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
-                                color: wipeRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium
-                            }
-                            MouseArea {
-                                id: wipeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    if (!wipeRow.armed) { wipeRow.armed = true; wipeDisarm.restart(); }
-                                    else { wipeRow.armed = false; wipeDisarm.stop(); AppController.resetToFirstRun(); }
-                                }
+                            text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
+                            onActivated: {
+                                if (!wipeRow.armed) { wipeRow.armed = true; wipeDisarm.restart(); }
+                                else { wipeRow.armed = false; wipeDisarm.stop(); AppController.resetToFirstRun(); }
                             }
                             Timer { id: wipeDisarm; interval: 3500; onTriggered: wipeRow.armed = false }
                         }
@@ -3005,25 +2989,15 @@ Item {
                     }
                     RowLayout {
                         spacing: Theme.spMd
-                        Rectangle {
-                            radius: Theme.radiusMd
-                            color: reportMA.containsMouse ? Theme.panel3 : Theme.panel2
-                            border.color: Theme.border; border.width: 1
-                            implicitWidth: reportTxt.implicitWidth + 24; implicitHeight: 30
-                            Text {
-                                id: reportTxt; anchors.centerIn: parent; text: I18n.t("settings.about.reportIssue"); color: Theme.text; font.pixelSize: Theme.fsMd
-                            }
-                            MouseArea { id: reportMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.reportAnIssue() }
+                        ActionButton {
+                            objectName: "settings-report-issue"
+                            text: I18n.t("settings.about.reportIssue")
+                            onActivated: AppController.reportAnIssue()
                         }
-                        Rectangle {
-                            radius: Theme.radiusMd
-                            color: logsMA.containsMouse ? Theme.panel3 : Theme.panel2
-                            border.color: Theme.border; border.width: 1
-                            implicitWidth: logsTxt.implicitWidth + 24; implicitHeight: 30
-                            Text {
-                                id: logsTxt; anchors.centerIn: parent; text: I18n.t("settings.about.openLogs"); color: Theme.text; font.pixelSize: Theme.fsMd
-                            }
-                            MouseArea { id: logsMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLogsFolder() }
+                        ActionButton {
+                            objectName: "settings-open-logs"
+                            text: I18n.t("settings.about.openLogs")
+                            onActivated: AppController.openLogsFolder()
                         }
                     }
                 }
@@ -3050,26 +3024,17 @@ Item {
                     }
                     RowLayout {
                         spacing: Theme.spMd
-                        Rectangle {
-                            radius: Theme.radiusMd
-                            color: checkMA.containsMouse ? Theme.panel3 : Theme.panel2
-                            border.color: Theme.border; border.width: 1
-                            implicitWidth: checkTxt.implicitWidth + 24; implicitHeight: 30
-                            Text {
-                                id: checkTxt; anchors.centerIn: parent; text: I18n.t("settings.about.checkUpdates"); color: Theme.text; font.pixelSize: Theme.fsMd
-                            }
-                            MouseArea { id: checkMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.checkForUpdates() }
+                        ActionButton {
+                            objectName: "settings-check-updates"
+                            text: I18n.t("settings.about.checkUpdates")
+                            onActivated: AppController.checkForUpdates()
                         }
-                        Rectangle {
+                        ActionButton {
+                            objectName: "settings-download-update"
                             visible: updatesCol.updateReady
-                            radius: Theme.radiusMd
-                            color: dlMA.containsMouse ? Theme.accent : Theme.panel2
-                            border.color: Theme.border; border.width: 1
-                            implicitWidth: dlTxt.implicitWidth + 24; implicitHeight: 30
-                            Text {
-                                id: dlTxt; anchors.centerIn: parent; text: I18n.t("settings.about.download"); color: dlMA.containsMouse ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsMd
-                            }
-                            MouseArea { id: dlMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.openLatestRelease() }
+                            hoverAccent: true
+                            text: I18n.t("settings.about.download")
+                            onActivated: AppController.openLatestRelease()
                         }
                     }
                     SwitchRow {

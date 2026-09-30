@@ -192,4 +192,168 @@ TestCase {
         toggle.clicked(null);
         tryVerify(function () { return !card.mapOpen; }, 1000, "a second click did not fold it again");
     }
+
+    // ─── Integrations: busy buttons and the last error (DES-5) ─────────
+    // "Sync now" and "Test connection" stayed clickable while the request ran,
+    // and a failure lived only in a toast that was gone in three seconds.
+
+    SignalSpy { id: activatedSpy; signalName: "activated" }
+
+    function test_a_running_sync_is_busy_and_ignores_a_second_press() {
+        const sv = make();
+        IntegrationActivity.clear("redmine");
+        _card(sv, "redmine", { connected: true });
+        const sync = findChild(sv, "int-sync-redmine");
+        verify(sync !== null);
+        compare(sync.available, true);
+
+        IntegrationActivity.start("redmine", "sync");
+        compare(sync.busy, true);
+        compare(sync.available, false, "a busy button still took presses");
+        compare(sync.shownText, I18n.t("settings.integrations.syncing"));
+        compare(sync.Accessible.name, I18n.t("settings.integrations.syncing"));
+
+        activatedSpy.clear();
+        activatedSpy.target = sync;
+        sync.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(activatedSpy.count, 0, "Return ran a sync that is already running");
+        verify(sync.activeFocus, "going busy took the keyboard away");
+
+        IntegrationActivity.finish("redmine", "sync", true, "");
+        compare(sync.busy, false);
+        compare(sync.available, true);
+    }
+
+    function test_a_failure_stays_on_the_card_until_the_next_success() {
+        const sv = make();
+        IntegrationActivity.clear("redmine");
+        _card(sv, "redmine", { connected: true });
+        const err = findChild(sv, "int-last-error-redmine");
+        const synced = findChild(sv, "int-last-sync-redmine");
+        compare(err.visible, false);
+
+        IntegrationActivity.start("redmine", "test");
+        IntegrationActivity.finish("redmine", "test", false, "Redmine: 401 bad token");
+        compare(err.visible, true, "the error went with the toast");
+        verify(err.text.indexOf("401 bad token") >= 0, err.text);
+        compare(findChild(sv, "int-test-redmine").busy, false);
+
+        IntegrationActivity.finish("redmine", "sync", true, "");
+        compare(err.visible, false, "a sync that worked left the old error up");
+        compare(synced.visible, true, "no last-sync time after a sync");
+    }
+
+    // The real round trip: a card marked connected with no token has no
+    // tracker behind it, so AppController answers the sync at once — as a
+    // failure the card keeps, not only a toast.
+    function test_sync_now_with_no_tracker_shows_why() {
+        const sv = make();
+        IntegrationActivity.clear("redmine");
+        _card(sv, "redmine", { connected: true });
+        const sync = findChild(sv, "int-sync-redmine");
+        sync.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(sync.busy, false, "the answer came back and the button stayed busy");
+        const err = findChild(sv, "int-last-error-redmine");
+        compare(err.visible, true);
+        verify(err.text.length > 0);
+    }
+
+    // Settings is rebuilt as the user moves around; an answer that came in
+    // meanwhile is still on the card when they come back.
+    function test_the_last_error_outlives_the_settings_view() {
+        IntegrationActivity.clear("redmine");
+        IntegrationActivity.finish("redmine", "sync", false, "Redmine sync failed: 404");
+        const sv = make();
+        _card(sv, "redmine", { connected: true });
+        const err = findChild(sv, "int-last-error-redmine");
+        compare(err.visible, true);
+        verify(err.text.indexOf("404") >= 0, err.text);
+        IntegrationActivity.clear("redmine");
+        compare(err.visible, false);
+    }
+
+    function test_a_busy_limit_frees_a_button_nobody_answered() {
+        const sv = make();
+        IntegrationActivity.clear("redmine");
+        _card(sv, "redmine", { connected: true });
+        IntegrationActivity.start("redmine", "sync");
+        IntegrationActivity.expire(Date.now() + 10 * 60 * 1000);
+        compare(findChild(sv, "int-sync-redmine").busy, false);
+        compare(findChild(sv, "int-last-error-redmine").visible, false,
+                "a timeout is not an answer and must not invent an error");
+    }
+
+    // ─── Settings actions on the keyboard (DES-8) ──────────────────────
+    // Export, Import, Restore, Wipe, Report, Logs, Check updates were
+    // Rectangle + MouseArea: no Tab stop, no name, no disabled state.
+
+    function test_data_actions_are_on_the_tab_path_and_named() {
+        const sv = make();
+        sv.activeSection = "data";
+        tryVerify(function () { return findChild(sv, "settings-export-json") !== null; }, 2000);
+        const exp = findChild(sv, "settings-export-json");
+        const imp = findChild(sv, "settings-import-json");
+        verify(exp.activeFocusOnTab);
+        compare(exp.Accessible.role, Accessible.Button);
+        compare(exp.Accessible.name, I18n.t("settings.data.exportJson"));
+        exp.forceActiveFocus();
+        keyClick(Qt.Key_Tab);
+        verify(imp.activeFocus, "Tab from Export did not reach Import");
+    }
+
+    function test_wipe_arms_from_the_keyboard() {
+        const sv = make();
+        sv.activeSection = "data";
+        tryVerify(function () { return findChild(sv, "settings-wipe") !== null; }, 2000);
+        const wipe = findChild(sv, "settings-wipe");
+        compare(wipe.armed, false);
+        wipe.forceActiveFocus();
+        // One press only: the second one would wipe the test profile.
+        keyClick(Qt.Key_Space);
+        compare(wipe.armed, true, "Space did not arm the wipe");
+        compare(wipe.Accessible.name, I18n.t("settings.data.wipe.confirm"));
+        wipe.parent.armed = false;
+    }
+
+    function test_about_actions_are_named_buttons() {
+        const sv = make();
+        sv.activeSection = "about";
+        tryVerify(function () { return findChild(sv, "settings-open-logs") !== null; }, 2000);
+        const names = {
+            "settings-report-issue": "settings.about.reportIssue",
+            "settings-open-logs": "settings.about.openLogs",
+            "settings-check-updates": "settings.about.checkUpdates"
+        };
+        for (const id in names) {
+            const b = findChild(sv, id);
+            verify(b !== null, id);
+            verify(b.activeFocusOnTab, id + " is not on the Tab path");
+            compare(b.Accessible.role, Accessible.Button, id);
+            compare(b.Accessible.name, I18n.t(names[id]), id);
+        }
+    }
+
+    // The button itself: Return, Enter and Space run it, a disabled one
+    // neither runs nor looks live. (The Settings instances open a browser,
+    // a folder or the network, so their keys are pinned here instead.)
+    function test_action_button_keys_and_disabled_state() {
+        const b = createTemporaryQmlObject('import TodoCpp; ActionButton { text: "Go" }', host);
+        activatedSpy.clear();
+        activatedSpy.target = b;
+        b.forceActiveFocus();
+        verify(b.activeFocus);
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Enter);
+        keyClick(Qt.Key_Space);
+        compare(activatedSpy.count, 3);
+        compare(b.opacity, 1);
+
+        b.enabled = false;
+        compare(b.available, false);
+        compare(b.opacity, 0.45, "a disabled button looked live");
+        b.press();
+        compare(activatedSpy.count, 3, "a disabled button still ran");
+    }
 }
