@@ -9,6 +9,10 @@
 // Rows are flat. A quote holding a list holding a paragraph is one row that
 // knows how deep it sits, which is what keeps the list virtualised: a note
 // with two thousand task items draws the dozen on screen.
+//
+// Bound: the row components below read `rowItem` and `view`, which qmllint
+// could only call unqualified access before.
+pragma ComponentBehavior: Bound
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls
@@ -252,12 +256,15 @@ ListView {
                 // note. The edit goes through the editor's own cursor, so it
                 // lands on the undo stack and the caret stays where the reader
                 // left it.
-                MouseArea {
+                ClickArea {
                     objectName: "mdTaskClick"
-                    anchors.fill: parent
-                    anchors.margins: -6
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
+                    minTarget: 26
+                    label: String(rowItem.model.html || "").replace(/<[^>]*>/g, "").trim() || I18n.t("notes.a11y.task")
+                    role: Accessible.CheckBox
+                    checkable: true
+                    checked: rowItem.model.taskState === 1
+                    showTip: false
+                    onActivated: {
                         // The write goes into the editor's own document, in one
                         // edit block, so Ctrl+Z takes the whole change back.
                         if (view.editorDocument && view.document.toggleTask(view.editorDocument, rowItem.index))
@@ -334,16 +341,16 @@ ListView {
                         Text {
                             objectName: "mdCodeCopy"
                             text: copyArea.copied ? I18n.t("notes.code.copied") : I18n.t("notes.code.copy")
-                            color: copyArea.containsMouse ? Theme.accentStrong : Theme.textDim
+                            color: copyArea.hovered ? Theme.accentStrong : Theme.textDim
                             font.family: Theme.fontUi
                             font.pixelSize: Theme.fsSm
-                            MouseArea {
+                            ClickArea {
                                 id: copyArea
-                                anchors.fill: parent
-                                anchors.margins: -4
-                                hoverEnabled: true
+                                objectName: "mdCodeCopyButton"
+                                label: I18n.t("notes.code.copy")
+                                showTip: false
                                 property bool copied: false
-                                onClicked: {
+                                onActivated: {
                                     clipboardHelper.text = rowItem.model.code;
                                     clipboardHelper.selectAll();
                                     clipboardHelper.copy();
@@ -539,28 +546,27 @@ ListView {
                         objectName: "mdRemoteImageLoad"
                         visible: /^https?:\/\//i.test(rowItem.model.imageSource)
                         text: I18n.t("notes.image.load")
-                        color: loadArea.containsMouse ? Theme.accentStrong : Theme.textDim
+                        color: loadArea.hovered ? Theme.accentStrong : Theme.textDim
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
-                        MouseArea {
+                        ClickArea {
                             id: loadArea
-                            anchors.fill: parent
-                            anchors.margins: -4
-                            hoverEnabled: true
-                            onClicked: view.document.allowRemoteImages = true
+                            label: I18n.t("notes.image.load")
+                            showTip: false
+                            onActivated: view.document.allowRemoteImages = true
                         }
                     }
                     Text {
                         text: I18n.t("notes.image.open")
-                        color: openArea.containsMouse ? Theme.accentStrong : Theme.textDim
+                        color: openArea.hovered ? Theme.accentStrong : Theme.textDim
                         font.family: Theme.fontUi
                         font.pixelSize: Theme.fsMd
-                        MouseArea {
+                        ClickArea {
                             id: openArea
-                            anchors.fill: parent
-                            anchors.margins: -4
-                            hoverEnabled: true
-                            onClicked: view.openExternal(rowItem.model.imageSource)
+                            role: Accessible.Link
+                            label: I18n.t("notes.image.open")
+                            showTip: false
+                            onActivated: view.openExternal(rowItem.model.imageSource)
                         }
                     }
                 }

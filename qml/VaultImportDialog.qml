@@ -32,6 +32,7 @@ QQC.Dialog {
     padding: Theme.inset
     title: I18n.t("notes.vault.previewTitle")
 
+    header: DialogHeader { text: root.title }
     background: Rectangle {
         radius: Theme.radiusXl
         color: Theme.panel
@@ -76,9 +77,7 @@ QQC.Dialog {
         }
     }
 
-    footer: RowLayout {
-        spacing: Theme.spMd
-        Item { Layout.fillWidth: true }
+    footer: DialogFooter {
         PillButton { text: I18n.t("common.cancel"); onClicked: root.close() }
         PillButton {
             objectName: "vault-import-go"
@@ -90,6 +89,5 @@ QQC.Dialog {
                 root.imported(AppController.importNotesFolder(root.folder));
             }
         }
-        Item { Layout.preferredWidth: Theme.spMd }
     }
 }

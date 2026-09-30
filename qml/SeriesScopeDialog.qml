@@ -66,6 +66,7 @@ Dialog {
         onActivated: root.answer("this")
     }
 
+    header: DialogHeader { text: root.title }
     background: Rectangle {
         radius: Theme.radiusXl
         color: Theme.panel
@@ -80,9 +81,14 @@ Dialog {
         wrapMode: Text.Wrap
     }
 
-    footer: RowLayout {
-        spacing: Theme.spMd
-        Layout.margins: Theme.sp2xl
+    // Cancel as a button too, not only Esc / a click outside (design audit
+    // DES-24: the dialog offered three answers and no way back).
+    footer: DialogFooter {
+        PillButton {
+            objectName: "series-scope-cancel"
+            text: I18n.t("common.cancel")
+            onClicked: root.close()
+        }
         Item { Layout.fillWidth: true }
         PillButton {
             objectName: "series-scope-all"

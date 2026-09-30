@@ -1177,6 +1177,11 @@ class AppController : public QObject {
   // A credential sign-in finished. The card clears its password field on both
   // outcomes, so a failed attempt never leaves one sitting in the UI.
   void integrationLoginFinished(const QString& providerId, bool ok);
+  // A card action came back: `action` is "sync", "test", "oauth" or "signin".
+  // `message` is what the toast said on failure (empty on success). The card
+  // shows its buttons as busy until this arrives and keeps the last error on
+  // screen, since the toast is gone in a few seconds (design audit DES-5).
+  void integrationActionFinished(const QString& providerId, const QString& action, bool ok, const QString& message);
   // Raised whenever the keychain contents change — on the async load at startup
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.

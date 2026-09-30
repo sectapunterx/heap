@@ -113,6 +113,11 @@ Popup {
         Item {
             id: keyCatcher
             focus: true
+            // On the Tab path with the header and footer buttons, so Tab
+            // comes back round to the grid instead of leaving it for good.
+            activeFocusOnTab: true
+            Accessible.role: Accessible.Table
+            Accessible.name: AppController.humanDate(pop.selected)
             Layout.preferredWidth: 0
             Layout.preferredHeight: 0
             Keys.onPressed: (e) => {
@@ -156,9 +161,15 @@ Popup {
             spacing: Theme.spSm
             Rectangle {
                 width: 24; height: 24; radius: Theme.radiusMd
-                color: prevMA.containsMouse ? Theme.panel3 : "transparent"
+                color: prevMA.hovered ? Theme.panel3 : "transparent"
                 Text { anchors.centerIn: parent; text: "‹"; color: Theme.text; font.pixelSize: Theme.fsLg }
-                MouseArea { id: prevMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pop._step(-1) }
+                ClickArea {
+                    id: prevMA
+                    objectName: "date-picker-prev"
+                    label: I18n.t("month.prev")
+                    tip: I18n.t("month.prev") + "  PgUp"
+                    onActivated: pop._step(-1)
+                }
             }
             Text {
                 Layout.fillWidth: true
@@ -171,9 +182,15 @@ Popup {
             }
             Rectangle {
                 width: 24; height: 24; radius: Theme.radiusMd
-                color: nextMA.containsMouse ? Theme.panel3 : "transparent"
+                color: nextMA.hovered ? Theme.panel3 : "transparent"
                 Text { anchors.centerIn: parent; text: "›"; color: Theme.text; font.pixelSize: Theme.fsLg }
-                MouseArea { id: nextMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: pop._step(1) }
+                ClickArea {
+                    id: nextMA
+                    objectName: "date-picker-next"
+                    label: I18n.t("month.next")
+                    tip: I18n.t("month.next") + "  PgDown"
+                    onActivated: pop._step(1)
+                }
             }
         }
 
@@ -232,12 +249,15 @@ Popup {
             Layout.fillWidth: true
             implicitHeight: 26
             radius: Theme.radiusMd
-            color: todayMA.containsMouse ? Theme.panel3 : Theme.panel2
+            color: todayMA.hovered ? Theme.panel3 : Theme.panel2
             border.color: Theme.border; border.width: 1
             Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: Theme.fsSm }
-            MouseArea {
-                id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: pop._pick(new Date())
+            ClickArea {
+                id: todayMA
+                objectName: "date-picker-today"
+                label: I18n.t("common.today")
+                tip: I18n.t("common.today") + "  T"
+                onActivated: pop._pick(new Date())
             }
         }
         Rectangle {
@@ -246,12 +266,14 @@ Popup {
             Layout.fillWidth: true
             implicitHeight: 26
             radius: Theme.radiusMd
-            color: clearMA.containsMouse ? Theme.panel3 : Theme.panel2
+            color: clearMA.hovered ? Theme.panel3 : Theme.panel2
             border.color: Theme.border; border.width: 1
             Text { anchors.centerIn: parent; text: I18n.t("datePicker.clear"); color: Theme.text; font.pixelSize: Theme.fsSm }
-            MouseArea {
-                id: clearMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                onClicked: { pop.cleared(); pop.close(); }
+            ClickArea {
+                id: clearMA
+                label: I18n.t("datePicker.clear")
+                tip: I18n.t("datePicker.clear") + "  Del"
+                onActivated: { pop.cleared(); pop.close(); }
             }
         }
         }

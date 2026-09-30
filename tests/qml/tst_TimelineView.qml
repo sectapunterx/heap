@@ -74,6 +74,43 @@ TestCase {
 
     // The timeline builds the rows on screen, not one per task (audit A5):
     // 2000 tasks used to cost over a gigabyte of delegates.
+    // Design audit DES-12: every bucket's label column is the same width, so
+    // rows line up across buckets — "На следующей неделе" pushed its own
+    // column wider and its rows started ~32px right of the others.
+    function test_label_columns_line_up_across_buckets() {
+        const saved = AppController.language;
+        AppController.language = "ru";
+        const next = new Date();
+        next.setDate(next.getDate() + 8);
+        next.setHours(0, 0, 0, 0);
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true; d.id = "TLV-ALIGN"; d.title = "align probe";
+        d.dueAt = next; d.scheduledAt = next; d.hasTime = false;
+        AppController.saveTask(d);
+        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent }');
+        function widths() {
+            const out = [];
+            (function walk(it) {
+                if (!it) return;
+                if (it.objectName === "timeline-label-col" && it.visible) out.push(it.width);
+                const kids = it.children || [];
+                for (let i = 0; i < kids.length; i++) walk(kids[i]);
+            })(tv);
+            return out;
+        }
+        // Rows are laid out a frame or more after they are built (slow CI
+        // runners showed 0 for the last ones); wait for the layout to settle.
+        tryVerify(function () {
+            const w = widths();
+            return w.length > 0 && w.every(function (x) { return x > 0; });
+        }, 3000, "label columns never got a width");
+        const cols = widths();
+        AppController.deleteTask("TLV-ALIGN");
+        AppController.clearPendingUndo();
+        AppController.language = saved;
+        for (let i = 0; i < cols.length; i++) compare(cols[i], 160);
+    }
+
     function test_a_long_timeline_builds_only_the_visible_rows() {
         const day = new Date();
         day.setDate(day.getDate() + 1);

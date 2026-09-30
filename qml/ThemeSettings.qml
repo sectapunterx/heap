@@ -193,7 +193,7 @@ ColumnLayout {
                 width: 150; height: 92
                 radius: Theme.radius
                 color: t.colors.bg
-                border.color: selected ? Theme.accent : (cardMA.containsMouse ? Theme.borderStrong : Theme.border)
+                border.color: selected ? Theme.accent : (cardMA.hovered ? Theme.borderStrong : Theme.border)
                 border.width: selected ? 2 : 1
 
                 // A miniature of the theme: a panel, a line of text, accent
@@ -235,12 +235,15 @@ ColumnLayout {
                     color: card.t.colors.textMuted
                     font.pixelSize: Theme.fsXs
                 }
-                MouseArea {
+                ClickArea {
                     id: cardMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: ts.pick(card.modelData.id)
+                    objectName: "theme-card-area-" + card.modelData.id
+                    label: card.t.name
+                    showTip: false
+                    role: Accessible.RadioButton
+                    checkable: true
+                    checked: card.selected
+                    onActivated: ts.pick(card.modelData.id)
                 }
             }
         }
@@ -429,10 +432,10 @@ ColumnLayout {
                             radius: Theme.radiusSm
                             color: tokRow.value
                             border.color: Theme.borderStrong; border.width: 1
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
+                            ClickArea {
+                                objectName: "theme-swatch-area-" + tokRow.key
+                                label: I18n.t("settings.theme.pickColor").arg(I18n.t("theme.token." + tokRow.key))
+                                onActivated: {
                                     picker.token = tokRow.key;
                                     picker.openFor(tokRow.value, sw);
                                 }
@@ -465,16 +468,15 @@ ColumnLayout {
                             objectName: "theme-reset-" + tokRow.key
                             text: "↺"
                             opacity: tokRow.changed ? 1 : 0
-                            color: resetMA.containsMouse ? Theme.accentStrong : Theme.textMuted
+                            color: resetMA.hovered ? Theme.accentStrong : Theme.textMuted
                             font.pixelSize: Theme.fsMd
                             Layout.preferredWidth: 14
-                            MouseArea {
+                            ClickArea {
                                 id: resetMA
-                                anchors.fill: parent
+                                objectName: "theme-reset-area-" + tokRow.key
                                 enabled: tokRow.changed
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: ts.resetToken(tokRow.key)
+                                label: I18n.t("settings.theme.resetToken").arg(I18n.t("theme.token." + tokRow.key))
+                                onActivated: ts.resetToken(tokRow.key)
                             }
                         }
                     }

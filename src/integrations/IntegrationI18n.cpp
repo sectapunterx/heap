@@ -51,6 +51,25 @@ const QHash<QString, Entry>& table() {
 // Whole sentences heap's providers write, English → Russian.
 const QList<QPair<QString, QString>>& phrases() {
   static const QList<QPair<QString, QString>> p = {
+      // What ReplyError adds when the tracker's answer says nothing useful
+      // (design audit DES-14: a Russian UI showed "HTTP 401 — unauthorized —
+      // check the token").
+      {QStringLiteral("the repo or project does not exist, or this token has no access to it"),
+       QStringLiteral("репозиторий или проект не существует, либо у токена нет к нему доступа")},
+      {QStringLiteral("the token was rejected — sign in again or paste a new one"),
+       QStringLiteral("токен отклонён — войдите снова или вставьте новый")},
+      {QStringLiteral("the token lacks access to this, or a required scope"),
+       QStringLiteral("у токена нет доступа к этому или нужного разрешения")},
+      {QStringLiteral("forbidden — the token is missing a required scope"),
+       QStringLiteral("доступ запрещён — у токена нет нужного разрешения")},
+      {QStringLiteral("not found — check the URL, project or repo"),
+       QStringLiteral("не найдено — проверьте адрес, проект или репозиторий")},
+      {QStringLiteral("rate limited — try again in a few minutes"),
+       QStringLiteral("превышен лимит запросов — повторите через несколько минут")},
+      {QStringLiteral("bad request — check the query or filter"), QStringLiteral("некорректный запрос — проверьте запрос или фильтр")},
+      {QStringLiteral("the network proxy rejected the request"), QStringLiteral("прокси-сервер отклонил запрос")},
+      {QStringLiteral("unauthorized — check the token"), QStringLiteral("нет авторизации — проверьте токен")},
+      {QStringLiteral("token refresh failed"), QStringLiteral("не удалось обновить токен")},
       {QStringLiteral("the browser session is no longer valid; sign in again"),
        QStringLiteral("сессия браузера больше не действительна — войдите снова")},
       {QStringLiteral("use an API token from id.atlassian.com, with the email of that same Atlassian account"),
@@ -126,7 +145,10 @@ QString translateProviderReason(const QString& reason, bool ru) {
     // A short phrase ("not configured") must be the whole reason or a whole
     // clause, never a fragment of the tracker's own sentence.
     const qsizetype end = at + en.size();
-    const bool startsClause = at == 0 || out.mid(0, at).endsWith(QStringLiteral("— ")) || out.mid(0, at).endsWith(QStringLiteral("· "));
+    // ": " too: ReplyError joins its explanation to the tracker's bare
+    // reason that way ("Not Found: the repo or project does not exist…").
+    const bool startsClause = at == 0 || out.mid(0, at).endsWith(QStringLiteral("— ")) || out.mid(0, at).endsWith(QStringLiteral("· ")) ||
+                              out.mid(0, at).endsWith(QStringLiteral(": "));
     const bool endsClause = end == out.size() || out.mid(end).startsWith(QStringLiteral(" ·"));
     if(!startsClause || !endsClause) {
       continue;

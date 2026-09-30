@@ -156,12 +156,13 @@ Item {
                 Repeater {
                     model: ["edit", "split"]
                     delegate: Rectangle {
+                        id: modeChip
                         required property var modelData
                         objectName: "docpage-mode-" + modelData
                         implicitWidth: 44; implicitHeight: 22
                         radius: Theme.radiusSm
                         color: root.mode === modelData ? Theme.withAlpha(Theme.accent, 0.18)
-                             : modeMA.containsMouse ? Theme.panel3 : "transparent"
+                             : modeMA.hovered ? Theme.panel3 : "transparent"
                         border.color: root.mode === modelData ? Theme.accent : Theme.border
                         border.width: 1
                         Text {
@@ -170,12 +171,14 @@ Item {
                             color: root.mode === modelData ? Theme.text : Theme.textDim
                             font.pixelSize: Theme.fsXs
                         }
-                        MouseArea {
+                        ClickArea {
                             id: modeMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.mode = modelData
+                            label: I18n.t("docs.mode." + modeChip.modelData)
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: root.mode === modeChip.modelData
+                            showTip: false
+                            onActivated: root.mode = modeChip.modelData
                         }
                     }
                 }

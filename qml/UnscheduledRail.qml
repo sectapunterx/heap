@@ -200,6 +200,15 @@ Rectangle {
                     }
                 }
 
+                // Opening from the keyboard (design audit DES-19). Under the
+                // drag area and deaf to the pointer, so a press still drags.
+                ClickArea {
+                    objectName: "unscheduled-open"
+                    label: chip.modelData.title
+                    showTip: false
+                    acceptedButtons: Qt.NoButton
+                    onActivated: dragArea.open()
+                }
                 MouseArea {
                     id: dragArea
                     anchors.fill: parent
@@ -208,6 +217,8 @@ Rectangle {
                     drag.threshold: 5
                     cursorShape: dragArea.drag.active ? Qt.ClosedHandCursor : Qt.PointingHandCursor
                     property bool didDrag: false
+                    // A click that did not drag, and Return on the ClickArea.
+                    function open() { root.taskClicked(chip.taskId); }
                     onPressed: { chip.homeX = chip.x; chip.homeY = chip.y; didDrag = false; }
                     onPositionChanged: if (dragArea.drag.active) didDrag = true;
                     onReleased: {
@@ -217,7 +228,7 @@ Rectangle {
                         chip.Drag.drop();
                         chip.x = chip.homeX;
                         chip.y = chip.homeY;
-                        if (!didDrag) root.taskClicked(chip.taskId);
+                        if (!didDrag) dragArea.open();
                     }
                 }
             }

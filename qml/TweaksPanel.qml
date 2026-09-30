@@ -88,19 +88,19 @@ Popup {
                 Item { Layout.fillWidth: true }
                 Rectangle {
                     width: 22; height: 22; radius: Theme.radiusSm
-                    color: closeMA.containsMouse ? Theme.panel3 : "transparent"
+                    color: closeMA.hovered ? Theme.panel3 : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "✕"
                         color: Theme.textDim
                         font.pixelSize: Theme.fsMd
                     }
-                    MouseArea {
+                    ClickArea {
                         id: closeMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.close()
+                        objectName: "tweaks-close"
+                        label: I18n.t("tweaks.close")
+                        shortcutId: "tweaks.open"
+                        onActivated: root.close()
                     }
                 }
             }
@@ -325,7 +325,9 @@ Popup {
         Rectangle {
             width: 32; height: 18; radius: 9
             color: toggleRow.checked ? Theme.accent : Theme.panel3
-            border.color: toggleRow.checked ? "transparent" : Theme.border
+            // An edge for the OFF track and the knob: both vanished on the
+            // light themes' panel3 and accent (DES-20).
+            border.color: toggleRow.checked ? "transparent" : Theme.fieldBorder
             border.width: 1
             Behavior on color { ColorAnimation { duration: Theme.animMs } }
             FocusRing { target: toggleRow; radius: 12 }
@@ -334,7 +336,7 @@ Popup {
                 y: 2
                 x: toggleRow.checked ? parent.width - width - 2 : 2
                 color: Theme.knob
-                border.color: Qt.rgba(0, 0, 0, 0.18)
+                border.color: Theme.fieldBorder
                 border.width: 1
                 Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }
             }

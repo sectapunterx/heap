@@ -32,6 +32,7 @@ QQC.Dialog {
     width: Math.min(460, (parent ? parent.width : 460) - 32)
     padding: Theme.inset
     title: I18n.t("md.link.confirm.title")
+    header: DialogHeader { text: root.title }
     background: Rectangle {
         radius: Theme.radiusXl
         color: Theme.panel
@@ -56,9 +57,7 @@ QQC.Dialog {
             wrapMode: Text.WrapAnywhere
         }
     }
-    footer: RowLayout {
-        spacing: Theme.spMd
-        Item { Layout.fillWidth: true }
+    footer: DialogFooter {
         PillButton {
             text: I18n.t("common.cancel")
             onClicked: root.close()
@@ -72,6 +71,5 @@ QQC.Dialog {
                 Qt.openUrlExternally(root.link);
             }
         }
-        Item { Layout.preferredWidth: Theme.spMd }
     }
 }

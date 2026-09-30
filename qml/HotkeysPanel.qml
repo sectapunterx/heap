@@ -129,14 +129,14 @@ Popup {
                 }
                 Rectangle {
                     width: 22; height: 22; radius: Theme.radiusSm
-                    color: closeMA.containsMouse ? Theme.panel3 : "transparent"
+                    color: closeMA.hovered ? Theme.panel3 : "transparent"
                     Text { anchors.centerIn: parent; text: "✕"; color: Theme.textDim; font.pixelSize: Theme.fsMd }
-                    MouseArea {
+                    ClickArea {
                         id: closeMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.close()
+                        objectName: "hotkeys-close"
+                        label: I18n.t("common.close")
+                        shortcutId: "hotkeys.open"
+                        onActivated: root.close()
                     }
                 }
             }
@@ -439,7 +439,7 @@ Popup {
 
             Rectangle {
                 width: 22; height: 22; radius: Theme.radiusSm
-                color: editMA.containsMouse ? Theme.panel3 : "transparent"
+                color: editMA.hovered ? Theme.panel3 : "transparent"
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
@@ -447,30 +447,31 @@ Popup {
                     color: chip.capturing ? Theme.accentStrong : Theme.textMuted
                     font.pixelSize: Theme.fsSm
                 }
-                MouseArea {
+                // Named and with a tooltip, but not a Tab stop: the chip
+                // beside it already records on Enter and saves on Enter.
+                ClickArea {
                     id: editMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: chip.capturing ? chip.commit() : chip.startCapture()
+                    objectName: "hotkeys-edit"
+                    activeFocusOnTab: false
+                    label: chip.capturing ? I18n.t("common.save") : I18n.t("hotkeys.edit")
+                    onActivated: chip.capturing ? chip.commit() : chip.startCapture()
                 }
             }
 
             Rectangle {
                 width: 22; height: 22; radius: Theme.radiusSm
                 visible: chip.sequence !== chip.defaultSequence
-                color: resetMA.containsMouse ? Theme.panel3 : "transparent"
+                color: resetMA.hovered ? Theme.panel3 : "transparent"
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
                     text: "↺"; color: Theme.textMuted; font.pixelSize: Theme.fsSm
                 }
-                MouseArea {
+                ClickArea {
                     id: resetMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
+                    objectName: "hotkeys-reset-" + chip.actionId
+                    label: I18n.t("hotkeys.reset")
+                    onActivated: {
                         const id = chip.actionId;
                         chip.cancelCapture();
                         AppController.resetShortcut(id);

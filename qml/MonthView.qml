@@ -164,6 +164,11 @@ Item {
             AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + dir * rows * 7);
         }
     }
+    // What ‹ › say they do: a month, or the run of weeks on screen.
+    function navLabel(dir) {
+        if (root.mode === "month") return I18n.t(dir < 0 ? "month.prev" : "month.next");
+        return I18n.t(dir < 0 ? "month.prevWeeks" : "month.nextWeeks");
+    }
     function rangeTitle() {
         if (mode === "month")
             return I18n.monthName(anchorDate.getMonth()) + " " + anchorDate.getFullYear();
@@ -186,14 +191,21 @@ Item {
 
             // prev / next
             Repeater {
-                model: [{ g: "‹", d: -1 }, { g: "›", d: 1 }]
+                model: [{ g: "‹", d: -1, k: "cal.prev" }, { g: "›", d: 1, k: "cal.next" }]
                 delegate: Rectangle {
+                    id: navBtn
                     required property var modelData
+                    objectName: navBtn.modelData.d < 0 ? "month-prev" : "month-next"
                     width: 28; height: 28; radius: Theme.radiusMd
-                    color: navMA.containsMouse ? Theme.panel3 : Theme.panel2
+                    color: navMA.hovered ? Theme.panel3 : Theme.panel2
                     border.color: Theme.border; border.width: 1
-                    Text { anchors.centerIn: parent; text: parent.modelData.g; color: Theme.text; font.pixelSize: Theme.fsLg }
-                    MouseArea { id: navMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.step(parent.modelData.d) }
+                    Text { anchors.centerIn: parent; text: navBtn.modelData.g; color: Theme.text; font.pixelSize: Theme.fsLg }
+                    ClickArea {
+                        id: navMA
+                        label: root.navLabel(navBtn.modelData.d)
+                        shortcutId: navBtn.modelData.k
+                        onActivated: root.step(navBtn.modelData.d)
+                    }
                 }
             }
 
@@ -211,16 +223,26 @@ Item {
                 Repeater {
                     model: [{ id: "month", label: I18n.t("cal.month") }, { id: "weeks", label: I18n.t("cal.weeks") }]
                     delegate: Rectangle {
+                        id: modeBtn
                         required property var modelData
+                        objectName: "month-mode-" + modelData.id
                         readonly property bool sel: root.mode === modelData.id
                         width: 76; height: 28
                         radius: Theme.radiusMd
                         // A selected segment is tinted, not filled: a filled
                         // accent is the screen's one action ("+ Task").
-                        color: sel ? Theme.accentSoft : (modeMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                        color: sel ? Theme.accentSoft : (modeMA.hovered ? Theme.panel3 : Theme.panel2)
                         border.color: sel ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border; border.width: 1
                         Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
-                        MouseArea { id: modeMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.mode = parent.modelData.id }
+                        ClickArea {
+                            id: modeMA
+                            label: modeBtn.modelData.label
+                            showTip: false
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: modeBtn.sel
+                            onActivated: root.mode = modeBtn.modelData.id
+                        }
                     }
                 }
             }
@@ -230,29 +252,35 @@ Item {
                 spacing: Theme.spXs
                 visible: root.mode === "weeks"
                 Rectangle {
-                    width: 24; height: 28; radius: Theme.radiusMd; color: decMA.containsMouse ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
+                    width: 24; height: 28; radius: Theme.radiusMd; color: decMA.hovered ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: "−"; color: Theme.text; font.pixelSize: Theme.fsLg }
-                    MouseArea { id: decMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.weeksCount = Math.max(1, root.weeksCount - 1) }
+                    ClickArea { id: decMA; objectName: "month-fewer-weeks"; label: I18n.t("month.fewerWeeks"); onActivated: root.weeksCount = Math.max(1, root.weeksCount - 1) }
                 }
                 Rectangle {
                     width: 52; height: 28; radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: root.weeksCount + " " + I18n.t("cal.wk"); color: Theme.text; font.pixelSize: Theme.fsSm; font.family: Theme.fontMono }
                 }
                 Rectangle {
-                    width: 24; height: 28; radius: Theme.radiusMd; color: incMA.containsMouse ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
+                    width: 24; height: 28; radius: Theme.radiusMd; color: incMA.hovered ? Theme.panel3 : Theme.panel2; border.color: Theme.border; border.width: 1
                     Text { anchors.centerIn: parent; text: "+"; color: Theme.text; font.pixelSize: Theme.fsLg }
-                    MouseArea { id: incMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root.weeksCount = Math.min(8, root.weeksCount + 1) }
+                    ClickArea { id: incMA; objectName: "month-more-weeks"; label: I18n.t("month.moreWeeks"); onActivated: root.weeksCount = Math.min(8, root.weeksCount + 1) }
                 }
             }
 
             Rectangle {
                 width: 60; height: 28; radius: Theme.radiusMd
-                color: todayMA.containsMouse ? Theme.panel3 : Theme.panel2
+                color: todayMA.hovered ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 Text { anchors.centerIn: parent; text: I18n.t("common.today"); color: Theme.text; font.pixelSize: Theme.fsSm }
                 // AppController.today, like every other "today" in the app —
                 // a raw new Date() carries a time-of-day with it.
-                MouseArea { id: todayMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: AppController.selectedDate = AppController.today }
+                ClickArea {
+                    id: todayMA
+                    objectName: "month-today"
+                    label: I18n.t("common.today")
+                    shortcutId: "cal.today"
+                    onActivated: AppController.selectedDate = AppController.today
+                }
             }
         }
 
@@ -286,6 +314,7 @@ Item {
             Repeater {
                 model: root.cells
                 delegate: Rectangle {
+                    id: dayCell
                     required property var modelData
                     // Named alias so the nested chip Repeaters (whose own
                     // `modelData` is their int index) can still read the cell.
@@ -324,12 +353,16 @@ Item {
                         }
 
                         // Chips — first few tasks, then events, then overflow.
+                        // 20px, like the week's chips: at 15px a row of them
+                        // was the hardest target in the app to hit (design
+                        // audit DES-17).
                         Repeater {
                             model: Math.min(3, cell.tasks.length)
                             delegate: Rectangle {
+                                id: taskChip
                                 required property int index
                                 Layout.fillWidth: true
-                                implicitHeight: 15
+                                implicitHeight: 20
                                 radius: Theme.radiusXs
                                 color: Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22)
                                 Row {
@@ -337,15 +370,20 @@ Item {
                                     Rectangle { width: 4; height: 4; radius: 2; anchors.verticalCenter: parent.verticalCenter; color: root.priColor(cell.tasks[index].priority) }
                                     Text { anchors.verticalCenter: parent.verticalCenter; width: parent.width - 8; elide: Text.ElideRight; text: (cell.tasks[index].scheduled ? "◷ " : "") + cell.tasks[index].title; color: Theme.text; font.pixelSize: Theme.fsXs }
                                 }
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.taskClicked(cell.tasks[index].id) }
+                                ClickArea {
+                                    label: dayCell.cell.tasks[taskChip.index].title
+                                    showTip: false
+                                    onActivated: root.taskClicked(dayCell.cell.tasks[taskChip.index].id)
+                                }
                             }
                         }
                         Repeater {
                             model: Math.min(2, cell.events.length)
                             delegate: Rectangle {
+                                id: eventChip
                                 required property int index
                                 Layout.fillWidth: true
-                                implicitHeight: 15
+                                implicitHeight: 20
                                 radius: Theme.radiusXs
                                 color: Theme.accentSoft
                                 Row {
@@ -358,25 +396,27 @@ Item {
                                         color: Theme.text; font.pixelSize: Theme.fsXs
                                     }
                                 }
-                                MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor; onClicked: root.eventClicked(cell.events[index].id, cell.events[index]) }
+                                ClickArea {
+                                    label: dayCell.cell.events[eventChip.index].title
+                                    showTip: false
+                                    onActivated: root.eventClicked(dayCell.cell.events[eventChip.index].id, dayCell.cell.events[eventChip.index])
+                                }
                             }
                         }
                         // The overflow count was dead text — the only way to
                         // reach what a cell hid was to guess. It selects the
                         // day, same as WeekView's.
                         Text {
+                            id: moreText
                             readonly property int _extra: Math.max(0, cell.tasks.length - 3) + Math.max(0, cell.events.length - 2)
                             visible: _extra > 0
                             text: "+" + _extra
-                            color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                            color: moreMA.hovered ? Theme.accentStrong : Theme.textDim
                             font.pixelSize: Theme.fsXs
-                            MouseArea {
+                            ClickArea {
                                 id: moreMA
-                                anchors.fill: parent
-                                anchors.margins: -4
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: AppController.selectedDate = cell.date
+                                label: I18n.t("cal.moreOnDay").arg(moreText._extra)
+                                onActivated: AppController.selectedDate = dayCell.cell.date
                             }
                         }
                         Item { Layout.fillHeight: true }

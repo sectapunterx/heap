@@ -208,7 +208,7 @@ Rectangle {
             Rectangle {
                 objectName: "note-new"
                 width: 22; height: 22; radius: Theme.radiusSm
-                color: newMA.containsMouse ? Theme.panel3 : Theme.panel2
+                color: newMA.hovered ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1
                 Text {
                     anchors.centerIn: parent
@@ -216,20 +216,17 @@ Rectangle {
                     color: Theme.text
                     font.pixelSize: Theme.fsLg
                 }
-                MouseArea {
+                ClickArea {
                     id: newMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: {
+                    objectName: "notes-new"
+                    label: I18n.t("notes.newNote")
+                    shortcutId: "notes.new"
+                    onActivated: {
                         const id = AppController.newNote();
                         root.noteActivated(id);
                         root.noteCreated(id);
                     }
                 }
-                QQC.ToolTip.visible: newMA.containsMouse
-                QQC.ToolTip.delay: 500
-                QQC.ToolTip.text: I18n.t("notes.newNote")
             }
         }
 
@@ -317,8 +314,10 @@ Rectangle {
                             text: I18n.t("notes.folder.rename")
                             onTriggered: folderPopup.openFor(headerItem.rowData.folder)
                         }
+                        AppMenuSeparator {}
                         AppMenuItem {
                             text: I18n.t("notes.folder.remove")
+                            danger: true
                             onTriggered: AppController.removeNoteFolder(headerItem.rowData.folder)
                         }
                     }
@@ -389,7 +388,9 @@ Rectangle {
                         }
                         Text {
                             text: row.note.excerpt || ""
-                            color: Theme.textDim
+                            // textMuted on the selected row: textDim on the 14%
+                            // accent tint fell to 3.3:1 (design audit DES-21).
+                            color: row.current ? Theme.textMuted : Theme.textDim
                             font.pixelSize: Theme.fsXs
                             elide: Text.ElideRight
                             Layout.fillWidth: true
@@ -422,6 +423,7 @@ Rectangle {
                         AppMenuSeparator {}
                         AppMenuItem {
                             text: I18n.t("common.delete")
+                            danger: true
                             onTriggered: AppController.deleteNote(row.note.id)
                         }
                     }

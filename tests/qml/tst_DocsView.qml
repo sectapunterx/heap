@@ -99,6 +99,21 @@ TestCase {
 
     // The section headers show a count; it has to follow the filter, or the
     // header claims nine snippets above a single visible card.
+    // Design audit DES-13: a query that matches nothing says so and offers
+    // to clear itself, instead of leaving a blank page.
+    function test_a_search_that_finds_nothing_says_so() {
+        const dv = make();
+        dv.searchText = "";
+        verify(!dv.searchFoundNothing);
+        dv.searchText = "zzqx-nothing-matches-this-9f3";
+        verify(dv.searchFoundNothing);
+        const empty = findChild(dv, "docs-no-matches");
+        verify(empty !== null);
+        verify(empty.visible);
+        dv.searchText = "";
+        verify(!empty.visible);
+    }
+
     function test_counts_follow_the_filter() {
         const dv = make();
         dv.snippets = [
