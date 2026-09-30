@@ -159,6 +159,29 @@ TEST(ExtractMeta, DoubleSlashNoSpaceEitherSide) {
   EXPECT_EQ(m.handles.at(0), QString("el"));
 }
 
+// TASKS-10: the "//" of a URL is not a comment. "See https:" plus a
+// description of "example.com/a/b for details" is what used to be saved.
+TEST(ExtractMeta, UrlDoubleSlashIsNotAComment) {
+  const auto m = extractMeta(QStringLiteral("See https://example.com/a/b for details"));
+  EXPECT_EQ(m.title, QStringLiteral("See https://example.com/a/b for details"));
+  EXPECT_TRUE(m.desc.isEmpty());
+}
+
+TEST(ExtractMeta, CommentAfterAUrlStillSplits) {
+  const auto m = extractMeta(QStringLiteral("Critical: crash, see https://example.com/issue/7 // repro on staging"));
+  EXPECT_EQ(m.desc, QStringLiteral("repro on staging"));
+  EXPECT_TRUE(m.title.contains(QStringLiteral("https://example.com/issue/7")));
+  // head is the text before the comment with nothing else taken out.
+  EXPECT_EQ(m.head.trimmed(), QStringLiteral("Critical: crash, see https://example.com/issue/7"));
+  EXPECT_EQ(m.priority, QStringLiteral("P0"));
+}
+
+TEST(ExtractMeta, HeadKeepsTokensTheTitleLoses) {
+  const auto m = extractMeta(QStringLiteral("p0 hotfix #billing APP-104"));
+  EXPECT_EQ(m.title, QStringLiteral("hotfix"));
+  EXPECT_EQ(m.head, QStringLiteral("p0 hotfix #billing APP-104"));
+}
+
 TEST(ExtractMeta, OnlyComment) {
   const auto m = extractMeta(QStringLiteral("// just a thought"));
   EXPECT_TRUE(m.title.isEmpty());
@@ -252,12 +275,12 @@ TEST(ExtractMeta, TrailingDoubleSlashEmptyDesc) {
   EXPECT_TRUE(m.desc.isEmpty());
 }
 
-TEST(ExtractMeta, UrlDoubleSlashFootgun) {
-  // Documented limitation (TaskTextUtils.h): a URL '//' still trips the
-  // comment split. Pinned so an intentional future fix is a conscious change.
+TEST(ExtractMeta, UrlDoubleSlashIsKept) {
+  // A URL's '//' used to trip the comment split ("see https:" + desc
+  // "example.com"). Fixed for TASKS-10.
   const auto m = extractMeta(QStringLiteral("see https://example.com"));
-  EXPECT_EQ(m.title, QString("see https:"));
-  EXPECT_EQ(m.desc, QString("example.com"));
+  EXPECT_EQ(m.title, QString("see https://example.com"));
+  EXPECT_TRUE(m.desc.isEmpty());
   EXPECT_TRUE(m.handles.isEmpty());
 }
 

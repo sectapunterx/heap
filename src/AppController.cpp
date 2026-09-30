@@ -5221,6 +5221,7 @@ QVariantMap AppController::extractTaskMeta(const QString& text) const {
   out["ticketKey"] = m.ticketKey;
   out["priority"] = m.priority;
   out["labels"] = m.labels;
+  out["head"] = m.head;
   return out;
 }
 
