@@ -774,13 +774,14 @@ Popup {
                     contentItem: Text { text: endBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                 }
                 Field {
+                    id: countField
                     objectName: "event-repeat-count"
                     visible: root.endKind === "count"
                     Layout.preferredWidth: 56
                     font.family: Theme.fontMono
                     text: String(root.repeatCount)
                     validator: IntValidator { bottom: 1; top: 999 }
-                    onTextEdited: root.repeatCount = Math.max(1, parseInt(text) || 1)
+                    onTextEdited: root.repeatCount = Math.max(1, parseInt(countField.text) || 1)
                 }
                 Rectangle {
                     id: untilBtn
@@ -839,6 +840,7 @@ Popup {
 
             // A rule the controls cannot show, edited as what it is.
             Field {
+                id: customField
                 objectName: "event-repeat-custom"
                 visible: root._kind() === "custom"
                 Layout.columnSpan: 2
@@ -846,7 +848,7 @@ Popup {
                 font.family: Theme.fontMono
                 placeholderText: I18n.t("repeat.custom.ph")
                 text: root.customRule
-                onTextEdited: root.customRule = text
+                onTextEdited: root.customRule = customField.text
             }
 
             // WHERE / LINK

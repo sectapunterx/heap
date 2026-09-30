@@ -126,6 +126,17 @@ TEST_F(TimeAudit, DraggingForAllKeepsThePastOccurrences) {
   }
 }
 
+// The raw updateEvent on a series master no longer re-dates it to the day
+// one occurrence was dropped on.
+TEST_F(TimeAudit, UpdateEventOnAMasterKeepsTheSeriesStart) {
+  const QString id = seed(QStringLiteral("FREQ=DAILY;COUNT=7"));
+  app_->updateEvent(id, 10.5, 11.5, kMon.addDays(4));
+
+  const QVector<QDate> d = dates();
+  ASSERT_EQ(d.size(), 7);
+  EXPECT_EQ(d.first(), kMon);
+}
+
 TEST_F(TimeAudit, DraggingAcrossDaysForAllMovesTheWeekday) {
   seed(QStringLiteral("FREQ=WEEKLY;BYDAY=MO"));
   app_->moveOccurrence(on(kMon.addDays(7)), 24.0, QStringLiteral("all"));

@@ -1915,7 +1915,7 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   // dropped on.
   const bool spans = e.allDay || (e.endDate.isValid() && e.endDate > e.date);
   if(spans) {
-    if(date.isValid() && e.date.isValid()) {
+    if(date.isValid() && e.date.isValid() && e.rrule.isEmpty()) {
       const qint64 shift = e.date.daysTo(date);
       e.date = date;
       if(e.endDate.isValid()) {
@@ -1931,7 +1931,10 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   const heap::cal::HourRange hours = heap::cal::clampHours(start, end, snapStepHours());
   e.start = hours.start;
   e.end = hours.end;
-  if(date.isValid()) {
+  // A series' date is its first occurrence. Handing it the day one later
+  // occurrence was dragged on re-dated the whole series and made every
+  // earlier one vanish; moving occurrences goes through moveOccurrence.
+  if(date.isValid() && e.rrule.isEmpty()) {
     e.date = date;
   }
   m_events.upsert(e);
