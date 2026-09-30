@@ -87,10 +87,25 @@ Live on the week and month views only, where the board's own letters are not.
 under the cursor. It does nothing for a locally-created task, and it stands
 down entirely while a dialog is open or the cursor is in a text field.
 
-## Notes editor
+## Notes view
 
-These work while the cursor is in the notes editor, and only there — `Ctrl+K`
-still opens the command palette everywhere else.
+Rebindable in Settings → Hotkeys; live only while Notes is on screen.
+
+| Action | Shortcut |
+|---|---|
+| New note (cursor goes in) | `Ctrl+Alt+N` |
+| Next / previous note in the list | `Ctrl+PgDown` / `Ctrl+PgUp` |
+| Rename or re-file the open note | `F2` |
+| Show / hide the list of notes | `Ctrl+Alt+L` |
+| Filter the notes (title, folder and body) | `Ctrl+F` |
+
+## Notes and doc page editor
+
+These work while the cursor is in the notes editor or a Docs page, and only
+there — `Ctrl+K` still opens the command palette everywhere else. With text
+selected, the formatting keys wrap the selection, and `Tab`, `Shift+Tab` and
+the heading key act on every selected line. `Ctrl+Z` with nothing left to undo
+in the text undoes the last app action (a deleted note or page, an import).
 
 | Action | Shortcut |
 |---|---|

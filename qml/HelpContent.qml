@@ -261,10 +261,13 @@ Item {
                     + "#ticket pulls in the people and tasks of the active profile."
             }
             Body {
-                text: "[[Double brackets]] link to another note by its title, falling back to a heading in "
-                    + "the note you are in. Clicking one that points nowhere offers to write it. Backlinks "
-                    + "answer what else refers to the note you are reading, and clicking a #TICKET opens the "
-                    + "task. Notes import and export as a folder of .md files with YAML frontmatter, which "
+                text: "[[Double brackets]] link to another note by its title ([[Note#Heading]] to a section "
+                    + "of it), falling back to a heading in the note you are in; renaming a note rewrites the "
+                    + "links to it. Clicking one that points nowhere offers to write it. The Links pane shows "
+                    + "which notes link here and where this note points. Clicking a #TICKET opens the task, "
+                    + "an @person opens the person, a #tag filters the list. Ctrl+Alt+N makes a note, "
+                    + "Ctrl+PgUp/PgDn steps through them, F2 renames, Ctrl+Alt+L folds the list away. "
+                    + "Notes import and export as a folder of .md files with YAML frontmatter, which "
                     + "is what Obsidian and friends already read. Export writes into a new folder and never "
                     + "over existing files; import shows what will change first, keeps a note you edited "
                     + "here when the file did not change, keeps both versions when both did, and is undone "
@@ -278,14 +281,17 @@ Item {
                     + "source — undoable like anything else."
             }
             Body {
-                text: "Formatting keys work while the cursor is in the editor: Ctrl+B bold, Ctrl+I italic, "
-                    + "Ctrl+E code, Ctrl+K link, Ctrl+Shift+X strikethrough, Ctrl+Shift+H highlight, "
-                    + "Ctrl+Shift+L heading level, Tab and Shift+Tab to indent a list, Ctrl+Enter to tick a "
-                    + "checkbox. Enter continues the list or quote you are in."
+                text: "Formatting keys work while the cursor is in a note or a Docs page: Ctrl+B bold, "
+                    + "Ctrl+I italic, Ctrl+E code, Ctrl+K link, Ctrl+Shift+X strikethrough, Ctrl+Shift+H "
+                    + "highlight, Ctrl+Shift+L heading level, Tab and Shift+Tab to indent a list, Ctrl+Enter "
+                    + "to tick a checkbox. With text selected they wrap the selection and act on every "
+                    + "selected line. Enter continues the list or quote you are in."
             }
             Body {
-                text: "Images render from disk. A remote image is shown as a link you can follow rather than "
-                    + "being downloaded — heap makes no network requests you did not ask for."
+                text: "Images render from disk: an absolute path (C:\\shots\\x.png, file:///…) anywhere, a "
+                    + "relative one from the attachments folder in heap's data folder. A remote image is "
+                    + "shown as a link, with Load images to fetch it on request — heap makes no network "
+                    + "requests you did not ask for, and network shares are never opened."
             }
         }
 

@@ -403,6 +403,29 @@ TEST_F(KnowAuditTest, Know20_CopyAsMarkdownHasAllNotesAndPages) {
   EXPECT_TRUE(md.contains(QStringLiteral("### › Child")));
 }
 
+// ── KNOW-16: deleting a page tree says so and can be undone ──
+
+TEST_F(KnowAuditTest, Know16_DeletingAPageTreeOffersUndo) {
+  const QString parent = app_->newDocPage(QStringLiteral("Parent"));
+  app_->newDocPage(QStringLiteral("Kid"), parent);
+  QSignalSpy toast(app_.get(), &AppController::undoableToast);
+
+  app_->deleteDocPage(parent);
+
+  ASSERT_EQ(toast.count(), 1);
+  EXPECT_TRUE(toast.at(0).at(0).toString().contains(QStringLiteral("Parent")));
+  EXPECT_EQ(app_->docPages()->rowCount(), 0);
+  app_->undo();
+  EXPECT_EQ(app_->docPages()->rowCount(), 2);
+}
+
+TEST_F(KnowAuditTest, KnowC_ExcerptsReadAsPlainText) {
+  const QString id = app_->newNote(QStringLiteral("Plain"));
+  app_->setNoteBody(id, QStringLiteral("# Plain\n\n- [ ] **Ship** the [build](http://x) and [[Other|the other]]"));
+  const QModelIndex idx = app_->notes()->index(app_->notes()->indexOfId(id), 0);
+  EXPECT_EQ(app_->notes()->data(idx, NoteModel::ExcerptRole).toString(), QStringLiteral("Ship the build and the other"));
+}
+
 // ── C: code highlighting in the preview ──
 
 namespace {
