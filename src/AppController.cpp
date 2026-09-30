@@ -5325,15 +5325,16 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     heap::undo::applyBackward(m_tasks, entry.tasks);
     heap::undo::applyBackward(m_events, entry.events);
     heap::undo::applyBackward(m_people, entry.people);
-    heap::undo::applyBackward(m_docPages, entry.docPages);
-    heap::undo::applyBackward(m_notes, entry.notes);
   } else {
     heap::undo::applyForward(m_tasks, entry.tasks);
     heap::undo::applyForward(m_events, entry.events);
     heap::undo::applyForward(m_people, entry.people);
-    heap::undo::applyForward(m_docPages, entry.docPages);
-    heap::undo::applyForward(m_notes, entry.notes);
   }
+  // Notes and doc pages are typed into without undo steps: the entry's own
+  // changes are merged onto them rather than the recorded copies put back
+  // whole, which would take that typing with them (KNOW-1).
+  heap::undo::applyMerged(m_docPages, entry.docPages, backward);
+  heap::undo::applyMerged(m_notes, entry.notes, backward);
   if(!entry.notes.isEmpty()) {
     reconcileActiveNote();
   }
@@ -5365,7 +5366,12 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   }
   if(entry.docsStateTouched) {
     const QString was = m_docsState;
-    m_docsState = backward ? entry.docsStateBefore : entry.docsStateAfter;
+    // Only what the entry changed, by id, on top of the blob as it is now:
+    // an entry edited after a deletion keeps its edit (KNOW-2).
+    m_docsState = heap::undo::rebaseDocsState(m_docsState,
+                                              backward ? entry.docsStateAfter : entry.docsStateBefore,
+                                              backward ? entry.docsStateBefore : entry.docsStateAfter,
+                                              nullptr);
     emit docsStateChanged();
     // Same reasoning as the tasks above: a contact coming back must stop
     // being "dismissed", and one going again must be dismissed again.
@@ -5408,16 +5414,20 @@ bool AppController::undoEntry(double serialValue) {
   // Reversing one operation out of order is only safe while nothing it
   // touched has changed again since; otherwise the later edit would be
   // silently thrown away.
+  flushNotesForUndo();
   bool statusesClean = true;
   QVariantList statuses = m_statuses;
   if(copy.statusesTouched) {
     statuses = heap::undo::revertStatusesOnly(m_statuses, copy.statusesBefore, copy.statusesAfter, &statusesClean);
   }
+  bool docsClean = true;
+  if(copy.docsStateTouched) {
+    heap::undo::rebaseDocsState(m_docsState, copy.docsStateAfter, copy.docsStateBefore, &docsClean);
+  }
   const bool clean = statusesClean && heap::undo::untouchedSince(m_tasks, copy.tasks) &&
                      heap::undo::untouchedSince(m_events, copy.events) && heap::undo::untouchedSince(m_people, copy.people) &&
-                     heap::undo::untouchedSince(m_docPages, copy.docPages) && heap::undo::untouchedSince(m_notes, copy.notes) &&
-                     (!copy.docsStateTouched || m_docsState == copy.docsStateAfter) &&
-                     (!copy.savedViewsTouched || m_savedViews == copy.savedViewsAfter);
+                     heap::undo::mergeableSince(m_docPages, copy.docPages) && heap::undo::mergeableSince(m_notes, copy.notes) &&
+                     docsClean && (!copy.savedViewsTouched || m_savedViews == copy.savedViewsAfter);
   if(!clean) {
     emit toast(tr_("undo.changedSince"));
     return false;
@@ -5454,11 +5464,25 @@ void AppController::clearPendingUndo() {
   emit pendingUndoChanged();
 }
 
+void AppController::flushNotesForUndo() {
+  // The open note's pending keystrokes go into it first, so the merge sees
+  // them and the reload after it does not drop them.
+  emit aboutToChangeActiveNote();
+  adoptOrphanNotesState();
+  syncActiveNoteBody();
+}
+
 void AppController::undo() {
-  const heap::undo::Entry* entry = m_undo.takeUndo();
+  if(!m_undo.canUndo()) {
+    return;
+  }
+  flushNotesForUndo();
+  heap::undo::Entry* entry = m_undo.takeUndo();
   if(entry == nullptr) {
     return;
   }
+  heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/true);
+  heap::undo::refreshLeaving(m_docPages, entry->docPages, /*backward=*/true);
   // Copy: restoring a profile re-enters the stack's owner and the pointer
   // would not survive it.
   const heap::undo::Entry copy = *entry;
@@ -5473,10 +5497,16 @@ void AppController::undo() {
 }
 
 void AppController::redo() {
-  const heap::undo::Entry* entry = m_undo.takeRedo();
+  if(!m_undo.canRedo()) {
+    return;
+  }
+  flushNotesForUndo();
+  heap::undo::Entry* entry = m_undo.takeRedo();
   if(entry == nullptr) {
     return;
   }
+  heap::undo::refreshLeaving(m_notes, entry->notes, /*backward=*/false);
+  heap::undo::refreshLeaving(m_docPages, entry->docPages, /*backward=*/false);
   const heap::undo::Entry copy = *entry;
   applyUndoEntry(copy, /*backward=*/false);
   emit pendingUndoChanged();

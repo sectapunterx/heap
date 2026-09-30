@@ -1539,6 +1539,8 @@ class AppController : public QObject {
   // Applies one recorded entry in either direction and refreshes what the UI
   // derives from the models.
   void applyUndoEntry(const heap::undo::Entry& entry, bool backward);
+  // Hands the open note's unsaved keystrokes to it before an undo or redo.
+  void flushNotesForUndo();
 
   // Selection state
   QSet<QString> m_selectedTaskIds;

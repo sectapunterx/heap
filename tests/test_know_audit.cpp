@@ -426,6 +426,186 @@ TEST_F(KnowAuditTest, KnowC_ExcerptsReadAsPlainText) {
   EXPECT_EQ(app_->notes()->data(idx, NoteModel::ExcerptRole).toString(), QStringLiteral("Ship the build and the other"));
 }
 
+// ── 2026-09-30 audit, KNOW-1: undoing a rename, pin or move keeps the typing ──
+//
+// Typing into a note is not an undo step, and the entry for a rename used to
+// put the whole note back: everything typed after the rename went with it,
+// and redo did not bring it back either.
+
+TEST_F(KnowAuditTest, Audit0930Know1_UndoRenameKeepsTextTypedSince) {
+  app_->clearPendingUndo();
+  const QString id = app_->newNote(QStringLiteral("Draft"));
+  const QString other = app_->newNote(QStringLiteral("Other"));
+  app_->setActiveNoteId(id);
+  app_->renameNote(id, QStringLiteral("Final"));
+  app_->setNotesState(QStringLiteral("# Final\n\nimportant"));
+  app_->setActiveNoteId(other);
+  app_->setActiveNoteId(id);
+
+  app_->undo();
+  const Note* n = byTitle(QStringLiteral("Draft"));
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(n->body, QStringLiteral("# Draft\n\nimportant")) << "only the rename is taken back";
+  EXPECT_EQ(app_->notesState(), n->body);
+
+  app_->redo();
+  n = byTitle(QStringLiteral("Final"));
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(n->body, QStringLiteral("# Final\n\nimportant")) << "and redo keeps it too";
+  EXPECT_EQ(app_->notesState(), n->body);
+}
+
+TEST_F(KnowAuditTest, Audit0930Know1_UndoPinAndMoveKeepTextTypedSince) {
+  app_->clearPendingUndo();
+  const QString id = app_->newNote(QStringLiteral("Pinme"));
+  app_->setNotePinned(id, true);
+  app_->setNotesState(QStringLiteral("# Pinme\n\nafter the pin"));
+  app_->moveNoteToFolder(id, QStringLiteral("work"));
+  app_->setNotesState(QStringLiteral("# Pinme\n\nafter the pin\nafter the move"));
+  const auto note = [&]() {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id));
+  };
+
+  app_->undo();
+  EXPECT_TRUE(note().folder.isEmpty());
+  EXPECT_EQ(note().body, QStringLiteral("# Pinme\n\nafter the pin\nafter the move"));
+  app_->undo();
+  EXPECT_FALSE(note().pinned);
+  EXPECT_EQ(note().body, QStringLiteral("# Pinme\n\nafter the pin\nafter the move"));
+  app_->redo();
+  app_->redo();
+  EXPECT_TRUE(note().pinned);
+  EXPECT_EQ(note().folder, QStringLiteral("work"));
+  EXPECT_EQ(note().body, QStringLiteral("# Pinme\n\nafter the pin\nafter the move"));
+}
+
+// The toast's Undo, out of order: typing since is no longer a reason to refuse,
+// and is not lost either.
+TEST_F(KnowAuditTest, Audit0930Know1_ToastUndoOfARenameKeepsTheTyping) {
+  app_->clearPendingUndo();
+  const QString id = app_->newNote(QStringLiteral("Draft"));
+  const QString other = app_->newNote(QStringLiteral("Other"));
+  app_->setActiveNoteId(id);
+  app_->renameNote(id, QStringLiteral("Final"));
+  const double serial = app_->undoSerialForToast();
+  app_->setNotePinned(other, true);
+  app_->setNotesState(QStringLiteral("# Final\n\nimportant"));
+
+  EXPECT_TRUE(app_->undoEntry(serial));
+  const Note* n = byTitle(QStringLiteral("Draft"));
+  ASSERT_NE(n, nullptr);
+  EXPECT_EQ(n->body, QStringLiteral("# Draft\n\nimportant"));
+  EXPECT_TRUE(app_->notes()->items().at(app_->notes()->indexOfId(other)).pinned) << "the later entry stays";
+}
+
+// Keystrokes still in the editor's debounce belong to the note before the undo
+// reloads it.
+TEST_F(KnowAuditTest, Audit0930Know1_UndoFlushesTheEditorFirst) {
+  app_->clearPendingUndo();
+  const QString id = app_->newNote(QStringLiteral("Draft"));
+  app_->renameNote(id, QStringLiteral("Final"));
+  const auto conn = QObject::connect(app_.get(), &AppController::aboutToChangeActiveNote, app_.get(), [this]() {
+    app_->setNotesState(QStringLiteral("# Final\n\nstill in the editor"));
+  });
+  app_->undo();
+  QObject::disconnect(conn);
+  EXPECT_EQ(app_->noteBody(id), QStringLiteral("# Draft\n\nstill in the editor"));
+}
+
+// Delete, undo, type, redo, undo: the note comes back with what was typed into
+// it while it was restored, not as it was when first deleted.
+TEST_F(KnowAuditTest, Audit0930Know1_RedoneDeleteBringsBackTheLatestText) {
+  app_->clearPendingUndo();
+  const QString id = app_->newNote(QStringLiteral("Gone"));
+  app_->deleteNote(id);
+  app_->undo();
+  app_->setNoteBody(id, QStringLiteral("# Gone\n\ntyped while restored"));
+  app_->redo();
+  EXPECT_LT(app_->notes()->indexOfId(id), 0);
+  app_->undo();
+  EXPECT_EQ(app_->noteBody(id), QStringLiteral("# Gone\n\ntyped while restored"));
+}
+
+// ── 2026-09-30 audit, KNOW-2: undoing a Docs deletion keeps later edits ──
+
+namespace {
+
+QJsonObject docEntry(const QString& id, const QString& title) {
+  return QJsonObject{{QStringLiteral("id"), id}, {QStringLiteral("title"), title}};
+}
+
+QString docsBlob(const QJsonArray& items, const QJsonArray& snippets) {
+  const QJsonObject section{{QStringLiteral("id"), QStringLiteral("web-standards")},
+                            {QStringLiteral("title"), QStringLiteral("Web")},
+                            {QStringLiteral("items"), items}};
+  const QJsonObject root{{QStringLiteral("sections"), QJsonArray{section}},
+                         {QStringLiteral("snippets"), snippets},
+                         {QStringLiteral("contacts"), QJsonArray{}}};
+  return QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact));
+}
+
+QJsonArray docItems(const QString& blob) {
+  return QJsonDocument::fromJson(blob.toUtf8()).object().value("sections").toArray().at(0).toObject().value("items").toArray();
+}
+
+QJsonArray docSnippets(const QString& blob) {
+  return QJsonDocument::fromJson(blob.toUtf8()).object().value("snippets").toArray();
+}
+
+}  // namespace
+
+TEST_F(KnowAuditTest, Audit0930Know2_UndoDeleteKeepsAnotherEntrysLaterEdit) {
+  app_->clearPendingUndo();
+  const QJsonObject http = docEntry(QStringLiteral("e1"), QStringLiteral("HTTP Semantics"));
+  const QJsonObject json = docEntry(QStringLiteral("e2"), QStringLiteral("The JSON Data Interchange Format"));
+  const QJsonObject edited = docEntry(QStringLiteral("e2"), QStringLiteral("EDITED AFTER DELETE"));
+  app_->setDocsState(docsBlob({http, json}, {}));
+  app_->setDocsStateUndoable(docsBlob({json}, {}), QStringLiteral("Restored"));
+  app_->setDocsState(docsBlob({edited}, {}));  // saveDoc: not an undo step
+
+  app_->undo();
+  EXPECT_EQ(docItems(app_->docsState()), (QJsonArray{http, edited})) << app_->docsState().toStdString();
+  app_->redo();
+  EXPECT_EQ(docItems(app_->docsState()), (QJsonArray{edited})) << app_->docsState().toStdString();
+  app_->undo();
+  EXPECT_EQ(docItems(app_->docsState()), (QJsonArray{http, edited}));
+}
+
+TEST_F(KnowAuditTest, Audit0930Know2_UndoSnippetDeleteKeepsTheOthersEdits) {
+  app_->clearPendingUndo();
+  const QJsonObject a{{QStringLiteral("title"), QStringLiteral("a")}};
+  const QJsonObject b{{QStringLiteral("title"), QStringLiteral("b")}};
+  const QJsonObject c{{QStringLiteral("title"), QStringLiteral("c")}};
+  const QJsonObject c2{{QStringLiteral("title"), QStringLiteral("c, edited")}};
+  const QJsonObject item = docEntry(QStringLiteral("e1"), QStringLiteral("x"));
+  const QJsonObject item2 = docEntry(QStringLiteral("e1"), QStringLiteral("x, edited"));
+  app_->setDocsState(docsBlob({item}, {a, b, c}));
+  app_->setDocsStateUndoable(docsBlob({item}, {a, c}), QStringLiteral("Restored"));
+  app_->setDocsState(docsBlob({item2}, {a, c2}));
+
+  app_->undo();
+  EXPECT_EQ(docSnippets(app_->docsState()), (QJsonArray{a, b, c2}));
+  EXPECT_EQ(docItems(app_->docsState()), (QJsonArray{item2}));
+}
+
+// The toast's Undo, out of order, used to refuse because the blob had changed
+// at all; an edit to another entry is no reason to.
+TEST_F(KnowAuditTest, Audit0930Know2_ToastUndoAfterAnotherEditPutsTheEntryBack) {
+  app_->clearPendingUndo();
+  const QJsonObject http = docEntry(QStringLiteral("e1"), QStringLiteral("HTTP"));
+  const QJsonObject json = docEntry(QStringLiteral("e2"), QStringLiteral("JSON"));
+  const QJsonObject edited = docEntry(QStringLiteral("e2"), QStringLiteral("JSON, edited"));
+  app_->setDocsState(docsBlob({http, json}, {}));
+  app_->setDocsStateUndoable(docsBlob({json}, {}), QStringLiteral("Restored"));
+  const double serial = app_->undoSerialForToast();
+  const QString n = app_->newNote(QStringLiteral("Unrelated"));
+  app_->setNotePinned(n, true);
+  app_->setDocsState(docsBlob({edited}, {}));
+
+  EXPECT_TRUE(app_->undoEntry(serial));
+  EXPECT_EQ(docItems(app_->docsState()), (QJsonArray{http, edited}));
+}
+
 // ── C: code highlighting in the preview ──
 
 namespace {

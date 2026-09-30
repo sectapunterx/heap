@@ -182,4 +182,37 @@ TestCase {
         compare(AppController.activeNoteId, holder);
         tc.madeNotes.push(holder);
     }
+
+    // 2026-09-30 audit, KNOW-1: Ctrl+Z in the editor with nothing of its own
+    // left to undo takes back the rename, and only the rename: what was typed
+    // after it stays, and Ctrl+Shift+Z keeps it too. Typed through the keys,
+    // so the editor's debounce and the flush before the undo are both real.
+    function test_ctrl_z_of_a_rename_keeps_the_text_typed_after_it() {
+        AppController.clearPendingUndo();
+        const n = AppController.newNote("know1 draft");
+        tc.madeNotes.push(n);
+        const other = AppController.newNote("know1 other");
+        tc.madeNotes.push(other);
+        AppController.activeNoteId = n;
+        const nv = make();
+        const ed = editorOf(nv);
+        AppController.renameNote(n, "know1 final");
+        ed.forceActiveFocus();
+        ed.cursorPosition = ed.length;
+        keyClick("i");
+        keyClick("m");
+        // Leave and come back: the editor's own history is gone.
+        AppController.activeNoteId = other;
+        AppController.activeNoteId = n;
+        ed.forceActiveFocus();
+        verify(!ed.canUndo);
+
+        keyClick(Qt.Key_Z, Qt.ControlModifier);
+        compare(AppController.noteBody(n), "# know1 draft\n\nim");
+        compare(ed.text, "# know1 draft\n\nim");
+        keyClick(Qt.Key_Z, Qt.ControlModifier | Qt.ShiftModifier);
+        compare(AppController.noteBody(n), "# know1 final\n\nim");
+        nv.destroy();
+        wait(0);
+    }
 }

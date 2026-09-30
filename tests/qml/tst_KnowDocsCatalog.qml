@@ -95,4 +95,25 @@ TestCase {
         AppController.undo();
         compare(dv.snippets.length, 1, "and the snippet is not lost behind it");
     }
+
+    // 2026-09-30 audit, KNOW-2: an entry saved after a deletion keeps its edit
+    // through the deletion's undo and redo. The undo used to put back the
+    // whole catalogue as it was before the deletion.
+    function test_undoing_a_delete_keeps_a_later_edit_to_another_entry() {
+        AppController.clearPendingUndo();
+        const dv = make();
+        dv.flushPending();
+        const first = items(dv)[0].id;
+        dv.deleteDoc("refs", first);
+        const second = items(dv)[0];
+        dv.openDocEdit("refs", second);
+        dv.saveDoc(Object.assign({}, second, { title: "EDITED AFTER DELETE", _sectionId: "refs" }));
+        dv.flushPending();
+
+        AppController.undo();
+        compare(titles(dv), ["First", "EDITED AFTER DELETE", "Third", "Fourth"]);
+        compare(items(dv)[0].id, first);
+        AppController.redo();
+        compare(titles(dv), ["EDITED AFTER DELETE", "Third", "Fourth"]);
+    }
 }
