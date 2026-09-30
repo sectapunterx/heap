@@ -264,9 +264,15 @@ or a status write-back, `AppController::ensureFreshToken` checks the stored
 (`OAuthRefresh.h`, a plain form POST that also works on Qt 6.4). A session with
 no recorded expiry gets one refresh-and-retry on its first `401`. Providers
 rotate the refresh token, so the new one is stored **before** the new access
-token. If the grant is gone (revoked, or a rotated token was reused) the card
-drops back to disconnected and asks you to sign in again. GitHub device-flow
-tokens don't expire, so there is nothing to refresh.
+token. Only the token endpoint refusing the grant itself — `invalid_grant` and
+friends, or a `400`/`401` — drops the card back to disconnected and asks you to
+sign in again. No answer at all (offline, DNS, a 30 s timeout, a captive
+portal), a `5xx` or a `429` keeps you signed in: the card says **offline**, the
+refresh is retried after 15 s, 30 s, 1 min … up to every 15 minutes, and the
+next successful pull clears it. `tokenExpiresAt` is stored in UTC with its
+offset (`…Z`); a value written by 0.5.2 or older, without an offset, is read as
+the local time it was. GitHub device-flow tokens don't expire, so there is
+nothing to refresh.
 
 ## Where secrets live
 
@@ -294,6 +300,34 @@ the card asks for, and an unscoped field fails the whole request.
 The tracker owns a task's due date only while you have not touched it. Edit
 or snooze the deadline and it becomes yours: later syncs leave it alone, and
 a due date removed upstream no longer clears it.
+
+## When both sides changed something
+
+Title, description and priority merge three-way against what the tracker sent
+last time: a field you edited here survives a sync that did not touch it, and
+a field only the tracker changed follows the tracker. When **both** changed,
+your version is kept, the card carries a **conflict** chip, the sync toast names
+it, and the editor shows the tracker's version with **Use tracker version** /
+**Keep mine**. Keeping yours re-flags the card the next time the tracker changes
+that field again. Labels merge the same way by name: a label removed in the
+tracker is removed here, one you added or removed here stays that way.
+
+## Changing the filter
+
+A sync that no longer returns an issue only means "gone" when the card's filter
+(repo, project, JQL, board, host…) is the one the card was last pulled under.
+Switch a card from a repo to "my issues", or edit the JQL, and the cards the new
+filter does not cover are marked **outside filter** instead — still live issues,
+kept as they are. The integration card offers to archive them in one go.
+
+## Moves while a tracker is away
+
+Moving a mirrored card while its tracker is disconnected or unreachable no
+longer vanishes: the card shows **not synced**, and the move is sent after the
+next successful pull. A move made in the tracker in the meantime wins. On Jira,
+where the workflow decides which moves exist, each pull also asks for every
+issue's available transitions; a drop into a column none of them maps to is
+refused on the spot, with a toast naming the columns the issue can go to.
 
 ## Writing back from "my issues" mode
 

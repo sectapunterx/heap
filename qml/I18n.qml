@@ -159,7 +159,7 @@ QtObject {
             "taskcard.unsynced": "not synced",
             "taskcard.unsynced.tip": "The tracker did not accept this status. Click to send it again.",
             "taskcard.gone": "not in tracker",
-            "taskcard.gone.tip": "The last full sync did not find this issue: it was deleted, or it no longer matches the filter.",
+            "taskcard.gone.tip": "The last full sync, under the same filter, did not find this issue: it was deleted or moved where this connection cannot see it.",
             "md.link.confirm.title": "Open this link?",
             "md.link.confirm.body": "This link is not a web page. It can start a program or open a system setting on this computer.",
             "md.link.confirm.open": "Open anyway",
@@ -1011,6 +1011,21 @@ QtObject {
             // ── audit-ux: begin ──
             // ── audit-ux: end ──
             // ── audit-int: begin ──
+            "taskcard.conflict": "conflict",
+            "taskcard.conflict.tip": "Changed here and in the tracker since the last sync. Your version is kept; open the card to compare.",
+            "taskcard.outOfScope": "outside filter",
+            "taskcard.outOfScope.tip": "The integration's filter changed and no longer pulls this issue. It still exists in the tracker; archive these cards from Settings → Integrations.",
+            "taskcard.queued.tip": "The tracker was out of reach, so this move has not been sent yet. It goes out after the next sync; click to try now.",
+            "ticket.conflict.head": "Changed here and in the tracker — the tracker now says:",
+            "ticket.conflict.title": "Title",
+            "ticket.conflict.body": "Description",
+            "ticket.conflict.priority": "Priority",
+            "ticket.conflict.useTracker": "Use tracker version",
+            "ticket.conflict.keepMine": "Keep mine",
+            "settings.integrations.offline": "offline",
+            "settings.integrations.offlineHint": "The tracker could not be reached. You are still signed in; heap keeps retrying and sends queued moves once it answers.",
+            "settings.integrations.outOfScope": "%1 card(s) are no longer covered by this filter.",
+            "settings.integrations.archiveOutOfScope": "Archive them",
             // ── audit-int: end ──
             // ── audit-perf: begin ──
             // ── audit-perf: end ──
@@ -1167,7 +1182,7 @@ QtObject {
             "taskcard.unsynced": "не синхронизировано",
             "taskcard.unsynced.tip": "Трекер не принял этот статус. Нажмите, чтобы отправить ещё раз.",
             "taskcard.gone": "нет в трекере",
-            "taskcard.gone.tip": "Последняя полная синхронизация не нашла эту задачу: её удалили или она больше не попадает в фильтр.",
+            "taskcard.gone.tip": "Последняя полная синхронизация с тем же фильтром не нашла эту задачу: её удалили или перенесли туда, где это подключение её не видит.",
             "md.link.confirm.title": "Открыть ссылку?",
             "md.link.confirm.body": "Это не веб-страница. Ссылка может запустить программу или открыть системные настройки.",
             "md.link.confirm.open": "Всё равно открыть",
@@ -1995,6 +2010,21 @@ QtObject {
             // ── audit-ux: begin ──
             // ── audit-ux: end ──
             // ── audit-int: begin ──
+            "taskcard.conflict": "конфликт",
+            "taskcard.conflict.tip": "Изменено и здесь, и в трекере после последней синхронизации. Оставлена ваша версия; откройте карточку, чтобы сравнить.",
+            "taskcard.outOfScope": "вне фильтра",
+            "taskcard.outOfScope.tip": "Фильтр интеграции изменился и больше не забирает эту задачу. В трекере она осталась; архивировать такие карточки можно в Настройки → Интеграции.",
+            "taskcard.queued.tip": "Трекер был недоступен, поэтому перемещение ещё не отправлено. Оно уйдёт после следующей синхронизации; нажмите, чтобы отправить сейчас.",
+            "ticket.conflict.head": "Изменено и здесь, и в трекере — в трекере сейчас:",
+            "ticket.conflict.title": "Заголовок",
+            "ticket.conflict.body": "Описание",
+            "ticket.conflict.priority": "Приоритет",
+            "ticket.conflict.useTracker": "Взять версию трекера",
+            "ticket.conflict.keepMine": "Оставить мою",
+            "settings.integrations.offline": "офлайн",
+            "settings.integrations.offlineHint": "Трекер недоступен. Вход сохранён; heap продолжает попытки и отправит отложенные перемещения, как только трекер ответит.",
+            "settings.integrations.outOfScope": "Карточек вне этого фильтра: %1.",
+            "settings.integrations.archiveOutOfScope": "Архивировать",
             // ── audit-int: end ──
             // ── audit-perf: begin ──
             // ── audit-perf: end ──

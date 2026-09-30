@@ -951,7 +951,9 @@ Item {
                 text: "A browser sign-in hands out a short-lived token — two hours on GitLab and Bitbucket, one "
                     + "on Jira and Asana — and heap. renews it in the background, so you stay signed in. The "
                     + "card shows when the current session runs out. If the tracker revokes the grant, the card "
-                    + "drops back to disconnected and asks you to sign in again rather than failing silently."
+                    + "drops back to disconnected and asks you to sign in again rather than failing silently. "
+                    + "Being offline is not that: the card says 'offline', keeps you signed in and retries, and "
+                    + "moves you make meanwhile are sent after the next sync."
             }
             Body {
                 text: "Disconnecting a browser session discards its tokens. A token you pasted yourself is left "
@@ -966,7 +968,9 @@ Item {
                 text: "Off by default. The chips at the top of the section run every connected tracker every "
                     + "15, 30 or 60 minutes; 'Sync now' on a card pulls just that one. Nothing is deleted by a "
                     + "sync — an issue that disappears upstream stays as a card, and labels you added locally "
-                    + "survive."
+                    + "survive. Changing a card's filter (repo, JQL) marks the cards it no longer covers 'outside "
+                    + "filter', not 'not in tracker'. A title, description or priority changed both here and in "
+                    + "the tracker keeps yours and shows a 'conflict' chip; the editor offers the tracker's version."
             }
         }
 

@@ -85,6 +85,37 @@ Popup {
         return out;
     }
 
+    // A field both heap and the tracker changed since the last sync (audit
+    // INT-4). Resolving it hides the panel for the rest of this dialog.
+    property bool _conflictResolved: false
+    readonly property bool _hasConflict: root._isTicket && !!root._ticket.conflict && !root._conflictResolved
+    // The tracker's side of each conflicting field, as label/value pairs.
+    readonly property var _conflictRows: {
+        if (!root._hasConflict) return [];
+        const t = root._ticket;
+        const fields = t.conflicts || [];
+        const out = [];
+        for (let i = 0; i < fields.length; ++i) {
+            const f = fields[i];
+            if (f === "title") out.push({ label: I18n.t("ticket.conflict.title"), value: String(t.remoteTitle || "") });
+            else if (f === "body") out.push({ label: I18n.t("ticket.conflict.body"), value: String(t.remoteBody || "") || "—" });
+            else if (f === "priority") out.push({ label: I18n.t("ticket.conflict.priority"), value: String(t.remotePriority || "") });
+        }
+        return out;
+    }
+    // Put the tracker's values in the fields (so Save keeps them) and on the
+    // stored card, in one undoable step.
+    function _takeTrackerVersion() {
+        const t = root._ticket;
+        const fields = t.conflicts || [];
+        if (fields.indexOf("title") >= 0 && String(t.remoteTitle || "").length > 0) titleField.text = t.remoteTitle;
+        if (fields.indexOf("body") >= 0) descField.text = String(t.remoteBody || "");
+        if (fields.indexOf("priority") >= 0 && String(t.remotePriority || "").length > 0)
+            priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(t.remotePriority));
+        AppController.resolveTrackerConflict(root._originalId, true);
+        root._conflictResolved = true;
+    }
+
     // Comments, held only while this dialog is open (HEAP-117).
     property var _comments: []
     property string _commentsError: ""
@@ -106,6 +137,7 @@ Popup {
         _comments = [];
         _commentsError = "";
         _commentsRequested = false;
+        _conflictResolved = false;
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
@@ -456,6 +488,54 @@ Popup {
                             color: Theme.textDim
                             font.pixelSize: Theme.fsXs
                             wrapMode: Text.WordWrap
+                        }
+                        // Both sides changed a field since the last sync: show
+                        // the tracker's version and let the user pick one.
+                        ColumnLayout {
+                            objectName: "te-ticket-conflict"
+                            visible: root._hasConflict
+                            Layout.fillWidth: true
+                            Layout.topMargin: Theme.spSm
+                            spacing: Theme.spXs
+                            Text {
+                                Layout.fillWidth: true
+                                text: I18n.t("ticket.conflict.head")
+                                textFormat: Text.PlainText
+                                color: Theme.warning
+                                font.pixelSize: Theme.fsSm
+                                font.weight: Font.DemiBold
+                                wrapMode: Text.WordWrap
+                            }
+                            Repeater {
+                                model: root._conflictRows
+                                delegate: Text {
+                                    required property var modelData
+                                    Layout.fillWidth: true
+                                    text: modelData.label + ": " + modelData.value
+                                    textFormat: Text.PlainText
+                                    color: Theme.text
+                                    font.pixelSize: Theme.fsSm
+                                    wrapMode: Text.WordWrap
+                                    maximumLineCount: 4
+                                    elide: Text.ElideRight
+                                }
+                            }
+                            RowLayout {
+                                spacing: Theme.spSm
+                                PillButton {
+                                    objectName: "te-conflict-use-tracker"
+                                    text: I18n.t("ticket.conflict.useTracker")
+                                    onClicked: root._takeTrackerVersion()
+                                }
+                                PillButton {
+                                    objectName: "te-conflict-keep-mine"
+                                    text: I18n.t("ticket.conflict.keepMine")
+                                    onClicked: {
+                                        AppController.resolveTrackerConflict(root._originalId, false);
+                                        root._conflictResolved = true;
+                                    }
+                                }
+                            }
                         }
                     }
                 }
