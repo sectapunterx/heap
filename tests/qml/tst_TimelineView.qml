@@ -74,6 +74,35 @@ TestCase {
 
     // The timeline builds the rows on screen, not one per task (audit A5):
     // 2000 tasks used to cost over a gigabyte of delegates.
+    // Design audit DES-12: every bucket's label column is the same width, so
+    // rows line up across buckets — "На следующей неделе" pushed its own
+    // column wider and its rows started ~32px right of the others.
+    function test_label_columns_line_up_across_buckets() {
+        const saved = AppController.language;
+        AppController.language = "ru";
+        const next = new Date();
+        next.setDate(next.getDate() + 8);
+        next.setHours(0, 0, 0, 0);
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true; d.id = "TLV-ALIGN"; d.title = "align probe";
+        d.dueAt = next; d.scheduledAt = next; d.hasTime = false;
+        AppController.saveTask(d);
+        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent }');
+        wait(50);
+        const cols = [];
+        (function walk(it) {
+            if (!it) return;
+            if (it.objectName === "timeline-label-col" && it.visible) cols.push(it.width);
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) walk(kids[i]);
+        })(tv);
+        AppController.deleteTask("TLV-ALIGN");
+        AppController.clearPendingUndo();
+        AppController.language = saved;
+        verify(cols.length > 0);
+        for (let i = 0; i < cols.length; i++) compare(cols[i], 160);
+    }
+
     function test_a_long_timeline_builds_only_the_visible_rows() {
         const day = new Date();
         day.setDate(day.getDate() + 1);

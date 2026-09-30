@@ -2890,11 +2890,11 @@ Item {
                         buttonText: I18n.t("settings.data.resetButton")
                         onTriggered: root.resetAll()
                     }
-                    // Full wipe → first-run. Two-step confirm (the button arms,
-                    // then commits) because this erases everything irreversibly.
+                    // Full wipe → first-run. The most destructive thing in the
+                    // app is confirmed in a dialog that says what goes (design
+                    // audit DES-16); a second click within 3.5 s was all it took.
                     RowLayout {
                         id: wipeRow
-                        property bool armed: false
                         Layout.fillWidth: true
                         spacing: Theme.spXl
                         ColumnLayout {
@@ -2906,14 +2906,72 @@ Item {
                         ActionButton {
                             objectName: "settings-wipe"
                             kind: "danger"
-                            armed: wipeRow.armed
                             implicitHeight: 28
-                            text: wipeRow.armed ? I18n.t("settings.data.wipe.confirm") : I18n.t("settings.data.wipeButton")
-                            onActivated: {
-                                if (!wipeRow.armed) { wipeRow.armed = true; wipeDisarm.restart(); }
-                                else { wipeRow.armed = false; wipeDisarm.stop(); AppController.resetToFirstRun(); }
+                            text: I18n.t("settings.data.wipeButton")
+                            onActivated: wipeDialog.open()
+                            // "Delete all data?" — names what goes, and Cancel is where focus
+                            // lands, so Return on an unread dialog keeps the data.
+                            Popup {
+                                id: wipeDialog
+                                objectName: "settings-wipe-dialog"
+                                modal: true
+                                focus: true
+                                parent: Overlay.overlay
+                                anchors.centerIn: parent
+                                width: Math.min(460, (parent ? parent.width : 460) - 2 * Theme.sp2xl)
+                                padding: Theme.inset
+                                closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+                                Overlay.modal: Rectangle { color: Theme.scrim }
+                                readonly property var profileNames: {
+                                    const out = [];
+                                    const ps = AppController.profiles || [];
+                                    for (let i = 0; i < ps.length; i++) out.push(ps[i].name || ps[i].id);
+                                    return out;
+                                }
+                                onOpened: wipeCancel.forceActiveFocus()
+                                background: Rectangle {
+                                    radius: Theme.radiusXl
+                                    color: Theme.panel
+                                    border.color: Theme.borderStrong
+                                    border.width: 1
+                                }
+                                contentItem: ColumnLayout {
+                                    spacing: Theme.spXl
+                                    Text {
+                                        text: I18n.t("settings.data.wipe.dialogTitle")
+                                        color: Theme.text
+                                        font.pixelSize: Theme.fsLg
+                                        font.weight: Font.DemiBold
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                    }
+                                    Text {
+                                        objectName: "settings-wipe-dialog-body"
+                                        text: I18n.t("settings.data.wipe.dialogBody").arg(wipeDialog.profileNames.join(", "))
+                                        color: Theme.textMuted
+                                        font.pixelSize: Theme.fsMd
+                                        Layout.fillWidth: true
+                                        wrapMode: Text.Wrap
+                                    }
+                                    RowLayout {
+                                        Layout.fillWidth: true
+                                        spacing: Theme.spMd
+                                        Item { Layout.fillWidth: true }
+                                        PillButton {
+                                            id: wipeCancel
+                                            objectName: "settings-wipe-cancel"
+                                            text: I18n.t("common.cancel")
+                                            onClicked: wipeDialog.close()
+                                        }
+                                        PillButton {
+                                            objectName: "settings-wipe-commit"
+                                            text: I18n.t("settings.data.wipeButton")
+                                            danger: true
+                                            onClicked: { wipeDialog.close(); AppController.resetToFirstRun(); }
+                                        }
+                                    }
+                                }
                             }
-                            Timer { id: wipeDisarm; interval: 3500; onTriggered: wipeRow.armed = false }
                         }
                     }
                 }

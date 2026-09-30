@@ -324,6 +324,7 @@ Item {
                             AppMenuItem {
                                 text: pageRow.modelData.hasChildren ? I18n.t("docs.deletePageTree")
                                                                     : I18n.t("common.delete")
+                                danger: true
                                 onTriggered: AppController.deleteDocPage(pageRow.modelData.id)
                             }
                         }

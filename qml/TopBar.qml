@@ -67,33 +67,12 @@ Rectangle {
             theme: Theme.dark ? "dark" : "light"
         }
 
-        // Breadcrumbs — editable in place
+        // Just the active profile (and its menu). The editable "project /
+        // week / user" crumbs before it said nothing the rest of the window
+        // did not, and pushed the profile toward the middle of the bar.
         RowLayout {
             id: crumbs
             spacing: Theme.spXs
-            EditableCrumb {
-                value: AppController.crumbProject
-                placeholder: I18n.t("topbar.crumb.project")
-                bold: true
-                onCommitted: (v) => AppController.crumbProject = v
-            }
-            CrumbSep {}
-            // sprint segment — derived; not editable
-            Text {
-                text: I18n.relang(AppController.sprintLabel())
-                color: Theme.textMuted
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsMd
-            }
-            CrumbSep {}
-            EditableCrumb {
-                value: AppController.crumbUser
-                placeholder: I18n.t("topbar.crumb.user")
-                bold: true
-                onCommitted: (v) => AppController.crumbUser = v
-            }
-            CrumbSep {}
-
             // Profile pill — color dot + name + dropdown
             Rectangle {
                 id: profilePill
@@ -178,11 +157,6 @@ Rectangle {
                     AppMenuItem {
                         text: I18n.t("topbar.profile.duplicate"); onTriggered: root.duplicateProfileRequested()
                     }
-                    AppMenuItem {
-                        text: I18n.t("topbar.profile.delete")
-                        enabled: AppController.profiles.length > 1
-                        onTriggered: AppController.deleteProfile(AppController.activeProfileId)
-                    }
                     AppMenuSeparator {}
                     AppMenuItem {
                         text: I18n.t("topbar.profile.import"); onTriggered: root.importJsonRequested()
@@ -203,6 +177,17 @@ Rectangle {
                     }
                     AppMenuItem {
                         text: I18n.t("topbar.notes.export"); onTriggered: root.exportVaultRequested()
+                    }
+                    // Last, apart and in red, and it says which profile goes
+                    // (design audit DES-9): "Delete active" sat between
+                    // Duplicate and Import looking like any other item.
+                    AppMenuSeparator {}
+                    AppMenuItem {
+                        objectName: "topbar-profile-delete"
+                        text: I18n.t("topbar.profile.delete").arg(profilePill.active.name || I18n.t("topbar.profile.fallback"))
+                        danger: true
+                        enabled: AppController.profiles.length > 1
+                        onTriggered: AppController.deleteProfile(AppController.activeProfileId)
                     }
                 }
             }
@@ -496,90 +481,6 @@ Rectangle {
             ToolTip.delay: 400
             ToolTip.text: I18n.t(root.rightPanelShown ? "topbar.rightPanel.hide" : "topbar.rightPanel.show")
                           + "  " + AppController.shortcutFor("panel.right")
-        }
-    }
-
-    component CrumbSep: Text {
-        text: "/"
-        color: Theme.textMuted
-        font.family: Theme.fontMono
-        font.pixelSize: Theme.fsMd
-    }
-
-    component EditableCrumb: Item {
-        id: ec
-        property string value: ""
-        property string placeholder: ""
-        property bool bold: false
-        property bool editing: false
-        signal committed(string text)
-
-        implicitWidth: editing ? Math.max(60, Math.min(root.crumbMaxWidth + 60, edit.implicitWidth + 12))
-                               : Math.max(20, label.width + 6)
-        implicitHeight: 22
-
-        // Keyboard: Tab to the crumb, Enter or F2 edits it.
-        activeFocusOnTab: !editing
-        Accessible.role: Accessible.Button
-        Accessible.name: label.text
-        function startEdit() {
-            ec.editing = true;
-            edit.forceActiveFocus();
-            edit.selectAll();
-        }
-        Keys.onReturnPressed: ec.startEdit()
-        Keys.onPressed: (event) => { if (event.key === Qt.Key_F2) { ec.startEdit(); event.accepted = true; } }
-        FocusRing { visible: ec.activeFocus && !ec.editing }
-
-        Rectangle {
-            anchors.fill: parent
-            radius: Theme.radiusSm
-            color: hoverMA.containsMouse && !ec.editing ? Theme.panel2 : (ec.editing ? Theme.panel2 : "transparent")
-            border.color: ec.editing ? Theme.accent : "transparent"
-            border.width: ec.editing ? 1 : 0
-        }
-
-        Text {
-            id: label
-            anchors.centerIn: parent
-            visible: !ec.editing
-            // Capped and elided, like the profile name.
-            width: Math.min(implicitWidth, root.crumbMaxWidth)
-            elide: Text.ElideRight
-            text: ec.value.length > 0 ? ec.value : ec.placeholder
-            color: ec.value.length > 0 ? Theme.text : Theme.textDim
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsMd
-            font.weight: ec.bold ? Font.Medium : Font.Normal
-        }
-
-        TextField {
-            id: edit
-            anchors.fill: parent
-            anchors.leftMargin: Theme.spXs; anchors.rightMargin: Theme.spXs
-            visible: ec.editing
-            text: ec.value
-            placeholderText: ec.placeholder
-            color: Theme.text
-            placeholderTextColor: Theme.textDim
-            background: Item {}
-            verticalAlignment: Text.AlignVCenter
-            font.family: Theme.fontMono
-            font.pixelSize: Theme.fsMd
-            font.weight: ec.bold ? Font.Medium : Font.Normal
-            selectByMouse: true
-            onAccepted: { ec.committed(edit.text.trim()); ec.editing = false }
-            onActiveFocusChanged: if (!activeFocus && ec.editing) { ec.committed(edit.text.trim()); ec.editing = false }
-            Keys.onEscapePressed: { edit.text = ec.value; ec.editing = false }
-        }
-
-        MouseArea {
-            id: hoverMA
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.IBeamCursor
-            visible: !ec.editing
-            onClicked: ec.startEdit()
         }
     }
 }

@@ -1329,7 +1329,10 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: root._allRows > 0 ? I18n.t("board.empty.archivedHint") : I18n.t("board.empty.hint")
+            // The keys as bound now, not as they shipped (design audit DES-15).
+            text: root._allRows > 0
+                  ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive"), AppController.shortcutFor("task.new"))
+                  : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new"), AppController.shortcutFor("quick-capture"))
             color: Theme.textMuted
             font.pixelSize: Theme.fsMd
         }

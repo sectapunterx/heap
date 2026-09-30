@@ -317,8 +317,10 @@ Rectangle {
                             text: I18n.t("notes.folder.rename")
                             onTriggered: folderPopup.openFor(headerItem.rowData.folder)
                         }
+                        AppMenuSeparator {}
                         AppMenuItem {
                             text: I18n.t("notes.folder.remove")
+                            danger: true
                             onTriggered: AppController.removeNoteFolder(headerItem.rowData.folder)
                         }
                     }
@@ -422,6 +424,7 @@ Rectangle {
                         AppMenuSeparator {}
                         AppMenuItem {
                             text: I18n.t("common.delete")
+                            danger: true
                             onTriggered: AppController.deleteNote(row.note.id)
                         }
                     }

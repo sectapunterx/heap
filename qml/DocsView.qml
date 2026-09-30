@@ -67,6 +67,16 @@ Item {
         for (let i = 0; i < snippets.length; i++) if (snippetPassesSearch(snippets[i])) n++;
         return n;
     }
+    readonly property int matchingDocCount: {
+        let n = 0;
+        for (let i = 0; i < sections.length; i++)
+            for (let j = 0; j < sections[i].items.length; j++) if (passesSearch(sections[i].items[j])) n++;
+        return n;
+    }
+    // A query that matches nothing anywhere (design audit DES-13): every
+    // section hid itself and the page went blank, which read as broken.
+    readonly property bool searchFoundNothing: (root.searchText || "").trim().length > 0
+        && root.matchingDocCount + root.matchingSnippetCount + root.matchingContactCount === 0
     readonly property int matchingContactCount: {
         let n = 0;
         for (let i = 0; i < contacts.length; i++) if (contactPassesSearch(contacts[i])) n++;
@@ -701,14 +711,14 @@ Item {
 
                     NavLink {
                         width: navCol.width
-                        label: "Snippets"
+                        label: I18n.t("docs.snippets")
                         count: root.snippets.length
                         barColor: Theme.accent
                         anchorId: "sec-snippets"
                     }
                     NavLink {
                         width: navCol.width
-                        label: "Contacts"
+                        label: I18n.t("docs.nav.contacts")
                         count: root.contacts.length
                         barColor: Theme.textMuted
                         anchorId: "sec-contacts"
@@ -796,6 +806,28 @@ Item {
                     width: bodyScroll.width
                     spacing: Theme.sp3xl
 
+                    ColumnLayout {
+                        objectName: "docs-no-matches"
+                        visible: root.searchFoundNothing
+                        Layout.fillWidth: true
+                        Layout.topMargin: Theme.sp3xl
+                        spacing: Theme.spMd
+                        Text {
+                            Layout.alignment: Qt.AlignHCenter
+                            Layout.maximumWidth: bodyCol.width - 2 * Theme.sp3xl
+                            text: I18n.t("docs.noMatches").arg(root.searchText.trim())
+                            color: Theme.text
+                            font.pixelSize: Theme.fsMd
+                            wrapMode: Text.Wrap
+                            horizontalAlignment: Text.AlignHCenter
+                        }
+                        PillButton {
+                            Layout.alignment: Qt.AlignHCenter
+                            text: I18n.t("docs.search.clear")
+                            onClicked: { root.searchText = ""; docsSearch.text = ""; docsSearch.forceActiveFocus(); }
+                        }
+                    }
+
                     // Doc sections
                     Repeater {
                         model: root.sections
@@ -849,7 +881,7 @@ Item {
                                     AppMenuItem { text: I18n.t("docs.menu.moveUp");   enabled: secCol.index > 0;                              onTriggered: root._moveSectionByDelta(secCol.section.id, -1) }
                                     AppMenuItem { text: I18n.t("docs.menu.moveDown"); enabled: secCol.index < root.sections.length - 1;       onTriggered: root._moveSectionByDelta(secCol.section.id, +1) }
                                     AppMenuSeparator {}
-                                    AppMenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(secCol.section.id) }
+                                    AppMenuItem { danger: true; text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(secCol.section.id) }
                                 }
 
                                 RowLayout {
@@ -1285,7 +1317,7 @@ Item {
             AppMenuItem { text: I18n.t("docs.menu.moveUp");   enabled: nav.sectionIndex > 0;                              onTriggered: root._moveSectionByDelta(nav.sectionId, -1) }
             AppMenuItem { text: I18n.t("docs.menu.moveDown"); enabled: nav.sectionIndex < root.sections.length - 1;        onTriggered: root._moveSectionByDelta(nav.sectionId, +1) }
             AppMenuSeparator {}
-            AppMenuItem { text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(nav.sectionId) }
+            AppMenuItem { danger: true; text: I18n.t("docs.menu.deleteSection"); onTriggered: root.deleteSection(nav.sectionId) }
         }
     }
 

@@ -40,6 +40,20 @@ TestCase {
         compare(I18n.t("no.such.key.exists"), "no.such.key.exists");
     }
 
+    // Design audit DES-15: the first-run hints name rebindable shortcuts, so
+    // they take them as arguments instead of spelling out the defaults.
+    function test_first_run_hints_take_the_shortcuts_as_arguments() {
+        const keys = ["welcome.capture.desc", "welcome.palette.desc", "board.empty.hint",
+                      "board.empty.archivedHint", "timeline.empty.none.hint"];
+        for (const lang of ["en", "ru"]) {
+            for (const k of keys) {
+                const s = String(I18n.dict[lang][k]);
+                verify(s.indexOf("%1") >= 0, lang + "." + k + " has no %1: " + s);
+                verify(!/Ctrl\+/.test(s), lang + "." + k + " spells out a shortcut: " + s);
+            }
+        }
+    }
+
     // …and a key that exists only in English still resolves under ru, rather
     // than falling through to the key.
     function test_ru_falls_back_to_english_not_to_the_key() {

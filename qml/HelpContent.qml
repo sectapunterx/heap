@@ -1139,15 +1139,6 @@ Item {
             }
 
             H3 {
-                text: root.tr2("Breadcrumbs in TopBar",
-                              "Хлебные крошки в верхней панели")
-            }
-            Body {
-                text: root.tr2("'Project / sprint / user' can be edited in place — click the breadcrumb you need. It's saved in settings.",
-                              "«Проект / неделя / пользователь» правятся на месте — нажмите нужную крошку (или Tab и Enter). Сохраняется в настройках.")
-            }
-
-            H3 {
                 text: root.tr2("Event resize handles",
                               "Ручки изменения размера события")
             }

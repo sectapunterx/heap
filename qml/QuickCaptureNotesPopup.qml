@@ -293,7 +293,7 @@ Popup {
                     }
                     PillButton {
                         text: I18n.t("common.delete")
-                        primary: true
+                        danger: true
                         onClicked: confirmDiscard._commitDiscard()
                     }
                 }

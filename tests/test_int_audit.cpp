@@ -467,6 +467,14 @@ TEST(IntegrationI18n, KnownReasonsAreTranslated_UnknownOnesPassThrough) {
   EXPECT_EQ(translateProviderReason(QStringLiteral("not configured"), true), QStringLiteral("не настроено"));
   EXPECT_EQ(translateProviderReason(QStringLiteral("HTTP 401 — the browser session is no longer valid; sign in again"), true),
             QStringLiteral("HTTP 401 — сессия браузера больше не действительна — войдите снова"));
+  // ReplyError's own hints (design audit DES-14), after the status prefix or
+  // joined to the tracker's bare reason.
+  EXPECT_EQ(translateProviderReason(QStringLiteral("HTTP 401 — unauthorized — check the token"), true),
+            QStringLiteral("HTTP 401 — нет авторизации — проверьте токен"));
+  EXPECT_EQ(translateProviderReason(
+                QStringLiteral("HTTP 404 — Not Found: the repo or project does not exist, or this token has no access to it"), true),
+            QStringLiteral("HTTP 404 — Not Found: репозиторий или проект не существует, либо у токена нет к нему доступа"));
+  EXPECT_EQ(translateProviderReason(QStringLiteral("token refresh failed"), true), QStringLiteral("не удалось обновить токен"));
   // A tracker's own words are not guessed at.
   EXPECT_EQ(translateProviderReason(QStringLiteral("HTTP 422 — Validation Failed"), true), QStringLiteral("HTTP 422 — Validation Failed"));
   EXPECT_EQ(translateProviderReason(QStringLiteral("repo is not configured properly"), true),

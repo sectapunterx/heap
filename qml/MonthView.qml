@@ -324,12 +324,15 @@ Item {
                         }
 
                         // Chips — first few tasks, then events, then overflow.
+                        // 20px, like the week's chips: at 15px a row of them
+                        // was the hardest target in the app to hit (design
+                        // audit DES-17).
                         Repeater {
                             model: Math.min(3, cell.tasks.length)
                             delegate: Rectangle {
                                 required property int index
                                 Layout.fillWidth: true
-                                implicitHeight: 15
+                                implicitHeight: 20
                                 radius: Theme.radiusXs
                                 color: Theme.withAlpha(root.priColor(cell.tasks[index].priority), 0.22)
                                 Row {
@@ -345,7 +348,7 @@ Item {
                             delegate: Rectangle {
                                 required property int index
                                 Layout.fillWidth: true
-                                implicitHeight: 15
+                                implicitHeight: 20
                                 radius: Theme.radiusXs
                                 color: Theme.accentSoft
                                 Row {
@@ -373,7 +376,7 @@ Item {
                             MouseArea {
                                 id: moreMA
                                 anchors.fill: parent
-                                anchors.margins: -4
+                                anchors.margins: -6
                                 hoverEnabled: true
                                 cursorShape: Qt.PointingHandCursor
                                 onClicked: AppController.selectedDate = cell.date

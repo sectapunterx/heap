@@ -52,16 +52,24 @@ Popup {
     // optional Help anchor for "Learn more".
     //   action.kind: "view"   → set AppController.currentView = arg
     //                "action" → emit openAction(arg), handled in Main.qml
+    // A hint with the shortcuts as bound now, not as they shipped (design
+    // audit DES-15): the keys are rebindable, the text was not.
+    function withKeys(key, ids) {
+        let text = I18n.t(key);
+        const list = ids || [];
+        for (let i = 0; i < list.length; i++) text = text.arg(AppController.shortcutFor(list[i]));
+        return text;
+    }
     readonly property var steps: [
         { glyph: "✦", title: "welcome.title", desc: "welcome.subtitle",
           keys: [], action: null, help: "",
           // The first page was one line over a blank frame; it now says what
           // the app is made of before the tour walks through each part.
           highlights: [
-              { glyph: "▦", title: "welcome.board.title", desc: "welcome.board.desc" },
-              { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.desc" },
-              { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.desc" },
-              { glyph: "⌘", title: "welcome.palette.title", desc: "welcome.palette.desc" }
+              { glyph: "▦", title: "welcome.board.title", desc: "welcome.board.desc", descText: I18n.t("welcome.board.desc") },
+              { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.desc", descText: I18n.t("welcome.calendar.desc") },
+              { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.desc", descText: root.withKeys("welcome.capture.desc", ["quick-capture"]) },
+              { glyph: "⌘", title: "welcome.palette.title", desc: "welcome.palette.desc", descText: root.withKeys("welcome.palette.desc", ["palette.open"]) }
           ],
           note: "welcome.demoNote" },
         { glyph: "▦", title: "welcome.views.title", desc: "welcome.views.desc",
@@ -285,7 +293,7 @@ Popup {
                                 }
                                 Text {
                                     Layout.fillWidth: true
-                                    text: I18n.t(modelData.desc)
+                                    text: modelData.descText
                                     color: Theme.textMuted
                                     font.pixelSize: Theme.fsSm
                                     wrapMode: Text.WordWrap

@@ -303,18 +303,28 @@ TestCase {
         verify(imp.activeFocus, "Tab from Export did not reach Import");
     }
 
-    function test_wipe_arms_from_the_keyboard() {
+    // Design audit DES-16: "Delete everything" asks in a dialog that names
+    // the profiles that go, with focus on Cancel; nothing is wiped until the
+    // red button in it is pressed.
+    function test_wipe_asks_in_a_dialog_with_focus_on_cancel() {
         const sv = make();
         sv.activeSection = "data";
         tryVerify(function () { return findChild(sv, "settings-wipe") !== null; }, 2000);
         const wipe = findChild(sv, "settings-wipe");
-        compare(wipe.armed, false);
+        const dialog = findChild(sv, "settings-wipe-dialog");
+        verify(dialog !== null);
+        const before = AppController.profiles.length;
         wipe.forceActiveFocus();
-        // One press only: the second one would wipe the test profile.
         keyClick(Qt.Key_Space);
-        compare(wipe.armed, true, "Space did not arm the wipe");
-        compare(wipe.Accessible.name, I18n.t("settings.data.wipe.confirm"));
-        wipe.parent.armed = false;
+        tryVerify(function () { return dialog.opened; }, 1000, "Space did not open the wipe dialog");
+        const body = findChild(dialog.contentItem, "settings-wipe-dialog-body");
+        const firstName = AppController.profiles[0].name;
+        verify(body.text.indexOf(firstName) >= 0, "the dialog does not name the profiles: " + body.text);
+        const cancel = findChild(dialog.contentItem, "settings-wipe-cancel");
+        tryVerify(function () { return cancel.activeFocus; }, 1000, "focus is not on Cancel");
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return !dialog.opened; }, 1000);
+        compare(AppController.profiles.length, before, "the profiles were touched");
     }
 
     function test_about_actions_are_named_buttons() {
