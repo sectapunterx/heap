@@ -40,6 +40,11 @@ struct ExternalTask {
   // which spans projects — so its externalId is only unique within its project
   // and it must never be written back through the configured-project path.
   bool crossProject = false;
+  // The statuses this issue's workflow can move it to right now, for trackers
+  // that say (Jira's `transitions`). `transitionsKnown` false = not reported,
+  // so every move is left for the tracker to judge.
+  QStringList transitions;
+  bool transitionsKnown = false;
 };
 
 // A person pulled from a chat/directory integration (Mattermost). Separate from

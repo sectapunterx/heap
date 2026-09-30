@@ -43,6 +43,15 @@ QVariantMap ticketToVariant(const Task& t) {
       {QStringLiteral("updatedAt"), t.externalMeta.updatedAt},
       {QStringLiteral("unsynced"), !t.externalMeta.unsyncedStatus.isEmpty()},
       {QStringLiteral("gone"), t.externalMeta.goneUpstream},
+      {QStringLiteral("outOfScope"), t.externalMeta.outOfScope},
+      {QStringLiteral("queued"), t.externalMeta.pushQueued},
+      // A field both sides changed: the editor shows the tracker's version
+      // next to the local one and lets the user pick.
+      {QStringLiteral("conflict"), !t.externalMeta.conflicts.isEmpty()},
+      {QStringLiteral("conflicts"), t.externalMeta.conflicts},
+      {QStringLiteral("remoteTitle"), t.externalMeta.title},
+      {QStringLiteral("remoteBody"), t.externalMeta.body},
+      {QStringLiteral("remotePriority"), t.externalMeta.priority},
   };
 }
 

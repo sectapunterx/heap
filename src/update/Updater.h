@@ -17,7 +17,20 @@ namespace heap::update {
 // dotted numeric components are compared left-to-right (missing = 0); with an
 // equal numeric core, a pre-release ("-rc1") ranks below the plain release.
 // Non-numeric components degrade to 0. Pure function — unit-tested directly.
+// Build metadata ("+hotfix") is ignored; two pre-releases of one core compare
+// identifier by identifier, "rc1" < "rc2" < "rc10" < the release.
 bool isNewerVersion(const QString& current, const QString& latest);
+
+// Why a check did not answer, so the UI can say "couldn't check" for the
+// network's (or GitHub's rate limit's) fault rather than "failed".
+enum class CheckFailure : int {
+  Offline = 0,      // no connection, DNS, timeout
+  RateLimited = 1,  // GitHub 403 / 429
+  Other = 2,
+};
+
+// `networkError` is a QNetworkReply::NetworkError. Pure — unit-tested.
+CheckFailure classifyCheckFailure(int httpStatus, int networkError);
 
 class Updater : public QObject {
   Q_OBJECT
@@ -37,7 +50,8 @@ class Updater : public QObject {
  signals:
   void updateAvailable(const QString& latestVersion, const QString& releaseUrl);
   void upToDate(const QString& currentVersion);
-  void checkFailed(const QString& error);
+  // `kind` is a CheckFailure.
+  void checkFailed(int kind, const QString& error);
 
  private:
   QString m_currentVersion;

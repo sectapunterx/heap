@@ -308,6 +308,8 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 # ── audit-ux: begin ──
 # ── audit-ux: end ──
 # ── audit-int: begin ──
+# ─── Integration / release fixes from the 2026-09-30 audit ───
+heap_add_appcontroller_test(heap_int_audit_tests test_int_audit.cpp)
 # ── audit-int: end ──
 # ── audit-perf: begin ──
 # ── audit-perf: end ──

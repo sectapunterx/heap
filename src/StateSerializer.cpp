@@ -24,7 +24,7 @@ static_assert(heap::meta::fieldCount<Task>() == 24,
               "Task gained or lost a field. Update taskToJson/taskFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<ExternalMeta>() == 15,
+static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -145,7 +145,35 @@ QJsonObject externalMetaToJson(const ExternalMeta& m) {
   if(m.goneUpstream) {
     o["goneUpstream"] = true;
   }
+  if(!m.scope.isEmpty()) {
+    o["remoteScope"] = m.scope;
+  }
+  if(m.outOfScope) {
+    o["outOfScope"] = true;
+  }
+  if(!m.priority.isEmpty()) {
+    o["remotePriority"] = m.priority;
+  }
+  if(!m.labels.isEmpty()) {
+    o["remoteLabels"] = QJsonArray::fromStringList(m.labels);
+  }
+  if(!m.conflicts.isEmpty()) {
+    o["conflicts"] = QJsonArray::fromStringList(m.conflicts);
+  }
+  if(m.pushQueued) {
+    o["pushQueued"] = true;
+  }
   return o;
+}
+
+QStringList stringsFromJson(const QJsonValue& v) {
+  QStringList out;
+  for(const QJsonValue& s : v.toArray()) {
+    if(s.isString()) {
+      out.append(s.toString());
+    }
+  }
+  return out;
 }
 
 ExternalMeta externalMetaFromJson(const QJsonObject& o) {
@@ -165,6 +193,12 @@ ExternalMeta externalMetaFromJson(const QJsonObject& o) {
   m.column = o["remoteColumn"].toString();
   m.unsyncedStatus = o["unsyncedStatus"].toString();
   m.goneUpstream = o["goneUpstream"].toBool(false);
+  m.scope = o["remoteScope"].toString();
+  m.outOfScope = o["outOfScope"].toBool(false);
+  m.priority = o["remotePriority"].toString();
+  m.labels = stringsFromJson(o["remoteLabels"]);
+  m.conflicts = stringsFromJson(o["conflicts"]);
+  m.pushQueued = o["pushQueued"].toBool(false);
   return m;
 }
 

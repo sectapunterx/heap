@@ -384,7 +384,7 @@ void OAuthManager::startAuthCode(const Params& params) {
   const QByteArray state = randomToken();
   m_receiver = new LoopbackReceiver(fragment ? LoopbackReceiver::Mode::Fragment : LoopbackReceiver::Mode::Query, state, this);
   if(!m_receiver->listen(params.redirectPort)) {
-    report({false, {}, {}, {}, tr("redirect port %1 is busy — close the other app and retry").arg(params.redirectPort)});
+    report({false, {}, {}, {}, QStringLiteral("redirect port %1 is busy — close the other app and retry").arg(params.redirectPort)});
     return;
   }
   const QString redirect = redirectUriFor(m_receiver->port(), params.redirectHost);
@@ -428,14 +428,14 @@ void OAuthManager::startAuthCode(const Params& params) {
     });
   });
 
-  armTimeout(kAuthCodeTimeoutMs, tr("timed out waiting for browser sign-in"));
+  armTimeout(kAuthCodeTimeoutMs, QStringLiteral("timed out waiting for browser sign-in"));
   m_openUrl(buildAuthorizeUrl(params, redirect, state, challenge));
 }
 
 #if !HEAP_HAVE_DEVICE_OAUTH
 void OAuthManager::startDevice(const Params& params) {
   Q_UNUSED(params);
-  report({false, {}, {}, {}, tr("browser sign-in for this provider needs Qt 6.9 or newer — use an access token")});
+  report({false, {}, {}, {}, QStringLiteral("browser sign-in for this provider needs Qt 6.9 or newer — use an access token")});
 }
 #else
 void OAuthManager::startDevice(const Params& params) {
@@ -476,10 +476,10 @@ void OAuthManager::startDevice(const Params& params) {
     report(r);
   });
   connect(m_deviceFlow, &QAbstractOAuth::requestFailed, this, [this](QAbstractOAuth::Error) {
-    report({false, {}, {}, {}, tr("authorization was denied, expired, or failed")});
+    report({false, {}, {}, {}, QStringLiteral("authorization was denied, expired, or failed")});
   });
 
-  armTimeout(kDeviceTimeoutMs, tr("timed out waiting for device authorization"));
+  armTimeout(kDeviceTimeoutMs, QStringLiteral("timed out waiting for device authorization"));
   m_deviceFlow->grant();
 }
 #endif

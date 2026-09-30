@@ -211,6 +211,9 @@ qt_add_library(heap_core STATIC
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
     # ── audit-int: begin ──
+    src/integrations/TrackerMerge.cpp
+    src/integrations/IntegrationI18n.cpp
+    src/diag/IssueReport.cpp
     # ── audit-int: end ──
     # ── audit-perf: begin ──
     # ── audit-perf: end ──

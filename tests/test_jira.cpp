@@ -910,7 +910,35 @@ TEST(JiraProvider, ParseJiraComments_LinkInAdfBody_KeepsTarget) {
       {"type":"text","text":"log","marks":[{"type":"link","attrs":{"href":"https://x.test/log"}}]}]}]}}]})json";
   const auto comments = heap::integrations::parseJiraComments(json);
   ASSERT_EQ(comments.size(), 1);
-  EXPECT_EQ(comments.at(0).body, QStringLiteral("log (https://x.test/log)"));
+  // Markdown, like the description and like GitHub's comments (INT-9).
+  EXPECT_EQ(comments.at(0).body, QStringLiteral("[log](https://x.test/log)"));
+}
+
+TEST(JiraProvider, ParseJiraComments_BoldAndCode_SurviveAsMarkdown) {
+  // The audit's "comment 2 bold" lost its strong mark on the way in.
+  const QByteArray json = R"json({"comments":[{"author":{"displayName":"A"},"created":"2026-01-01T10:00:00.000+0000",
+    "body":{"type":"doc","content":[
+      {"type":"paragraph","content":[{"type":"text","text":"comment 2 "},
+        {"type":"text","text":"bold","marks":[{"type":"strong"}]},{"type":"text","text":" "},
+        {"type":"text","text":"x()","marks":[{"type":"code"}]}]},
+      {"type":"bulletList","content":[
+        {"type":"listItem","content":[{"type":"paragraph","content":[{"type":"text","text":"one"}]}]}]}]}}]})json";
+  const auto comments = heap::integrations::parseJiraComments(json);
+  ASSERT_EQ(comments.size(), 1);
+  EXPECT_EQ(comments.at(0).body, QStringLiteral("comment 2 **bold** `x()`\n\n- one"));
+}
+
+TEST(JiraProvider, ParseJiraIssues_ExpandedTransitions_AreKept) {
+  const QByteArray json = R"json({"issues":[
+    {"key":"HT-1","fields":{"summary":"a","status":{"name":"To Do"}},
+     "transitions":[{"id":"11","to":{"name":"In Progress"}},{"id":"21","to":{"name":"Done"}},{"id":"31","to":{"name":"Done"}}]},
+    {"key":"HT-2","fields":{"summary":"b","status":{"name":"To Do"}}}]})json";
+  const auto issues = heap::integrations::parseJiraIssues(json, QStringLiteral("https://acme.atlassian.net"));
+  ASSERT_EQ(issues.size(), 2);
+  EXPECT_TRUE(issues.at(0).transitionsKnown);
+  EXPECT_EQ(issues.at(0).transitions, (QStringList{"In Progress", "Done"}));
+  // Not expanded: nothing is known, so nothing is refused on its account.
+  EXPECT_FALSE(issues.at(1).transitionsKnown);
 }
 
 TEST(JiraProvider, ParseJiraStatuses_StatusList_ReturnsSortedUniqueNames) {

@@ -12,8 +12,10 @@
 #include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
+#include "diag/IssueReport.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
 #include "integrations/MattermostClient.h"
 #include "integrations/OAuthManager.h"
@@ -23,6 +25,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "integrations/TrackerMerge.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
 #include "notes/MdVault.h"
@@ -187,7 +190,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
       {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
       {"sync.conflicts",
-       {"%1 kept your local edits (also changed in the tracker)", "%1 — оставлены локальные правки (в трекере тоже изменены)"}},
+       {"%1 changed on both sides, your edits kept: %2 — open the card to compare",
+        "%1 изменены с обеих сторон, оставлены ваши правки: %2 — откройте карточку, чтобы сравнить"}},
       {"sync.gone", {"%1 no longer in the tracker", "%1 больше нет в трекере"}},
       {"sync.pushFailed", {"%1: the tracker did not take the change — %2", "%1: трекер не принял изменение — %2"}},
       {"onboarding.freshUndone", {"Demo content restored", "Демо-данные возвращены"}},
@@ -562,9 +566,18 @@ AppController::AppController(QObject* parent) :
     m_updateStatus = tr_("update.upToDate");
     emit updateStatusChanged();
   });
-  connect(m_updater.get(), &heap::update::Updater::checkFailed, this, [this](const QString& error) {
-    qWarning() << "update check failed:" << error;
-    m_updateStatus = tr_("update.failed");
+  connect(m_updater.get(), &heap::update::Updater::checkFailed, this, [this](int kind, const QString& error) {
+    qWarning() << "update check failed:" << kind << error;
+    // No network, or GitHub's rate limit, is not the check failing: say it
+    // could not check, and why (PLAT-27).
+    using heap::update::CheckFailure;
+    if(kind == static_cast<int>(CheckFailure::RateLimited)) {
+      m_updateStatus = tr_("update.couldNotCheck").arg(tr_("update.rateLimited"));
+    } else if(kind == static_cast<int>(CheckFailure::Offline)) {
+      m_updateStatus = tr_("update.couldNotCheck").arg(tr_("update.offline"));
+    } else {
+      m_updateStatus = tr_("update.failed");
+    }
     emit updateStatusChanged();
   });
   // Opt-out background check shortly after startup (never auto-downloads). The
@@ -713,7 +726,9 @@ QString AppController::tr_(const QString& key) const {
   const auto& table = i18nTable();
   const auto it = table.constFind(key);
   if(it == table.constEnd()) {
-    return key;
+    // The integrations keep their own strings (audit INT-7).
+    const QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
+    return own.isNull() ? key : own;
   }
   return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
 }
@@ -1212,17 +1227,38 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   }
   const QString providerId = t.externalProvider;
   const QString externalId = t.externalId;
+  // A tracker that is disconnected has no provider to send through. The move
+  // used to vanish there (INT-6): flag it and send it after the next pull.
+  const bool connected = std::any_of(m_syncProviders.cbegin(), m_syncProviders.cend(), [&providerId](const auto& provider) {
+    return provider->id() == providerId;
+  });
+  if(!connected) {
+    queueTrackerPush(taskId, status);
+    return;
+  }
   // Remembered until the tracker answers, so a failure can name the card and
   // offer to send the same status again.
-  m_pendingPushes.insert(pushKey(providerId, project, externalId), taskId);
-  ensureFreshToken(providerId, [this, providerId, externalId, status, project]() {
-    for(const auto& provider : m_syncProviders) {
-      if(provider->id() == providerId) {
-        provider->pushStatusChange(externalId, status, project);
-        return;
-      }
-    }
-  });
+  const QString key = pushKey(providerId, project, externalId);
+  m_pendingPushes.insert(key, taskId);
+  ensureFreshToken(
+      providerId,
+      [this, providerId, externalId, status, project, key, taskId]() {
+        for(const auto& provider : m_syncProviders) {
+          if(provider->id() == providerId) {
+            provider->pushStatusChange(externalId, status, project);
+            return;
+          }
+        }
+        // Rebuilt away while the token renewed (signed out meanwhile).
+        m_pendingPushes.remove(key);
+        queueTrackerPush(taskId, status);
+      },
+      [this, key, taskId, status]() {
+        // The token could not be renewed — offline, or the session ended.
+        // Either way the move has not reached the tracker yet.
+        m_pendingPushes.remove(key);
+        queueTrackerPush(taskId, status);
+      });
 }
 
 QString AppController::pushKey(const QString& providerId, const QString& project, const QString& externalId) {
@@ -1250,14 +1286,21 @@ void AppController::onTaskPushed(
   // The flag is what keeps the card where the user put it until the tracker
   // agrees, and what the card shows as "not synced".
   const QString wanted = ok ? QString() : t.status;
-  if(t.externalMeta.unsyncedStatus != wanted) {
+  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued) {
     t.externalMeta.unsyncedStatus = wanted;
+    // The tracker answered: the move is no longer waiting to be sent.
+    t.externalMeta.pushQueued = false;
     m_tasks.upsert(t);
     scheduleSave();
   }
+  if(ok) {
+    // The issue sits somewhere else in its workflow now; what it can move to
+    // is unknown until the next pull says.
+    m_trackerTransitions.remove(providerId + QChar('\n') + externalId);
+  }
   if(!ok) {
     qWarning() << providerId << "push failed for" << externalId << ":" << error;
-    emit trackerPushFailed(t.id, tr_("sync.pushFailed").arg(externalKeyOf(t), error));
+    emit trackerPushFailed(t.id, tr_("sync.pushFailed").arg(externalKeyOf(t), providerReason(error)));
   }
 }
 
@@ -4003,6 +4046,9 @@ void AppController::openLogsFolder() const {
 }
 
 QString AppController::issueReportBody() const {
+  const auto scrubbed = [](const QString& text) {
+    return heap::diag::scrubPersonalPaths(text, QDir::homePath(), heap::diag::currentUserName());
+  };
   QString body = QStringLiteral(
                      "<!-- Describe the problem above this line. The diagnostics below are "
                      "filled in automatically — please keep them. -->\n\n"
@@ -4010,22 +4056,42 @@ QString AppController::issueReportBody() const {
                      "**Diagnostics**\n"
                      "- heap version: %1\n"
                      "- OS: %2 (%3)\n"
-                     "- Qt: %4\n\n"
+                     "- Qt: %4\n"
+                     "- The full log is on your clipboard — paste it below if it helps.\n\n"
                      "<details><summary>Recent log tail</summary>\n\n"
                      "```\n%5\n```\n</details>\n")
                      .arg(QCoreApplication::applicationVersion(),
                           QSysInfo::prettyProductName(),
                           QSysInfo::currentCpuArchitecture(),
                           QString::fromLatin1(qVersion()),
-                          heap::logging::logTail());
+                          // A URL is not private: a short tail, and no home
+                          // folder or user name in it (PLAT-28).
+                          heap::diag::tailLines(scrubbed(heap::logging::logTail()), 25, 1500));
 
   // Corruption recoveries are the failures nobody reports because nobody sees
   // them. Attach them to the report the user is already writing (HEAP-156).
-  const QString recovery = heap::recovery::tail();
+  const QString recovery = heap::diag::tailLines(scrubbed(heap::recovery::tail()), 8, 600);
   if(!recovery.isEmpty()) {
     body += QStringLiteral("\n<details><summary>Recovery log</summary>\n\n```\n%1\n```\n</details>\n").arg(recovery);
   }
   return body;
+}
+
+QString AppController::issueDiagnostics() const {
+  const auto scrubbed = [](const QString& text) {
+    return heap::diag::scrubPersonalPaths(text, QDir::homePath(), heap::diag::currentUserName());
+  };
+  QString out = QStringLiteral("heap %1 · %2 (%3) · Qt %4\n\n```\n%5\n```\n")
+                    .arg(QCoreApplication::applicationVersion(),
+                         QSysInfo::prettyProductName(),
+                         QSysInfo::currentCpuArchitecture(),
+                         QString::fromLatin1(qVersion()),
+                         scrubbed(heap::logging::logTail(12000)));
+  const QString recovery = scrubbed(heap::recovery::tail());
+  if(!recovery.isEmpty()) {
+    out += QStringLiteral("\nRecovery log:\n```\n%1\n```\n").arg(recovery);
+  }
+  return out;
 }
 
 QVariantList AppController::recoveryLog() const {
@@ -4039,8 +4105,13 @@ bool AppController::exportRecoveryLog(const QUrl& fileUrl) {
   return ok;
 }
 
-void AppController::reportAnIssue() const {
+void AppController::reportAnIssue() {
   const QString body = issueReportBody();
+  // The long version goes where only the user can see it until they paste it.
+  if(QClipboard* clipboard = QGuiApplication::clipboard()) {
+    clipboard->setText(issueDiagnostics());
+    emit toast(tr_("issue.logCopied"));
+  }
 
   QUrl url(QStringLiteral("https://github.com/sectapunterx/heap/issues/new"));
   QUrlQuery query;
@@ -4150,6 +4221,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // Issues the user deleted here. Deleting one is how they say "not mine";
   // re-adding it on the next pull would make the deletion meaningless.
   const QStringList dismissed = dismissedTasks(providerId);
+  // Which filter this batch answers. A card last pulled under another one is
+  // not evidence of anything when it is missing (INT-1).
+  const QString scopeNow = scopeFingerprintFor(providerId);
   // Rows this pull accounted for, and the ones it closed.
   QSet<QString> seenIds;
   QStringList closedIds;
@@ -4223,29 +4297,55 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     const bool isNewRow = row < 0;
     seenIds.insert(t.id);
 
-    // Title and description are a three-way merge against what the tracker
-    // sent last time. Nothing is ever pushed back for them, so a local edit
-    // the tracker did not also touch has to survive the pull; when both sides
-    // changed, the local text wins and the user is told.
+    // Title, description and priority are a three-way merge against what the
+    // tracker sent last time. Nothing is ever pushed back for them, so a local
+    // edit the tracker did not also touch has to survive the pull; when both
+    // sides changed, the local value wins, the card is flagged and the user is
+    // told which one — the editor then offers the tracker's version (INT-4).
     const bool noBase = !isNewRow && before.externalMeta.title.isEmpty() && before.externalMeta.status.isEmpty();
-    const auto mergeText = [&](QString& local, QString& base, const QString& remote) {
-      if(isNewRow || noBase) {
-        // No base means a card from before bases were kept; that build
-        // overwrote every pull, so the tracker's text is what it expects.
-        local = remote;
-      } else {
-        const bool localEdited = local != base;
-        const bool remoteChanged = remote != base;
-        if(!localEdited) {
-          local = remote;
-        } else if(remoteChanged && local != remote) {
-          ++stats.conflicts;
-        }
+    bool conflicted = false;
+    const auto mergeScalar =
+        [&](const QString& field, QString& local, QString& base, const QString& remote, bool hasBase, bool legacyKeepsLocal) {
+          using heap::integrations::FieldMerge;
+          const FieldMerge m =
+              isNewRow ? FieldMerge::TakeRemote : heap::integrations::mergeField(local, base, remote, hasBase, legacyKeepsLocal);
+          if(m == FieldMerge::TakeRemote) {
+            local = remote;
+          }
+          if(m == FieldMerge::Conflict) {
+            conflicted = true;
+            heap::integrations::setConflict(t.externalMeta.conflicts, field, true);
+          } else if(m != FieldMerge::KeepLocal) {
+            // Taken or converged: nothing left to choose between.
+            heap::integrations::setConflict(t.externalMeta.conflicts, field, false);
+          }
+          base = remote;
+        };
+    // No base means a card from before bases were kept; that build overwrote
+    // every pull, so the tracker's text is what it expects.
+    mergeScalar(QStringLiteral("title"), t.title, t.externalMeta.title, ext.title, !noBase, false);
+    mergeScalar(QStringLiteral("body"), t.desc, t.externalMeta.body, ext.body, !noBase, false);
+    // Priority used to be overwritten on every pull (INT-2). A card without a
+    // priority base was, too — so a value that differs from the tracker's now
+    // is an edit made since the last pull, and it stays.
+    if(!ext.priority.isEmpty()) {
+      const QString remotePriority = StatusMap::priority(ext.priority);
+      mergeScalar(QStringLiteral("priority"),
+                  t.priority,
+                  t.externalMeta.priority,
+                  remotePriority,
+                  !t.externalMeta.priority.isEmpty(),
+                  /*legacyKeepsLocal=*/!t.priority.isEmpty());
+    } else {
+      t.externalMeta.priority.clear();
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("priority"), false);
+      if(t.priority.isEmpty()) {
+        t.priority = QStringLiteral("P2");
       }
-      base = remote;
-    };
-    mergeText(t.title, t.externalMeta.title, ext.title);
-    mergeText(t.desc, t.externalMeta.body, ext.body);
+    }
+    if(conflicted) {
+      ++stats.conflicts;
+    }
 
     if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
       seenStatuses.append(ext.status);
@@ -4263,9 +4363,11 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     if(isNewRow) {
       t.status = mapped;
     } else if(remoteMoved) {
-      // Someone moved the issue in the tracker: that is news, and it wins.
+      // Someone moved the issue in the tracker: that is news, and it wins —
+      // over a queued move too, which would now undo theirs.
       t.status = mapped;
       t.externalMeta.unsyncedStatus.clear();
+      t.externalMeta.pushQueued = false;
     } else if(!t.externalMeta.unsyncedStatus.isEmpty()) {
       // A move the tracker refused: keep it here until a push goes through.
     } else if(prevRemote.isEmpty()) {
@@ -4282,16 +4384,19 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     t.externalMeta.column = mapped;
     t.externalMeta.status = ext.status;
     t.externalMeta.goneUpstream = false;
+    t.externalMeta.outOfScope = false;
+    t.externalMeta.scope = scopeNow;
+    const QString transitionsKey = providerId + QChar('\n') + ext.externalId;
+    if(ext.transitionsKnown) {
+      m_trackerTransitions.insert(transitionsKey, ext.transitions);
+    } else {
+      m_trackerTransitions.remove(transitionsKey);
+    }
     if(t.status != before.status && !isNewRow) {
       t.statusChangedAt = QDateTime::currentDateTime();
       if(isDone(t.status)) {
         closedIds.append(t.id);
       }
-    }
-    if(!ext.priority.isEmpty()) {
-      t.priority = StatusMap::priority(ext.priority);
-    } else if(t.priority.isEmpty()) {
-      t.priority = QStringLiteral("P2");
     }
     t.externalId = ext.externalId;
     t.externalUrl = ext.url;
@@ -4309,24 +4414,13 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       }
     }
 
-    // Pulled labels used to be parsed and thrown away (HEAP-124). Merge rather
-    // than clobber: a label the user added locally and the tracker doesn't know
-    // must survive the pull. A chip that has no colour yet takes the tracker's
-    // (the editor drops colours when it rewrites labels from text).
-    QHash<QString, int> presentAt;
-    for(int i = 0; i < t.labels.size(); ++i) {
-      presentAt.insert(t.labels[i].id, i);
-    }
-    for(const QString& name : ext.labels) {
-      const QString color = ext.labelColors.value(name);
-      const auto at = presentAt.constFind(name);
-      if(at == presentAt.constEnd()) {
-        presentAt.insert(name, static_cast<int>(t.labels.size()));
-        t.labels.append(Label{name, color});
-      } else if(t.labels[*at].color.isEmpty() && !color.isEmpty()) {
-        t.labels[*at].color = color;
-      }
-    }
+    // Pulled labels used to be parsed and thrown away (HEAP-124), then only
+    // ever added (INT-3). Three-way against the labels the tracker sent last
+    // time: a label added locally survives, one removed upstream goes, one the
+    // user took off here stays off. A chip that has no colour yet takes the
+    // tracker's (the editor drops colours when it rewrites labels from text).
+    t.labels = heap::integrations::mergeLabels(t.labels, t.externalMeta.labels, ext.labels, ext.labelColors);
+    t.externalMeta.labels = ext.labels;
 
     t.externalMeta.author = ext.author;
     t.externalMeta.issueType = ext.issueType;
@@ -4344,21 +4438,35 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     if(row >= 0 && t == before) {
       continue;
     }
+    if(conflicted) {
+      stats.conflictKeys.append(externalKeyOf(t));
+    }
     m_tasks.upsert(t);
     (row >= 0 ? stats.updated : stats.added)++;
   }
-  // A complete pull that no longer carries an issue means it was deleted or
-  // left the filter. The card stays — it may hold local notes — but says so,
-  // instead of looking like live work forever.
+  // A complete pull that no longer carries an issue, under the same filter the
+  // card was last pulled under, means the issue was deleted or moved out of
+  // reach. The card stays — it may hold local notes — but says so, instead of
+  // looking like live work forever. Under a different filter (the user
+  // switched repo, "my issues", or edited the JQL) the absence only says the
+  // filter changed: the card is out of scope, not gone (INT-1).
   if(complete) {
     for(int i = 0; i < m_tasks.rowCount(); ++i) {
       Task t = m_tasks.items().at(i);
-      if(t.externalProvider != providerId || t.externalId.isEmpty() || seenIds.contains(t.id) || t.externalMeta.goneUpstream) {
+      if(t.externalProvider != providerId || t.externalId.isEmpty() || seenIds.contains(t.id) || t.externalMeta.goneUpstream ||
+         t.externalMeta.outOfScope) {
         continue;
       }
-      t.externalMeta.goneUpstream = true;
+      // An empty scope is a card from before scopes were kept: nothing says
+      // which filter it came from, so it gets the benefit of the doubt.
+      if(t.externalMeta.scope == scopeNow) {
+        t.externalMeta.goneUpstream = true;
+        ++stats.gone;
+      } else {
+        t.externalMeta.outOfScope = true;
+        ++stats.outOfScope;
+      }
       m_tasks.upsert(t);
-      ++stats.gone;
     }
   }
   for(const QString& id : closedIds) {
@@ -4369,8 +4477,11 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // them. Written even when nothing else changed — a status appearing for the
   // first time is news whether or not the issue carrying it was new.
   const bool learned = rememberSeenStatuses(providerId, seenStatuses);
-  if(stats.added > 0 || stats.updated > 0 || stats.gone > 0 || learned) {
+  if(stats.added > 0 || stats.updated > 0 || stats.gone > 0 || stats.outOfScope > 0 || learned) {
     scheduleSave();
+  }
+  if(stats.outOfScope > 0 || stats.added > 0 || stats.updated > 0) {
+    emit integrationStatesChanged();
   }
   return stats;
 }
@@ -4525,8 +4636,16 @@ void AppController::applyIntegrationSettings() {
             this,
             [this, provider, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
               m_retriedAfter401.remove(providerId);
+              // The tracker answered, so it is reachable again.
+              setProviderOffline(providerId, false);
               const bool settlePull = m_settlePulls.remove(providerId);
               const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues, provider->lastPullComplete());
+              // Moves made while the tracker was out of reach go now that it
+              // answers (INT-6). Deferred: sending builds on the provider list,
+              // which this handler's own settings writes may rebuild.
+              QTimer::singleShot(0, this, [this, providerId]() {
+                flushQueuedPushes(providerId);
+              });
               // Jira Cloud's search is eventually consistent: an issue created
               // a moment ago is often missing from the first answer and turned
               // up only on the next sync. One quiet follow-up pull a little
@@ -4537,19 +4656,39 @@ void AppController::applyIntegrationSettings() {
                   syncProviderNow(providerId);
                 });
               }
-              if(settlePull && stats.added == 0 && stats.updated == 0 && stats.gone == 0) {
+              const bool changed = stats.added > 0 || stats.updated > 0;
+              const bool news = changed || stats.gone > 0 || stats.outOfScope > 0 || stats.conflicts > 0;
+              if(settlePull && !news) {
                 return;
               }
               // "Synced 12 issues" every quarter of an hour says nothing about
-              // whether anything happened. Report what actually changed.
-              QString message = (stats.added == 0 && stats.updated == 0)
-                                    ? tr_("sync.upToDate").arg(label)
-                                    : tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated);
+              // whether anything happened. Report what actually changed — and
+              // never "up to date" next to something that did (INT-7).
+              if(!news) {
+                emit toast(tr_("sync.upToDate").arg(label));
+                return;
+              }
+              QStringList parts;
+              if(changed) {
+                parts.append(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
+              }
               if(stats.conflicts > 0) {
-                message += QStringLiteral(" · ") + tr_("sync.conflicts").arg(stats.conflicts);
+                // Name the cards, so the user can go and pick a side (INT-4).
+                QStringList keys = stats.conflictKeys.mid(0, 3);
+                if(stats.conflictKeys.size() > 3) {
+                  keys.append(QStringLiteral("…"));
+                }
+                parts.append(tr_("sync.conflicts").arg(stats.conflicts).arg(keys.join(QStringLiteral(", "))));
               }
               if(stats.gone > 0) {
-                message += QStringLiteral(" · ") + tr_("sync.gone").arg(stats.gone);
+                parts.append(tr_("sync.gone").arg(stats.gone));
+              }
+              if(stats.outOfScope > 0) {
+                parts.append(tr_("sync.outOfScope").arg(stats.outOfScope));
+              }
+              QString message = parts.join(QStringLiteral(" · "));
+              if(!changed) {
+                message = tr_("sync.headline").arg(label, message);
               }
               emit toast(message);
             });
@@ -4578,7 +4717,7 @@ void AppController::applyIntegrationSettings() {
             });
             return;
           }
-          emit toast(tr_("sync.failed").arg(label, error));
+          emit toast(tr_("sync.failed").arg(label, providerReason(error)));
         });
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
@@ -4587,7 +4726,7 @@ void AppController::applyIntegrationSettings() {
               onTaskPushed(providerId, externalId, project, ok, error);
             });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
-      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
+      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)));
     });
     // The mapping UI used to list only statuses an issue had already arrived
     // in; the tracker's own list fills in the rest.
@@ -4682,7 +4821,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   const QString label = d ? d->displayName : providerId;
   connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, label](bool ok, const QString& error) {
-    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
+    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)));
   });
   connect(client,
           &heap::integrations::MattermostClient::contactsFetched,
@@ -4703,7 +4842,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
       emit toast(tr_("int.sessionExpired").arg(label));
       return;
     }
-    emit toast(tr_("sync.failed").arg(label, error));
+    emit toast(tr_("sync.failed").arg(label, providerReason(error)));
   });
 
   m_directoryClients.insert(providerId, client);
@@ -5009,7 +5148,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
             client->deleteLater();
             emit integrationLoginFinished(providerId, ok);
             if(!ok) {
-              emit toast(tr_("int.signInFailed").arg(label, error));
+              emit toast(tr_("int.signInFailed").arg(label, providerReason(error)));
               return;
             }
             if(m_secretStore) {
@@ -5180,7 +5319,7 @@ void AppController::testIntegration(const QString& providerId) {
   const QString label = d->displayName;
   connect(
       provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, provider, label](bool ok, const QString& error) {
-        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
+        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, providerReason(error)));
         provider->deleteLater();
       });
   provider->testConnection();
@@ -5277,7 +5416,7 @@ void AppController::fetchTicketComments(const QString& taskId) {
                                          {QStringLiteral("createdAt"), c.createdAt},
                                          {QStringLiteral("url"), url}});
                 }
-                emit ticketCommentsLoaded(taskId, out, error);
+                emit ticketCommentsLoaded(taskId, out, providerReason(error));
               });
       provider->fetchComments(externalId, project);
       return;
@@ -5448,22 +5587,192 @@ void AppController::setIntegrationFields(const QString& providerId, const QVaria
   scheduleSave();
 }
 
-void AppController::ensureFreshToken(const QString& providerId, std::function<void()> then) {
+void AppController::ensureFreshToken(const QString& providerId, std::function<void()> then, std::function<void()> onFail) {
   const QVariantMap cfg = integrationConfig(providerId);
   const bool isOAuth = cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth");
   const QString refreshToken = cfg.value(QStringLiteral("refreshToken")).toString();
-  const QDateTime expiresAt = QDateTime::fromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString(), Qt::ISODate);
+  const QDateTime expiresAt = heap::integrations::expiryFromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString());
   // PAT providers, non-expiring tokens and sessions with nothing to refresh
   // with all go straight through.
   if(!isOAuth || refreshToken.isEmpty() || !heap::integrations::tokenNeedsRefresh(expiresAt)) {
     then();
     return;
   }
-  refreshOAuthToken(providerId, [then = std::move(then)](bool ok) {
+  refreshOAuthToken(providerId, [then = std::move(then), onFail = std::move(onFail)](bool ok) {
     if(ok) {
       then();
+    } else if(onFail) {
+      onFail();
     }
   });
+}
+
+QString AppController::providerReason(const QString& reason) const {
+  return heap::integrations::translateProviderReason(reason, m_language == QStringLiteral("ru"));
+}
+
+QVariantMap AppController::integrationStates() const {
+  QVariantMap out;
+  QHash<QString, int> outOfScope;
+  for(const Task& t : m_tasks.items()) {
+    if(t.externalMeta.outOfScope && !t.archived && !t.externalProvider.isEmpty()) {
+      ++outOfScope[t.externalProvider];
+    }
+  }
+  QSet<QString> ids = m_offlineProviders;
+  for(auto it = outOfScope.constBegin(); it != outOfScope.constEnd(); ++it) {
+    ids.insert(it.key());
+  }
+  for(const QString& id : ids) {
+    out.insert(id,
+               QVariantMap{
+                   {QStringLiteral("offline"), m_offlineProviders.contains(id)},
+                   {QStringLiteral("outOfScope"), outOfScope.value(id)},
+               });
+  }
+  return out;
+}
+
+void AppController::setProviderOffline(const QString& providerId, bool offline) {
+  if(offline == m_offlineProviders.contains(providerId)) {
+    return;
+  }
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  const QString label = d ? d->displayName : providerId;
+  if(offline) {
+    m_offlineProviders.insert(providerId);
+    emit toast(tr_("int.offline").arg(label));
+  } else {
+    m_offlineProviders.remove(providerId);
+    m_refreshRetryMs.remove(providerId);
+    emit toast(tr_("int.backOnline").arg(label));
+  }
+  emit integrationStatesChanged();
+}
+
+void AppController::scheduleRefreshRetry(const QString& providerId) {
+  // 15 s, 30 s, 1 min … capped at 15 min: soon enough that a laptop waking
+  // onto Wi-Fi is back within a sync, slow enough not to hammer a dead
+  // endpoint all night.
+  constexpr int kFirstMs = 15 * 1000;
+  constexpr int kMaxMs = 15 * 60 * 1000;
+  const int delay = m_refreshRetryMs.value(providerId, kFirstMs);
+  m_refreshRetryMs.insert(providerId, qMin(delay * 2, kMaxMs));
+  QTimer::singleShot(delay, this, [this, providerId]() {
+    if(!m_offlineProviders.contains(providerId)) {
+      return;  // back already, or signed out meanwhile
+    }
+    if(m_refreshing.contains(providerId)) {
+      scheduleRefreshRetry(providerId);
+      return;
+    }
+    refreshOAuthToken(providerId, [this, providerId](bool ok) {
+      if(ok) {
+        syncProviderNow(providerId);
+      }
+    });
+  });
+}
+
+QString AppController::scopeFingerprintFor(const QString& providerId) const {
+  const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
+  if(d == nullptr) {
+    return {};
+  }
+  return heap::integrations::scopeFingerprint(*d, integrationConfig(providerId));
+}
+
+void AppController::queueTrackerPush(const QString& taskId, const QString& status) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  if(t.externalMeta.pushQueued && t.externalMeta.unsyncedStatus == status) {
+    return;
+  }
+  t.externalMeta.unsyncedStatus = status;
+  t.externalMeta.pushQueued = true;
+  m_tasks.upsert(t);
+  scheduleSave();
+  if(m_bulkMoveDepth == 0) {
+    const bool connected = integrationConfig(t.externalProvider).value(QStringLiteral("connected"), false).toBool();
+    const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+    const QString label = d ? d->displayName : t.externalProvider;
+    emit toast(connected ? tr_("sync.queued").arg(externalKeyOf(t)) : tr_("sync.queuedDisconnected").arg(externalKeyOf(t), label));
+  }
+}
+
+void AppController::flushQueuedPushes(const QString& providerId) {
+  QStringList ids;
+  for(const Task& t : m_tasks.items()) {
+    if(t.externalProvider == providerId && t.externalMeta.pushQueued) {
+      ids.append(t.id);
+    }
+  }
+  for(const QString& id : ids) {
+    const int row = m_tasks.indexOfId(id);
+    if(row < 0) {
+      continue;
+    }
+    Task t = m_tasks.items().at(row);
+    // Sent now; the answer clears or re-flags it. The column is whatever the
+    // card says today — a later local move supersedes the queued one.
+    t.externalMeta.pushQueued = false;
+    m_tasks.upsert(t);
+    pushStatusToTracker(id, t.status);
+  }
+  if(!ids.isEmpty()) {
+    scheduleSave();
+  }
+}
+
+void AppController::resolveTrackerConflict(const QString& taskId, bool useTracker) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  if(t.externalMeta.conflicts.isEmpty()) {
+    return;
+  }
+  const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+  if(useTracker) {
+    for(const QString& field : t.externalMeta.conflicts) {
+      if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
+        t.title = t.externalMeta.title;
+      } else if(field == QStringLiteral("body")) {
+        t.desc = t.externalMeta.body;
+      } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
+        t.priority = t.externalMeta.priority;
+      }
+    }
+  }
+  // Keeping mine only stops the flag: the base stays what the tracker sent,
+  // so the next upstream change to the same field is flagged again.
+  t.externalMeta.conflicts.clear();
+  m_tasks.upsert(t);
+  scheduleSave();
+  emit toast(tr_(useTracker ? "task.conflictTookTracker" : "task.conflictKeptMine").arg(externalKeyOf(t)));
+}
+
+void AppController::archiveOutOfScope(const QString& providerId) {
+  QStringList ids;
+  for(const Task& t : m_tasks.items()) {
+    if(t.externalProvider == providerId && t.externalMeta.outOfScope && !t.archived) {
+      ids.append(t.id);
+    }
+  }
+  if(ids.isEmpty()) {
+    return;
+  }
+  const UndoScope scope(this, tr_("int.outOfScopeArchived").arg(ids.size()));
+  for(const QString& id : ids) {
+    m_tasks.setArchived(id, true);
+  }
+  scheduleSave();
+  emit integrationStatesChanged();
+  emit undoableToast(tr_("int.outOfScopeArchived").arg(ids.size()), 5);
 }
 
 void AppController::refreshOAuthToken(const QString& providerId, std::function<void(bool)> done) {
@@ -5515,15 +5824,28 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
       m_oauthNam, p, [this, providerId, label, done = std::move(done)](const heap::integrations::OAuthResult& r) {
         m_refreshing.remove(providerId);
         if(!r.ok) {
+          qWarning() << providerId << "token refresh failed:" << r.httpStatus << r.error;
+          if(!r.grantRejected) {
+            // No answer, a timeout, a 5xx, a captive portal: the network's
+            // problem, not the session's (INT-5). Stay signed in, say
+            // "offline" and try again later.
+            setProviderOffline(providerId, true);
+            scheduleRefreshRetry(providerId);
+            done(false);
+            return;
+          }
           // The grant is gone for good (revoked, or a rotated refresh token was
           // reused). Drop the card back to disconnected so the Integrations
           // panel offers the sign-in button again instead of failing forever.
-          qWarning() << providerId << "token refresh failed:" << r.error;
+          m_offlineProviders.remove(providerId);
+          m_refreshRetryMs.remove(providerId);
+          emit integrationStatesChanged();
           setIntegrationField(providerId, QStringLiteral("connected"), false);
           emit toast(tr_("int.sessionExpired").arg(label));
           done(false);
           return;
         }
+        setProviderOffline(providerId, false);
         if(m_secretStore) {
           // Refresh token first: providers rotate it, so the old one is already
           // dead. Dying between the two writes must not leave a live access
@@ -5533,8 +5855,7 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
           }
           m_secretStore->setValue(providerId, QStringLiteral("token"), r.accessToken);
         }
-        setIntegrationField(
-            providerId, QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString());
+        setIntegrationField(providerId, QStringLiteral("tokenExpiresAt"), heap::integrations::expiryToString(r.expiresAt));
         done(true);
       });
 }
@@ -5672,7 +5993,7 @@ void AppController::connectOAuth(const QString& providerId) {
     mgr->deleteLater();
     emit oauthDeviceCode(providerId, QString(), QString());  // clear the banner
     if(!r.ok) {
-      emit toast(tr_("int.signInFailed").arg(label, r.error));
+      emit toast(tr_("int.signInFailed").arg(label, providerReason(r.error)));
       return;
     }
     if(m_secretStore) {
@@ -5697,7 +6018,7 @@ void AppController::connectOAuth(const QString& providerId) {
                              // When the token expires. Without it the access token was
                              // used until the provider started refusing it, which read
                              // as an empty sync.
-                             {QStringLiteral("tokenExpiresAt"), r.expiresAt.isValid() ? r.expiresAt.toString(Qt::ISODate) : QString()},
+                             {QStringLiteral("tokenExpiresAt"), heap::integrations::expiryToString(r.expiresAt)},
                              {QStringLiteral("connected"), !needsSite},
                          });
     if(needsSite) {
@@ -7269,6 +7590,47 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
     const QVariantMap tasks = s.value("tasks").toMap();
     if(tasks.value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
       emit toast(tr_("branch.required"));
+      return false;
+    }
+  }
+  // A tracker whose workflow decides the moves (Jira) said, on the last pull,
+  // which statuses this issue can go to. A column none of them maps to would
+  // only be refused after the round trip and leave the card "unsynced" —
+  // say so on the drop instead (INT-8).
+  if(!t.externalProvider.isEmpty() && !t.externalId.isEmpty() && newStatus != t.status) {
+    const auto known = m_trackerTransitions.constFind(t.externalProvider + QChar('\n') + t.externalId);
+    if(known != m_trackerTransitions.constEnd()) {
+      using heap::integrations::StatusMap;
+      const QHash<QString, QString> overrides = statusOverridesFor(t.externalProvider);
+      // Back to where the tracker already has it: nothing to transition.
+      if(!t.externalMeta.status.isEmpty() && StatusMap::column(t.externalMeta.status, overrides, QString()) == newStatus) {
+        return true;
+      }
+      const auto columnName = [this](const QString& id) {
+        for(const QVariant& v : m_statuses) {
+          const QVariantMap m = v.toMap();
+          if(m.value(QStringLiteral("id")).toString() == id) {
+            return m.value(QStringLiteral("name")).toString();
+          }
+        }
+        return id;
+      };
+      QStringList reachable;
+      for(const QString& status : *known) {
+        const QString column = StatusMap::column(status, overrides, QString());
+        if(column == newStatus) {
+          return true;
+        }
+        if(!column.isEmpty() && !reachable.contains(columnName(column))) {
+          reachable.append(columnName(column));
+        }
+      }
+      const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(t.externalProvider);
+      const QString label = d ? d->displayName : t.externalProvider;
+      emit toast(
+          reachable.isEmpty()
+              ? tr_("int.transitionNone").arg(externalKeyOf(t), label, columnName(newStatus))
+              : tr_("int.transitionRefused").arg(externalKeyOf(t), label, columnName(newStatus), reachable.join(QStringLiteral(", "))));
       return false;
     }
   }
