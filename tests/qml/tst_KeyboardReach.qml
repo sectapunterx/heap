@@ -55,6 +55,47 @@ TestCase {
     function sameDay(a, b) { return a.getFullYear() === b.getFullYear() && a.getMonth() === b.getMonth() && a.getDate() === b.getDate(); }
     function plusDays(d, n) { return new Date(d.getFullYear(), d.getMonth(), d.getDate() + n); }
 
+    function editor() {
+        const ps = popups();
+        for (let i = 0; i < ps.length; i++) if (String(ps[i]).indexOf("TaskEditor") === 0) return ps[i];
+        return null;
+    }
+    function within(item, root) {
+        for (let p = item; p; p = p.parent) if (p === root) return true;
+        return false;
+    }
+
+    // Closing a popup hands the keyboard back to where it was (design audit
+    // DES-1). Esc in the task editor left focus on a bare layout, so the
+    // board's J/K and Return were dead until the next click.
+    function test_closing_the_editor_gives_the_board_its_keys_back() {
+        const b = tc.win.activeViewItem();
+        verify(within(tc.win.activeFocusItem, b), "setup: the board has focus");
+        const te = editor();
+        verify(te !== null);
+        te.showFor(AppController.newTaskDraft("todo"));
+        tryVerify(function () { return te.opened; }, 2000);
+        tryVerify(function () { return tc.win._focusInPopup; }, 2000);
+        keyClick(Qt.Key_Escape);
+        tryVerify(function () { return !te.opened; }, 2000);
+        tryVerify(function () { return within(tc.win.activeFocusItem, b); }, 2000,
+                  "focus after Esc: " + tc.win.activeFocusItem);
+    }
+
+    // …and to the control that had it, not just to the view.
+    function test_closing_the_editor_returns_focus_to_the_control() {
+        const chip = byName("pri-P2");
+        chip.forceActiveFocus(Qt.TabFocusReason);
+        const te = editor();
+        te.showFor(AppController.newTaskDraft("todo"));
+        tryVerify(function () { return te.opened; }, 2000);
+        tryVerify(function () { return tc.win._focusInPopup; }, 2000);
+        te.close();
+        tryVerify(function () { return !te.opened; }, 2000);
+        tryVerify(function () { return tc.win.activeFocusItem === chip; }, 2000,
+                  "focus after close: " + tc.win.activeFocusItem);
+    }
+
     function test_filter_chips_toggle_from_the_keyboard() {
         const chip = byName("pri-P0");
         verify(chip !== null);
