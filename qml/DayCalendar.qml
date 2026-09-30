@@ -748,11 +748,11 @@ Item {
                                 required property string title
                                 objectName: "taskblock-" + id
                                 required property var scheduledAt
-                                required property bool hasTime
+                                required property bool scheduledHasTime
                                 required property bool archived
                                 required property string status
 
-                                readonly property real startHour: hasTime && scheduledAt && scheduledAt.getHours
+                                readonly property real startHour: scheduledHasTime && scheduledAt && scheduledAt.getHours
                                     ? scheduledAt.getHours() + scheduledAt.getMinutes() / 60.0
                                     : -1
 

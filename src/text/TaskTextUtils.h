@@ -14,6 +14,7 @@ struct TaskMeta {
     QStringList handles;   // raw identifiers (without leading '@')
     QString ticketKey;     // "LTE-2398" when the text names a tracker ticket
     QString priority;      // "P0".."P3" from "p1" / "!!" / "срочно"; "" if none
+    QStringList labels;    // "#backend" → "backend", removed from the title
 };
 
 // Classify free-form input against three keyword lists. Order of precedence:

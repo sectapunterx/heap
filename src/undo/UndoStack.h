@@ -146,9 +146,99 @@ void applyForward(Model& model, const Edits<T>& edits) {
       });
 }
 
+// True when every element `edits` touched is still exactly as the operation
+// left it — the precondition for reversing that one operation while later ones
+// stay in place.
+template<class Model, class T>
+bool untouchedSince(const Model& model, const Edits<T>& edits) {
+  for(const Edit<T>& e : edits) {
+    const int row = model.indexOfId(e.id);
+    if((row >= 0) != e.existsAfter) {
+      return false;
+    }
+    if(row >= 0 && !(model.items().at(row) == e.after)) {
+      return false;
+    }
+  }
+  return true;
+}
+
+namespace detail {
+inline QString statusIdOf(const QVariant& v) {
+  return v.toMap().value(QStringLiteral("id")).toString();
+}
+
+inline int statusRow(const QVariantList& xs, const QString& id) {
+  for(int i = 0; i < xs.size(); ++i) {
+    if(statusIdOf(xs.at(i)) == id) {
+      return i;
+    }
+  }
+  return -1;
+}
+}  // namespace detail
+
+// The board columns are kept whole per entry, which is exact for Ctrl+Z (the
+// entries come off in order). Reversing one entry out of order must not throw
+// away the column edits made after it, so this reverts only the columns that
+// entry changed: a column it deleted comes back where it was, one it added
+// goes, one it edited gets its old fields. `ok` is false when a column it
+// changed has been changed again since.
+inline QVariantList revertStatusesOnly(const QVariantList& current, const QVariantList& before, const QVariantList& after, bool* ok) {
+  QVariantList out = current;
+  bool clean = true;
+  // Columns the entry added: drop them.
+  for(const QVariant& a : after) {
+    const QString id = detail::statusIdOf(a);
+    if(detail::statusRow(before, id) < 0) {
+      const int at = detail::statusRow(out, id);
+      if(at >= 0) {
+        clean = clean && out.at(at) == a;
+        out.removeAt(at);
+      }
+    }
+  }
+  // Columns the entry edited: restore their fields in place.
+  for(const QVariant& b : before) {
+    const QString id = detail::statusIdOf(b);
+    const int inAfter = detail::statusRow(after, id);
+    if(inAfter >= 0 && !(after.at(inAfter) == b)) {
+      const int at = detail::statusRow(out, id);
+      if(at >= 0) {
+        clean = clean && out.at(at) == after.at(inAfter);
+        out[at] = b;
+      }
+    }
+  }
+  // Columns the entry removed: put them back at their old index.
+  for(int i = 0; i < before.size(); ++i) {
+    const QString id = detail::statusIdOf(before.at(i));
+    if(detail::statusRow(after, id) < 0 && detail::statusRow(out, id) < 0) {
+      out.insert(qBound(0, i, static_cast<int>(out.size())), before.at(i));
+    }
+  }
+  // An entry that only reordered columns: its old order can be restored only
+  // if nothing has moved since.
+  if(out == current && before != after) {
+    if(current == after) {
+      out = before;
+    } else {
+      clean = false;
+    }
+  }
+  if(ok != nullptr) {
+    *ok = clean;
+  }
+  return out;
+}
+
 // One undoable operation.
 struct Entry {
   QString label;  // what the toast says, already translated
+  // Stable identity for the operation, so a toast's Undo button can take back
+  // the action it names even after something else was done in between. 0 =
+  // unassigned (entries built by hand in tests).
+  quint64 serial = 0;
   Edits<Task> tasks;
   Edits<CalEvent> events;
   Edits<Person> people;
@@ -247,6 +337,35 @@ class UndoStack {
   void clear() {
     m_entries.clear();
     m_cursor = 0;
+  }
+
+  // The undoable entry recorded under `serial`, or nullptr when it has been
+  // undone already, fell off the bottom of the stack or never existed.
+  const Entry* findUndoable(quint64 serial) const {
+    if(serial == 0) {
+      return nullptr;
+    }
+    for(int i = 0; i < m_cursor; ++i) {
+      if(m_entries.at(i).serial == serial) {
+        return &m_entries.at(i);
+      }
+    }
+    return nullptr;
+  }
+
+  // Takes one entry out of the undoable part of the stack after it has been
+  // reversed out of order. The redoable tail goes too: those entries were
+  // recorded on top of a state that no longer exists.
+  bool removeUndoable(quint64 serial) {
+    for(int i = 0; i < m_cursor; ++i) {
+      if(m_entries.at(i).serial == serial) {
+        m_entries.resize(m_cursor);
+        m_entries.remove(i);
+        m_cursor = static_cast<int>(m_entries.size());
+        return true;
+      }
+    }
+    return false;
   }
 
   int depth() const {

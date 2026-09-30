@@ -702,7 +702,7 @@ class AppController : public QObject {
   // Every status' task count, built in one pass and cached until the model
   // changes. Prefer this over repeated countByStatus calls: the rail and the
   // top bar used to ask for six separate counts per task edit, each a full
-  // scan. countByStatus is a lookup into this.
+  // scan. Archived tasks are not counted; "_total" is the live task count.
   QVariantMap statusCounts() const;
 
   // settingsMap() is private and also cached; this exists so a test can prove
@@ -711,6 +711,8 @@ class AppController : public QObject {
     return settingsMap();
   }
 
+  // Every task holding the status, archived ones included (what a column
+  // delete re-homes).
   Q_INVOKABLE int countByStatus(const QString& statusId) const;
 
   // ---- Lookups ----
@@ -732,6 +734,9 @@ class AppController : public QObject {
   // task list, so the search field can ask on every keystroke to show whether
   // it is filtering structurally.
   Q_INVOKABLE bool searchIsQuery(const QString& text) const;
+  // The tokens of `text` that look like clauses but mean nothing (an unknown
+  // field, column, priority or date), for the search box to point out.
+  Q_INVOKABLE QStringList searchProblems(const QString& text) const;
 
   // The clause fields the search box understands ("deadline", "status", …),
   // sorted. For the hint under the field.
@@ -832,6 +837,21 @@ class AppController : public QObject {
   Q_INVOKABLE void undoLastDeletion() {
     undo();
   }
+
+  // The operation a toast is about to name: the one being recorded right now
+  // (an undoable toast is emitted from inside its operation) or, failing that,
+  // the newest undoable one. The toast keeps this and hands it to undoEntry().
+  Q_INVOKABLE double undoSerialForToast() const;
+  // Undo the operation recorded under `serial` — the toast's own action, not
+  // whatever happens to be on top of the stack. Newer operations stay; when
+  // one of them has changed the same thing since, nothing is reverted and the
+  // user is told. Returns whether it was undone.
+  Q_INVOKABLE bool undoEntry(double serial);
+
+  // Group several calls from QML into one undo step (a quick-captured "sync"
+  // is a task and its meeting). Nests; every begin needs its end.
+  Q_INVOKABLE void beginUndoGroup(const QString& label);
+  Q_INVOKABLE void endUndoGroup();
 
   Q_INVOKABLE void clearPendingUndo();
 
@@ -1111,6 +1131,8 @@ class AppController : public QObject {
   // bulk archive are undoable now without either of them knowing about undo.
   heap::undo::UndoStack m_undo;
   int m_undoScopeDepth = 0;
+  quint64 m_undoSerialCounter = 0;
+  quint64 m_openUndoSerial = 0;  // serial of the outermost scope being recorded
 
   // Snapshots the collections on construction and pushes the diff on
   // destruction. Declaring one at the top of a mutator is the whole contract:
@@ -1147,6 +1169,7 @@ class AppController : public QObject {
     // Scopes nest: an operation built out of other operations records one
     // entry, not one per part. Only the outermost scope snapshots and pushes.
     bool m_outermost = true;
+    quint64 m_serial = 0;
     QVector<::Task> m_tasks;
     QVector<::CalEvent> m_events;
     QVector<::Person> m_people;
@@ -1155,6 +1178,9 @@ class AppController : public QObject {
     QVariantList m_statuses;
     QString m_docsState;
   };
+
+  // Scopes opened by beginUndoGroup() and closed by endUndoGroup().
+  std::vector<std::unique_ptr<UndoScope>> m_undoGroups;
 
   // Applies one recorded entry in either direction and refreshes what the UI
   // derives from the models.

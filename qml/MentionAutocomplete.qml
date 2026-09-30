@@ -30,6 +30,9 @@ Popup {
     property int _selectedIdx: 0
     property string _trigger: ""  // "@" or "#" while a suggestion list is live
     readonly property bool isOpen: visible && _suggestions.length > 0
+    // True once the arrows have moved the highlight since the list opened —
+    // the owner's cue that Enter means "take this one" rather than "submit".
+    property bool navigated: false
 
     readonly property var _handleCharRe: /[A-Za-zА-Яа-яЁё0-9_.\-]/
 
@@ -128,6 +131,7 @@ Popup {
         _suggestions = (r.trigger === "@") ? _peopleSuggestions(q)
             : _ticketSuggestions(q);
         _selectedIdx = 0;
+        navigated = false;
         if (_suggestions.length > 0) _reposition();
     }
 
@@ -152,6 +156,7 @@ Popup {
         if (!isOpen) return;
         _selectedIdx = Math.max(0, Math.min(_suggestions.length - 1,
             _selectedIdx + delta));
+        navigated = true;
     }
 
     function dismiss() {

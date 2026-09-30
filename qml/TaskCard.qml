@@ -320,7 +320,10 @@ Rectangle {
                     if (days === 99999) return "";
                     // A task due at a clock time shows it; a bare date does not.
                     let clock = "";
-                    if (card.task.hasTime && card.task.dueAt && card.task.dueAt.getHours) {
+                    // dueHasTime since schema v10; views that still hand over the
+                    // old single flag keep working.
+                    const timed = card.task.dueHasTime !== undefined ? card.task.dueHasTime : card.task.hasTime;
+                    if (timed && card.task.dueAt && card.task.dueAt.getHours) {
                         clock = " " + String(card.task.dueAt.getHours()).padStart(2, "0")
                               + ":" + String(card.task.dueAt.getMinutes()).padStart(2, "0");
                     }

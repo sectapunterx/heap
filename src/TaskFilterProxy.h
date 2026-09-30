@@ -31,6 +31,9 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // applied as filters; whatever is left over is matched against the model's
   // prebuilt lowercase haystack, so a query and a search compose.
   Q_PROPERTY(QString searchText READ searchText WRITE setSearchText NOTIFY filterChanged)
+  // The board's columns ([{id, name}]), so `status:"Code Review"` means the
+  // column the user sees by that name, not only an internal id.
+  Q_PROPERTY(QVariantList statuses READ statuses WRITE setStatuses NOTIFY filterChanged)
   // True when the text contained at least one clause — the search field uses
   // it to show that it is filtering structurally, not just by substring.
   Q_PROPERTY(bool isQuery READ isQuery NOTIFY filterChanged)
@@ -66,6 +69,12 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   }
 
   void setSearchText(const QString& v);
+
+  QVariantList statuses() const {
+    return m_statuses;
+  }
+
+  void setStatuses(const QVariantList& v);
 
   bool isQuery() const {
     return m_query.isQuery();
@@ -107,6 +116,7 @@ class TaskFilterProxy : public QSortFilterProxyModel {
  private:
   QString m_status;
   bool m_showArchived = false;
+  QVariantList m_statuses;
   QString m_rawSearch;             // exactly what the user typed
   QString m_searchText;            // the free-text remainder, lowercased
   heap::query::TaskQuery m_query;  // compiled once per keystroke

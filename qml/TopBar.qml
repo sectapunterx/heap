@@ -13,6 +13,9 @@ Rectangle {
     // Parse-only, so this costs nothing per keystroke — it never touches the
     // task list, unlike the filtering itself.
     readonly property bool searchIsQuery: AppController.searchIsQuery(searchField.text)
+    // Clauses that mean nothing ("stauts:x", an unknown column, "due:banana"):
+    // shown on the badge, so a typo does not read as an empty board.
+    readonly property var searchProblems: AppController.searchProblems(searchField.text)
     signal newTaskRequested()
     signal rightPanelToggleRequested()
     // Whether the calendar/people column is on screen, for the toggle's look.
@@ -398,19 +401,24 @@ Rectangle {
                 }
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {
-                    visible: root.searchIsQuery
+                    objectName: "search-query-badge"
+                    readonly property bool bad: root.searchProblems.length > 0
+                    visible: root.searchIsQuery || bad
                     radius: Theme.radiusSm
-                    color: Theme.accentSoft
-                    border.color: Theme.accent
+                    color: bad ? Theme.withAlpha(Theme.warning, 0.14) : Theme.accentSoft
+                    border.color: bad ? Theme.warning : Theme.accent
                     border.width: 1
                     width: qLbl.implicitWidth + 10; height: 16
                     Text {
                         id: qLbl
                         anchors.centerIn: parent
-                        text: I18n.t("topbar.searchQueryBadge")
-                        color: Theme.accent
+                        text: parent.bad ? "?" + root.searchProblems.length : I18n.t("topbar.searchQueryBadge")
+                        color: parent.bad ? Theme.warning : Theme.accent
                         font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }
+                    QQC.ToolTip.visible: bad && (qBadgeHover.hovered || searchField.activeFocus)
+                    QQC.ToolTip.text: I18n.t("topbar.searchUnknown").arg(root.searchProblems.join("  "))
+                    HoverHandler { id: qBadgeHover }
                 }
                 // Shortcut hint. It used to read "⌘K" — a macOS glyph on every
                 // platform, and the wrong binding besides: Ctrl+K opens the

@@ -95,7 +95,7 @@ TEST_F(BoardOrderTest, MoveToTheTopOfAColumn) {
   app_->moveTaskTo(QStringLiteral("C"), QStringLiteral("todo"), QStringLiteral("A"));
 
   EXPECT_EQ(order(QStringLiteral("todo")).first(), QStringLiteral("C"));
-  EXPECT_GT(rankOf(QStringLiteral("C")), 0.0) << "the top of a column is still a positive rank";
+  EXPECT_LT(rankOf(QStringLiteral("C")), rankOf(QStringLiteral("A"))) << "the top of a column is above its old first card";
 }
 
 // An empty target is what dropping below every card hands over.

@@ -227,13 +227,8 @@ ApplicationWindow {
     readonly property int _activeCount:  (_counts["prog"] || 0) + (_counts["half"] || 0)
     readonly property int _blockedCount: _counts["blocked"] || 0
     readonly property int _reviewCount:  _counts["review"] || 0
-    property int _taskCount: AppController.tasks.rowCount()
-    Connections {
-        target: AppController.tasks
-        function onModelReset()   { win._taskCount = AppController.tasks.rowCount() }
-        function onRowsInserted() { win._taskCount = AppController.tasks.rowCount() }
-        function onRowsRemoved()  { win._taskCount = AppController.tasks.rowCount() }
-    }
+    // Live tasks only: archived ones are off the board and off its counts.
+    readonly property int _taskCount: _counts["_total"] || 0
 
     Component.onCompleted: {
         _restoreGeometry();
@@ -428,8 +423,11 @@ ApplicationWindow {
             }, "error");
         }
         function onUndoableToast(msg, secs) {
+            // Undo takes back the action this toast names — not whatever was
+            // done last, which after a silent reorder is something else.
+            const serial = AppController.undoSerialForToast();
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
-                AppController.undoLastDeletion()
+                AppController.undoEntry(serial)
             });
         }
         // A newer release was found — offer a one-click jump to the release page.
@@ -1201,13 +1199,16 @@ ApplicationWindow {
     Shortcut {
         sequence: _kbd("undo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo
+        // Not behind an open editor or dialog: it would change what the dialog
+        // is showing (and could delete the task being edited). Inside a text
+        // field Ctrl+Z belongs to the field, which takes it first.
+        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.hasPendingUndo && !win._overlayOpen
         onActivated: AppController.undo()
     }
     Shortcut {
         sequence: _kbd("redo")
         context: Qt.ApplicationShortcut
-        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.canRedo
+        enabled: sequence.length > 0 && !hotkeys.isCapturing && AppController.canRedo && !win._overlayOpen
         onActivated: AppController.redo()
     }
     Shortcut {

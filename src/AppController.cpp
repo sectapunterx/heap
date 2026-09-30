@@ -186,6 +186,15 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.titleRequired", {"A task needs a title", "У задачи должен быть заголовок"}},
       {"task.editUndone", {"Edit undone: %1", "Правка отменена: %1"}},
       {"task.createUndone", {"Creation undone: %1", "Создание отменено: %1"}},
+      // audit-tasks: toasts for operations that became undoable.
+      {"undo.changedSince", {"Can't undo that — it has been changed since", "Нельзя отменить — это уже изменили после"}},
+      {"undo.column", {"Column change undone: %1", "Изменение колонки отменено: %1"}},
+      {"undo.schedule", {"Scheduling undone: %1", "Планирование отменено: %1"}},
+      {"undo.timer", {"Timer change undone: %1", "Изменение таймера отменено: %1"}},
+      {"undo.snooze", {"Snooze undone: %1", "Откладывание отменено: %1"}},
+      {"undo.bulkEdit", {"Change undone for %1 task(s)", "Изменение отменено для задач: %1"}},
+      {"task.bulkPriority", {"%1 task(s) → %2", "Задач: %1 → %2"}},
+      {"task.bulkLabel", {"%1 task(s) labelled %2", "Метка %2 — задач: %1"}},
       {"sync.conflicts",
        {"%1 kept your local edits (also changed in the tracker)", "%1 — оставлены локальные правки (в трекере тоже изменены)"}},
       {"sync.gone", {"%1 no longer in the tracker", "%1 больше нет в трекере"}},
@@ -659,6 +668,11 @@ AppController::AppController(QObject* parent) :
 }
 
 AppController::~AppController() {
+  // A group QML never closed records nothing: the models are going away.
+  for(auto& group : m_undoGroups) {
+    group->abandon();
+  }
+  m_undoGroups.clear();
   flushSave();
 }
 
@@ -1145,33 +1159,64 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   }
 
   // Recurring task completed → spawn the next occurrence (HEAP-77).
+  QString recursNote;
   if(newStatus == QStringLiteral("done") && !recurrence.isEmpty()) {
-    const QDate base = recurBase.isValid() ? recurBase : QDate::currentDate();
-    const QDate next = heap::recur::nextOccurrence(recurrence, base);
+    const QDate today = QDate::currentDate();
+    const QDate base = recurBase.isValid() ? recurBase : today;
+    // The first occurrence still ahead: a weekly task finished three weeks
+    // late used to spawn a copy that was already overdue.
+    const QDate next = heap::recur::nextOccurrenceAfter(recurrence, base, today);
     const int srcRow = m_tasks.indexOfId(taskId);
-    if(next.isValid() && srcRow >= 0) {
+    // Fresh unique id (strip any prior "-rN" suffix) so upsert inserts a new
+    // row rather than overwriting the just-completed one.
+    QString stem = taskId;
+    static const QRegularExpression kRSuffix(QStringLiteral("-r\\d+$"));
+    stem.remove(kRSuffix);
+    // Done → In Progress → Done again is one completion, not two: when the
+    // series already holds an open copy on that date, none is spawned.
+    bool alreadySpawned = false;
+    const QRegularExpression series(QStringLiteral("^%1(-r\\d+)?$").arg(QRegularExpression::escape(stem)));
+    for(const Task& other : m_tasks.items()) {
+      if(other.id == taskId || other.archived || other.status == QStringLiteral("done") || other.recurrence != recurrence ||
+         !series.match(other.id).hasMatch()) {
+        continue;
+      }
+      const QDate otherDate = other.dueAt.isValid() ? other.dueAt.date() : other.scheduledAt.date();
+      if(otherDate == next) {
+        alreadySpawned = true;
+        break;
+      }
+    }
+    if(next.isValid() && srcRow >= 0 && !alreadySpawned) {
       Task copy = m_tasks.items().at(srcRow);  // clone title/desc/priority/branch
-      // Fresh unique id (strip any prior "-rN" suffix) so upsert inserts a new
-      // row rather than overwriting the just-completed one.
-      QString stem = taskId;
-      static const QRegularExpression kRSuffix(QStringLiteral("-r\\d+$"));
-      stem.remove(kRSuffix);
       QString newId;
       int n = 1;
       do {
         newId = stem + QStringLiteral("-r") + QString::number(n++);
       } while(m_tasks.indexOfId(newId) >= 0);
       copy.id = newId;
-      copy.status = QStringLiteral("todo");
+      // The next one starts at the head of the board. With the To Do column
+      // deleted, a "todo" copy was drawn by no column at all.
+      copy.status = statusIndexOf(QStringLiteral("todo")) >= 0 || m_statuses.isEmpty()
+                        ? QStringLiteral("todo")
+                        : m_statuses.constFirst().toMap().value("id").toString();
+      copy.archived = false;
+      // A fresh occurrence has ticked none of its checklist yet.
+      static const QRegularExpression kTicked(QStringLiteral(R"(^(\s*(?:[-*+]|\d+[.)])\s+)\[[xX]\])"), QRegularExpression::MultilineOption);
+      copy.desc.replace(kTicked, QStringLiteral("\\1[ ]"));
+      const QVector<::Task> column = columnTasks(copy.status, QString());
+      copy.rank = heap::board::between(column.isEmpty() ? 0.0 : column.last().rank, 0.0, !column.isEmpty(), false);
       // Roll each datetime onto the next occurrence, keeping the clock time the
-      // user set (a 09:00 standup recurs at 09:00, not at midnight). A field the
-      // task never carried stays invalid — rebuilding it would manufacture a
-      // phantom midnight deadline/schedule and fire spurious reminders.
+      // user set (a 09:00 standup recurs at 09:00, not at midnight) and the gap
+      // between the two dates. A field the task never carried stays invalid —
+      // rebuilding it would manufacture a phantom midnight deadline/schedule and
+      // fire spurious reminders.
+      const int shift = static_cast<int>(base.daysTo(next));
       if(copy.dueAt.isValid()) {
-        copy.dueAt = QDateTime(next, copy.dueAt.time());
+        copy.dueAt = QDateTime(copy.dueAt.date().addDays(shift), copy.dueAt.time());
       }
       if(copy.scheduledAt.isValid()) {
-        copy.scheduledAt = QDateTime(next, copy.scheduledAt.time());
+        copy.scheduledAt = QDateTime(copy.scheduledAt.date().addDays(shift), copy.scheduledAt.time());
       }
       copy.statusChangedAt = QDateTime::currentDateTime();
       copy.trackedSeconds = 0;
@@ -1183,12 +1228,16 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
       copy.assignee.clear();
       copy.externalMeta = {};
       m_tasks.upsert(copy);
-      emit toast(tr_("task.recurs").arg(newId, next.toString(Qt::ISODate)));
+      recursNote = tr_("task.recurs").arg(newId, next.toString(Qt::ISODate));
     }
   }
 
+  // One toast: the move toast used to replace the recurrence one at once.
   if(m_bulkMoveDepth == 0) {
-    emit undoableToast(tr_("task.moved").arg(taskId, statusName), 5);
+    const QString moved = tr_("task.moved").arg(taskId, statusName);
+    emit undoableToast(recursNote.isEmpty() ? moved : moved + QStringLiteral(" · ") + recursNote, 5);
+  } else if(!recursNote.isEmpty()) {
+    emit toast(recursNote);
   }
   scheduleSave();
 }
@@ -1298,11 +1347,12 @@ QVector<::Task> AppController::columnTasks(const QString& statusId, const QStrin
 // consecutive drops into the same gap.
 void AppController::rebalanceColumn(const QString& statusId) {
   const QVector<::Task> ordered = columnTasks(statusId, QString());
+  QHash<QString, double> ranks;
+  ranks.reserve(ordered.size());
   for(int i = 0; i < ordered.size(); ++i) {
-    ::Task t = ordered.at(i);
-    t.rank = (i + 1) * heap::state::kRankStep;
-    m_tasks.upsert(t);
+    ranks.insert(ordered.at(i).id, (i + 1) * heap::state::kRankStep);
   }
+  m_tasks.setRanks(ranks);
 }
 
 void AppController::moveTaskTo(const QString& id, const QString& statusId, const QString& beforeTaskId) {
@@ -1423,7 +1473,8 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   m["status"] = statusId.isEmpty() ? (statusDefault.isEmpty() ? QStringLiteral("todo") : statusDefault) : statusId;
   m["scheduledAt"] = QDateTime();
   m["dueAt"] = QDateTime();
-  m["hasTime"] = false;
+  m["scheduledHasTime"] = false;
+  m["dueHasTime"] = false;
   m["branch"] = QString();
   m["labels"] = QVariantList();
   m["estimateMinutes"] = 0;
@@ -1501,11 +1552,15 @@ void AppController::createTaskFromTemplate(const QString& name) {
   const QVariantMap draft = newTaskDraft(QStringLiteral("todo"));
   Task t;
   t.id = draft.value("id").toString();
+  const UndoScope scope(this, tr_("task.createUndone").arg(t.id));
   t.title = it->title;
   t.desc = it->desc;
   t.priority = it->priority;
-  t.status = QStringLiteral("todo");
+  t.status = statusIndexOf(QStringLiteral("todo")) >= 0 || m_statuses.isEmpty() ? QStringLiteral("todo")
+                                                                                : m_statuses.constFirst().toMap().value("id").toString();
   t.statusChangedAt = QDateTime::currentDateTime();
+  const QVector<::Task> ordered = columnTasks(t.status, t.id);
+  t.rank = heap::board::beforeFirst(ordered.isEmpty() ? 0.0 : ordered.first().rank, !ordered.isEmpty());
   m_tasks.upsert(t);
   scheduleSave();
   emit toast(tr_("task.fromTemplate").arg(it->name));
@@ -1538,13 +1593,22 @@ bool AppController::saveTask(const QVariantMap& draft) {
   // the legacy `deadline` key, which lands at midnight on both fields.
   t.scheduledAt = draft.value("scheduledAt").toDateTime();
   t.dueAt = draft.value("dueAt").toDateTime();
-  t.hasTime = draft.value("hasTime").toBool();
+  // Each datetime says for itself whether its clock is real (schema v10). A
+  // caller that still sets the single legacy `hasTime` (no draft this
+  // controller hands out carries it) gets the migration's rule.
+  if(draft.contains("hasTime")) {
+    heap::state::applyLegacyHasTime(t, draft.value("hasTime").toBool());
+  } else {
+    t.scheduledHasTime = t.scheduledAt.isValid() && draft.value("scheduledHasTime").toBool();
+    t.dueHasTime = t.dueAt.isValid() && draft.value("dueHasTime").toBool();
+  }
   if(!t.scheduledAt.isValid() && !t.dueAt.isValid() && draft.contains("deadline")) {
     const QDate legacy = draft.value("deadline").toDate();
     if(legacy.isValid()) {
       t.scheduledAt = QDateTime(legacy, QTime(0, 0));
       t.dueAt = t.scheduledAt;
-      t.hasTime = false;
+      t.scheduledHasTime = false;
+      t.dueHasTime = false;
     }
   }
   t.estimateMinutes = draft.value("estimateMinutes").toInt();
@@ -1591,6 +1655,16 @@ bool AppController::saveTask(const QVariantMap& draft) {
     t.priority = (prior != nullptr && kPriority.match(prior->priority).hasMatch()) ? prior->priority : QStringLiteral("P2");
   }
 
+  // A column rule that refuses the move (review needs a branch) refuses the
+  // whole save, before anything is written: saving the rest and closing the
+  // editor lost the status the user picked. The branch typed in this same
+  // save counts.
+  if(prior != nullptr && prior->status != t.status && t.status == QStringLiteral("review") &&
+     settingsMap().value("tasks").toMap().value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
+    emit toast(tr_("branch.required"));
+    return false;
+  }
+
   // Everything from here on is one undoable edit: the rename, the re-keyed
   // calendar links and the row itself.
   const UndoScope scope(this, tr_(isNew ? "task.createUndone" : "task.editUndone").arg(t.id));
@@ -1630,7 +1704,29 @@ bool AppController::saveTask(const QVariantMap& draft) {
       if(!draft.contains("someday")) {
         t.someday = prev.someday;
       }
+      // The editor shows neither the card's place in its column nor its
+      // dependency links. Both used to be reset by any save — the card jumped
+      // to the top and its "blocks" links were gone.
+      t.rank = prev.rank;
+      t.links = prev.links;
+      // A label sent as plain text keeps the colour it already had.
+      for(Label& l : t.labels) {
+        if(!l.color.isEmpty()) {
+          continue;
+        }
+        for(const Label& old : prev.labels) {
+          if(old.id.compare(l.id, Qt::CaseInsensitive) == 0) {
+            l.color = old.color;
+            break;
+          }
+        }
+      }
     }
+  } else {
+    // A new task has just entered its column: without the stamp the "Updated"
+    // sort lists it last, a task created in Done never auto-archives and one
+    // created in Blocked never reads as stuck.
+    t.statusChangedAt = QDateTime::currentDateTime();
   }
 
   // ── Rename path ──
@@ -1678,6 +1774,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   // its own.
   const QString statusAfter = t.status;
   const bool statusMoved = !isNew && !statusBefore.isEmpty() && statusBefore != statusAfter;
+
   if(statusMoved) {
     t.status = statusBefore;
   }
@@ -2614,6 +2711,8 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   }
   Task t = m_tasks.items().at(row);  // by value — scheduledAt is written back
   const QDate day = date.isValid() ? date : m_selectedDate;
+  // The block and the task's new scheduledAt are one action (TIME-12).
+  const UndoScope scope(this, tr_("undo.schedule").arg(t.id));
 
   // Length comes from the task's own estimate when it has one: dropping a
   // 20-minute chore onto the calendar used to carve out a full hour regardless.
@@ -2641,7 +2740,7 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   // own "scheduled" label — goes through Task.scheduledAt, so without this a
   // time-blocked task stayed unscheduled everywhere but the day it was dropped.
   t.scheduledAt = QDateTime(day, heap::cal::hourToTime(hours.start));
-  t.hasTime = true;
+  t.scheduledHasTime = true;  // the deadline keeps its own flag (schema v10)
   m_tasks.upsert(t);
 
   emit toast(tr_("event.scheduled").arg(t.id, eventHourLabel(hours.start)));
@@ -3008,8 +3107,14 @@ void AppController::deletePerson(const QString& id) {
   scheduleSave();
 }
 
+// Every task in the column, archived ones too: this is what a column delete
+// re-homes, so it is what the confirmation has to count.
 int AppController::countByStatus(const QString& statusId) const {
-  return statusCounts().value(statusId).toInt();
+  int n = 0;
+  for(const Task& t : m_tasks.items()) {
+    n += t.status == statusId ? 1 : 0;
+  }
+  return n;
 }
 
 QVariantMap AppController::statusCounts() const {
@@ -3019,10 +3124,19 @@ QVariantMap AppController::statusCounts() const {
   if(!m_statusCountsDirty) {
     return m_statusCounts;
   }
+  // Archived tasks are off the board, so they are off its counters too: the
+  // sidebar's Blocked badge counted every blocked card ever archived.
+  // "_total" (no column id can start with "_") is the live task count.
   m_statusCounts.clear();
+  int total = 0;
   for(const Task& t : m_tasks.items()) {
+    if(t.archived) {
+      continue;
+    }
+    ++total;
     m_statusCounts[t.status] = m_statusCounts.value(t.status).toInt() + 1;
   }
+  m_statusCounts[QStringLiteral("_total")] = total;
   m_statusCountsDirty = false;
   return m_statusCounts;
 }
@@ -3070,6 +3184,7 @@ void AppController::addStatus(const QString& name, const QString& color) {
   m["id"] = id;
   m["name"] = name;
   m["color"] = QColor(color.isEmpty() ? QStringLiteral("#5cc2dd") : color);
+  const UndoScope scope(this, tr_("undo.column").arg(name));
   m_statuses.append(m);
   emit statusesChanged();
   emit toast(tr_("status.added").arg(name));
@@ -3102,6 +3217,7 @@ void AppController::renameStatus(const QString& id, const QString& name) {
   if(m.value("name").toString() == name) {
     return;
   }
+  const UndoScope scope(this, tr_("undo.column").arg(name));
   m["name"] = name;
   m_statuses[i] = m;
   emit statusesChanged();
@@ -3121,6 +3237,7 @@ void AppController::setStatusWipLimit(const QString& id, int limit) {
   if(m.value("wip").toInt() == clamped) {
     return;
   }
+  const UndoScope scope(this, tr_("undo.column").arg(m.value("name").toString()));
   m["wip"] = clamped;
   m_statuses[i] = m;
   emit statusesChanged();
@@ -3137,6 +3254,10 @@ void AppController::setStatusColor(const QString& id, const QString& color) {
     return;
   }
   QVariantMap m = m_statuses[i].toMap();
+  if(m.value("color").value<QColor>() == c) {
+    return;
+  }
+  const UndoScope scope(this, tr_("undo.column").arg(m.value("name").toString()));
   m["color"] = c;
   m_statuses[i] = m;
   emit statusesChanged();
@@ -3152,6 +3273,7 @@ void AppController::moveStatus(const QString& id, int newIndex) {
   if(from == newIndex) {
     return;
   }
+  const UndoScope scope(this, tr_("undo.column").arg(m_statuses[from].toMap().value("name").toString()));
   const QVariant v = m_statuses.takeAt(from);
   m_statuses.insert(newIndex, v);
   emit statusesChanged();
@@ -3208,7 +3330,8 @@ QVariantMap AppController::taskById(const QString& id) const {
   m["status"] = t.status;
   m["scheduledAt"] = t.scheduledAt;
   m["dueAt"] = t.dueAt;
-  m["hasTime"] = t.hasTime;
+  m["scheduledHasTime"] = t.scheduledHasTime;
+  m["dueHasTime"] = t.dueHasTime;
   m["branch"] = t.branch;
   m["archived"] = t.archived;
   m["trackedSeconds"] = t.trackedSeconds;
@@ -3227,10 +3350,11 @@ QVariantMap AppController::taskById(const QString& id) const {
 }
 
 QVariantMap AppController::compileSearch(const QString& text) const {
-  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today);
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses);
   QVariantMap out;
   out["isQuery"] = q.isQuery();
   out["freeText"] = q.freeText();
+  out["unknown"] = q.unknownClauses();
   // The id list is what the JS views filter on. Built only for a real query:
   // with no clauses it would be every task, which is both useless and the
   // largest thing this call could return.
@@ -3247,7 +3371,11 @@ QVariantMap AppController::compileSearch(const QString& text) const {
 }
 
 bool AppController::searchIsQuery(const QString& text) const {
-  return heap::query::TaskQuery::compile(text, m_today).isQuery();
+  return heap::query::TaskQuery::compile(text, m_today, m_statuses).isQuery();
+}
+
+QStringList AppController::searchProblems(const QString& text) const {
+  return heap::query::TaskQuery::compile(text, m_today, m_statuses).unknownClauses();
 }
 
 QStringList AppController::searchFields() const {
@@ -3432,7 +3560,7 @@ void AppController::copyActiveProfileMarkdownToClipboard() {
     line += t.title;
     QStringList meta;
     if(t.dueAt.isValid()) {
-      meta << QStringLiteral("deadline: ") + (t.hasTime ? t.dueAt.toString(Qt::ISODate) : t.dueAt.date().toString(Qt::ISODate));
+      meta << QStringLiteral("deadline: ") + (t.dueHasTime ? t.dueAt.toString(Qt::ISODate) : t.dueAt.date().toString(Qt::ISODate));
     }
     if(!t.branch.isEmpty()) {
       meta << QStringLiteral("branch: ") + t.branch;
@@ -3570,6 +3698,7 @@ void AppController::startTaskTimer(const QString& id) {
   if(m_tasks.indexOfId(id) < 0) {
     return;
   }
+  const UndoScope scope(this, tr_("undo.timer").arg(id));
   m_tasks.startTiming(id);
   scheduleSave();
 }
@@ -3578,6 +3707,7 @@ void AppController::stopTaskTimer(const QString& id) {
   if(m_tasks.indexOfId(id) < 0) {
     return;
   }
+  const UndoScope scope(this, tr_("undo.timer").arg(id));
   m_tasks.stopTiming(id);
   scheduleSave();
 }
@@ -3806,6 +3936,7 @@ QVariantMap AppController::extractTaskMeta(const QString& text) const {
   out["handles"] = QVariant::fromValue(m.handles);
   out["ticketKey"] = m.ticketKey;
   out["priority"] = m.priority;
+  out["labels"] = m.labels;
   return out;
 }
 
@@ -3825,10 +3956,17 @@ AppController::UndoScope::UndoScope(AppController* owner, QString label) :
     m_statuses(m_outermost ? owner->m_statuses : QVariantList{}),
     m_docsState(m_outermost ? owner->m_docsState : QString{}) {
   ++owner->m_undoScopeDepth;
+  if(m_outermost) {
+    m_serial = ++owner->m_undoSerialCounter;
+    owner->m_openUndoSerial = m_serial;
+  }
 }
 
 AppController::UndoScope::~UndoScope() {
   --m_owner->m_undoScopeDepth;
+  if(m_outermost) {
+    m_owner->m_openUndoSerial = 0;
+  }
   // An inner scope is part of a bigger operation; the outer one is recording
   // the whole thing.
   if(!m_armed || !m_outermost) {
@@ -3836,6 +3974,7 @@ AppController::UndoScope::~UndoScope() {
   }
   heap::undo::Entry entry;
   entry.label = m_label;
+  entry.serial = m_serial;
   entry.tasks = heap::undo::diff(m_tasks, m_owner->m_tasks.items(), [](const ::Task& t) {
     return t.id;
   });
@@ -3932,6 +4071,73 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
   }
   // The status-count cache drops itself from the task model's own signals, so
   // nothing here has to remember to invalidate it.
+}
+
+double AppController::undoSerialForToast() const {
+  if(m_openUndoSerial != 0) {
+    return static_cast<double>(m_openUndoSerial);
+  }
+  const heap::undo::Entry* top = m_undo.peekUndo();
+  return top != nullptr ? static_cast<double>(top->serial) : 0.0;
+}
+
+bool AppController::undoEntry(double serialValue) {
+  const auto serial = static_cast<quint64>(serialValue);
+  const heap::undo::Entry* top = m_undo.peekUndo();
+  if(top == nullptr) {
+    return false;
+  }
+  // The common case — nothing happened since the toast — is a plain undo.
+  if(serial == 0 || top->serial == serial) {
+    undo();
+    return true;
+  }
+  const heap::undo::Entry* found = m_undo.findUndoable(serial);
+  if(found == nullptr) {
+    return false;  // already undone (Ctrl+Z got there first) or evicted
+  }
+  const heap::undo::Entry copy = *found;
+  if(copy.profileRemoved) {
+    return false;  // a profile swap only makes sense off the top of the stack
+  }
+  // Reversing one operation out of order is only safe while nothing it
+  // touched has changed again since; otherwise the later edit would be
+  // silently thrown away.
+  bool statusesClean = true;
+  QVariantList statuses = m_statuses;
+  if(copy.statusesTouched) {
+    statuses = heap::undo::revertStatusesOnly(m_statuses, copy.statusesBefore, copy.statusesAfter, &statusesClean);
+  }
+  const bool clean = statusesClean && heap::undo::untouchedSince(m_tasks, copy.tasks) &&
+                     heap::undo::untouchedSince(m_events, copy.events) && heap::undo::untouchedSince(m_people, copy.people) &&
+                     heap::undo::untouchedSince(m_docPages, copy.docPages) && heap::undo::untouchedSince(m_notes, copy.notes) &&
+                     (!copy.docsStateTouched || m_docsState == copy.docsStateAfter);
+  if(!clean) {
+    emit toast(tr_("undo.changedSince"));
+    return false;
+  }
+  heap::undo::Entry partial = copy;
+  partial.statusesTouched = false;  // columns are merged below, not swapped whole
+  applyUndoEntry(partial, /*backward=*/true);
+  if(copy.statusesTouched && statuses != m_statuses) {
+    m_statuses = statuses;
+    emit statusesChanged();
+  }
+  m_undo.removeUndoable(serial);
+  emit pendingUndoChanged();
+  emit toast(copy.label);
+  scheduleSave();
+  return true;
+}
+
+void AppController::beginUndoGroup(const QString& label) {
+  m_undoGroups.push_back(std::make_unique<UndoScope>(this, label));
+}
+
+void AppController::endUndoGroup() {
+  if(!m_undoGroups.empty()) {
+    m_undoGroups.pop_back();  // the scope's destructor records the group
+  }
 }
 
 void AppController::clearPendingUndo() {
@@ -4219,6 +4425,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       t.id = uniqueTaskId(base + ext.externalId);
       t.statusChangedAt = QDateTime::currentDateTime();
     }
+    const bool needsRank = row < 0;
     const Task before = t;
     const bool isNewRow = row < 0;
     seenIds.insert(t.id);
@@ -4304,9 +4511,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     const bool syncOwnedDue = !t.dueAt.isValid() || t.dueAt == t.externalMeta.dueAt;
     if(syncOwnedDue) {
       t.dueAt = ext.dueAt;  // an invalid value clears a deadline dropped upstream
-      if(!t.scheduledAt.isValid()) {
-        t.hasTime = ext.dueAt.isValid() && ext.dueHasTime;
-      }
+      t.dueHasTime = ext.dueAt.isValid() && ext.dueHasTime;
     }
 
     // Pulled labels used to be parsed and thrown away (HEAP-124). Merge rather
@@ -4343,6 +4548,12 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     // the contact merge already avoids.
     if(row >= 0 && t == before) {
       continue;
+    }
+    if(needsRank) {
+      // A pulled issue lands at the end of its column with a rank of its own;
+      // rank 0 tied it with every other synced card (TASKS-3).
+      const QVector<::Task> col = columnTasks(t.status, t.id);
+      t.rank = heap::board::between(col.isEmpty() ? 0.0 : col.last().rank, 0.0, !col.isEmpty(), false);
     }
     m_tasks.upsert(t);
     (row >= 0 ? stats.updated : stats.added)++;
@@ -5795,7 +6006,10 @@ void AppController::snapshotActiveProfile() {
 }
 
 void AppController::applyProfileToModels(const Profile& p) {
-  m_tasks.reset(p.tasks);
+  // Imports and hand-edited files may still carry rank ties (see Rank.h).
+  QVector<Task> tasks = p.tasks;
+  heap::board::spreadTiedRanks(tasks);
+  m_tasks.reset(tasks);
   m_people.reset(p.people);
   m_statuses = p.statuses;
   emit statusesChanged();
@@ -7664,7 +7878,7 @@ void AppController::runAutomation() {
       }
       // A task due at a parsed clock time fires then; a bare due date keeps the
       // old end-of-day horizon.
-      const QDateTime deadlineAt = t.hasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
+      const QDateTime deadlineAt = t.dueHasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
       const qint64 hoursLeft = now.secsTo(deadlineAt) / 3600;
       if(hoursLeft < 0 || hoursLeft > leadHours) {
         continue;
@@ -8033,6 +8247,7 @@ void AppController::snoozeDeadline(const QString& taskId, int seconds) {
   if(!t.dueAt.isValid()) {
     return;
   }
+  const UndoScope scope(this, tr_("undo.snooze").arg(taskId));
   // Reminders are date-grained — bump to the next day so the dl: sentinel
   // for "today" stops firing. The clock time rides along.
   const int days = (seconds + 86399) / 86400;

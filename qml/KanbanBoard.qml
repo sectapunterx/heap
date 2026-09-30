@@ -626,7 +626,9 @@ Item {
                                             required property string recurrence
                                             required property var    labels
                                             required property var    dueAt
-                                            required property bool   hasTime
+                                            required property bool   dueHasTime
+                                            required property var    scheduledAt
+                                            required property bool   scheduledHasTime
                                             required property var    ticket
                                             required property string searchText
                                             width: bodyFlick.width
@@ -641,7 +643,8 @@ Item {
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
                                                 recurrence: tc.recurrence,
-                                                labels: tc.labels, dueAt: tc.dueAt, hasTime: tc.hasTime,
+                                                labels: tc.labels, dueAt: tc.dueAt, dueHasTime: tc.dueHasTime,
+                                                scheduledAt: tc.scheduledAt, scheduledHasTime: tc.scheduledHasTime,
                                                 ticket: tc.ticket, searchText: tc.searchText,
                                                 checklist: tc.checklist
                                             })
@@ -779,6 +782,7 @@ Item {
                         id: colFilter
                         sourceModel: AppController.tasks
                         status: col.statusId
+                        statuses: AppController.statuses
                         showArchived: root.showArchived
                         searchText: root.searchText
                         priorities: root.activePriorities

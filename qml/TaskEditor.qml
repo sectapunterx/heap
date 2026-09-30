@@ -117,8 +117,10 @@ Popup {
         statusBox.currentIndex = Math.max(0, statusList().indexOf(draft.status));
         priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(draft.priority || "P2"));
         branchField.text = draft.branch || "";
-        deadlineField.text = formatWhen(draft.dueAt, draft.hasTime);
-        scheduledField.text = formatWhen(draft.scheduledAt, draft.hasTime);
+        // Each datetime has its own clock flag (schema v10): a date-only
+        // deadline next to a timed schedule stays date-only.
+        deadlineField.text = formatWhen(draft.dueAt, draft.dueHasTime);
+        scheduledField.text = formatWhen(draft.scheduledAt, draft.scheduledHasTime);
         labelsField.text = labelsToText(draft.labels);
         estimateField.text = draft.estimateMinutes > 0 ? String(draft.estimateMinutes) : "";
         somedayBox.checked = !!draft.someday;
@@ -274,8 +276,8 @@ Popup {
         const dueAt = root.parseDate(deadlineField.text);
         const schedTyped = root.parseDate(scheduledField.text);
         const scheduledAt = schedTyped || dueAt;
-        const hasTime = root.parseHasTime(scheduledField.text)
-                     || root.parseHasTime(deadlineField.text);
+        const dueHasTime = !!dueAt && root.parseHasTime(deadlineField.text);
+        const scheduledHasTime = schedTyped ? root.parseHasTime(scheduledField.text) : dueHasTime;
 
         const d = {
             _isNew: root.isNew,
@@ -295,7 +297,8 @@ Popup {
             status: root.statusList()[statusBox.currentIndex],
             scheduledAt: scheduledAt,
             dueAt: dueAt,
-            hasTime: hasTime,
+            dueHasTime: dueHasTime,
+            scheduledHasTime: scheduledHasTime,
             branch: branchField.text,
             recurrence: recurBox._vals[recurBox.currentIndex] || "",
             labels: root.labelsFromText(labelsField.text),

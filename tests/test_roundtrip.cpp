@@ -62,7 +62,8 @@ Task makeFullTask() {
   t.status = QStringLiteral("prog");
   t.scheduledAt = QDateTime(QDate(2026, 7, 10), QTime(9, 0, 0, 250));
   t.dueAt = QDateTime(QDate(2026, 7, 11), QTime(16, 0, 0, 750));
-  t.hasTime = true;
+  t.scheduledHasTime = true;
+  t.dueHasTime = true;
   t.branch = QStringLiteral("heap-104-lossless-task-model");
   t.statusChangedAt = QDateTime(QDate(2026, 7, 9), QTime(14, 30, 5, 125));
   t.archived = true;
@@ -155,7 +156,9 @@ class Gen {
     t.status = text();
     t.scheduledAt = dateTime();
     t.dueAt = dateTime();
-    t.hasTime = boolean();
+    // The live reader drops a clock flag on a datetime that is not there.
+    t.scheduledHasTime = t.scheduledAt.isValid() && boolean();
+    t.dueHasTime = t.dueAt.isValid() && boolean();
     t.branch = text();
     // Never invalid: taskFromJson heals a missing status stamp to "now", which
     // is deliberate (old files must not sort to the epoch) and unmatchable.
@@ -249,7 +252,7 @@ constexpr int kCases = 1000;
 // Mirrors the static_asserts inside both serializers. If the struct grows and
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
-  EXPECT_EQ(heap::meta::fieldCount<Task>(), 24u);
+  EXPECT_EQ(heap::meta::fieldCount<Task>(), 25u);
   EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 16u);
 }
 
@@ -434,11 +437,13 @@ TEST(RoundTrip, LegacyBareDateDeadlineLandsAtMidnightWithoutTime) {
   const Task live = heap::state::taskFromJson(o);
   EXPECT_EQ(live.scheduledAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
   EXPECT_EQ(live.dueAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
-  EXPECT_FALSE(live.hasTime);
+  EXPECT_FALSE(live.dueHasTime);
+  EXPECT_FALSE(live.scheduledHasTime);
 
   const Task synced = heap::sync::SyncSerializer::taskFromJson(o);
   EXPECT_EQ(synced.scheduledAt, QDateTime(QDate(2026, 7, 8), QTime(0, 0)));
-  EXPECT_FALSE(synced.hasTime);
+  EXPECT_FALSE(synced.dueHasTime);
+  EXPECT_FALSE(synced.scheduledHasTime);
 }
 
 TEST(RoundTrip, LegacyEmptyDeadlineStaysUnset) {

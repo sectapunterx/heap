@@ -2,7 +2,9 @@
 
 #include <QChar>
 #include <QHash>
+#include <QPair>
 #include <QRegularExpression>
+#include <QVector>
 
 namespace heap::text {
 
@@ -255,6 +257,33 @@ TaskMeta extractMeta(QStringView raw) {
         break;
       }
     }
+
+    // 5. "#label" tokens are labels, the way p1 is a priority: they leave the
+    //    title. "#42" is an issue number and "C#" is a word, so a label needs
+    //    a boundary before it and a letter first.
+    static const QRegularExpression labelRx(QStringLiteral("(?:^|(?<=[\\s,;(]))#([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_.\\-/]*)"));
+    QRegularExpressionMatchIterator li = labelRx.globalMatch(body);
+    QVector<QPair<int, int>> spans;
+    while(li.hasNext()) {
+      const auto m = li.next();
+      QString label = m.captured(1);
+      while(label.endsWith(QChar('.')) || label.endsWith(QChar('-')) || label.endsWith(QChar('/'))) {
+        label.chop(1);  // sentence punctuation, not part of the label
+      }
+      if(!label.isEmpty() && !out.labels.contains(label, Qt::CaseInsensitive)) {
+        out.labels.append(label);
+      }
+      spans.append({m.capturedStart(0), m.capturedLength(0)});
+    }
+    for(int i = static_cast<int>(spans.size()) - 1; i >= 0; --i) {
+      body.remove(spans[i].first, spans[i].second);
+    }
+
+    // 6. A leading "ticket:" / "task:" / "todo:" / "задача:" says what the
+    //    line is; it is not part of what the task is called.
+    static const QRegularExpression markerRx(QStringLiteral("^\\s*(?:ticket|task|todo|тикет|задача)\\s*:\\s*"),
+                                             QRegularExpression::CaseInsensitiveOption);
+    body.remove(markerRx);
 
     // Collapse whitespace but otherwise preserve body verbatim.
     out.title = body.simplified();

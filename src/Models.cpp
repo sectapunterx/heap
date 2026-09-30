@@ -153,6 +153,8 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {RankRole, "rank"},
       {BlocksRole, "blocks"},
       {ChecklistRole, "checklist"},
+      {ScheduledHasTimeRole, "scheduledHasTime"},
+      {DueHasTimeRole, "dueHasTime"},
   };
 }
 
@@ -218,7 +220,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
     case DueAtRole:
       return t.dueAt;
     case HasTimeRole:
-      return t.hasTime;
+    case DueHasTimeRole:
+      return t.dueHasTime;
+    case ScheduledHasTimeRole:
+      return t.scheduledHasTime;
     case EstimateMinutesRole:
       return t.estimateMinutes;
     case SomedayRole:
@@ -338,6 +343,23 @@ void TaskModel::stampStatusChange(const QString& id) {
   m_items[row].statusChangedAt = QDateTime::currentDateTime();
   const QModelIndex mi = index(row, 0);
   emit dataChanged(mi, mi, {StatusChangedAtRole});
+}
+
+void TaskModel::setRanks(const QHash<QString, double>& ranks) {
+  int first = -1;
+  int last = -1;
+  for(auto it = ranks.constBegin(); it != ranks.constEnd(); ++it) {
+    const int row = indexOfId(it.key());
+    if(row < 0 || m_items[row].rank == it.value()) {
+      continue;
+    }
+    m_items[row].rank = it.value();
+    first = first < 0 ? row : qMin(first, row);
+    last = qMax(last, row);
+  }
+  if(first >= 0) {
+    emit dataChanged(index(first, 0), index(last, 0), {RankRole});
+  }
 }
 
 void TaskModel::startTiming(const QString& id) {

@@ -26,16 +26,38 @@ TEST(Rank, DroppedAtTheEndGoesPastTheLastCard) {
   EXPECT_DOUBLE_EQ(r, 2048.0 + kStep);
 }
 
-// Dragging to the top repeatedly must not walk the rank toward negative
-// infinity — halving keeps it positive however many times it happens.
-TEST(Rank, DroppedAtTheTopStaysPositive) {
+// Dragging to the top repeatedly always lands strictly above the first card,
+// a whole step away — halving toward zero ran out of room once the first card
+// sat at rank 0, which every demo card and synced issue did (TASKS-3).
+TEST(Rank, DroppedAtTheTopAlwaysLandsAboveTheFirstCard) {
   double first = kStep;
   for(int i = 0; i < 200; ++i) {
     const double r = heap::board::between(0.0, first, false, true);
-    EXPECT_GT(r, 0.0) << "iteration " << i;
-    EXPECT_LT(r, first);
+    EXPECT_LT(r, first) << "iteration " << i;
+    EXPECT_FALSE(heap::board::needsRebalance(r, first)) << "iteration " << i;
     first = r;
   }
+  EXPECT_LT(heap::board::between(0.0, 0.0, false, true), 0.0) << "a first card at rank 0 still has room above it";
+}
+
+TEST(Rank, SpreadTiedRanksKeepsBoardOrderAndLeavesCleanColumnsAlone) {
+  QVector<Task> tasks(4);
+  tasks[0].id = "B";
+  tasks[0].status = "todo";
+  tasks[1].id = "A";
+  tasks[1].status = "todo";
+  tasks[2].id = "C";
+  tasks[2].status = "todo";
+  tasks[2].rank = -5.0;
+  tasks[3].id = "D";
+  tasks[3].status = "done";
+  tasks[3].rank = 3.0;
+  EXPECT_EQ(heap::board::spreadTiedRanks(tasks), 3);
+  // C (-5) first, then A and B (tied at 0, by id).
+  EXPECT_LT(tasks[2].rank, tasks[1].rank);
+  EXPECT_LT(tasks[1].rank, tasks[0].rank);
+  EXPECT_DOUBLE_EQ(tasks[3].rank, 3.0);
+  EXPECT_EQ(heap::board::spreadTiedRanks(tasks), 0) << "a second pass is a no-op";
 }
 
 TEST(Rank, AnEmptyColumnGetsTheBaseStep) {
@@ -43,7 +65,7 @@ TEST(Rank, AnEmptyColumnGetsTheBaseStep) {
 }
 
 TEST(Rank, BeforeFirstMatchesTheTopOfAColumn) {
-  EXPECT_DOUBLE_EQ(heap::board::beforeFirst(1000.0, true), 500.0);
+  EXPECT_DOUBLE_EQ(heap::board::beforeFirst(1000.0, true), 1000.0 - kStep);
   EXPECT_DOUBLE_EQ(heap::board::beforeFirst(0.0, false), kStep);
 }
 

@@ -567,7 +567,7 @@ TEST(TaskModelScheduling, DeadlineRoleIsTheDueDateWithoutItsClockTime) {
   Task t;
   t.dueAt = QDateTime(QDate(2026, 7, 11), QTime(16, 0));
   t.scheduledAt = QDateTime(QDate(2026, 7, 10), QTime(9, 30));
-  t.hasTime = true;
+  t.dueHasTime = true;
 
   TaskModel m;
   m.reset({t});

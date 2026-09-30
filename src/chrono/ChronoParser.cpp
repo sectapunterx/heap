@@ -2,6 +2,8 @@
 #include "ChronoParser.h"
 #include "ChronoTokenizer.h"
 
+#include "recur/RecurrenceEngine.h"
+
 #include <QChar>
 #include <QDate>
 #include <QTime>
@@ -142,6 +144,23 @@ class ChronoParser::Impl {
         best.recurrence = rec;
         best.dateFirst = (recF >= 0 ? recF : dm.firstTok);
         best.dateLast = dm.lastTok;
+      }
+    }
+
+    // A clock time with no date of its own means its next occurrence. "call
+    // mom at 5" typed at 23:49 was today 05:00 — a task born overdue, with a
+    // calendar block in the past. A recurring one ("every weekday 10:00"
+    // after 10:00) starts at its next occurrence the same way. A date the user
+    // named ("today at 9am") is taken as said.
+    const QDateTime refMinute(ref.date(), QTime(ref.time().hour(), ref.time().minute()));
+    if(best.hasTime && QDateTime(best.date, best.start) < refMinute) {
+      if(!best.recurrence.isEmpty()) {
+        const QDate next = heap::recur::nextOccurrence(best.recurrence, best.date);
+        if(next.isValid()) {
+          best.date = next;
+        }
+      } else if(!best.hasExplicitDate) {
+        best.date = best.date.addDays(1);
       }
     }
 
@@ -734,6 +753,32 @@ class ChronoParser::Impl {
       return false;
     }
     int u = i + 1;
+    // Half an hour: "через полчаса", "через пол часа", "in half an hour".
+    {
+      int h = u;
+      bool half = false;
+      if(h < toks.size() && toks[h].kind == TokenKind::Word) {
+        const QString& w = toks[h].lower;
+        if(w == QString::fromUtf8("полчаса") || w == QString::fromUtf8("полчасика")) {
+          half = true;
+        } else if(w == QString::fromUtf8("пол") || w == QStringLiteral("half")) {
+          int k = h + 1;
+          if(k < toks.size() && toks[k].kind == TokenKind::Word && inListAny(toks[k].lower, primary->articles, fallback->articles)) {
+            ++k;
+          }
+          if(k < toks.size() && toks[k].kind == TokenKind::Word &&
+             (primary->hourUnits.contains(toks[k].lower) || fallback->hourUnits.contains(toks[k].lower))) {
+            half = true;
+            h = k;
+          }
+        }
+      }
+      if(half) {
+        at = QDateTime(ref.date(), QTime(ref.time().hour(), ref.time().minute())).addSecs(30 * 60);
+        last = h;
+        return true;
+      }
+    }
     int n = 1;
     if(u < toks.size() && toks[u].kind == TokenKind::Number) {
       n = toks[u].value;
@@ -800,6 +845,19 @@ class ChronoParser::Impl {
   bool tryNamedTime(const QVector<Token>& toks, int i, const ChronoLocale* primary, const ChronoLocale* fallback, TimeMatch& out) const {
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
       return false;
+    }
+    // "in the evening" / "in the morning": the phrase, not just the noun.
+    if(toks[i].lower == QStringLiteral("in") && i + 2 < toks.size() && toks[i + 1].kind == TokenKind::Word &&
+       toks[i + 1].lower == QStringLiteral("the") && toks[i + 2].kind == TokenKind::Word) {
+      bool dayPart = false;
+      const int m = lookupHashAny(toks[i + 2].lower, primary->namedTimes, fallback->namedTimes, &dayPart);
+      if(dayPart) {
+        out = TimeMatch{};
+        out.time = QTime(m / 60, m % 60);
+        out.firstTok = i;
+        out.lastTok = i + 2;
+        return true;
+      }
     }
     bool found = false;
     int minutes = lookupHashAny(toks[i].lower, primary->namedTimes, fallback->namedTimes, &found);
@@ -918,6 +976,26 @@ class ChronoParser::Impl {
     if(j >= toks.size() || toks[j].kind != TokenKind::Word) {
       return false;
     }
+    // "next week" / "на следующей неделе" is its Monday, "next month" its 1st,
+    // "next year" its January 1st — the start of the span named.
+    {
+      const QString& unit = toks[j].lower;
+      const QDate today = ref.date();
+      QDate d;
+      if(primary->weekUnits.contains(unit) || fallback->weekUnits.contains(unit)) {
+        d = today.addDays(8 - today.dayOfWeek());
+      } else if(primary->monthUnits.contains(unit) || fallback->monthUnits.contains(unit)) {
+        d = QDate(today.year(), today.month(), 1).addMonths(1);
+      } else if(primary->yearUnits.contains(unit) || fallback->yearUnits.contains(unit)) {
+        d = QDate(today.year() + 1, 1, 1);
+      }
+      if(d.isValid()) {
+        out.date = d;
+        out.firstTok = i;
+        out.lastTok = j;
+        return true;
+      }
+    }
     bool found = false;
     const int iso = lookupHashAny(toks[j].lower, primary->weekdayNames, fallback->weekdayNames, &found);
     if(!found) {
@@ -957,6 +1035,51 @@ class ChronoParser::Impl {
     return true;
   }
 
+  // A day of the month at toks[i]: "15", "15th", "15-го", "15 число". With
+  // `needMarker` the bare number is not enough (it could be a count).
+  int dayOfMonthAt(const QVector<Token>& toks, int i, bool needMarker, int& end) const {
+    if(i >= toks.size() || toks[i].kind != TokenKind::Number || toks[i].value < 1 || toks[i].value > 31) {
+      return 0;
+    }
+    static const QStringList kMarkers = {QStringLiteral("st"),
+                                         QStringLiteral("nd"),
+                                         QStringLiteral("rd"),
+                                         QStringLiteral("th"),
+                                         QString::fromUtf8("го"),
+                                         QString::fromUtf8("число"),
+                                         QString::fromUtf8("числа"),
+                                         QString::fromUtf8("числам")};
+    int k = i + 1;
+    if(k + 1 < toks.size() && toks[k].kind == TokenKind::Dash && toks[k + 1].kind == TokenKind::Word) {
+      ++k;  // "15-го"
+    }
+    if(k < toks.size() && toks[k].kind == TokenKind::Word && kMarkers.contains(toks[k].lower)) {
+      end = k;
+      return toks[i].value;
+    }
+    if(needMarker) {
+      return 0;
+    }
+    end = i;
+    return toks[i].value;
+  }
+
+  // Monthly on `day`: the first such date from today on (clamped in a short
+  // month), and the token RecurrenceEngine rolls forward.
+  void monthlyOn(int day, const QDateTime& ref, QString& recurrence, DateMatch& out) const {
+    const QDate today = ref.date();
+    QDate d;
+    for(int k = 0; k < 2 && !d.isValid(); ++k) {
+      const QDate first = QDate(today.year(), today.month(), 1).addMonths(k);
+      const QDate cand(first.year(), first.month(), qMin(day, first.daysInMonth()));
+      if(cand >= today) {
+        d = cand;
+      }
+    }
+    recurrence = QStringLiteral("every:month:") + QString::number(day);
+    out.date = d;
+  }
+
   // ── "every monday" / "каждую среду" / "every weekday" / "every day" ──
   bool tryEveryPhrase(const QVector<Token>& toks,
                       int i,
@@ -968,13 +1091,56 @@ class ChronoParser::Impl {
     if(i >= toks.size() || toks[i].kind != TokenKind::Word) {
       return false;
     }
+    // "monthly" / "ежемесячно": on this day of the month.
+    if(toks[i].lower == QStringLiteral("monthly") || toks[i].lower == QString::fromUtf8("ежемесячно")) {
+      monthlyOn(ref.date().day(), ref, recurrence, out);
+      out.firstTok = i;
+      out.lastTok = i;
+      return true;
+    }
     if(!inListAny(toks[i].lower, primary->everyAdjectives, fallback->everyAdjectives)) {
+      return false;
+    }
+    // "каждое 25 число" / "every 15th": a day of the month on its own.
+    if(i + 1 < toks.size() && toks[i + 1].kind == TokenKind::Number) {
+      int end = -1;
+      const int day = dayOfMonthAt(toks, i + 1, /*needMarker=*/true, end);
+      if(day > 0) {
+        monthlyOn(day, ref, recurrence, out);
+        out.firstTok = i;
+        out.lastTok = end;
+        return true;
+      }
       return false;
     }
     if(i + 1 >= toks.size() || toks[i + 1].kind != TokenKind::Word) {
       return false;
     }
     const QString w = toks[i + 1].lower;
+
+    // "every month [on the 15th]" / "каждый месяц [15-го]".
+    if(primary->monthUnits.contains(w) || fallback->monthUnits.contains(w)) {
+      int last = i + 1;
+      int day = ref.date().day();
+      int j = i + 2;
+      if(j < toks.size() && toks[j].kind == TokenKind::Word &&
+         (toks[j].lower == QStringLiteral("on") || inListAny(toks[j].lower, primary->atWords, fallback->atWords))) {
+        ++j;
+      }
+      if(j < toks.size() && toks[j].kind == TokenKind::Word && toks[j].lower == QStringLiteral("the")) {
+        ++j;
+      }
+      int end = -1;
+      const int named = dayOfMonthAt(toks, j, /*needMarker=*/false, end);
+      if(named > 0) {
+        day = named;
+        last = end;
+      }
+      monthlyOn(day, ref, recurrence, out);
+      out.firstTok = i;
+      out.lastTok = last;
+      return true;
+    }
 
     // "every weekday" / "по будням" / "каждый будний (рабочий) день"
     static const QStringList kWeekdayWords = {QStringLiteral("weekday"),
