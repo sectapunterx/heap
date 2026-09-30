@@ -69,9 +69,22 @@ void TaskFilterProxy::setSearchText(const QString& v) {
   m_rawSearch = v;
   // Compiled once per keystroke, not once per row: resolving `deadline:<friday`
   // runs the date parser, which has no business being in a per-row predicate.
-  m_query = heap::query::TaskQuery::compile(v, QDate::currentDate(), m_statuses);
+  m_query = heap::query::TaskQuery::compile(v, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses);
   m_searchText = m_query.freeText();
-  invalidateFilter();
+  refilter();
+  emit filterChanged();
+  emit countChanged();
+}
+
+void TaskFilterProxy::setToday(const QDate& d) {
+  if(m_today == d) {
+    return;
+  }
+  m_today = d;
+  // Relative clauses ("deadline:today") mean a different day now.
+  m_query = heap::query::TaskQuery::compile(m_rawSearch, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses);
+  m_searchText = m_query.freeText();
+  refilter();
   emit filterChanged();
   emit countChanged();
 }
@@ -85,7 +98,7 @@ void TaskFilterProxy::setStatuses(const QVariantList& v) {
     emit filterChanged();
     return;
   }
-  m_query = heap::query::TaskQuery::compile(m_rawSearch, QDate::currentDate(), m_statuses);
+  m_query = heap::query::TaskQuery::compile(m_rawSearch, m_today.isValid() ? m_today : QDate::currentDate(), m_statuses);
   m_searchText = m_query.freeText();
   refilter();
   emit filterChanged();

@@ -25,6 +25,36 @@ Item {
     // occurrence map says which date was clicked.
     signal eventClicked(string id, var occurrence)
     signal taskClicked(string id)
+    // An empty slot was clicked or dragged over: the shell opens the event
+    // editor on it, as the week view does. Saving an untitled "New event" at
+    // once (and at the floored hour, ignoring the snap) was the old behaviour.
+    signal createRequested(real startHour, real endHour, date day)
+
+    // A drag or resize on one occurrence of a series asks which ones it is
+    // for, like the editor does; anything else applies at once. `cancel` puts
+    // the block back when the question is dismissed.
+    SeriesScopeDialog { id: scopeAsk }
+    readonly property alias scopePrompt: scopeAsk
+    function _commitMove(occ, deltaHours, cancel) {
+        if (!occ || Math.abs(deltaHours) < 1e-9) { if (cancel) cancel(); return; }
+        if (String(occ.masterId || "").length > 0)
+            scopeAsk.ask("move", (scope) => AppController.moveOccurrence(occ, deltaHours, scope), cancel);
+        else
+            AppController.moveOccurrence(occ, deltaHours, "this");
+    }
+    function _commitResize(occ, start, end, cancel) {
+        if (!occ) { if (cancel) cancel(); return; }
+        if (String(occ.masterId || "").length > 0)
+            scopeAsk.ask("move", (scope) => AppController.resizeOccurrence(occ, start, end, scope), cancel);
+        else
+            AppController.resizeOccurrence(occ, start, end, "this");
+    }
+    // A span's own key: a series' occurrences share the master's id, and an
+    // overnight one from yesterday lands on the same day as today's.
+    function spanKey(e) {
+        const d = e.occurrenceDate || e.date;
+        return e.id + "@" + (d && d.getTime ? d.getTime() : "");
+    }
 
     function snapHour(h)  {
         const step = Math.max(1, Theme.snapMinutes) / 60.0;
@@ -122,8 +152,46 @@ Item {
     property var _overlap: ({})
     function _recomputeOverlaps() {
         // Timed pieces only: an all-day event has no hours to pack and would
-        // squeeze every real meeting on the day into a sliver.
-        _overlap = Overlap.compute(Seg.timedOn(root._allSpans(), AppController.selectedDate));
+        // squeeze every real meeting on the day into a sliver. Task blocks go
+        // into the same sweep: a meeting drawn over a scheduled task hid it
+        // and ate its clicks (0.5.0 #6); side by side, both are reachable.
+        const all = root._allSpans();
+        const items = [];
+        for (let i = 0; i < all.length; i++) {
+            if (Seg.isStrip(all[i])) continue;
+            const seg = Seg.segmentOn(all[i], AppController.selectedDate);
+            if (seg) items.push({ id: root.spanKey(all[i]), start: seg.start, end: seg.end });
+        }
+        for (let i = 0; i < root._taskBlocks.length; i++) {
+            const t = root._taskBlocks[i];
+            if (!t.linked) items.push({ id: "task:" + t.id, start: t.start, end: t.end });
+        }
+        _overlap = Overlap.compute(items);
+    }
+
+    // Tasks scheduled at a clock time on the selected day, read once per
+    // change from C++ — a Repeater over the whole task model built a delegate
+    // per task in the profile to show the two or three that are today.
+    property var _taskBlocks: []
+    readonly property int _visibleTaskBlocks: {
+        let n = 0;
+        for (let i = 0; i < root._taskBlocks.length; i++) if (!root._taskBlocks[i].linked) n++;
+        return n;
+    }
+    function _recomputeTaskBlocks() {
+        const d = AppController.selectedDate;
+        if (!d || !d.getFullYear) { _taskBlocks = []; return; }
+        const list = AppController.calendarTasks(d, d, false);
+        const out = [];
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            if (t.status === "done" || !(t.schedHour >= 0) || t.schedDay !== 0) continue;
+            const len = t.estimateMinutes > 0 ? t.estimateMinutes / 60 : 1;
+            out.push({ id: t.id, title: t.title, start: t.schedHour,
+                       end: Math.min(24, t.schedHour + Math.max(Theme.minEventHours, len)),
+                       linked: !!root._linkedTaskIds[t.id] });
+        }
+        _taskBlocks = out;
     }
 
     // All-day events covering the selected day, longest first. Bound from a
@@ -152,12 +220,17 @@ Item {
         }
         _linkedTaskIds = map;
     }
+    function _recomputeTasksOnly() {
+        _recomputeTaskBlocks();
+        _recomputeOverlaps();
+    }
     function _recomputeDay() {
         _recomputeSpans();
         _recountEventsToday();
+        _recomputeLinkedTasks();
+        _recomputeTaskBlocks();
         _recomputeOverlaps();
         _recomputeStrip();
-        _recomputeLinkedTasks();
     }
 
     Connections {
@@ -166,6 +239,16 @@ Item {
         function onRowsRemoved()  { root._recomputeDay() }
         function onDataChanged()  { root._recomputeDay() }
         function onModelReset()   { root._recomputeDay() }
+    }
+    Connections {
+        target: AppController.tasks
+        // Only the task blocks: rebuilding the event list would recreate the
+        // event delegates, and a task that changes mid-drag (a running timer
+        // ticks every second) would drop the block out from under the pointer.
+        function onRowsInserted() { root._recomputeTasksOnly() }
+        function onRowsRemoved()  { root._recomputeTasksOnly() }
+        function onDataChanged()  { root._recomputeTasksOnly() }
+        function onModelReset()   { root._recomputeTasksOnly() }
     }
     Connections {
         target: AppController
@@ -248,20 +331,33 @@ Item {
                 id: allDayStrip
                 objectName: "allday-strip"
                 Layout.fillWidth: true
-                Layout.preferredHeight: visible ? (root._stripEvents.length * 26 + 10) : 0
+                // At most three bars tall; more scroll inside the strip. A
+                // week of holidays and trips used to push the grid off the
+                // panel.
+                readonly property int maxRows: 3
+                Layout.preferredHeight: visible ? (Math.min(maxRows, root._stripEvents.length) * 26 + 10) : 0
                 visible: root._stripEvents.length > 0
                 color: Theme.panel
+                clip: true
 
                 Rectangle {
                     anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                     height: 1; color: Theme.border
                 }
 
-                Column {
+                Flickable {
+                    id: stripFlick
                     anchors.fill: parent
                     anchors.leftMargin: 14 + 44   // clear of the hour labels, so bars line up with the grid
                     anchors.rightMargin: Theme.sp2xl
                     anchors.topMargin: Theme.spXs
+                    contentHeight: stripCol.implicitHeight
+                    interactive: contentHeight > height
+                    boundsBehavior: Flickable.StopAtBounds
+                    ScrollBar.vertical: ThinScrollBar {}
+                Column {
+                    id: stripCol
+                    width: stripFlick.width
                     spacing: Theme.sp2xs
 
                     Repeater {
@@ -308,6 +404,7 @@ Item {
                             TapHandler { onTapped: root.eventClicked(bar.modelData.id, bar.modelData) }
                         }
                     }
+                }
                 }
             }
 
@@ -458,6 +555,7 @@ Item {
                         // the single-click 1-hour event branch.
                         MouseArea {
                             id: createArea
+                            objectName: "day-create-area"
                             anchors.fill: parent
                             z: 1
                             cursorShape: Qt.PointingHandCursor
@@ -481,15 +579,17 @@ Item {
                                 const hi = Math.max(pressY, currentY);
                                 const startH = root.snapHour(root.yToHour(lo));
                                 const endH   = root.snapHour(root.yToHour(hi));
+                                // Both open the editor on a draft, like the
+                                // week view: the event is named before it
+                                // exists, and a stray click leaves nothing.
                                 if (!dragging || (endH - startH) < Theme.minEventHours) {
-                                    // Legacy single-click → 1-hour event at clicked hour.
-                                    const h = Math.floor(root.yToHour(pressY));
-                                    const draft = AppController.newEventDraft(h, AppController.selectedDate);
-                                    AppController.saveEvent(draft);
+                                    // A click: an hour from the snapped slot
+                                    // under the pointer (it used to floor to
+                                    // the whole hour whatever the snap).
+                                    const h = root.clampHour(root.snapHour(root.yToHour(pressY)));
+                                    root.createRequested(Math.min(h, 23), Math.min(24, Math.min(h, 23) + 1), AppController.selectedDate);
                                 } else {
-                                    const draft = AppController.newEventDraft(startH, AppController.selectedDate);
-                                    draft.end = Math.min(endH, 24);
-                                    AppController.saveEvent(draft);
+                                    root.createRequested(startH, Math.min(endH, 24), AppController.selectedDate);
                                 }
                                 pressY = -1; currentY = -1; dragging = false;
                             }
@@ -529,7 +629,10 @@ Item {
                             Rectangle {
                                 id: evRect
                                 required property var modelData
-                                objectName: "event-" + evRect.id
+                                // The occurrences of the day either side are here too
+                                // (they may reach in past midnight); only a piece
+                                // that lands on this day answers to the event id.
+                                objectName: (evRect.seg !== null ? "event-" : "event-offday-") + evRect.id
                                 // Named individually so the rest of the
                                 // delegate reads the same as when this was
                                 // bound to model roles.
@@ -591,7 +694,7 @@ Item {
                                     : null
 
                                 // Side-by-side overlap slot (see root._overlap).
-                                readonly property var slot: root._overlap[id] || ({ col: 0, cols: 1 })
+                                readonly property var slot: root._overlap[root.spanKey(evRect.modelData)] || ({ col: 0, cols: 1 })
                                 readonly property real colGap: 3
                                 readonly property real colW: parent.width / Math.max(1, slot.cols)
 
@@ -706,7 +809,9 @@ Item {
 
                                     onPressed: (mouse) => {
                                         grabY = mouse.y;
-                                        baseY = (evRect.start - root.hoursStart) * Theme.hourH;
+                                        // The piece's own top: the after-midnight
+                                        // piece of an overnight event starts at 0.
+                                        baseY = ((evRect.seg ? evRect.seg.start : evRect.start) - root.hoursStart) * Theme.hourH;
                                         didDrag = false;
                                         evRect.dragDy = 0;
                                     }
@@ -723,13 +828,14 @@ Item {
                                     }
                                     onReleased: {
                                         if (didDrag) {
-                                            const baseAbs = (evRect.start - root.hoursStart) * Theme.hourH;
-                                            const newAbs = baseAbs + evRect.dragDy;
-                                            const dur = evRect.end - evRect.start;
+                                            // A move is a shift of the whole
+                                            // event by what the piece moved.
+                                            const pieceStart = evRect.seg ? evRect.seg.start : evRect.start;
+                                            const pieceEnd = evRect.seg ? evRect.seg.end : evRect.end;
+                                            const newAbs = moveArea.baseY + evRect.dragDy;
                                             let ns = root.snapHour(root.yToHour(newAbs));
-                                            ns = Math.max(root.hoursStart, Math.min(ns, root.hoursEnd - dur));
-                                            AppController.updateEvent(evRect.id, ns, ns + dur, AppController.selectedDate);
-                                            evRect.dragDy = 0;
+                                            ns = Math.max(root.hoursStart, Math.min(ns, root.hoursEnd - (pieceEnd - pieceStart)));
+                                            root._commitMove(evRect.modelData, ns - pieceStart, () => { if (evRect) evRect.dragDy = 0; });
                                         } else {
                                             root.eventClicked(evRect.id, evRect.modelData);
                                         }
@@ -763,8 +869,8 @@ Item {
                                         if (!resizing) return;
                                         resizing = false;
                                         const ns = evRect.pendingStartH;
-                                        AppController.updateEvent(evRect.id, ns, evRect.end, AppController.selectedDate);
-                                        evRect.pendingStartH = NaN;
+                                        if (Math.abs(ns - evRect.start) < 1e-9) { evRect.pendingStartH = NaN; return; }
+                                        root._commitResize(evRect.modelData, ns, evRect.end, () => { if (evRect) evRect.pendingStartH = NaN; });
                                     }
                                     onCanceled: { resizing = false; evRect.pendingStartH = NaN; }
                                 }
@@ -792,8 +898,8 @@ Item {
                                         if (!resizing) return;
                                         resizing = false;
                                         const ne = evRect.pendingEndH;
-                                        AppController.updateEvent(evRect.id, evRect.start, ne, AppController.selectedDate);
-                                        evRect.pendingEndH = NaN;
+                                        if (Math.abs(ne - evRect.end) < 1e-9) { evRect.pendingEndH = NaN; return; }
+                                        root._commitResize(evRect.modelData, evRect.start, ne, () => { if (evRect) evRect.pendingEndH = NaN; });
                                     }
                                     onCanceled: { resizing = false; evRect.pendingEndH = NaN; }
                                 }
@@ -803,35 +909,31 @@ Item {
                         // Layer 3b: tasks scheduled at a clock time (HEAP-115).
                         // Before this, the only way a task's parsed time reached
                         // the day view was a side focus-block event; now the
-                        // task's own scheduledAt puts it here.
+                        // task's own scheduledAt puts it here. It takes a column
+                        // in the same overlap layout as the events, so neither
+                        // covers the other.
                         Repeater {
-                            model: AppController.tasks
+                            model: root._taskBlocks
                             Rectangle {
                                 id: taskBlock
-                                required property string id
-                                required property string title
-                                objectName: "taskblock-" + id
-                                required property var scheduledAt
-                                required property bool scheduledHasTime
-                                required property bool archived
-                                required property string status
+                                required property var modelData
+                                readonly property string id: taskBlock.modelData.id
+                                readonly property string title: taskBlock.modelData.title || ""
+                                objectName: "taskblock-" + taskBlock.id
+                                readonly property var tslot: root._overlap["task:" + taskBlock.id] || ({ col: 0, cols: 1 })
+                                readonly property real colW: parent.width / Math.max(1, tslot.cols)
 
-                                readonly property real startHour: scheduledHasTime && scheduledAt && scheduledAt.getHours
-                                    ? scheduledAt.getHours() + scheduledAt.getMinutes() / 60.0
-                                    : -1
-
-                                visible: !archived && status !== "done" && startHour >= 0
-                                         && root.isSameDay(scheduledAt, AppController.selectedDate)
-                                         && !root._linkedTaskIds[id]
-                                x: 0
-                                y: (startHour - root.hoursStart) * Theme.hourH
-                                width: Math.max(20, parent.width * 0.5 - 3)
-                                height: Theme.hourH - 2
+                                // A linked meeting event stands in for the task.
+                                visible: !taskBlock.modelData.linked
+                                x: tslot.col * colW
+                                y: (taskBlock.modelData.start - root.hoursStart) * Theme.hourH
+                                width: Math.max(20, colW - 3)
+                                height: Math.max(20, (taskBlock.modelData.end - taskBlock.modelData.start) * Theme.hourH - 2)
                                 radius: Theme.radiusMd
                                 color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.18 : 0.10)
                                 border.color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.9 : 0.5)
                                 border.width: 1
-                                z: 4
+                                z: 5
 
                                 Text {
                                     anchors.fill: parent
@@ -896,8 +998,9 @@ Item {
     Text {
         id: dayEmptyText
         anchors.centerIn: parent
-        width: parent.width - 96
-        visible: root._eventsToday === 0
+        width: parent.width - 48
+        // Not over a day that has task blocks on it.
+        visible: root._eventsToday === 0 && root._visibleTaskBlocks === 0
         horizontalAlignment: Text.AlignHCenter
         wrapMode: Text.WordWrap
         text: I18n.t("day.noEvents")

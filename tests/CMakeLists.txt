@@ -308,6 +308,9 @@ heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
 heap_add_appcontroller_test(heap_audit_tasks_tests test_audit_tasks.cpp)
 # ── audit-tasks: end ──
 # ── audit-time: begin ──
+# Calendar fixes from the 2026-09-30 audit: series drags and edits, reminders,
+# today, focus blocks, free slots (TIME-*, PLAT-10/11/13/18/19, TASKS-17/29).
+heap_add_appcontroller_test(heap_time_audit_tests test_time_audit.cpp)
 # ── audit-time: end ──
 # ── audit-know: begin ──
 # Notes / docs / markdown regressions from the 2026-09-30 audit (KNOW-*, PLAT-21).

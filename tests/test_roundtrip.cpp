@@ -111,6 +111,11 @@ CalEvent makeFullEvent() {
   e.exdates = {QDate(2026, 7, 20), QDate(2026, 8, 3)};
   e.masterId = QStringLiteral("ev-master");
   e.originalDate = QDate(2026, 7, 13);
+  e.tz = QStringLiteral("America/New_York");
+  e.location = QStringLiteral("Room 4");
+  e.notes = QStringLiteral("agenda:\n- one");
+  e.url = QStringLiteral("https://meet.example/abc");
+  e.reminderMinutes = 15;
   return e;
 }
 
@@ -243,6 +248,11 @@ class Gen {
     }
     e.masterId = boolean() ? text() : QString();
     e.originalDate = boolean() ? date() : QDate();
+    e.tz = boolean() ? QStringLiteral("Europe/Berlin") : QString();
+    e.location = text();
+    e.notes = text();
+    e.url = boolean() ? text() : QString();
+    e.reminderMinutes = pick(-2, 60);
     return e;
   }
 
@@ -259,7 +269,7 @@ constexpr int kCases = 1000;
 // only one serializer is updated, that serializer's own static_assert fires.
 TEST(FieldCountGuard, TaskAndEventArityIsPinned) {
   EXPECT_EQ(heap::meta::fieldCount<Task>(), 25u);
-  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 16u);
+  EXPECT_EQ(heap::meta::fieldCount<CalEvent>(), 21u);
 }
 
 // ExternalMeta is nested inside Task, so Task's own count stays 1 for the whole

@@ -22,6 +22,18 @@ About** shows the exact folder of the running copy.
 global events, and your settings blob. It is human-readable — safe to inspect,
 and easy to back up by copying.
 
+An event carries, besides its title, type, hours and dates, a few optional
+fields a file from before 0.5.3 simply lacks: `location`, `notes`, `url`,
+`reminderMinutes` (-1 = the notification setting, -2 = none, else minutes
+before) and `tz`. `tz` is empty for an ordinary event (it is at that hour
+wherever you are); a series imported from another time zone keeps the zone's
+IANA name there, its hours are that zone's, and every occurrence is converted
+on its own day so it follows that zone's daylight-saving changes.
+
+`reminders.json`, next to `state.json`, remembers which reminders were already
+shown in the last three days, so a restart does not show them again. Deleting
+it is harmless.
+
 ### Using a different directory
 
 `--data-dir <dir>` puts `state.json`, `backups/`, `logs/` and the keychain-less

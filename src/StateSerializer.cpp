@@ -30,7 +30,7 @@ static_assert(heap::meta::fieldCount<ExternalMeta>() == 21,
               "ExternalMeta gained or lost a field. Update externalMetaToJson/FromJson here AND "
               "in src/sync/SyncSerializer.cpp, extend makeFullTask() in tests/test_roundtrip.cpp, "
               "then bump this count.");
-static_assert(heap::meta::fieldCount<CalEvent>() == 16,
+static_assert(heap::meta::fieldCount<CalEvent>() == 21,
               "CalEvent gained or lost a field. Update eventToJson/eventFromJson here AND in "
               "src/sync/SyncSerializer.cpp, extend makeFullEvent() in tests/test_roundtrip.cpp, "
               "then bump this count.");
@@ -393,6 +393,13 @@ QJsonObject eventToJson(const CalEvent& e) {
   o["exdates"] = datesToJson(e.exdates);
   o["masterId"] = e.masterId;
   o["originalDate"] = e.originalDate.isValid() ? e.originalDate.toString(Qt::ISODate) : QString();
+  // Optional since 0.5.3 (audit-time); an older file lacks them and reads the
+  // defaults — floating local time, no notes, the settings' reminder lead.
+  o["tz"] = e.tz;
+  o["location"] = e.location;
+  o["notes"] = e.notes;
+  o["url"] = e.url;
+  o["reminderMinutes"] = e.reminderMinutes;
   return o;
 }
 
@@ -414,6 +421,11 @@ CalEvent eventFromJson(const QJsonObject& o, const QString& fallbackProfileId) {
   e.exdates = datesFromJson(o["exdates"].toArray());
   e.masterId = o["masterId"].toString();
   e.originalDate = QDate::fromString(o["originalDate"].toString(), Qt::ISODate);
+  e.tz = o["tz"].toString();
+  e.location = o["location"].toString();
+  e.notes = o["notes"].toString();
+  e.url = o["url"].toString();
+  e.reminderMinutes = o["reminderMinutes"].toInt(CalEvent::kReminderDefault);
   return e;
 }
 

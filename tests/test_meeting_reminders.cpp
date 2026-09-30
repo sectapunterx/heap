@@ -121,14 +121,86 @@ TEST(MeetingWindow, AnEventOnAnotherDayIsIgnored) {
   EXPECT_TRUE(dueMeetingReminders({e}, kNow, 10).isEmpty());
 }
 
-// Late in the evening the window must not spill into tomorrow's small hours:
-// a 00:30 meeting is not "30 minutes away" from 23:50 as far as the rule is
-// concerned, because it is not on today's date at all.
-TEST(MeetingWindow, TheWindowDoesNotReachAcrossMidnight) {
+// A 00:30 meeting is 40 minutes away from 23:50, whatever the date says: the
+// window used to stop at midnight, so a meeting just after it was never
+// announced (audit TIME-30).
+TEST(MeetingWindow, TheWindowReachesAcrossMidnight) {
   CalEvent e = at(QStringLiteral("a"), 0.5);
   e.date = kDay.addDays(1);
 
-  EXPECT_TRUE(dueMeetingReminders({e}, QDateTime(kDay, QTime(23, 50)), 60).isEmpty());
+  const auto due = dueMeetingReminders({e}, QDateTime(kDay, QTime(23, 50)), 60);
+  ASSERT_EQ(due.size(), 1);
+  EXPECT_EQ(due.first().minutesLeft, 40);
+}
+
+// "Starting now" only once it has: 30 seconds before the start is "in 1 min".
+TEST(MeetingWindow, StartingNowIsNeverSaidEarly) {
+  const auto due = dueMeetingReminders({at(QStringLiteral("a"), 10.0)}, QDateTime(kDay, QTime(9, 59, 30)), 5);
+  ASSERT_EQ(due.size(), 1);
+  EXPECT_EQ(due.first().minutesLeft, 1);
+}
+
+// A reminder whose minute passed (quiet hours, a busy tick) is still due until
+// shortly after the start, and a sent key is not repeated.
+TEST(MeetingWindow, ALateReminderIsStillDueUntilTheGraceEnds) {
+  const CalEvent e = at(QStringLiteral("a"), 9.0);
+  EXPECT_EQ(dueMeetingReminders({e}, QDateTime(kDay, QTime(9, 0, 40)), 5).size(), 1);
+  EXPECT_TRUE(dueMeetingReminders({e}, QDateTime(kDay, QTime(9, 6)), 5).isEmpty());
+  const auto due = dueMeetingReminders({e}, QDateTime(kDay, QTime(8, 56)), 5);
+  ASSERT_EQ(due.size(), 1);
+  EXPECT_TRUE(dueMeetingReminders({e}, QDateTime(kDay, QTime(8, 57)), 5, {due.first().key}).isEmpty());
+}
+
+// The key names the occurrence's start, so a meeting moved later the same day
+// is reminded again (audit TIME-21).
+TEST(MeetingWindow, AMovedMeetingGetsANewKey) {
+  CalEvent e = at(QStringLiteral("a"), 9.0);
+  const auto first = dueMeetingReminders({e}, QDateTime(kDay, QTime(8, 56)), 5);
+  e.start = 15.0;
+  e.end = 15.5;
+  const auto second = dueMeetingReminders({e}, QDateTime(kDay, QTime(14, 56)), 5, {first.value(0).key});
+  EXPECT_EQ(second.size(), 1);
+}
+
+TEST(MeetingWindow, AnEventsOwnLeadWinsAndOffSilencesIt) {
+  CalEvent e = at(QStringLiteral("a"), 10.5);
+  e.reminderMinutes = 30;
+  EXPECT_EQ(dueMeetingReminders({e}, kNow, 5).size(), 1);
+  e.reminderMinutes = CalEvent::kReminderOff;
+  EXPECT_TRUE(dueMeetingReminders({e}, QDateTime(kDay, QTime(10, 29)), 5).isEmpty());
+}
+
+// ── Deadlines (audit PLAT-19) ──
+
+TEST(DeadlineWindow, HalfAnHourOverdueIsOverdueNotDueSoon) {
+  const auto call = heap::cal::deadlineReminder(QStringLiteral("T-1"), QDateTime(kDay, QTime(9, 30)), kNow, 24);
+  EXPECT_TRUE(call.due);
+  EXPECT_TRUE(call.overdue);
+  EXPECT_EQ(call.hours, 0);
+}
+
+TEST(DeadlineWindow, ThreeHoursOverdueIsStillSaid) {
+  const auto call = heap::cal::deadlineReminder(QStringLiteral("T-1"), QDateTime(kDay, QTime(7, 0)), kNow, 24);
+  EXPECT_TRUE(call.due);
+  EXPECT_TRUE(call.overdue);
+  EXPECT_EQ(call.hours, 3);
+}
+
+TEST(DeadlineWindow, HoursLeftRoundUp) {
+  const auto call = heap::cal::deadlineReminder(QStringLiteral("T-1"), QDateTime(kDay, QTime(11, 30)), kNow, 24);
+  EXPECT_TRUE(call.due);
+  EXPECT_FALSE(call.overdue);
+  EXPECT_EQ(call.hours, 2);
+}
+
+TEST(DeadlineWindow, LongOverdueWorkIsNotAFlood) {
+  EXPECT_FALSE(heap::cal::deadlineReminder(QStringLiteral("T-1"), kNow.addDays(-3), kNow, 24).due);
+}
+
+TEST(QuietWindow, WrapsMidnight) {
+  EXPECT_TRUE(heap::cal::inQuietWindow(QTime(19, 0), QTime(9, 0), QTime(23, 0)));
+  EXPECT_TRUE(heap::cal::inQuietWindow(QTime(19, 0), QTime(9, 0), QTime(8, 59)));
+  EXPECT_FALSE(heap::cal::inQuietWindow(QTime(19, 0), QTime(9, 0), QTime(9, 0)));
 }
 
 // An all-day event has no start to count down to. Announcing "your holiday

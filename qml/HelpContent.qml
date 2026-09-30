@@ -780,8 +780,8 @@ Item {
                               "Напоминания о сроках")
             }
             Body {
-                text: root.tr2("N hours before a deadline (24 by default, configurable in Settings → Notifications) — it pushes a notification. The notification has a 'Snooze 1h' action.",
-                              "За N часов до срока (по умолчанию 24, настраивается в Настройки → Уведомления) приходит уведомление. У него есть действие «Отложить на 1 ч».")
+                text: root.tr2("N hours before a deadline (24 by default, configurable in Settings → Notifications) — it pushes a notification, and once more if the deadline passes. The notification has a 'Snooze 1h' action.",
+                              "За N часов до срока (по умолчанию 24, настраивается в Настройки → Уведомления) приходит уведомление, и ещё одно, если срок прошёл. У него есть действие «Отложить на 1 ч».")
             }
 
             H3 {
@@ -789,8 +789,8 @@ Item {
                               "Напоминание о стендапе")
             }
             Body {
-                text: root.tr2("Daily at standup-time (default 10:00). The time is changed in Settings → Notifications.",
-                              "Каждый день во время стендапа (по умолчанию 10:00). Время меняется в Настройки → Уведомления.")
+                text: root.tr2("At standup-time (default 10:00) on working days — Monday to Friday unless changed in Settings → Calendar → Working days. The time is changed in Settings → Notifications.",
+                              "Во время стендапа (по умолчанию 10:00) в рабочие дни — с понедельника по пятницу, если не изменено в Настройки → Календарь → Рабочие дни. Время меняется в Настройки → Уведомления.")
             }
 
             H3 {
@@ -816,8 +816,8 @@ Item {
                               "Тихие часы")
             }
             Body {
-                text: root.tr2("The quiet window (default 19:00–09:00) suppresses desktop notifications, but not the reminders themselves — inside the app the toast still appears.",
-                              "Тихое окно (по умолчанию 19:00–09:00) глушит системные уведомления, но не сами напоминания — внутри приложения тост всё равно появится. Время пишется как ЧЧ:ММ.")
+                text: root.tr2("The quiet window (default 19:00–09:00) holds notifications back and delivers them when it ends, instead of dropping them. Meeting and standup reminders are appointments and still come through. Every reminder is sent once, even across a restart.",
+                              "Тихое окно (по умолчанию 19:00–09:00) придерживает уведомления и доставляет их, когда оно заканчивается, а не выбрасывает. Напоминания о встречах и стендапе — это назначенное время, они приходят всегда. Каждое напоминание отправляется один раз, даже после перезапуска.")
             }
 
             H3 {

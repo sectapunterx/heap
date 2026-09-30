@@ -240,6 +240,10 @@ struct Entry {
   // the action it names even after something else was done in between. 0 =
   // unassigned (entries built by hand in tests).
   quint64 serial = 0;
+  // What the toast says when the entry is redone. Empty = a generic "Redone":
+  // the undo label names the undo's outcome ("Restored: X"), which is the
+  // opposite of what a redo does.
+  QString redoLabel;
   Edits<Task> tasks;
   Edits<CalEvent> events;
   Edits<Person> people;

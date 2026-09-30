@@ -264,6 +264,7 @@ qt_add_qml_module(heap_core
         qml/PlainText.js
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
+        qml/SeriesScopeDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml

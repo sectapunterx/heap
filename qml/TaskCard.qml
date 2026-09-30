@@ -738,9 +738,10 @@ Rectangle {
                 // 14:00 used to be hardcoded here, so every task scheduled from
                 // the card landed on top of the last one — and on a time that
                 // had already passed for most of the afternoon.
-                const est = card.task.estimateMinutes > 0 ? card.task.estimateMinutes / 60 : 1;
-                const at = AppController.nextFreeSlot(AppController.selectedDate, est);
-                AppController.scheduleTask(card.task.id, at, AppController.selectedDate);
+                // The gap is looked for with the block's real length (the
+                // estimate, else the focus-block setting); it used to search
+                // for an hour and then book ninety minutes over a meeting.
+                AppController.scheduleTaskAtNextFreeSlot(card.task.id, AppController.selectedDate);
             }
         }
         AppMenuItem {

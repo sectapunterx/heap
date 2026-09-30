@@ -74,6 +74,8 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <optional>
+#include <utility>
 
 namespace {
 
@@ -234,7 +236,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notes.undo.move", {"Move undone: %1", "Перемещение отменено: %1"}},
       {"notes.undo.folder", {"Folder change undone: %1", "Изменение папки отменено: %1"}},
       {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
-      {"undo.importIcs", {"Calendar imported", "Календарь импортирован"}},
+      {"undo.importIcs", {"Import undone", "Импорт отменён"}},
+      {"event.scheduleUndone", {"Scheduling undone: %1", "Планирование отменено: %1"}},
+      {"status.doingUndone", {"Column change undone: %1", "Изменение колонки отменено: %1"}},
+      {"ics.error.notCalendar", {"That file is not a calendar (.ics).", "Это не файл календаря (.ics)."}},
+      {"ics.reimported", {"Calendar imported again: %1 events", "Календарь импортирован снова: событий %1"}},
+      {"event.seriesDeleted", {"Deleted series: %1", "Удалена серия: %1"}},
+      {"event.followingDeleted", {"Deleted this and following: %1", "Удалены это и следующие: %1"}},
+      {"undo.redone", {"Redone", "Повторено"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
       {"shortcut.cal.today.desc", {"Jump the calendar back to today.", "Вернуть календарь к сегодняшнему дню."}},
       {"shortcut.cal.prev.label", {"Calendar: previous", "Календарь: назад"}},
@@ -253,6 +262,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.notes.rename.desc", {"Rename or re-file the open note.", "Переименовать открытую заметку или сменить её папку."}},
       {"shortcut.notes.toggleList.label", {"Notes: show or hide the list", "Заметки: показать или скрыть список"}},
       {"shortcut.notes.toggleList.desc", {"Fold the list of notes away, or bring it back.", "Свернуть список заметок или вернуть его."}},
+      {"shortcut.cal.prevDay.label", {"Calendar: previous day", "Календарь: предыдущий день"}},
+      {"shortcut.cal.prevDay.desc", {"Move the selected day back by one.", "Сдвинуть выбранный день на один назад."}},
+      {"shortcut.cal.nextDay.label", {"Calendar: next day", "Календарь: следующий день"}},
+      {"shortcut.cal.nextDay.desc", {"Move the selected day forward by one.", "Сдвинуть выбранный день на один вперёд."}},
+      {"shortcut.cal.newEvent.label", {"New event", "Новое событие"}},
+      {"shortcut.cal.newEvent.desc",
+       {"Open the event editor at the next free slot of the selected day.",
+        "Открыть редактор события на ближайшем свободном слоте выбранного дня."}},
       {"shortcut.board.cursorDown.label", {"Board: next card", "Доска: следующая карточка"}},
       {"shortcut.board.cursorDown.desc", {"Move the keyboard cursor down a column.", "Сдвинуть курсор вниз по колонке."}},
       {"shortcut.board.cursorUp.label", {"Board: previous card", "Доска: предыдущая карточка"}},
@@ -472,6 +489,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"selection.toast.unarchived", {"Tasks unarchived: %1", "Задач возвращено из архива: %1"}},
       // ---- Notification copy ----
       {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
+      {"notify.overdueTitle", {"Overdue %1", "Просрочено %1"}},
+      {"notify.deadlineWhen.overdue", {"just now", "только что"}},
+      {"notify.deadlineWhen.overdueH", {"by %1 h", "на %1 ч"}},
       {"notify.deadlineWhen.h1", {"in 1 hour", "через час"}},
       {"notify.deadlineWhen.hN", {"in %1 h", "через %1 ч"}},
       {"notify.standupTitle", {"Standup soon", "Скоро стендап"}},
@@ -549,6 +569,22 @@ AppController::AppController(QObject* parent) :
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
 
+  // "Today" is not a constant: the app stays open across midnight, and a
+  // laptop resumes on another day or in another zone.
+  m_midnightTimer = new QTimer(this);
+  m_midnightTimer->setSingleShot(true);
+  connect(m_midnightTimer, &QTimer::timeout, this, [this]() {
+    refreshToday();
+    armMidnightTimer();
+  });
+  armMidnightTimer();
+  connect(qApp, &QGuiApplication::applicationStateChanged, this, [this](Qt::ApplicationState state) {
+    if(state == Qt::ApplicationActive) {
+      refreshToday();
+      armMidnightTimer();
+    }
+  });
+
   // (Legacy QSystemTrayIcon creation removed — the notification backend
   // owns its own tray icon on Windows/macOS via the tray fallback. Having
   // two would show duplicate icons in the system tray.)
@@ -573,7 +609,11 @@ AppController::AppController(QObject* parent) :
   // notification(...)`) keep working — the lambda just forwards to the
   // NotificationCenter without action buttons (it carries no task id).
   connect(this, &AppController::notification, this, [this](const QString& title, const QString& body, const QString& kind) {
-    if(inQuietHours(QDateTime::currentDateTime())) {
+    // Quiet hours hold a notification until they end rather than dropping
+    // it. A meeting or the standup is an appointment and goes through.
+    const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
+    if(!appointment && inQuietHours(QDateTime::currentDateTime())) {
+      holdNotification({title, body, kind, QString()});
       return;
     }
     const QVariantMap notif = settingsMap().value("notifications").toMap();
@@ -594,7 +634,9 @@ AppController::AppController(QObject* parent) :
     if(notif.value("soundOnPing", false).toBool()) {
       QApplication::beep();
     }
-    emit toast(body);
+    // The title is what says why ("Starting now", "Deadline in 1 hour"); the
+    // in-app toast used to show only the body, a bare task title.
+    emit toast(title.isEmpty() ? body : title + QStringLiteral(" · ") + body);
   });
 
   // Invalidate the status-count cache from the model's own signals, so every
@@ -625,6 +667,7 @@ AppController::AppController(QObject* parent) :
   });
 
   loadStateOnStart();
+  loadSentReminders();
   m_automationTimer->start();
 
   // An unwritable data folder (a --data-dir under Program Files, a read-only
@@ -831,6 +874,34 @@ void AppController::setSelectedDate(const QDate& d) {
   }
   m_selectedDate = d;
   emit selectedDateChanged();
+}
+
+void AppController::refreshToday(const QDate& current) {
+  if(!current.isValid() || current == m_today) {
+    return;
+  }
+  const QDate was = m_today;
+  m_today = current;
+  // A calendar left on "today" stays on today. One the user paged elsewhere
+  // stays where they put it.
+  if(m_selectedDate == was) {
+    m_selectedDate = current;
+    emit selectedDateChanged();
+  }
+  emit todayChanged();
+}
+
+void AppController::armMidnightTimer() {
+  if(m_midnightTimer == nullptr) {
+    return;
+  }
+  const QDateTime now = QDateTime::currentDateTime();
+  // A second past midnight, so the date read then is the new one. Capped, so
+  // a clock that jumps (sleep, a manual change) is caught within the hour
+  // even if the timer's own deadline was computed against the old clock.
+  const QDateTime next(now.date().addDays(1), QTime(0, 0, 1));
+  const qint64 ms = qBound<qint64>(1000, now.msecsTo(next), 60LL * 60 * 1000);
+  m_midnightTimer->start(static_cast<int>(ms));
 }
 
 void AppController::setTheme(const QString& t) {
@@ -1503,16 +1574,10 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
     emit blockedStuckChanged();
   }
 
-  // Auto focus-block when moving into "prog", if setting on.
-  if(newStatus == QStringLiteral("prog")) {
-    const QVariantMap s = settingsMap();
-    const QVariantMap cal = s.value("calendar").toMap();
-    if(cal.value("autoFocusBlock", true).toBool()) {
-      scheduleFocusBlockFor(taskId);
-    }
-  }
-
-  // Time set aside for work that is now finished is time given back.
+  // A focus block when the card enters a "doing" column (In Progress, or any
+  // column marked so), and the future ones dropped when it leaves one — for
+  // Done, and equally for a card put back in To Do.
+  focusBlockOnStatusChange(taskId, prevStatus, newStatus);
   if(newStatus == QStringLiteral("done")) {
     dropFutureFocusBlocks(taskId);
   }
@@ -2214,6 +2279,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   m_tasks.upsert(t);
   if(isNew) {
     noteTaskIdUsed(t.id);
+    focusBlockOnStatusChange(t.id, QString(), t.status);
     emit toast(tr_("task.created").arg(t.id));
   } else if(statusMoved) {
     moveTask(t.id, statusAfter);
@@ -2270,6 +2336,11 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
   m["allDay"] = false;
   m["endDate"] = QVariant();  // absent = a single day, which is the common case
   m["rrule"] = QString();     // absent = this event does not repeat
+  m["location"] = QString();
+  m["notes"] = QString();
+  m["url"] = QString();
+  m["reminderMinutes"] = CalEvent::kReminderDefault;
+  m["tz"] = QString();  // floating: the event is at this hour wherever the user is
   m["_isNew"] = true;
   return m;
 }
@@ -2279,6 +2350,14 @@ void AppController::saveEvent(const QVariantMap& draft) {
   const UndoScope scope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   CalEvent e;
   e.id = draft.value("id").toString();
+  // Every key a draft may omit keeps the stored value: the editors do not all
+  // carry every field around, and an ordinary edit must not silently turn a
+  // weekly meeting into a single one or wipe its notes.
+  const int prevRow = m_events.indexOfId(e.id);
+  const CalEvent* prev = prevRow >= 0 ? &m_events.items().at(prevRow) : nullptr;
+  const auto str = [&](const char* key, const QString& old) {
+    return draft.contains(QLatin1String(key)) ? draft.value(QLatin1String(key)).toString() : old;
+  };
   e.title = draft.value("title").toString();
   e.type = draft.value("type").toString();
   e.start = draft.value("start").toDouble();
@@ -2289,33 +2368,45 @@ void AppController::saveEvent(const QVariantMap& draft) {
   // EventEditor no longer exposes profileId — preserve the prior value
   // (round-tripped through showForId) when the draft omits the key, so
   // existing saved attribution survives an edit.
-  if(draft.contains("profileId")) {
-    e.profileId = draft.value("profileId").toString();
-  } else {
-    const int prev = m_events.indexOfId(e.id);
-    e.profileId = (prev >= 0) ? m_events.items().at(prev).profileId : QString();
-  }
+  e.profileId = str("profileId", prev ? prev->profileId : QString());
   e.context = draft.value("context").toString();
   e.allDay = draft.value("allDay").toBool();
   e.endDate = draft.value("endDate").toDate();
-  // Recurrence keys are preserved when the draft omits them: the event editor
-  // does not carry a rule around, and an ordinary edit must not silently turn
-  // a weekly meeting into a single one.
-  const int prevRow = m_events.indexOfId(e.id);
-  const CalEvent* prev = prevRow >= 0 ? &m_events.items().at(prevRow) : nullptr;
-  e.rrule = draft.contains("rrule") ? draft.value("rrule").toString() : (prev ? prev->rrule : QString());
-  e.masterId = draft.contains("masterId") ? draft.value("masterId").toString() : (prev ? prev->masterId : QString());
+  e.rrule = str("rrule", prev ? prev->rrule : QString());
+  e.masterId = str("masterId", prev ? prev->masterId : QString());
   e.originalDate = draft.contains("originalDate") ? draft.value("originalDate").toDate() : (prev ? prev->originalDate : QDate());
+  e.tz = str("tz", prev ? prev->tz : QString());
+  e.location = str("location", prev ? prev->location : QString());
+  e.notes = str("notes", prev ? prev->notes : QString());
+  e.url = str("url", prev ? prev->url : QString());
+  e.reminderMinutes = draft.contains("reminderMinutes") && draft.value("reminderMinutes").isValid()
+                          ? draft.value("reminderMinutes").toInt()
+                          : (prev ? prev->reminderMinutes : CalEvent::kReminderDefault);
   // The deleted-occurrence list is never in a draft — nothing in the editor
   // edits it — so it is always the stored one.
   if(prev) {
     e.exdates = prev->exdates;
   }
+  storeEvent(e);
+}
+
+void AppController::storeEvent(CalEvent e) {
   // A rule this build cannot expand used to be stored anyway and draw as one
   // event, with nothing saying why the series never repeated.
-  if(!e.rrule.isEmpty() && !heap::cal::parseRRule(e.rrule).isValid()) {
-    emit toast(tr_("event.badRule").arg(e.rrule), QStringLiteral("warning"));
-    e.rrule.clear();
+  if(!e.rrule.isEmpty()) {
+    QString why;
+    if(!heap::cal::parseRRule(e.rrule, &why).isValid()) {
+      emit toast(tr_("event.badRule").arg(e.rrule), QStringLiteral("warning"));
+      e.rrule.clear();
+    }
+  }
+  if(e.rrule.isEmpty() && e.masterId.isEmpty()) {
+    // A single event keeps no deletions, and keeps no zone either: it is
+    // shown converted, and the next edit writes what was on screen.
+    e.exdates.clear();
+    if(!e.tz.isEmpty()) {
+      e = heap::cal::localized(e, QTimeZone::systemTimeZone());
+    }
   }
   // The editor parses free-typed times and a multi-day event may legally end
   // before it starts by the clock, so the whole span is normalized in one
@@ -2325,7 +2416,12 @@ void AppController::saveEvent(const QVariantMap& draft) {
   e.endDate = (span.endDate == span.date) ? QDate() : span.endDate;
   e.start = span.start;
   e.end = span.end;
+  const int prevRow = m_events.indexOfId(e.id);
+  const std::optional<CalEvent> before = prevRow >= 0 ? std::optional<CalEvent>(m_events.items().at(prevRow)) : std::nullopt;
   m_events.upsert(e);
+  if(before) {
+    followFocusBlock(*before, &e);
+  }
   scheduleSave();
 }
 
@@ -2335,8 +2431,14 @@ void AppController::updateEvent(const QString& id, double start, double end, con
     return;
   }
   CalEvent e = m_events.items().at(row);
+  const CalEvent before = e;
   // A drag on the calendar is an edit like any other: Ctrl+Z puts it back.
   const UndoScope scope(this, tr_("event.editUndone").arg(e.title));
+  // The grid speaks the viewer's clock. A zoned event is re-expressed in it
+  // before the drag is applied, or the new hours would be read in New York.
+  if(!e.tz.isEmpty() && e.rrule.isEmpty()) {
+    e = heap::cal::localized(e, QTimeZone::systemTimeZone());
+  }
 
   // Dragging a multi-day or all-day block moves the whole span: the grid can
   // only ever hand back one day's worth of hours, and reading them as the new
@@ -2344,7 +2446,7 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   // dropped on.
   const bool spans = e.allDay || (e.endDate.isValid() && e.endDate > e.date);
   if(spans) {
-    if(date.isValid() && e.date.isValid()) {
+    if(date.isValid() && e.date.isValid() && e.rrule.isEmpty()) {
       const qint64 shift = e.date.daysTo(date);
       e.date = date;
       if(e.endDate.isValid()) {
@@ -2352,6 +2454,7 @@ void AppController::updateEvent(const QString& id, double start, double end, con
       }
     }
     m_events.upsert(e);
+    followFocusBlock(before, &e);
     scheduleSave();
     return;
   }
@@ -2359,10 +2462,14 @@ void AppController::updateEvent(const QString& id, double start, double end, con
   const heap::cal::HourRange hours = heap::cal::clampHours(start, end, snapStepHours());
   e.start = hours.start;
   e.end = hours.end;
-  if(date.isValid()) {
+  // A series' date is its first occurrence. Handing it the day one later
+  // occurrence was dragged on re-dated the whole series and made every
+  // earlier one vanish; moving occurrences goes through moveOccurrence.
+  if(date.isValid() && e.rrule.isEmpty()) {
     e.date = date;
   }
   m_events.upsert(e);
+  followFocusBlock(before, &e);
   scheduleSave();
 }
 
@@ -2387,7 +2494,44 @@ QVariantMap occurrenceToVariant(const CalEvent& e) {
   m["rrule"] = e.rrule;
   m["masterId"] = e.masterId;
   m["originalDate"] = e.originalDate.isValid() ? QVariant(e.originalDate) : QVariant();
+  m["tz"] = e.tz;
+  m["location"] = e.location;
+  m["notes"] = e.notes;
+  m["url"] = e.url;
+  m["reminderMinutes"] = e.reminderMinutes;
   return m;
+}
+
+// The rule without its end: two rules that differ only in COUNT or UNTIL put
+// occurrences on the same days, so deletions and moved occurrences still
+// line up with the new one.
+QString rulePattern(const QString& text) {
+  heap::cal::RRule r = heap::cal::parseRRule(text);
+  if(!r.isValid()) {
+    return text;
+  }
+  r.count = 0;
+  r.until = QDate();
+  r.untilAt = QDateTime();
+  return heap::cal::toRRuleText(r);
+}
+
+// A weekly rule's weekdays follow its occurrence when the series is moved by
+// days: dragging Monday's meeting to Tuesday for "all events" makes it a
+// Tuesday meeting, not a Monday one with a Tuesday start.
+QString shiftWeekdays(const QString& text, qint64 days) {
+  heap::cal::RRule r = heap::cal::parseRRule(text);
+  const int shift = static_cast<int>(((days % 7) + 7) % 7);
+  if(!r.isValid() || shift == 0 || r.byDay.isEmpty() || (r.freq != heap::cal::RRule::Weekly && r.freq != heap::cal::RRule::Daily)) {
+    return text;
+  }
+  for(heap::cal::WeekdayNum& w : r.byDay) {
+    w.day = ((w.day - 1 + shift) % 7) + 1;
+  }
+  std::sort(r.byDay.begin(), r.byDay.end(), [](const heap::cal::WeekdayNum& a, const heap::cal::WeekdayNum& b) {
+    return a.ord != b.ord ? a.ord < b.ord : a.day < b.day;
+  });
+  return heap::cal::toRRuleText(r);
 }
 
 }  // namespace
@@ -2401,6 +2545,12 @@ QVariantList AppController::eventOccurrences(const QDate& from, const QDate& to)
   }
   for(const heap::cal::Occurrence& o : occurrences) {
     QVariantMap m = occurrenceToVariant(o.event);
+    // An occurrence of a series carries no rule of its own, and must not look
+    // as if it did: handed back to saveOccurrence, an empty "rrule" reads as
+    // "stop repeating". The rule is the master's (eventSeriesMaster).
+    if(!o.event.masterId.isEmpty()) {
+      m.remove("rrule");
+    }
     m["occurrenceDate"] = o.occurrenceDate;
     m["generated"] = o.generated;
     out.append(m);
@@ -2413,112 +2563,306 @@ QVariantMap AppController::eventSeriesMaster(const QString& masterId) const {
   return row >= 0 ? occurrenceToVariant(m_events.items().at(row)) : QVariantMap();
 }
 
+bool AppController::isValidRRule(const QString& rule) const {
+  return heap::cal::parseRRule(rule).isValid();
+}
+
+QVariantMap AppController::eventById(const QString& id) const {
+  const int row = m_events.indexOfId(id);
+  return row >= 0 ? occurrenceToVariant(m_events.items().at(row)) : QVariantMap();
+}
+
 void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
   const UndoScope editScope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   const QString masterId = draft.value("masterId").toString();
   const QDate original = draft.value("originalDate").toDate();
+  const int masterRow = masterId.isEmpty() ? -1 : m_events.indexOfId(masterId);
 
-  // Not part of a series, or the whole series is being rewritten: an ordinary
-  // save on the stored event.
-  if(masterId.isEmpty() || !original.isValid() || scope == QStringLiteral("all")) {
-    QVariantMap d = draft;
-    if(!masterId.isEmpty() && scope == QStringLiteral("all")) {
-      // Write through to the master, keeping its rule — the occurrence's id is
-      // the master's only when it came from the expansion.
-      const int row = m_events.indexOfId(masterId);
-      if(row >= 0) {
-        const CalEvent& m = m_events.items().at(row);
-        d["id"] = m.id;
-        d["rrule"] = m.rrule.isEmpty() ? draft.value("rrule") : m.rrule;
-        // Moving the whole series moves its anchor by the same number of days,
-        // so every other occurrence shifts with it rather than staying put.
-        const QDate newDate = draft.value("date").toDate();
-        if(newDate.isValid() && original.isValid() && m.date.isValid()) {
-          d["date"] = m.date.addDays(original.daysTo(newDate));
-        }
-        d["masterId"] = QString();
-        d["originalDate"] = QVariant();
-      }
-    }
-    saveEvent(d);
-    return;
-  }
-
-  const int masterRow = m_events.indexOfId(masterId);
-  if(masterRow < 0) {
-    return;
-  }
-
-  if(scope == QStringLiteral("following")) {
-    // Split the series: the old master stops the day before this occurrence,
-    // and a new one starts here carrying the edit. Every occurrence already
-    // moved or deleted before the split keeps pointing at the old master, so
-    // history is preserved rather than rewritten.
-    CalEvent master = m_events.items().at(masterRow);
-    heap::cal::RRule rule = heap::cal::parseRRule(master.rrule);
-    if(rule.isValid()) {
-      rule.until = original.addDays(-1);
-      rule.count = 0;  // an UNTIL and a COUNT together would fight
-      master.rrule = heap::cal::toRRuleText(rule);
-    }
-
-    QVariantMap d = draft;
-    const QString newId = mintEventId();
-    d["id"] = newId;
-    d["rrule"] = m_events.items().at(masterRow).rrule;
-    d["masterId"] = QString();
-    d["originalDate"] = QVariant();
-    // Occurrences the user had already deleted after the split point belong to
-    // the new half. Without this they come back, which is the one thing a
-    // deletion must never do.
-    QVector<QDate> carried;
-    for(const QDate& d0 : m_events.items().at(masterRow).exdates) {
-      if(d0 >= original) {
-        carried.append(d0);
-      }
-    }
-
-    const UndoScope undo(this, tr_("undo.splitSeries"));
-    // The old master is truncated first: if the split lands on its very first
-    // occurrence there is nothing left of it, and it goes rather than lingering
-    // as an empty series.
-    if(rule.isValid() && master.date.isValid() && rule.until < master.date) {
-      m_events.removeById(master.id);
-    } else {
-      // The old half keeps only the deletions that fall before the split.
-      QVector<QDate> kept;
-      for(const QDate& d0 : master.exdates) {
-        if(d0 < original) {
-          kept.append(d0);
-        }
-      }
-      master.exdates = kept;
-      m_events.upsert(master);
-    }
-    saveEvent(d);
-    if(!carried.isEmpty()) {
-      const int row = m_events.indexOfId(newId);
-      if(row >= 0) {
-        CalEvent fresh = m_events.items().at(row);
-        fresh.exdates = carried;
-        m_events.upsert(fresh);
-      }
+  // Not part of a series (or the series is gone): an ordinary save.
+  if(masterId.isEmpty() || !original.isValid() || masterRow < 0) {
+    if(masterId.isEmpty() || scope == QStringLiteral("all")) {
+      saveEvent(draft);
     }
     return;
   }
+  const CalEvent master = m_events.items().at(masterRow);
 
   // "this": one occurrence, stored as an override that names the date it
-  // replaces. The master is untouched, so the rest of the series does not move.
-  QVariantMap d = draft;
-  const int existing = m_events.indexOfId(draft.value("id").toString());
-  const bool isStoredOverride = existing >= 0 && !m_events.items().at(existing).masterId.isEmpty();
-  if(!isStoredOverride) {
-    d["id"] = mintEventId();
+  // replaces. The master is untouched, so the rest of the series does not
+  // move. The draft is in the viewer's clock, so the override floats.
+  if(scope != QStringLiteral("all") && scope != QStringLiteral("following")) {
+    QVariantMap d = draft;
+    const int existing = m_events.indexOfId(draft.value("id").toString());
+    const bool isStoredOverride = existing >= 0 && !m_events.items().at(existing).masterId.isEmpty();
+    if(!isStoredOverride) {
+      d["id"] = mintEventId();
+    }
+    d["rrule"] = QString();
+    d["masterId"] = masterId;
+    d["originalDate"] = original;
+    d["tz"] = QString();
+    saveEvent(d);
+    return;
   }
-  d["rrule"] = QString();
-  d["masterId"] = masterId;
-  d["originalDate"] = original;
-  saveEvent(d);
+
+  // The edited occurrence, written in the series' own clock. For a floating
+  // series that is the draft as given; for one that kept its source zone the
+  // viewer's hours are converted back into it.
+  const QTimeZone zone = heap::cal::zoneOf(master);
+  const bool allDay = draft.value("allDay").toBool();
+  QDate newDate = draft.value("date").toDate();
+  double newStart = draft.value("start").toDouble();
+  QDate newEndDate = draft.value("endDate").toDate();
+  if(!newEndDate.isValid() || newEndDate < newDate) {
+    newEndDate = newDate;
+  }
+  double newEnd = draft.value("end").toDouble();
+  if(zone.isValid() && !allDay) {
+    const QTimeZone local = QTimeZone::systemTimeZone();
+    heap::cal::toZoneWall(newDate, newStart, local, zone, &newDate, &newStart);
+    heap::cal::toZoneWall(newEndDate, newEnd, local, zone, &newEndDate, &newEnd);
+    if(newEnd <= 1e-9 && newEndDate > newDate) {
+      newEndDate = newEndDate.addDays(-1);
+      newEnd = 24.0;
+    }
+  }
+  const qint64 lengthDays = newDate.isValid() ? std::max<qint64>(0, newDate.daysTo(newEndDate)) : 0;
+  const qint64 dayShift = (newDate.isValid() && original.isValid()) ? original.daysTo(newDate) : 0;
+  // The rule as the editor now has it. A draft that does not mention one
+  // (a drag) keeps the series' own.
+  const QString draftRule = draft.contains("rrule") ? draft.value("rrule").toString() : master.rrule;
+
+  const auto applyDraftFields = [&](CalEvent& e) {
+    e.title = draft.value("title").toString();
+    e.type = draft.value("type").toString();
+    e.attendees = draft.value("attendees").toString();
+    e.context = draft.value("context").toString();
+    e.allDay = allDay;
+    e.start = newStart;
+    e.end = newEnd;
+    for(const char* key : {"location", "notes", "url"}) {
+      if(draft.contains(QLatin1String(key))) {
+        const QString v = draft.value(QLatin1String(key)).toString();
+        if(qstrcmp(key, "location") == 0) {
+          e.location = v;
+        } else if(qstrcmp(key, "notes") == 0) {
+          e.notes = v;
+        } else {
+          e.url = v;
+        }
+      }
+    }
+    if(draft.contains("reminderMinutes") && draft.value("reminderMinutes").isValid()) {
+      e.reminderMinutes = draft.value("reminderMinutes").toInt();
+    }
+  };
+  // Every override of this master whose occurrence is on or after `from`.
+  const auto overridesFrom = [&](const QDate& from) {
+    QStringList ids;
+    for(const CalEvent& e : m_events.items()) {
+      if(e.masterId == masterId && e.originalDate.isValid() && e.originalDate >= from) {
+        ids << e.id;
+      }
+    }
+    return ids;
+  };
+
+  if(scope == QStringLiteral("all")) {
+    CalEvent m = master;
+    applyDraftFields(m);
+    if(draftRule.isEmpty()) {
+      // The repeat was removed: what is left is one event, the occurrence the
+      // user was looking at. The series' exceptions have nothing to except.
+      m.rrule.clear();
+      m.exdates.clear();
+      m.date = newDate;
+      m.endDate = lengthDays > 0 ? newDate.addDays(lengthDays) : QDate();
+      for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
+        m_events.removeById(id);
+      }
+      storeEvent(m);
+      return;
+    }
+    // Moving one occurrence of "all" moves the anchor by the same number of
+    // days, and the end with it — the end used to stay behind, so every
+    // occurrence became a multi-day event.
+    m.date = master.date.addDays(dayShift);
+    m.endDate = lengthDays > 0 ? m.date.addDays(lengthDays) : QDate();
+    const QString shiftedOld = shiftWeekdays(master.rrule, dayShift);
+    const bool patternChanged = rulePattern(draftRule) != rulePattern(master.rrule) && rulePattern(draftRule) != rulePattern(shiftedOld);
+    m.rrule = (draftRule == master.rrule) ? shiftedOld : draftRule;
+    if(patternChanged) {
+      // New days: the old deletions and moves were about other dates.
+      m.exdates.clear();
+      for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
+        m_events.removeById(id);
+      }
+    } else if(dayShift != 0) {
+      // The same series a few days later: its exceptions move with it, or a
+      // deleted occurrence would come back and a moved one would revert.
+      for(QDate& d : m.exdates) {
+        d = d.addDays(dayShift);
+      }
+      for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
+        CalEvent ov = m_events.items().at(m_events.indexOfId(id));
+        ov.originalDate = ov.originalDate.addDays(dayShift);
+        m_events.upsert(ov);
+      }
+    }
+    storeEvent(m);
+    return;
+  }
+
+  // "following": split the series. The old master stops the day before this
+  // occurrence and a new one starts here carrying the edit. Deletions and
+  // moved occurrences before the split stay with the old half; those after it
+  // go to the new one, so nothing already changed comes back or reverts.
+  heap::cal::RRule oldRule = heap::cal::parseRRule(master.rrule);
+  CalEvent head = master;
+  int usedBefore = 0;
+  if(oldRule.isValid()) {
+    usedBefore = static_cast<int>(heap::cal::expand(oldRule, master.date, master.date, original.addDays(-1)).size());
+    oldRule.endOn(original.addDays(-1));
+    head.rrule = heap::cal::toRRuleText(oldRule);
+  }
+  QVector<QDate> kept;
+  QVector<QDate> carried;
+  for(const QDate& d0 : master.exdates) {
+    (d0 < original ? kept : carried).append(d0);
+  }
+  head.exdates = kept;
+
+  CalEvent tail = master;
+  applyDraftFields(tail);
+  tail.id = mintEventId();
+  tail.masterId.clear();
+  tail.originalDate = QDate();
+  tail.date = newDate;
+  tail.endDate = lengthDays > 0 ? newDate.addDays(lengthDays) : QDate();
+  tail.exdates.clear();
+  // The new half repeats by the editor's rule. A COUNT carried over from the
+  // old one is what is LEFT of it: a ten-time series split at the sixth is
+  // five more, not ten more.
+  heap::cal::RRule tailRule = heap::cal::parseRRule(draftRule == master.rrule ? shiftWeekdays(master.rrule, dayShift) : draftRule);
+  const bool samePattern = rulePattern(draftRule) == rulePattern(master.rrule);
+  if(tailRule.isValid() && samePattern && tailRule.count > 0 && draftRule == master.rrule) {
+    tailRule.count = std::max(1, tailRule.count - usedBefore);
+  }
+  tail.rrule = tailRule.isValid() ? heap::cal::toRRuleText(tailRule) : QString();
+  if(!tail.rrule.isEmpty() && samePattern) {
+    for(const QDate& d0 : carried) {
+      tail.exdates.append(d0.addDays(dayShift));
+    }
+  }
+
+  const UndoScope undo(this, tr_("undo.splitSeries"));
+  for(const QString& id : overridesFrom(original)) {
+    CalEvent ov = m_events.items().at(m_events.indexOfId(id));
+    if(tail.rrule.isEmpty() || !samePattern || ov.originalDate == original) {
+      // The edited occurrence itself is replaced by the new half's first;
+      // a new pattern has other days; a single event has no occurrences.
+      m_events.removeById(id);
+      continue;
+    }
+    ov.masterId = tail.id;
+    ov.originalDate = ov.originalDate.addDays(dayShift);
+    m_events.upsert(ov);
+  }
+  // The split may land on the very first occurrence, and then there is
+  // nothing left of the old half: it goes rather than lingering empty.
+  if(oldRule.isValid() && master.date.isValid() && original <= master.date) {
+    m_events.removeById(master.id);
+  } else {
+    m_events.upsert(head);
+  }
+  storeEvent(tail);
+}
+
+void AppController::moveOccurrence(const QVariantMap& occurrence, double deltaHours, const QString& scope) {
+  const QString id = occurrence.value("id").toString();
+  if(id.isEmpty() || !std::isfinite(deltaHours)) {
+    return;
+  }
+  const bool allDay = occurrence.value("allDay").toBool();
+  const QDate date = occurrence.value("date").toDate();
+  if(!date.isValid()) {
+    return;
+  }
+  QDate endDate = occurrence.value("endDate").toDate();
+  if(!endDate.isValid() || endDate < date) {
+    endDate = date;
+  }
+  const double start = occurrence.value("start").toDouble();
+  const double end = occurrence.value("end").toDouble();
+
+  // The whole event moves by the drag, snapped: start and end as instants on
+  // the viewer's wall clock, so a piece after midnight moves the event it is
+  // part of instead of re-dating it.
+  const double step = snapStepHours();
+  const double delta = allDay ? std::round(deltaHours / 24.0) * 24.0 : std::round(deltaHours / step) * step;
+  if(std::abs(delta) < 1e-9) {
+    return;
+  }
+  const auto shifted = [&](const QDate& d, double h, QDate* outD, double* outH) {
+    const double total = h + delta;
+    const int days = static_cast<int>(std::floor(total / 24.0));
+    *outD = d.addDays(days);
+    *outH = total - (24.0 * days);
+  };
+  QDate nd;
+  QDate ned;
+  double ns = start;
+  double ne = end;
+  if(allDay) {
+    const int days = static_cast<int>(std::lround(delta / 24.0));
+    nd = date.addDays(days);
+    ned = endDate.addDays(days);
+  } else {
+    shifted(date, start, &nd, &ns);
+    shifted(endDate, end, &ned, &ne);
+    // An end on midnight belongs to the day before.
+    if(ne <= 1e-9 && ned > nd) {
+      ned = ned.addDays(-1);
+      ne = 24.0;
+    }
+  }
+
+  QVariantMap d = occurrence;
+  d["date"] = nd;
+  d["endDate"] = ned > nd ? QVariant(ned) : QVariant();
+  d["start"] = ns;
+  d["end"] = ne;
+  d.remove("rrule");  // a drag never changes the rule
+  if(d.value("masterId").toString().isEmpty()) {
+    // A single event: the stored row is the occurrence.
+    d.remove("occurrenceDate");
+    d.remove("generated");
+    saveEvent(d);
+    return;
+  }
+  d["originalDate"] = occurrence.contains("occurrenceDate") ? occurrence.value("occurrenceDate") : occurrence.value("originalDate");
+  saveOccurrence(d, scope);
+}
+
+void AppController::resizeOccurrence(const QVariantMap& occurrence, double start, double end, const QString& scope) {
+  const QString id = occurrence.value("id").toString();
+  if(id.isEmpty() || occurrence.value("allDay").toBool()) {
+    return;
+  }
+  const heap::cal::HourRange hours = heap::cal::clampHours(start, end, snapStepHours());
+  QVariantMap d = occurrence;
+  d["start"] = hours.start;
+  d["end"] = hours.end;
+  d["endDate"] = QVariant();
+  d.remove("rrule");
+  if(d.value("masterId").toString().isEmpty()) {
+    d.remove("occurrenceDate");
+    d.remove("generated");
+    saveEvent(d);
+    return;
+  }
+  d["originalDate"] = occurrence.contains("occurrenceDate") ? occurrence.value("occurrenceDate") : occurrence.value("originalDate");
+  saveOccurrence(d, scope);
 }
 
 void AppController::deleteOccurrence(const QString& masterId, const QDate& occurrenceDate, const QString& scope) {
@@ -2526,9 +2870,11 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
   if(masterRow < 0) {
     return;
   }
+  const QString title = m_events.items().at(masterRow).title;
 
   if(scope == QStringLiteral("all")) {
-    const UndoScope undo(this, tr_("undo.deleteSeries"));
+    UndoScope undo(this, tr_("undo.deleteSeries"));
+    undo.setRedoLabel(tr_("event.seriesDeleted").arg(title));
     // The overrides go with it: an override without its master is a ghost.
     QStringList doomed;
     for(const CalEvent& e : m_events.items()) {
@@ -2540,6 +2886,8 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
       m_events.removeById(id);
     }
     m_events.removeById(masterId);
+    // Like a single event's delete: said, and undoable from the toast.
+    emit undoableToast(tr_("event.seriesDeleted").arg(title), 5);
     scheduleSave();
     return;
   }
@@ -2552,7 +2900,8 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
 
   if(scope == QStringLiteral("following")) {
     heap::cal::RRule rule = heap::cal::parseRRule(master.rrule);
-    const UndoScope undo(this, tr_("undo.deleteFollowing"));
+    UndoScope undo(this, tr_("undo.deleteFollowing"));
+    undo.setRedoLabel(tr_("event.followingDeleted").arg(title));
     QStringList doomed;
     for(const CalEvent& e : m_events.items()) {
       if(e.masterId == masterId && e.originalDate.isValid() && e.originalDate >= occurrenceDate) {
@@ -2563,21 +2912,29 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
       m_events.removeById(id);
     }
     if(rule.isValid()) {
-      rule.until = occurrenceDate.addDays(-1);
-      rule.count = 0;
+      rule.endOn(occurrenceDate.addDays(-1));
       master.rrule = heap::cal::toRRuleText(rule);
     }
-    if(rule.isValid() && master.date.isValid() && rule.until < master.date) {
+    if(rule.isValid() && master.date.isValid() && occurrenceDate <= master.date) {
       m_events.removeById(master.id);
     } else {
+      QVector<QDate> kept;
+      for(const QDate& d0 : master.exdates) {
+        if(d0 < occurrenceDate) {
+          kept.append(d0);
+        }
+      }
+      master.exdates = kept;
       m_events.upsert(master);
     }
+    emit undoableToast(tr_("event.followingDeleted").arg(title), 5);
     scheduleSave();
     return;
   }
 
   // "this": remember the hole rather than rewriting the series.
-  const UndoScope undo(this, tr_("undo.deleteOccurrence"));
+  UndoScope undo(this, tr_("undo.deleteOccurrence"));
+  undo.setRedoLabel(tr_("event.deleted").arg(title));
   QStringList doomed;
   for(const CalEvent& e : m_events.items()) {
     if(e.masterId == masterId && e.originalDate == occurrenceDate) {
@@ -2592,6 +2949,7 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
     std::sort(master.exdates.begin(), master.exdates.end());
   }
   m_events.upsert(master);
+  emit undoableToast(tr_("event.deleted").arg(title), 5);
   scheduleSave();
 }
 
@@ -2610,23 +2968,51 @@ QVariantMap AppController::importIcs(const QUrl& fileUrl) {
   }
   const heap::cal::IcsImport parsed = heap::cal::parseIcs(QString::fromUtf8(f.readAll()));
   f.close();
+  // A file with no calendar in it is an error to name, not "0 imported".
+  if(!parsed.recognised) {
+    out["error"] = tr_("ics.error.notCalendar");
+    return out;
+  }
 
   int imported = 0;
   int updated = 0;
   {
     // One undo step for the whole file: an import that brought in forty events
     // is one thing the user did, and undoing it forty times is not a feature.
-    const UndoScope scope(this, tr_("undo.importIcs"));
+    UndoScope scope(this, tr_("undo.importIcs"));
     for(const CalEvent& incoming : parsed.events) {
       CalEvent e = incoming;
       // The UID is what makes importing the same file twice an update rather
       // than a second copy of everybody's calendar.
       const int existing = m_events.indexOfId(e.id);
       if(existing >= 0) {
-        // Attribution is heap's, not the file's: a re-import must not move an
-        // event out of the profile the user filed it under.
-        e.profileId = m_events.items().at(existing).profileId;
-        e.taskId = m_events.items().at(existing).taskId;
+        const CalEvent& was = m_events.items().at(existing);
+        // What heap knows and the file does not stays heap's: attribution,
+        // the task link, the kind of event (a focus block must not turn into
+        // a meeting that reminds), and anything the file left blank.
+        e.profileId = was.profileId;
+        e.taskId = was.taskId;
+        if(incoming.type == QStringLiteral("sync") && !was.type.isEmpty()) {
+          e.type = was.type;
+        }
+        if(e.attendees.isEmpty()) {
+          e.attendees = was.attendees;
+        }
+        if(e.context.isEmpty()) {
+          e.context = was.context;
+        }
+        if(e.notes.isEmpty()) {
+          e.notes = was.notes;
+        }
+        if(e.url.isEmpty()) {
+          e.url = was.url;
+        }
+        if(e.location.isEmpty()) {
+          e.location = was.location;
+        }
+        if(e.reminderMinutes == CalEvent::kReminderDefault) {
+          e.reminderMinutes = was.reminderMinutes;
+        }
         updated++;
       } else {
         e.profileId = m_activeProfileId;
@@ -2634,6 +3020,7 @@ QVariantMap AppController::importIcs(const QUrl& fileUrl) {
       }
       m_events.upsert(e);
     }
+    scope.setRedoLabel(tr_("ics.reimported").arg(imported + updated));
   }
   if(imported > 0 || updated > 0) {
     scheduleSave();
@@ -3261,13 +3648,58 @@ QString AppController::scheduledLabelFor(const QString& taskId, const QDate& dat
   return eventHourLabel(earliest);
 }
 
+QVariantList AppController::calendarTasks(const QDate& from, const QDate& to, bool includeArchived) const {
+  QVariantList out;
+  if(!from.isValid() || !to.isValid() || to < from) {
+    return out;
+  }
+  const auto& items = m_tasks.items();
+  for(int i = 0; i < items.size(); ++i) {
+    const Task& t = items.at(i);
+    if(t.archived && !includeArchived) {
+      continue;
+    }
+    const QDate due = t.dueAt.isValid() ? t.dueAt.date() : QDate();
+    const QDate sched = t.scheduledAt.isValid() ? t.scheduledAt.date() : QDate();
+    const bool dueIn = due.isValid() && due >= from && due <= to;
+    const bool schedIn = sched.isValid() && sched >= from && sched <= to;
+    if(!dueIn && !schedIn) {
+      continue;
+    }
+    const QModelIndex idx = m_tasks.index(i, 0);
+    QVariantMap m;
+    m["id"] = t.id;
+    m["title"] = t.title;
+    m["desc"] = t.desc;
+    m["priority"] = t.priority;
+    m["status"] = t.status;
+    m["deadline"] = due.isValid() ? QVariant(due) : QVariant();
+    m["dueAt"] = t.dueAt;
+    m["scheduledAt"] = t.scheduledAt;
+    m["hasTime"] = t.dueHasTime;
+    m["dueHasTime"] = t.dueHasTime;
+    m["scheduledHasTime"] = t.scheduledHasTime;
+    m["archived"] = t.archived;
+    m["estimateMinutes"] = t.estimateMinutes;
+    m["searchText"] = m_tasks.data(idx, TaskModel::SearchTextRole);
+    m["ticket"] = m_tasks.data(idx, TaskModel::TicketRole);
+    m["dueDay"] = dueIn ? static_cast<int>(from.daysTo(due)) : -1;
+    m["schedDay"] = schedIn ? static_cast<int>(from.daysTo(sched)) : -1;
+    // A scheduled clock time, as an hour, or -1 when the schedule is a date.
+    m["schedHour"] = (schedIn && t.scheduledHasTime) ? t.scheduledAt.time().hour() + (t.scheduledAt.time().minute() / 60.0) : -1.0;
+    out.append(m);
+  }
+  return out;
+}
+
 void AppController::deleteEvent(const QString& id) {
   const int row = m_events.indexOfId(id);
   if(row < 0) {
     return;
   }
   const CalEvent removedEvent = m_events.items().at(row);
-  const UndoScope scope(this, tr_("event.restored").arg(removedEvent.title));
+  UndoScope scope(this, tr_("event.restored").arg(removedEvent.title));
+  scope.setRedoLabel(tr_("event.deleted").arg(removedEvent.title));
   // A QuickCapture "sync" is one thing shown twice: the meeting event and the
   // task that mirrors it on the board. Deleting the meeting must take the mirror
   // task with it, else the user has to hunt it down separately (HEAP-104). Only
@@ -3291,8 +3723,20 @@ void AppController::deleteEvent(const QString& id) {
     }
   }
   m_events.removeById(id);
+  followFocusBlock(removedEvent, nullptr);
   emit undoableToast(tr_("event.deleted").arg(ev.title), 5);
   scheduleSave();
+}
+
+int AppController::taskBlockMinutes(const QString& taskId) const {
+  // Length comes from the task's own estimate when it has one: dropping a
+  // 20-minute chore onto the calendar used to carve out a full hour regardless.
+  // Without an estimate, the focus-block duration from settings is the better
+  // guess than a hardcoded 60 minutes.
+  const int row = m_tasks.indexOfId(taskId);
+  const int fallbackMin = settingsMap().value("calendar").toMap().value("focusBlockDuration", 90).toInt();
+  const int est = row >= 0 ? m_tasks.items().at(row).estimateMinutes : 0;
+  return est > 0 ? est : qMax(15, fallbackMin);
 }
 
 void AppController::scheduleTask(const QString& taskId, double startHour, const QDate& date) {
@@ -3305,12 +3749,7 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   // The block and the task's new scheduledAt are one action (TIME-12).
   const UndoScope scope(this, tr_("undo.schedule").arg(t.id));
 
-  // Length comes from the task's own estimate when it has one: dropping a
-  // 20-minute chore onto the calendar used to carve out a full hour regardless.
-  // Without an estimate, the focus-block duration from settings is the better
-  // guess than a hardcoded 60 minutes.
-  const int fallbackMin = settingsMap().value("calendar").toMap().value("focusBlockDuration", 90).toInt();
-  const int durMin = t.estimateMinutes > 0 ? t.estimateMinutes : fallbackMin;
+  const int durMin = taskBlockMinutes(taskId);
   const double step = snapStepHours();
   const heap::cal::HourRange hours = heap::cal::clampHours(startHour, startHour + durMin / 60.0, step);
 
@@ -3338,6 +3777,41 @@ void AppController::scheduleTask(const QString& taskId, double startHour, const 
   scheduleSave();
 }
 
+void AppController::scheduleTaskAtNextFreeSlot(const QString& taskId, const QDate& date) {
+  const QDate day = date.isValid() ? date : m_selectedDate;
+  // The gap is looked for with the length the block will actually have; it
+  // used to search for an hour and then book ninety minutes over a meeting.
+  const double hours = taskBlockMinutes(taskId) / 60.0;
+  scheduleTask(taskId, nextFreeSlot(day, hours), day);
+}
+
+void AppController::followFocusBlock(const CalEvent& before, const CalEvent* after) {
+  if(before.type != QStringLiteral("focus") || before.taskId.isEmpty()) {
+    return;
+  }
+  const int row = m_tasks.indexOfId(before.taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  const QDateTime was(before.date, heap::cal::hourToTime(before.start));
+  // Only a schedule that came from this block follows it: a task the user
+  // scheduled for some other time keeps that time.
+  if(t.scheduledAt.isValid() && t.scheduledAt != was) {
+    return;
+  }
+  if(after != nullptr) {
+    t.scheduledAt = QDateTime(after->date, heap::cal::hourToTime(after->start));
+    t.scheduledHasTime = true;
+  } else {
+    // The block is gone: the task has no slot any more and goes back to the
+    // "needs a slot" rail.
+    t.scheduledAt = QDateTime();
+    t.scheduledHasTime = false;
+  }
+  m_tasks.upsert(t);
+}
+
 double AppController::nextFreeSlot(const QDate& date, double durationHours) const {
   const double step = snapStepHours();
   const double dur = qMax(step, durationHours);
@@ -3351,13 +3825,21 @@ double AppController::nextFreeSlot(const QDate& date, double durationHours) cons
   }
   cursor = std::ceil(cursor / step) * step;
 
-  // Walk the day's existing events in start order, stepping past any that the
-  // candidate would overlap.
+  // What is on the calendar that day: the occurrences, so a daily standup and
+  // a meeting that started yesterday evening count. An all-day event is a
+  // label on the day (a holiday, a release), not time taken.
   QVector<QPair<double, double>> busy;
-  for(const CalEvent& e : m_events.items()) {
-    if(e.date == date) {
-      busy.append({e.start, e.end});
+  for(const CalEvent& e : heap::cal::expandedEvents(m_events.items(), date, date)) {
+    if(e.allDay || !e.date.isValid()) {
+      continue;
     }
+    const QDate last = (e.endDate.isValid() && e.endDate > e.date) ? e.endDate : e.date;
+    if(date < e.date || date > last) {
+      continue;
+    }
+    const double from = (e.date < date) ? 0.0 : e.start;
+    const double to = (last > date) ? 24.0 : e.end;
+    busy.append({from, to});
   }
   std::sort(busy.begin(), busy.end());
   for(const auto& b : busy) {
@@ -4707,6 +5189,7 @@ AppController::UndoScope::~UndoScope() {
   heap::undo::Entry entry;
   entry.label = m_label;
   entry.serial = m_serial;
+  entry.redoLabel = m_redoLabel;
   entry.tasks = heap::undo::diff(m_tasks, m_owner->m_tasks.items(), [](const ::Task& t) {
     return t.id;
   });
@@ -4931,7 +5414,7 @@ void AppController::redo() {
   const heap::undo::Entry copy = *entry;
   applyUndoEntry(copy, /*backward=*/false);
   emit pendingUndoChanged();
-  emit toast(copy.label);
+  emit toast(copy.redoLabel.isEmpty() ? tr_("undo.redone") : copy.redoLabel);
   scheduleSave();
 }
 
@@ -8788,6 +9271,11 @@ void AppController::seedShortcutCatalog() {
   add("notes.prev", "Ctrl+PgUp");
   add("notes.rename", "F2");
   add("notes.toggleList", "Ctrl+Alt+L");
+  // A day at a time, in any view the day panel sits beside; and a new event
+  // from the keyboard, at the next free slot of the selected day.
+  add("cal.prevDay", "Alt+Left");
+  add("cal.nextDay", "Alt+Right");
+  add("cal.newEvent", "Ctrl+Alt+E");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;
@@ -9092,6 +9580,9 @@ void AppController::setArchived(const QString& taskId, bool archived) {
   // without this function knowing anything about undo.
   const UndoScope scope(this, tr_("task.archiveUndone").arg(taskId));
   m_tasks.setArchived(taskId, archived);
+  if(archived) {
+    dropFutureFocusBlocks(taskId);
+  }
 
   emit undoableToast(tr_(archived ? "task.archived" : "task.unarchived").arg(taskId), 5);
   scheduleSave();
@@ -9277,6 +9768,9 @@ void AppController::setSelectedTasksArchived(bool archived) {
       continue;
     }
     m_tasks.setArchived(id, archived);
+    if(archived) {
+      dropFutureFocusBlocks(id);
+    }
     ++n;
   }
   if(n > 0) {
@@ -9302,15 +9796,8 @@ bool AppController::inQuietHours(const QDateTime& when) const {
   }
   const QTime from = QTime::fromString(notif.value("quietFrom", "19:00").toString(), "HH:mm");
   const QTime to = QTime::fromString(notif.value("quietTo", "09:00").toString(), "HH:mm");
-  if(!from.isValid() || !to.isValid()) {
-    return false;
-  }
-  const QTime now = when.time();
-  if(from <= to) {
-    return now >= from && now < to;
-  }
-  // Window wraps midnight (e.g. 19:00..09:00).
-  return now >= from || now < to;
+  // The window wraps midnight in the usual case (19:00..09:00).
+  return heap::cal::inQuietWindow(from, to, when.time());
 }
 
 double AppController::nextQuarterHour(const QDateTime& when) {
@@ -9318,6 +9805,51 @@ double AppController::nextQuarterHour(const QDateTime& when) {
   const double cur = t.hour() + t.minute() / 60.0;
   const double q = std::ceil(cur * 4.0) / 4.0;
   return std::min(q, 24.0);
+}
+
+bool AppController::isDoingStatus(const QString& statusId) const {
+  if(statusId == QStringLiteral("prog")) {
+    return true;
+  }
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    if(m.value("id").toString() == statusId) {
+      return m.value("doing").toBool();
+    }
+  }
+  return false;
+}
+
+void AppController::setStatusDoing(const QString& statusId, bool doing) {
+  for(int i = 0; i < m_statuses.size(); ++i) {
+    QVariantMap m = m_statuses.at(i).toMap();
+    if(m.value("id").toString() != statusId) {
+      continue;
+    }
+    if(m.value("doing").toBool() == doing) {
+      return;
+    }
+    const UndoScope scope(this, tr_("status.doingUndone").arg(m.value("name").toString()));
+    m["doing"] = doing;
+    m_statuses[i] = m;
+    emit statusesChanged();
+    scheduleSave();
+    return;
+  }
+}
+
+void AppController::focusBlockOnStatusChange(const QString& taskId, const QString& from, const QString& to) {
+  const bool wasDoing = !from.isEmpty() && isDoingStatus(from);
+  const bool isDoing = isDoingStatus(to);
+  if(isDoing && !wasDoing) {
+    if(settingsMap().value("calendar").toMap().value("autoFocusBlock", true).toBool()) {
+      scheduleFocusBlockFor(taskId);
+    }
+  } else if(wasDoing && !isDoing) {
+    // Time set aside for work that stopped being in progress — finished, put
+    // back, parked in review — is time given back.
+    dropFutureFocusBlocks(taskId);
+  }
 }
 
 void AppController::scheduleFocusBlockFor(const QString& taskId) {
@@ -9341,7 +9873,7 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
   // coming week. A Saturday-night drag used to book 21:00 that same night.
   for(int offset = 0; offset < 7; ++offset) {
     const QDate day = now.date().addDays(offset);
-    if(day.dayOfWeek() > 5) {
+    if(!isWorkDay(day)) {
       continue;
     }
     const double start = nextFreeSlot(day, dur);
@@ -9358,6 +9890,14 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
     e.taskId = taskId;
     e.profileId = m_activeProfileId;
     m_events.upsert(e);
+    // The task is scheduled for the block, unless it already has a time of
+    // its own. Otherwise the week and the rail still said "needs a slot".
+    Task copy = m_tasks.items().at(row);
+    if(!copy.scheduledAt.isValid()) {
+      copy.scheduledAt = QDateTime(day, heap::cal::hourToTime(start));
+      copy.scheduledHasTime = true;  // the deadline keeps its own flag (schema v10)
+      m_tasks.upsert(copy);
+    }
     scheduleSave();
     return;
   }
@@ -9365,14 +9905,15 @@ void AppController::scheduleFocusBlockFor(const QString& taskId) {
 
 void AppController::dropFutureFocusBlocks(const QString& taskId) {
   const QDateTime now = QDateTime::currentDateTime();
-  QStringList doomed;
+  QVector<CalEvent> doomed;
   for(const CalEvent& e : m_events.items()) {
     if(e.taskId == taskId && e.type == QStringLiteral("focus") && QDateTime(e.date, heap::cal::hourToTime(e.start)) > now) {
-      doomed.append(e.id);
+      doomed.append(e);
     }
   }
-  for(const QString& id : doomed) {
-    m_events.removeById(id);
+  for(const CalEvent& e : doomed) {
+    m_events.removeById(e.id);
+    followFocusBlock(e, nullptr);
   }
   if(!doomed.isEmpty()) {
     scheduleSave();
@@ -9380,7 +9921,13 @@ void AppController::dropFutureFocusBlocks(const QString& taskId) {
 }
 
 void AppController::runAutomation() {
-  const QDateTime now = QDateTime::currentDateTime();
+  runAutomationAt(QDateTime::currentDateTime());
+}
+
+void AppController::runAutomationAt(const QDateTime& now) {
+  // The minute tick is also what notices that the date moved on — after
+  // midnight, a sleep or a time-zone change.
+  refreshToday(now.date());
   const QDate today = now.date();
   const QVariantMap s = settingsMap();
   const QVariantMap tasksCfg = s.value("tasks").toMap();
@@ -9428,8 +9975,8 @@ void AppController::runAutomation() {
   // 1b. Daily digest of blocked-stuck tasks — one notification per day.
   if(notif.value("blockedDailyDigest", false).toBool() && !stuckEverywhere.isEmpty()) {
     const QString sentinel = QStringLiteral("digest:") + today.toString(Qt::ISODate);
-    if(m_lastReminderDay.value(sentinel) != today) {
-      m_lastReminderDay[sentinel] = today;
+    if(!reminderSent(sentinel)) {
+      markReminderSent(sentinel, now);
       QStringList ids;
       ids.reserve(stuckEverywhere.size());
       for(const QString& id : stuckEverywhere) {
@@ -9462,6 +10009,7 @@ void AppController::runAutomation() {
     }
     for(const QString& id : toArchive) {
       m_tasks.setArchived(id, true);
+      dropFutureFocusBlocks(id);
       persistedAny = true;
     }
     for(Profile& p : m_profiles) {
@@ -9480,8 +10028,15 @@ void AppController::runAutomation() {
     scheduleSave();
   }
 
-  // 3. Deadline reminders — at most one per task per day.
-  if(notif.value("deadlineReminders", true).toBool()) {
+  // Reminders are held, not dropped, while quiet hours last: nothing below
+  // marks a reminder sent until it is delivered, and each stays due until
+  // shortly after what it is about, so the first tick after the quiet window
+  // delivers it. A meeting or the standup is an appointment and is not held.
+  const bool quiet = inQuietHours(now);
+
+  // 3. Deadline reminders — once when the deadline comes inside the lead, once
+  // more when it has passed.
+  if(notif.value("deadlineReminders", true).toBool() && !quiet) {
     const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
     QVector<Task> candidates = m_tasks.items();
     for(const Profile& p : m_profiles) {
@@ -9502,60 +10057,167 @@ void AppController::runAutomation() {
       // A task due at a parsed clock time fires then; a bare due date keeps the
       // old end-of-day horizon.
       const QDateTime deadlineAt = t.dueHasTime ? t.dueAt : QDateTime(t.dueAt.date(), QTime(23, 59));
-      const qint64 hoursLeft = now.secsTo(deadlineAt) / 3600;
-      if(hoursLeft < 0 || hoursLeft > leadHours) {
+      const heap::cal::DeadlineCall call = heap::cal::deadlineReminder(t.id, deadlineAt, now, leadHours);
+      if(!call.due || reminderSent(call.key)) {
         continue;
       }
-      const QString sentinel = QStringLiteral("dl:") + t.id;
-      if(m_lastReminderDay.value(sentinel) == today) {
-        continue;
-      }
-      m_lastReminderDay[sentinel] = today;
-      const QString when = (hoursLeft <= 1) ? tr_("notify.deadlineWhen.h1") : tr_("notify.deadlineWhen.hN").arg(hoursLeft);
-      notifyTask(
-          t.id, tr_("notify.deadlineTitle").arg(when), QStringLiteral("%1 (%2)").arg(t.title, t.priority), QStringLiteral("deadline"));
+      markReminderSent(call.key, now);
+      const QString when = call.overdue
+                               ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
+                           : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
+                                               : tr_("notify.deadlineWhen.hN").arg(call.hours);
+      notifyTask(t.id,
+                 call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
+                 QStringLiteral("%1 (%2)").arg(t.title, t.priority),
+                 QStringLiteral("deadline"));
     }
   }
 
-  // 4. Meeting reminders — one per event per day.
+  // 4. Meeting reminders — one per occurrence.
   //
   // heap had a "minutes before a meeting" setting and exactly one meeting it
   // applied to: the standup, at a fixed time from settings. Every real event
   // in the calendar went unannounced, which made the setting read like a
-  // promise the app did not keep.
+  // promise the app did not keep. The occurrences are what is on the calendar
+  // — a series is one stored row, and a deleted occurrence is not a meeting —
+  // and tomorrow is included, for a 00:05 call and a 23:55 reminder.
   if(notif.value("meetingReminders", true).toBool()) {
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
-    // Which meetings are inside the window is a pure question of the clock and
-    // the events; see src/cal/Reminders.h. Only the once-per-day bookkeeping
-    // is AppController's, because it owns the sentinel map that survives ticks.
-    for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(m_events.items(), now, lead)) {
-      // Keyed by event and day: an event that recurs gets one reminder per
-      // occurrence, and a restart inside the lead window does not repeat it.
-      const QString sentinel = QStringLiteral("ev:%1:%2").arg(due.eventId, today.toString(Qt::ISODate));
-      if(m_lastReminderDay.value(sentinel) == today) {
-        continue;
-      }
-      m_lastReminderDay[sentinel] = today;
+    const QVector<CalEvent> occurrences = heap::cal::expandedEvents(m_events.items(), today.addDays(-1), today.addDays(1));
+    for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(occurrences, now, lead, sentReminderKeys())) {
+      markReminderSent(due.key, now);
       const QString title = due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(due.minutesLeft);
       notify(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"));
     }
   }
 
-  // 5. Standup reminder.
-  if(notif.value("standupReminder", true).toBool()) {
+  // 5. Standup reminder, on working days only.
+  if(notif.value("standupReminder", true).toBool() && isWorkDay(today)) {
     const QVariantMap cal = s.value("calendar").toMap();
     const QTime standup = QTime::fromString(cal.value("standupTime", "10:00").toString(), "HH:mm");
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
     if(standup.isValid()) {
-      const QDateTime atDt(today, standup);
-      const qint64 minsLeft = now.secsTo(atDt) / 60;
-      if(minsLeft >= 0 && minsLeft <= lead) {
-        const QString sentinel = QStringLiteral("standup:%1").arg(today.toString(Qt::ISODate));
-        if(m_lastReminderDay.value(sentinel) != today) {
-          m_lastReminderDay[sentinel] = today;
-          notify(tr_("notify.standupTitle"), tr_("notify.standupBody").arg(minsLeft), QStringLiteral("standup"));
-        }
+      CalEvent st;
+      st.id = QStringLiteral("standup");
+      st.title = tr_("notify.standupTitle");
+      st.type = QStringLiteral("standup");
+      st.date = today;
+      st.start = standup.hour() + (standup.minute() / 60.0);
+      st.end = st.start + 0.25;
+      for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders({st}, now, lead, sentReminderKeys())) {
+        markReminderSent(due.key, now);
+        notify(tr_("notify.standupTitle"),
+               due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.standupBody").arg(due.minutesLeft),
+               QStringLiteral("standup"));
       }
+    }
+  }
+
+  // Anything else that arrived during quiet hours goes out now.
+  if(!quiet) {
+    flushHeldNotifications();
+  }
+}
+
+bool AppController::isWorkDay(const QDate& day) const {
+  // calendar.workDays: Qt weekday numbers (Mon=1 … Sun=7). Absent means the
+  // usual Monday to Friday.
+  const QVariantList days = settingsMap().value("calendar").toMap().value("workDays").toList();
+  if(days.isEmpty()) {
+    return day.dayOfWeek() <= 5;
+  }
+  for(const QVariant& v : days) {
+    if(v.toInt() == day.dayOfWeek()) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// ── Reminders already sent ──
+//
+// Kept in reminders.json next to state.json rather than in memory: a restart
+// inside a reminder's window used to announce it again, and the state file
+// is the wrong place for bookkeeping that changes every minute.
+
+QString AppController::remindersFilePath() const {
+  return heap::paths::dataDir() + QStringLiteral("/reminders.json");
+}
+
+void AppController::loadSentReminders() {
+  m_sentReminders.clear();
+  QFile f(remindersFilePath());
+  if(!f.open(QIODevice::ReadOnly)) {
+    return;
+  }
+  const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+  const QDateTime horizon = QDateTime::currentDateTime().addDays(-3);
+  for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
+    const QDateTime at = QDateTime::fromString(it.value().toString(), Qt::ISODate);
+    if(at.isValid() && at > horizon) {
+      m_sentReminders.insert(it.key(), at);
+    }
+  }
+}
+
+void AppController::saveSentReminders() const {
+  QJsonObject o;
+  for(auto it = m_sentReminders.constBegin(); it != m_sentReminders.constEnd(); ++it) {
+    o.insert(it.key(), it.value().toString(Qt::ISODate));
+  }
+  QDir().mkpath(heap::paths::dataDir());
+  QSaveFile f(remindersFilePath());
+  if(f.open(QIODevice::WriteOnly)) {
+    f.write(QJsonDocument(o).toJson(QJsonDocument::Compact));
+    f.commit();
+  }
+}
+
+bool AppController::reminderSent(const QString& key) const {
+  return m_sentReminders.contains(key);
+}
+
+QSet<QString> AppController::sentReminderKeys() const {
+  QSet<QString> keys;
+  keys.reserve(m_sentReminders.size());
+  for(auto it = m_sentReminders.constBegin(); it != m_sentReminders.constEnd(); ++it) {
+    keys.insert(it.key());
+  }
+  return keys;
+}
+
+void AppController::markReminderSent(const QString& key, const QDateTime& at) {
+  m_sentReminders.insert(key, at);
+  // Three days is longer than any reminder stays due.
+  const QDateTime horizon = at.addDays(-3);
+  for(auto it = m_sentReminders.begin(); it != m_sentReminders.end();) {
+    it = it.value() < horizon ? m_sentReminders.erase(it) : std::next(it);
+  }
+  saveSentReminders();
+}
+
+void AppController::holdNotification(const HeldNotification& n) {
+  // A night of git branch switches is not worth fifty toasts in the morning:
+  // the newest few are kept, and one of each is enough.
+  for(const HeldNotification& h : m_heldNotifications) {
+    if(h.title == n.title && h.body == n.body && h.kind == n.kind && h.taskId == n.taskId) {
+      return;
+    }
+  }
+  constexpr int kMaxHeld = 20;
+  if(m_heldNotifications.size() >= kMaxHeld) {
+    m_heldNotifications.removeFirst();
+  }
+  m_heldNotifications.append(n);
+}
+
+void AppController::flushHeldNotifications() {
+  const QVector<HeldNotification> held = std::exchange(m_heldNotifications, {});
+  for(const HeldNotification& h : held) {
+    if(h.taskId.isEmpty()) {
+      emit notification(h.title, h.body, h.kind);
+    } else {
+      notifyTask(h.taskId, h.title, h.body, h.kind);
     }
   }
 }
@@ -9824,8 +10486,10 @@ void AppController::onGitCommits(const QString& repo, const QVariantMap& commits
 
 void AppController::notifyTask(const QString& taskId, const QString& title, const QString& body, const QString& kind) {
   if(inQuietHours(QDateTime::currentDateTime())) {
+    holdNotification({title, body, kind, taskId});
     return;
   }
+  const QString inApp = title.isEmpty() ? body : title + QStringLiteral(" · ") + body;
   const QVariantMap notif = settingsMap().value("notifications").toMap();
   // Suppress the OS toast when notifications are disabled, unavailable, or the
   // window is currently focused. In the focused case the in-app Toast bar below
@@ -9834,7 +10498,7 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
   const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
   if(!notif.value("desktopNotif", true).toBool() || !m_notifier || appActive) {
     // Fallback path — still surface via in-app toast for visibility.
-    emit toast(body);
+    emit toast(inApp);
     return;
   }
 
@@ -9857,7 +10521,7 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
   if(notif.value("soundOnPing", false).toBool()) {
     QApplication::beep();
   }
-  emit toast(body);
+  emit toast(inApp);
 }
 
 void AppController::notifyCapture(const QString& taskId, const QString& title, const QString& body) {
@@ -9893,8 +10557,8 @@ void AppController::snoozeDeadline(const QString& taskId, int seconds) {
     t.scheduledAt = t.scheduledAt.addDays(days);
   }
   m_tasks.upsert(t);
-  // Forget the "already notified today" memo so the new horizon is honoured.
-  m_lastReminderDay.remove(QStringLiteral("dl:") + taskId);
+  // The reminder keys carry the deadline itself, so the new horizon is armed
+  // on its own.
   emit toast(tr_("deadline.snoozed").arg(taskId));
   scheduleSave();
 }

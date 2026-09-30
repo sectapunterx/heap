@@ -8,6 +8,7 @@
 // inside a VEVENT ends the event early if the first END: is trusted.
 
 #include "cal/IcsCodec.h"
+#include "cal/Occurrences.h"
 
 #include <gtest/gtest.h>
 
@@ -298,24 +299,20 @@ TEST(Ics, EventsWithoutUidsGetDistinctIds) {
   EXPECT_NE(in.events.at(0).id, in.events.at(1).id);
 }
 
-TEST(Ics, LocationBecomesTheContext) {
+TEST(Ics, LocationIsTheLocation) {
   const CalEvent e = one(QStringLiteral("UID:a\r\nDTSTART:20260921T100000\r\nLOCATION:Room 3\r\nSUMMARY:x"));
 
-  EXPECT_EQ(e.context, QStringLiteral("Room 3"));
+  EXPECT_EQ(e.location, QStringLiteral("Room 3"));
+  EXPECT_TRUE(e.context.isEmpty()) << "context is heap's own label, not the room";
 }
 
-// heap has nowhere to put a description; saying so once is honest, saying so
-// per event would bury the real warnings.
-TEST(Ics, DescriptionIsReportedOnceForTheWholeFile) {
-  const QString doc = QStringLiteral(
-      "BEGIN:VCALENDAR\r\nBEGIN:VEVENT\r\nUID:a\r\nDTSTART:20260921T100000\r\nDESCRIPTION:notes\r\nSUMMARY:one\r\n"
-      "END:VEVENT\r\nBEGIN:VEVENT\r\nUID:b\r\nDTSTART:20260922T100000\r\nDESCRIPTION:more\r\nSUMMARY:two\r\n"
-      "END:VEVENT\r\nEND:VCALENDAR\r\n");
+// Events carry notes now; a description is kept, not warned about.
+TEST(Ics, DescriptionBecomesTheNotes) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:a\r\nDTSTART:20260921T100000\r\nDESCRIPTION:line one\\nline two\r\nSUMMARY:one")));
 
-  const IcsImport in = parseIcs(doc);
-
-  EXPECT_EQ(in.events.size(), 2);
-  EXPECT_EQ(in.warnings.size(), 1);
+  ASSERT_EQ(in.events.size(), 1);
+  EXPECT_EQ(in.events.first().notes, QStringLiteral("line one\nline two"));
+  EXPECT_TRUE(in.warnings.isEmpty());
 }
 
 // ── Writing ──
@@ -466,4 +463,209 @@ TEST(Ics, TheSameFileTwiceYieldsTheSameIds) {
   const QString doc = toIcs({timed()});
 
   EXPECT_EQ(parseIcs(doc).events.value(0).id, parseIcs(doc).events.value(0).id);
+}
+
+// ── Time zones (audit TIME-6) ──
+//
+// Every case names the viewer's zone explicitly, so the result does not
+// depend on where the test runs.
+
+namespace {
+
+const QTimeZone kMsk("Europe/Moscow");
+const QTimeZone kNy("America/New_York");
+
+double hourAt(const heap::cal::Occurrence& o) {
+  return o.event.start;
+}
+
+// US Eastern, as Outlook describes it under a name no zone database knows.
+const char* kCustomEastern =
+    "BEGIN:VTIMEZONE\r\nTZID:Customized Time Zone\r\n"
+    "BEGIN:STANDARD\r\nDTSTART:16010101T020000\r\nTZOFFSETFROM:-0400\r\nTZOFFSETTO:-0500\r\n"
+    "RRULE:FREQ=YEARLY;BYDAY=1SU;BYMONTH=11\r\nEND:STANDARD\r\n"
+    "BEGIN:DAYLIGHT\r\nDTSTART:16010101T020000\r\nTZOFFSETFROM:-0500\r\nTZOFFSETTO:-0400\r\n"
+    "RRULE:FREQ=YEARLY;BYDAY=2SU;BYMONTH=3\r\nEND:DAYLIGHT\r\nEND:VTIMEZONE\r\n";
+
+QString calendar(const QString& inner) {
+  return QStringLiteral("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n") + inner + QStringLiteral("END:VCALENDAR\r\n");
+}
+
+}  // namespace
+
+TEST(IcsZones, AWindowsZoneNameIsResolved) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:a\r\nDTSTART;TZID=Eastern Standard Time:20261005T100000\r\n"
+                                                    "DTEND;TZID=Eastern Standard Time:20261005T110000\r\nSUMMARY:x")),
+                                kMsk);
+  ASSERT_EQ(in.events.size(), 1);
+  EXPECT_NEAR(in.events.first().start, 17.0, 0.001) << "10:00 EDT is 17:00 in Moscow";
+  EXPECT_TRUE(in.events.first().tz.isEmpty()) << "a single event is converted once";
+}
+
+TEST(IcsZones, AnUnknownNameIsReadThroughItsVtimezone) {
+  const IcsImport in = parseIcs(calendar(QString::fromLatin1(kCustomEastern) +
+                                         QStringLiteral("BEGIN:VEVENT\r\nUID:a\r\nDTSTART;TZID=Customized Time Zone:20261215T100000\r\n"
+                                                        "DTEND;TZID=Customized Time Zone:20261215T110000\r\nSUMMARY:x\r\nEND:VEVENT\r\n")),
+                                kMsk);
+  ASSERT_EQ(in.events.size(), 1);
+  EXPECT_NEAR(in.events.first().start, 18.0, 0.001) << "10:00 EST is 18:00 in Moscow";
+}
+
+// A New York series follows New York's DST: 17:00 Moscow in October, 18:00
+// after the US clocks go back on Nov 1.
+TEST(IcsZones, ARecurringSeriesKeepsItsSourceZone) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:ny\r\nDTSTART;TZID=America/New_York:20261026T100000\r\n"
+                                                    "DTEND;TZID=America/New_York:20261026T110000\r\nRRULE:FREQ=DAILY\r\nSUMMARY:x")),
+                                kMsk);
+  ASSERT_EQ(in.events.size(), 1);
+  EXPECT_EQ(in.events.first().tz, QStringLiteral("America/New_York"));
+  const auto occ = heap::cal::expandEvents(in.events, QDate(2026, 10, 30), QDate(2026, 11, 3), nullptr, kMsk);
+  ASSERT_EQ(occ.size(), 5);
+  EXPECT_NEAR(hourAt(occ.first()), 17.0, 0.001);
+  EXPECT_NEAR(hourAt(occ.last()), 18.0, 0.001);
+}
+
+// Tuesday 20:00 in New York is Wednesday 03:00 in Moscow — including the first
+// occurrence, which used to go missing.
+TEST(IcsZones, AnEveningSeriesLandsOnTheViewersNextDay) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:ny\r\nDTSTART;TZID=America/New_York:20261006T200000\r\n"
+                                                    "DTEND;TZID=America/New_York:20261006T210000\r\n"
+                                                    "RRULE:FREQ=WEEKLY;BYDAY=TU\r\nSUMMARY:x")),
+                                kMsk);
+  const auto occ = heap::cal::expandEvents(in.events, QDate(2026, 10, 1), QDate(2026, 10, 21), nullptr, kMsk);
+  ASSERT_EQ(occ.size(), 3);
+  EXPECT_EQ(occ.first().event.date, QDate(2026, 10, 7));
+  EXPECT_EQ(occ.first().event.date.dayOfWeek(), 3);
+  EXPECT_NEAR(hourAt(occ.first()), 3.0, 0.001);
+  EXPECT_EQ(occ.first().occurrenceDate, QDate(2026, 10, 6)) << "keyed by the source date";
+}
+
+// The other direction: a Moscow standup seen from New York moves when New
+// York's clocks change, because Moscow's do not.
+TEST(IcsZones, ASeriesMovesWhenOnlyTheViewersClockChanges) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:msk\r\nDTSTART;TZID=Europe/Moscow:20261026T093000\r\n"
+                                                    "DTEND;TZID=Europe/Moscow:20261026T094500\r\nRRULE:FREQ=DAILY\r\nSUMMARY:x")),
+                                kNy);
+  const auto occ = heap::cal::expandEvents(in.events, QDate(2026, 10, 30), QDate(2026, 11, 2), nullptr, kNy);
+  ASSERT_EQ(occ.size(), 4);
+  EXPECT_NEAR(hourAt(occ.first()), 2.5, 0.001) << "09:30 MSK = 02:30 EDT";
+  EXPECT_NEAR(hourAt(occ.last()), 1.5, 0.001) << "09:30 MSK = 01:30 EST";
+}
+
+TEST(IcsZones, AVtimezoneSeriesIsMatchedToARealZone) {
+  const IcsImport in = parseIcs(calendar(QString::fromLatin1(kCustomEastern) +
+                                         QStringLiteral("BEGIN:VEVENT\r\nUID:a\r\nDTSTART;TZID=Customized Time Zone:20261026T100000\r\n"
+                                                        "DTEND;TZID=Customized Time Zone:20261026T110000\r\nRRULE:FREQ=DAILY\r\n"
+                                                        "SUMMARY:x\r\nEND:VEVENT\r\n")),
+                                kMsk);
+  ASSERT_EQ(in.events.size(), 1);
+  ASSERT_FALSE(in.events.first().tz.isEmpty());
+  const auto occ = heap::cal::expandEvents(in.events, QDate(2026, 10, 30), QDate(2026, 11, 3), nullptr, kMsk);
+  ASSERT_EQ(occ.size(), 5);
+  EXPECT_NEAR(hourAt(occ.first()), 17.0, 0.001);
+  EXPECT_NEAR(hourAt(occ.last()), 18.0, 0.001);
+}
+
+TEST(IcsZones, AUtcRecurrenceIdNamesTheSeriesOwnDate) {
+  const IcsImport in =
+      parseIcs(calendar(QStringLiteral("BEGIN:VEVENT\r\nUID:ny\r\nDTSTART;TZID=America/New_York:20261006T200000\r\n"
+                                       "DTEND;TZID=America/New_York:20261006T210000\r\nRRULE:FREQ=WEEKLY\r\nSUMMARY:x\r\nEND:VEVENT\r\n"
+                                       "BEGIN:VEVENT\r\nUID:ny\r\nRECURRENCE-ID:20261014T000000Z\r\n"
+                                       "DTSTART;TZID=America/New_York:20261013T190000\r\nDTEND;TZID=America/New_York:20261013T200000\r\n"
+                                       "SUMMARY:moved\r\nEND:VEVENT\r\n")),
+               kMsk);
+  ASSERT_EQ(in.events.size(), 2);
+  EXPECT_EQ(in.events.at(1).originalDate, QDate(2026, 10, 13)) << "00:00Z on the 14th is the 13th in New York";
+}
+
+// ── Import details (audit TIME-18, TIME-26, TIME-32) ──
+
+TEST(Ics, AttendeesAreRead) {
+  const CalEvent e =
+      one(QStringLiteral("UID:a\r\nDTSTART:20260921T100000\r\nATTENDEE;CN=Ann Lee:mailto:ann@x.io\r\n"
+                         "ATTENDEE:mailto:bob@x.io\r\nATTENDEE;CN=\"Oleg\":invalid:nomail\r\nSUMMARY:x"));
+  EXPECT_EQ(e.attendees, QStringLiteral("Ann Lee, bob@x.io, Oleg"));
+}
+
+TEST(Ics, AnAlarmBecomesTheEventsReminder) {
+  const CalEvent e = one(
+      QStringLiteral("UID:a\r\nDTSTART:20260921T100000\r\nBEGIN:VALARM\r\nACTION:DISPLAY\r\nTRIGGER:-PT15M\r\nEND:VALARM\r\nSUMMARY:x"));
+  EXPECT_EQ(e.reminderMinutes, 15);
+}
+
+TEST(Ics, AnEventWithoutAUidGetsTheSameIdEveryTime) {
+  const QString doc = wrap(QStringLiteral("DTSTART:20260921T100000\r\nSUMMARY:no uid"));
+  EXPECT_EQ(parseIcs(doc).events.value(0).id, parseIcs(doc).events.value(0).id);
+}
+
+TEST(Ics, TextThatIsNotACalendarIsNotRecognised) {
+  EXPECT_FALSE(parseIcs(QStringLiteral("hello, world")).recognised);
+  EXPECT_TRUE(parseIcs(wrap(QStringLiteral("UID:a\r\nDTSTART:20260921T100000"))).recognised);
+}
+
+TEST(Ics, AnUnsupportedRuleSaysWhichPart) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:a\r\nDTSTART:20260921T100000\r\nRRULE:FREQ=YEARLY;BYWEEKNO=20\r\nSUMMARY:x")));
+  ASSERT_EQ(in.warnings.size(), 1);
+  EXPECT_TRUE(in.warnings.first().contains(QStringLiteral("BYWEEKNO")));
+}
+
+// ── Export details (audit TIME-18, TIME-19) ──
+
+TEST(Ics, ExportCarriesTheStampZoneAndEverythingHeapKnows) {
+  CalEvent e = timed();
+  e.type = QStringLiteral("focus");
+  e.attendees = QStringLiteral("Ann, bob@x.io");
+  e.notes = QStringLiteral("agenda");
+  e.url = QStringLiteral("https://meet.example/x");
+  e.location = QStringLiteral("Room 1");
+  e.reminderMinutes = 10;
+  const QString doc = toIcs({e}, kMsk, QDateTime(QDate(2026, 9, 1), QTime(8, 0), QTimeZone::utc()));
+  EXPECT_TRUE(doc.contains(QStringLiteral("DTSTAMP:20260901T080000Z")));
+  EXPECT_TRUE(doc.contains(QStringLiteral("DTSTART:20260921T110000Z"))) << "14:00 Moscow, written in UTC";
+  EXPECT_TRUE(doc.contains(QStringLiteral("ATTENDEE:mailto:bob@x.io")));
+
+  const CalEvent back = parseIcs(doc, kMsk).events.value(0);
+  EXPECT_EQ(back.type, QStringLiteral("focus"));
+  EXPECT_EQ(back.attendees, QStringLiteral("Ann, bob@x.io"));
+  EXPECT_EQ(back.notes, e.notes);
+  EXPECT_EQ(back.url, e.url);
+  EXPECT_EQ(back.location, e.location);
+  EXPECT_EQ(back.reminderMinutes, 10);
+  EXPECT_NEAR(back.start, 14.0, 0.001);
+}
+
+TEST(Ics, ExportWritesASeriesInANamedZone) {
+  CalEvent e = timed();
+  e.rrule = QStringLiteral("FREQ=WEEKLY");
+  e.tz = QStringLiteral("America/New_York");
+  const QString doc = toIcs({e}, kMsk);
+  EXPECT_TRUE(doc.contains(QStringLiteral("DTSTART;TZID=America/New_York:20260921T140000")));
+  EXPECT_TRUE(doc.contains(QStringLiteral("BEGIN:VTIMEZONE")));
+  EXPECT_TRUE(doc.contains(QStringLiteral("TZID:America/New_York")));
+  EXPECT_EQ(parseIcs(doc, kMsk).events.value(0).tz, QStringLiteral("America/New_York"));
+}
+
+TEST(Ics, AMovedOccurrenceIsNamedByItsOriginalStart) {
+  CalEvent m = timed();
+  m.rrule = QStringLiteral("FREQ=WEEKLY");
+  m.tz = QStringLiteral("Europe/Moscow");
+  CalEvent ov = timed();
+  ov.id = QStringLiteral("ov-1");
+  ov.masterId = m.id;
+  ov.originalDate = QDate(2026, 9, 28);
+  ov.date = QDate(2026, 9, 29);
+  ov.start = 16.0;
+  ov.end = 17.0;
+  const QString doc = toIcs({m, ov}, kMsk);
+  EXPECT_TRUE(doc.contains(QStringLiteral("RECURRENCE-ID;TZID=Europe/Moscow:20260928T140000"))) << doc.toStdString();
+}
+
+TEST(Ics, AMidnightEndIsTheNextDay) {
+  CalEvent e = timed();
+  e.rrule = QStringLiteral("FREQ=DAILY");
+  e.tz = QStringLiteral("Europe/Moscow");
+  e.start = 23.0;
+  e.end = 24.0;
+  const QString doc = toIcs({e}, kMsk);
+  EXPECT_TRUE(doc.contains(QStringLiteral("DTEND;TZID=Europe/Moscow:20260922T000000"))) << doc.toStdString();
 }

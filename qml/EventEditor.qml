@@ -8,13 +8,21 @@ Popup {
     id: root
     modal: true
     focus: true
-    closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
+    // Unsaved edits are not thrown away by a stray click beside the popup:
+    // with changes, a press outside or Esc asks first (see _requestClose).
+    closePolicy: Popup.NoAutoClose
     padding: 0
-    width: 460
+    width: 520
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: Rectangle {
+        color: Theme.scrim
+        MouseArea {
+            anchors.fill: parent
+            onPressed: root._requestClose()
+        }
+    }
 
     property string eventId: ""
     // The day this event falls on — editable via the calendar picker below.
@@ -39,21 +47,151 @@ Popup {
     property var originalDate: undefined
     readonly property bool repeating: root.masterId.length > 0 || repeatBox.currentIndex > 0
 
-    // The rules offered in the menu. Anything heap did not write — an .ics
-    // import with a rule it does not model — lands on "custom", which is shown
-    // and kept but not editable here.
-    readonly property var repeatRules: ["", "FREQ=DAILY", "FREQ=WEEKLY", "FREQ=WEEKLY;INTERVAL=2", "FREQ=MONTHLY", "FREQ=YEARLY"]
+    // ── The repeat rule, as the editor builds it ─────────────────────────
+    // The menu covers what people set by hand; the weekday picker, the end
+    // (a date or a count) and "every weekday" complete it. A rule heap cannot
+    // show that way — an import with BYSETPOS, say — is "Custom" and edited
+    // as text, so nothing is silently rewritten into something simpler.
+    readonly property var repeatKinds: ["never", "daily", "weekdays", "weekly", "biweekly", "monthly", "yearly", "custom"]
+    readonly property var dayTokens: ["MO", "TU", "WE", "TH", "FR", "SA", "SU"]
+    property var repeatDays: []          // Qt weekday numbers, for weekly kinds
+    property string endKind: "never"     // never | until | count
+    property var untilDate: undefined
+    property int repeatCount: 10
     property string customRule: ""
 
-    function _repeatIndexFor(rule) {
-        if (!rule) return 0;
-        const i = root.repeatRules.indexOf(rule);
-        return i >= 0 ? i : root.repeatRules.length;   // "custom"
+    function _kindIndex(k) { return Math.max(0, root.repeatKinds.indexOf(k)); }
+    function _kind() { return root.repeatKinds[repeatBox.currentIndex] || "never"; }
+    function _weekdayOf(d) { const w = d.getDay(); return w === 0 ? 7 : w; }
+
+    // RRULE text → editor state. Returns false for a rule the controls cannot
+    // represent (it is then kept as custom text).
+    function _loadRule(rule) {
+        root.customRule = rule || "";
+        root.repeatDays = [];
+        root.endKind = "never";
+        root.untilDate = undefined;
+        root.repeatCount = 10;
+        if (!rule) { repeatBox.currentIndex = 0; return true; }
+        const parts = {};
+        const chunks = String(rule).toUpperCase().split(";");
+        for (let i = 0; i < chunks.length; i++) {
+            const eq = chunks[i].indexOf("=");
+            if (eq > 0) parts[chunks[i].slice(0, eq)] = chunks[i].slice(eq + 1);
+        }
+        const known = { FREQ: 1, INTERVAL: 1, BYDAY: 1, COUNT: 1, UNTIL: 1 };
+        for (const k in parts) if (!known[k]) { repeatBox.currentIndex = root._kindIndex("custom"); return false; }
+        const interval = parts.INTERVAL ? parseInt(parts.INTERVAL) : 1;
+        const days = [];
+        if (parts.BYDAY) {
+            const toks = parts.BYDAY.split(",");
+            for (let i = 0; i < toks.length; i++) {
+                const n = root.dayTokens.indexOf(toks[i]);
+                if (n < 0) { repeatBox.currentIndex = root._kindIndex("custom"); return false; }
+                days.push(n + 1);
+            }
+        }
+        if (parts.COUNT) { root.endKind = "count"; root.repeatCount = parseInt(parts.COUNT); }
+        if (parts.UNTIL) {
+            const u = parts.UNTIL;
+            root.endKind = "until";
+            root.untilDate = new Date(parseInt(u.slice(0, 4)), parseInt(u.slice(4, 6)) - 1, parseInt(u.slice(6, 8)));
+        }
+        let kind = "custom";
+        const f = parts.FREQ;
+        const isWeekdays = days.length === 5 && days.join(",") === "1,2,3,4,5";
+        if (f === "DAILY" && interval === 1 && days.length === 0) kind = "daily";
+        else if ((f === "DAILY" || f === "WEEKLY") && interval === 1 && isWeekdays) kind = "weekdays";
+        else if (f === "WEEKLY" && interval === 1) kind = "weekly";
+        else if (f === "WEEKLY" && interval === 2) kind = "biweekly";
+        else if (f === "MONTHLY" && interval === 1 && days.length === 0) kind = "monthly";
+        else if (f === "YEARLY" && interval === 1 && days.length === 0) kind = "yearly";
+        root.repeatDays = (kind === "weekly" || kind === "biweekly") ? days : [];
+        repeatBox.currentIndex = root._kindIndex(kind);
+        return kind !== "custom";
     }
+
+    // Editor state → RRULE text ("" = does not repeat).
     function _ruleFromBox() {
-        return repeatBox.currentIndex < root.repeatRules.length
-            ? root.repeatRules[repeatBox.currentIndex]
-            : root.customRule;
+        const kind = root._kind();
+        if (kind === "never") return "";
+        if (kind === "custom") return root.customRule.trim().replace(/^RRULE:/i, "");
+        let r = "";
+        if (kind === "daily") r = "FREQ=DAILY";
+        else if (kind === "weekdays") r = "FREQ=WEEKLY;BYDAY=MO,TU,WE,TH,FR";
+        else if (kind === "monthly") r = "FREQ=MONTHLY";
+        else if (kind === "yearly") r = "FREQ=YEARLY";
+        else {
+            r = kind === "biweekly" ? "FREQ=WEEKLY;INTERVAL=2" : "FREQ=WEEKLY";
+            const days = root.repeatDays.slice().sort();
+            // The start's own weekday is what an empty BYDAY means; naming it
+            // alone is redundant, naming more is the point.
+            const own = root.pickedDate && root.pickedDate.getDay ? root._weekdayOf(root.pickedDate) : 0;
+            if (days.length > 1 || (days.length === 1 && days[0] !== own))
+                r += ";BYDAY=" + days.map(d => root.dayTokens[d - 1]).join(",");
+        }
+        if (root.endKind === "count" && root.repeatCount > 0) r += ";COUNT=" + root.repeatCount;
+        if (root.endKind === "until" && root.untilDate && root.untilDate.getFullYear)
+            r += ";UNTIL=" + Qt.formatDate(root.untilDate, "yyyyMMdd");
+        return r;
+    }
+    function _toggleDay(d) {
+        const days = root.repeatDays.slice();
+        const i = days.indexOf(d);
+        if (i >= 0) days.splice(i, 1); else days.push(d);
+        root.repeatDays = days;
+    }
+
+    // ── Reminder ─────────────────────────────────────────────────────────
+    // -1 = the notifications setting, -2 = none, else minutes before.
+    readonly property var reminderChoices: [-1, -2, 0, 5, 10, 15, 30, 60]
+    readonly property int defaultLead: {
+        try {
+            const s = JSON.parse(AppController.appSettingsJson || "{}");
+            const n = s.notifications && s.notifications.meetingLead;
+            return (n === undefined || n === null) ? 5 : Number(n);
+        } catch (e) { return 5; }
+    }
+    function _reminderLabel(v) {
+        if (v === -1) return I18n.t("reminder.default").arg(root.defaultLead);
+        if (v === -2) return I18n.t("reminder.none");
+        if (v === 0) return I18n.t("reminder.atStart");
+        return I18n.t("reminder.before").arg(v);
+    }
+    function _reminderIndex(v) {
+        const i = root.reminderChoices.indexOf(v === undefined || v === null ? -1 : Number(v));
+        return i >= 0 ? i : 0;
+    }
+
+    // What the fields held when the editor opened, to know whether closing
+    // loses anything.
+    property string _openedAs: ""
+    readonly property bool _dirty: root.opened && root._openedAs.length > 0 && JSON.stringify(root._draftFields()) !== root._openedAs
+    property bool _confirmDiscard: false
+    property string _error: ""
+
+    function _loadCommon(src) {
+        titleField.text = src.title || "";
+        typeBox.currentIndex = root._typeIndex(src.type);
+        startField.text = AppController.eventHourLabel(src.start);
+        endField.text = AppController.eventHourLabel(src.end);
+        attField.text = src.attendees || "";
+        root.pickedDate = src.date;
+        root.pickedEndDate = src.endDate && src.endDate.getFullYear ? src.endDate : src.date;
+        root.allDay = !!src.allDay;
+        contextField.text = src.context || "";
+        locationField.text = src.location || "";
+        linkField.text = src.url || "";
+        notesField.text = src.notes || "";
+        reminderBox.currentIndex = root._reminderIndex(src.reminderMinutes);
+    }
+    function _opened() {
+        root._error = "";
+        root._confirmDiscard = false;
+        open();
+        root._openedAs = JSON.stringify(root._draftFields());
+        titleField.forceActiveFocus();
+        titleField.selectAll();
     }
 
     // Open on a draft that has not been saved yet — a click on an empty slot
@@ -61,22 +199,11 @@ Popup {
     // cancelling leaves nothing behind.
     function showForDraft(draft) {
         eventId = draft.id;
-        titleField.text = draft.title || "";
-        typeBox.currentIndex = root._typeIndex(draft.type);
-        startField.text = AppController.eventHourLabel(draft.start);
-        endField.text = AppController.eventHourLabel(draft.end);
-        attField.text = draft.attendees || "";
-        root.pickedDate = draft.date;
-        root.pickedEndDate = draft.endDate && draft.endDate.getFullYear ? draft.endDate : draft.date;
-        root.allDay = !!draft.allDay;
+        root._loadCommon(draft);
         root.masterId = draft.masterId || "";
         root.originalDate = draft.originalDate;
-        root.customRule = draft.rrule || "";
-        repeatBox.currentIndex = root._repeatIndexFor(draft.rrule || "");
-        contextField.text = draft.context || "";
-        open();
-        titleField.forceActiveFocus();
-        titleField.selectAll();
+        root._loadRule(draft.rrule || "");
+        root._opened();
     }
 
     // Open on one occurrence of a series. `occ` is a map from
@@ -84,67 +211,55 @@ Popup {
     // plus the master it came from.
     function showForOccurrence(occ) {
         eventId = occ.id;
-        titleField.text = occ.title || "";
-        typeBox.currentIndex = root._typeIndex(occ.type);
-        startField.text = AppController.eventHourLabel(occ.start);
-        endField.text = AppController.eventHourLabel(occ.end);
-        attField.text = occ.attendees || "";
-        root.pickedDate = occ.date;
-        root.pickedEndDate = occ.endDate && occ.endDate.getFullYear ? occ.endDate : occ.date;
-        root.allDay = !!occ.allDay;
+        root._loadCommon(occ);
         root.masterId = occ.masterId || "";
         root.originalDate = occ.occurrenceDate || occ.originalDate;
-        contextField.text = occ.context || "";
 
         // The rule lives on the master, never on a generated instance.
         const master = root.masterId.length > 0 ? AppController.eventSeriesMaster(root.masterId) : null;
         const rule = (master && master.rrule) ? master.rrule : (occ.rrule || "");
-        root.customRule = rule;
-        repeatBox.currentIndex = root._repeatIndexFor(rule);
-        open();
+        root._loadRule(rule);
+        root._opened();
     }
 
     function showForId(id) {
+        const ev = AppController.eventById(id);
+        if (!ev || !ev.id) return;
         eventId = id;
-        const m = AppController.events;
-        for (let i = 0; i < m.rowCount(); i++) {
-            const idx = m.index(i, 0);
-            if (m.data(idx, Qt.UserRole + 1) === id) {
-                titleField.text   = m.data(idx, Qt.UserRole + 2);
-                typeBox.currentIndex = root._typeIndex(m.data(idx, Qt.UserRole + 3));
-                startField.text   = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 4));
-                endField.text     = AppController.eventHourLabel(m.data(idx, Qt.UserRole + 5));
-                attField.text     = m.data(idx, Qt.UserRole + 6);
-                root.pickedDate    = m.data(idx, Qt.UserRole + 7);
-                root.allDay        = Boolean(m.data(idx, Qt.UserRole + 11));
-                // EndDateRole always reports a usable date: a single-day event
-                // reports its own day.
-                root.pickedEndDate = m.data(idx, Qt.UserRole + 12);
-                root.masterId      = String(m.data(idx, Qt.UserRole + 14) || "");
-                root.originalDate  = undefined;
-                root.customRule    = String(m.data(idx, Qt.UserRole + 13) || "");
-                repeatBox.currentIndex = root._repeatIndexFor(root.customRule);
-                contextField.text  = m.data(idx, Qt.UserRole + 10) || "";
-                break;
-            }
-        }
-        open();
+        root._loadCommon(ev);
+        root.masterId = String(ev.masterId || "");
+        root.originalDate = undefined;
+        root._loadRule(String(ev.rrule || ""));
+        root._opened();
     }
 
-    // Free-typed time → hours since midnight, always inside the day. "99:00"
-    // and "-3" are things a text field accepts; the saved range is clamped in
-    // C++ too (heap::cal::clampHours), but an out-of-range value must not be
-    // what the editor shows back either.
-    function parseHour(s) {
-        if (!s) return 0;
-        const r = AppController.parseDateTime(s, new Date());
+    // Free-typed time → hours since midnight, or NaN when it is not a time.
+    // "930" and "9.30" are 09:30 (they used to read as 24:00 and 09:00), "9"
+    // is 09:00, and an hour past 24 is clamped to the end of the day.
+    function parseHourStrict(s) {
+        const t = String(s || "").trim();
+        if (t.length === 0) return NaN;
+        let m = t.match(/^(\d{1,2})(\d{2})$/);
+        if (m) return root._hm(parseInt(m[1]), parseInt(m[2]));
+        m = t.match(/^(\d{1,2})[.,:](\d{2})$/);
+        if (m) return root._hm(parseInt(m[1]), parseInt(m[2]));
+        m = t.match(/^(\d{1,2})$/);
+        if (m) return root._hm(parseInt(m[1]), 0);
+        const r = AppController.parseDateTime(t, new Date());
         if (r && r.ok && r.hasTime && r.start) {
             return r.start.getHours() + r.start.getMinutes() / 60.0;
         }
-        const parts = s.split(":");
-        const h = parseInt(parts[0]); const m = parseInt(parts[1] || "0");
-        if (isNaN(h)) return 0;
-        return Math.max(0, Math.min(24, h + (isNaN(m) ? 0 : m / 60.0)));
+        return NaN;
+    }
+    function _hm(h, m) {
+        if (isNaN(h) || isNaN(m) || m > 59) return NaN;
+        return Math.max(0, Math.min(24, h + m / 60.0));
+    }
+    // The lenient form the rest of the editor used to use: 0 for anything
+    // that is not a time.
+    function parseHour(s) {
+        const h = root.parseHourStrict(s);
+        return isNaN(h) ? 0 : h;
     }
 
     // If `s` resolves to a range expression (e.g. "14-15", "с 14 до 15"), return
@@ -182,16 +297,29 @@ Popup {
         }
     }
 
+    // What the fields say, for the dirty check (no ids, which do not change).
+    function _draftFields() {
+        return {
+            title: titleField.text, type: typeBox.currentIndex, start: startField.text, end: endField.text,
+            attendees: attField.text, date: root.pickedDate ? String(root.pickedDate) : "",
+            endDate: root.pickedEndDate ? String(root.pickedEndDate) : "", allDay: root.allDay,
+            rule: root._ruleFromBox(), context: contextField.text, location: locationField.text,
+            url: linkField.text, notes: notesField.text, reminder: reminderBox.currentIndex
+        };
+    }
+
     // The three answers a calendar asks for when a repeating event is touched.
     // Asked only when there is a series to disturb: an ordinary event saves
     // straight through, and so does one that is only now being given a rule.
     function _commit(scope) {
         AppController.saveOccurrence(root._draft(), scope);
+        root._openedAs = "";
         root.close();
     }
 
     function _commitDelete(scope) {
         AppController.deleteOccurrence(root.masterId, root.originalDate, scope);
+        root._openedAs = "";
         root.close();
     }
 
@@ -202,18 +330,10 @@ Popup {
     }
 
     function _draft() {
-        const m = AppController.events;
-        let curTaskId = "";
-        for (let i = 0; i < m.rowCount(); i++) {
-            const idx = m.index(i, 0);
-            if (m.data(idx, Qt.UserRole + 1) === root.eventId) {
-                curTaskId = m.data(idx, Qt.UserRole + 8);
-                break;
-            }
-        }
+        const stored = AppController.eventById(root.eventId);
         return {
             id: root.eventId,
-            title: titleField.text,
+            title: titleField.text.trim(),
             type: root.types[typeBox.currentIndex],
             start: root.parseHour(startField.text),
             end: root.parseHour(endField.text),
@@ -224,35 +344,83 @@ Popup {
             rrule: root._ruleFromBox(),
             masterId: root.masterId,
             originalDate: root.originalDate,
-            taskId: curTaskId,
-            context: contextField.text
+            taskId: (stored && stored.taskId) ? stored.taskId : "",
+            context: contextField.text,
+            location: locationField.text.trim(),
+            url: linkField.text.trim(),
+            notes: notesField.text,
+            reminderMinutes: root.reminderChoices[reminderBox.currentIndex]
         };
+    }
+
+    // What would be saved, checked first: an empty title, a time that is not
+    // one, an end before the start, a rule heap cannot read.
+    function _validate() {
+        if (titleField.text.trim().length === 0) {
+            titleField.forceActiveFocus();
+            return I18n.t("editor.err.title");
+        }
+        if (!root.allDay) {
+            const s = root.parseHourStrict(startField.text);
+            const e = root.parseHourStrict(endField.text);
+            if (isNaN(s)) { startField.forceActiveFocus(); return I18n.t("editor.err.time").arg(startField.text); }
+            if (isNaN(e)) { endField.forceActiveFocus(); return I18n.t("editor.err.time").arg(endField.text); }
+            // An end at or before the start on the same day used to save as
+            // a 23-hour event; an overnight one says so with its end date.
+            if (root._spanDays() === 0 && e <= s) { endField.forceActiveFocus(); return I18n.t("editor.err.endBeforeStart"); }
+        }
+        if (root._kind() === "custom" && root.customRule.trim().length > 0
+                && !AppController.isValidRRule(root._ruleFromBox()))
+            return I18n.t("editor.err.rule");
+        return "";
     }
 
     // Shared by the Save button and the Ctrl+Return shortcut.
     function _save() {
+        root._error = root._validate();
+        if (root._error.length > 0) return;
         if (root.masterId.length > 0 && root.originalDate) {
-            scopePrompt.ask(false);
+            scopePrompt.ask("save", (scope) => root._commit(scope), null);
             return;
         }
         AppController.saveEvent(root._draft());
+        root._openedAs = "";
         root.close();
     }
 
     function _delete() {
         if (root.masterId.length > 0 && root.originalDate) {
-            scopePrompt.ask(true);
+            scopePrompt.ask("delete", (scope) => root._commitDelete(scope), null);
             return;
         }
         AppController.deleteEvent(root.eventId);
+        root._openedAs = "";
         root.close();
+    }
+
+    // Esc or a press outside: closes at once when nothing changed, and asks
+    // once when something did — a second Esc discards.
+    function _requestClose() {
+        if (!root._dirty || root._confirmDiscard) {
+            root._openedAs = "";
+            root.close();
+            return;
+        }
+        root._confirmDiscard = true;
     }
 
     // Keyboard-first — see TaskEditor.
     Shortcut {
         sequences: ["Ctrl+Return", "Ctrl+Enter"]
-        enabled: root.opened
+        enabled: root.opened && !scopePrompt.opened
         onActivated: root._save()
+    }
+    Shortcut {
+        sequence: "Esc"
+        // A picker or the scope question closes itself first.
+        enabled: root.opened && !scopePrompt.opened && !eventDatePicker.opened && !endDatePicker.opened
+                 && !untilPicker.opened
+        onActivated: attSuggest.isOpen ? attSuggest.dismiss() : root._requestClose()
     }
 
     background: Rectangle {
@@ -264,73 +432,24 @@ Popup {
 
     // "This event, this and following, or all events?" — asked whenever an
     // occurrence of a series is saved or deleted, because every wrong answer
-    // is a quiet data loss.
-    Dialog {
-        id: scopePrompt
-        objectName: "series-scope"
-        property bool deleting: false
-        modal: true
-        anchors.centerIn: Overlay.overlay
-        parent: Overlay.overlay
-        padding: Theme.inset
-        // Explicit, because the contentItem wraps: without a width of its own
-        // it sizes from the dialog, which is sizing from it.
-        width: 420
-        title: scopePrompt.deleting ? I18n.t("repeat.scope.deleteTitle") : I18n.t("repeat.scope.saveTitle")
+    // is a quiet data loss. "This event" is the default.
+    SeriesScopeDialog { id: scopePrompt }
 
-        function ask(isDelete) {
-            scopePrompt.deleting = isDelete;
-            scopePrompt.open();
-        }
-
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
-
-        contentItem: Text {
-            text: I18n.t("repeat.scope.body")
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsMd
-            wrapMode: Text.Wrap
-        }
-
-        footer: RowLayout {
-            spacing: Theme.spMd
-            Layout.margins: Theme.sp2xl
-            Item { Layout.fillWidth: true }
-            PillButton {
-                objectName: "series-scope-this"
-                text: I18n.t("repeat.scope.this")
-                onClicked: {
-                    scopePrompt.close();
-                    if (scopePrompt.deleting) root._commitDelete("this"); else root._commit("this");
-                }
-            }
-            PillButton {
-                objectName: "series-scope-following"
-                text: I18n.t("repeat.scope.following")
-                onClicked: {
-                    scopePrompt.close();
-                    if (scopePrompt.deleting) root._commitDelete("following"); else root._commit("following");
-                }
-            }
-            PillButton {
-                objectName: "series-scope-all"
-                text: I18n.t("repeat.scope.all")
-                primary: true
-                onClicked: {
-                    scopePrompt.close();
-                    if (scopePrompt.deleting) root._commitDelete("all"); else root._commit("all");
-                }
-            }
-        }
+    component FieldLabel: Text {
+        color: Theme.textMuted
+        font.pixelSize: Theme.fsXs
+        font.weight: Font.DemiBold
+        font.letterSpacing: 1
+    }
+    component Field: TextField {
+        background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+        color: Theme.text
+        placeholderTextColor: Theme.textDim
+        selectByMouse: true
     }
 
     contentItem: ColumnLayout {
-        spacing: Theme.spXl
+        spacing: Theme.spLg
         Item { Layout.preferredHeight: 4 }
 
         Text {
@@ -341,26 +460,21 @@ Popup {
             font.weight: Font.DemiBold
         }
 
-        Text {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+        FieldLabel {
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title").toUpperCase()
         }
-        TextField {
+        Field {
             id: titleField
+            objectName: "event-title"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-            background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-            color: Theme.text
         }
 
         GridLayout {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs
 
-            Text {
-                text: I18n.t("editor.label.eventType").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
-            Text {
-                text: I18n.t("editor.label.attendees").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
+            FieldLabel { text: I18n.t("editor.label.eventType").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.attendees").toUpperCase() }
 
             ComboBox {
                 id: typeBox
@@ -369,15 +483,11 @@ Popup {
                 background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
-            TextField {
+            Field {
                 id: attField
                 objectName: "event-attendees"
                 Layout.fillWidth: true
                 placeholderText: I18n.t("event.ph.attendees")
-                placeholderTextColor: Theme.textDim
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                color: Theme.text
-                selectByMouse: true
                 onTextChanged: if (attField.activeFocus) attSuggest.refresh()
                 onCursorPositionChanged: if (attField.activeFocus) attSuggest.refresh()
                 onActiveFocusChanged: attField.activeFocus ? attSuggest.refresh() : attSuggest.dismiss()
@@ -507,61 +617,36 @@ Popup {
                 }
             }
 
-            Text {
-                Layout.columnSpan: 2
-                text: I18n.t("editor.label.repeat").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+            FieldLabel {
+                visible: !root.allDay
+                text: I18n.t("editor.label.start").toUpperCase()
             }
-            ComboBox {
-                id: repeatBox
-                objectName: "event-repeat"
-                Layout.columnSpan: 2
-                Layout.fillWidth: true
-                // One entry past the known rules for anything heap did not
-                // write — an imported rule is kept rather than silently
-                // rewritten into something simpler.
-                model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekly"),
-                        I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
-                        I18n.t("repeat.custom")]
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
+            FieldLabel {
+                visible: !root.allDay
+                text: I18n.t("editor.label.end").toUpperCase()
             }
 
-            Text {
-                visible: !root.allDay
-                text: I18n.t("editor.label.start").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
-            Text {
-                visible: !root.allDay
-                text: I18n.t("editor.label.end").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
-
-            TextField {
+            Field {
                 id: startField
+                objectName: "event-start"
                 visible: !root.allDay
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
                 placeholderText: I18n.t("editor.ph.timeRange")
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                color: Theme.text
                 onEditingFinished: root._maybeExpandRange(startField, endField)
             }
-            TextField {
+            Field {
                 id: endField
+                objectName: "event-end"
                 visible: !root.allDay
                 Layout.fillWidth: true
                 font.family: Theme.fontMono
                 placeholderText: "11:00"
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                color: Theme.text
             }
 
             // DATE — the day this event lands on, and the last day it covers.
-            Text {
-                text: I18n.t("editor.label.date").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
-            Text {
-                text: I18n.t("editor.label.endDate").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
+            FieldLabel { text: I18n.t("editor.label.date").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.endDate").toUpperCase() }
             Rectangle {
                 id: dateBtn
                 Layout.fillWidth: true
@@ -574,7 +659,7 @@ Popup {
                     spacing: Theme.spSm
                     Text {
                         Layout.fillWidth: true
-                        text: root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
+                        text: root.pickedDate && root.pickedDate.toLocaleDateString ? root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy") : ""
                         color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {   // mini calendar glyph
@@ -636,43 +721,222 @@ Popup {
                 DatePickerPopup {
                     id: endDatePicker
                     y: parent.height + 4
-                    // An end before the start is meaningless; normalizeSpan
-                    // would swap them, which reads as the picker ignoring the
-                    // click.
+                    // An end before the start is meaningless: the picker
+                    // refuses it rather than seeming to ignore the click.
+                    minimumDate: root.pickedDate
                     onPicked: (value) => root.pickedEndDate = (value < root.pickedDate) ? root.pickedDate : value
+                }
+            }
+
+            // REPEAT — the rule, its days and its end.
+            FieldLabel { text: I18n.t("editor.label.repeat").toUpperCase() }
+            FieldLabel {
+                visible: root._kind() !== "never" && root._kind() !== "custom"
+                text: I18n.t("repeat.ends").toUpperCase()
+            }
+            ComboBox {
+                id: repeatBox
+                objectName: "event-repeat"
+                Layout.fillWidth: true
+                Layout.columnSpan: (root._kind() === "never" || root._kind() === "custom") ? 2 : 1
+                model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekdays"), I18n.t("repeat.weekly"),
+                        I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
+                        I18n.t("repeat.custom")]
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
+                onActivated: {
+                    // A weekly rule starts from the event's own weekday.
+                    if ((root._kind() === "weekly" || root._kind() === "biweekly") && root.repeatDays.length === 0
+                            && root.pickedDate && root.pickedDate.getDay)
+                        root.repeatDays = [root._weekdayOf(root.pickedDate)];
+                    if (root._kind() === "custom" && root.customRule.length === 0)
+                        root.customRule = "FREQ=WEEKLY";
+                }
+            }
+            RowLayout {
+                visible: root._kind() !== "never" && root._kind() !== "custom"
+                Layout.fillWidth: true
+                spacing: Theme.spSm
+                ComboBox {
+                    id: endBox
+                    objectName: "event-repeat-end"
+                    Layout.fillWidth: true
+                    model: [I18n.t("repeat.ends.never"), I18n.t("repeat.ends.on"), I18n.t("repeat.ends.after")]
+                    currentIndex: root.endKind === "until" ? 1 : root.endKind === "count" ? 2 : 0
+                    onActivated: (i) => {
+                        root.endKind = i === 1 ? "until" : i === 2 ? "count" : "never";
+                        if (i === 1 && !(root.untilDate && root.untilDate.getFullYear)) {
+                            const d = root.pickedDate;
+                            root.untilDate = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate());
+                        }
+                    }
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                    contentItem: Text { text: endBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+                }
+                Field {
+                    id: countField
+                    objectName: "event-repeat-count"
+                    visible: root.endKind === "count"
+                    Layout.preferredWidth: 56
+                    font.family: Theme.fontMono
+                    text: String(root.repeatCount)
+                    validator: IntValidator { bottom: 1; top: 999 }
+                    onTextEdited: root.repeatCount = Math.max(1, parseInt(countField.text) || 1)
+                }
+                Rectangle {
+                    id: untilBtn
+                    visible: root.endKind === "until"
+                    Layout.preferredWidth: 110
+                    implicitHeight: 34
+                    radius: Theme.radiusMd
+                    color: untilMA.containsMouse ? Theme.panel3 : Theme.panel2
+                    border.color: Theme.border; border.width: 1
+                    Text {
+                        anchors.centerIn: parent
+                        text: root.untilDate && root.untilDate.getFullYear ? root.untilDate.toLocaleDateString(I18n.locale, "d MMM yyyy") : ""
+                        color: Theme.text; font.family: Theme.fontMono; font.pixelSize: Theme.fsSm
+                    }
+                    MouseArea {
+                        id: untilMA
+                        anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                        onClicked: untilPicker.openAt(root.untilDate, untilBtn)
+                    }
+                    DatePickerPopup {
+                        id: untilPicker
+                        y: parent.height + 4
+                        minimumDate: root.pickedDate
+                        onPicked: (value) => root.untilDate = value
+                    }
+                }
+            }
+
+            // The days of a weekly rule.
+            Row {
+                objectName: "event-repeat-days"
+                visible: root._kind() === "weekly" || root._kind() === "biweekly"
+                Layout.columnSpan: 2
+                spacing: Theme.spXs
+                Repeater {
+                    model: 7
+                    delegate: Rectangle {
+                        id: dayChip
+                        required property int index
+                        readonly property int day: dayChip.index + 1
+                        readonly property bool on: root.repeatDays.indexOf(dayChip.day) >= 0
+                        objectName: "event-repeat-day-" + dayChip.day
+                        width: 36; height: 26; radius: Theme.radiusMd
+                        color: dayChip.on ? Theme.accentSoft : (chipMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                        border.color: dayChip.on ? Theme.accent : Theme.border; border.width: 1
+                        Text {
+                            anchors.centerIn: parent
+                            text: I18n.dayName(dayChip.day % 7)
+                            color: dayChip.on ? Theme.accentStrong : Theme.text
+                            font.pixelSize: Theme.fsXs
+                        }
+                        MouseArea { id: chipMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: root._toggleDay(dayChip.day) }
+                    }
+                }
+            }
+
+            // A rule the controls cannot show, edited as what it is.
+            Field {
+                id: customField
+                objectName: "event-repeat-custom"
+                visible: root._kind() === "custom"
+                Layout.columnSpan: 2
+                Layout.fillWidth: true
+                font.family: Theme.fontMono
+                placeholderText: I18n.t("repeat.custom.ph")
+                text: root.customRule
+                onTextEdited: root.customRule = customField.text
+            }
+
+            // WHERE / LINK
+            FieldLabel { text: I18n.t("editor.label.location").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.link").toUpperCase() }
+            Field {
+                id: locationField
+                objectName: "event-location"
+                Layout.fillWidth: true
+                placeholderText: I18n.t("event.ph.location")
+            }
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spXs
+                Field {
+                    id: linkField
+                    objectName: "event-link"
+                    Layout.fillWidth: true
+                    placeholderText: I18n.t("event.ph.link")
+                }
+                PillButton {
+                    visible: /^https?:\/\//i.test(linkField.text.trim())
+                    text: "↗"
+                    onClicked: Qt.openUrlExternally(linkField.text.trim())
+                }
+            }
+
+            // CONTEXT / REMINDER
+            FieldLabel { text: I18n.t("editor.label.context").toUpperCase() }
+            FieldLabel { text: I18n.t("editor.label.reminder").toUpperCase() }
+            // Free-form context label — rendered before the event title in the
+            // calendar so the same profile can mean different things per event
+            // (sprint name, feature, on-call rotation, …).
+            Field {
+                id: contextField
+                Layout.fillWidth: true
+                placeholderText: I18n.t("event.ph.context")
+            }
+            ComboBox {
+                id: reminderBox
+                objectName: "event-reminder"
+                Layout.fillWidth: true
+                model: root.reminderChoices.map(v => root._reminderLabel(v))
+                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
+                contentItem: Text { text: reminderBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
+            }
+        }
+
+        ColumnLayout {
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            spacing: Theme.spXs
+            FieldLabel { text: I18n.t("editor.label.notes").toUpperCase() }
+            ScrollView {
+                Layout.fillWidth: true
+                Layout.preferredHeight: 64
+                TextArea {
+                    id: notesField
+                    objectName: "event-notes"
+                    placeholderText: I18n.t("event.ph.notes")
+                    placeholderTextColor: Theme.textDim
+                    color: Theme.text
+                    wrapMode: TextArea.Wrap
+                    selectByMouse: true
+                    background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
                 }
             }
         }
 
-        // Free-form context label — rendered before the event title in the
-        // calendar so the same profile can mean different things per event
-        // (sprint name, feature, on-call rotation, …).
-        ColumnLayout {
+        // What is wrong with the draft, or that closing would lose edits.
+        Text {
+            objectName: "event-editor-message"
+            visible: text.length > 0
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-            spacing: Theme.spXs
-            Text {
-                text: I18n.t("editor.label.context").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
-            }
-            TextField {
-                id: contextField
-                Layout.fillWidth: true
-                placeholderText: I18n.t("event.ph.context")
-                background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }
-                color: Theme.text
-                placeholderTextColor: Theme.textDim
-                selectByMouse: true
-            }
+            wrapMode: Text.Wrap
+            text: root._error.length > 0 ? root._error : (root._confirmDiscard ? I18n.t("editor.unsaved") : "")
+            color: root._error.length > 0 ? Theme.danger : Theme.textMuted
+            font.pixelSize: Theme.fsSm
         }
 
         RowLayout {
-            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spMd; Layout.bottomMargin: Theme.sp2xl
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spSm; Layout.bottomMargin: Theme.sp2xl
             spacing: Theme.spMd
             PillButton {
                 text: I18n.t("common.delete"); danger: true; onClicked: root._delete()
             }
             Item { Layout.fillWidth: true }
             PillButton {
-                text: I18n.t("common.cancel"); onClicked: root.close()
+                text: I18n.t("common.cancel"); onClicked: { root._openedAs = ""; root.close(); }
             }
             PillButton {
                 text: I18n.t("editor.btn.save"); primary: true

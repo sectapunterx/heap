@@ -1524,6 +1524,58 @@ Item {
                         checked: !!(root.settings.calendar && root.settings.calendar.showWeekends)
                         onToggled: (checked) => root.set("calendar", "showWeekends", checked)
                     }
+                    // The days the standup reminder fires and focus blocks
+                    // are booked on. Qt weekday numbers, Mon=1 … Sun=7.
+                    RowLayout {
+                        id: workDaysRow
+                        objectName: "settings-workdays"
+                        Layout.fillWidth: true
+                        spacing: Theme.spMd
+                        readonly property var days: (root.settings.calendar && root.settings.calendar.workDays
+                                                     && root.settings.calendar.workDays.length > 0)
+                                                    ? root.settings.calendar.workDays : [1, 2, 3, 4, 5]
+                        Text {
+                            Layout.fillWidth: true
+                            text: I18n.t("settings.cal.workDays")
+                            color: Theme.text
+                            font.pixelSize: Theme.fsMd
+                        }
+                        Repeater {
+                            model: 7
+                            delegate: Rectangle {
+                                id: wdChip
+                                required property int index
+                                readonly property int day: wdChip.index + 1
+                                readonly property bool on: workDaysRow.days.indexOf(wdChip.day) >= 0
+                                implicitWidth: 34; implicitHeight: 24
+                                radius: Theme.radiusMd
+                                color: wdChip.on ? Theme.accentSoft : (wdMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                                border.color: wdChip.on ? Theme.accent : Theme.border
+                                border.width: 1
+                                Text {
+                                    anchors.centerIn: parent
+                                    text: I18n.dayName(wdChip.day % 7)
+                                    color: wdChip.on ? Theme.accentStrong : Theme.text
+                                    font.pixelSize: Theme.fsXs
+                                }
+                                MouseArea {
+                                    id: wdMA
+                                    anchors.fill: parent
+                                    hoverEnabled: true
+                                    cursorShape: Qt.PointingHandCursor
+                                    onClicked: {
+                                        const next = workDaysRow.days.slice();
+                                        const i = next.indexOf(wdChip.day);
+                                        if (i >= 0) next.splice(i, 1); else next.push(wdChip.day);
+                                        next.sort();
+                                        // At least one working day: none would silence
+                                        // the standup and focus blocks for good.
+                                        if (next.length > 0) root.set("calendar", "workDays", next);
+                                    }
+                                }
+                            }
+                        }
+                    }
                 }
             }
             SectionCard {

@@ -161,7 +161,7 @@ Item {
     function passesFilter(t) {
         if (t.status === "done") return false;
         // Clauses filter structurally, leftover words stay a substring test.
-        if (!Search.accepts(AppController, root.searchText, root.taskRev, t)) return false;
+        if (!Search.accepts(AppController, root.searchText, root.taskRev + ":" + AppController.today, t)) return false;
         let any = false;
         for (const k in root.prioritiesFilter) if (root.prioritiesFilter[k]) { any = true; break; }
         if (any && !root.prioritiesFilter[t.priority]) return false;
@@ -213,50 +213,35 @@ Item {
     }
     readonly property var spans: buildSpans()
 
-    function buildDays() {
+    // The event half of the week, on its own binding: it depends on the
+    // events and the week only, so a task that changes mid-drag (a running
+    // timer ticks every second) does not rebuild the event delegates and
+    // drop the block out from under the pointer.
+    function buildEventDays() {
         const start = weekStart;
         const days = [];
-        const _t = root.taskRev; const _e = root.eventRev;
+        const _e = root.eventRev;
         const showWeekends = Theme.showWeekends;
+        // Column of each day of the week, by its offset from weekStart; -1
+        // for a hidden weekend.
+        const colOf = [];
         for (let i = 0; i < 7; i++) {
             const d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
-            if (!showWeekends && (d.getDay() === 0 || d.getDay() === 6)) continue;
-            days.push({ date: d, tasks: [], events: [] });
-        }
-        const tm = AppController.tasks;
-        for (let i = 0; i < tm.rowCount(); i++) {
-            const idx = tm.index(i, 0);
-            const archived = tm.data(idx, Qt.UserRole + 9);
-            if (archived && !root.showArchived) continue;
-            const t = {
-                id:       tm.data(idx, Qt.UserRole + 1),
-                title:    tm.data(idx, Qt.UserRole + 2),
-                desc:     tm.data(idx, Qt.UserRole + 3),
-                priority: tm.data(idx, Qt.UserRole + 4),
-                status:   tm.data(idx, Qt.UserRole + 5),
-                deadline: tm.data(idx, Qt.UserRole + 6),
-                branch:   tm.data(idx, Qt.UserRole + 7),
-                // The one haystack passesFilter() searches (HEAP-117).
-                searchText: tm.data(idx, Qt.UserRole + 32),
-                ticket:     tm.data(idx, Qt.UserRole + 31),
-            };
-            if (!t.deadline || !t.deadline.getTime) continue;
-            if (!root.passesFilter(t)) continue;
-            for (let k = 0; k < days.length; k++) {
-                if (root.isSameDay(days[k].date, t.deadline)) {
-                    days[k].tasks.push(t);
-                    break;
-                }
-            }
+            if (!showWeekends && (d.getDay() === 0 || d.getDay() === 6)) { colOf.push(-1); continue; }
+            colOf.push(days.length);
+            days.push({ date: d, events: [] });
         }
         // An event is no longer pinned to one day: it may be all-day, or run
         // past midnight. Each day takes the piece that lands on it, so a
         // 22:00-02:00 call draws on both days instead of only the one its
         // `date` happens to name.
         const spans = root.spans;
+        const linked = [];   // per column: task ids a linked event stands in for
         for (let k = 0; k < days.length; k++) {
+            linked.push({});
             for (let i = 0; i < spans.length; i++) {
                 const e = spans[i];
+                if (Seg.covers(e, days[k].date) && e.taskId) linked[k][String(e.taskId)] = true;
                 if (Seg.isStrip(e)) continue;   // all-day events live in the strip
                 const seg = Seg.segmentOn(e, days[k].date);
                 if (!seg) continue;
@@ -272,6 +257,48 @@ Item {
                     key: e.id + "@" + k,
                     segFirst: seg.first, segLast: seg.last
                 });
+            }
+        }
+        return { days: days, colOf: colOf, linked: linked };
+    }
+    readonly property var eventDays: buildEventDays()
+
+    function buildDays() {
+        const start = weekStart;
+        const _t = root.taskRev;
+        const ev = root.eventDays;
+        const colOf = ev.colOf;
+        const linked = ev.linked;
+        const days = [];
+        for (let k = 0; k < ev.days.length; k++)
+            days.push({ date: ev.days[k].date, tasks: [], events: ev.days[k].events, blocks: [] });
+        // Tasks: C++ hands over only those due or scheduled this week, with
+        // the day already worked out — reading ten roles of every task in the
+        // profile to find the few that are this week took seconds at 10k.
+        // A deadline is a chip in the header; so is a date-only schedule. A
+        // task scheduled at a clock time is a block on the grid, next to the
+        // events, unless a linked event already stands in for it.
+        const end = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 6);
+        const list = AppController.calendarTasks(start, end, root.showArchived);
+        for (let i = 0; i < list.length; i++) {
+            const t = list[i];
+            if (!root.passesFilter(t)) continue;
+            const dueCol = t.dueDay >= 0 ? colOf[t.dueDay] : -1;
+            const schedCol = t.schedDay >= 0 ? colOf[t.schedDay] : -1;
+            if (dueCol >= 0) days[dueCol].tasks.push(t);
+            if (schedCol >= 0) {
+                if (t.schedHour >= 0) {
+                    if (!linked[schedCol][t.id]) {
+                        const len = t.estimateMinutes > 0 ? t.estimateMinutes / 60 : 1;
+                        days[schedCol].blocks.push({
+                            id: t.id, title: t.title, priority: t.priority,
+                            start: t.schedHour, end: Math.min(24, t.schedHour + Math.max(Theme.minEventHours, len)),
+                            key: "task:" + t.id + "@" + schedCol
+                        });
+                    }
+                } else if (schedCol !== dueCol) {
+                    days[schedCol].tasks.push(Object.assign({ scheduled: true }, t));
+                }
             }
         }
         const priRank = { P0: 0, P1: 1, P2: 2, P3: 3 };
@@ -290,7 +317,7 @@ Item {
     // grid would otherwise read as blank/broken.
     readonly property bool weekEmpty: {
         for (let i = 0; i < days.length; i++)
-            if (days[i].tasks.length > 0 || days[i].events.length > 0) return false;
+            if (days[i].tasks.length > 0 || days[i].events.length > 0 || days[i].blocks.length > 0) return false;
         return true;
     }
 
@@ -298,6 +325,7 @@ Item {
     // can position them absolutely (and move across day columns).
     function buildFlatEvents() {
         const out = [];
+        const days = root.eventDays.days;
         for (let i = 0; i < days.length; i++) {
             for (let j = 0; j < days[i].events.length; j++) {
                 const e = days[i].events[j];
@@ -317,6 +345,38 @@ Item {
         return out;
     }
     readonly property var flatEvents: buildFlatEvents()
+
+    function buildFlatBlocks() {
+        const out = [];
+        for (let i = 0; i < days.length; i++)
+            for (let j = 0; j < days[i].blocks.length; j++)
+                out.push(Object.assign({ dayIndex: i }, days[i].blocks[j]));
+        return out;
+    }
+    readonly property var flatBlocks: buildFlatBlocks()
+
+    // A drag or resize on one occurrence of a series asks which ones it is
+    // for, like the editor does; anything else applies at once.
+    SeriesScopeDialog { id: scopeAsk }
+    readonly property alias scopePrompt: scopeAsk
+    function _commitMove(occ, deltaHours, cancel) {
+        if (!occ || Math.abs(deltaHours) < 1e-9) { if (cancel) cancel(); return; }
+        if (String(occ.masterId || "").length > 0)
+            scopeAsk.ask("move", (scope) => AppController.moveOccurrence(occ, deltaHours, scope), cancel);
+        else
+            AppController.moveOccurrence(occ, deltaHours, "this");
+    }
+    function _commitResize(occ, start, end, cancel) {
+        if (!occ) { if (cancel) cancel(); return; }
+        if (String(occ.masterId || "").length > 0)
+            scopeAsk.ask("move", (scope) => AppController.resizeOccurrence(occ, start, end, scope), cancel);
+        else
+            AppController.resizeOccurrence(occ, start, end, "this");
+    }
+    function _daysBetween(a, b) {
+        return Math.round((Date.UTC(b.getFullYear(), b.getMonth(), b.getDate())
+                         - Date.UTC(a.getFullYear(), a.getMonth(), a.getDate())) / 86400000);
+    }
 
     // All-day events, packed into rows so bars stack instead of overlapping.
     // Computed for the whole week at once: a bar's row has to be the same in
@@ -356,6 +416,10 @@ Item {
                 const e = days[i].events[j];
                 list.push({ id: e.key, start: e.start, end: e.end });
             }
+            for (let j = 0; j < days[i].blocks.length; j++) {
+                const b = days[i].blocks[j];
+                list.push({ id: b.key, start: b.start, end: b.end });
+            }
             perDay.push(list);
         }
         return Overlap.computeByDay(perDay);
@@ -364,7 +428,8 @@ Item {
 
     function totalTasks() {
         let n = 0;
-        for (let i = 0; i < days.length; i++) n += days[i].tasks.length;
+        for (let i = 0; i < days.length; i++)
+            for (let j = 0; j < days[i].tasks.length; j++) if (!days[i].tasks[j].scheduled) n++;
         return n;
     }
     function totalEvents() {
@@ -593,7 +658,9 @@ Item {
                                             }
                                             Text {
                                                 Layout.fillWidth: true
-                                                text: modelData.title
+                                                // A planned day (no deadline here) reads
+                                                // as planned, not as due.
+                                                text: (modelData.scheduled ? "◷ " : "") + modelData.title
                                                 textFormat: Text.PlainText
                                                 color: Theme.text
                                                 font.pixelSize: Theme.fsXs
@@ -1005,6 +1072,9 @@ Item {
                                 anchors.topMargin: Theme.spSm
                                 anchors.bottomMargin: Theme.spSm
                                 cursorShape: didDrag ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                                // The ScrollView's Flickable took the vertical
+                                // drag: a move in time or any resize snapped back.
+                                preventStealing: true
                                 property real grabX: 0
                                 property real grabY: 0
                                 property real baseX: 0
@@ -1035,15 +1105,22 @@ Item {
                                 }
                                 onReleased: {
                                     if (didDrag) {
+                                        // A shift of the whole event by what
+                                        // this piece moved: hours, plus whole
+                                        // days by date (hidden weekends make
+                                        // columns and days differ).
                                         const dur = weEv.modelData.end - weEv.modelData.start;
-                                        const newY = baseY + weEv.dragDy;
+                                        const newY = (weEv.modelData.start - root.hoursStart) * root.hourH + weEv.dragDy;
                                         let ns = root.snapHour(root.yToHour(newY));
                                         ns = Math.max(root.hoursStart, Math.min(ns, root.hoursEnd - dur));
-                                        const newDate = root.days[weEv.effDayIndex].date;
-                                        AppController.updateEvent(weEv.modelData.id, ns, ns + dur, newDate);
-                                    } else {
-                                        root.eventClicked(weEv.modelData.id, weEv.modelData.occ);
+                                        const dayShift = root._daysBetween(root.days[weEv.modelData.dayIndex].date,
+                                                                           root.days[weEv.effDayIndex].date);
+                                        didDrag = false;
+                                        root._commitMove(weEv.modelData.occ, (ns - weEv.modelData.start) + dayShift * 24,
+                                                         () => { if (weEv) { weEv.dragDx = 0; weEv.dragDy = 0; } });
+                                        return;
                                     }
+                                    root.eventClicked(weEv.modelData.id, weEv.modelData.occ);
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                     didDrag = false;
                                 }
@@ -1053,9 +1130,14 @@ Item {
                             // Top resize handle.
                             MouseArea {
                                 id: weTop
+                                // A piece of an overnight event has no edge of
+                                // its own on this day, as in the day panel.
+                                enabled: weEv.modelData.segFirst && weEv.modelData.segLast
+                                visible: enabled
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
                                 height: 6
                                 cursorShape: Qt.SizeVerCursor
+                                preventStealing: true
                                 property bool resizing: false
                                 onPressed: { resizing = true; weEv.pendingStartH = weEv.modelData.start; }
                                 onPositionChanged: (mouse) => {
@@ -1069,8 +1151,8 @@ Item {
                                     if (!resizing) return;
                                     resizing = false;
                                     const ns = weEv.pendingStartH;
-                                    AppController.updateEvent(weEv.modelData.id, ns, weEv.modelData.end, weEv.modelData.date);
-                                    weEv.pendingStartH = NaN;
+                                    if (Math.abs(ns - weEv.modelData.start) < 1e-9) { weEv.pendingStartH = NaN; return; }
+                                    root._commitResize(weEv.modelData.occ, ns, weEv.modelData.end, () => { if (weEv) weEv.pendingStartH = NaN; });
                                 }
                                 onCanceled: { resizing = false; weEv.pendingStartH = NaN; }
                             }
@@ -1078,9 +1160,12 @@ Item {
                             // Bottom resize handle.
                             MouseArea {
                                 id: weBot
+                                enabled: weEv.modelData.segFirst && weEv.modelData.segLast
+                                visible: enabled
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                 height: 6
                                 cursorShape: Qt.SizeVerCursor
+                                preventStealing: true
                                 property bool resizing: false
                                 onPressed: { resizing = true; weEv.pendingEndH = weEv.modelData.end; }
                                 onPositionChanged: (mouse) => {
@@ -1094,10 +1179,49 @@ Item {
                                     if (!resizing) return;
                                     resizing = false;
                                     const ne = weEv.pendingEndH;
-                                    AppController.updateEvent(weEv.modelData.id, weEv.modelData.start, ne, weEv.modelData.date);
-                                    weEv.pendingEndH = NaN;
+                                    if (Math.abs(ne - weEv.modelData.end) < 1e-9) { weEv.pendingEndH = NaN; return; }
+                                    root._commitResize(weEv.modelData.occ, weEv.modelData.start, ne, () => { if (weEv) weEv.pendingEndH = NaN; });
                                 }
                                 onCanceled: { resizing = false; weEv.pendingEndH = NaN; }
+                            }
+                        }
+                    }
+
+                    // Tasks scheduled at a clock time. The week used to show
+                    // only deadlines, so a task planned for Thursday 14:00
+                    // without one appeared nowhere but the day panel.
+                    Repeater {
+                        model: root.flatBlocks
+                        delegate: Rectangle {
+                            id: wkBlock
+                            required property var modelData
+                            objectName: "week-taskblock-" + wkBlock.modelData.id
+                            readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
+                            readonly property real _slotW: (gridHost.dayW - 4) / Math.max(1, _slot.cols)
+                            x: gridHost.gutterW + wkBlock.modelData.dayIndex * gridHost.dayW + 2 + _slot.col * _slotW
+                            y: (wkBlock.modelData.start - root.hoursStart) * root.hourH
+                            width: _slotW - (_slot.cols > 1 ? 2 : 0)
+                            height: Math.max(18, (wkBlock.modelData.end - wkBlock.modelData.start) * root.hourH - 2)
+                            radius: Theme.radiusSm
+                            color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.containsMouse ? 0.18 : 0.10)
+                            border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.6)
+                            border.width: 1
+                            z: 5
+                            Text {
+                                anchors.fill: parent
+                                anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs
+                                text: "▸ " + (wkBlock.modelData.title || "")
+                                color: Theme.text
+                                font.pixelSize: Theme.fsXs
+                                font.weight: Font.DemiBold
+                                elide: Text.ElideRight
+                            }
+                            MouseArea {
+                                id: wkBlockMA
+                                anchors.fill: parent
+                                hoverEnabled: true
+                                cursorShape: Qt.PointingHandCursor
+                                onClicked: root.taskClicked(wkBlock.modelData.id)
                             }
                         }
                     }

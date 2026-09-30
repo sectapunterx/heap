@@ -28,7 +28,7 @@ TEST(RRuleParse, ReadsFrequencyIntervalAndDays) {
   ASSERT_TRUE(r.isValid());
   EXPECT_EQ(r.freq, RRule::Weekly);
   EXPECT_EQ(r.interval, 2);
-  EXPECT_EQ(r.byDay, (QVector<int>{1, 3}));
+  EXPECT_EQ(r.plainDays(), (QVector<int>{1, 3}));
 }
 
 TEST(RRuleParse, IntervalDefaultsToOne) {
@@ -41,8 +41,12 @@ TEST(RRuleParse, ReadsCountAndUntil) {
   EXPECT_EQ(r.until, QDate(2027, 1, 15));
 }
 
+// The UTC form keeps its instant; the day bound is loosened by one because in
+// UTC the date can run ahead of the event's own (see untilAt).
 TEST(RRuleParse, ReadsTheDateTimeFormOfUntil) {
-  EXPECT_EQ(parseRRule(QStringLiteral("FREQ=DAILY;UNTIL=20270115T090000Z")).until, QDate(2027, 1, 15));
+  const RRule r = parseRRule(QStringLiteral("FREQ=DAILY;UNTIL=20270115T090000Z"));
+  EXPECT_EQ(r.untilAt, QDateTime(QDate(2027, 1, 15), QTime(9, 0), QTimeZone::utc()));
+  EXPECT_EQ(r.until, QDate(2027, 1, 16));
 }
 
 TEST(RRuleParse, RejectsWhatItDoesNotSupport) {
@@ -54,12 +58,27 @@ TEST(RRuleParse, RejectsWhatItDoesNotSupport) {
   EXPECT_FALSE(parseRRule(QStringLiteral("FREQ=DAILY;UNTIL=notadate")).isValid());
 }
 
-// An ordinal BYDAY means "the second Thursday". Dropping the ordinal would
-// silently turn that into every Thursday — a meeting four times as often as it
-// should be — so the whole rule is rejected instead.
-TEST(RRuleParse, RejectsAnOrdinalByDayRatherThanMisreadingIt) {
-  EXPECT_FALSE(parseRRule(QStringLiteral("FREQ=MONTHLY;BYDAY=2TH")).isValid());
-  EXPECT_FALSE(parseRRule(QStringLiteral("FREQ=MONTHLY;BYDAY=-1FR")).isValid());
+// An ordinal BYDAY means "the second Thursday" and is read as such where the
+// RFC allows it; in a DAILY or WEEKLY rule it has nothing to count within, so
+// the rule is rejected rather than misread as "every Thursday".
+TEST(RRuleParse, ReadsAnOrdinalByDayWhereTheRfcAllowsIt) {
+  const RRule r = parseRRule(QStringLiteral("FREQ=MONTHLY;BYDAY=2TH"));
+  ASSERT_TRUE(r.isValid());
+  ASSERT_EQ(r.byDay.size(), 1);
+  EXPECT_EQ(r.byDay.first().ord, 2);
+  EXPECT_EQ(r.byDay.first().day, 4);
+  EXPECT_TRUE(parseRRule(QStringLiteral("FREQ=MONTHLY;BYDAY=-1FR")).isValid());
+  QString why;
+  EXPECT_FALSE(parseRRule(QStringLiteral("FREQ=WEEKLY;BYDAY=2TH"), &why).isValid());
+  EXPECT_FALSE(why.isEmpty());
+}
+
+TEST(RRuleParse, NamesThePartItDoesNotSupport) {
+  QString why;
+  EXPECT_FALSE(parseRRule(QStringLiteral("FREQ=YEARLY;BYWEEKNO=20"), &why).isValid());
+  EXPECT_TRUE(why.contains(QStringLiteral("BYWEEKNO")));
+  EXPECT_FALSE(parseRRule(QStringLiteral("FREQ=HOURLY"), &why).isValid());
+  EXPECT_TRUE(why.contains(QStringLiteral("HOURLY")));
 }
 
 TEST(RRuleParse, RoundTripsThroughText) {
@@ -200,4 +219,104 @@ TEST(RRule, Expand_YearlyOnLeapDay_ReturnsToLeapDay) {
   const QVector<QDate> d = datesOf(QStringLiteral("FREQ=YEARLY"), QDate(2028, 2, 29), QDate(2028, 1, 1), QDate(2032, 12, 31));
   ASSERT_EQ(d.size(), 5);
   EXPECT_EQ(d.last(), QDate(2032, 2, 29));
+}
+
+// ─── The rest of RFC 5545's BYxxx (audit TIME-8, TIME-27) ─────────────
+
+// 5 Oct 2026 is a Monday.
+TEST(RRuleRfc, DailyByDayIsEveryWorkingDay) {
+  const QVector<QDate> d =
+      datesOf(QStringLiteral("FREQ=DAILY;BYDAY=MO,TU,WE,TH,FR"), QDate(2026, 10, 5), QDate(2026, 10, 5), QDate(2026, 10, 18));
+  EXPECT_EQ(d.size(), 10);
+  for(const QDate& x : d) {
+    EXPECT_LE(x.dayOfWeek(), 5) << x.toString(Qt::ISODate).toStdString();
+  }
+}
+
+TEST(RRuleRfc, MonthlyByMonthDayListHitsEveryDay) {
+  const QVector<QDate> d =
+      datesOf(QStringLiteral("FREQ=MONTHLY;BYMONTHDAY=1,15"), QDate(2026, 10, 1), QDate(2026, 10, 1), QDate(2026, 12, 31));
+  EXPECT_EQ(
+      d,
+      (QVector<QDate>{
+          QDate(2026, 10, 1), QDate(2026, 10, 15), QDate(2026, 11, 1), QDate(2026, 11, 15), QDate(2026, 12, 1), QDate(2026, 12, 15)}));
+}
+
+TEST(RRuleRfc, NegativeMonthDayIsCountedFromTheEnd) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=MONTHLY;BYMONTHDAY=-1"), QDate(2027, 1, 31), QDate(2027, 1, 1), QDate(2027, 4, 30));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2027, 1, 31), QDate(2027, 2, 28), QDate(2027, 3, 31), QDate(2027, 4, 30)}));
+}
+
+TEST(RRuleRfc, AnExplicitMonthDayTheMonthLacksIsSkipped) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=MONTHLY;BYMONTHDAY=31"), QDate(2027, 1, 31), QDate(2027, 1, 1), QDate(2027, 5, 31));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2027, 1, 31), QDate(2027, 3, 31), QDate(2027, 5, 31)}));
+}
+
+TEST(RRuleRfc, LastFridayViaBySetPos) {
+  const QVector<QDate> d = datesOf(
+      QStringLiteral("FREQ=MONTHLY;BYDAY=MO,TU,WE,TH,FR;BYSETPOS=-1"), QDate(2026, 10, 30), QDate(2026, 10, 1), QDate(2026, 12, 31));
+  // The last working day of Oct, Nov and Dec 2026.
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2026, 10, 30), QDate(2026, 11, 30), QDate(2026, 12, 31)}));
+  const QVector<QDate> f =
+      datesOf(QStringLiteral("FREQ=MONTHLY;BYDAY=FR;BYSETPOS=-1"), QDate(2026, 10, 30), QDate(2026, 10, 1), QDate(2026, 12, 31));
+  EXPECT_EQ(f, (QVector<QDate>{QDate(2026, 10, 30), QDate(2026, 11, 27), QDate(2026, 12, 25)}));
+}
+
+TEST(RRuleRfc, OrdinalWeekdayInAMonth) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=MONTHLY;BYDAY=2TH"), QDate(2026, 10, 8), QDate(2026, 10, 1), QDate(2026, 12, 31));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2026, 10, 8), QDate(2026, 11, 12), QDate(2026, 12, 10)}));
+}
+
+TEST(RRuleRfc, YearlyByMonthListHitsEveryMonth) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=YEARLY;BYMONTH=3,9"), QDate(2026, 3, 10), QDate(2026, 1, 1), QDate(2027, 12, 31));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2026, 3, 10), QDate(2026, 9, 10), QDate(2027, 3, 10), QDate(2027, 9, 10)}));
+}
+
+TEST(RRuleRfc, YearlyOrdinalWeekdayOfAMonth) {
+  // US Thanksgiving: the fourth Thursday of November.
+  const QVector<QDate> d =
+      datesOf(QStringLiteral("FREQ=YEARLY;BYMONTH=11;BYDAY=4TH"), QDate(2026, 11, 26), QDate(2026, 1, 1), QDate(2028, 12, 31));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2026, 11, 26), QDate(2027, 11, 25), QDate(2028, 11, 23)}));
+}
+
+// WKST decides which days share a week for INTERVAL>1. The RFC's own example:
+// every other week on TU,SU from Tue 5 Aug 1997 gives Aug 5, 10, 19, 24 with
+// WKST=MO and Aug 5, 17, 19, 31 with WKST=SU.
+TEST(RRuleRfc, WeekStartChangesTheBiweeklyPairing) {
+  const QVector<QDate> mo = datesOf(
+      QStringLiteral("FREQ=WEEKLY;INTERVAL=2;COUNT=4;BYDAY=TU,SU;WKST=MO"), QDate(1997, 8, 5), QDate(1997, 8, 1), QDate(1997, 9, 30));
+  EXPECT_EQ(mo, (QVector<QDate>{QDate(1997, 8, 5), QDate(1997, 8, 10), QDate(1997, 8, 19), QDate(1997, 8, 24)}));
+  const QVector<QDate> su = datesOf(
+      QStringLiteral("FREQ=WEEKLY;INTERVAL=2;COUNT=4;BYDAY=TU,SU;WKST=SU"), QDate(1997, 8, 5), QDate(1997, 8, 1), QDate(1997, 9, 30));
+  EXPECT_EQ(su, (QVector<QDate>{QDate(1997, 8, 5), QDate(1997, 8, 17), QDate(1997, 8, 19), QDate(1997, 8, 31)}));
+}
+
+// DTSTART is the first occurrence even when it is not one of the rule's days.
+TEST(RRuleRfc, AStartOffTheRuleIsStillTheFirstOccurrence) {
+  // Wed 7 Oct 2026, rule on Mondays.
+  const QVector<QDate> d =
+      datesOf(QStringLiteral("FREQ=WEEKLY;BYDAY=MO;COUNT=3"), QDate(2026, 10, 7), QDate(2026, 10, 1), QDate(2026, 12, 31));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2026, 10, 7), QDate(2026, 10, 12), QDate(2026, 10, 19)}));
+}
+
+// A daily series did not stop after ~11 years when the window is far ahead.
+TEST(RRuleRfc, AFarWindowOfAnUnboundedSeriesIsReached) {
+  const QVector<QDate> d = datesOf(QStringLiteral("FREQ=DAILY"), QDate(2010, 1, 1), QDate(2040, 6, 1), QDate(2040, 6, 3));
+  EXPECT_EQ(d, (QVector<QDate>{QDate(2040, 6, 1), QDate(2040, 6, 2), QDate(2040, 6, 3)}));
+  const QVector<QDate> w = datesOf(QStringLiteral("FREQ=WEEKLY;INTERVAL=2"), QDate(2010, 1, 4), QDate(2040, 6, 1), QDate(2040, 6, 30));
+  ASSERT_FALSE(w.isEmpty());
+  EXPECT_EQ(QDate(2010, 1, 4).daysTo(w.first()) % 14, 0);
+}
+
+TEST(RRuleRfc, AnUtcUntilKeepsTheInstantAndLoosensTheDay) {
+  const RRule r = parseRRule(QStringLiteral("FREQ=DAILY;UNTIL=20261216T045959Z"));
+  ASSERT_TRUE(r.isValid());
+  EXPECT_EQ(r.untilAt, QDateTime(QDate(2026, 12, 16), QTime(4, 59, 59), QTimeZone::utc()));
+  EXPECT_EQ(r.until, QDate(2026, 12, 17));
+  EXPECT_EQ(heap::cal::toRRuleText(r), QStringLiteral("FREQ=DAILY;UNTIL=20261216T045959Z"));
+}
+
+TEST(RRuleRfc, EveryPartRoundTrips) {
+  const QString text = QStringLiteral("FREQ=YEARLY;INTERVAL=2;BYMONTH=3,9;BYMONTHDAY=-1,1;BYDAY=-1FR,MO;BYSETPOS=-1,1;WKST=SU;COUNT=6");
+  EXPECT_EQ(heap::cal::toRRuleText(parseRRule(text)), text);
 }
