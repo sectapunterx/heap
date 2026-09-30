@@ -481,10 +481,30 @@ Item {
                                 Layout.fillWidth: true
                             }
                         }
+                        // Drawn like SwitchRow's switch: the stock Basic
+                        // indicator ignored the theme (DES-20).
                         Switch {
                             id: devSwitch
                             checked: root._showUnimplemented
                             onToggled: root.set("developer", "showUnimplemented", checked)
+                            Accessible.name: I18n.t("settings.debug.showUnimpl")
+                            indicator: Rectangle {
+                                implicitWidth: 36; implicitHeight: 20; radius: 10
+                                x: devSwitch.leftPadding
+                                y: (devSwitch.height - height) / 2
+                                color: devSwitch.checked ? Theme.accent : Theme.panel3
+                                border.color: devSwitch.checked ? Theme.accent : Theme.fieldBorder
+                                border.width: 1
+                                FocusRing { target: devSwitch; radius: 13 }
+                                Rectangle {
+                                    width: 14; height: 14; radius: 7
+                                    color: Theme.knob
+                                    border.color: Theme.fieldBorder
+                                    border.width: 1
+                                    y: 3
+                                    x: devSwitch.checked ? 36 - width - 3 : 3
+                                }
+                            }
                         }
                     }
                 }
@@ -952,12 +972,16 @@ Item {
         Rectangle {
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
             color: switchRow.checked ? Theme.accent : Theme.panel3
-            border.color: switchRow.checked ? Theme.accent : Theme.border
+            // The OFF track had no edge on panel3 in the light themes, and
+            // the knob was 1.2-2.3:1 on the accent track (DES-20).
+            border.color: switchRow.checked ? Theme.accent : Theme.fieldBorder
             border.width: 1
             FocusRing { target: switchRow; radius: 13 }
             Rectangle {
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
+                border.color: Theme.fieldBorder
+                border.width: 1
                 anchors.verticalCenter: parent.verticalCenter
                 x: switchRow.checked ? parent.width - width - 3 : 3
                 Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
@@ -1550,7 +1574,7 @@ Item {
                                 readonly property bool on: workDaysRow.days.indexOf(wdChip.day) >= 0
                                 implicitWidth: 34; implicitHeight: 24
                                 radius: Theme.radiusMd
-                                color: wdChip.on ? Theme.accentSoft : (wdMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                                color: wdChip.on ? Theme.accentSoft : (wdMA.hovered ? Theme.panel3 : Theme.panel2)
                                 border.color: wdChip.on ? Theme.accent : Theme.border
                                 border.width: 1
                                 Text {
@@ -1559,12 +1583,15 @@ Item {
                                     color: wdChip.on ? Theme.accentStrong : Theme.text
                                     font.pixelSize: Theme.fsXs
                                 }
-                                MouseArea {
+                                ClickArea {
                                     id: wdMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
+                                    objectName: "settings-workday-" + wdChip.day
+                                    label: I18n.t("settings.cal.workDays") + ": " + I18n.dayName(wdChip.day % 7)
+                                    showTip: false
+                                    role: Accessible.CheckBox
+                                    checkable: true
+                                    checked: wdChip.on
+                                    onActivated: {
                                         const next = workDaysRow.days.slice();
                                         const i = next.indexOf(wdChip.day);
                                         if (i >= 0) next.splice(i, 1); else next.push(wdChip.day);
@@ -1717,13 +1744,20 @@ Item {
                         Item { Layout.fillWidth: true }
                         Rectangle {
                             radius: Theme.radiusMd; implicitWidth: openTxt.implicitWidth + 18; implicitHeight: 26
-                            color: openMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            color: openMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             Text {
                                 id:
                                     openTxt; anchors.centerIn: parent; text: I18n.t("settings.shortcuts.open"); color: Theme.text; font.pixelSize: Theme.fsSm
                             }
-                            MouseArea { id: openMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: settingsBridge.openHotkeysRequested() }
+                            ClickArea {
+                                id: openMA
+                                objectName: "settings-open-hotkeys"
+                                label: I18n.t("settings.shortcuts.open")
+                                tip: I18n.t("hotkeys.title")
+                                shortcutId: "hotkeys.open"
+                                onActivated: settingsBridge.openHotkeysRequested()
+                            }
                         }
                     }
                     Text {
@@ -1912,20 +1946,27 @@ Item {
                             { label: "60m", v: 60 }
                         ]
                         delegate: Rectangle {
+                            id: asOpt
                             required property var modelData
                             readonly property int cur: (root.settings.integrations && root.settings.integrations.autoSyncMinutes) || 0
                             radius: Theme.radiusMd
                             implicitWidth: asTxt.implicitWidth + 20; implicitHeight: 26
                             Layout.minimumWidth: implicitWidth
-                            color: cur === modelData.v ? Theme.accent : (asMA.containsMouse ? Theme.panel3 : Theme.panel2)
+                            color: cur === modelData.v ? Theme.accent : (asMA.hovered ? Theme.panel3 : Theme.panel2)
                             border.color: cur === modelData.v ? Theme.accent : Theme.border; border.width: 1
                             Text {
                                 id: asTxt; anchors.centerIn: parent; text: modelData.label
                                 color: parent.cur === modelData.v ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsSm
                             }
-                            MouseArea {
-                                id: asMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                onClicked: root.set("integrations", "autoSyncMinutes", modelData.v)
+                            ClickArea {
+                                id: asMA
+                                objectName: "settings-autosync-" + asOpt.modelData.v
+                                label: I18n.t("settings.integrations.autoSync") + ": " + asOpt.modelData.label
+                                showTip: false
+                                role: Accessible.RadioButton
+                                checkable: true
+                                checked: asOpt.cur === asOpt.modelData.v
+                                onActivated: root.set("integrations", "autoSyncMinutes", asOpt.modelData.v)
                             }
                         }
                     }
@@ -2024,6 +2065,8 @@ Item {
                                 anchors.verticalCenter: parent.verticalCenter
                                 spacing: Theme.spXl
                                 Rectangle {
+                                    id: intTile
+                                    objectName: "int-card-tile"
                                     width: 32; height: 32; radius: Theme.radiusMd
                                     color: modelData.color
                                     readonly property string logo: root.providerLogos[modelData.id] || ""
@@ -2033,19 +2076,21 @@ Item {
                                         width: 18; height: 18
                                         sourceSize.width: 36; sourceSize.height: 36
                                         source: parent.logo !== "" ? "qrc:/brand/icons/" + parent.logo + ".svg" : ""
-                                        color: Theme.textOnAccent
+                                        // On the brand colour, not the accent:
+                                        // textOnAccent was 2.8:1 on Jira red (DES-25).
+                                        color: Theme.textOn(intTile.color)
                                     }
                                     // A provider without a drawn mark keeps
                                     // its catalogue glyph.
                                     Text {
                                         visible: parent.logo === ""
-                                        anchors.centerIn: parent; text: modelData.icon; color: Theme.textOnAccent; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                                        anchors.centerIn: parent; text: modelData.icon; color: Theme.textOn(intTile.color); font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
                                     }
                                 }
                                 ColumnLayout {
                                     Layout.fillWidth: true
                                     spacing: 1
-                                    Text { text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                    Text { id: intName; text: modelData.name; color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
                                     Text { text: I18n.t(modelData.descKey); color: Theme.textMuted; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; wrapMode: Text.WordWrap }
                                 }
                                 Text {
@@ -2062,11 +2107,14 @@ Item {
                                     color: Theme.textDim; font.pixelSize: Theme.fsMd
                                 }
                             }
-                            MouseArea {
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: intCard.open = !intCard.open
+                            ClickArea {
+                                objectName: "int-card-header"
+                                label: intName.text
+                                showTip: false
+                                role: Accessible.CheckBox
+                                checkable: true
+                                checked: intCard.open
+                                onActivated: intCard.open = !intCard.open
                             }
                         }
 
@@ -2239,7 +2287,15 @@ Item {
                                 visible: intCard.canOneClick || intCard.isConn
                                 text: (intCard.advanced ? "▾  " : "▸  ") + I18n.t("settings.integrations.advanced")
                                 color: Theme.textMuted; font.pixelSize: Theme.fsSm
-                                MouseArea { anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: intCard.advanced = !intCard.advanced }
+                                ClickArea {
+                                    objectName: "int-card-advanced"
+                                    label: I18n.t("settings.integrations.advanced")
+                                    showTip: false
+                                    role: Accessible.CheckBox
+                                    checkable: true
+                                    checked: intCard.advanced
+                                    onActivated: intCard.advanced = !intCard.advanced
+                                }
                             }
 
                             // Credential / scope fields. Secret fields (token/key)
@@ -2297,7 +2353,7 @@ Item {
                                         spacing: Theme.spMd
                                         Text {
                                             text: (intCard.mapOpen ? "▾  " : "▸  ") + I18n.t("settings.integrations.statusMap")
-                                            color: mapToggleMA.containsMouse ? Theme.accentStrong : Theme.text
+                                            color: mapToggleMA.hovered ? Theme.accentStrong : Theme.text
                                             font.pixelSize: Theme.fsMd
                                             font.weight: Font.DemiBold
                                         }
@@ -2316,13 +2372,15 @@ Item {
                                         }
                                         Item { Layout.fillWidth: true; visible: intCard.mapOpen }
                                     }
-                                    MouseArea {
+                                    ClickArea {
                                         id: mapToggleMA
                                         objectName: "status-map-toggle-area"
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.toggleStatusMap(intCard.intKey)
+                                        label: I18n.t("settings.integrations.statusMap")
+                                        showTip: false
+                                        role: Accessible.CheckBox
+                                        checkable: true
+                                        checked: intCard.mapOpen
+                                        onActivated: root.toggleStatusMap(intCard.intKey)
                                     }
                                 }
                                 Text {
@@ -2606,7 +2664,7 @@ Item {
                             }
                             Rectangle {
                                 radius: Theme.radiusSm
-                                color: rmMA.containsMouse
+                                color: rmMA.hovered
                                     ? Theme.withAlpha(Theme.danger, 0.18)
                                     : "transparent"
                                 border.color: Theme.danger; border.width: 1
@@ -2616,12 +2674,11 @@ Item {
                                     text: "×"
                                     color: Theme.danger
                                 }
-                                MouseArea {
+                                ClickArea {
                                     id: rmMA
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: {
+                                    objectName: "settings-git-remove-repo"
+                                    label: I18n.t("settings.git.removeRepo")
+                                    onActivated: {
                                         const arr = ((root.settings.git
                                                     && root.settings.git.watchedRepos) || []).slice();
                                         arr.splice(index, 1);
@@ -2649,7 +2706,8 @@ Item {
                             radius: Theme.radiusMd
                             implicitHeight: 30
                             implicitWidth: addT.implicitWidth + 22
-                            color: addMA.containsMouse ? Theme.accentHover : Theme.accent
+                            color: addMA.hovered ? Theme.accentHover : Theme.accent
+                            opacity: addMA.enabled ? 1 : 0.45
                             Text {
                                 id: addT
                                 anchors.centerIn: parent
@@ -2657,12 +2715,13 @@ Item {
                                 color: Theme.textOnAccent
                                 font.weight: Font.Medium
                             }
-                            MouseArea {
+                            ClickArea {
                                 id: addMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
+                                objectName: "settings-git-add-repo"
+                                label: I18n.t("common.add")
+                                showTip: false
+                                enabled: newRepoField.text.trim().length > 0
+                                onActivated: {
                                     const p = newRepoField.text.trim();
                                     if (!p.length) return;
                                     const arr = ((root.settings.git

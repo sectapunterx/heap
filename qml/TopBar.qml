@@ -268,13 +268,12 @@ Rectangle {
                         font.pixelSize: Theme.fsXs
                         font.weight: Font.DemiBold
                     }
-                    MouseArea {
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: (prBadge.pr && prBadge.pr.url)
-                                     ? Qt.PointingHandCursor : Qt.ArrowCursor
-                        onClicked: if (prBadge.pr && prBadge.pr.url)
-                                       Qt.openUrlExternally(prBadge.pr.url)
+                    ClickArea {
+                        objectName: "topbar-pr-badge"
+                        enabled: !!(prBadge.pr && prBadge.pr.url)
+                        label: prBadgeT.text
+                        tip: I18n.t("topbar.pr.openTip")
+                        onActivated: Qt.openUrlExternally(prBadge.pr.url)
                     }
                 }
                 // ── CI check rollup on the focused repo (HEAP-76) ──
@@ -314,7 +313,7 @@ Rectangle {
                 }
                 Rectangle {
                     radius: Theme.radiusSm
-                    color: openMA.containsMouse ? Theme.accentStrong : "transparent"
+                    color: openMA.hovered ? Theme.accentStrong : "transparent"
                     border.color: Theme.accentStrong
                     border.width: 1
                     implicitWidth: openT.implicitWidth + 12
@@ -323,16 +322,16 @@ Rectangle {
                         id: openT
                         anchors.centerIn: parent
                         text: I18n.t("topbar.git.open")
-                        color: openMA.containsMouse ? Theme.bg : Theme.accentStrong
+                        color: openMA.hovered ? Theme.bg : Theme.accentStrong
                         font.pixelSize: Theme.fsXs
                         font.weight: Font.Medium
                     }
-                    MouseArea {
+                    ClickArea {
                         id: openMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: AppController.openFocusedTask()
+                        objectName: "topbar-git-open"
+                        label: I18n.t("topbar.git.open")
+                        showTip: false
+                        onActivated: AppController.openFocusedTask()
                     }
                 }
                 // Dismiss. The hit area used to be the glyph's own bounds —
@@ -341,23 +340,19 @@ Rectangle {
                     Layout.preferredWidth: 20
                     Layout.preferredHeight: 20
                     radius: Theme.radiusSm
-                    color: dismissMA.containsMouse ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
+                    color: dismissMA.hovered ? Theme.withAlpha(Theme.accentStrong, 0.18) : "transparent"
                     Text {
                         anchors.centerIn: parent
                         text: "×"
-                        color: dismissMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                        color: dismissMA.hovered ? Theme.accentStrong : Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsLg
                     }
-                    MouseArea {
+                    ClickArea {
                         id: dismissMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: AppController.dismissGitBanner()
-                        ToolTip.visible: containsMouse
-                        ToolTip.delay: 400
-                        ToolTip.text: I18n.t("topbar.git.dismiss")
+                        objectName: "topbar-git-dismiss"
+                        label: I18n.t("topbar.git.dismiss")
+                        onActivated: AppController.dismissGitBanner()
                     }
                 }
             }
@@ -443,25 +438,24 @@ Rectangle {
                 Rectangle {
                     visible: kbd.text.length > 0
                     radius: Theme.radiusSm
-                    border.color: kbdMA.containsMouse ? Theme.borderStrong : Theme.border
+                    border.color: kbdMA.hovered ? Theme.borderStrong : Theme.border
                     border.width: 1
-                    color: kbdMA.containsMouse ? Theme.panel3 : "transparent"
+                    color: kbdMA.hovered ? Theme.panel3 : "transparent"
                     width: kbd.implicitWidth + 10; height: 16
                     Text {
                         id: kbd; anchors.centerIn: parent
                         text: AppController.shortcutFor("search.focus")
-                        color: kbdMA.containsMouse ? Theme.text : Theme.textDim
+                        color: kbdMA.hovered ? Theme.text : Theme.textDim
                         font.family: Theme.fontMono; font.pixelSize: Theme.fsXs
                     }
-                    MouseArea {
+                    // Named, not a Tab stop: the search field right before it
+                    // is where it would take the keyboard.
+                    ClickArea {
                         id: kbdMA
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.focusSearch()
-                        ToolTip.visible: containsMouse
-                        ToolTip.delay: 400
-                        ToolTip.text: I18n.t("topbar.searchHint").arg(kbd.text)
+                        objectName: "topbar-search-kbd"
+                        activeFocusOnTab: false
+                        label: I18n.t("topbar.searchHint").arg(kbd.text)
+                        onActivated: root.focusSearch()
                     }
                 }
             }

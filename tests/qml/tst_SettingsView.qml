@@ -185,11 +185,11 @@ TestCase {
         const combo = findChild(card, "status-map-combo");
         verify(!combo.parent.visible, "a folded mapping still shows its rows");
 
-        toggle.clicked(null);
+        toggle.activated();
         tryVerify(function () { return card.mapOpen; }, 1000, "a click did not unfold the mapping");
         verify(combo.parent.visible);
 
-        toggle.clicked(null);
+        toggle.activated();
         tryVerify(function () { return !card.mapOpen; }, 1000, "a second click did not fold it again");
     }
 
