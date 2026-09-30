@@ -304,6 +304,8 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 # ── audit-time: begin ──
 # ── audit-time: end ──
 # ── audit-know: begin ──
+# Notes / docs / markdown regressions from the 2026-09-30 audit (KNOW-*, PLAT-21).
+heap_add_appcontroller_test(heap_know_audit_tests test_know_audit.cpp)
 # ── audit-know: end ──
 # ── audit-ux: begin ──
 # ── audit-ux: end ──

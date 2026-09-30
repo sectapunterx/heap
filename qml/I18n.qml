@@ -658,7 +658,7 @@ QtObject {
             "topbar.notes.import": "Import notes folder…",
             "topbar.notes.export": "Export notes folder…",
             "dialog.importVault.title": "Pick any file inside the notes folder",
-            "dialog.exportVault.title": "Pick a name inside the destination folder",
+            "dialog.exportVault.title": "Name a new folder for the export — existing files are never overwritten",
             "toast.notes.imported": "Imported %1, updated %2, skipped %3",
             "toast.notes.exported": "Wrote %1 notes",
             "rail.unscheduled": "Needs a slot",
@@ -1007,6 +1007,12 @@ QtObject {
             // ── audit-time: begin ──
             // ── audit-time: end ──
             // ── audit-know: begin ──
+            "notes.vault.previewTitle": "Import notes folder",
+            "notes.vault.previewBody": "%1 files: %2 new, %3 updated from disk, %4 unchanged, %5 kept as edited here, %6 changed on both sides, %7 skipped.",
+            "notes.vault.previewConflicts": "Notes changed both here and on disk keep your version; the file arrives next to it as a copy marked “from disk”.",
+            "notes.vault.import": "Import",
+            "toast.notes.importedFull": "Notes: %1 new · %2 updated · %3 kept · %4 conflicts · %5 skipped — Ctrl+Z undoes",
+            "toast.notes.exportedTo": "Wrote %1 notes to %2",
             // ── audit-know: end ──
             // ── audit-ux: begin ──
             // ── audit-ux: end ──
@@ -1654,7 +1660,7 @@ QtObject {
             "topbar.notes.import": "Импорт папки заметок…",
             "topbar.notes.export": "Экспорт папки заметок…",
             "dialog.importVault.title": "Выберите любой файл внутри папки заметок",
-            "dialog.exportVault.title": "Выберите имя внутри папки назначения",
+            "dialog.exportVault.title": "Назовите новую папку для экспорта — существующие файлы не перезаписываются",
             "toast.notes.imported": "Добавлено %1, обновлено %2, пропущено %3",
             "toast.notes.exported": "Записано заметок: %1",
             "rail.unscheduled": "Без времени",
@@ -1991,6 +1997,12 @@ QtObject {
             // ── audit-time: begin ──
             // ── audit-time: end ──
             // ── audit-know: begin ──
+            "notes.vault.previewTitle": "Импорт папки заметок",
+            "notes.vault.previewBody": "Файлов: %1. Новых — %2, обновятся с диска — %3, без изменений — %4, останутся как правлены здесь — %5, изменены с обеих сторон — %6, пропущено — %7.",
+            "notes.vault.previewConflicts": "Для заметок, изменённых и здесь, и на диске, остаётся ваша версия, а файл появится рядом копией с пометкой «с диска».",
+            "notes.vault.import": "Импортировать",
+            "toast.notes.importedFull": "Заметки: новых %1 · обновлено %2 · оставлено %3 · конфликтов %4 · пропущено %5 — Ctrl+Z отменит",
+            "toast.notes.exportedTo": "Записано заметок: %1 → %2",
             // ── audit-know: end ──
             // ── audit-ux: begin ──
             // ── audit-ux: end ──

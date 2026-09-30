@@ -198,6 +198,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
       {"notes.vault.badFolder", {"That folder could not be opened.", "Не удалось открыть папку."}},
       {"notes.vault.unreadable", {"Could not read %1", "Не удалось прочитать %1"}},
+      {"notes.vault.tooBig", {"Skipped %1: %2 MB is too big for a note", "Пропущен %1: %2 МБ — слишком много для заметки"}},
+      {"notes.vault.binary", {"Skipped %1: not a text file", "Пропущен %1: это не текстовый файл"}},
+      {"notes.vault.conflict", {"%1 changed both here and on disk — kept both", "%1 изменён и здесь, и на диске — сохранены обе версии"}},
+      {"notes.vault.conflictSuffix", {" (from disk)", " (с диска)"}},
+      {"notes.vault.undo", {"Notes import undone", "Импорт заметок отменён"}},
       {"ics.error.open", {"Could not read that file.", "Не удалось прочитать файл."}},
       {"undo.importIcs", {"Calendar imported", "Календарь импортирован"}},
       {"shortcut.cal.today.label", {"Calendar: today", "Календарь: сегодня"}},
@@ -2139,7 +2144,12 @@ namespace {
 constexpr int kMaxVaultDepth = 12;
 constexpr int kMaxVaultFiles = 20000;
 
-void collectMarkdown(const QDir& root, const QString& prefix, int depth, QStringList& out) {
+// `rootCanonical` is the chosen folder with links resolved. A directory whose
+// real location is outside it is somewhere else on the disk — a junction, a
+// symlink, a mount — and neither its files nor a loop back through it belong to
+// this vault. `seen` stops the same real directory being walked twice.
+void collectMarkdown(
+    const QDir& root, const QString& prefix, int depth, const QString& rootCanonical, QSet<QString>& seen, QStringList& out) {
   if(depth > kMaxVaultDepth || out.size() >= kMaxVaultFiles) {
     return;
   }
@@ -2149,13 +2159,19 @@ void collectMarkdown(const QDir& root, const QString& prefix, int depth, QString
     if(heap::notes::isIgnoredPath(rel)) {
       continue;
     }
+    // Not through a link: a vault synced from elsewhere may well contain one
+    // pointing back at a parent. isSymLink() alone misses NTFS junctions.
+    if(info.isSymLink() || info.isJunction()) {
+      continue;
+    }
     if(info.isDir()) {
-      // Not through a symlink: a vault synced from elsewhere may well contain
-      // one pointing back at a parent.
-      if(info.isSymLink()) {
+      const QString real = info.canonicalFilePath();
+      const bool inside = real.startsWith(rootCanonical + QLatin1Char('/'), Qt::CaseInsensitive);
+      if(real.isEmpty() || !inside || seen.contains(real)) {
         continue;
       }
-      collectMarkdown(QDir(info.absoluteFilePath()), rel, depth + 1, out);
+      seen.insert(real);
+      collectMarkdown(QDir(info.absoluteFilePath()), rel, depth + 1, rootCanonical, seen, out);
     } else if(info.suffix().compare(QLatin1String("md"), Qt::CaseInsensitive) == 0 ||
               info.suffix().compare(QLatin1String("markdown"), Qt::CaseInsensitive) == 0) {
       out << rel;
@@ -2163,13 +2179,21 @@ void collectMarkdown(const QDir& root, const QString& prefix, int depth, QString
   }
 }
 
+QString newNoteId() {
+  return QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+}
+
 }  // namespace
 
-QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
+QVariantMap AppController::planNotesImport(const QUrl& folderUrl, QVector<heap::notes::VaultPlanItem>* plan) const {
   QVariantMap out;
   out["imported"] = 0;
   out["updated"] = 0;
+  out["unchanged"] = 0;
+  out["kept"] = 0;
+  out["conflicts"] = 0;
   out["skipped"] = 0;
+  out["files"] = 0;
   out["warnings"] = QStringList();
 
   const QString path = folderUrl.isLocalFile() ? folderUrl.toLocalFile() : folderUrl.toString();
@@ -2178,27 +2202,26 @@ QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
     out["error"] = tr_("notes.vault.badFolder");
     return out;
   }
+  out["folder"] = QDir::toNativeSeparators(root.absolutePath());
 
   QStringList relatives;
-  collectMarkdown(root, QString(), 0, relatives);
+  QSet<QString> seen;
+  const QString rootCanonical = QFileInfo(root.absolutePath()).canonicalFilePath();
+  seen.insert(rootCanonical);
+  collectMarkdown(root, QString(), 0, rootCanonical, seen, relatives);
   relatives.sort();
 
   QStringList warnings;
-  int imported = 0;
-  int updated = 0;
   int skipped = 0;
-
-  // Matching on folder-and-title rather than on a generated id: the whole point
-  // of a vault is that it is edited elsewhere, and a second import of the same
-  // folder has to update the notes it brought in the first time rather than
-  // doubling them.
-  QHash<QString, QString> byKey;
-  for(const Note& n : m_notes.items()) {
-    byKey.insert(n.folder + QLatin1Char('/') + n.title.toLower(), n.id);
-  }
-
+  QVector<heap::notes::VaultSource> sources;
+  sources.reserve(relatives.size());
   for(const QString& rel : relatives) {
     QFile f(root.filePath(rel));
+    if(f.size() > heap::notes::kMaxVaultFileBytes) {
+      skipped++;
+      warnings << tr_("notes.vault.tooBig").arg(rel).arg(f.size() / (1024 * 1024));
+      continue;
+    }
     if(!f.open(QIODevice::ReadOnly)) {
       skipped++;
       warnings << tr_("notes.vault.unreadable").arg(rel);
@@ -2206,27 +2229,105 @@ QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
     }
     const QByteArray bytes = f.readAll();
     f.close();
-
-    Note n = heap::notes::importFile(rel, QString::fromUtf8(bytes));
-    const QString key = n.folder + QLatin1Char('/') + n.title.toLower();
-    const auto existing = byKey.constFind(key);
-    if(existing != byKey.constEnd()) {
-      n.id = existing.value();
-      updated++;
-    } else {
-      n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-      byKey.insert(key, n.id);
-      imported++;
+    bool binary = false;
+    const QString text = heap::notes::decodeVaultBytes(bytes, &binary);
+    if(binary) {
+      skipped++;
+      warnings << tr_("notes.vault.binary").arg(rel);
+      continue;
     }
-    m_notes.upsert(n);
+    sources.append({rel, text});
   }
 
-  if(imported > 0 || updated > 0) {
+  const QVector<heap::notes::VaultPlanItem> items =
+      heap::notes::planImport(m_notes.items(), sources, &newNoteId, tr_("notes.vault.conflictSuffix"));
+  int imported = 0;
+  int updated = 0;
+  int unchanged = 0;
+  int kept = 0;
+  int conflicts = 0;
+  for(const heap::notes::VaultPlanItem& it : items) {
+    switch(it.action) {
+      case heap::notes::VaultAction::Create:
+        imported++;
+        break;
+      case heap::notes::VaultAction::Update:
+        updated++;
+        break;
+      case heap::notes::VaultAction::Unchanged:
+        unchanged++;
+        break;
+      case heap::notes::VaultAction::KeepLocal:
+        kept++;
+        break;
+      case heap::notes::VaultAction::Conflict:
+        conflicts++;
+        warnings << tr_("notes.vault.conflict").arg(it.path);
+        break;
+    }
+  }
+  if(plan != nullptr) {
+    *plan = items;
+  }
+  out["imported"] = imported;
+  out["updated"] = updated;
+  out["unchanged"] = unchanged;
+  out["kept"] = kept;
+  out["conflicts"] = conflicts;
+  out["skipped"] = skipped;
+  out["files"] = static_cast<int>(relatives.size());
+  out["warnings"] = warnings;
+  return out;
+}
+
+QVariantMap AppController::previewNotesFolder(const QUrl& folderUrl) {
+  // What heap has typed but not yet written is heap's side of the
+  // comparison, so the preview has to see it.
+  emit aboutToChangeActiveNote();
+  syncActiveNoteBody();
+  return planNotesImport(folderUrl, nullptr);
+}
+
+QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
+  // The editor's debounced keystrokes are part of the note: without this flush
+  // an edit made a moment ago looked "untouched since the last import" and the
+  // older file overwrote it.
+  emit aboutToChangeActiveNote();
+  adoptOrphanNotesState();
+  syncActiveNoteBody();
+
+  QVector<heap::notes::VaultPlanItem> plan;
+  QVariantMap out = planNotesImport(folderUrl, &plan);
+  if(out.contains("error")) {
+    return out;
+  }
+
+  bool changed = false;
+  {
+    // One undo step for the whole folder: importing the wrong vault is taken
+    // back with one Ctrl+Z, not one per file.
+    const UndoScope scope(this, tr_("notes.vault.undo"));
+    for(const heap::notes::VaultPlanItem& it : plan) {
+      const int row = m_notes.indexOfId(it.note.id);
+      if(row < 0 || !(m_notes.items().at(row) == it.note)) {
+        m_notes.upsert(it.note);
+        changed = true;
+      }
+      if(it.action == heap::notes::VaultAction::Conflict) {
+        m_notes.upsert(it.copy);
+        changed = true;
+      }
+    }
+  }
+
+  if(changed) {
     // The open note may have just been rewritten from disk.
     const int row = m_notes.indexOfId(m_activeNoteId);
     if(row >= 0) {
-      m_notesState = m_notes.items().at(row).body;
-      emit notesStateChanged();
+      if(m_notes.items().at(row).body != m_notesState) {
+        m_notesState = m_notes.items().at(row).body;
+        emit notesStateChanged();
+      }
     } else if(!m_notes.items().isEmpty() && m_activeNoteId.isEmpty()) {
       m_activeNoteId = m_notes.items().first().id;
       m_notesState = m_notes.items().first().body;
@@ -2235,31 +2336,58 @@ QVariantMap AppController::importNotesFolder(const QUrl& folderUrl) {
     }
     scheduleSave();
   }
-
-  out["imported"] = imported;
-  out["updated"] = updated;
-  out["skipped"] = skipped;
-  out["warnings"] = warnings;
   return out;
 }
 
-QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl) const {
+QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QString& subfolder) {
   QVariantMap out;
   out["written"] = 0;
   out["skipped"] = 0;
 
+  emit aboutToChangeActiveNote();
+  adoptOrphanNotesState();
+  syncActiveNoteBody();
+
   const QString path = folderUrl.isLocalFile() ? folderUrl.toLocalFile() : folderUrl.toString();
-  const QDir root(path);
-  if(path.isEmpty() || !root.exists()) {
+  const QDir parent(path);
+  if(path.isEmpty() || !parent.exists()) {
     out["error"] = tr_("notes.vault.badFolder");
     return out;
   }
 
+  // Never into files that are already there. An export goes into a folder of
+  // its own — the name typed into the dialog, or a dated one — and when that
+  // name is taken it gets a suffix rather than a merge: the user's own
+  // team/Meeting.md must not turn into heap's Meeting.md.
+  QString name = subfolder.trimmed();
+  if(name.endsWith(QStringLiteral(".md"), Qt::CaseInsensitive)) {
+    name.chop(3);
+  }
+  name = name.trimmed().isEmpty()
+             ? QStringLiteral("heap-notes-%1").arg(QDateTime::currentDateTime().toString(QStringLiteral("yyyy-MM-dd-HHmm")))
+             : heap::notes::detail::sanitiseFileName(name);
+  QString target = name;
+  for(int n = 2; parent.exists(target); ++n) {
+    target = QStringLiteral("%1 %2").arg(name).arg(n);
+  }
+  if(!parent.mkpath(target)) {
+    out["error"] = tr_("notes.vault.badFolder");
+    return out;
+  }
+  const QDir root(parent.filePath(target));
+
   int written = 0;
   int skipped = 0;
+  QHash<QString, QString> pathOf;
   for(const heap::notes::VaultFile& file : heap::notes::exportVault(m_notes.items())) {
     const QString full = root.filePath(file.path);
     QDir().mkpath(QFileInfo(full).absolutePath());
+    // The folder is new, so nothing should be here. If something is — two
+    // names the filesystem folds together — skip rather than overwrite.
+    if(QFileInfo::exists(full)) {
+      skipped++;
+      continue;
+    }
     // QSaveFile, like every other write in this app: a half-written note is
     // worse than one that was not exported.
     QSaveFile f(full);
@@ -2270,13 +2398,34 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl) const {
     f.write(file.contents.toUtf8());
     if(f.commit()) {
       written++;
+      pathOf.insert(file.noteId, file.path);
     } else {
       skipped++;
     }
   }
 
+  // Remember what each note looked like when it left, so importing this
+  // folder back later can tell an edit made here from one made there.
+  for(const Note& n : QVector<Note>(m_notes.items())) {
+    const auto it = pathOf.constFind(n.id);
+    if(it == pathOf.constEnd()) {
+      continue;
+    }
+    const QString hash = heap::notes::contentHash(n);
+    if(n.vaultPath != it.value() || n.vaultHash != hash) {
+      Note next = n;
+      next.vaultPath = it.value();
+      next.vaultHash = hash;
+      m_notes.upsert(next);
+    }
+  }
+  if(!pathOf.isEmpty()) {
+    scheduleSave();
+  }
+
   out["written"] = written;
   out["skipped"] = skipped;
+  out["folder"] = QDir::toNativeSeparators(root.absolutePath());
   return out;
 }
 
@@ -6806,14 +6955,14 @@ QString AppController::exportActiveProfileJson() const {
   if(i < 0) {
     return QString();
   }
-  // Snapshot the live models into the profile copy we serialise, so
-  // unsaved edits in tasks/people/statuses/docs/notes round-trip.
+  // The editors debounce their writes: ask them to hand over what is still
+  // only in a text field, then take the same snapshot a save would. Copying
+  // just notesState here left the note list and the doc pages as of the last
+  // save, so a note written a moment ago was missing from the export.
+  auto* self = const_cast<AppController*>(this);
+  emit self->flushEditorsRequested();
+  self->snapshotActiveProfile();
   Profile p = m_profiles[i];
-  p.tasks = m_tasks.items();
-  p.people = m_people.items();
-  p.statuses = m_statuses;
-  p.docsState = m_docsState;
-  p.notesState = m_notesState;
   QJsonObject profObj = heap::state::profileToJson(p);
 
   // Events live in the global pool, so profileToJson() cannot see them — a

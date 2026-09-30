@@ -39,6 +39,10 @@ namespace heap::platform {
 class GlobalHotkey;
 }
 
+namespace heap::notes {
+struct VaultPlanItem;
+}
+
 namespace heap::update {
 class Updater;
 }
@@ -263,9 +267,16 @@ class AppController : public QObject {
   //
   // Import returns a summary rather than a bool, for the same reason .ics does:
   // a vault that brought in forty notes and skipped two is neither a success
-  // nor a failure. Keys: imported, updated, skipped, warnings.
+  // nor a failure. Keys: imported, updated, unchanged, kept (edited here, not
+  // on disk), conflicts (edited in both: the file arrives as a copy), skipped,
+  // files, folder, warnings. The whole import is one undo step.
   Q_INVOKABLE QVariantMap importNotesFolder(const QUrl& folderUrl);
-  Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl) const;
+  // The same summary without changing anything, for a confirm step.
+  Q_INVOKABLE QVariantMap previewNotesFolder(const QUrl& folderUrl);
+  // Writes into a new folder inside `folderUrl` — named `subfolder`, or dated
+  // when that is empty, with a suffix when the name is taken — so an export
+  // never overwrites a file. Keys: written, skipped, folder.
+  Q_INVOKABLE QVariantMap exportNotesFolder(const QUrl& folderUrl, const QString& subfolder = QString());
 
   // ── Links between notes ──
   //
@@ -893,6 +904,10 @@ class AppController : public QObject {
   // only in the text field at this point; it flushes on this signal, and they
   // land in the note they were typed into instead of the one being opened.
   void aboutToChangeActiveNote();
+  // Asks every editor with a debounced write pending (notes, doc pages, the
+  // docs catalogue) to write it now. Emitted before anything that reads the
+  // whole profile — an export, a search — so it sees what is on screen.
+  void flushEditorsRequested();
   void activeDocPageChanged();
   void appSettingsJsonChanged();
   void statusesChanged();
@@ -1011,6 +1026,9 @@ class AppController : public QObject {
   // A note with no body, made active without announcing a new notesState:
   // callers write the body next and that is the one change the editor sees.
   QString createActiveNote(const QString& title);
+  // Reads a vault folder and decides what importing it would do (see
+  // heap::notes::planImport); the summary is what import and preview return.
+  QVariantMap planNotesImport(const QUrl& folderUrl, QVector<heap::notes::VaultPlanItem>* plan) const;
   QString m_appSettingsJson;
   // settingsMap()'s parse cache, keyed on the string above so that no writer
   // of it has to remember to invalidate anything.

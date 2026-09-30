@@ -66,6 +66,11 @@ Item {
             AppController.flushSave();
         }
     }
+    // An export or a search is about to read the whole profile.
+    Connections {
+        target: AppController
+        function onFlushEditorsRequested() { root.flush() }
+    }
 
     // The body may change under us — an undo, a profile switch, an import.
     Connections {

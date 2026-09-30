@@ -179,6 +179,8 @@ Item {
             if (!root._loadedOnce || root._persisting) return;
             root._loadFromController();
         }
+        // An export or a search is about to read the whole profile.
+        function onFlushEditorsRequested() { root.flushPending() }
     }
 
     // ── Undo ────────────────────────────────────────────────────────────────

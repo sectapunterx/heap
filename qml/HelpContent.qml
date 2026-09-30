@@ -265,7 +265,10 @@ Item {
                     + "the note you are in. Clicking one that points nowhere offers to write it. Backlinks "
                     + "answer what else refers to the note you are reading, and clicking a #TICKET opens the "
                     + "task. Notes import and export as a folder of .md files with YAML frontmatter, which "
-                    + "is what Obsidian and friends already read."
+                    + "is what Obsidian and friends already read. Export writes into a new folder and never "
+                    + "over existing files; import shows what will change first, keeps a note you edited "
+                    + "here when the file did not change, keeps both versions when both did, and is undone "
+                    + "with one Ctrl+Z."
             }
             Body {
                 text: "Full markdown: headings, nested and task lists, tables, fenced code with syntax "

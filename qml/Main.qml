@@ -1459,12 +1459,18 @@ ApplicationWindow {
         // hides the contents and people cannot tell which folder they are in.
         nameFilters: ["Markdown (*.md *.markdown)", "All files (*)"]
         title: I18n.t("dialog.importVault.title")
-        onAccepted: {
-            const r = AppController.importNotesFolder(currentFolder);
+        // Nothing is imported from here: the folder is previewed first, so
+        // what is about to change is visible before it does.
+        onAccepted: vaultImportConfirm.openFor(currentFolder)
+    }
+    VaultImportDialog {
+        id: vaultImportConfirm
+        onImported: (r) => {
             if (r.error) { toast.show(r.error, "error"); return; }
-            toast.show(I18n.t("toast.notes.imported")
-                       .arg(r.imported).arg(r.updated).arg(r.skipped),
-                       r.skipped > 0 ? "warning" : "success");
+            const trouble = r.skipped > 0 || r.conflicts > 0;
+            toast.show(I18n.t("toast.notes.importedFull")
+                       .arg(r.imported).arg(r.updated).arg(r.kept).arg(r.conflicts).arg(r.skipped),
+                       trouble ? "warning" : "success");
             for (let i = 0; i < r.warnings.length; i++) console.warn("[vault]", r.warnings[i]);
         }
     }
@@ -1473,10 +1479,14 @@ ApplicationWindow {
         fileMode: FileDialog.SaveFile
         nameFilters: ["All files (*)"]
         title: I18n.t("dialog.exportVault.title")
+        // The typed name becomes the new folder the notes go into; nothing
+        // already in the chosen directory is written over.
         onAccepted: {
-            const r = AppController.exportNotesFolder(currentFolder);
+            const file = String(selectedFile);
+            const name = decodeURIComponent(file.substring(file.lastIndexOf("/") + 1));
+            const r = AppController.exportNotesFolder(currentFolder, name);
             toast.show(r.error ? r.error
-                               : I18n.t("toast.notes.exported").arg(r.written),
+                               : I18n.t("toast.notes.exportedTo").arg(r.written).arg(r.folder),
                        r.error ? "error" : "success");
         }
     }

@@ -603,19 +603,19 @@ TEST_F(NotesVaultTest, ExportWritesAFilePerNote) {
   app_->newNote(QStringLiteral("One"));
   app_->newNote(QStringLiteral("Two"));
 
-  const QVariantMap r = app_->exportNotesFolder(vaultUrl());
+  const QVariantMap r = app_->exportNotesFolder(vaultUrl(), QStringLiteral("out"));
 
   EXPECT_EQ(r.value(QStringLiteral("written")).toInt(), 2);
-  EXPECT_TRUE(QFile::exists(dir_.path() + QStringLiteral("/One.md")));
+  EXPECT_TRUE(QFile::exists(dir_.path() + QStringLiteral("/out/One.md")));
 }
 
 TEST_F(NotesVaultTest, ExportCreatesTheDirectoryForAFolder) {
   const QString id = app_->newNote(QStringLiteral("Retro"));
   app_->moveNoteToFolder(id, QStringLiteral("meetings/2026"));
 
-  app_->exportNotesFolder(vaultUrl());
+  app_->exportNotesFolder(vaultUrl(), QStringLiteral("out"));
 
-  EXPECT_TRUE(QFile::exists(dir_.path() + QStringLiteral("/meetings/2026/Retro.md")));
+  EXPECT_TRUE(QFile::exists(dir_.path() + QStringLiteral("/out/meetings/2026/Retro.md")));
 }
 
 // The whole point: out to a folder, back in, and nothing has moved.
@@ -625,9 +625,10 @@ TEST_F(NotesVaultTest, NotesSurviveAnExportAndReimport) {
   app_->setNoteBody(id, QStringLiteral("# Standup\n\nthe body\n"));
   app_->setNotePinned(id, true);
 
-  app_->exportNotesFolder(vaultUrl());
+  const QString out = app_->exportNotesFolder(vaultUrl()).value(QStringLiteral("folder")).toString();
   app_->notes()->reset({});
-  app_->importNotesFolder(vaultUrl());
+  app_->setNotesState(QString());
+  app_->importNotesFolder(QUrl::fromLocalFile(out));
 
   ASSERT_EQ(app_->notes()->rowCount(), 1);
   const Note back = app_->notes()->items().at(0);
