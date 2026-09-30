@@ -865,7 +865,7 @@ Item {
                 id: nameField
                 objectName: "add-column-name"
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
-                placeholderText: "Review · QA · Stalled…"
+                placeholderText: I18n.t("kanban.colName.ph")
                 color: Theme.text
                 placeholderTextColor: Theme.textDim
                 background: Rectangle { radius: Theme.radiusMd; color: Theme.panel2; border.color: Theme.border; border.width: 1 }

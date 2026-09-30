@@ -36,20 +36,26 @@ Rectangle {
                 color: Theme.panel3
                 implicitWidth: badge.implicitWidth + 12
                 implicitHeight: 18
+                // Counts come from calls the binding cannot watch, so the model
+                // signals bump a revision it does watch. They used to assign
+                // badge.text directly, which broke the binding to I18n: the
+                // badge stayed English after switching to Russian.
+                property int _rev: 0
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
+                    text: (parent._rev >= 0 ? I18n.t("people.badge") : "")
+                              .arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
                     color: Theme.textDim
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsXs
                 }
                 Connections {
                     target: AppController.activePeople
-                    function onDataChanged()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
-                    function onRowsInserted()   { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
-                    function onRowsRemoved()    { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
-                    function onModelReset()     { badge.text = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount()) }
+                    function onDataChanged()    { badge.parent._rev++ }
+                    function onRowsInserted()   { badge.parent._rev++ }
+                    function onRowsRemoved()    { badge.parent._rev++ }
+                    function onModelReset()     { badge.parent._rev++ }
                 }
             }
             Item { Layout.fillWidth: true }

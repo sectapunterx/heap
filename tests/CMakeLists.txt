@@ -306,6 +306,8 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 # ── audit-know: begin ──
 # ── audit-know: end ──
 # ── audit-ux: begin ──
+# UX audit fixes that live in C++: first-run language, toast kinds, RU labels.
+heap_add_appcontroller_test(heap_ux_audit_tests test_ux_audit.cpp)
 # ── audit-ux: end ──
 # ── audit-int: begin ──
 # ── audit-int: end ──

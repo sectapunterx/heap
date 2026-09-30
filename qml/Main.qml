@@ -472,7 +472,7 @@ ApplicationWindow {
         }
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
-        function onToast(msg) { toast.show(msg) }
+        function onToast(msg, kind) { toast.show(msg, kind || "info") }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)

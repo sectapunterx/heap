@@ -456,8 +456,14 @@ class AppController : public QObject {
   QString qtVersion() const;
   QString appVersion() const;
 
+  // Built from a key at read time, so a language switch repaints it (it
+  // used to be the English sentence stored when the check finished).
   QString updateStatus() const {
-    return m_updateStatus;
+    if(m_updateStatus.isEmpty()) {
+      return {};
+    }
+    const QString text = tr_(m_updateStatus);
+    return m_updateStatusArg.isEmpty() ? text : text.arg(m_updateStatusArg);
   }
 
   // ---- Diagnostics (HEAP-64) ----
@@ -910,7 +916,9 @@ class AppController : public QObject {
   void blockedStuckChanged();
   void statusCountsChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
-  void toast(const QString& message);
+  // `kind` tints the toast: "info" (default when empty), "success", "warning"
+  // or "error". Every C++ toast used to arrive as info, failures included.
+  void toast(const QString& message, const QString& kind = QString());
   // Device-flow OAuth: prompts the Integrations card to show a "enter this code
   // in your browser" banner. An empty `code` clears the banner (flow finished).
   void oauthDeviceCode(const QString& providerId, const QString& code, const QString& verificationUri);
@@ -1172,7 +1180,8 @@ class AppController : public QObject {
 
   // ---- Auto-update (HEAP-63) ----
   std::unique_ptr<heap::update::Updater> m_updater;
-  QString m_updateStatus;
+  QString m_updateStatus;  // a tr_() key, "" before the first check
+  QString m_updateStatusArg;
   QString m_latestReleaseUrl;
 
   // ---- Tracker sync (HEAP-74 GitHub, HEAP-75 Jira + GitLab) ----

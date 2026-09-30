@@ -191,7 +191,7 @@ Rectangle {
                         Layout.fillWidth: true
                     }
                     Text {
-                        text: chip.modelData.id + " · " + Qt.formatDate(chip.modelData.deadline, "ddd d MMM")
+                        text: chip.modelData.id + " · " + chip.modelData.deadline.toLocaleDateString(I18n.locale, "ddd d MMM")
                         color: Theme.textDim
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsXs

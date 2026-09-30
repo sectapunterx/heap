@@ -148,7 +148,7 @@ Item {
                     anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.sp2xl
                     Column {
                         Text {
-                            text: (I18n.lang, AppController.humanDate(AppController.selectedDate))
+                            text: I18n.relang(AppController.humanDate(AppController.selectedDate))
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
                             font.weight: Font.DemiBold

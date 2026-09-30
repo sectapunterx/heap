@@ -1232,7 +1232,7 @@ Item {
                     SliderRow {
                         visible: !!(root.settings.notifications && root.settings.notifications.deadlineReminders)
                         label: I18n.t("settings.notif.leadHours")
-                        unit: "h"; min: 1; max: 72; step: 1
+                        unit: I18n.t("common.hours"); min: 1; max: 72; step: 1
                         value: _num(root.settings.notifications && root.settings.notifications.deadlineLeadHours, 24)
                         onMoved: (value) => root.set("notifications", "deadlineLeadHours", value)
                     }
@@ -1250,7 +1250,7 @@ Item {
                     }
                     SliderRow {
                         label: I18n.t("settings.notif.meetingLead")
-                        unit: " min"; min: 0; max: 30; step: 1
+                        unit: " " + I18n.t("common.minutes"); min: 0; max: 30; step: 1
                         // Undefined-aware fallback: a stored 0 is a valid lead
                         // (min is 0) and must not collapse to 5 via a falsy `||`.
                         value: root.settings.notifications
@@ -1366,7 +1366,7 @@ Item {
                     SegRow {
                         label: I18n.t("settings.cal.snap")
                         value: String(_num(root.settings.calendar && root.settings.calendar.snapMinutes, 15))
-                        options: [ ({ value: "5", label: "5 min" }), ({ value: "15", label: "15 min" }), ({ value: "30", label: "30 min" }) ]
+                        options: [ ({ value: "5", label: "5 " + I18n.t("common.minutes") }), ({ value: "15", label: "15 " + I18n.t("common.minutes") }), ({ value: "30", label: "30 " + I18n.t("common.minutes") }) ]
                         onSelected: (value) => root.set("calendar", "snapMinutes", parseInt(value))
                     }
                     SwitchRow {
@@ -1392,7 +1392,7 @@ Item {
                     SliderRow {
                         visible: !!(root.settings.calendar && root.settings.calendar.autoFocusBlock)
                         label: I18n.t("settings.cal.focusDuration")
-                        unit: " min"; min: 30; max: 240; step: 15
+                        unit: " " + I18n.t("common.minutes"); min: 30; max: 240; step: 15
                         value: _num(root.settings.calendar && root.settings.calendar.focusBlockDuration, 90)
                         onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }

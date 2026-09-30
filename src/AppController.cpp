@@ -34,6 +34,7 @@
 #include "query/TaskQuery.h"
 #include "recur/RecurrenceEngine.h"
 #include "text/TaskTextUtils.h"
+#include "text/UiLanguage.h"
 #include "update/Updater.h"
 
 #include <QApplication>
@@ -56,6 +57,7 @@
 #include <QNetworkAccessManager>
 #include <QPair>
 #include <QSaveFile>
+#include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
 #include <QTime>
@@ -276,7 +278,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "обнови heap, чтобы редактировать."}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
-      {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
+      {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
       {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
@@ -300,24 +302,24 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"import.openFail", {"Cannot open: ", "Не открывается: "}},
       {"event.newDefault", {"New event", "Новое событие"}},
       // ---- Shortcuts catalog (labels + descriptions) ----
-      {"shortcut.palette.open.label", {"Open Command Palette", "Открыть Command Palette"}},
+      {"shortcut.palette.open.label", {"Open Command Palette", "Открыть палитру команд"}},
       {"shortcut.palette.open.desc",
-       {"Global fuzzy search across tasks, docs, profiles.", "Глобальный fuzzy-поиск задач, доков, профилей."}},
+       {"Fuzzy search across tasks, docs, notes, profiles and commands.", "Нечёткий поиск задач, доков, заметок, профилей и команд."}},
       {"shortcut.task.new.label", {"New task", "Новая задача"}},
       {"shortcut.task.new.desc", {"Create a ticket in the active profile.", "Создать тикет в активном профиле."}},
-      {"shortcut.view.board.label", {"Go to Board", "Перейти в Board"}},
+      {"shortcut.view.board.label", {"Go to Board", "Перейти к доске"}},
       {"shortcut.view.board.desc", {"Kanban of the active profile.", "Канбан активного профиля."}},
-      {"shortcut.view.timeline.label", {"Go to Timeline", "Перейти в Timeline"}},
+      {"shortcut.view.timeline.label", {"Go to Timeline", "Перейти к ленте"}},
       {"shortcut.view.timeline.desc", {"Feed by deadlines.", "Лента по дедлайнам."}},
-      {"shortcut.view.week.label", {"Go to Week", "Перейти в Week"}},
+      {"shortcut.view.week.label", {"Go to Week", "Перейти к неделе"}},
       {"shortcut.view.week.desc", {"Seven-day planner.", "Семидневный планировщик."}},
-      {"shortcut.view.month.label", {"Go to Month", "Перейти в Month"}},
+      {"shortcut.view.month.label", {"Go to Month", "Перейти к месяцу"}},
       {"shortcut.view.month.desc", {"Month grid of deadlines and events.", "Сетка месяца: дедлайны и события."}},
-      {"shortcut.view.docs.label", {"Go to Docs", "Перейти в Docs"}},
+      {"shortcut.view.docs.label", {"Go to Docs", "Перейти к докам"}},
       {"shortcut.view.docs.desc", {"Specs, links, snippets, contacts.", "Спеки, ссылки, сниппеты, контакты."}},
-      {"shortcut.view.notes.label", {"Go to Notes", "Перейти в Notes"}},
+      {"shortcut.view.notes.label", {"Go to Notes", "Перейти к заметкам"}},
       {"shortcut.view.notes.desc", {"Markdown canvas of the active profile.", "Markdown-канвас активного профиля."}},
-      {"shortcut.view.settings.label", {"Go to Settings", "Перейти в Settings"}},
+      {"shortcut.view.settings.label", {"Go to Settings", "Перейти к настройкам"}},
       {"shortcut.view.settings.desc",
        {"Full settings panel: profile, appearance, integrations.", "Полная панель настроек: профиль, внешний вид, интеграции."}},
       {"shortcut.profile.next.label", {"Next profile", "Следующий профиль"}},
@@ -331,9 +333,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.profile.weeklyReport.desc",
        {"Copies a Markdown report of tasks marked done in the last 7 days, with tracked time.",
         "Копирует Markdown-отчёт задач, завершённых за последние 7 дней, с учётом времени."}},
-      {"shortcut.tweaks.open.label", {"Open Tweaks", "Открыть Tweaks"}},
+      {"shortcut.tweaks.open.label", {"Open Tweaks", "Открыть твики"}},
       {"shortcut.tweaks.open.desc", {"Theme, density, workday.", "Тема, плотность, рабочий день."}},
-      {"shortcut.hotkeys.open.label", {"Open Hotkeys", "Открыть Hotkeys"}},
+      {"shortcut.hotkeys.open.label", {"Open Hotkeys", "Открыть горячие клавиши"}},
       {"shortcut.hotkeys.open.desc", {"This panel.", "Эта панель."}},
       {"shortcut.redo.label", {"Redo", "Повторить"}},
       {"shortcut.redo.desc", {"Re-apply the operation Ctrl+Z reversed.", "Повторить отменённое действие."}},
@@ -344,11 +346,11 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.search.focus.desc", {"Move the cursor to the header search field.", "Перевести курсор в строку поиска в шапке."}},
       {"shortcut.quick-capture.label", {"Quick-capture task", "Быстрое создание задачи"}},
       {"shortcut.quick-capture.desc",
-       {"Open Quick-capture with on-the-fly date parsing.", "Открыть Quick-capture с разбором даты на лету."}},
+       {"Open Quick-capture with on-the-fly date parsing.", "Открыть быстрый ввод с разбором даты на лету."}},
       {"shortcut.quick-capture-notes.label", {"Quick-capture note", "Быстрая заметка"}},
       {"shortcut.quick-capture-notes.desc",
-       {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть Quick-capture для Заметок (дописывает в блок Notes)."}},
-      {"shortcut.view.archive.label", {"Go to Archive", "Перейти в Архив"}},
+       {"Open Quick-capture for Notes (appends to the Notes block).", "Открыть быстрый ввод заметки (дописывает в блок заметок)."}},
+      {"shortcut.view.archive.label", {"Go to Archive", "Перейти к архиву"}},
       {"shortcut.view.archive.desc", {"Archived tickets of the active profile.", "Архивные тикеты активного профиля."}},
       {"shortcut.panel.right.label", {"Show / hide calendar column", "Показать/скрыть колонку календаря"}},
       {"shortcut.panel.right.desc",
@@ -388,7 +390,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.deadlineTitle", {"Deadline %1", "Дедлайн %1"}},
       {"notify.deadlineWhen.h1", {"in 1 hour", "через час"}},
       {"notify.deadlineWhen.hN", {"in %1 h", "через %1 ч"}},
-      {"notify.standupTitle", {"Standup soon", "Standup скоро"}},
+      {"notify.standupTitle", {"Standup soon", "Скоро стендап"}},
       {"notify.standupBody", {"In %1 min", "Через %1 мин"}},
   };
   return table;
@@ -498,12 +500,20 @@ AppController::AppController(QObject* parent) :
   connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::dataChanged, this, dropStatusCounts);
 
+  // A fresh install speaks the system's language (a saved one overrides it in
+  // loadStateOnStart). Test runs stay on English whatever the machine says,
+  // so suites that read strings do not depend on the developer's locale.
+  if(!QStandardPaths::isTestModeEnabled()) {
+    m_language = heap::text::uiLanguageFor(QLocale::system().uiLanguages());
+  }
+
   seedShortcutCatalog();
 
   // Re-localize shortcut catalog when language flips so the Settings →
   // Shortcuts list and HotkeysPanel labels update in place.
   connect(this, &AppController::languageChanged, this, [this]() {
     seedShortcutCatalog();
+    emit updateStatusChanged();
   });
 
   loadStateOnStart();
@@ -554,17 +564,20 @@ AppController::AppController(QObject* parent) :
   m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
   connect(m_updater.get(), &heap::update::Updater::updateAvailable, this, [this](const QString& version, const QString& url) {
     m_latestReleaseUrl = url;
-    m_updateStatus = tr_("update.available").arg(version);
+    m_updateStatus = QStringLiteral("update.available");
+    m_updateStatusArg = version;
     emit updateStatusChanged();
     emit updateAvailable(version, url);
   });
   connect(m_updater.get(), &heap::update::Updater::upToDate, this, [this](const QString&) {
-    m_updateStatus = tr_("update.upToDate");
+    m_updateStatus = QStringLiteral("update.upToDate");
+    m_updateStatusArg.clear();
     emit updateStatusChanged();
   });
   connect(m_updater.get(), &heap::update::Updater::checkFailed, this, [this](const QString& error) {
     qWarning() << "update check failed:" << error;
-    m_updateStatus = tr_("update.failed");
+    m_updateStatus = QStringLiteral("update.failed");
+    m_updateStatusArg.clear();
     emit updateStatusChanged();
   });
   // Opt-out background check shortly after startup (never auto-downloads). The
@@ -1524,7 +1537,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
     t.id = originalId;
   }
   if(t.id.isEmpty()) {
-    emit toast(tr_("task.idRequired"));
+    emit toast(tr_("task.idRequired"), QStringLiteral("warning"));
     return false;
   }
   t.title = draft.value("title").toString();
@@ -1554,7 +1567,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   // leave a card with nothing on it.
   if(t.title.trimmed().isEmpty()) {
     if(!isNew) {
-      emit toast(tr_("task.titleRequired"));
+      emit toast(tr_("task.titleRequired"), QStringLiteral("warning"));
     }
     return false;
   }
@@ -1569,7 +1582,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   const QString heldId = (!isNew && !originalId.isEmpty()) ? originalId : (isNew ? QString() : t.id);
   for(const Task& other : m_tasks.items()) {
     if(other.id != heldId && other.id.compare(t.id, Qt::CaseInsensitive) == 0) {
-      emit toast(tr_("task.idTaken").arg(other.id));
+      emit toast(tr_("task.idTaken").arg(other.id), QStringLiteral("warning"));
       return false;
     }
   }
@@ -1783,7 +1796,7 @@ void AppController::saveEvent(const QVariantMap& draft) {
   // A rule this build cannot expand used to be stored anyway and draw as one
   // event, with nothing saying why the series never repeated.
   if(!e.rrule.isEmpty() && !heap::cal::parseRRule(e.rrule).isValid()) {
-    emit toast(tr_("event.badRule").arg(e.rrule));
+    emit toast(tr_("event.badRule").arg(e.rrule), QStringLiteral("warning"));
     e.rrule.clear();
   }
   // The editor parses free-typed times and a multi-day event may legally end
@@ -3041,7 +3054,7 @@ void AppController::addStatus(const QString& name, const QString& color) {
     return;
   }
   if(statusNameTaken(name, QString())) {
-    emit toast(tr_("status.nameTaken").arg(name.trimmed()));
+    emit toast(tr_("status.nameTaken").arg(name.trimmed()), QStringLiteral("warning"));
     return;
   }
   const QString base = name.toLower();
@@ -3094,7 +3107,7 @@ void AppController::renameStatus(const QString& id, const QString& name) {
   // Two columns with one name cannot be told apart on the board, in a filter
   // or in the status mapping.
   if(statusNameTaken(name, id)) {
-    emit toast(tr_("status.nameTaken").arg(name.trimmed()));
+    emit toast(tr_("status.nameTaken").arg(name.trimmed()), QStringLiteral("warning"));
     emit statusesChanged();  // the editor falls back to the stored name
     return;
   }
@@ -3268,8 +3281,10 @@ QString AppController::eventHourLabel(double hour) const {
 }
 
 QString AppController::sprintLabel() const {
-  const int n = static_cast<int>((m_today.month()) * 2.1);
-  return QString("sprint-%1").arg(n);
+  // The ISO week, in the UI language. It used to be "sprint-<month × 2.1>":
+  // a number nobody's sprint was on, and English in a Russian UI.
+  const int week = m_today.weekNumber();
+  return (m_language == QStringLiteral("ru") ? QStringLiteral("нед. %1") : QStringLiteral("wk %1")).arg(week);
 }
 
 QString AppController::humanDate(const QDate& date) const {
@@ -4054,7 +4069,8 @@ void AppController::checkForUpdates() {
   if(!m_updater || m_updater->isChecking()) {
     return;
   }
-  m_updateStatus = tr_("update.checking");
+  m_updateStatus = QStringLiteral("update.checking");
+  m_updateStatusArg.clear();
   emit updateStatusChanged();
   m_updater->checkForUpdates();
 }
@@ -4578,7 +4594,7 @@ void AppController::applyIntegrationSettings() {
             });
             return;
           }
-          emit toast(tr_("sync.failed").arg(label, error));
+          emit toast(tr_("sync.failed").arg(label, error), QStringLiteral("error"));
         });
     connect(provider,
             &heap::integrations::IntegrationProvider::taskPushed,
@@ -4587,7 +4603,8 @@ void AppController::applyIntegrationSettings() {
               onTaskPushed(providerId, externalId, project, ok, error);
             });
     connect(provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, label](bool ok, const QString& error) {
-      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
+      emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error),
+                 ok ? QStringLiteral("success") : QStringLiteral("error"));
     });
     // The mapping UI used to list only statuses an issue had already arrived
     // in; the tracker's own list fills in the rest.
@@ -4682,7 +4699,8 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   const QString label = d ? d->displayName : providerId;
   connect(client, &heap::integrations::MattermostClient::connectionTested, this, [this, label](bool ok, const QString& error) {
-    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
+    emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error),
+               ok ? QStringLiteral("success") : QStringLiteral("error"));
   });
   connect(client,
           &heap::integrations::MattermostClient::contactsFetched,
@@ -4700,10 +4718,10 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
     // Saying "expired" beats repeating the same failure on every auto-sync.
     if(status == 401) {
       disconnectIntegration(providerId);
-      emit toast(tr_("int.sessionExpired").arg(label));
+      emit toast(tr_("int.sessionExpired").arg(label), QStringLiteral("warning"));
       return;
     }
-    emit toast(tr_("sync.failed").arg(label, error));
+    emit toast(tr_("sync.failed").arg(label, error), QStringLiteral("error"));
   });
 
   m_directoryClients.insert(providerId, client);
@@ -5009,7 +5027,7 @@ void AppController::connectWithCredentials(const QString& providerId, const QVar
             client->deleteLater();
             emit integrationLoginFinished(providerId, ok);
             if(!ok) {
-              emit toast(tr_("int.signInFailed").arg(label, error));
+              emit toast(tr_("int.signInFailed").arg(label, error), QStringLiteral("error"));
               return;
             }
             if(m_secretStore) {
@@ -5180,7 +5198,8 @@ void AppController::testIntegration(const QString& providerId) {
   const QString label = d->displayName;
   connect(
       provider, &heap::integrations::IntegrationProvider::connectionTested, this, [this, provider, label](bool ok, const QString& error) {
-        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error));
+        emit toast(ok ? tr_("int.connected").arg(label) : tr_("int.connectFailed").arg(label, error),
+                   ok ? QStringLiteral("success") : QStringLiteral("error"));
         provider->deleteLater();
       });
   provider->testConnection();
@@ -5520,7 +5539,7 @@ void AppController::refreshOAuthToken(const QString& providerId, std::function<v
           // panel offers the sign-in button again instead of failing forever.
           qWarning() << providerId << "token refresh failed:" << r.error;
           setIntegrationField(providerId, QStringLiteral("connected"), false);
-          emit toast(tr_("int.sessionExpired").arg(label));
+          emit toast(tr_("int.sessionExpired").arg(label), QStringLiteral("warning"));
           done(false);
           return;
         }
@@ -5593,7 +5612,7 @@ void AppController::resolveJiraSite(const QString& accessToken, const QString& l
 void AppController::connectOAuth(const QString& providerId) {
   const heap::integrations::ProviderDescriptor* d = heap::integrations::findDescriptor(providerId);
   if(!d || !d->oauth.supported) {
-    emit toast(tr_("int.noBrowser"));
+    emit toast(tr_("int.noBrowser"), QStringLiteral("error"));
     return;
   }
   const QVariantMap cfg = integrationConfig(providerId);
@@ -5672,7 +5691,7 @@ void AppController::connectOAuth(const QString& providerId) {
     mgr->deleteLater();
     emit oauthDeviceCode(providerId, QString(), QString());  // clear the banner
     if(!r.ok) {
-      emit toast(tr_("int.signInFailed").arg(label, r.error));
+      emit toast(tr_("int.signInFailed").arg(label, r.error), QStringLiteral("error"));
       return;
     }
     if(m_secretStore) {
@@ -6345,7 +6364,7 @@ QString AppController::createProfile(const QString& name, const QString& color) 
     return QString();
   }
   if(profileNameTaken(name, QString())) {
-    emit toast(tr_("profile.nameTaken").arg(name.trimmed()));
+    emit toast(tr_("profile.nameTaken").arg(name.trimmed()), QStringLiteral("warning"));
     return QString();
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
@@ -6371,7 +6390,7 @@ void AppController::renameProfile(const QString& id, const QString& newName) {
     return;
   }
   if(profileNameTaken(newName, id)) {
-    emit toast(tr_("profile.nameTaken").arg(newName.trimmed()));
+    emit toast(tr_("profile.nameTaken").arg(newName.trimmed()), QStringLiteral("warning"));
     emit profilesChanged();  // the editor falls back to the stored name
     return;
   }
@@ -7268,7 +7287,7 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
     const QVariantMap s = settingsMap();
     const QVariantMap tasks = s.value("tasks").toMap();
     if(tasks.value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
-      emit toast(tr_("branch.required"));
+      emit toast(tr_("branch.required"), QStringLiteral("warning"));
       return false;
     }
   }
@@ -7903,7 +7922,7 @@ void AppController::createBranchForTask(const QString& taskId) {
     repo = repos.first();
   }
   if(repo.isEmpty()) {
-    emit toast(tr_("git.noRepo"));
+    emit toast(tr_("git.noRepo"), QStringLiteral("warning"));
     return;
   }
 
@@ -7936,7 +7955,7 @@ void AppController::createBranchForTask(const QString& taskId) {
                           delete connection;
 
                           if(!ok) {
-                            emit toast(tr_("git.branchFailed").arg(error));
+                            emit toast(tr_("git.branchFailed").arg(error), QStringLiteral("error"));
                             return;
                           }
                           const int taskRow = m_tasks.indexOfId(pendingTaskId);

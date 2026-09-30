@@ -68,14 +68,14 @@ Rectangle {
             spacing: Theme.spXs
             EditableCrumb {
                 value: AppController.crumbProject
-                placeholder: "project"
+                placeholder: I18n.t("topbar.crumb.project")
                 bold: true
                 onCommitted: (v) => AppController.crumbProject = v
             }
             CrumbSep {}
             // sprint segment — derived; not editable
             Text {
-                text: AppController.sprintLabel()
+                text: I18n.relang(AppController.sprintLabel())
                 color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsMd
@@ -83,7 +83,7 @@ Rectangle {
             CrumbSep {}
             EditableCrumb {
                 value: AppController.crumbUser
-                placeholder: "you"
+                placeholder: I18n.t("topbar.crumb.user")
                 bold: true
                 onCommitted: (v) => AppController.crumbUser = v
             }
@@ -112,7 +112,7 @@ Rectangle {
                         color: profilePill.active.color || Theme.accent
                     }
                     Text {
-                        text: profilePill.active.name || "Profile"
+                        text: profilePill.active.name || I18n.t("topbar.profile.fallback")
                         color: Theme.text
                         font.family: Theme.fontMono
                         font.pixelSize: Theme.fsMd
@@ -257,8 +257,9 @@ Rectangle {
                             if (!prBadge.pr) return "";
                             const n = prBadge.pr.number || 0;
                             const s = String(prBadge.pr.state || "");
-                            const d = prBadge.pr.draft === true ? " · draft" : "";
-                            return "PR #" + n + " " + s + d;
+                            const d = prBadge.pr.draft === true ? " · " + I18n.t("topbar.pr.draft") : "";
+                            const st = s === "open" || s === "merged" || s === "closed" ? I18n.t("topbar.pr." + s) : s;
+                            return "PR #" + n + " " + st + d;
                         }
                         color: Theme.accentStrong
                         font.family: Theme.fontMono
