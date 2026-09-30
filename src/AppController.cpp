@@ -653,6 +653,7 @@ AppController::AppController(QObject* parent) :
   connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::dataChanged, this, dropStatusCounts);
+  wireSavedViews();
 
   // A fresh install speaks the system's language (a saved one overrides it in
   // loadStateOnStart). Test runs stay on English whatever the machine says,
@@ -945,7 +946,11 @@ QString AppController::tr_(const QString& key) const {
   const auto it = table.constFind(key);
   if(it == table.constEnd()) {
     // The integrations keep their own strings (audit INT-7).
-    const QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
+    // …and so do saved views.
+    QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
+    if(own.isNull()) {
+      own = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
+    }
     return own.isNull() ? key : own;
   }
   return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
@@ -4989,6 +4994,7 @@ void AppController::seedExampleProfile() {
   p.notes = SampleData::notes(seedLang);
   p.activeNoteId = p.notes.isEmpty() ? QString() : p.notes.constFirst().id;
   p.notesState = p.notes.isEmpty() ? QString() : p.notes.constFirst().body;
+  p.savedViews = heap::savedviews::starterViews(seedLang == SampleData::Lang::Ru);
   m_profiles.push_back(p);
   m_activeProfileId = p.id;
 
@@ -5218,7 +5224,8 @@ AppController::UndoScope::UndoScope(AppController* owner, QString label) :
     m_docPages(m_outermost ? owner->m_docPages.items() : QVector<::DocPage>{}),
     m_notes(m_outermost ? owner->m_notes.items() : QVector<::Note>{}),
     m_statuses(m_outermost ? owner->m_statuses : QVariantList{}),
-    m_docsState(m_outermost ? owner->m_docsState : QString{}) {
+    m_docsState(m_outermost ? owner->m_docsState : QString{}),
+    m_savedViews(m_outermost ? owner->m_savedViews : QVector<heap::savedviews::SavedView>{}) {
   ++owner->m_undoScopeDepth;
   if(m_outermost) {
     m_serial = ++owner->m_undoSerialCounter;
@@ -5264,6 +5271,11 @@ AppController::UndoScope::~UndoScope() {
     entry.docsStateTouched = true;
     entry.docsStateBefore = m_docsState;
     entry.docsStateAfter = m_owner->m_docsState;
+  }
+  if(m_savedViews != m_owner->m_savedViews) {
+    entry.savedViewsTouched = true;
+    entry.savedViewsBefore = m_savedViews;
+    entry.savedViewsAfter = m_owner->m_savedViews;
   }
   const bool wasEmpty = entry.isEmpty();
   m_owner->m_undo.push(std::move(entry));
@@ -5359,6 +5371,9 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     // being "dismissed", and one going again must be dismissed again.
     syncDismissedContacts(was, m_docsState);
   }
+  if(entry.savedViewsTouched) {
+    setSavedViews(backward ? entry.savedViewsBefore : entry.savedViewsAfter);
+  }
   // The status-count cache drops itself from the task model's own signals, so
   // nothing here has to remember to invalidate it.
 }
@@ -5401,7 +5416,8 @@ bool AppController::undoEntry(double serialValue) {
   const bool clean = statusesClean && heap::undo::untouchedSince(m_tasks, copy.tasks) &&
                      heap::undo::untouchedSince(m_events, copy.events) && heap::undo::untouchedSince(m_people, copy.people) &&
                      heap::undo::untouchedSince(m_docPages, copy.docPages) && heap::undo::untouchedSince(m_notes, copy.notes) &&
-                     (!copy.docsStateTouched || m_docsState == copy.docsStateAfter);
+                     (!copy.docsStateTouched || m_docsState == copy.docsStateAfter) &&
+                     (!copy.savedViewsTouched || m_savedViews == copy.savedViewsAfter);
   if(!clean) {
     emit toast(tr_("undo.changedSince"));
     return false;
@@ -7579,6 +7595,7 @@ void AppController::snapshotActiveProfile() {
   p.activeNoteId = m_activeNoteId;
   p.docPages = m_docPages.items();
   p.activeDocPageId = m_activeDocPageId;
+  p.savedViews = m_savedViews;
   // Events are global — not snapshotted into the profile.
 }
 
@@ -7619,6 +7636,7 @@ void AppController::applyProfileToModels(const Profile& p) {
   m_docPages.reset(p.docPages);
   m_activeDocPageId = p.activeDocPageId.isEmpty() && !p.docPages.isEmpty() ? p.docPages.first().id : p.activeDocPageId;
   emit activeDocPageChanged();
+  setSavedViews(p.savedViews);
   // Events are global — not reset on profile switch.
 }
 
@@ -7640,7 +7658,9 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
       p.statuses.append(m);
     }
   }
-  // tasks / events / people / docs — empty
+  // tasks / events / people / docs — empty; a few starter saved views, which
+  // are seeded only here, when the profile is made.
+  p.savedViews = heap::savedviews::starterViews(m_language == QStringLiteral("ru"));
   return p;
 }
 
@@ -9351,6 +9371,17 @@ void AppController::seedShortcutCatalog() {
   add("cal.prevDay", "Alt+Left");
   add("cal.nextDay", "Alt+Right");
   add("cal.newEvent", "Ctrl+Alt+E");
+  // The first nine saved views, in sidebar order. Alt+digit is free in the
+  // catalog and in every text field, and Ctrl+digit already means "view".
+  add("savedView.1", "Alt+1");
+  add("savedView.2", "Alt+2");
+  add("savedView.3", "Alt+3");
+  add("savedView.4", "Alt+4");
+  add("savedView.5", "Alt+5");
+  add("savedView.6", "Alt+6");
+  add("savedView.7", "Alt+7");
+  add("savedView.8", "Alt+8");
+  add("savedView.9", "Alt+9");
 
   if(!existingOverrides.isEmpty()) {
     QVariantMap asMap;

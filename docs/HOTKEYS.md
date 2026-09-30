@@ -81,6 +81,29 @@ task keeps the week, month, timeline or archive view you are on.
 
 The numbers follow the side rail, top to bottom.
 
+## Saved views
+
+A saved view is a named set of filters — the search query, the priority chips,
+the board sort, Archived, Show done — plus the view it opens in. They are
+listed in the sidebar under *Saved views*, numbered; the number is the key.
+
+| Action | Default |
+|--------|---------|
+| Apply saved view 1 … 9 | `Alt+1` `Alt+2` `Alt+3` `Alt+4` `Alt+5` `Alt+6` `Alt+7` `Alt+8` `Alt+9` |
+
+In the palette every view is a command, *View: name*, and *Save current view*
+saves the filters on screen. In the name dialog `Enter` saves and `Esc`
+cancels. In the sidebar list (`Tab` to it):
+
+| Action | Key |
+|---|---|
+| Previous / next view | `↑` / `↓` |
+| Apply | `Enter` |
+| Move the view up / down | `Ctrl+↑` / `Ctrl+↓` |
+| Rename | `F2` |
+| Delete (Undo in the toast, or `Ctrl+Z`) | `Del` |
+| Menu (apply, update from current filters, rename, duplicate, move, delete) | `Menu` or `Shift+F10`, or right click |
+
 ## Board cursor
 
 Bare letters, so a focused text field still types them. Arrow keys work

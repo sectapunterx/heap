@@ -53,6 +53,13 @@ TestCase {
         const rail = make('import TodoCpp; SideRail { width: 56; height: 480 }');
         const btn = findChild(rail, "rail-docs");
         verify(btn !== null, "rail-docs not found");
+        // At 480px Docs sits below the fold of the rail's scrolling part,
+        // under the saved views; the keyboard reaching it scrolls it in.
+        btn.forceActiveFocus(Qt.TabFocusReason);
+        tryVerify(function () {
+            const y = btn.mapToItem(rail, 0, 0).y;
+            return y >= 0 && y + btn.height <= rail.height;
+        }, 1000, "focusing a rail button scrolls it into view");
         mouseClick(btn);
         compare(AppController.currentView, "docs");
     }

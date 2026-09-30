@@ -388,6 +388,10 @@ QByteArray SyncSerializer::serializeProfile(const Profile& p) {
   // Free-form blobs kept verbatim: lossless and idempotent across round-trips.
   root[QStringLiteral("docsState")] = p.docsState;
   root[QStringLiteral("notesState")] = p.notesState;
+  // Order is the sidebar's, so not sorted by id; absent when there are none.
+  if(!p.savedViews.isEmpty()) {
+    root[QStringLiteral("savedViews")] = heap::savedviews::listToJson(p.savedViews);
+  }
 
   return QJsonDocument(root).toJson(QJsonDocument::Indented);
 }
@@ -415,6 +419,7 @@ std::optional<Profile> SyncSerializer::deserializeProfile(const QByteArray& json
   }
   p.docsState = root.value(QStringLiteral("docsState")).toString();
   p.notesState = root.value(QStringLiteral("notesState")).toString();
+  p.savedViews = heap::savedviews::listFromJson(root.value(QStringLiteral("savedViews")).toArray());
   return p;
 }
 

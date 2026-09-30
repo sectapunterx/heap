@@ -1,5 +1,7 @@
 #pragma once
 
+#include "views/SavedView.h"
+
 #include <QAbstractListModel>
 #include <QColor>
 #include <QDate>
@@ -310,6 +312,8 @@ struct Profile {
   QString activeNoteId;
   QVector<DocPage> docPages;
   QString activeDocPageId;
+  // Named filter snapshots, in sidebar order (profile key `savedViews`).
+  QVector<heap::savedviews::SavedView> savedViews;
   // Keys of the profile object this build does not read, carried through a
   // save untouched (PLAT-26). Only filled for a document at the current schema.
   QJsonObject extra;

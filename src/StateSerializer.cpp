@@ -683,6 +683,11 @@ QJsonObject profileToJson(const Profile& p) {
   if(!p.activeDocPageId.isEmpty()) {
     o["activeDocPageId"] = p.activeDocPageId;
   }
+  // Optional: a profile with none (or one written before saved views) has no
+  // key at all.
+  if(!p.savedViews.isEmpty()) {
+    o["savedViews"] = heap::savedviews::listToJson(p.savedViews);
+  }
   return o;
 }
 
@@ -712,6 +717,7 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
   p.activeNoteId = o["activeNoteId"].toString();
   p.docPages = docPagesFromJson(o["docPages"].toArray());
   p.activeDocPageId = o["activeDocPageId"].toString();
+  p.savedViews = heap::savedviews::listFromJson(o["savedViews"].toArray());
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
   }
@@ -730,6 +736,7 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
                                      QStringLiteral("activeNoteId"),
                                      QStringLiteral("docPages"),
                                      QStringLiteral("activeDocPageId"),
+                                     QStringLiteral("savedViews"),
                                      QStringLiteral("events")};
   for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
     if(!kKnown.contains(it.key())) {

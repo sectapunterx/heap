@@ -1,0 +1,397 @@
+// Saved views, end to end in the real Main.qml: saving from the filter bar
+// through the name dialog (Enter saves, Esc cancels), applying from the
+// sidebar, Alt+N and the palette, "modified" with Update view / Save as new,
+// the sidebar's keyboard (arrows, Enter, Ctrl+arrows, F2, Delete) and its
+// count and problem badges.
+import QtQuick
+import QtTest
+import TodoCpp
+
+TestCase {
+    id: tc
+    name: "SavedViews"
+    when: windowShown
+
+    property var win: null
+    property var host: null
+    property var seeded: []
+
+    function initTestCase() {
+        const comp = Qt.createComponent("qrc:/qt/qml/TodoCpp/qml/Main.qml");
+        tryCompare(comp, "status", Component.Ready, 5000);
+        verify(comp.status === Component.Ready, comp.errorString());
+        tc.win = comp.createObject(null);
+        verify(tc.win !== null);
+        tc.win.width = 1456;
+        tc.win.height = 939;
+        AppController.resetAllShortcuts();
+        wait(1200);   // splash
+        const cd = tc.win.contentData;
+        for (let i = 0; i < cd.length; i++) {
+            const o = cd[i];
+            if (o && o.opened !== undefined && o.close !== undefined && o.opened) o.close();
+        }
+        tc.host = find(tc.win.contentItem, function (it) { return it.objectName === "saved-views-host"; });
+        verify(tc.host !== null, "no SavedViewsHost in Main");
+        tc.win.requestActivate();
+        AppController.currentView = "board";
+        tryVerify(function () { return tc.win.activeViewItem() !== null; }, 3000);
+    }
+
+    function cleanupTestCase() {
+        clearViews();
+        if (tc.win) tc.win.destroy();
+        tc.win = null;
+    }
+
+    function init() {
+        clearViews();
+        resetFilters();
+        tc.seeded = [];
+        for (let i = 0; i < 3; i++) {
+            const d = AppController.newTaskDraft("todo");
+            d._isNew = true;
+            d.id = "SVQ-" + i;
+            d.title = "svprobe card " + i;
+            d.priority = i === 0 ? "P0" : "P2";
+            AppController.saveTask(d);
+            tc.seeded.push(d.id);
+        }
+        AppController.clearPendingUndo();
+        tc.win.focusActiveView();
+    }
+
+    function cleanup() {
+        const d = tc.host.nameDialog;
+        if (d.opened) d.close();
+        for (let i = 0; i < tc.seeded.length; i++) AppController.deleteTask(tc.seeded[i]);
+        tc.seeded = [];
+        clearViews();
+        resetFilters();
+        AppController.clearPendingUndo();
+        AppController.currentView = "board";
+    }
+
+    function clearViews() {
+        // The property is re-read on every access, so delete from the front.
+        while (AppController.savedViews.length > 0) AppController.deleteSavedView(AppController.savedViews[0].id);
+        if (tc.host) tc.host.leave();
+    }
+    function resetFilters() {
+        tc.win.searchText = "";
+        tc.win.prioritiesFilter = ({});
+        tc.win.boardSortMode = "manual";
+        tc.win.showArchived = false;
+        tc.win.showDoneTimeline = false;
+    }
+
+    function find(root, pred) {
+        if (!root) return null;
+        if (pred(root)) return root;
+        const kids = root.children || [];
+        for (let i = 0; i < kids.length; i++) {
+            const r = find(kids[i], pred);
+            if (r) return r;
+        }
+        return null;
+    }
+    function byName(name) {
+        return find(tc.win.contentItem, function (it) { return it.objectName === name && it.visible !== false; });
+    }
+    // A control that just appeared is placed on the next polish; click it
+    // after that, not at wherever the layout had it before.
+    function clickLaidOut(name) {
+        const it = byName(name);
+        verify(it !== null, name + " is not shown");
+        wait(50);
+        mouseClick(it);
+    }
+    function railRow(i) {
+        const list = byName("rail-saved-list");
+        verify(list !== null, "no saved view list in the rail");
+        // A row added a moment ago is laid out on the next polish.
+        tryVerify(function () {
+            const r = list.itemAtIndex(i);
+            return r !== null && list.height >= r.y + r.height;
+        }, 1000, "saved view row " + i + " is not laid out");
+        return list.itemAtIndex(i);
+    }
+    function mkView(name, query, view) {
+        return AppController.saveView(name, { query: query, priorities: [], sort: "manual",
+                                              archived: false, showDone: false, view: view || "board" });
+    }
+    function typeText(s) {
+        for (let i = 0; i < s.length; i++) keyClick(s[i]);
+    }
+    function ids() {
+        return AppController.savedViews.map(function (v) { return v.id; });
+    }
+
+    // ── Save from the filter bar: the dialog, Enter and Esc ──
+
+    function test_save_from_the_filter_bar_with_enter() {
+        tc.win.searchText = "svprobe priority:P0";
+        clickLaidOut("save-view");
+        const dlg = tc.host.nameDialog;
+        tryCompare(dlg, "opened", true);
+        const field = find(dlg.contentItem, function (it) { return it.objectName === "saved-view-name-field"; });
+        tryVerify(function () { return field.activeFocus; }, 1000, "the name field takes the keyboard");
+        compare(field.text, "svprobe priority:P0", "the query is the suggested name");
+        field.selectAll();
+        typeText("Hot");
+        keyClick(Qt.Key_Return);
+        tryCompare(dlg, "opened", false);
+        compare(AppController.savedViews.length, 1);
+        const v = AppController.savedViews[0];
+        compare(v.name, "Hot");
+        compare(v.query, "svprobe priority:P0");
+        compare(tc.host.activeId, v.id, "a view just saved is the active one");
+        verify(!tc.host.modified);
+        tryVerify(function () { const c = byName("saved-view-chip"); return c !== null && c.text === "Hot"; });
+        compare(byName("save-view"), null, "Save view gives way to the active view's chip");
+        tryVerify(function () { return AppController.savedViewCounts[v.id] === 1; }, 1000);
+    }
+
+    function test_escape_cancels_the_dialog() {
+        tc.host.openSave();
+        const dlg = tc.host.nameDialog;
+        tryCompare(dlg, "opened", true);
+        typeText("nope");
+        keyClick(Qt.Key_Escape);
+        tryCompare(dlg, "opened", false);
+        compare(AppController.savedViews.length, 0, "Esc saves nothing");
+    }
+
+    function test_an_empty_name_does_not_save() {
+        tc.host.openSave();
+        const dlg = tc.host.nameDialog;
+        tryCompare(dlg, "opened", true);
+        const field = find(dlg.contentItem, function (it) { return it.objectName === "saved-view-name-field"; });
+        field.text = "   ";
+        keyClick(Qt.Key_Return);
+        verify(dlg.opened, "a blank name keeps the dialog open");
+        compare(AppController.savedViews.length, 0);
+        keyClick(Qt.Key_Escape);
+    }
+
+    // ── Apply, modify, update, save as new ──
+
+    function test_apply_restores_filters_and_view() {
+        const id = AppController.saveView("Arch P0", { query: "svprobe", priorities: ["P0"], sort: "priority",
+                                                      archived: true, showDone: true, view: "timeline" });
+        compare(tc.host.activeId, "", "saving through the API does not activate");
+        mouseClick(railRow(0));
+        compare(AppController.currentView, "timeline");
+        compare(tc.win.searchText, "svprobe");
+        compare(tc.win.prioritiesFilter["P0"], true);
+        compare(tc.win.boardSortMode, "priority");
+        compare(tc.win.showArchived, true);
+        compare(tc.win.showDoneTimeline, true);
+        compare(tc.host.activeId, id);
+        verify(railRow(0).active, "the applied view is marked in the sidebar");
+        verify(!tc.host.modified);
+    }
+
+    function test_changing_filters_marks_modified_then_update() {
+        const id = mkView("Probe", "svprobe");
+        tc.host.apply(id);
+        verify(!tc.host.modified);
+        tc.win.prioritiesFilter = ({ P0: true });
+        verify(tc.host.modified, "a chip turned on moves off the view");
+        verify(railRow(0).modified);
+        verify(byName("save-as-new-view") !== null, "Save as new appears");
+        clickLaidOut("update-view");
+        verify(!tc.host.modified);
+        compare(AppController.savedView(id).priorities, ["P0"]);
+        compare(AppController.savedViews.length, 1, "update does not add a view");
+        // Walking over to Notes is not a change of filters.
+        AppController.currentView = "notes";
+        verify(!tc.host.modified);
+        AppController.currentView = "board";
+    }
+
+    function test_save_as_new_keeps_the_original() {
+        const id = mkView("Probe", "svprobe");
+        tc.host.apply(id);
+        tc.win.searchText = "svprobe card 1";
+        verify(tc.host.modified);
+        clickLaidOut("save-as-new-view");
+        const dlg = tc.host.nameDialog;
+        tryCompare(dlg, "opened", true);
+        keyClick(Qt.Key_Return);   // accept the suggestion
+        tryCompare(dlg, "opened", false);
+        compare(AppController.savedViews.length, 2);
+        compare(AppController.savedView(id).query, "svprobe", "the original is untouched");
+        verify(tc.host.activeId !== id, "the new view is the active one");
+        verify(!tc.host.modified);
+    }
+
+    function test_leaving_a_view_keeps_the_filters() {
+        const id = mkView("Probe", "svprobe");
+        tc.host.apply(id);
+        clickLaidOut("saved-view-chip");
+        compare(tc.host.activeId, "");
+        compare(tc.win.searchText, "svprobe");
+    }
+
+    // ── Keys: Alt+N and the palette ──
+
+    function test_alt_digits_apply_the_nth_view() {
+        mkView("One", "svprobe card 0");
+        const two = mkView("Two", "svprobe card 1", "week");
+        keyClick(Qt.Key_2, Qt.AltModifier);
+        compare(tc.host.activeId, two);
+        compare(AppController.currentView, "week");
+        compare(tc.win.searchText, "svprobe card 1");
+        // A number with no view behind it does nothing.
+        keyClick(Qt.Key_7, Qt.AltModifier);
+        compare(tc.host.activeId, two);
+        AppController.currentView = "board";
+    }
+
+    function test_palette_offers_each_view_and_save() {
+        const id = mkView("Palette probe", "svprobe");
+        let found = null;
+        let save = null;
+        const cd = tc.win.contentData;
+        let pal = null;
+        for (let i = 0; i < cd.length; i++) if (cd[i] && cd[i]._commands !== undefined) pal = cd[i];
+        verify(pal !== null);
+        const cmds = pal._commands();
+        for (let j = 0; j < cmds.length; j++) {
+            if (cmds[j].commandId === "savedview:" + id) found = cmds[j];
+            if (cmds[j].commandId === "savedview.save") save = cmds[j];
+            verify(cmds[j].commandId.indexOf("savedView.") !== 0, "the numbered catalog entries stay out of the palette");
+        }
+        verify(found !== null);
+        compare(found.label, I18n.t("palette.cmd.savedView").arg("Palette probe"));
+        compare(found.sub, "Alt+1");
+        verify(save !== null);
+        tc.win.runCommand("savedview:" + id);
+        compare(tc.host.activeId, id);
+    }
+
+    // ── The sidebar list: arrows, Enter, Ctrl+arrows, F2, Delete ──
+
+    function test_sidebar_keyboard() {
+        const a = mkView("Alpha", "svprobe card 0");
+        const b = mkView("Beta", "svprobe card 1");
+        const c = mkView("Gamma", "svprobe card 2");
+        railRow(0).forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Down);
+        verify(railRow(1).activeFocus, "Down moves to the next view");
+        keyClick(Qt.Key_Return);
+        compare(tc.host.activeId, b, "Enter applies it");
+        compare(tc.win.searchText, "svprobe card 1");
+
+        railRow(1).forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Up, Qt.ControlModifier);
+        compare(ids(), [b, a, c], "Ctrl+Up moves the view up");
+        tryVerify(function () { return railRow(0) && railRow(0).activeFocus; }, 1000, "focus follows the moved view");
+        AppController.undo();
+        compare(ids(), [a, b, c], "the move is one undo step");
+
+        railRow(2).forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_F2);
+        const dlg = tc.host.nameDialog;
+        tryCompare(dlg, "opened", true);
+        compare(dlg.mode, "rename");
+        compare(dlg.text, "Gamma");
+        const field = find(dlg.contentItem, function (it) { return it.objectName === "saved-view-name-field"; });
+        tryVerify(function () { return field.activeFocus; });
+        field.selectAll();
+        typeText("Delta");
+        keyClick(Qt.Key_Return);
+        tryCompare(dlg, "opened", false);
+        compare(AppController.savedView(c).name, "Delta");
+
+        railRow(0).forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Delete);
+        compare(ids(), [b, c]);
+        tryVerify(function () { return railRow(0) && railRow(0).activeFocus; }, 1000, "focus stays in the list");
+        AppController.undo();
+        compare(ids(), [a, b, c], "undo brings the deleted view back in its place");
+        tc.win.focusActiveView();
+    }
+
+    function test_context_menu_duplicate_and_delete() {
+        const a = mkView("Alpha", "svprobe");
+        mouseClick(railRow(0), 20, 10, Qt.RightButton);
+        const menu = railMenu();
+        verify(menu !== null);
+        tryCompare(menu, "opened", true);
+        const dup = findMenuItem(menu, "rail-saved-duplicate");
+        verify(dup !== null);
+        dup.triggered();
+        tryVerify(function () { return AppController.savedViews.length === 2; });
+        compare(AppController.savedViews[1].name, "Alpha copy");
+        compare(AppController.savedViews[1].query, "svprobe");
+        if (menu.opened) menu.close();
+        tryCompare(menu, "opened", false);
+
+        // The Menu key opens it for the focused row; Delete there removes that row.
+        railRow(1).forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Menu);
+        tryCompare(menu, "opened", true);
+        compare(menu.targetIndex, 1);
+        findMenuItem(menu, "rail-saved-delete").triggered();
+        tryVerify(function () { return AppController.savedViews.length === 1; });
+        compare(AppController.savedViews[0].id, a, "the copy went, the original stayed");
+        if (menu.opened) menu.close();
+    }
+    function railMenu() {
+        let rail = byName("rail-saved-head");
+        while (rail && rail._savedViews === undefined) rail = rail.parent;
+        const d = rail.data;
+        for (let i = 0; i < d.length; i++) if (d[i] && d[i].objectName === "rail-saved-menu") return d[i];
+        return null;
+    }
+    function findMenuItem(menu, name) {
+        for (let i = 0; i < menu.count; i++) {
+            const it = menu.itemAt(i);
+            if (it && it.objectName === name) return it;
+        }
+        return null;
+    }
+
+    // ── Badges ──
+
+    function test_badge_counts_and_problem() {
+        const ok = mkView("Cards", "svprobe");
+        const bad = mkView("Gone", "status:nosuchcolumn svprobe");
+        tryVerify(function () { return railRow(0) && railRow(0).countText === "3"; }, 1000, "three probe cards");
+        compare(railRow(1).countText, "?", "a query heap cannot read shows the problem, not 0");
+        verify(railRow(1).tooltipText.indexOf("status:nosuchcolumn") >= 0);
+        // A new matching task moves the badge.
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true;
+        d.id = "SVQ-9";
+        d.title = "svprobe late";
+        AppController.saveTask(d);
+        tc.seeded.push(d.id);
+        tryVerify(function () { return railRow(0).countText === "4"; }, 1000);
+        // Applying the broken view shows the same problem on the search box.
+        tc.host.apply(bad);
+        compare(AppController.searchProblems(tc.win.searchText), ["status:nosuchcolumn"]);
+        compare(AppController.savedViewCounts[ok], 4);
+    }
+
+    function test_empty_list_offers_saving() {
+        clickLaidOut("rail-saved-empty");
+        tryCompare(tc.host.nameDialog, "opened", true);
+        keyClick(Qt.Key_Escape);
+        tryCompare(tc.host.nameDialog, "opened", false);
+    }
+
+    function test_profile_switch_leaves_the_view() {
+        const id = mkView("Here", "svprobe");
+        tc.host.apply(id);
+        const home = AppController.activeProfileId;
+        const other = AppController.createProfile("SV probe other");
+        compare(tc.host.activeId, "", "a view does not follow into another workspace");
+        AppController.activeProfileId = home;
+        AppController.deleteProfile(other);
+        AppController.clearPendingUndo();
+        AppController.activeProfileId = home;
+    }
+}

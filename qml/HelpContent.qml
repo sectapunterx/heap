@@ -29,7 +29,7 @@ Item {
         {anchor: "help-people", label: root.tr2("People — contacts, mentions, state cycle", "Люди — контакты, упоминания, цикл состояний")},
         {anchor: "help-profiles", label: root.tr2("Profiles — workspaces, JSON", "Профили — рабочие пространства, JSON")},
         {anchor: "help-search", label: root.tr2("Search & Command Palette", "Поиск и палитра команд")},
-        {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done", "Фильтры — приоритеты, архив, выполненные")},
+        {anchor: "help-filter", label: root.tr2("Filters — priorities, archived, show-done, saved views", "Фильтры — приоритеты, архив, выполненные, сохранённые виды")},
         {anchor: "help-tweaks", label: root.tr2("Tweaks — theme, density, contrast", "Твики — тема, плотность, контраст")},
         {anchor: "help-hotkeys", label: root.tr2("Hotkeys — rebinding and conflicts", "Горячие клавиши — переназначение и конфликты")},
         {anchor: "help-automation", label: root.tr2("Automation & Notifications", "Автоматизация и уведомления")},
@@ -656,6 +656,15 @@ Item {
             Body {
                 text: root.tr2("In the timeline, completed tasks are hidden by default. The toggle shows them as a dashed card.",
                               "В ленте выполненные задачи по умолчанию скрыты. Переключатель показывает их пунктирной карточкой.")
+            }
+
+            H3 {
+                text: root.tr2("Saved views",
+                              "Сохранённые виды")
+            }
+            Body {
+                text: root.tr2("A saved view is a named set of filters: the search query (status:, priority:, #tag, due:, is:, -, OR), the priority chips, the board sort, Archived, Show done, and the view it opens in. \"Save view…\" in the filter bar or \"Save current view\" in the palette asks for a name (Enter saves, Esc cancels). Views are listed in the sidebar under Saved views, numbered, with how many tasks each one shows; Alt+1…Alt+9 or a click applies one, and the palette has \"View: name\" for each. Once you change a filter the view reads as modified, and the filter bar offers Update view or Save as new. Right click (or Menu) on a view renames, updates, duplicates, moves or deletes it — each one undoable. A query heap can no longer read, such as a column that was deleted, shows \"?\" on the view instead of an empty count. Views belong to the profile and travel with its export.",
+                              "Сохранённый вид — это набор фильтров с именем: поисковый запрос (status:, priority:, #метка, due:, is:, -, OR), чипы приоритетов, сортировка доски, «Архив», «Выполненные» и вид, в котором он открывается. «Сохранить вид…» в панели фильтров или «Сохранить текущий вид» в палитре спрашивает название (Enter сохраняет, Esc отменяет). Виды перечислены на боковой панели в разделе «Сохранённые виды», пронумерованы и показывают, сколько задач в каждом; Alt+1…Alt+9 или щелчок применяет вид, а в палитре для каждого есть «Вид: название». Если вы измените фильтр, вид отмечается как изменённый, и панель фильтров предлагает «Обновить вид» или «Сохранить как новый». Правый щелчок (или Menu) по виду переименовывает, обновляет, дублирует, перемещает или удаляет его — всё это можно отменить. Если запрос больше не читается, например колонку удалили, на виде вместо числа стоит «?». Виды принадлежат профилю и переносятся вместе с его экспортом.")
             }
 
             H3 {

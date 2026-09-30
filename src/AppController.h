@@ -76,6 +76,13 @@ class AppController : public QObject {
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
+  // The active profile's saved views, in sidebar order: [{id, name, query,
+  // priorities, sort, archived, showDone, view, problems}] — `problems` is what
+  // the search box would flag in the query (a deleted column, a typo).
+  Q_PROPERTY(QVariantList savedViews READ savedViews NOTIFY savedViewsChanged)
+  // view id → how many tasks opening it shows. One pass for all views, cached
+  // until a task, a column, the day or the views change.
+  Q_PROPERTY(QVariantMap savedViewCounts READ savedViewCounts NOTIFY savedViewCountsChanged)
   // Moves at local midnight, on resume and on a clock or zone change: every
   // "today" in the UI binds to this, so after midnight T goes to the new day.
   Q_PROPERTY(QDate today READ today NOTIFY todayChanged)
@@ -882,6 +889,26 @@ class AppController : public QObject {
   // scan. Archived tasks are not counted; "_total" is the live task count.
   QVariantMap statusCounts() const;
 
+  // ---- Saved views (src/AppControllerSavedViews.cpp) ----
+  // `state` is the filter state as Main.qml holds it: {query, priorities
+  // (list or {P0: true} map), sort, archived, showDone, view}. Every mutation
+  // is one undo step with a toast. Names are made unique ("Name (2)").
+  QVariantList savedViews() const;
+  QVariantMap savedViewCounts() const;
+  // Returns the new view's id; "" when there is no profile.
+  Q_INVOKABLE QString saveView(const QString& name, const QVariantMap& state);
+  Q_INVOKABLE bool renameSavedView(const QString& id, const QString& name);
+  // Overwrites the view's filters with `state`, keeping its name and place.
+  Q_INVOKABLE bool updateSavedView(const QString& id, const QVariantMap& state);
+  Q_INVOKABLE QString duplicateSavedView(const QString& id);
+  Q_INVOKABLE bool deleteSavedView(const QString& id);
+  // -1 = up, +1 = down; false at either end.
+  Q_INVOKABLE bool moveSavedView(const QString& id, int delta);
+  // {} when there is no such view.
+  Q_INVOKABLE QVariantMap savedView(const QString& id) const;
+  // True when `state` no longer matches the view — what shows it as modified.
+  Q_INVOKABLE bool savedViewDiffers(const QString& id, const QVariantMap& state) const;
+
   // settingsMap() is private and also cached; this exists so a test can prove
   // the cache does not outlive the settings it was built from.
   QVariantMap settingsMapForTest() const {
@@ -1123,6 +1150,8 @@ class AppController : public QObject {
   void shortcutsChanged();
   void blockedStuckChanged();
   void statusCountsChanged();
+  void savedViewsChanged();
+  void savedViewCountsChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
   // `kind` tints the toast: "info" (default when empty), "success", "warning"
   // or "error". Every C++ toast used to arrive as info, failures included.
@@ -1273,6 +1302,15 @@ class AppController : public QObject {
   // every mutation path is covered without each one remembering to.
   mutable QVariantMap m_statusCounts;
   mutable bool m_statusCountsDirty = true;
+  // The active profile's saved views and savedViewCounts()' cache. The count
+  // signal is coalesced: a bulk edit fires the model's signals per row.
+  QVector<heap::savedviews::SavedView> m_savedViews;
+  mutable QVariantMap m_savedViewCounts;
+  mutable bool m_savedViewCountsDirty = true;
+  QTimer m_savedViewCountsTimer;
+  void wireSavedViews();
+  void dropSavedViewCounts();
+  void setSavedViews(const QVector<heap::savedviews::SavedView>& views);
   bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
   bool m_demoActive = false;   // onboarding: profile still holds seeded demo
 
@@ -1489,6 +1527,7 @@ class AppController : public QObject {
     QVector<::Note> m_notes;
     QVariantList m_statuses;
     QString m_docsState;
+    QVector<heap::savedviews::SavedView> m_savedViews;
   };
 
   // One task's priority, unrecorded; false when nothing changed.
