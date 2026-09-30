@@ -456,7 +456,17 @@ ApplicationWindow {
             Layout.row: 0; Layout.column: 0; Layout.columnSpan: win.rightPanelShown ? 3 : 2
             Layout.fillWidth: true
             searchText: win.searchText
-            onSearchTextChanged: win.searchText = searchText
+            // Typing reaches the views once the keys pause, not per key: a
+            // keystroke that swaps most rows on a 3k-task board rebinds every
+            // visible card (~100 ms), and a quick "priority:p0" used to pay
+            // that for each intermediate state, including "priority:p" — which
+            // matches nothing. The field itself updates instantly.
+            onSearchTextChanged: searchApply.restart()
+            Timer {
+                id: searchApply
+                interval: 120
+                onTriggered: win.searchText = topBar.searchText
+            }
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
