@@ -14,6 +14,10 @@ namespace heap::logging {
 // heap folder, and before the QML engine loads. No-op if already installed.
 void installFileLogger();
 
+// Restores the previous message handler and closes heap.log, so the folder it
+// lives in can be removed (a --smoke run's temporary profile).
+void closeFileLogger();
+
 // Absolute path to the log directory (…/AppDataLocation/logs), created on demand.
 QString logDirPath();
 

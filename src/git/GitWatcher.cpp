@@ -128,7 +128,7 @@ void GitWatcher::addRepo(const QString& path) {
     qInfo("GitWatcher: skipping '%s' — no .git found", qUtf8Printable(path));
     return;
   }
-  const RepoConfig cfg{.path = path, .resolvedGitDir = gitDir};
+  const RepoConfig cfg{.path = path, .resolvedGitDir = gitDir, .commonGitDir = BranchTaskMatcher::resolveCommonDir(gitDir)};
   m_configs.insert(path, cfg);
   RepoState st;
   st.repoPath = path;
@@ -142,9 +142,9 @@ void GitWatcher::removeRepo(const QString& path) {
   if(it == m_configs.end()) {
     return;
   }
-  const QString gitDir = it->resolvedGitDir;
-  for(const QString& f : {QStringLiteral("HEAD"), QStringLiteral("packed-refs"), QStringLiteral("index")}) {
-    const QString fp = gitDir + QChar('/') + f;
+  for(const QString& fp : {it->resolvedGitDir + QStringLiteral("/HEAD"),
+                           it->resolvedGitDir + QStringLiteral("/index"),
+                           it->commonGitDir + QStringLiteral("/packed-refs")}) {
     m_fsw->removePath(fp);
     m_watchedFileOwner.remove(fp);
   }
@@ -153,8 +153,11 @@ void GitWatcher::removeRepo(const QString& path) {
 }
 
 void GitWatcher::rewatchFiles(const RepoConfig& cfg) {
-  for(const QString& f : {QStringLiteral("HEAD"), QStringLiteral("packed-refs"), QStringLiteral("index")}) {
-    const QString fp = cfg.resolvedGitDir + QChar('/') + f;
+  // HEAD and index belong to the worktree; packed-refs and refs/heads to the
+  // common dir, which is the same place for a plain clone.
+  for(const QString& fp : {cfg.resolvedGitDir + QStringLiteral("/HEAD"),
+                           cfg.resolvedGitDir + QStringLiteral("/index"),
+                           cfg.commonGitDir + QStringLiteral("/packed-refs")}) {
     if(!QFile::exists(fp)) {
       continue;
     }
@@ -165,7 +168,7 @@ void GitWatcher::rewatchFiles(const RepoConfig& cfg) {
   }
   // Also watch the refs/heads directory: branch SHA file is created on
   // first checkout and may not exist yet.
-  const QString refsHeads = cfg.resolvedGitDir + QStringLiteral("/refs/heads");
+  const QString refsHeads = cfg.commonGitDir + QStringLiteral("/refs/heads");
   if(QFileInfo(refsHeads).isDir() && !m_fsw->directories().contains(refsHeads)) {
     m_fsw->addPath(refsHeads);
     m_watchedFileOwner.insert(refsHeads, cfg.path);
@@ -287,7 +290,7 @@ void GitWatcher::recomputeForRepo(const QString& path) {
 
   const QString headText = readHeadText(cfg.resolvedGitDir);
   const QString branch = BranchTaskMatcher::branchFromHeadText(headText);
-  const QString sha = readShaForBranch(cfg.resolvedGitDir, branch);
+  const QString sha = readShaForBranch(cfg.commonGitDir, branch);
 
   RepoState& st = m_state[path];
   const QString oldBranch = st.branch;
@@ -298,7 +301,7 @@ void GitWatcher::recomputeForRepo(const QString& path) {
 
   st.branch = branch;
   st.headSha = sha;
-  st.upstream = upstreamForBranch(cfg.resolvedGitDir, branch);
+  st.upstream = upstreamForBranch(cfg.commonGitDir, branch);
 
   const bool branchActuallyChanged = (oldBranch != branch);
   if(branchActuallyChanged) {

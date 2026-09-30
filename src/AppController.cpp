@@ -4,6 +4,7 @@
 #include "SampleData.h"
 #include "StateSerializer.h"
 #include "TaskDefer.h"
+#include "ViewNames.h"
 
 #include "board/Rank.h"
 #include "cal/EventClamp.h"
@@ -36,6 +37,8 @@
 #include "platform/Paths.h"
 #include "query/TaskQuery.h"
 #include "recur/RecurrenceEngine.h"
+#include "storage/AsyncSaver.h"
+#include "storage/StateIO.h"
 #include "text/TaskTextUtils.h"
 #include "update/Updater.h"
 
@@ -68,6 +71,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <iterator>
 
 namespace {
 
@@ -267,17 +271,42 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
       {"data.recovered",
-       {"Your data file was unreadable — recovered from backup %1", "Файл данных был нечитаем — восстановлено из бэкапа %1"}},
+       {"Your data file was damaged — recovered from backup %1. The damaged file was kept as %2.",
+        "Файл данных был повреждён — восстановлено из бэкапа %1. Повреждённый файл сохранён как %2."}},
       {"data.corruptKept",
-       {"Your data file was unreadable and no backup was found. The damaged file was "
-        "kept as state.corrupt-*.json.",
-        "Файл данных был нечитаем, бэкап не найден. Повреждённый файл сохранён как "
-        "state.corrupt-*.json."}},
+       {"Your data file was damaged and no backup was found. The damaged file was kept as %1.",
+        "Файл данных был повреждён, бэкап не найден. Повреждённый файл сохранён как %1."}},
       {"data.schemaTooNew",
-       {"This data file was written by a newer version of heap. Saving is disabled so nothing is lost — "
-        "update heap to edit it.",
-        "Этот файл данных создан более новой версией heap. Сохранение отключено, чтобы ничего не потерять — "
-        "обнови heap, чтобы редактировать."}},
+       {"Read-only: this data file was written by a newer heap (schema v%1, this build reads v%2). "
+        "Nothing you change now is saved — update heap to edit it.",
+        "Только чтение: файл данных записан более новой версией heap (схема v%1, эта сборка знает v%2). "
+        "Изменения сейчас не сохраняются — обнови heap, чтобы редактировать."}},
+      // ── audit-plat: storage health banner (PLAT-1/4) ──
+      {"storage.unreadable",
+       {"Read-only: heap could not open %1 (%2). Nothing is saved over it until it opens — changes made now "
+        "are not kept.",
+        "Только чтение: heap не смог открыть %1 (%2). Пока файл не откроется, поверх него ничего не "
+        "сохраняется — изменения сейчас не сохранятся."}},
+      {"storage.showingBackup", {"Showing backup %1.", "Показан бэкап %1."}},
+      {"storage.damagedLocked", {"the file is damaged and could not be set aside", "файл повреждён и его не удалось отложить в сторону"}},
+      {"storage.writeFailed",
+       {"Not saved: writing %1 failed (%2). Your changes are kept in memory and heap keeps retrying.",
+        "Не сохранено: запись %1 не удалась (%2). Изменения в памяти, heap повторяет попытки."}},
+      {"storage.dirUnwritable",
+       {"Not saved: the data folder is not writable (%1). Nothing you change is saved.",
+        "Не сохранено: папка данных недоступна для записи (%1). Изменения не сохраняются."}},
+      {"settings.resetDone",
+       {"Settings reset to defaults — connections, repos, themes and layout kept",
+        "Настройки сброшены — подключения, репозитории, темы и раскладка сохранены"}},
+      {"settings.resetUndone", {"Settings restored", "Настройки восстановлены"}},
+      {"person.nameRequired", {"A person needs a name — kept the old one", "У человека должно быть имя — оставлено прежнее"}},
+      {"storage.savedAgain", {"Saved — writing to disk works again", "Сохранено — запись на диск снова работает"}},
+      {"storage.reopened", {"state.json opened — your data is loaded", "state.json открыт — данные загружены"}},
+      {"storage.stillLocked", {"state.json still can't be opened", "state.json всё ещё не открывается"}},
+      {"backup.snapshotFailed",
+       {"Restore cancelled: could not snapshot the current state first",
+        "Восстановление отменено: не удалось сохранить текущее состояние"}},
+      {"backup.invalid", {"%1 is not a heap state file", "%1 — не файл состояния heap"}},
       {"hotkeys.reset", {"Hotkeys reset to defaults", "Хоткеи сброшены к дефолту"}},
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Заполни branch — этого требует Settings"}},
@@ -437,6 +466,30 @@ AppController::AppController(QObject* parent) :
   m_saveTimer->setSingleShot(true);
   m_saveTimer->setInterval(300);
   connect(m_saveTimer, &QTimer::timeout, this, &AppController::saveStateNow);
+  m_saver = std::make_unique<heap::storage::AsyncSaver>();
+  connect(m_saver.get(), &heap::storage::AsyncSaver::finished, this, &AppController::onSaveFinished);
+  m_saveRetryTimer = new QTimer(this);
+  m_saveRetryTimer->setSingleShot(true);
+  connect(m_saveRetryTimer, &QTimer::timeout, this, &AppController::saveStateNow);
+  // While state.json is locked (read-only session), look again every few
+  // seconds; the first time it opens and nothing was typed meanwhile, load it.
+  m_storageRetryTimer = new QTimer(this);
+  m_storageRetryTimer->setInterval(5000);
+  connect(m_storageRetryTimer, &QTimer::timeout, this, [this]() {
+    if(m_storageState != QLatin1String("unreadable")) {
+      m_storageRetryTimer->stop();
+      return;
+    }
+    if(m_editsWhileBlocked) {
+      return;  // reloading would discard them; the banner's Retry decides
+    }
+    if(heap::storage::readWithRetry(stateFilePath(), {}).kind != heap::storage::ReadResult::Unreadable) {
+      reloadStateFromDisk();
+      if(m_storageState == QLatin1String("ok")) {
+        emit toast(tr_("storage.reopened"));
+      }
+    }
+  });
 
   m_activePeople.setSourceModel(&m_people);
 
@@ -512,6 +565,16 @@ AppController::AppController(QObject* parent) :
 
   loadStateOnStart();
   m_automationTimer->start();
+
+  // An unwritable data folder (a --data-dir under Program Files, a read-only
+  // share) used to look like a normal first run that silently saved nothing.
+  {
+    QString why;
+    if(m_storageState == QLatin1String("ok") && !heap::storage::probeWritableDir(heap::paths::dataDir(), &why)) {
+      qWarning("data directory is not writable: %s", qUtf8Printable(why));
+      setStorageState(QStringLiteral("writeFailed"), tr_("storage.dirUnwritable").arg(why));
+    }
+  }
 
   // ---- Global hotkeys (OS-level Quick-capture) ----
   // Registered after loadStateOnStart() so any user rebind of the capture
@@ -669,6 +732,10 @@ AppController::AppController(QObject* parent) :
       scheduleSave();
     }
   }
+
+  // Start-up's own bookkeeping saves are not user edits: a read-only session
+  // opened on a locked file may still reopen it by itself.
+  m_editsWhileBlocked = false;
 }
 
 AppController::~AppController() {
@@ -679,6 +746,10 @@ void AppController::flushSave() {
   if(m_saveTimer && m_saveTimer->isActive()) {
     m_saveTimer->stop();
     saveStateNow();
+  }
+  // A save may be running on the worker already; flushing means on disk.
+  if(m_saver) {
+    m_saver->flush();
   }
 }
 
@@ -733,7 +804,10 @@ QString AppController::tr_(const QString& key) const {
   return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
 }
 
-void AppController::setCurrentView(const QString& v) {
+void AppController::setCurrentView(const QString& requested) {
+  // An unknown name (a --view typo, a stale binding) lands on the board rather
+  // than on a blank content area that would then be saved and come back.
+  const QString v = heap::views::isKnown(requested) ? requested : QStringLiteral("board");
   if(v == m_currentView) {
     return;
   }
@@ -1434,32 +1508,14 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
-  // The row count is not a high-water mark: it drops when a task is deleted
-  // and it counts archived rows, so "2700 + rowCount()" walks back over ids
-  // that are still in use. saveTask upserts, and upsert on a taken id replaces
-  // that row outright — proposing a colliding id is proposing to destroy a
-  // task. Start past the highest number already minted under this prefix, then
-  // probe, the way newQuickTaskDraft and the recurrence clone already do.
+  // saveTask upserts, and upsert on a taken id replaces that row outright —
+  // proposing a colliding id is proposing to destroy a task. mintTaskId walks
+  // past a persisted high-water mark (a deleted id is never handed out again)
+  // and past every id any profile holds, so two workspaces never share one.
   const QString stem = prefix.isEmpty() ? QStringLiteral("TASK") : prefix;
-  int nextNum = 2700;
-  const QString head = stem + QChar('-');
-  for(const Task& t : m_tasks.items()) {
-    if(!t.id.startsWith(head)) {
-      continue;
-    }
-    bool numeric = false;
-    const int n = t.id.mid(head.size()).toInt(&numeric);
-    if(numeric && n >= nextNum) {
-      nextNum = n + 1;
-    }
-  }
   QVariantMap m;
   m["_isNew"] = true;
-  QString candidate;
-  do {
-    candidate = QString("%1-%2").arg(stem).arg(nextNum++);
-  } while(m_tasks.indexOfId(candidate) >= 0);
-  m["id"] = candidate;
+  m["id"] = mintTaskId(stem);
   m["title"] = QString();
   m["desc"] = QString();
   m["priority"] = priorityDefault.isEmpty() ? QStringLiteral("P2") : priorityDefault;
@@ -1472,6 +1528,61 @@ QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   m["estimateMinutes"] = 0;
   m["someday"] = false;
   return m;
+}
+
+namespace {
+// "ENG-42" → ("ENG", 42). False for anything that is not <stem>-<number>.
+bool splitTaskId(const QString& id, QString& stem, int& number) {
+  const int dash = id.lastIndexOf(QChar('-'));
+  if(dash <= 0 || dash == id.size() - 1) {
+    return false;
+  }
+  bool numeric = false;
+  number = id.mid(dash + 1).toInt(&numeric);
+  if(!numeric || number < 0) {
+    return false;
+  }
+  stem = id.left(dash);
+  return true;
+}
+}  // namespace
+
+QString AppController::mintTaskId(const QString& stem) const {
+  // A workspace that has never minted under this prefix starts at 1 (UX-32);
+  // one that has, continues past everything it ever handed out (TASKS-31).
+  int next = qMax(1, m_taskSeq.value(stem, 1));
+  QSet<QString> taken;
+  const auto scan = [&](const QVector<Task>& tasks) {
+    for(const Task& t : tasks) {
+      taken.insert(t.id);
+      QString s;
+      int n = 0;
+      if(splitTaskId(t.id, s, n) && s == stem && n >= next) {
+        next = n + 1;
+      }
+    }
+  };
+  // Every profile, not only the active one: ids that collide across
+  // workspaces made undo and event links hit the wrong task (TASKS-1).
+  scan(m_tasks.items());
+  for(const Profile& p : m_profiles) {
+    if(p.id != m_activeProfileId) {
+      scan(p.tasks);
+    }
+  }
+  QString candidate;
+  do {
+    candidate = QStringLiteral("%1-%2").arg(stem).arg(next++);
+  } while(taken.contains(candidate));
+  return candidate;
+}
+
+void AppController::noteTaskIdUsed(const QString& id) {
+  QString stem;
+  int n = 0;
+  if(splitTaskId(id, stem, n) && n + 1 > m_taskSeq.value(stem, 1)) {
+    m_taskSeq.insert(stem, n + 1);
+  }
 }
 
 QVariantMap AppController::newQuickTaskDraft(const QString& ticketKey) const {
@@ -1726,6 +1837,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   }
   m_tasks.upsert(t);
   if(isNew) {
+    noteTaskIdUsed(t.id);
     emit toast(tr_("task.created").arg(t.id));
   } else if(statusMoved) {
     moveTask(t.id, statusAfter);
@@ -2782,6 +2894,14 @@ void AppController::savePerson(const QVariantMap& draft) {
   Person p;
   p.id = draft.value("id").toString();
   p.name = draft.value("name").toString();
+  // A person with no name cannot be picked, mentioned or told apart from the
+  // next one — for an existing person as much as for a new one (PLAT-20).
+  if(p.name.trimmed().isEmpty()) {
+    if(!draft.value("_isNew").toBool()) {
+      emit toast(tr_("person.nameRequired"));
+    }
+    return;
+  }
   p.role = draft.value("role").toString();
   p.question = draft.value("question").toString();
   p.state = draft.value("state").toString();
@@ -2805,9 +2925,6 @@ void AppController::savePerson(const QVariantMap& draft) {
     p.id = QString("p-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
   }
   const bool isNew = draft.value("_isNew").toBool();
-  if(isNew && p.name.trimmed().isEmpty()) {
-    return;
-  }
   m_people.upsert(p);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
@@ -3763,6 +3880,9 @@ void AppController::resetToFirstRun() {
   // 4. Clear every profile + model, then re-seed like a fresh install.
   m_profiles.clear();
   m_activeProfileId.clear();
+  m_rootExtra = {};
+  m_settingsExtra = {};
+  m_taskSeq.clear();
   m_events.reset({});
   m_tasks.reset({});
   m_people.reset({});
@@ -3778,7 +3898,55 @@ void AppController::resetToFirstRun() {
   // 5. Persist the fresh state immediately and let the UI re-onboard.
   m_loading = false;
   saveStateNow();
+  m_saver->flush();  // on disk before the UI re-onboards
   emit firstRunReset();
+}
+
+void AppController::resetSettingsToDefaults() {
+  const QJsonObject current = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+  // The groups the Settings page owns and resets. Everything else in the
+  // blob — window geometry, panel sizes, close-to-tray, notes view mode, the
+  // profile card, tracker connections — is state or identity, not a
+  // preference, and a reset that wiped it read as data loss.
+  static const QStringList kReset = {QStringLiteral("appearance"),
+                                     QStringLiteral("notifications"),
+                                     QStringLiteral("calendar"),
+                                     QStringLiteral("tasks"),
+                                     QStringLiteral("cpp"),
+                                     QStringLiteral("data"),
+                                     QStringLiteral("updates"),
+                                     QStringLiteral("git"),
+                                     QStringLiteral("developer")};
+  QJsonObject next;
+  for(auto it = current.constBegin(); it != current.constEnd(); ++it) {
+    if(!kReset.contains(it.key())) {
+      next.insert(it.key(), it.value());
+    }
+  }
+  // A new install's look, not the built-in fallback (heap. dark, normal).
+  QJsonObject appearance{{"darkPreset", "minimal-dark"}, {"lightPreset", "heap-light"}, {"contrast", "soft"}};
+  const QJsonObject oldAppearance = current.value("appearance").toObject();
+  if(oldAppearance.contains("customThemes")) {
+    appearance["customThemes"] = oldAppearance.value("customThemes");  // the user's own work
+  }
+  next["appearance"] = appearance;
+  const QJsonArray repos = current.value("git").toObject().value("watchedRepos").toArray();
+  if(!repos.isEmpty()) {
+    next["git"] = QJsonObject{{"watchedRepos", repos}};
+  }
+  m_settingsBeforeReset = m_appSettingsJson;
+  setAppSettingsJson(QString::fromUtf8(QJsonDocument(next).toJson(QJsonDocument::Compact)));
+  emit settingsReset(tr_("settings.resetDone"));
+}
+
+void AppController::undoSettingsReset() {
+  if(m_settingsBeforeReset.isNull()) {
+    return;
+  }
+  const QString previous = m_settingsBeforeReset;
+  m_settingsBeforeReset = QString();
+  setAppSettingsJson(previous);
+  emit toast(tr_("settings.resetUndone"));
 }
 
 void AppController::startFresh() {
@@ -3808,7 +3976,9 @@ void AppController::startFresh() {
     m_docPages.reset({});
     m_activeDocPageId.clear();
     emit activeDocPageChanged();
-    m_docsState.clear();
+    // Explicitly empty, not absent: an empty blob is what DocsView reads as
+    // "never opened" and seeds the demo catalogue into (UX-6).
+    m_docsState = QStringLiteral(R"({"sections":[],"snippets":[],"contacts":[]})");
     emit docsStateChanged();
   }
 
@@ -3919,9 +4089,30 @@ void AppController::applyUndoEntry(const heap::undo::Entry& entry, bool backward
     // for, so the stack is cleared instead (see undo()).
     const int idx = qBound(0, entry.profileRow, static_cast<int>(m_profiles.size()));
     snapshotActiveProfile();
-    m_profiles.insert(idx, entry.profile);
-    m_activeProfileId = entry.profile.id;
-    applyProfileToModels(entry.profile);
+    Profile restored = entry.profile;
+    // The id may have been handed out again since (delete "Work", create
+    // "Work", undo): two profiles under one id cannot both be addressed, so
+    // the restored one takes a fresh id, and a fresh name if that is taken too.
+    if(profileIndexOf(restored.id) >= 0) {
+      restored.id = makeProfileId(restored.name);
+    }
+    restored.name = uniqueProfileName(restored.name);
+    // Give back the events the deletion detached — only those still detached;
+    // one the user has since assigned elsewhere stays where they put it.
+    for(const QString& eventId : entry.profileEventIds) {
+      const int row = m_events.indexOfId(eventId);
+      if(row < 0) {
+        continue;
+      }
+      CalEvent e = m_events.items().at(row);
+      if(e.profileId.isEmpty()) {
+        e.profileId = restored.id;
+        m_events.upsert(e);
+      }
+    }
+    m_profiles.insert(idx, restored);
+    m_activeProfileId = restored.id;
+    applyProfileToModels(restored);
     emit profilesChanged();
     emit activeProfileChanged();
     return;
@@ -6046,6 +6237,11 @@ void AppController::connectOAuth(const QString& providerId) {
 }
 
 void AppController::scheduleSave() {
+  if(m_saveBlocked && !m_loading && !m_editsWhileBlocked) {
+    // The banner already says nothing is saved; from here on a reload would
+    // throw work away, so the silent auto-reopen stops.
+    m_editsWhileBlocked = true;
+  }
   if(m_loading || m_saveBlocked || !m_saveTimer) {
     return;
   }
@@ -6179,39 +6375,116 @@ Profile AppController::makeStartingProfile(const QString& name, const QString& c
 // The writer seam (HEAP-156). saveStateNow() never touches the filesystem
 // directly; it hands the serialized bytes to whatever is installed here. The
 // default is an atomic QSaveFile write; the fault-injection harness swaps in a
-// writer that truncates, corrupts or drops the rename.
+// writer that truncates, corrupts or drops the rename. It runs on the save
+// worker thread (PLAT-23).
 namespace {
 AppController::StateWriter g_stateWriter;
 
-bool defaultStateWriter(const QString& path, const QByteArray& bytes) {
-  QSaveFile f(path);
-  if(!f.open(QIODevice::WriteOnly)) {
-    qWarning("todocpp: cannot open state.json for writing: %s", qUtf8Printable(f.errorString()));
-    return false;
-  }
-  f.write(bytes);
-  if(!f.commit()) {
-    qWarning("todocpp: state.json commit failed: %s", qUtf8Printable(f.errorString()));
+bool defaultStateWriter(const QString& path, const QByteArray& bytes, QString* error) {
+  if(!heap::storage::writeAtomically(path, bytes, error)) {
+    qWarning("todocpp: cannot write state.json: %s", qUtf8Printable(error ? *error : QString()));
     return false;
   }
   return true;
 }
+
+// Root and settings keys this build reads. Anything else found in a document
+// at the current schema version is carried through a save untouched (PLAT-26):
+// a sibling build, or a hand edit, may have put it there on purpose.
+const QStringList& knownRootKeys() {
+  static const QStringList keys = {QStringLiteral("schemaVersion"),
+                                   QStringLiteral("activeProfileId"),
+                                   QStringLiteral("profiles"),
+                                   QStringLiteral("events"),
+                                   QStringLiteral("settings"),
+                                   QStringLiteral("taskSeq"),
+                                   // v1 flat collections
+                                   QStringLiteral("tasks"),
+                                   QStringLiteral("people"),
+                                   QStringLiteral("statuses"),
+                                   QStringLiteral("docs")};
+  return keys;
+}
+
+const QStringList& knownSettingsKeys() {
+  static const QStringList keys = {QStringLiteral("theme"),
+                                   QStringLiteral("density"),
+                                   QStringLiteral("language"),
+                                   QStringLiteral("currentView"),
+                                   QStringLiteral("workdayStart"),
+                                   QStringLiteral("workdayEnd"),
+                                   QStringLiteral("crumbProject"),
+                                   QStringLiteral("crumbUser"),
+                                   QStringLiteral("welcomeSeen"),
+                                   QStringLiteral("demoActive"),
+                                   QStringLiteral("shortcuts"),
+                                   QStringLiteral("shortcutsSchema"),
+                                   QStringLiteral("app")};
+  return keys;
+}
+
+QJsonObject unknownKeys(const QJsonObject& o, const QStringList& known) {
+  QJsonObject out;
+  for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
+    if(!known.contains(it.key())) {
+      out.insert(it.key(), it.value());
+    }
+  }
+  return out;
+}
+
+// Rotational snapshots only, newest first by the stamp in the name (which is
+// when the copy was taken). Pre-migration copies are exempt: the one taken
+// before an upgrade is the only image of the user's data at the old version.
+void pruneBackupDir(const QString& dirPath, int keep) {
+  QDir d(dirPath);
+  QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Name);
+  std::reverse(all.begin(), all.end());
+  int kept = 0;
+  for(const QString& name : all) {
+    if(name.contains(QLatin1String("premigration"))) {
+      continue;
+    }
+    if(++kept > keep) {
+      d.remove(name);
+    }
+  }
+}
+
+// Copies the live file into the backup dir under a stamp that never clobbers
+// an earlier copy. Returns the file name, empty on failure.
+QString copyStateToBackupDir(const QString& statePath, const QString& dirPath, const QString& tag) {
+  if(!QFile::exists(statePath)) {
+    return {};
+  }
+  QDir().mkpath(dirPath);
+  const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
+  const QString base = QStringLiteral("state-") + stamp + tag;
+  QString name = base + QStringLiteral(".json");
+  for(int n = 2; QFile::exists(dirPath + "/" + name); ++n) {
+    name = base + QChar('-') + QString::number(n) + QStringLiteral(".json");
+  }
+  return QFile::copy(statePath, dirPath + "/" + name) ? name : QString();
+}
+
+// A pre-migration copy for a file from a NEWER build is taken on every launch
+// of the older one. Identical bytes are not copied twice, and only the newest
+// few are kept per version (PLAT-5).
+constexpr int kNewerSchemaCopiesKept = 3;
 }  // namespace
 
 void AppController::setStateWriterForTesting(StateWriter writer) {
   g_stateWriter = std::move(writer);
 }
 
-void AppController::rotateBackupIfDue() {
+bool AppController::backupDueNow(const QDateTime& now) {
   const QVariantMap d = settingsMap().value("data").toMap();
   if(!d.value("autoBackup", true).toBool()) {
-    return;
+    return false;
   }
-  const QString path = stateFilePath();
-  if(!QFile::exists(path)) {
-    return;
+  if(!QFile::exists(stateFilePath())) {
+    return false;
   }
-  const QDateTime now = QDateTime::currentDateTime();
   qint64 intervalSecs = kBackupIntervalSeconds;
   const QString interval = d.value("backupInterval", QStringLiteral("daily")).toString();
   if(interval == QLatin1String("hourly")) {
@@ -6227,14 +6500,19 @@ void AppController::rotateBackupIfDue() {
   if(!m_lastBackupAt.isValid()) {
     m_lastBackupAt = newestBackupTime();
   }
-  if(m_lastBackupAt.isValid() && m_lastBackupAt.secsTo(now) < intervalSecs) {
-    return;
+  return !m_lastBackupAt.isValid() || m_lastBackupAt.secsTo(now) >= intervalSecs;
+}
+
+QString AppController::snapshotStateToBackups(const QString& tag) {
+  if(m_saver) {
+    m_saver->flush();  // never copy a file the worker is replacing
   }
-  const QString dir = backupDirPath();
-  const QString stamp = now.toString("yyyyMMdd-HHmmss");
-  QFile::copy(path, dir + "/state-" + stamp + ".json");
-  pruneBackups(kBackupRetentionCount);
-  m_lastBackupAt = now;
+  const QString name = copyStateToBackupDir(stateFilePath(), backupDirPath(), tag);
+  if(!name.isEmpty()) {
+    pruneBackupDir(backupDirPath(), kBackupRetentionCount);
+    m_lastBackupAt = QDateTime::currentDateTime();
+  }
+  return name;
 }
 
 QDateTime AppController::newestBackupTime() const {
@@ -6247,7 +6525,7 @@ QDateTime AppController::newestBackupTime() const {
     }
     // The name carries when the copy was taken. The file time may not: a copy
     // on Windows keeps the source's last-write time.
-    QDateTime when = QDateTime::fromString(fi.completeBaseName().mid(6), QStringLiteral("yyyyMMdd-HHmmss"));
+    QDateTime when = QDateTime::fromString(fi.completeBaseName().mid(6, 15), QStringLiteral("yyyyMMdd-HHmmss"));
     if(!when.isValid()) {
       when = fi.lastModified();
     }
@@ -6258,28 +6536,10 @@ QDateTime AppController::newestBackupTime() const {
   return newest;
 }
 
-void AppController::pruneBackups(int keep) {
-  QDir d(backupDirPath());
-  // Rotational snapshots only. The pre-migration copy retained by
-  // loadStateOnStart must survive retention: it is the only pre-v4 image of the
-  // user's data.
-  // Newest first by the stamp in the name, which is when the copy was taken.
-  QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Name);
-  std::reverse(all.begin(), all.end());
-  int kept = 0;
-  for(const QString& name : all) {
-    if(name.contains(QLatin1String("premigration"))) {
-      continue;
-    }
-    if(++kept > keep) {
-      d.remove(name);
-    }
-  }
-}
-
 bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath) {
   const QDir d(backupDirPath());
-  // Newest first — return the most recent backup that still parses as an object.
+  // Newest first — return the most recent backup that is a loadable state
+  // document (valid JSON is not enough: `{}` would load as nothing).
   const QFileInfoList backups = d.entryInfoList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Time);
   for(const QFileInfo& fi : backups) {
     QFile bf(fi.absoluteFilePath());
@@ -6288,7 +6548,7 @@ bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath)
     }
     const QJsonDocument doc = QJsonDocument::fromJson(bf.readAll());
     bf.close();
-    if(!doc.isNull() && doc.isObject()) {
+    if(!doc.isNull() && doc.isObject() && heap::storage::validateShape(doc.object())) {
       out = doc.object();
       fromPath = fi.absoluteFilePath();
       return true;
@@ -6297,10 +6557,7 @@ bool AppController::recoverFromNewestBackup(QJsonObject& out, QString& fromPath)
   return false;
 }
 
-void AppController::quarantineCorruptState(const QString& path) {
-  if(!QFile::exists(path)) {
-    return;
-  }
+QString AppController::quarantineCorruptState(const QString& path, const QByteArray& bytes) {
   const QFileInfo fi(path);
   const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
   QString target = fi.absolutePath() + "/state.corrupt-" + stamp + ".json";
@@ -6309,12 +6566,24 @@ void AppController::quarantineCorruptState(const QString& path) {
   while(QFile::exists(target)) {
     target = fi.absolutePath() + "/state.corrupt-" + stamp + "-" + QString::number(n++) + ".json";
   }
-  if(!QFile::rename(path, target)) {
-    qWarning("todocpp: could not quarantine corrupt state.json to %s", qUtf8Printable(target));
-    return;
+  if(QFile::rename(path, target)) {
+    heap::recovery::append(QString::fromLatin1(heap::recovery::kQuarantined),
+                           {{QStringLiteral("from"), path}, {QStringLiteral("to"), target}});
+    return QFileInfo(target).fileName();
   }
-  heap::recovery::append(QString::fromLatin1(heap::recovery::kQuarantined),
-                         {{QStringLiteral("from"), path}, {QStringLiteral("to"), target}});
+  // A lock that lets us read but not rename (sync clients, some AV) — keep a
+  // byte-identical copy of what we read instead. The original stays where it
+  // is and is replaced by the next atomic save.
+  QString error;
+  if(heap::storage::writeAtomically(target, bytes, &error)) {
+    heap::recovery::append(QString::fromLatin1(heap::recovery::kQuarantined),
+                           {{QStringLiteral("from"), path}, {QStringLiteral("to"), target}, {QStringLiteral("copied"), true}});
+    return QFileInfo(target).fileName();
+  }
+  qWarning("todocpp: could not quarantine corrupt state.json to %s: %s", qUtf8Printable(target), qUtf8Printable(error));
+  heap::recovery::append(QString::fromLatin1(heap::recovery::kQuarantineFailed),
+                         {{QStringLiteral("path"), path}, {QStringLiteral("error"), error}});
+  return {};
 }
 
 void AppController::saveStateNow() {
@@ -6327,20 +6596,10 @@ void AppController::saveStateNow() {
   // Push live model state back into the active profile.
   snapshotActiveProfile();
 
-  QJsonObject root;
-  root["schemaVersion"] = heap::state::kSchemaVersion;
-  root["activeProfileId"] = m_activeProfileId;
-
-  QJsonArray profilesArr;
-  for(const Profile& p : m_profiles) {
-    profilesArr.append(heap::state::profileToJson(p));
-  }
-  root["profiles"] = profilesArr;
-
-  // Events are global (shown across profiles in the calendar).
-  root["events"] = heap::state::eventsToJson(m_events.items());
-
-  QJsonObject s;
+  // Everything below the settings object is a snapshot: implicitly shared
+  // copies, a refcount bump each. The worker serializes them (PLAT-23), so
+  // the UI thread no longer pays ~200 ms per save on a 10k-task profile.
+  QJsonObject s = m_settingsExtra;
   s["theme"] = m_theme;
   s["density"] = m_density;
   s["language"] = m_language;
@@ -6374,62 +6633,256 @@ void AppController::saveStateNow() {
     }
   }
 
-  root["settings"] = s;
+  QJsonObject seq;
+  for(auto it = m_taskSeq.constBegin(); it != m_taskSeq.constEnd(); ++it) {
+    seq[it.key()] = it.value();
+  }
 
-  rotateBackupIfDue();
+  QJsonObject head = m_rootExtra;
+  head["schemaVersion"] = heap::state::kSchemaVersion;
+  head["activeProfileId"] = m_activeProfileId;
+  head["settings"] = s;
+  head["taskSeq"] = seq;
 
-  const QByteArray bytes = QJsonDocument(root).toJson(QJsonDocument::Indented);
-  const bool ok = g_stateWriter ? g_stateWriter(stateFilePath(), bytes) : defaultStateWriter(stateFilePath(), bytes);
-  if(!ok) {
-    // A failed write is the fault the user never sees. Leave a local record so
-    // "heap lost my edit" has evidence attached to the next bug report.
-    heap::recovery::append(QString::fromLatin1(heap::recovery::kWriteFailed),
-                           {{QStringLiteral("path"), stateFilePath()}, {QStringLiteral("bytes"), bytes.size()}});
+  const QDateTime now = QDateTime::currentDateTime();
+  const bool backupDue = backupDueNow(now);
+  if(backupDue) {
+    m_lastBackupAt = now;
+  }
+
+  const QVector<Profile> profiles = m_profiles;
+  const QVector<CalEvent> events = m_events.items();
+  const QString path = stateFilePath();
+  const QString backups = backupDirPath();
+  const AppController::StateWriter writer = g_stateWriter;
+
+  auto job = [head, profiles, events, path, backups, backupDue, writer]() {
+    QJsonObject root = head;
+    QJsonArray profilesArr;
+    for(const Profile& p : profiles) {
+      profilesArr.append(heap::state::profileToJson(p));
+    }
+    root["profiles"] = profilesArr;
+    // Events are global (shown across profiles in the calendar).
+    root["events"] = heap::state::eventsToJson(events);
+
+    if(backupDue) {
+      copyStateToBackupDir(path, backups, QString());
+      pruneBackupDir(backups, kBackupRetentionCount);
+    }
+
+    heap::storage::SaveOutcome outcome;
+    const QByteArray bytes = QJsonDocument(root).toJson(QJsonDocument::Indented);
+    outcome.bytes = bytes.size();
+    QString error;
+    outcome.ok = writer ? writer(path, bytes) : defaultStateWriter(path, bytes, &error);
+    if(!outcome.ok) {
+      outcome.error = error.isEmpty() ? QStringLiteral("write failed") : error;
+      // A failed write is the fault the user never sees. Leave a local record
+      // so "heap lost my edit" has evidence attached to the next bug report.
+      heap::recovery::append(
+          QString::fromLatin1(heap::recovery::kWriteFailed),
+          {{QStringLiteral("path"), path}, {QStringLiteral("bytes"), bytes.size()}, {QStringLiteral("error"), outcome.error}});
+    }
+    return outcome;
+  };
+  m_saver->submit(++m_saveGeneration, std::move(job));
+}
+
+void AppController::onSaveFinished(const heap::storage::SaveOutcome& outcome) {
+  if(outcome.ok) {
+    m_saveRetryStep = 0;
+    if(m_saveRetryTimer) {
+      m_saveRetryTimer->stop();
+    }
+    if(m_storageState == QLatin1String("writeFailed")) {
+      setStorageState(QStringLiteral("ok"), QString());
+      emit toast(tr_("storage.savedAgain"));
+    }
+    return;
+  }
+  // A newer save already landed: this failure is stale.
+  if(outcome.generation < m_saveGeneration && m_storageState == QLatin1String("ok")) {
+    return;
+  }
+  setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), outcome.error));
+  // Keep trying on a backoff: the usual cause (a sync client or AV scan
+  // holding the file) goes away by itself, and the edits are still in memory.
+  static const int kRetryMs[] = {2000, 5000, 15000, 30000, 60000};
+  const int step = qMin(m_saveRetryStep, static_cast<int>(std::size(kRetryMs)) - 1);
+  ++m_saveRetryStep;
+  if(m_saveRetryTimer && !m_saveBlocked) {
+    m_saveRetryTimer->start(kRetryMs[step]);
+  }
+}
+
+void AppController::setStorageState(const QString& state, const QString& message) {
+  if(state == m_storageState && message == m_storageMessage) {
+    return;
+  }
+  m_storageState = state;
+  m_storageMessage = message;
+  emit storageStateChanged();
+}
+
+void AppController::retryStorage() {
+  if(m_storageState == QLatin1String("writeFailed")) {
+    if(m_saveTimer) {
+      m_saveTimer->stop();
+    }
+    saveStateNow();
+    m_saver->flush();
+    return;
+  }
+  if(m_storageState != QLatin1String("unreadable")) {
+    return;
+  }
+  const heap::storage::ReadResult probe = heap::storage::readWithRetry(stateFilePath(), {});
+  if(probe.kind == heap::storage::ReadResult::Unreadable) {
+    setStorageState(m_storageState, tr_("storage.unreadable").arg(QDir::toNativeSeparators(stateFilePath()), probe.error));
+    emit toast(tr_("storage.stillLocked"));
+    return;
+  }
+  reloadStateFromDisk();
+  if(m_storageState == QLatin1String("ok")) {
+    emit toast(tr_("storage.reopened"));
+  }
+}
+
+void AppController::reloadStateFromDisk() {
+  if(m_saver) {
+    m_saver->flush();
+  }
+  if(m_storageRetryTimer) {
+    m_storageRetryTimer->stop();
+  }
+  // Whatever the stack held describes the state being replaced (PLAT-15).
+  m_undo.clear();
+  emit pendingUndoChanged();
+  clearSelection();
+  emit aboutToChangeActiveNote();
+  m_profiles.clear();
+  m_activeProfileId.clear();
+  m_rootExtra = {};
+  m_settingsExtra = {};
+  m_taskSeq.clear();
+  m_saveBlocked = false;
+  m_editsWhileBlocked = false;
+  setStorageState(QStringLiteral("ok"), QString());
+  loadStateOnStart();
+  if(m_profiles.isEmpty()) {
+    seedExampleProfile();
+  }
+  if(!m_recoveryNotice.isEmpty()) {
+    emit toast(m_recoveryNotice);
+    m_recoveryNotice.clear();
+  }
+}
+
+void AppController::enterUnreadableMode(const QString& error) {
+  // Read-only session. The file on disk is the user's data; the one thing this
+  // session must never do is write over it.
+  m_saveBlocked = true;
+  const QString path = stateFilePath();
+  heap::recovery::append(QString::fromLatin1(heap::recovery::kUnreadable),
+                         {{QStringLiteral("path"), path}, {QStringLiteral("error"), error}});
+  qWarning("state.json could not be opened (%s) — read-only session, nothing will be saved", qUtf8Printable(error));
+
+  // Show the newest backup so the user can still look things up, clearly
+  // flagged; without one, an empty workspace — never the demo, which would
+  // read as "heap deleted my tasks".
+  QJsonObject backup;
+  QString from;
+  QString shown;
+  if(recoverFromNewestBackup(backup, from)) {
+    loadStateDocument(backup, /*viewOnly=*/true);
+    shown = QFileInfo(from).fileName();
+  }
+  m_editsWhileBlocked = false;
+  if(m_profiles.isEmpty()) {
+    Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+    p.id = QStringLiteral("default");
+    m_profiles.push_back(p);
+    m_activeProfileId = p.id;
+    applyProfileToModels(p);
+    m_welcomeSeen = true;
+    emit onboardingChanged();
+    emit profilesChanged();
+    emit activeProfileChanged();
+  }
+  QString message = tr_("storage.unreadable").arg(QDir::toNativeSeparators(path), error);
+  if(!shown.isEmpty()) {
+    message += QChar(' ') + tr_("storage.showingBackup").arg(shown);
+  }
+  setStorageState(QStringLiteral("unreadable"), message);
+  // The usual cause is a lock that lifts by itself. Until the user has typed
+  // something into this read-only session, open the real file as soon as it
+  // can be read.
+  if(m_storageRetryTimer) {
+    m_storageRetryTimer->start();
   }
 }
 
 void AppController::loadStateOnStart() {
   const QString path = stateFilePath();
-  QFile f(path);
-  if(!f.exists()) {
+  // Open failure is not corruption (PLAT-1): a lock held by an AV scan or a
+  // sync client clears by itself, so it is retried, and if it never clears
+  // the session goes read-only rather than seeding a demo that would later be
+  // saved over the real file.
+  const heap::storage::ReadResult read = heap::storage::readWithRetry(path, heap::storage::startupBackoff());
+  if(read.kind == heap::storage::ReadResult::Missing) {
     return;  // genuine first run — nothing to load, seed demo silently
   }
-
-  // The file exists, so from here on any failure is corruption / an unreadable
-  // file, NOT a first run. We must never let the caller silently seed demo data
-  // and overwrite it: try to recover from the newest valid backup, otherwise
-  // quarantine the damaged file so the subsequent save cannot destroy it.
-  QJsonDocument doc;
-  bool ok = false;
-  if(f.open(QFile::ReadOnly)) {
-    doc = QJsonDocument::fromJson(f.readAll());
-    f.close();
-    ok = !doc.isNull() && doc.isObject();
+  if(read.kind == heap::storage::ReadResult::Unreadable) {
+    enterUnreadableMode(read.error);
+    return;
   }
 
+  // The bytes are in hand, so from here on a failure is damage, NOT a first
+  // run. We must never let the caller silently seed demo data and overwrite
+  // it: quarantine the damaged file, then recover the newest valid backup.
+  const QJsonDocument doc = QJsonDocument::fromJson(read.bytes);
+  QString shapeError;
+  const bool ok = !doc.isNull() && doc.isObject() && heap::storage::validateShape(doc.object(), &shapeError);
+
   if(!ok) {
+    const QString kept = quarantineCorruptState(path, read.bytes);
+    if(kept.isEmpty()) {
+      // Could not set the damaged file aside. Writing anything now would
+      // destroy the only copy, so this session is read-only too.
+      enterUnreadableMode(tr_("storage.damagedLocked"));
+      return;
+    }
     QJsonObject recovered;
     QString recoveredFrom;
     if(recoverFromNewestBackup(recovered, recoveredFrom)) {
-      // Quarantine the corrupt original, then promote the recovered backup to
-      // be the live state so future debounced saves continue from good data.
-      quarantineCorruptState(path);
-      QFile::copy(recoveredFrom, path);
-      doc = QJsonDocument(recovered);
-      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName());
-      heap::recovery::append(QString::fromLatin1(heap::recovery::kRecovered), {{QStringLiteral("from"), recoveredFrom}});
+      // Promote the recovered backup to be the live state so future saves
+      // continue from good data. An atomic write: the original may still be
+      // there when the quarantine had to copy rather than move it.
+      QString error;
+      if(!heap::storage::writeAtomically(path, QJsonDocument(recovered).toJson(QJsonDocument::Indented), &error)) {
+        qWarning("todocpp: could not promote backup %s: %s", qUtf8Printable(recoveredFrom), qUtf8Printable(error));
+      }
+      m_recoveryNotice = tr_("data.recovered").arg(QFileInfo(recoveredFrom).fileName(), kept);
+      heap::recovery::append(QString::fromLatin1(heap::recovery::kRecovered),
+                             {{QStringLiteral("from"), recoveredFrom}, {QStringLiteral("reason"), shapeError}});
+      loadStateDocument(recovered, /*viewOnly=*/false);
     } else {
-      // No usable backup. Preserve the damaged file under a distinct name and
-      // fall through to a fresh seed — the user keeps a recoverable copy and a
-      // visible warning instead of a silent wipe.
-      quarantineCorruptState(path);
-      m_recoveryNotice = tr_("data.corruptKept");
-      heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered), {{QStringLiteral("path"), path}});
-      return;
+      // No usable backup. The damaged file is preserved under a distinct name
+      // and the caller seeds a fresh profile — the user keeps a recoverable
+      // copy and a visible warning instead of a silent wipe.
+      m_recoveryNotice = tr_("data.corruptKept").arg(kept);
+      heap::recovery::append(QString::fromLatin1(heap::recovery::kUnrecovered),
+                             {{QStringLiteral("path"), path}, {QStringLiteral("reason"), shapeError}});
     }
+    return;
   }
 
-  QJsonObject root = doc.object();
+  loadStateDocument(doc.object(), /*viewOnly=*/false);
+}
+
+void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
+  const QString path = stateFilePath();
 
   // ----- schema ladder: field-level upgrades, before anything parses a task ---
   // Version-gated and idempotent: a v4 document walks straight past this, so
@@ -6438,21 +6891,39 @@ void AppController::loadStateOnStart() {
   // newest valid state-*.json in the backup dir.
   const int onDiskSchema = root.value("schemaVersion").toInt(1);
   if(onDiskSchema < heap::state::kSchemaVersion) {
-    retainPreMigrationBackup(path, onDiskSchema);
+    if(!viewOnly) {
+      retainPreMigrationBackup(path, onDiskSchema);
+    }
     heap::state::migrateState(root, onDiskSchema);
-    heap::recovery::append(QString::fromLatin1(heap::recovery::kMigrated),
-                           {{QStringLiteral("from"), onDiskSchema}, {QStringLiteral("to"), heap::state::kSchemaVersion}});
-  } else if(onDiskSchema > heap::state::kSchemaVersion) {
+    if(!viewOnly) {
+      heap::recovery::append(QString::fromLatin1(heap::recovery::kMigrated),
+                             {{QStringLiteral("from"), onDiskSchema}, {QStringLiteral("to"), heap::state::kSchemaVersion}});
+    }
+  } else if(onDiskSchema > heap::state::kSchemaVersion && !viewOnly) {
     // Written by a newer build — running two builds against one data dir, or a
     // downgrade. There is no ladder downwards, and this build would silently
     // drop every field it does not know on the next save. Load what parses so
-    // the user still sees their work, keep a copy, and block all saving.
+    // the user still sees their work, keep a copy, and block all saving — with
+    // a banner that stays up, not a toast that is gone in two seconds.
     m_saveBlocked = true;
     retainPreMigrationBackup(path, onDiskSchema);
-    m_recoveryNotice = tr_("data.schemaTooNew");
+    setStorageState(QStringLiteral("tooNew"), tr_("data.schemaTooNew").arg(onDiskSchema).arg(heap::state::kSchemaVersion));
     heap::recovery::append(QString::fromLatin1(heap::recovery::kSchemaTooNew),
                            {{QStringLiteral("onDisk"), onDiskSchema}, {QStringLiteral("supported"), heap::state::kSchemaVersion}});
     qWarning("state.json schema v%d is newer than this build's v%d — saving disabled", onDiskSchema, heap::state::kSchemaVersion);
+  }
+
+  // Keys this build does not know, at the version it writes: kept (PLAT-26).
+  if(onDiskSchema == heap::state::kSchemaVersion) {
+    m_rootExtra = unknownKeys(root, knownRootKeys());
+    m_settingsExtra = unknownKeys(root.value("settings").toObject(), knownSettingsKeys());
+  }
+  m_taskSeq.clear();
+  const QJsonObject seq = root.value("taskSeq").toObject();
+  for(auto it = seq.constBegin(); it != seq.constEnd(); ++it) {
+    if(it.value().isDouble() && it.value().toInt() > 0) {
+      m_taskSeq.insert(it.key(), it.value().toInt());
+    }
   }
 
   m_loading = true;
@@ -6474,7 +6945,10 @@ void AppController::loadStateOnStart() {
       emit languageChanged();
     }
     if(s.contains("currentView")) {
-      m_currentView = s["currentView"].toString();
+      // A view this build does not have (a hand edit, an older --view typo
+      // that got saved) would leave the content area blank on every launch.
+      const QString v = s["currentView"].toString();
+      m_currentView = heap::views::isKnown(v) ? v : QStringLiteral("board");
       emit currentViewChanged();
     }
     if(s.contains("workdayStart") || s.contains("workdayEnd")) {
@@ -6522,19 +6996,41 @@ void AppController::loadStateOnStart() {
       m_appSettingsJson = QJsonDocument(s["app"].toObject()).toJson(QJsonDocument::Compact);
       emit appSettingsJsonChanged();
     }
+  } else {
+    // A document with no settings object at all is still a returning user.
+    m_welcomeSeen = true;
+    emit onboardingChanged();
   }
 
   // Structural decisions below key off what was on disk, not the migrated value.
   const int schema = onDiskSchema;
   QVector<CalEvent> globalEvents;
 
-  if(schema >= 2 && root.contains("profiles")) {
+  if(schema >= 2 && root.value("profiles").isArray()) {
     // ----- schema v2 / v3: profiles array -----
     for(const auto& it : root["profiles"].toArray()) {
+      if(!it.isObject()) {
+        continue;
+      }
       // For v2, profiles still carried their own events — hoist them
       // into the global pool tagged with the source profile id.
       QVector<CalEvent> legacy;
-      m_profiles.push_back(heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr));
+      Profile p = heap::state::profileFromJson(it.toObject(), schema < 3 ? &legacy : nullptr);
+      if(schema != heap::state::kSchemaVersion) {
+        p.extra = {};  // pass-through is for the version this build writes
+      }
+      // Two profiles under one id cannot both be addressed; the second one
+      // gets its own rather than shadowing the first.
+      if(p.id.isEmpty() || profileIndexOf(p.id) >= 0) {
+        const QString oldId = p.id;
+        p.id = makeProfileId(p.name.isEmpty() ? QStringLiteral("profile") : p.name);
+        for(CalEvent& e : legacy) {
+          if(e.profileId == oldId) {
+            e.profileId = p.id;
+          }
+        }
+      }
+      m_profiles.push_back(p);
       if(!legacy.isEmpty()) {
         globalEvents.append(legacy);
       }
@@ -6574,6 +7070,15 @@ void AppController::loadStateOnStart() {
     m_activeProfileId = p.id;
   }
 
+  // A profile with no columns is a board nothing can be put on (PLAT-7).
+  for(Profile& p : m_profiles) {
+    if(p.statuses.isEmpty()) {
+      for(const auto& m : SampleData::statuses(m_language == QStringLiteral("ru") ? SampleData::Lang::Ru : SampleData::Lang::En)) {
+        p.statuses.append(m);
+      }
+    }
+  }
+
   m_events.reset(globalEvents);
 
   if(!m_profiles.isEmpty()) {
@@ -6594,13 +7099,35 @@ void AppController::loadStateOnStart() {
 
 void AppController::retainPreMigrationBackup(const QString& path, int fromVersion) {
   const QString dir = backupDirPath();
+  const QString prefix = "state-premigration-v" + QString::number(fromVersion) + "-";
+  const bool fromNewer = fromVersion > heap::state::kSchemaVersion;
+  if(fromNewer) {
+    // An older build opening a newer file does so on every launch, and the
+    // file rarely changes in between: one copy per distinct content is enough.
+    QFile live(path);
+    const QByteArray bytes = live.open(QIODevice::ReadOnly) ? live.readAll() : QByteArray();
+    const QDir d(dir);
+    for(const QString& name : d.entryList({prefix + "*.json"}, QDir::Files)) {
+      QFile other(d.filePath(name));
+      if(other.size() == bytes.size() && other.open(QIODevice::ReadOnly) && other.readAll() == bytes) {
+        return;
+      }
+    }
+  }
   const QString stamp = QDateTime::currentDateTime().toString("yyyyMMdd-HHmmss");
-  const QString target = dir + "/state-premigration-v" + QString::number(fromVersion) + "-" + stamp + ".json";
+  const QString target = dir + "/" + prefix + stamp + ".json";
   if(QFile::exists(target) || !QFile::copy(path, target)) {
     return;
   }
   heap::recovery::append(QString::fromLatin1(heap::recovery::kPreMigration),
                          {{QStringLiteral("from"), path}, {QStringLiteral("to"), target}, {QStringLiteral("schema"), fromVersion}});
+  if(fromNewer) {
+    QDir d(dir);
+    QStringList copies = d.entryList({prefix + "*.json"}, QDir::Files, QDir::Name);
+    while(copies.size() > kNewerSchemaCopiesKept) {
+      d.remove(copies.takeFirst());
+    }
+  }
 }
 
 // ───────────────────────────────────────────────────── Profiles API ──
@@ -6632,6 +7159,10 @@ void AppController::setActiveProfileId(const QString& id) {
   // The notes editor's unsaved keystrokes belong to this profile's note.
   emit aboutToChangeActiveNote();
   snapshotActiveProfile();
+  // Undo is scoped to the workspace it was recorded in (PLAT-15/TASKS-1): the
+  // entries are diffs of the active models, and replaying one onto another
+  // profile's models deleted or duplicated that profile's tasks.
+  clearPendingUndo();
   m_activeProfileId = id;
   applyProfileToModels(m_profiles[next]);
   emit activeProfileChanged();
@@ -6671,6 +7202,7 @@ QString AppController::createProfile(const QString& name, const QString& color) 
   }
   // Snapshot current active before creating so we don't lose unsaved edits.
   snapshotActiveProfile();
+  clearPendingUndo();  // undo is scoped to the active workspace
   Profile p = makeStartingProfile(name.trimmed(), color);
   p.id = makeProfileId(name.trimmed());
   m_profiles.push_back(p);
@@ -6727,6 +7259,26 @@ void AppController::deleteProfile(const QString& id) {
     return;  // never let the app run out of profiles
   }
   snapshotActiveProfile();
+  // The history of the workspace being deleted must not be replayed onto the
+  // one that takes its place (PLAT-15); only the deletion itself stays undoable.
+  if(id == m_activeProfileId) {
+    m_undo.clear();
+  }
+  // Events that were attributed to this profile become "unassigned"
+  // (still visible in the calendar, but with no feature dot). Their ids go
+  // into the entry so the undo can give them back.
+  QStringList detached;
+  for(int r = 0; r < m_events.rowCount(); ++r) {
+    const QModelIndex mi = m_events.index(r, 0);
+    if(m_events.data(mi, EventModel::ProfileIdRole).toString() == id) {
+      const CalEvent& e = m_events.items().at(r);
+      CalEvent copy = e;
+      detached.append(copy.id);
+      copy.profileId.clear();
+      m_events.upsert(copy);
+    }
+  }
+
   // Restoring a profile swaps every collection at once, so this is not a diff.
   // It also invalidates whatever the stack held about the old workspace, which
   // is why it goes in alone.
@@ -6734,23 +7286,12 @@ void AppController::deleteProfile(const QString& id) {
   entry.profileRemoved = true;
   entry.profile = m_profiles[i];
   entry.profileRow = i;
+  entry.profileEventIds = detached;
   entry.label = tr_("profile.restored").arg(m_profiles[i].name);
   m_undo.pushProfileRemoval(std::move(entry));
   emit pendingUndoChanged();
   const QString name = m_profiles[i].name;
   m_profiles.removeAt(i);
-
-  // Events that were attributed to this profile become "unassigned"
-  // (still visible in the calendar, but with no feature dot).
-  for(int r = 0; r < m_events.rowCount(); ++r) {
-    const QModelIndex mi = m_events.index(r, 0);
-    if(m_events.data(mi, EventModel::ProfileIdRole).toString() == id) {
-      const CalEvent& e = m_events.items().at(r);
-      CalEvent copy = e;
-      copy.profileId.clear();
-      m_events.upsert(copy);
-    }
-  }
 
   // If we deleted the active one, fall back to its neighbour.
   if(id == m_activeProfileId) {
@@ -6789,6 +7330,7 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
+  clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
   applyProfileToModels(copy);
@@ -6872,25 +7414,48 @@ QVariantList AppController::listBackups() const {
 }
 
 bool AppController::restoreFromBackup(const QString& fileName) {
-  const QString src = backupDirPath() + "/" + fileName;
-  if(!QFile::exists(src)) {
+  // Names come from listBackups(); anything with a path in it is not one.
+  if(fileName.isEmpty() || fileName.contains('/') || fileName.contains(QChar(0x5C))) {
     return false;
   }
-  // Snapshot current state alongside backups before overwriting.
-  rotateBackupIfDue();
-  flushSave();
-  QFile target(stateFilePath());
-  if(target.exists()) {
-    target.remove();
+  const QString src = backupDirPath() + "/" + fileName;
+  QFile in(src);
+  if(!in.open(QIODevice::ReadOnly)) {
+    return false;
   }
-  if(!QFile::copy(src, stateFilePath())) {
+  const QByteArray bytes = in.readAll();
+  in.close();
+  const QJsonDocument doc = QJsonDocument::fromJson(bytes);
+  if(doc.isNull() || !doc.isObject() || !heap::storage::validateShape(doc.object())) {
+    emit toast(tr_("backup.invalid").arg(fileName));
     return false;
   }
 
-  // Reload from disk.
-  m_profiles.clear();
-  m_activeProfileId.clear();
-  loadStateOnStart();
+  // The current state is snapshotted first, every time (PLAT-3). The rotation
+  // clock is the wrong gate here: with a daily backup the newest copy is
+  // almost always under 24 h old, so "restore" used to throw away everything
+  // since it for good. A read-only session writes nothing of its own, but the
+  // file it could not save over is still copied aside — and if even that is
+  // impossible (it is locked), the restore does not go ahead.
+  if(!m_saveBlocked) {
+    if(m_saveTimer) {
+      m_saveTimer->stop();
+    }
+    saveStateNow();
+  }
+  if(QFile::exists(stateFilePath()) && snapshotStateToBackups(QStringLiteral("-prerestore")).isEmpty()) {
+    emit toast(tr_("backup.snapshotFailed"));
+    return false;
+  }
+  QString error;
+  if(!heap::storage::writeAtomically(stateFilePath(), bytes, &error)) {
+    setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), error));
+    return false;
+  }
+
+  // Reload from disk. The undo history described the state that was just
+  // replaced, so it goes with it (reloadStateFromDisk clears it).
+  reloadStateFromDisk();
   emit toast(tr_("backup.restored").arg(fileName));
   return true;
 }
@@ -7237,6 +7802,7 @@ QString AppController::importProfileFromJson(const QString& jsonText, bool activ
   }
 
   if(activate) {
+    clearPendingUndo();  // undo is scoped to the active workspace
     m_activeProfileId = imported.id;
     applyProfileToModels(imported);
     emit activeProfileChanged();
@@ -7967,14 +8533,30 @@ void AppController::runAutomation() {
     emit blockedStuckChanged();
   }
 
+  // Automation covers every profile, not only the one on screen (PLAT-9): a
+  // task in a workspace the user has not opened today is still due today.
+  // The active profile's rows live in the models, the others' in m_profiles.
+  QSet<QString> stuckEverywhere = m_blockedStuckIds;
+  for(const Profile& p : m_profiles) {
+    if(p.id == m_activeProfileId) {
+      continue;
+    }
+    for(const Task& t : p.tasks) {
+      if(!t.archived && t.status == QStringLiteral("blocked") && t.statusChangedAt.isValid() &&
+         t.statusChangedAt.daysTo(now) >= stuckDays) {
+        stuckEverywhere.insert(t.id);
+      }
+    }
+  }
+
   // 1b. Daily digest of blocked-stuck tasks — one notification per day.
-  if(notif.value("blockedDailyDigest", false).toBool() && !m_blockedStuckIds.isEmpty()) {
+  if(notif.value("blockedDailyDigest", false).toBool() && !stuckEverywhere.isEmpty()) {
     const QString sentinel = QStringLiteral("digest:") + today.toString(Qt::ISODate);
     if(m_lastReminderDay.value(sentinel) != today) {
       m_lastReminderDay[sentinel] = today;
       QStringList ids;
-      ids.reserve(m_blockedStuckIds.size());
-      for(const QString& id : m_blockedStuckIds) {
+      ids.reserve(stuckEverywhere.size());
+      for(const QString& id : stuckEverywhere) {
         ids << id;
       }
       std::sort(ids.begin(), ids.end());
@@ -8006,6 +8588,17 @@ void AppController::runAutomation() {
       m_tasks.setArchived(id, true);
       persistedAny = true;
     }
+    for(Profile& p : m_profiles) {
+      if(p.id == m_activeProfileId) {
+        continue;
+      }
+      for(Task& t : p.tasks) {
+        if(!t.archived && t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.daysTo(now) >= archDays) {
+          t.archived = true;
+          persistedAny = true;
+        }
+      }
+    }
   }
   if(persistedAny) {
     scheduleSave();
@@ -8014,7 +8607,13 @@ void AppController::runAutomation() {
   // 3. Deadline reminders — at most one per task per day.
   if(notif.value("deadlineReminders", true).toBool()) {
     const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
-    for(const Task& t : m_tasks.items()) {
+    QVector<Task> candidates = m_tasks.items();
+    for(const Profile& p : m_profiles) {
+      if(p.id != m_activeProfileId) {
+        candidates += p.tasks;
+      }
+    }
+    for(const Task& t : candidates) {
       if(t.archived) {
         continue;
       }
@@ -8187,7 +8786,21 @@ void AppController::onGitBranchChanged(const QString& repo, const QString& branc
     return;
   }
 
-  if(g.value("autoMoveToInProgress", true).toBool() && m_tasks.items().at(row).status != QStringLiteral("prog")) {
+  // Checking out a branch means work is starting — never that finished work
+  // is starting again (PLAT-6). The watcher reports the current branch on
+  // every launch, so moving a Done or In-review card back to In Progress
+  // undid the user's own move (and told the tracker) each time the app
+  // opened. Only a card in a column before In Progress moves forward; an
+  // archived, done or in-review one is left alone, with no focus block.
+  const Task& task = m_tasks.items().at(row);
+  const int at = statusIndexOf(task.status);
+  const int prog = statusIndexOf(QStringLiteral("prog"));
+  const bool finished = task.archived || task.status == QLatin1String("done") || task.status == QLatin1String("review") ||
+                        (at >= 0 && at == m_statuses.size() - 1);
+  if(finished) {
+    return;
+  }
+  if(g.value("autoMoveToInProgress", true).toBool() && prog >= 0 && at >= 0 && at < prog) {
     moveTask(taskId, QStringLiteral("prog"));
   }
   if(g.value("autoCreateFocusBlock", false).toBool()) {
@@ -8415,6 +9028,8 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
   if(taskId.isEmpty()) {
     return;
   }
+  // Reminders cover every profile; acting on one opens the workspace it is in.
+  activateProfileOfTask(taskId);
 
   if(actionId == QStringLiteral("snooze1h")) {
     snoozeDeadline(taskId, 3600);
@@ -8429,9 +9044,27 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
   }
 }
 
+void AppController::activateProfileOfTask(const QString& taskId) {
+  if(taskId.isEmpty() || m_tasks.indexOfId(taskId) >= 0) {
+    return;
+  }
+  for(const Profile& p : m_profiles) {
+    if(p.id == m_activeProfileId) {
+      continue;
+    }
+    for(const Task& t : p.tasks) {
+      if(t.id == taskId) {
+        setActiveProfileId(p.id);
+        return;
+      }
+    }
+  }
+}
+
 void AppController::onNotifierActivated(const QString& notificationId) {
   const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
   Q_UNUSED(kind);
+  activateProfileOfTask(taskId);
   if(!taskId.isEmpty() && m_tasks.indexOfId(taskId) >= 0) {
     emit openTaskRequested(taskId);
   }

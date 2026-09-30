@@ -427,6 +427,11 @@ ApplicationWindow {
                 AppController.retryTrackerPush(taskId)
             }, "error");
         }
+        function onSettingsReset(msg) {
+            toast.showWithAction(msg, I18n.t("undo.action"), 10, function () {
+                AppController.undoSettingsReset()
+            });
+        }
         function onUndoableToast(msg, secs) {
             toast.showWithAction(msg, I18n.t("undo.action"), secs, function () {
                 AppController.undoLastDeletion()
@@ -521,6 +526,9 @@ ApplicationWindow {
             ColumnLayout {
                 anchors.fill: parent
                 spacing: 0
+
+                // state.json unreadable / from a newer heap / not saving.
+                StorageBanner { Layout.fillWidth: true }
 
                 // First-run demo banner: offer to clear the seeded sample data.
                 Rectangle {

@@ -272,7 +272,9 @@ Item {
         _persistNow();
     }
     function resetAll() {
-        AppController.appSettingsJson = "";
+        // Preferences only, onto a new install's look; connections, repos,
+        // own themes and layout stay, and the toast offers Undo (UX-5).
+        AppController.resetSettingsToDefaults();
         _loadFromController();
     }
 
@@ -1002,12 +1004,18 @@ Item {
     }
 
     component DangerRow: RowLayout {
+        id: dangerRow
         property string title: ""
         property string hint: ""
         property string buttonText: ""
+        // Two-step, like the other destructive rows: the first click arms,
+        // the second commits, and it disarms by itself.
+        property string confirmText: I18n.t("settings.data.wipe.confirm")
+        property bool armed: false
         signal triggered()
         Layout.fillWidth: true
         spacing: Theme.spXl
+        Timer { id: dangerDisarm; interval: 3500; onTriggered: dangerRow.armed = false }
         ColumnLayout {
             Layout.fillWidth: true
             spacing: 1
@@ -1016,12 +1024,24 @@ Item {
         }
         Rectangle {
             radius: Theme.radiusMd
-            color: dangerMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10)
+            color: dangerRow.armed ? Theme.danger
+                 : (dangerMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.20) : Theme.withAlpha(Theme.danger, 0.10))
             border.color: Theme.danger; border.width: 1
             implicitWidth: dangerTxt.implicitWidth + 24
             implicitHeight: 28
-            Text { id: dangerTxt; anchors.centerIn: parent; text: parent.parent.buttonText; color: Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium }
-            MouseArea { id: dangerMA; anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor; onClicked: parent.parent.triggered() }
+            Text {
+                id: dangerTxt; anchors.centerIn: parent
+                text: dangerRow.armed ? dangerRow.confirmText : dangerRow.buttonText
+                color: dangerRow.armed ? Theme.textOnDanger : Theme.danger; font.pixelSize: Theme.fsMd; font.weight: Font.Medium
+            }
+            MouseArea {
+                id: dangerMA; objectName: "danger-row-button"
+                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
+                onClicked: {
+                    if (!dangerRow.armed) { dangerRow.armed = true; dangerDisarm.restart(); return; }
+                    dangerRow.armed = false; dangerDisarm.stop(); dangerRow.triggered();
+                }
+            }
         }
     }
 

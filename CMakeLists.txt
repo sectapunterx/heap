@@ -201,6 +201,9 @@ qt_add_library(heap_core STATIC
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
     # ── audit-plat: begin ──
+    src/storage/StateIO.cpp
+    src/storage/AsyncSaver.cpp
+    src/platform/SingleInstance.cpp
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
     # ── audit-tasks: end ──
@@ -254,6 +257,7 @@ qt_add_qml_module(heap_core
         qml/Theme.qml
         qml/ThemePresets.js
         # ── audit-plat: begin ──
+        qml/StorageBanner.qml
         # ── audit-plat: end ──
         # ── audit-tasks: begin ──
         # ── audit-tasks: end ──

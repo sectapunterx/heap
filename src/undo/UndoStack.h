@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QSet>
 #include <QString>
+#include <QStringList>
 #include <QVariantList>
 #include <QVector>
 
@@ -175,6 +176,9 @@ struct Entry {
   bool profileRemoved = false;
   ::Profile profile;
   int profileRow = -1;
+  // Events the deletion detached from the profile (profileId cleared), so the
+  // undo can hand them back (PLAT-14).
+  QStringList profileEventIds;
 
   bool isEmpty() const {
     return !profileRemoved && !statusesTouched && !docsStateTouched && tasks.isEmpty() && events.isEmpty() && people.isEmpty() &&

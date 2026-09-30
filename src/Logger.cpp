@@ -121,7 +121,21 @@ void installFileLogger() {
   g_logFile.setFileName(logFilePath());
   if(g_logFile.open(QIODevice::WriteOnly | QIODevice::Append | QIODevice::Text)) {
     g_previousHandler = qInstallMessageHandler(messageHandler);
+  } else {
+    // An unwritable data dir used to leave no trace at all (PLAT-4).
+    static_cast<void>(fputs(
+        qPrintable(QStringLiteral("heap: cannot open log file %1: %2\n").arg(g_logFile.fileName(), g_logFile.errorString())), stderr));
   }
+}
+
+void closeFileLogger() {
+  const QMutexLocker lock(&g_mutex);
+  if(!g_logFile.isOpen()) {
+    return;
+  }
+  qInstallMessageHandler(g_previousHandler);
+  g_previousHandler = nullptr;
+  g_logFile.close();
 }
 
 QString logTail(int maxBytes) {

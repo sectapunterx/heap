@@ -579,7 +579,8 @@ QVariantList statusesFromJson(const QJsonArray& a) {
 // ───────────────── Profile ─────────────────
 
 QJsonObject profileToJson(const Profile& p) {
-  QJsonObject o;
+  // Unknown keys first, so every key this build owns overwrites a stale copy.
+  QJsonObject o = p.extra;
   o["id"] = p.id;
   o["name"] = p.name;
   o["color"] = p.color;
@@ -642,6 +643,27 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
   p.activeDocPageId = o["activeDocPageId"].toString();
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
+  }
+  // Whatever else the object carries passes through a save (PLAT-26). A key
+  // added to profileToJson must be listed here too, or a stale copy of it
+  // would come back from `extra` when the new code omits it.
+  static const QStringList kKnown = {QStringLiteral("id"),
+                                     QStringLiteral("name"),
+                                     QStringLiteral("color"),
+                                     QStringLiteral("createdAt"),
+                                     QStringLiteral("tasks"),
+                                     QStringLiteral("people"),
+                                     QStringLiteral("statuses"),
+                                     QStringLiteral("docs"),
+                                     QStringLiteral("notes"),
+                                     QStringLiteral("activeNoteId"),
+                                     QStringLiteral("docPages"),
+                                     QStringLiteral("activeDocPageId"),
+                                     QStringLiteral("events")};
+  for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
+    if(!kKnown.contains(it.key())) {
+      p.extra.insert(it.key(), it.value());
+    }
   }
   return p;
 }
