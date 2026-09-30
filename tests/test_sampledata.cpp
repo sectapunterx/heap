@@ -8,6 +8,7 @@
 #include "Models.h"
 #include "SampleData.h"
 
+#include <QColor>
 #include <QDate>
 #include <QSet>
 
@@ -51,6 +52,20 @@ TEST(SampleData, BoardStaysPopulatedAcrossColumns) {
   }
   EXPECT_GE(ts.size(), 10);
   EXPECT_GE(statuses.size(), 4);
+}
+
+TEST(SampleData, DefaultStatusesHaveDistinctColours) {
+  // Design audit DES-7: To Do and Code Review shipped the same grey, In
+  // Progress and 50/50 the same blue, so the dot beside a card told two
+  // statuses apart by nothing. A new profile gets one colour per status.
+  for(const SampleData::Lang lang : {SampleData::Lang::En, SampleData::Lang::Ru}) {
+    QSet<QString> colours;
+    const QVector<QVariantMap> sts = SampleData::statuses(lang);
+    for(const QVariantMap& s : sts) {
+      colours.insert(s.value(QStringLiteral("color")).value<QColor>().name());
+    }
+    EXPECT_EQ(colours.size(), sts.size());
+  }
 }
 
 int main(int argc, char** argv) {
