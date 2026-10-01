@@ -128,7 +128,16 @@ Item {
             root._forgetRows(topLeft.row, bottomRight.row);
             root.modelRev++;
         }
-        function onRowsInserted() { root.modelRev++ }
+        // An id can come back: a task renamed to the id of a deleted one, or
+        // a new task handed a deleted task's id. Its row was still cached
+        // under that id, so the timeline showed the deleted task's title,
+        // priority and bucket (TASKS-3, audit 2026-09-30). Inserted and
+        // removed rows leave the cache like changed ones do.
+        function onRowsInserted(parent, first, last) {
+            root._forgetRows(first, last);
+            root.modelRev++;
+        }
+        function onRowsAboutToBeRemoved(parent, first, last) { root._forgetRows(first, last) }
         function onRowsRemoved()  { root.modelRev++ }
         function onModelReset()   { root._rowCache = ({}); root.modelRev++ }
     }
@@ -136,10 +145,10 @@ Item {
     // One snapshot row per task id, kept between rebuilds. A rebuild used to
     // read ten roles and ask C++ for the bucket of every task — 3k tasks,
     // ~85 ms — for every change anywhere, a single card's move included. Now
-    // only the rows the model says changed are read again. Rows are keyed by
-    // id, not position, so an insert or a removal leaves the rest valid; the
-    // entries of removed tasks are simply never looked up again. The bucket
-    // depends on today, so a new day starts a new cache.
+    // only the rows the model says changed, arrived or left are read again.
+    // Rows are keyed by id, not position, so an insert or a removal leaves the
+    // rest valid. The bucket depends on today, so a new day starts a new
+    // cache.
     property var _rowCache: ({})
     property string _rowCacheDay: ""
     function _forgetRows(first, last) {
@@ -526,7 +535,13 @@ Item {
                     id: tlRow
                     objectName: "tl-row"
                     readonly property var rd: parent && parent.rowData ? parent.rowData : null
-                    readonly property var t: rd ? rd.task : null
+                    // While the Loader swaps a row between a header and a task
+                    // the row has no task for a moment; every binding below
+                    // read tlRow.t.x and threw a TypeError (TASKS-3).
+                    readonly property var t: rd && rd.task ? rd.task : _noTask
+                    readonly property var _noTask: ({ id: "", title: "", desc: "", priority: "", status: "", branch: "",
+                                                      ticket: null, when: new Date(NaN), dueAt: null, scheduledAt: null,
+                                                      dueHasTime: false, scheduledHasTime: false, scheduledOnly: false })
                     readonly property var st: t ? root.statusInfo(t.status) : null
                     readonly property bool _selected: t && AppController.selectionCount >= 0
                         && AppController.isTaskSelected(t.id)

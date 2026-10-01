@@ -1164,3 +1164,34 @@ TEST_F(Chrono, MonthlyRecurrence) {
   EXPECT_EQ(r.recurrence, QStringLiteral("every:month:25"));
   EXPECT_DATE(r, 2026, 5, 25);
 }
+
+// TASKS-8 (audit 2026-09-30): version and section numbers are not dates.
+// "release 1.2.3" got a due date in 2003 and lost "1.2.3" from its title.
+TEST_F(Chrono, VersionNumbersAreNotDates) {
+  for(const char* text : {"release 1.2.3 notes",
+                          "bump qt to 6.9.1",
+                          "read section 4.2 of the spec",
+                          "upgrade node 20.11",
+                          "ship 1.2.3.4",
+                          "bump to 6.10.12",
+                          "version 2.1 changelog"}) {
+    const auto r = parserEn.parse(QString::fromUtf8(text), kRef);
+    EXPECT_FALSE(r.ok) << text << " -> " << r.consumed.toStdString();
+  }
+  EXPECT_FALSE(parserRu.parse(QString::fromUtf8("прочитать раздел 4.2"), kRef).ok);
+}
+
+// The guard leaves real dotted dates alone, including a two-digit year in the
+// recent past and a date after a version.
+TEST_F(Chrono, DottedDatesStillParseNextToVersionGuard) {
+  auto r = parserEn.parse("ship it by 22.05", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 22);
+  r = parserRu.parse(QString::fromUtf8("сдать отчёт 15.10.25"), kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2025, 10, 15);
+  r = parserEn.parse("release 1.2.3 on 22.05", kRef);
+  EXPECT_OK(r);
+  EXPECT_DATE(r, 2026, 5, 22);
+  EXPECT_EQ(r.consumed, QStringLiteral("on 22.05"));
+}

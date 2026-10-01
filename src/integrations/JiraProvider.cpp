@@ -16,6 +16,7 @@
 #include <QUrlQuery>
 
 #include <algorithm>
+#include <memory>
 
 namespace heap::integrations {
 
@@ -25,6 +26,23 @@ namespace {
 // the cap bounds a sync to 2000 issues however many the JQL matches.
 constexpr int kJiraPageSize = 100;
 constexpr int kJiraMaxPages = 20;
+
+// The fields parseJiraIssues reads, for a search and for a single issue.
+QStringList jiraIssueFields() {
+  return {QStringLiteral("summary"),
+          QStringLiteral("description"),
+          QStringLiteral("status"),
+          QStringLiteral("priority"),
+          QStringLiteral("labels"),
+          QStringLiteral("updated"),
+          QStringLiteral("created"),
+          QStringLiteral("duedate"),
+          QStringLiteral("assignee"),
+          QStringLiteral("reporter"),
+          QStringLiteral("issuetype"),
+          QStringLiteral("project"),
+          QStringLiteral("fixVersions")};
+}
 
 // Atlassian Document Format → markdown.
 //
@@ -835,23 +853,7 @@ void JiraProvider::pullPage(const QString& cursor, int startAt) {
   // The /search/jql endpoint requires an explicit `fields` list (omitting it
   // returns only ids); the parser needs exactly these. `comment` stays out on
   // purpose — it would inline every comment body of all 100 issues.
-  QJsonArray fields;
-  for(const auto* f : {"summary",
-                       "description",
-                       "status",
-                       "priority",
-                       "labels",
-                       "updated",
-                       "created",
-                       "duedate",
-                       "assignee",
-                       "reporter",
-                       "issuetype",
-                       "project",
-                       "fixVersions"}) {
-    fields.append(QLatin1String(f));
-  }
-  payload.insert(QStringLiteral("fields"), fields);
+  payload.insert(QStringLiteral("fields"), QJsonArray::fromStringList(jiraIssueFields()));
   // Each issue's available workflow transitions, so a move the workflow cannot
   // make is caught on the drop. Cloud's /search/jql takes a comma-separated
   // string, Server's /search an array.
@@ -937,6 +939,41 @@ void JiraProvider::fetchComments(const QString& externalId, const QString& /*pro
     }
     emit commentsFetched(externalId, parseJiraComments(r.body), QString());
   });
+}
+
+void JiraProvider::lookUpIssues(const QStringList& externalIds) {
+  if(!isConfigured() || externalIds.isEmpty()) {
+    emit issuesLookedUp({}, {});
+    return;
+  }
+
+  // One GET per key: a JQL "key in (…)" refuses the whole query when one of
+  // the keys was deleted, which is exactly the case being told apart.
+  struct Lookup {
+    int pending = 0;
+    QVector<ExternalTask> found;
+    QStringList missing;
+  };
+
+  const auto state = std::make_shared<Lookup>();
+  state->pending = static_cast<int>(externalIds.size());
+  const QString query = QStringLiteral("?fields=") + jiraIssueFields().join(QLatin1Char(',')) + QStringLiteral("&expand=transitions");
+  const QString site = m_baseUrl;
+  for(const QString& key : externalIds) {
+    send("GET", QStringLiteral("/issue/") + key + query, {}, [this, state, key, site](const ApiResult& r) {
+      if(r.ok) {
+        // A single issue has the shape of one entry of a search answer.
+        QJsonObject wrapped;
+        wrapped.insert(QStringLiteral("issues"), QJsonArray{QJsonDocument::fromJson(r.body).object()});
+        state->found += parseJiraIssues(QJsonDocument(wrapped).toJson(QJsonDocument::Compact), site);
+      } else if(r.status == 404) {
+        state->missing.append(key);
+      }
+      if(--state->pending == 0) {
+        emit issuesLookedUp(state->found, state->missing);
+      }
+    });
+  }
 }
 
 void JiraProvider::fetchStatuses() {

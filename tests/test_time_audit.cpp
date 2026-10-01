@@ -305,6 +305,47 @@ TEST_F(TimeAudit, AFileThatIsNotACalendarIsAnError) {
   EXPECT_FALSE(r.value("error").toString().isEmpty());
 }
 
+// ── TIME-25 (audit 2026-09-30): another heap's ev-2 is not ours ──
+
+TEST_F(TimeAudit, AnotherHeapsEventWithOurIdIsANewEvent) {
+  const QString id = seed(QString());
+  const QString title = app_->eventById(id).value("title").toString();
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("colleague.ics"));
+  QFile f(path);
+  ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+  f.write(QStringLiteral("BEGIN:VCALENDAR\r\nPRODID:-//heap//EN\r\nBEGIN:VEVENT\r\nUID:%1@0123456789ab.heap\r\n"
+                         "DTSTART:20261105T100000\r\nSUMMARY:Colleague's design review\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+              .arg(id)
+              .toUtf8());
+  f.close();
+
+  const QVariantMap r = app_->importIcs(QUrl::fromLocalFile(path));
+
+  EXPECT_EQ(r.value("imported").toInt(), 1);
+  EXPECT_EQ(r.value("updated").toInt(), 0);
+  EXPECT_EQ(app_->events()->rowCount(), 2);
+  EXPECT_EQ(app_->eventById(id).value("title").toString(), title) << "our own event is left alone";
+}
+
+TEST_F(TimeAudit, OurOwnExportComesBackAsAnUpdate) {
+  const QString id = seed(QString());
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("mine.ics"));
+  ASSERT_TRUE(app_->exportIcsToFile(QUrl::fromLocalFile(path)));
+  QFile f(path);
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  const QString text = QString::fromUtf8(f.readAll());
+  f.close();
+  EXPECT_TRUE(text.contains(QStringLiteral("UID:") + id + QLatin1Char('@') + app_->icsUidDomain())) << text.toStdString();
+
+  const QVariantMap r = app_->importIcs(QUrl::fromLocalFile(path));
+
+  EXPECT_EQ(r.value("imported").toInt(), 0);
+  EXPECT_EQ(r.value("updated").toInt(), 1);
+  EXPECT_EQ(app_->events()->rowCount(), 1);
+}
+
 // ── TIME-7 / TASKS-17: today moves ──
 
 TEST_F(TimeAudit, TodayMovesAndASelectionOnTodayFollows) {
@@ -610,6 +651,165 @@ TEST_F(TimeAudit, CalendarTasksIsCheapAtTenThousandTasks) {
 
   EXPECT_GT(week.size(), 100);
   EXPECT_LT(ms, 250) << "a week's candidates took " << ms << " ms";
+}
+
+// ── B·A tier of the 2026-09-30 audit: series edits and .ics round trips ──
+
+namespace {
+
+QVector<QDate> datesOf(const QVariantList& occurrences) {
+  QVector<QDate> out;
+  for(const QVariant& v : occurrences) {
+    out.append(v.toMap().value("date").toDate());
+  }
+  std::sort(out.begin(), out.end());
+  return out;
+}
+
+QVariantMap occurrenceOn(AppController& app, const QDate& day) {
+  return app.eventOccurrences(day, day).value(0).toMap();
+}
+
+bool writeFile(const QString& path, const QString& text) {
+  QFile f(path);
+  if(!f.open(QIODevice::WriteOnly)) {
+    return false;
+  }
+  f.write(text.toUtf8());
+  return true;
+}
+
+}  // namespace
+
+// TIME-3: the editor hands an imported "BYDAY=TU" weekly rule back without
+// the BYDAY; the split still knows it is the same rule and the same COUNT.
+TEST_F(TimeAudit, SplittingAnImportedCountedSeriesKeepsTheTotal) {
+  const QDate tue(2031, 4, 1);
+  seed(QStringLiteral("FREQ=WEEKLY;BYDAY=TU;COUNT=6"), 10.0, 11.0, tue);
+  QVariantMap fourth = occurrenceOn(*app_, QDate(2031, 4, 22));
+  ASSERT_FALSE(fourth.isEmpty());
+  fourth["title"] = QStringLiteral("renamed");
+  fourth["rrule"] = QStringLiteral("FREQ=WEEKLY;COUNT=6");
+
+  app_->saveOccurrence(fourth, QStringLiteral("following"));
+
+  const QVariantList all = app_->eventOccurrences(tue, tue.addDays(120));
+  EXPECT_EQ(all.size(), 6) << "3 before the split and 3 after, not 3 + 6";
+  int renamed = 0;
+  for(const QVariant& v : all) {
+    renamed += v.toMap().value("title").toString() == QStringLiteral("renamed") ? 1 : 0;
+  }
+  EXPECT_EQ(renamed, 3);
+}
+
+// TIME-5: a Tue/Thu meeting created on a Monday starts on Tuesday.
+TEST_F(TimeAudit, ASeriesCreatedOffItsDaysStartsOnTheFirstOfThem) {
+  const QDate mon(2031, 6, 2);
+  seed(QStringLiteral("FREQ=WEEKLY;BYDAY=TU,TH;COUNT=4"), 10.0, 11.0, mon);
+
+  EXPECT_EQ(datesOf(app_->eventOccurrences(mon, mon.addDays(30))),
+            (QVector<QDate>{QDate(2031, 6, 3), QDate(2031, 6, 5), QDate(2031, 6, 10), QDate(2031, 6, 12)}))
+      << "no Monday occurrence, and it does not eat one of the four";
+}
+
+// TIME-5: renaming a series that legally starts off its days (as an import
+// may) leaves its start alone.
+TEST_F(TimeAudit, RenamingAnOffDaySeriesKeepsItsStart) {
+  const QDate mon(2031, 6, 2);
+  const QString id = seed(QStringLiteral("FREQ=WEEKLY;BYDAY=TU"), 10.0, 11.0, mon.addDays(1));
+  CalEvent stored = app_->events()->items().at(app_->events()->indexOfId(id));
+  stored.date = mon;  // as an RFC import would store it
+  app_->events()->upsert(stored);
+  QVariantMap e = app_->eventById(id);
+  e["title"] = QStringLiteral("renamed");
+
+  app_->saveEvent(e);
+
+  EXPECT_EQ(app_->eventById(id).value("date").toDate(), mon);
+}
+
+// TIME-7: moving "all" of a series on the 15th to the 16th moves every one.
+TEST_F(TimeAudit, MovingAMonthDaySeriesForAllMovesEveryOccurrence) {
+  const QDate first(2031, 8, 15);
+  const QString id = seed(QStringLiteral("FREQ=MONTHLY;BYMONTHDAY=15"), 10.0, 11.0, first);
+  app_->deleteOccurrence(id, QDate(2031, 10, 15), QStringLiteral("this"));
+
+  app_->moveOccurrence(occurrenceOn(*app_, QDate(2031, 9, 15)), 24.0, QStringLiteral("all"));
+
+  EXPECT_EQ(datesOf(app_->eventOccurrences(first, QDate(2031, 11, 30))),
+            (QVector<QDate>{QDate(2031, 8, 16), QDate(2031, 9, 16), QDate(2031, 11, 16)}))
+      << "the deleted October one stays deleted";
+}
+
+// TIME-7: the second Tuesday dropped on the following Wednesday (the 3rd
+// Wednesday that month) is "the third Wednesday" from then on.
+TEST_F(TimeAudit, MovingAnOrdinalWeekdaySeriesForAllRereadsTheDay) {
+  const QDate first(2031, 9, 9);  // the second Tuesday of September
+  seed(QStringLiteral("FREQ=MONTHLY;BYDAY=2TU"), 10.0, 11.0, first);
+
+  app_->moveOccurrence(occurrenceOn(*app_, QDate(2031, 10, 14)), 24.0, QStringLiteral("all"));
+
+  EXPECT_EQ(datesOf(app_->eventOccurrences(QDate(2031, 9, 1), QDate(2031, 11, 30))),
+            (QVector<QDate>{QDate(2031, 9, 17), QDate(2031, 10, 15), QDate(2031, 11, 19)}));
+}
+
+// TIME-7: a rule the new day cannot be said in is left whole and says why.
+TEST_F(TimeAudit, AnUnmovableRuleIsNotMovedInPart) {
+  const QDate first(2031, 9, 1);  // the first Monday
+  const QString id = seed(QStringLiteral("FREQ=MONTHLY;BYDAY=1MO,3MO"), 10.0, 11.0, first);
+  QSignalSpy spy(app_.get(), &AppController::toast);
+
+  app_->moveOccurrence(occurrenceOn(*app_, QDate(2031, 9, 15)), 24.0, QStringLiteral("all"));
+
+  EXPECT_EQ(app_->eventById(id).value("date").toDate(), first);
+  EXPECT_EQ(app_->eventById(id).value("rrule").toString(), QStringLiteral("FREQ=MONTHLY;BYDAY=1MO,3MO"));
+  EXPECT_EQ(spy.count(), 1);
+}
+
+// TIME-9: a file that only cancels one occurrence of a stored series
+// deletes it there.
+TEST_F(TimeAudit, AnImportedCancellationDeletesTheStoredOccurrence) {
+  const QDate mon(2031, 6, 2);
+  const QString id = seed(QStringLiteral("FREQ=WEEKLY"), 10.0, 11.0, mon);
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("cancel.ics"));
+  ASSERT_TRUE(writeFile(path,
+                        QStringLiteral("BEGIN:VCALENDAR\r\nVERSION:2.0\r\nBEGIN:VEVENT\r\nUID:%1@%2\r\n"
+                                       "RECURRENCE-ID:20310609T100000\r\nSTATUS:CANCELLED\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+                            .arg(id, app_->icsUidDomain())));
+
+  const QVariantMap r = app_->importIcs(QUrl::fromLocalFile(path));
+
+  EXPECT_EQ(r.value("skipped").toInt(), 0);
+  EXPECT_EQ(datesOf(app_->eventOccurrences(mon, mon.addDays(14))), (QVector<QDate>{mon, mon.addDays(14)}));
+}
+
+// TIME-10: our own export with a moved occurrence comes back as an update,
+// however many times, and an earlier import's double is folded away.
+TEST_F(TimeAudit, ReimportingOurExportDoesNotDoubleMovedOccurrences) {
+  const QDate mon(2031, 3, 3);
+  seed(QStringLiteral("FREQ=WEEKLY;COUNT=4"), 10.0, 11.0, mon);
+  app_->moveOccurrence(occurrenceOn(*app_, mon.addDays(14)), 2.0, QStringLiteral("this"));
+  ASSERT_EQ(app_->events()->rowCount(), 2);
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("mine.ics"));
+  ASSERT_TRUE(app_->exportIcsToFile(QUrl::fromLocalFile(path)));
+
+  for(int round = 0; round < 2; ++round) {
+    const QVariantMap r = app_->importIcs(QUrl::fromLocalFile(path));
+    EXPECT_EQ(r.value("imported").toInt(), 0) << "round " << round;
+    EXPECT_EQ(r.value("updated").toInt(), 2) << "round " << round;
+    EXPECT_EQ(app_->events()->rowCount(), 2) << "round " << round;
+  }
+
+  // The state an older build's import left: a second override of that date.
+  CalEvent dup = app_->events()->items().at(1).masterId.isEmpty() ? app_->events()->items().at(0) : app_->events()->items().at(1);
+  dup.id = dup.masterId + QStringLiteral("-20310317");
+  app_->events()->upsert(dup);
+  ASSERT_EQ(app_->events()->rowCount(), 3);
+  app_->importIcs(QUrl::fromLocalFile(path));
+  EXPECT_EQ(app_->events()->rowCount(), 2) << "the double is folded into one override";
+  EXPECT_NEAR(occurrenceOn(*app_, mon.addDays(14)).value("start").toDouble(), 12.0, 1e-6);
 }
 
 int main(int argc, char** argv) {

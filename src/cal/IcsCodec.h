@@ -49,6 +49,17 @@ struct IcsImport {
   QVector<CalEvent> events;
   // VEVENTs that could not be read at all: no start, or cancelled.
   int skipped = 0;
+
+  // Occurrences a calendar cancelled (RECURRENCE-ID + STATUS:CANCELLED) of a
+  // series this file does not carry: the importer deletes them from the
+  // stored series of that id. One whose series is in the file is already an
+  // EXDATE on it (TIME-9, audit 2026-09-30).
+  struct Cancelled {
+    QString masterId;
+    QDate date;  // in the series' own clock, like an EXDATE
+  };
+
+  QVector<Cancelled> cancelled;
   // One line per thing that was degraded rather than lost.
   QStringList warnings;
   // False when the text had no VCALENDAR or VEVENT at all — not a calendar,
@@ -565,7 +576,11 @@ inline QStringList vtimezoneLines(const QTimeZone& zone, int fromYear, int toYea
 
 // Reads a document. `display` is the viewer's zone: floating times are read
 // in it, and everything that is not kept in its own zone is converted to it.
-inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZone::systemTimeZone()) {
+// `uidDomain` is this install's (see toIcs): a UID ending in it is one of our
+// own events coming back and maps to its local id; any other UID is kept whole.
+inline IcsImport parseIcs(const QString& text,
+                          const QTimeZone& display = QTimeZone::systemTimeZone(),
+                          const QString& uidDomain = QString()) {
   IcsImport out;
   const QStringList lines = detail::unfold(text);
 
@@ -659,6 +674,8 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
   };
 
   QVector<PendingOverride> pending;
+  // Cancelled occurrences, by the UID of their series; settled like overrides.
+  QVector<QPair<QString, detail::Instant>> cancelledIds;
 
   const auto reset = [&]() {
     uid.clear();
@@ -729,6 +746,14 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
       }
       inEvent = false;
 
+      // A cancelled occurrence of a series is how Google, Outlook and CalDAV
+      // delete one meeting of many. It is a deletion, not an event that
+      // failed to read: counted as skipped, it left the meeting standing
+      // (TIME-9, audit 2026-09-30).
+      if(cancelled && recurrenceId.valid && !uid.isEmpty()) {
+        cancelledIds.append({uid, recurrenceId});
+        continue;
+      }
       if(cancelled || !dtStart.valid) {
         out.skipped++;
         continue;
@@ -881,6 +906,9 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
 
     if(cl.name == QLatin1String("UID")) {
       uid = cl.value.trimmed();
+      if(!uidDomain.isEmpty() && uid.endsWith(QLatin1Char('@') + uidDomain, Qt::CaseInsensitive)) {
+        uid.chop(uidDomain.size() + 1);
+      }
     } else if(cl.name == QLatin1String("SUMMARY")) {
       summary = detail::unescapeText(cl.value);
     } else if(cl.name == QLatin1String("LOCATION")) {
@@ -948,6 +976,35 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
     const QDateTime at = detail::instantFor(rid, zones, display);
     ov.originalDate = at.toTimeZone(mz.isValid() ? mz : display).date();
   }
+  QSet<QString> dropped;
+  for(const auto& [masterUid, rid] : std::as_const(cancelledIds)) {
+    const auto it = masters.constFind(masterUid);
+    QDate day = rid.date;
+    if(!rid.dateOnly && (!rid.tzid.isEmpty() || rid.utc)) {
+      const QTimeZone mz = it != masters.constEnd() ? zoneOf(out.events.at(*it)) : QTimeZone();
+      day = detail::instantFor(rid, zones, display).toTimeZone(mz.isValid() ? mz : display).date();
+    }
+    if(!day.isValid()) {
+      continue;
+    }
+    if(it == masters.constEnd()) {
+      out.cancelled.append({masterUid, day});
+      continue;
+    }
+    CalEvent& m = out.events[*it];
+    if(!m.exdates.contains(day)) {
+      m.exdates.append(day);
+      std::sort(m.exdates.begin(), m.exdates.end());
+    }
+    dropped.insert(masterUid + QLatin1Char('|') + day.toString(Qt::ISODate));
+  }
+  // An override of a cancelled occurrence in the same file goes with it.
+  // Removed only now: `masters` holds indices into the list.
+  if(!dropped.isEmpty()) {
+    out.events.removeIf([&](const CalEvent& e) {
+      return !e.masterId.isEmpty() && dropped.contains(e.masterId + QLatin1Char('|') + e.originalDate.toString(Qt::ISODate));
+    });
+  }
   return out;
 }
 
@@ -955,9 +1012,15 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
 // event goes out in UTC, which every reader agrees on; a series goes out
 // in the viewer's zone by name (with its VTIMEZONE), so its DST keeps working
 // wherever it is opened. A series that kept a source zone keeps it.
+// `uidDomain` qualifies a local id ("ev-2" → "ev-2@<domain>"): a bare local id
+// is the same in every install (the demo's ev-1..ev-5 above all), so another
+// heap importing the file took it for its own event and overwrote that
+// (TIME-25, audit 2026-09-30). An id that already has an "@" came from some
+// calendar's UID and leaves as it arrived.
 inline QString toIcs(const QVector<CalEvent>& events,
                      const QTimeZone& display = QTimeZone::systemTimeZone(),
-                     const QDateTime& now = QDateTime::currentDateTimeUtc()) {
+                     const QDateTime& now = QDateTime::currentDateTimeUtc(),
+                     const QString& uidDomain = QString()) {
   QStringList body;
   QHash<QByteArray, QPair<int, int>> zoneYears;  // zone id → year range used
   const auto useZone = [&](const QTimeZone& z, const QDate& d) {
@@ -993,7 +1056,9 @@ inline QString toIcs(const QVector<CalEvent>& events,
       continue;
     }
     body << QStringLiteral("BEGIN:VEVENT");
-    body << QStringLiteral("UID:") + (e.masterId.isEmpty() ? e.id : e.masterId);
+    const QString localUid = e.masterId.isEmpty() ? e.id : e.masterId;
+    body << QStringLiteral("UID:") +
+                (uidDomain.isEmpty() || localUid.contains(QLatin1Char('@')) ? localUid : localUid + QLatin1Char('@') + uidDomain);
     body << QStringLiteral("DTSTAMP:") + detail::icsUtc(now);
     if(!e.title.isEmpty()) {
       body << QStringLiteral("SUMMARY:") + detail::escapeText(e.title);

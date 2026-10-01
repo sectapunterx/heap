@@ -43,6 +43,7 @@ void AppController::setTaskPriority(const QString& taskId, const QString& priori
 }
 
 void AppController::setSelectedTasksPriority(const QString& priority) {
+  pruneSelectionToFilter_();
   if(!validPriority(priority) || m_selectedTaskIdsList.isEmpty()) {
     return;
   }
@@ -59,6 +60,7 @@ void AppController::setSelectedTasksPriority(const QString& priority) {
 }
 
 void AppController::setSelectedTasksLabel(const QString& label, bool present) {
+  pruneSelectionToFilter_();
   const QString name = label.trimmed().remove(QRegularExpression(QStringLiteral("^#+")));
   if(name.isEmpty() || m_selectedTaskIdsList.isEmpty()) {
     return;
@@ -108,28 +110,34 @@ void AppController::setSelectedTasksLabel(const QString& label, bool present) {
   }
 }
 
+bool AppController::passesFilter_(
+    int row, const heap::query::TaskQuery& q, const QStringList& priorities, bool showArchived, bool hideDone) const {
+  const Task& t = m_tasks.items().at(row);
+  if((t.archived && !showArchived) || (hideDone && t.status == QStringLiteral("done"))) {
+    return false;
+  }
+  if(!priorities.isEmpty() && !priorities.contains(t.priority)) {
+    return false;
+  }
+  const QString free = q.freeText();
+  if(!free.isEmpty() && !m_tasks.data(m_tasks.index(row, 0), TaskModel::SearchTextRole).toString().contains(free)) {
+    return false;
+  }
+  return !q.isQuery() || q.matches(t);
+}
+
 QVariantMap AppController::filteredCounts(
     const QString& search, const QStringList& priorities, bool showArchived, bool hideDone, const QVariant&) const {
   const heap::query::TaskQuery q = heap::query::TaskQuery::compile(search, m_today, m_statuses);
-  const QString free = q.freeText();
   int total = 0;
   int active = 0;
   int blocked = 0;
   int review = 0;
   for(int row = 0; row < m_tasks.rowCount(); ++row) {
+    if(!passesFilter_(row, q, priorities, showArchived, hideDone)) {
+      continue;
+    }
     const Task& t = m_tasks.items().at(row);
-    if((t.archived && !showArchived) || (hideDone && t.status == QStringLiteral("done"))) {
-      continue;
-    }
-    if(!priorities.isEmpty() && !priorities.contains(t.priority)) {
-      continue;
-    }
-    if(!free.isEmpty() && !m_tasks.data(m_tasks.index(row, 0), TaskModel::SearchTextRole).toString().contains(free)) {
-      continue;
-    }
-    if(q.isQuery() && !q.matches(t)) {
-      continue;
-    }
     ++total;
     active += (t.status == QStringLiteral("prog") || t.status == QStringLiteral("half")) ? 1 : 0;
     blocked += t.status == QStringLiteral("blocked") ? 1 : 0;
@@ -139,4 +147,30 @@ QVariantMap AppController::filteredCounts(
           {QStringLiteral("active"), active},
           {QStringLiteral("blocked"), blocked},
           {QStringLiteral("review"), review}};
+}
+
+void AppController::setSelectionFilter(const QString& search, const QStringList& priorities, bool showArchived, bool hideDone) {
+  m_selectionFilter = {search, priorities, showArchived, hideDone};
+  pruneSelectionToFilter_();
+}
+
+void AppController::pruneSelectionToFilter_() {
+  if(m_selectedTaskIds.isEmpty()) {
+    return;
+  }
+  const SelectionFilter& f = m_selectionFilter;
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(f.search, m_today, m_statuses);
+  QSet<QString> kept;
+  for(const QString& id : std::as_const(m_selectedTaskIds)) {
+    const int row = m_tasks.indexOfId(id);
+    if(row >= 0 && passesFilter_(row, q, f.priorities, f.showArchived, f.hideDone)) {
+      kept.insert(id);
+    }
+  }
+  if(kept.size() == m_selectedTaskIds.size()) {
+    return;
+  }
+  m_selectedTaskIds = kept;
+  rebuildSelectionList_();
+  emit selectedTaskIdsChanged();
 }

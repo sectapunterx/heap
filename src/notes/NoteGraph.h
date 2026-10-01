@@ -251,7 +251,11 @@ inline QVector<Backlink> backlinksTo(const QString& noteId, const QVector<Note>&
 // Rewrite every link to the note called `oldTitle` so it names `newTitle`,
 // keeping any "#heading" and "|label". Returns the new body, or the same one
 // when nothing changed. A rename used to leave every link to the note broken.
-inline QString retargetLinks(const QString& body, const QString& oldTitle, const QString& newTitle) {
+//
+// `accept`, when given, sees each link target that names `oldTitle` and says
+// whether it is rewritten — see the overload below for why that matters.
+template<typename Accept>
+inline QString retargetLinks(const QString& body, const QString& oldTitle, const QString& newTitle, Accept accept) {
   if(!body.contains(QStringLiteral("[["))) {
     return body;
   }
@@ -263,7 +267,7 @@ inline QString retargetLinks(const QString& body, const QString& oldTitle, const
   while(it.hasNext()) {
     const auto m = it.next();
     const QString inner = m.captured(1);
-    if(detail::normalise(noteNameOf(inner)) != needle) {
+    if(detail::normalise(noteNameOf(inner)) != needle || !accept(inner)) {
       continue;
     }
     // Keep whatever followed the name: "#heading", "|label".
@@ -286,6 +290,30 @@ inline QString retargetLinks(const QString& body, const QString& oldTitle, const
   out += body.mid(last);
   return out;
 }
+
+inline QString retargetLinks(const QString& body, const QString& oldTitle, const QString& newTitle) {
+  return retargetLinks(body, oldTitle, newTitle, [](const QString&) {
+    return true;
+  });
+}
+
+// Rewrite, in note `fromNoteId`, only the links that resolve to `renamedId`
+// (resolved against `notes` as they were before the rename). Two notes can
+// share a title in different folders; matching by title alone made renaming
+// teamA/Meeting repoint teamB's [[Meeting]] links at teamA's note (KNOW-7,
+// audit 2026-09-30).
+inline QString retargetLinksTo(const QString& body,
+                               const QString& fromNoteId,
+                               const QVector<Note>& notes,
+                               const QString& renamedId,
+                               const QString& oldTitle,
+                               const QString& newTitle) {
+  return retargetLinks(body, oldTitle, newTitle, [&](const QString& inner) {
+    const LinkTarget t = resolveLink(inner, notes, fromNoteId);
+    return t.kind != LinkTarget::Missing && t.noteId == renamedId;
+  });
+}
+
 // Targets in `markdown` that no note and no heading answers to.
 //
 // Worth surfacing rather than leaving as dead text: in a linked set of notes a

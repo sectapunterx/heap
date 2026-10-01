@@ -28,6 +28,10 @@ namespace heap::chrono {
 class ChronoParser;
 }
 
+namespace heap::query {
+class TaskQuery;
+}
+
 namespace heap::git {
 class GitWatcher;
 }
@@ -563,6 +567,11 @@ class AppController : public QObject {
   Q_INVOKABLE void setTaskSelected(const QString& id, bool selected);
   Q_INVOKABLE void setSelectedTaskIds(const QStringList& ids);
   Q_INVOKABLE void clearSelection();
+  // The filters the views show tasks under (search or query, priority chips,
+  // archived, the timeline's done toggle). Selected tasks they hide leave the
+  // selection, now and before every bulk action, so Delete never reaches a
+  // card the user cannot see (TASKS-13, audit 2026-09-30).
+  Q_INVOKABLE void setSelectionFilter(const QString& search, const QStringList& priorities, bool showArchived, bool hideDone = false);
 
   // Bulk ops — operate on the current selection set.
   Q_INVOKABLE void deleteSelectedTasks();
@@ -652,10 +661,23 @@ class AppController : public QObject {
   // Public so the sync merge can be exercised without a live tracker.
   // `complete` says the batch holds every issue the provider's filter
   // matches; only then is a missing issue marked as gone upstream.
+  // `goneCandidates`, when given, collects the external ids that would be
+  // marked gone instead of marking them: the provider can look them up first
+  // (INT-6, audit 2026-09-30).
   MergeStats mergeExternalTasks(const QString& providerId,
                                 const QString& idPrefix,
                                 const QVector<heap::integrations::ExternalTask>& issues,
-                                bool complete = false);
+                                bool complete = false,
+                                QStringList* goneCandidates = nullptr);
+  // What a lookup of those candidates found. An issue that still exists only
+  // left the filter — closed under "statusCategory != Done", say: it is merged
+  // like any pulled issue (so a closed one moves to Done) and marked outside
+  // the filter. One the tracker says does not exist is gone. An id in neither
+  // list (the lookup failed) is left for the next sync.
+  MergeStats settleMissingIssues(const QString& providerId,
+                                 const QString& idPrefix,
+                                 const QVector<heap::integrations::ExternalTask>& found,
+                                 const QStringList& missing);
 
   // Fold fetched contacts into the active profile's Docs contact list and, for
   // the people actually talked to, the People rail. Returns how many contacts
@@ -780,6 +802,11 @@ class AppController : public QObject {
   // window has focus — the capture window has it — and in quiet hours, since
   // the user just asked for it. Clicking it opens `taskId` when there is one.
   Q_INVOKABLE void notifyCapture(const QString& taskId, const QString& title, const QString& body);
+
+  // An in-app toast from QML, for a view that refuses a key and says why.
+  Q_INVOKABLE void showToast(const QString& message) {
+    emit toast(message, QStringLiteral("info"));
+  }
   // Slide the deadline of \p taskId forward by \p seconds (no-op if the
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
@@ -832,6 +859,9 @@ class AppController : public QObject {
   // has to be told which. Keys: imported, updated, skipped, warnings.
   Q_INVOKABLE QVariantMap importIcs(const QUrl& fileUrl);
   Q_INVOKABLE bool exportIcsToFile(const QUrl& fileUrl) const;
+  // "<install id>.heap": what qualifies this install's event ids as .ics UIDs,
+  // so another heap's ev-2 is not taken for ours (TIME-25).
+  QString icsUidDomain() const;
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).
@@ -978,8 +1008,9 @@ class AppController : public QObject {
   // For a "sync": the event type it books — "standup" | "oneone" | "sync" |
   // "none" (a one-off call or meeting).
   Q_INVOKABLE QString meetingType(const QString& text) const;
-  // Returns { title, desc, handles: [..], ticketKey, priority }.
-  Q_INVOKABLE QVariantMap extractTaskMeta(const QString& text) const;
+  // Returns { title, desc, handles: [..], ticketKey, priority }. With
+  // keepTicketKey the key stays in the title (see heap::text::extractMeta).
+  Q_INVOKABLE QVariantMap extractTaskMeta(const QString& text, bool keepTicketKey = false) const;
   // Suggest a slug-style person id ("e.zaharov") from a free-form name.
   // Avoids collisions with already-existing ids in the active profile
   // by appending "-2", "-3", … on conflict.
@@ -1278,6 +1309,18 @@ class AppController : public QObject {
   // Providers whose next tasksFetched answers a quiet follow-up pull.
   QSet<QString> m_settlePulls;
 
+  // A pull whose missing issues are being looked up: its stats and whether it
+  // was a quiet follow-up, held so one toast reports both (INT-6).
+  struct PendingSyncReport {
+    MergeStats stats;
+    bool settlePull = false;
+  };
+
+  QHash<QString, PendingSyncReport> m_pendingLookups;
+  // The sync toast for one pull's stats; quiet when a follow-up pull found
+  // nothing.
+  void reportSync(const QString& label, const MergeStats& stats, bool settlePull);
+
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
   // a note of its own here. Without this it lived only in `notesState`, which
@@ -1341,6 +1384,7 @@ class AppController : public QObject {
   void setSavedViews(const QVector<heap::savedviews::SavedView>& views);
   bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
   bool m_demoActive = false;   // onboarding: profile still holds seeded demo
+  mutable QString m_installId;  // settings.installId, minted on first use
 
   // Profiles
   QVector<Profile> m_profiles;
@@ -1462,6 +1506,8 @@ class AppController : public QObject {
   void reloadStateFromDisk();
   // Whether an edit was made while saving was blocked (it will not persist).
   bool m_editsWhileBlocked = false;
+  // When the last "this edit is not saved" toast was shown, ms since epoch.
+  qint64 m_lastBlockedEditToastMs = 0;
   std::unique_ptr<heap::storage::AsyncSaver> m_saver;
   quint64 m_saveGeneration = 0;
   QTimer* m_saveRetryTimer = nullptr;
@@ -1578,6 +1624,18 @@ class AppController : public QObject {
   QSet<QString> m_selectedTaskIds;
   QStringList m_selectedTaskIdsList;  // ordered cache for QML
   void rebuildSelectionList_();
+
+  struct SelectionFilter {
+    QString search;
+    QStringList priorities;
+    bool showArchived = true;
+    bool hideDone = false;
+  } m_selectionFilter;
+
+  // Drops selected ids m_selectionFilter hides; emits when it dropped any.
+  void pruneSelectionToFilter_();
+  // The one predicate the filter bar counts and the selection prune share.
+  bool passesFilter_(int row, const heap::query::TaskQuery& q, const QStringList& priorities, bool showArchived, bool hideDone) const;
 
   std::unique_ptr<heap::chrono::ChronoParser> m_chrono;
 

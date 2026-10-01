@@ -436,6 +436,35 @@ QSet<QString> AppController::referencedAttachmentIds() const {
       collectProfile(e.profile, &ids);
     }
   });
+  // A backup holds only state.json, so a file it names is gone for good once
+  // cleaned up, and restoring it brings back a broken attachment (TASKS-16,
+  // audit 2026-09-30). An id is a hash plus extension, which no other text in
+  // the file can spell, so finding it in the raw bytes is enough.
+  const QStringList stored = att::Store(attachmentsDir()).ids();
+  QStringList unseen;
+  for(const QString& id : stored) {
+    if(!ids.contains(id)) {
+      unseen.append(id);
+    }
+  }
+  if(!unseen.isEmpty()) {
+    const QDir backups(backupDirPath());
+    for(const QString& name : backups.entryList({QStringLiteral("state-*.json")}, QDir::Files | QDir::NoSymLinks)) {
+      QFile f(backups.filePath(name));
+      if(!f.open(QIODevice::ReadOnly)) {
+        continue;
+      }
+      const QByteArray bytes = f.readAll();
+      for(qsizetype i = unseen.size() - 1; i >= 0; --i) {
+        if(bytes.contains(unseen.at(i).toLatin1())) {
+          ids.insert(unseen.takeAt(i));
+        }
+      }
+      if(unseen.isEmpty()) {
+        break;
+      }
+    }
+  }
   return ids;
 }
 

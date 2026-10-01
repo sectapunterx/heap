@@ -48,8 +48,10 @@ class IntAudit : public ::testing::Test {
 
   void TearDown() override {
     app_->setAppSettingsJson(QStringLiteral("{}"));
-    for(const char* f : {"token", "refreshToken"}) {
-      app_->setIntegrationSecret(QStringLiteral("gitea"), QString::fromLatin1(f), QString());
+    for(const char* provider : {"gitea", "jira"}) {
+      for(const char* f : {"token", "refreshToken"}) {
+        app_->setIntegrationSecret(QString::fromLatin1(provider), QString::fromLatin1(f), QString());
+      }
     }
     app_.reset();
   }
@@ -135,6 +137,88 @@ TEST_F(IntAudit, UnchangedScope_MissingIssue_IsGone) {
   EXPECT_EQ(stats.gone, 1);
   EXPECT_TRUE(task("gh-2")->externalMeta.goneUpstream);
   EXPECT_FALSE(task("gh-2")->externalMeta.outOfScope);
+}
+
+// ── INT-6 (audit 2026-09-30): closed under a status filter is not "gone" ──
+
+TEST_F(IntAudit, IssueClosedUnderAStatusFilter_MovesToDoneInsteadOfGone) {
+  const auto jira = [](const QString& key, const QString& status) {
+    ExternalTask e;
+    e.providerId = QStringLiteral("jira");
+    e.externalId = key;
+    e.url = QStringLiteral("https://acme.atlassian.net/browse/") + key;
+    e.title = key;
+    e.status = status;
+    e.project = QStringLiteral("HT");
+    return e;
+  };
+  writeIntegrationConfig(QStringLiteral("jira"),
+                         QJsonObject{{QStringLiteral("jql"), QStringLiteral("project = HT AND statusCategory != Done")}});
+  app_->mergeExternalTasks(
+      QStringLiteral("jira"), QStringLiteral("jira-"), {jira("HT-10", "To Do"), jira("HT-11", "To Do"), jira("HT-12", "To Do")}, true);
+
+  // HT-11 was closed and HT-12 deleted: both drop out of the pull. Neither is
+  // called gone before the tracker has been asked.
+  QStringList candidates;
+  const auto stats = app_->mergeExternalTasks(QStringLiteral("jira"), QStringLiteral("jira-"), {jira("HT-10", "To Do")}, true, &candidates);
+  EXPECT_EQ(stats.gone, 0);
+  candidates.sort();
+  EXPECT_EQ(candidates, (QStringList{QStringLiteral("HT-11"), QStringLiteral("HT-12")}));
+  EXPECT_FALSE(task("jira-HT-11")->externalMeta.goneUpstream);
+
+  const auto settled =
+      app_->settleMissingIssues(QStringLiteral("jira"), QStringLiteral("jira-"), {jira("HT-11", "Done")}, {QStringLiteral("HT-12")});
+  EXPECT_EQ(task("jira-HT-11")->status, QStringLiteral("done"));
+  EXPECT_FALSE(task("jira-HT-11")->externalMeta.goneUpstream) << "a closed issue read as deleted";
+  EXPECT_TRUE(task("jira-HT-11")->externalMeta.outOfScope);
+  EXPECT_TRUE(task("jira-HT-12")->externalMeta.goneUpstream);
+  EXPECT_EQ(settled.gone, 1);
+  EXPECT_EQ(settled.updated, 1);
+  EXPECT_EQ(settled.outOfScope, 0) << "a card that moved to Done is not also news as 'outside filter'";
+
+  // The next sync under the same filter asks about neither again.
+  QStringList again;
+  app_->mergeExternalTasks(QStringLiteral("jira"), QStringLiteral("jira-"), {jira("HT-10", "To Do")}, true, &again);
+  EXPECT_TRUE(again.isEmpty());
+}
+
+// End to end through the provider: a Jira sync against a fake server.
+TEST_F(IntAudit, JiraSync_LooksUpAMissingIssueBeforeCallingItGone) {
+  heap::testing::FakeHttpServer jira;
+  jira.route("GET /rest/api/2/serverInfo", {200, R"({"deploymentType":"Cloud"})", {}});
+  jira.route("POST /rest/api/3/search/jql",
+             {200, R"({"isLast":true,"issues":[{"key":"HT-10","fields":{"summary":"ten","status":{"name":"To Do"}}}]})", {}});
+  jira.route("GET /rest/api/3/issue/HT-11", {200, R"({"key":"HT-11","fields":{"summary":"eleven","status":{"name":"Done"}}})", {}});
+  app_->setIntegrationSecret(QStringLiteral("jira"), QStringLiteral("token"), QStringLiteral("tok"));
+  writeIntegrationConfig(QStringLiteral("jira"),
+                         QJsonObject{{QStringLiteral("connected"), true},
+                                     {QStringLiteral("baseUrl"), jira.base()},
+                                     {QStringLiteral("email"), QStringLiteral("me@example.com")},
+                                     {QStringLiteral("jql"), QStringLiteral("project = HT AND statusCategory != Done")}});
+  ExternalTask e;
+  e.providerId = QStringLiteral("jira");
+  e.status = QStringLiteral("To Do");
+  e.project = QStringLiteral("HT");
+  for(const char* key : {"HT-10", "HT-11"}) {
+    e.externalId = QString::fromLatin1(key);
+    e.title = e.externalId;
+    e.url = jira.base() + QStringLiteral("/browse/") + e.externalId;
+    app_->mergeExternalTasks(QStringLiteral("jira"), QStringLiteral("jira-"), {e}, false);
+  }
+  ASSERT_NE(task("jira-HT-11"), nullptr);
+
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  app_->syncProvider(QStringLiteral("jira"));
+  ASSERT_TRUE(heap::testing::waitUntil([this]() {
+    return task("jira-HT-11")->status == QStringLiteral("done");
+  })) << "the closed issue never reached Done";
+  EXPECT_FALSE(task("jira-HT-11")->externalMeta.goneUpstream);
+  ASSERT_TRUE(heap::testing::waitUntil([&toasts]() {
+    return toasts.count() > 0;
+  }));
+  for(const auto& args : toasts) {
+    EXPECT_FALSE(args.at(0).toString().contains(QStringLiteral("no longer in the tracker"))) << args.at(0).toString().toStdString();
+  }
 }
 
 TEST_F(IntAudit, CosmeticJqlEdit_IsNotAScopeChange) {

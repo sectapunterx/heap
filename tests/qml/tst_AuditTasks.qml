@@ -203,6 +203,54 @@ TestCase {
         compare(AppController.taskById(id).title, tc.probe + " dirty", "discard saved nothing");
     }
 
+    // ── TASKS-18 / SHELL-29 (audit 2026-09-30): opening another task from a
+    // notification and quitting wait for the save/discard answer ──
+    function test_the_next_step_waits_for_the_prompt() {
+        const id = addTask("todo", { title: "settle" });
+        const te = make('import TodoCpp; TaskEditor { }');
+        let ran = 0;
+        // Clean: at once.
+        te.showFor(Object.assign({}, AppController.taskById(id)));
+        tryVerify(() => te.opened);
+        te.settleThen(() => ran++);
+        compare(ran, 1, "a clean editor does not ask");
+
+        const fields = [];
+        collectFields(te.contentItem, fields);
+        fields[0].text = tc.probe + " settled";
+        const prompt = findChild(te, "te-discard-prompt");
+        te.settleThen(() => ran++);
+        tryVerify(() => prompt.opened);
+        compare(ran, 1, "nothing runs before the answer");
+
+        // Keep editing drops the step.
+        findChild(te, "te-dirty-keep").clicked();
+        tryVerify(() => !prompt.opened);
+        compare(ran, 1);
+        verify(te.opened);
+
+        // Save: the edit is kept, then the step runs.
+        te.settleThen(() => ran++);
+        tryVerify(() => prompt.opened);
+        findChild(te, "te-dirty-save").clicked();
+        tryVerify(() => !te.opened);
+        compare(ran, 2);
+        compare(AppController.taskById(id).title, tc.probe + " settled");
+
+        // Discard: nothing saved, then the step runs.
+        te.showFor(Object.assign({}, AppController.taskById(id)));
+        tryVerify(() => te.opened);
+        const again = [];
+        collectFields(te.contentItem, again);
+        again[0].text = tc.probe + " thrown";
+        te.settleThen(() => ran++);
+        tryVerify(() => prompt.opened);
+        findChild(te, "te-dirty-discard").clicked();
+        tryVerify(() => !te.opened);
+        compare(ran, 3);
+        compare(AppController.taskById(id).title, tc.probe + " settled");
+    }
+
     // The same, from the keyboard: Esc in a field asks, Esc keeps editing,
     // Enter saves.
     function test_the_prompt_is_keyboard_first() {

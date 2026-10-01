@@ -247,7 +247,7 @@ class ChronoParser::Impl {
       recLast = dm.lastTok;
       return true;
     }
-    if(tryNumericDate(toks, i, dm)) {
+    if(tryNumericDate(toks, i, ref, dm)) {
       return true;
     }
     if(tryMonthNameDate(toks, i, primary, fallback, dm)) {
@@ -543,7 +543,32 @@ class ChronoParser::Impl {
   }
 
   // ── Numeric date (ISO / DD.MM[.YYYY] / D/M[/Y]) ───────────────────────
-  bool tryNumericDate(const QVector<Token>& toks, int i, DateMatch& out) const {
+  // A word after which "4.2" / "20.11" is a number, not a date: "section 4.2",
+  // "node 20.11", "версия 2.1" (TASKS-8, audit 2026-09-30).
+  static bool namesVersion(const QString& lower) {
+    static const QStringList kWords = {
+        QStringLiteral("v"),         QStringLiteral("ver"),       QStringLiteral("version"),    QStringLiteral("release"),
+        QStringLiteral("rel"),       QStringLiteral("build"),     QStringLiteral("section"),    QStringLiteral("sec"),
+        QStringLiteral("chapter"),   QStringLiteral("ch"),        QStringLiteral("part"),       QStringLiteral("step"),
+        QStringLiteral("item"),      QStringLiteral("clause"),    QStringLiteral("node"),       QStringLiteral("qt"),
+        QStringLiteral("python"),    QStringLiteral("py"),        QStringLiteral("java"),       QStringLiteral("go"),
+        QStringLiteral("rust"),      QStringLiteral("gcc"),       QStringLiteral("clang"),      QStringLiteral("llvm"),
+        QStringLiteral("cmake"),     QStringLiteral("kotlin"),    QStringLiteral("swift"),      QStringLiteral("ios"),
+        QStringLiteral("android"),   QStringLiteral("macos"),     QStringLiteral("ubuntu"),     QStringLiteral("debian"),
+        QStringLiteral("kernel"),    QStringLiteral("linux"),     QStringLiteral("api"),        QStringLiteral("sdk"),
+        QStringLiteral("php"),       QStringLiteral("ruby"),      QStringLiteral("npm"),        QStringLiteral("pip"),
+        QString::fromUtf8("версия"), QString::fromUtf8("версии"), QString::fromUtf8("версию"),  QString::fromUtf8("релиз"),
+        QString::fromUtf8("релиза"), QString::fromUtf8("раздел"), QString::fromUtf8("раздела"), QString::fromUtf8("разделе"),
+        QString::fromUtf8("глава"),  QString::fromUtf8("главы"),  QString::fromUtf8("главе"),   QString::fromUtf8("пункт"),
+        QString::fromUtf8("пункта"), QString::fromUtf8("пункте"), QString::fromUtf8("п"),       QString::fromUtf8("шаг")};
+    return kWords.contains(lower);
+  }
+
+  static bool adjacent(const Token& a, const Token& b) {
+    return a.pos + a.len == b.pos;
+  }
+
+  bool tryNumericDate(const QVector<Token>& toks, int i, const QDateTime& ref, DateMatch& out) const {
     if(i + 4 < toks.size() && toks[i].kind == TokenKind::Number && toks[i + 1].kind == TokenKind::Dash &&
        toks[i + 2].kind == TokenKind::Number && toks[i + 3].kind == TokenKind::Dash && toks[i + 4].kind == TokenKind::Number) {
       const int a = toks[i].value;
@@ -568,17 +593,37 @@ class ChronoParser::Impl {
        toks[i + 2].kind == TokenKind::Number) {
       const int day = toks[i].value;
       const int month = toks[i + 2].value;
-      int year = QDate::currentDate().year();
+      int year = ref.date().year();
       int last = i + 2;
+      // Dotted numbers are also versions and section numbers: "release 1.2.3"
+      // set a due date in 2003 and "bump qt to 6.9.1" one in 2001, and the
+      // number left the title (TASKS-8, audit 2026-09-30). A date's year is
+      // two or four digits, a run of more than three parts is a version, the
+      // tail of one ("2.3" in "1.2.3") is not a date of its own, a two-digit
+      // year more than a year back is a version ("6.10.12"), and a day.month
+      // right after "version" / "section" / "node" names that thing.
+      bool version = i >= 2 && toks[i - 1].kind == TokenKind::Dot && toks[i - 2].kind == TokenKind::Number &&
+                     adjacent(toks[i - 2], toks[i - 1]) && adjacent(toks[i - 1], toks[i]);
+      bool twoDigitYear = false;
       if(i + 4 < toks.size() && toks[i + 3].kind == TokenKind::Dot && toks[i + 4].kind == TokenKind::Number) {
+        const int yearLen = toks[i + 4].len;
+        version = version || (yearLen != 2 && yearLen != 4);
+        version = version || (i + 6 < toks.size() && toks[i + 5].kind == TokenKind::Dot && toks[i + 6].kind == TokenKind::Number &&
+                              adjacent(toks[i + 4], toks[i + 5]));
         year = toks[i + 4].value;
         if(year < 100) {
           year += 2000;
+          twoDigitYear = true;
         }
         last = i + 4;
+      } else if(i >= 1 && toks[i - 1].kind == TokenKind::Word && namesVersion(toks[i - 1].lower)) {
+        version = true;
       }
       const QDate d(year, month, day);
-      if(d.isValid()) {
+      if(twoDigitYear && d.isValid() && d < ref.date().addYears(-1)) {
+        version = true;
+      }
+      if(!version && d.isValid()) {
         out.date = d;
         out.firstTok = i;
         out.lastTok = last;
@@ -591,7 +636,7 @@ class ChronoParser::Impl {
        toks[i + 2].kind == TokenKind::Number) {
       const int a = toks[i].value;
       const int b = toks[i + 2].value;
-      int year = QDate::currentDate().year();
+      int year = ref.date().year();
       int last = i + 2;
       if(i + 4 < toks.size() && toks[i + 3].kind == TokenKind::Slash && toks[i + 4].kind == TokenKind::Number) {
         year = toks[i + 4].value;

@@ -128,6 +128,13 @@ class JiraProvider : public IntegrationProvider {
   void fetchComments(const QString& externalId, const QString& project) override;
   void fetchStatuses() override;
 
+  bool canLookUpIssues() const override {
+    return true;
+  }
+
+  // GET /issue/{key} for each key: a 404 is "missing", a 200 is found.
+  void lookUpIssues(const QStringList& externalIds) override;
+
   void setStatusOverrides(const QHash<QString, QString>& overrides) override {
     m_statusOverrides = overrides;
   }

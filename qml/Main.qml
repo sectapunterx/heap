@@ -283,11 +283,27 @@ ApplicationWindow {
         win._filtersRestored = true;
     }
     function _saveFiltersSoon() { if (win._filtersRestored) filterSaveTimer.restart(); }
-    onSearchTextChanged: _saveFiltersSoon()
-    onPrioritiesFilterChanged: _saveFiltersSoon()
+    // The selection follows the filters: a card selected and then hidden by
+    // the search left the selection with it, and Delete took it along with
+    // the visible ones (TASKS-13, audit 2026-09-30). The Archive view lists
+    // archived tasks whatever the toggle says; the timeline hides done ones
+    // unless asked.
+    function _syncSelectionFilter() {
+        const v = AppController.currentView;
+        const pri = [];
+        for (const k in win.prioritiesFilter) if (win.prioritiesFilter[k]) pri.push(k);
+        AppController.setSelectionFilter(win.searchText, pri, win.showArchived || v === "archive",
+                                         v === "timeline" && !win.showDoneTimeline);
+    }
+    onSearchTextChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
+    onPrioritiesFilterChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
     onBoardSortModeChanged: _saveFiltersSoon()
-    onShowArchivedChanged: _saveFiltersSoon()
-    onShowDoneTimelineChanged: _saveFiltersSoon()
+    onShowArchivedChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
+    onShowDoneTimelineChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
+    Connections {
+        target: AppController
+        function onCurrentViewChanged() { win._syncSelectionFilter(); }
+    }
     Timer {
         id: filterSaveTimer
         interval: 400
@@ -316,6 +332,7 @@ ApplicationWindow {
     Component.onCompleted: {
         _restoreGeometry();
         _restoreFilters();
+        _syncSelectionFilter();
         win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
@@ -343,6 +360,14 @@ ApplicationWindow {
         AppController.appSettingsJson = JSON.stringify(s);
     }
     onClosing: (close) => {
+        // Hiding to the tray keeps the editor as it is; a quit asks about what
+        // is typed in it first, then closes again (SHELL-29).
+        const quits = !win._minimizeToTray || win._closeToTrayPref() === false;
+        if (quits && taskEditor.isDirty()) {
+            close.accepted = false;
+            taskEditor.settleThen(() => win.close());
+            return;
+        }
         if (!win._minimizeToTray) return;
         const pref = win._closeToTrayPref();
         if (pref === false) return;   // a real quit
@@ -401,8 +426,10 @@ ApplicationWindow {
                 onClicked: {
                     win._setCloseToTray(false);
                     closeAsk.close();
-                    AppController.flushSave();
-                    Qt.quit();
+                    taskEditor.settleThen(() => {
+                        AppController.flushSave();
+                        Qt.quit();
+                    });
                 }
             }
             PillButton {
@@ -1259,7 +1286,8 @@ ApplicationWindow {
         function onOpenTaskRequested(taskId) {
             // Also reached from a notification click while heap is in the tray.
             win._summon();
-            taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+            // Edits to the task already open are not swapped out unasked (TASKS-18).
+            taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
         }
     }
 
@@ -1656,7 +1684,11 @@ ApplicationWindow {
     Shortcut {
         sequences: [_kbd("cal.newEvent")]
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        // Behind a modal, a menu or a view's own dialog it stands down like
+        // every other global key; it used to open over a delete confirmation
+        // (SHELL-2, audit 2026-09-30). In a text field AltGrGuard keeps the
+        // chord for the field (AltGr+E is € on a German layout).
+        enabled: sequences.length > 0 && win._globalKeysOn && !win._overlayOpen
         onActivated: {
             const day = AppController.selectedDate;
             const draft = AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day);

@@ -7,6 +7,9 @@
 // The Setup object enables QStandardPaths test mode before any test loads, so
 // component tests that construct AppController (which reads/seeds state.json
 // under AppDataLocation) never touch the real user data.
+#include "platform/AltGrGuard.h"
+
+#include <QCoreApplication>
 #include <QMutex>
 #include <QObject>
 #include <QStandardPaths>
@@ -55,6 +58,8 @@ class Setup : public QObject {
   void applicationAvailable() {
     QStandardPaths::setTestModeEnabled(true);
     g_previousHandler = qInstallMessageHandler(collectScriptErrors);
+    // The same AltGr rule main() installs, so key tests see it (SHELL-2).
+    QCoreApplication::instance()->installEventFilter(new heap::platform::AltGrGuard(QCoreApplication::instance()));
   }
 
   void cleanupTestCase() {

@@ -176,6 +176,29 @@ TEST(ExtractMeta, CommentAfterAUrlStillSplits) {
   EXPECT_EQ(m.priority, QStringLiteral("P0"));
 }
 
+// TASKS-7 (B tier, audit 2026-09-30): the quick-input repros. Fixed with
+// TASKS-10 in extractMeta, which quick capture forwards to; pinned here with
+// the exact text the audit typed.
+TEST(ExtractMeta, QuickInputKeepsALinkWhole) {
+  auto m = extractMeta(QStringLiteral("review https://github.com/sectapunterx/larra/pull/12"));
+  EXPECT_EQ(m.title, QStringLiteral("review https://github.com/sectapunterx/larra/pull/12"));
+  EXPECT_TRUE(m.desc.isEmpty());
+  m = extractMeta(QStringLiteral("read docs at http://example.com // later"));
+  EXPECT_EQ(m.title, QStringLiteral("read docs at http://example.com"));
+  EXPECT_EQ(m.desc, QStringLiteral("later"));
+}
+
+// TASKS-22 (B tier, audit 2026-09-30): a key the caller cannot use as the id
+// stays in the title, and is still reported.
+TEST(ExtractMeta, ATicketKeyCanStayInTheTitle) {
+  const auto cut = extractMeta(QStringLiteral("APP-101 follow up with QA"));
+  EXPECT_EQ(cut.title, QStringLiteral("follow up with QA"));
+  const auto kept = extractMeta(QStringLiteral("APP-101 follow up with QA p1"), /*keepTicketKey=*/true);
+  EXPECT_EQ(kept.title, QStringLiteral("APP-101 follow up with QA"));
+  EXPECT_EQ(kept.ticketKey, QStringLiteral("APP-101"));
+  EXPECT_EQ(kept.priority, QStringLiteral("P1"));
+}
+
 TEST(ExtractMeta, HeadKeepsTokensTheTitleLoses) {
   const auto m = extractMeta(QStringLiteral("p0 hotfix #billing APP-104"));
   EXPECT_EQ(m.title, QStringLiteral("hotfix"));

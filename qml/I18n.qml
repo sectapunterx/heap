@@ -258,6 +258,7 @@ QtObject {
 
             // ── Kanban / TaskCard ──
             "kanban.empty": "— empty —",
+            "board.sorted.noReorder": "The board is sorted — switch the sort to Manual to reorder cards",
             "board.empty.title": "No tasks yet",
             "board.empty.hint": "Press %1 to add your first task, or use quick-capture (%2).",
             "day.noEvents": "No events today — drag an empty slot to create one, or drop a task to schedule it.",
@@ -930,6 +931,7 @@ QtObject {
             "settings.cal.autoFocus.hint": "When a task moves to In Progress — add a block to the calendar.",
             "settings.cal.focusDuration": "Focus block duration",
             "settings.cal.standupTime": "Daily standup time",
+            "settings.cal.standupTime.invalid": "Use HH:MM, e.g. 10:00",
 
             // Tasks section
             "settings.tasks.idPrefix": "ID prefix",
@@ -1467,6 +1469,7 @@ QtObject {
             "filter.counts": "%1 задач · %2 в работе · %3 заблокировано · %4 на ревью",
 
             "kanban.empty": "— пусто —",
+            "board.sorted.noReorder": "Доска отсортирована — чтобы менять порядок карточек, включите сортировку «Вручную»",
             "board.empty.title": "Пока нет задач",
             "board.empty.hint": "Нажмите %1, чтобы добавить первую задачу, или откройте быстрый ввод (%2).",
             "day.noEvents": "Событий сегодня нет — потяни пустой слот, чтобы создать, или брось задачу для планирования.",
@@ -2125,6 +2128,7 @@ QtObject {
             "settings.cal.autoFocus.hint": "Когда задача переходит «В работу» — добавлять блок в календарь.",
             "settings.cal.focusDuration": "Длительность фокус-блока",
             "settings.cal.standupTime": "Время стендапа",
+            "settings.cal.standupTime.invalid": "Формат ЧЧ:ММ, например 10:00",
 
             "settings.tasks.idPrefix": "Префикс ID",
             "settings.tasks.idPrefix.hint": "Новые задачи: %1-XXXX",

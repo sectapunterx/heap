@@ -268,6 +268,23 @@ Popup {
         discardPrompt.open();
     }
 
+    // Runs `next` once nothing typed here is left to lose: at once when the
+    // editor is clean or closed, otherwise after the save/discard prompt —
+    // never after "keep editing". Opening another task from a notification and
+    // quitting the app used to drop the edits without asking (TASKS-18,
+    // SHELL-29, audit 2026-09-30).
+    property var _afterPrompt: null
+    function settleThen(next) {
+        if (!root.isDirty()) { next(); return; }
+        root._afterPrompt = next;
+        if (!discardPrompt.opened) discardPrompt.open();
+    }
+    function _runAfterPrompt() {
+        const next = root._afterPrompt;
+        root._afterPrompt = null;
+        if (next && !root.isDirty()) next();
+    }
+
     function statusList() {
         const out = [];
         const sts = AppController.statuses;
@@ -1497,9 +1514,10 @@ Popup {
         }
         Overlay.modal: Rectangle { color: Theme.scrim }
         onOpened: promptBody.forceActiveFocus()
-        function keep() { discardPrompt.close(); titleField.forceActiveFocus(); }
-        function discard() { discardPrompt.close(); root.close(); }
-        function save() { discardPrompt.close(); root._save(); }
+        function keep() { root._afterPrompt = null; discardPrompt.close(); titleField.forceActiveFocus(); }
+        function discard() { discardPrompt.close(); root.close(); root._runAfterPrompt(); }
+        // A refused save keeps the editor open and the next step waiting.
+        function save() { discardPrompt.close(); if (root._save()) root._runAfterPrompt(); else root._afterPrompt = null; }
         contentItem: ColumnLayout {
             id: promptBody
             spacing: Theme.spLg

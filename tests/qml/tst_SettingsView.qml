@@ -289,6 +289,33 @@ TestCase {
     // Export, Import, Restore, Wipe, Report, Logs, Check updates were
     // Rectangle + MouseArea: no Tab stop, no name, no disabled state.
 
+    // SHELL-9 (audit 2026-09-30): the standup time took "25:00", "abc" and
+    // an empty field as they were, and the reminder then stopped. Invalid
+    // input is put back; "9:30" is stored as "09:30".
+    function test_standup_time_is_validated_and_normalised() {
+        const sv = make();
+        sv.activeSection = "calendar";
+        tryVerify(function () { return findChild(sv, "standupTimeRow-field") !== null; }, 2000);
+        const row = findChild(sv, "standupTimeRow");
+        const field = findChild(sv, "standupTimeRow-field");
+        sv.set("calendar", "standupTime", "10:00");
+
+        const bad = ["25:00", "abc", "", "9:3"];
+        for (let i = 0; i < bad.length; i++) {
+            field.text = bad[i];
+            row.commitPending();
+            compare(sv.settings.calendar.standupTime, "10:00", "stored '" + bad[i] + "'");
+        }
+        field.text = "25:00";
+        verify(row.invalid);
+        verify(row.hint.length > 0, "no message for an invalid time");
+
+        field.text = "9:30";
+        row.commitPending();
+        compare(sv.settings.calendar.standupTime, "09:30");
+        sv.set("calendar", "standupTime", "10:00");
+    }
+
     function test_data_actions_are_on_the_tab_path_and_named() {
         const sv = make();
         sv.activeSection = "data";

@@ -669,3 +669,54 @@ TEST(Ics, AMidnightEndIsTheNextDay) {
   const QString doc = toIcs({e}, kMsk);
   EXPECT_TRUE(doc.contains(QStringLiteral("DTEND;TZID=Europe/Moscow:20260922T000000"))) << doc.toStdString();
 }
+
+// ── TIME-9 (audit 2026-09-30): a cancelled occurrence is a deletion ──
+
+// How Google and CalDAV cancel one meeting of a series: a second VEVENT with
+// the series' UID, the occurrence's RECURRENCE-ID and STATUS:CANCELLED.
+TEST(Ics, ACancelledOccurrenceBecomesAnExdate) {
+  const QTimeZone berlin("Europe/Berlin");
+  const IcsImport in = parseIcs(QStringLiteral("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+                                               "BEGIN:VEVENT\r\nUID:weekly@google.com\r\nSUMMARY:Planning\r\n"
+                                               "DTSTART;TZID=Europe/Berlin:20360505T110000\r\n"
+                                               "DTEND;TZID=Europe/Berlin:20360505T120000\r\nRRULE:FREQ=WEEKLY;BYDAY=MO\r\nEND:VEVENT\r\n"
+                                               "BEGIN:VEVENT\r\nUID:weekly@google.com\r\nSTATUS:CANCELLED\r\n"
+                                               "RECURRENCE-ID;TZID=Europe/Berlin:20360526T110000\r\n"
+                                               "DTSTART;TZID=Europe/Berlin:20360526T110000\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"),
+                                berlin);
+
+  ASSERT_EQ(in.events.size(), 1);
+  EXPECT_EQ(in.skipped, 0) << "a cancellation is not a VEVENT that failed to read";
+  EXPECT_EQ(in.events.first().exdates, QVector<QDate>{QDate(2036, 5, 26)});
+  const QVector<CalEvent> shown = heap::cal::expandedEvents(in.events, QDate(2036, 5, 25), QDate(2036, 5, 31), berlin);
+  EXPECT_TRUE(shown.isEmpty()) << "the cancelled meeting must not be in the calendar";
+}
+
+// A RECURRENCE-ID in UTC names the series' date in the series' zone, and an
+// override of the same occurrence in the file goes with it.
+TEST(Ics, ACancelledOccurrenceInUtcIsTheSeriesDate) {
+  const QTimeZone tokyo("Asia/Tokyo");
+  const IcsImport in = parseIcs(QStringLiteral("BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+                                               "BEGIN:VEVENT\r\nUID:s\r\nDTSTART;TZID=Asia/Tokyo:20360505T080000\r\n"
+                                               "RRULE:FREQ=WEEKLY\r\nEND:VEVENT\r\n"
+                                               "BEGIN:VEVENT\r\nUID:s\r\nRECURRENCE-ID;TZID=Asia/Tokyo:20360512T080000\r\n"
+                                               "DTSTART;TZID=Asia/Tokyo:20360512T100000\r\nSUMMARY:moved\r\nEND:VEVENT\r\n"
+                                               "BEGIN:VEVENT\r\nUID:s\r\nSTATUS:CANCELLED\r\n"
+                                               "RECURRENCE-ID:20360511T230000Z\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n"),
+                                tokyo);
+
+  ASSERT_EQ(in.events.size(), 1) << "the override of the cancelled occurrence is dropped";
+  EXPECT_EQ(in.events.first().exdates, QVector<QDate>{QDate(2036, 5, 12)});
+}
+
+// A cancellation for a series the file does not carry is handed to the
+// importer, which knows the stored series.
+TEST(Ics, ACancellationAloneIsReportedForTheStoredSeries) {
+  const IcsImport in = parseIcs(wrap(QStringLiteral("UID:s\r\nSTATUS:CANCELLED\r\nRECURRENCE-ID;VALUE=DATE:20360526")));
+
+  EXPECT_TRUE(in.events.isEmpty());
+  EXPECT_EQ(in.skipped, 0);
+  ASSERT_EQ(in.cancelled.size(), 1);
+  EXPECT_EQ(in.cancelled.first().masterId, QStringLiteral("s"));
+  EXPECT_EQ(in.cancelled.first().date, QDate(2036, 5, 26));
+}

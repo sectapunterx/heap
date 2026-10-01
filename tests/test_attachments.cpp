@@ -223,10 +223,12 @@ TEST(AttachmentRefs, TheRendererFindsTheStoredFile) {
 }
 
 TEST(AttachmentRefs, RunnableTypesNeedAConfirmation) {
-  for(const char* n : {"setup.exe", "run.BAT", "x.ps1", "deploy.sh", "a.lnk", "b.js", "noextension"}) {
+  for(const char* n :
+      {"setup.exe", "run.BAT", "x.ps1", "deploy.sh", "a.lnk", "b.js",  "noextension", "console.msc", "help.chm",  "app.jnlp",
+       "addin.xll", "x.scf",   "s.wsc", "s.sct",     "q.iqy", "q.slk", "disk.iso",    "disk.vhdx",   "page.html", "macro.docm"}) {
     EXPECT_TRUE(att::needsOpenConfirmation(QString::fromLatin1(n))) << n;
   }
-  for(const char* n : {"shot.png", "spec.pdf", "notes.txt", "data.csv", "log.zip"}) {
+  for(const char* n : {"shot.png", "spec.pdf", "notes.txt", "data.csv", "log.zip", "Plan.DOCX", "demo.mp4"}) {
     EXPECT_FALSE(att::needsOpenConfirmation(QString::fromLatin1(n))) << n;
   }
 }
@@ -653,6 +655,27 @@ TEST_F(AttachmentAppTest, CleanupDeletesOnlyWhatNothingPointsAt) {
   EXPECT_TRUE(store().contains(task(id)->attachments.at(0).id));
   EXPECT_TRUE(store().contains(noteAtt.at(0).toMap().value("id").toString()));
   EXPECT_EQ(app_->unusedAttachments().value("count").toInt(), 0);
+}
+
+// 2026-09-30 audit, TASKS-16: a backup holds only state.json, so the cleanup
+// used to delete a file only a backup still named, and restoring that backup
+// brought the attachment back broken.
+TEST_F(AttachmentAppTest, Audit0930Tasks16_CleanupKeepsAFileABackupNames) {
+  const QString id = newTask(QStringLiteral("backup probe"));
+  app_->attachFilesToTask(id, urls({write(QStringLiteral("Shot.PNG"), uniqueBytes("shot"))}));
+  const QString attId = task(id)->attachments.at(0).id;
+  app_->flushSave();
+  const QString backups = app_->dataDir() + QStringLiteral("/backups");
+  QDir().mkpath(backups);
+  ASSERT_TRUE(QFile::copy(app_->dataDir() + QStringLiteral("/state.json"), backups + QStringLiteral("/state-20260101-000000.json")));
+
+  app_->removeTaskAttachment(id, attId);
+  app_->clearPendingUndo();
+
+  EXPECT_EQ(app_->unusedAttachments().value("count").toInt(), 0);
+  app_->cleanUpUnusedAttachments();
+  EXPECT_TRUE(store().contains(attId));
+  QFile::remove(backups + QStringLiteral("/state-20260101-000000.json"));
 }
 
 // 2026-09-30 audit, KNOW-3: a link taken out of a note can come back with the
