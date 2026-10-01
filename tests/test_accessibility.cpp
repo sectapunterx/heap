@@ -19,7 +19,7 @@ QJsonObject appearanceOf(const QString& json) {
 
 TEST(FirstRunAppearance, DefaultsToSoftContrastWithMotion) {
   const QJsonObject a = appearanceOf(heap::platform::firstRunAppearanceJson({}));
-  EXPECT_EQ(a.value(QStringLiteral("darkPreset")).toString(), QStringLiteral("minimal-dark"));
+  EXPECT_EQ(a.value(QStringLiteral("darkPreset")).toString(), QStringLiteral("heap-ink"));
   EXPECT_EQ(a.value(QStringLiteral("lightPreset")).toString(), QStringLiteral("heap-light"));
   EXPECT_EQ(a.value(QStringLiteral("contrast")).toString(), QStringLiteral("soft"));
   EXPECT_FALSE(a.contains(QStringLiteral("reducedMotion")));

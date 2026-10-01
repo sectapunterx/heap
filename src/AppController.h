@@ -495,7 +495,7 @@ class AppController : public QObject {
   // first-run onboarding, so the app is exactly "as new" on this device.
   Q_INVOKABLE void resetToFirstRun();
   // Settings -> Data -> "Reset all settings" (UX-5): preferences go back to a
-  // new install's (Minimal dark + soft contrast included). Kept: the profile
+  // new install's (heap. ink + soft contrast included). Kept: the profile
   // card, tracker connections, watched repositories, your own themes, window
   // and panel layout, and anything the Settings page does not own. Undoable
   // through undoSettingsReset() for as long as the toast offers it.

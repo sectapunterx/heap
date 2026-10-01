@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-og-card.svg" width="100%" alt="heap. — Work, in one place.">
+  <img src="design/brand-export/surfaces/heap-og-card-outlined.svg" width="100%" alt="heap. — Work, in one place.">
 </p>
 
 <h3 align="center">Tickets, calendar and notes for engineers — one native, keyboard-first window.</h3>
@@ -20,7 +20,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns, the git banner for the task you're on, today's calendar, people to ping">
+  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns, today's calendar, people to ping">
 </p>
 
 Your tickets from GitHub, Jira, GitLab and nine more trackers, your meetings and focus time, your notes — side by side
@@ -40,7 +40,7 @@ English or Russian.
 
 | You type | You get |
 | --- | --- |
-| `APP-231 fix login race !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, due tomorrow at 15:00, labelled `auth` |
+| `APP-231 fix login race with @Masha !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, due tomorrow at 15:00, labelled `auth`, linked to Masha |
 | `1:1 with @anna thursday 12:00` | a 1:1 on Thursday's calendar with Anna as an attendee |
 | `focus refactor parser 10:00` | a focus block on today's calendar |
 | `review PRs every weekday 10:00` | a task that repeats every weekday at 10:00 |
@@ -53,10 +53,6 @@ Full syntax: [First day in heap.](docs/TUTORIAL.md#quick-capture-syntax)
 heap. watches your working copy. Check out a branch with the ticket in its name — `feature/app-101-login-rate-limit`
 — and the top bar says you're working on `APP-101`, with its pull request and CI checks one click away. The card
 carries the PR state too. Need a branch? Create one from the task's menu. No manual linking.
-
-<p align="center">
-  <img src="docs/assets/img/readme/git.png" width="460" alt="Top bar: Working on APP-101, PR #214 open, CI passing; the APP-101 card shows PR #214 open">
-</p>
 
 ### Every tracker, one board
 
@@ -100,7 +96,7 @@ moves the card, `Ctrl+1`…`8` switch views. Every shortcut is rebindable from o
 - **Recurring tasks** and **automation**: auto-archive, stuck-task warnings, deadline and standup reminders, quiet hours
 - **Undo and redo** for every change
 - **Profiles** — separate workspaces per project or job, with JSON import / export
-- **Themes** — dark and light presets, accent colours, contrast modes, density
+- **Themes** — heap. ink in the brand's colours by default, more dark and light presets, your own themes, contrast modes, density
 - **Weekly report**, one keystroke away (`Ctrl+Shift+W`)
 - A sample board and a replayable **guided tour** on first run
 

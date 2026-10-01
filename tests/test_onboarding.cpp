@@ -51,13 +51,13 @@ TEST_F(OnboardingTest, FreshInstallShowsWelcomeAndFlagsDemo) {
   EXPECT_TRUE(app.demoActive());
 }
 
-// A new user starts on Minimal dark / heap. light with soft contrast, written into the
+// A new user starts on heap. ink / heap. light with soft contrast, written into the
 // settings so the built-in fallback (heap. dark) still holds for everyone who
 // has never opened Appearance.
-TEST_F(OnboardingTest, FreshInstallStartsOnMinimalWithSoftContrast) {
+TEST_F(OnboardingTest, FreshInstallStartsOnInkWithSoftContrast) {
   AppController app;
   const QJsonObject appearance = QJsonDocument::fromJson(app.appSettingsJson().toUtf8()).object()["appearance"].toObject();
-  EXPECT_EQ(appearance["darkPreset"].toString(), QStringLiteral("minimal-dark"));
+  EXPECT_EQ(appearance["darkPreset"].toString(), QStringLiteral("heap-ink"));
   EXPECT_EQ(appearance["lightPreset"].toString(), QStringLiteral("heap-light"));
   EXPECT_EQ(appearance["contrast"].toString(), QStringLiteral("soft"));
 }

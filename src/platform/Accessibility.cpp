@@ -27,7 +27,7 @@ AccessibilityPrefs systemAccessibilityPrefs() {
 
 QString firstRunAppearanceJson(const AccessibilityPrefs& prefs) {
   QJsonObject appearance{
-      {QStringLiteral("darkPreset"), QStringLiteral("minimal-dark")},
+      {QStringLiteral("darkPreset"), QStringLiteral("heap-ink")},
       {QStringLiteral("lightPreset"), QStringLiteral("heap-light")},
       {QStringLiteral("contrast"), prefs.high_contrast ? QStringLiteral("high") : QStringLiteral("soft")},
   };
