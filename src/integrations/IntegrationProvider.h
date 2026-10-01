@@ -5,6 +5,7 @@
 #include <QHash>
 #include <QObject>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 namespace heap::integrations {
@@ -45,6 +46,20 @@ class IntegrationProvider : public QObject {
   virtual void fetchStatuses() {
   }
 
+  // Look issues up by id, outside the configured filter. A filter like
+  // "statusCategory != Done" drops an issue the moment it is closed, and its
+  // absence from the pull read as "deleted in the tracker" (INT-6, audit
+  // 2026-09-30). Answers issuesLookedUp once, with the issues that exist and
+  // the ids the tracker says do not; an id that failed for another reason is
+  // in neither. Only a provider that says it can is asked.
+  virtual bool canLookUpIssues() const {
+    return false;
+  }
+
+  virtual void lookUpIssues(const QStringList& /*externalIds*/) {
+    emit issuesLookedUp({}, {});
+  }
+
   // The user's status → column choices, which a push must honour when it
   // picks a target status. The default provider pushes by column name alone.
   virtual void setStatusOverrides(const QHash<QString, QString>& /*overrides*/) {
@@ -73,6 +88,7 @@ class IntegrationProvider : public QObject {
   // Newest first. An empty list with an empty error means the issue has none.
   void commentsFetched(const QString& externalId, const QVector<ExternalComment>& comments, const QString& error);
   void statusesFetched(const QStringList& statuses);
+  void issuesLookedUp(const QVector<ExternalTask>& found, const QStringList& missing);
 
  protected:
   using QObject::QObject;
