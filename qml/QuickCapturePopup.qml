@@ -41,8 +41,15 @@ Popup {
 
     // Single source of truth lives in heap::text::extractMeta (C++) and is
     // unit-tested. QML just forwards.
+    // A ticket key another task already holds cannot be the new task's id
+    // (newQuickTaskDraft falls back to the prefix), so it stays in the title:
+    // "APP-101 follow up with QA" used to lose its only link to the ticket
+    // (TASKS-22, audit 2026-09-30).
     function _extractMeta(raw) {
-        return AppController.extractTaskMeta(raw || "");
+        const meta = AppController.extractTaskMeta(raw || "");
+        if (meta.ticketKey && AppController.taskById(meta.ticketKey).id)
+            return AppController.extractTaskMeta(raw || "", true);
+        return meta;
     }
 
     function _resolvePeopleNames(handles) {

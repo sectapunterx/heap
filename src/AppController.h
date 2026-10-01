@@ -28,6 +28,10 @@ namespace heap::chrono {
 class ChronoParser;
 }
 
+namespace heap::query {
+class TaskQuery;
+}
+
 namespace heap::git {
 class GitWatcher;
 }
@@ -563,6 +567,11 @@ class AppController : public QObject {
   Q_INVOKABLE void setTaskSelected(const QString& id, bool selected);
   Q_INVOKABLE void setSelectedTaskIds(const QStringList& ids);
   Q_INVOKABLE void clearSelection();
+  // The filters the views show tasks under (search or query, priority chips,
+  // archived, the timeline's done toggle). Selected tasks they hide leave the
+  // selection, now and before every bulk action, so Delete never reaches a
+  // card the user cannot see (TASKS-13, audit 2026-09-30).
+  Q_INVOKABLE void setSelectionFilter(const QString& search, const QStringList& priorities, bool showArchived, bool hideDone = false);
 
   // Bulk ops — operate on the current selection set.
   Q_INVOKABLE void deleteSelectedTasks();
@@ -780,6 +789,11 @@ class AppController : public QObject {
   // window has focus — the capture window has it — and in quiet hours, since
   // the user just asked for it. Clicking it opens `taskId` when there is one.
   Q_INVOKABLE void notifyCapture(const QString& taskId, const QString& title, const QString& body);
+
+  // An in-app toast from QML, for a view that refuses a key and says why.
+  Q_INVOKABLE void showToast(const QString& message) {
+    emit toast(message, QStringLiteral("info"));
+  }
   // Slide the deadline of \p taskId forward by \p seconds (no-op if the
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
@@ -981,8 +995,9 @@ class AppController : public QObject {
   // For a "sync": the event type it books — "standup" | "oneone" | "sync" |
   // "none" (a one-off call or meeting).
   Q_INVOKABLE QString meetingType(const QString& text) const;
-  // Returns { title, desc, handles: [..], ticketKey, priority }.
-  Q_INVOKABLE QVariantMap extractTaskMeta(const QString& text) const;
+  // Returns { title, desc, handles: [..], ticketKey, priority }. With
+  // keepTicketKey the key stays in the title (see heap::text::extractMeta).
+  Q_INVOKABLE QVariantMap extractTaskMeta(const QString& text, bool keepTicketKey = false) const;
   // Suggest a slug-style person id ("e.zaharov") from a free-form name.
   // Avoids collisions with already-existing ids in the active profile
   // by appending "-2", "-3", … on conflict.
@@ -1584,6 +1599,18 @@ class AppController : public QObject {
   QSet<QString> m_selectedTaskIds;
   QStringList m_selectedTaskIdsList;  // ordered cache for QML
   void rebuildSelectionList_();
+
+  struct SelectionFilter {
+    QString search;
+    QStringList priorities;
+    bool showArchived = true;
+    bool hideDone = false;
+  } m_selectionFilter;
+
+  // Drops selected ids m_selectionFilter hides; emits when it dropped any.
+  void pruneSelectionToFilter_();
+  // The one predicate the filter bar counts and the selection prune share.
+  bool passesFilter_(int row, const heap::query::TaskQuery& q, const QStringList& priorities, bool showArchived, bool hideDone) const;
 
   std::unique_ptr<heap::chrono::ChronoParser> m_chrono;
 

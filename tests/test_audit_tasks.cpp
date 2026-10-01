@@ -484,6 +484,70 @@ TEST_F(AuditTasksTest, ThisWeekEndsOnSunday) {
   EXPECT_EQ(app_->deadlineBucket(sunday.addDays(8)), QStringLiteral("later"));
 }
 
+// ── TASKS-2 (B tier): a template task marks its id used ──
+
+TEST_F(AuditTasksTest, ATemplateTasksIdIsNeverHandedOutAgain) {
+  app_->tasks()->reset({});
+  QSignalSpy opened(app_.get(), &AppController::openTaskRequested);
+  app_->createTaskFromTemplate(QStringLiteral("PR review"));
+  ASSERT_EQ(opened.count(), 1);
+  const QString templateId = opened.first().first().toString();
+  ASSERT_TRUE(has(templateId));
+  app_->deleteTask(templateId);
+  ASSERT_FALSE(has(templateId));
+  const QString next = app_->newTaskDraft(QStringLiteral("todo")).value("id").toString();
+  EXPECT_NE(next, templateId) << "the deleted template task's id was proposed again";
+}
+
+// ── TASKS-13 (B tier): bulk actions reach only the cards the filters show ──
+
+TEST_F(AuditTasksTest, ASelectedCardTheSearchHidesLeavesTheSelection) {
+  Task a = makeTask(QStringLiteral("SEL-1"), QStringLiteral("todo"));
+  a.title = QStringLiteral("qzsel keep alpha");
+  Task b = makeTask(QStringLiteral("SEL-2"), QStringLiteral("todo"));
+  b.title = QStringLiteral("qzsel keep beta");
+  Task c = makeTask(QStringLiteral("SEL-3"), QStringLiteral("todo"));
+  c.title = QStringLiteral("qzsel gamma");
+  app_->tasks()->reset({a, b, c});
+  app_->setSelectionFilter(QString(), {}, false);
+  app_->setSelectedTaskIds({QStringLiteral("SEL-1"), QStringLiteral("SEL-2"), QStringLiteral("SEL-3")});
+  ASSERT_EQ(app_->selectionCount(), 3);
+
+  app_->setSelectionFilter(QStringLiteral("gamma"), {}, false);
+  EXPECT_EQ(app_->selectedTaskIds(), QStringList{QStringLiteral("SEL-3")});
+  app_->deleteSelectedTasks();
+  EXPECT_TRUE(has(QStringLiteral("SEL-1")));
+  EXPECT_TRUE(has(QStringLiteral("SEL-2")));
+  EXPECT_FALSE(has(QStringLiteral("SEL-3")));
+}
+
+TEST_F(AuditTasksTest, ABulkActionDropsCardsTheFiltersHideSinceSelecting) {
+  Task a = makeTask(QStringLiteral("SEL-1"), QStringLiteral("todo"));
+  a.priority = QStringLiteral("P0");
+  Task b = makeTask(QStringLiteral("SEL-2"), QStringLiteral("todo"));
+  b.priority = QStringLiteral("P0");
+  app_->tasks()->reset({a, b});
+  app_->setSelectionFilter(QString(), {QStringLiteral("P0")}, false);
+  app_->setSelectedTaskIds({QStringLiteral("SEL-1"), QStringLiteral("SEL-2")});
+  // SEL-2 leaves the P0 chip's view by an edit, not a filter change.
+  QVariantMap d = editDraft(QStringLiteral("SEL-2"));
+  d["priority"] = QStringLiteral("P3");
+  ASSERT_TRUE(app_->saveTask(d));
+  app_->setSelectedTasksArchived(true);
+  EXPECT_TRUE(task(QStringLiteral("SEL-1")).archived);
+  EXPECT_FALSE(task(QStringLiteral("SEL-2")).archived) << "a card no longer on screen was archived";
+}
+
+TEST_F(AuditTasksTest, TheArchiveViewKeepsArchivedCardsSelected) {
+  Task a = makeTask(QStringLiteral("SEL-1"), QStringLiteral("todo"));
+  a.archived = true;
+  app_->tasks()->reset({a});
+  app_->setSelectionFilter(QString(), {}, /*showArchived=*/true);
+  app_->setSelectedTaskIds({QStringLiteral("SEL-1")});
+  app_->setSelectedTasksArchived(false);
+  EXPECT_FALSE(task(QStringLiteral("SEL-1")).archived);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

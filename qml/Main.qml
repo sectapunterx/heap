@@ -283,11 +283,27 @@ ApplicationWindow {
         win._filtersRestored = true;
     }
     function _saveFiltersSoon() { if (win._filtersRestored) filterSaveTimer.restart(); }
-    onSearchTextChanged: _saveFiltersSoon()
-    onPrioritiesFilterChanged: _saveFiltersSoon()
+    // The selection follows the filters: a card selected and then hidden by
+    // the search left the selection with it, and Delete took it along with
+    // the visible ones (TASKS-13, audit 2026-09-30). The Archive view lists
+    // archived tasks whatever the toggle says; the timeline hides done ones
+    // unless asked.
+    function _syncSelectionFilter() {
+        const v = AppController.currentView;
+        const pri = [];
+        for (const k in win.prioritiesFilter) if (win.prioritiesFilter[k]) pri.push(k);
+        AppController.setSelectionFilter(win.searchText, pri, win.showArchived || v === "archive",
+                                         v === "timeline" && !win.showDoneTimeline);
+    }
+    onSearchTextChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
+    onPrioritiesFilterChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
     onBoardSortModeChanged: _saveFiltersSoon()
-    onShowArchivedChanged: _saveFiltersSoon()
-    onShowDoneTimelineChanged: _saveFiltersSoon()
+    onShowArchivedChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
+    onShowDoneTimelineChanged: { _saveFiltersSoon(); _syncSelectionFilter(); }
+    Connections {
+        target: AppController
+        function onCurrentViewChanged() { win._syncSelectionFilter(); }
+    }
     Timer {
         id: filterSaveTimer
         interval: 400
@@ -316,6 +332,7 @@ ApplicationWindow {
     Component.onCompleted: {
         _restoreGeometry();
         _restoreFilters();
+        _syncSelectionFilter();
         win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;

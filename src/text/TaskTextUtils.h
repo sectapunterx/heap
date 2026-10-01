@@ -30,8 +30,10 @@ QString meetingType(QStringView text);
 
 // Strip "// comment" tail (→ desc) and "@handle" tokens (→ handles) from a
 // title. A "//" inside a URL ("https://example.com/a") is part of the URL,
-// never the start of a comment.
-TaskMeta extractMeta(QStringView raw);
+// never the start of a comment. With `keepTicketKey` a tracker key is still
+// reported in ticketKey but stays in the title: the caller cannot make it the
+// task's id (another task holds it), so it is the only trace of the ticket.
+TaskMeta extractMeta(QStringView raw, bool keepTicketKey = false);
 
 // Generate a human-readable slug for a person's name, of the form
 // "<first-initial>.<last-name>" with Cyrillic transliterated to Latin.
