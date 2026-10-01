@@ -351,6 +351,24 @@ TEST_F(KnowAuditTest, Know7_RenameLeavesLinksToASameTitledNoteElsewhere) {
   EXPECT_EQ(heap::notes::backlinksTo(b, app_->notes()->items()).size(), 1);
 }
 
+// KNOW-17 (audit 2026-09-30): quick capture into the open note while the
+// editor still holds unflushed keystrokes keeps them.
+TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
+  const QString id = app_->newNote(QStringLiteral("QN target"));
+  // The editor's pending text, written to notesState when asked to flush.
+  QObject::connect(app_.get(), &AppController::aboutToChangeActiveNote, app_.get(), [this]() {
+    if(!app_->notesState().contains(QStringLiteral("typing"))) {
+      app_->setNotesState(QStringLiteral("# QN target\n\ntyping"));
+    }
+  });
+
+  app_->appendNoteEntry(QStringLiteral("from quick capture"));
+
+  const QString body = app_->noteBody(id);
+  EXPECT_TRUE(body.contains(QStringLiteral("typing"))) << body.toStdString();
+  EXPECT_TRUE(body.contains(QStringLiteral("from quick capture"))) << body.toStdString();
+}
+
 TEST_F(KnowAuditTest, KnowC_TitleFollowsTheH1WhileTheyAgree) {
   const QString id = app_->newNote();
   app_->setNotesState(QStringLiteral("# Release checklist\n\nbody"));

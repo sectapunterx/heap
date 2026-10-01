@@ -1437,6 +1437,10 @@ void AppController::appendNoteEntry(const QString& text) {
   if(body.isEmpty()) {
     return;
   }
+  // The editor's debounced keystrokes go into notesState first: the entry is
+  // appended to notesState, and the view diffs the editor against it, so text
+  // typed in the last 250 ms was erased (KNOW-17, audit 2026-09-30).
+  emit aboutToChangeActiveNote();
   // Quick capture with no note open goes to Inbox, found or made. It used to
   // write into `notesState` with no note behind it, where it was shown in the
   // editor, listed nowhere, and dropped on the next save.
