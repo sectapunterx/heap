@@ -201,6 +201,7 @@ qt_add_library(heap_core STATIC
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
+    src/platform/AltGrGuard.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
@@ -383,6 +384,7 @@ qt_add_qml_module(heap_core
         src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
+        src/platform/AltGrGuard.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
         src/integrations/GithubProvider.h

@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "ViewNames.h"
 
+#include "platform/AltGrGuard.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
 #include "storage/StateIO.h"
@@ -184,6 +185,10 @@ int main(int argc, char* argv[]) {
   QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
   const CliOptions cli = parseCommandLine(QApplication::arguments());
+
+  // AltGr+E in a text field types €, not "new event" (SHELL-2).
+  heap::platform::AltGrGuard altGrGuard;
+  QApplication::instance()->installEventFilter(&altGrGuard);
 
   // Redirect the data directory before the logger opens its file and before
   // AppController resolves state.json. The flag wins over the environment so a

@@ -1667,7 +1667,11 @@ ApplicationWindow {
     Shortcut {
         sequences: [_kbd("cal.newEvent")]
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        // Behind a modal, a menu or a view's own dialog it stands down like
+        // every other global key; it used to open over a delete confirmation
+        // (SHELL-2, audit 2026-09-30). In a text field AltGrGuard keeps the
+        // chord for the field (AltGr+E is € on a German layout).
+        enabled: sequences.length > 0 && win._globalKeysOn && !win._overlayOpen
         onActivated: {
             const day = AppController.selectedDate;
             const draft = AppController.newEventDraft(AppController.nextFreeSlot(day, 1), day);
