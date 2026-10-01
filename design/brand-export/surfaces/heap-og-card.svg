@@ -8,9 +8,7 @@
             <rect x="11" y="7.6" width="10" height="4.4" rx="2.2" fill="#ffffff"></rect>
         </g>
         <text x="79.80000000000001" y="57.792" font-family="&#39;IBM Plex Sans&#39;, Helvetica, Arial, sans-serif"
-              font-weight="500" font-size="67.2" letter-spacing="-2.3520000000000003" fill="#e8eef4">heap
-            <tspan fill="#e8eef4">.</tspan>
-        </text>
+              font-weight="500" font-size="67.2" letter-spacing="-2.3520000000000003" fill="#e8eef4">heap<tspan fill="#e8eef4">.</tspan></text>
     </g>
     <text x="80" y="340" font-family="&#39;IBM Plex Serif&#39;, Georgia, &#39;Times New Roman&#39;, serif"
           font-weight="300" font-size="62" letter-spacing="-1.1" fill="#e5ecf3">Work, in one place.

@@ -25,7 +25,8 @@ brand-export/
 │  ├─ heap-splash.svg
 │  ├─ heap-readme-banner.svg
 │  ├─ heap-marketing-hero.svg
-│  └─ heap-og-card.svg        ← 1200×630 social card
+│  ├─ heap-og-card.svg        ← 1200×630 social card (source, live text)
+│  └─ heap-og-card-outlined.svg ← same card, text as paths (README hero)
 ├─ export/                    ← navigator + raw export bundle (`index.html`)
 ├─ brand.css                  ← brandbook tokens as CSS variables
 └─ heap brand.html            ← full brandbook
@@ -83,6 +84,14 @@ The surface SVGs (`heap-splash`, `heap-readme-banner`, `heap-og-card`,
 `heap-marketing-hero`) reference IBM Plex Sans / Serif / JetBrains Mono by name only — no `<link>` to a font CDN. If the
 host system has those fonts installed the text renders pixel-perfect; otherwise geometry is unchanged and text falls
 back to the system sans / serif / mono.
+
+`heap-og-card-outlined.svg` is the social card with its text converted to glyph outlines from the fonts in
+`site/public/brand/assets/fonts/`, so it renders identically anywhere — GitHub included — with no font installed.
+Regenerate it after editing the source (needs `pip install fonttools brotli`):
+
+```bash
+python design/brand-export/outline_svg.py     design/brand-export/surfaces/heap-og-card.svg     design/brand-export/surfaces/heap-og-card-outlined.svg
+```
 
 For a guaranteed-identical render on social cards (`og:image`) and the README banner, pre-rasterise to PNG:
 

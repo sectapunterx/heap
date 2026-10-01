@@ -16,7 +16,7 @@ struct AccessibilityPrefs {
 // theme on → high_contrast. Elsewhere both are false for now.
 AccessibilityPrefs systemAccessibilityPrefs();
 
-// The appearance a new profile starts with: Minimal dark / heap. light, soft
+// The appearance a new profile starts with: heap. ink / heap. light, soft
 // contrast — or high contrast and no motion when the system asks for them.
 // Pure, so the choice is testable without the system settings.
 QString firstRunAppearanceJson(const AccessibilityPrefs& prefs);

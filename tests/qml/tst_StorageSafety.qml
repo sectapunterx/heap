@@ -46,7 +46,7 @@ TestCase {
         AppController.resetSettingsToDefaults();
         compare(spy.count, 1);
         const after = JSON.parse(AppController.appSettingsJson);
-        compare(after.appearance.darkPreset, "minimal-dark");
+        compare(after.appearance.darkPreset, "heap-ink");
         compare(after.appearance.contrast, "soft");
         compare(after.appearance.customThemes.length, 1);
         compare(after.notifications, undefined);

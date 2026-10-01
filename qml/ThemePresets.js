@@ -273,6 +273,32 @@ var MINIMAL_DARK = {
     }
 };
 
+// heap. ink: the Minimal recipe in the brand's own colours. Navy-black
+// surfaces and the mark's ink greys from design/brand-export, a monochrome
+// accent like the logo, hairlines tinted with the ink, and the brand cyan
+// kept for links, mentions and keywords.
+var HEAP_INK = {
+    id: "heap-ink", name: "heap. ink", base: "dark", builtin: true,
+    colors: {
+        bg: "#0b0e13", bg2: "#080a0e", panel: "#0f1218", panel2: "#141820",
+        panel3: "#1a1f29", border: "#14c6d0dc", borderStrong: "#26c6d0dc", text: "#e5ecf3",
+        textMuted: "#a6b0bd", textDim: "#8a94a3", textOnAccent: "#0b0e13", textOnDanger: "#0b0e13",
+        textOnBadge: "#0b0e13", accent: "#e8eef4", accentStrong: "#ffffff", accentSoft: "#1ac6d0dc",
+        knob: "#a6b0bd", danger: "#e6624c", warning: "#fe9c3a", success: "#78be7a",
+        info: "#32b2e7", toastBg: "#141820", toastBorder: "#1ac6d0dc", toastText: "#e5ecf3",
+        scrim: "#99000000", p0: "#e6624c", p1: "#fe9c3a", p2: "#a6b0bd",
+        p3: "#8a94a3", stBacklog: "#6f7888", stTodo: "#86a0bd", stProg: "#32b2e7",
+        stHalf: "#d8c277", stBlocked: "#e6624c", stReview: "#bf94ec", stDone: "#78be7a",
+        mStandup: "#32b2e7", mOneone: "#bf94ec", mSync: "#3bccdd", mFocus: "#78be7a",
+        nowLine: "#e6624c", synKeyword: "#3bccdd", synString: "#78be7a", synNumber: "#d8c277",
+        synComment: "#7d8797", synType: "#86a0bd", synBuiltin: "#e5ecf3", codeBg: "#080a0e",
+        code: "#c6d0dc", mention: "#3bccdd", ticket: "#a6b0bd", tag: "#bf94ec",
+        math: "#d8c277", heading: "#a6b0bd", highlightBg: "#4dd8c277", mdLink: "#3bccdd",
+        mdCode: "#e5ecf3", mdCodeBg: "#141820", mdMention: "#3bccdd", mdTicket: "#e5ecf3",
+        mdTag: "#bf94ec", mdMath: "#d8c277", mdHighlight: "#4dd8c277"
+    }
+};
+
 // The colours the user can give a column, a label, a person or a profile.
 // They are stored as data (a column keeps its colour whatever the theme), so
 // every picker offers the same ten: one hue per family, then two greys. The
@@ -280,7 +306,7 @@ var MINIMAL_DARK = {
 var SWATCHES = ["#5cc2dd", "#5aa9e6", "#a4a4d6", "#c07acf", "#e6624c",
                 "#e69854", "#dcb86b", "#6ec18a", "#9aa3b4", "#8a8e98"];
 
-var PRESETS = [HEAP_DARK, HEAP_LIGHT, MINIMAL_DARK, ASH, STONE, SLATE, SAGE];
+var PRESETS = [HEAP_DARK, HEAP_LIGHT, MINIMAL_DARK, HEAP_INK, ASH, STONE, SLATE, SAGE];
 
 // Built-ins that were retired, and the one that replaces each, so a user who
 // picked one lands on its nearest relative instead of the slot default.
