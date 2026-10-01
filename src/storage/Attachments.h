@@ -58,8 +58,8 @@ QString mimeFor(const QString& name, const QByteArray& head = QByteArray());
 // Images the notes preview can draw inline.
 bool isDisplayableImage(const QString& mime);
 
-// Opening one of these hands it to the shell, which runs it: a script, a
-// program, a shortcut. Such a file is only opened after the user confirms.
+// Whether opening the file waits for a confirmation: everything but the plain
+// picture, document, media and archive types, since the shell may run it.
 bool needsOpenConfirmation(const QString& name);
 
 // `![name](attachments/<id>)` for an image, `[name](attachments/<id>)` for any

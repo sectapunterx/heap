@@ -565,7 +565,11 @@ inline QStringList vtimezoneLines(const QTimeZone& zone, int fromYear, int toYea
 
 // Reads a document. `display` is the viewer's zone: floating times are read
 // in it, and everything that is not kept in its own zone is converted to it.
-inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZone::systemTimeZone()) {
+// `uidDomain` is this install's (see toIcs): a UID ending in it is one of our
+// own events coming back and maps to its local id; any other UID is kept whole.
+inline IcsImport parseIcs(const QString& text,
+                          const QTimeZone& display = QTimeZone::systemTimeZone(),
+                          const QString& uidDomain = QString()) {
   IcsImport out;
   const QStringList lines = detail::unfold(text);
 
@@ -881,6 +885,9 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
 
     if(cl.name == QLatin1String("UID")) {
       uid = cl.value.trimmed();
+      if(!uidDomain.isEmpty() && uid.endsWith(QLatin1Char('@') + uidDomain, Qt::CaseInsensitive)) {
+        uid.chop(uidDomain.size() + 1);
+      }
     } else if(cl.name == QLatin1String("SUMMARY")) {
       summary = detail::unescapeText(cl.value);
     } else if(cl.name == QLatin1String("LOCATION")) {
@@ -955,9 +962,15 @@ inline IcsImport parseIcs(const QString& text, const QTimeZone& display = QTimeZ
 // event goes out in UTC, which every reader agrees on; a series goes out
 // in the viewer's zone by name (with its VTIMEZONE), so its DST keeps working
 // wherever it is opened. A series that kept a source zone keeps it.
+// `uidDomain` qualifies a local id ("ev-2" → "ev-2@<domain>"): a bare local id
+// is the same in every install (the demo's ev-1..ev-5 above all), so another
+// heap importing the file took it for its own event and overwrote that
+// (TIME-25, audit 2026-09-30). An id that already has an "@" came from some
+// calendar's UID and leaves as it arrived.
 inline QString toIcs(const QVector<CalEvent>& events,
                      const QTimeZone& display = QTimeZone::systemTimeZone(),
-                     const QDateTime& now = QDateTime::currentDateTimeUtc()) {
+                     const QDateTime& now = QDateTime::currentDateTimeUtc(),
+                     const QString& uidDomain = QString()) {
   QStringList body;
   QHash<QByteArray, QPair<int, int>> zoneYears;  // zone id → year range used
   const auto useZone = [&](const QTimeZone& z, const QDate& d) {
@@ -993,7 +1006,9 @@ inline QString toIcs(const QVector<CalEvent>& events,
       continue;
     }
     body << QStringLiteral("BEGIN:VEVENT");
-    body << QStringLiteral("UID:") + (e.masterId.isEmpty() ? e.id : e.masterId);
+    const QString localUid = e.masterId.isEmpty() ? e.id : e.masterId;
+    body << QStringLiteral("UID:") +
+                (uidDomain.isEmpty() || localUid.contains(QLatin1Char('@')) ? localUid : localUid + QLatin1Char('@') + uidDomain);
     body << QStringLiteral("DTSTAMP:") + detail::icsUtc(now);
     if(!e.title.isEmpty()) {
       body << QStringLiteral("SUMMARY:") + detail::escapeText(e.title);

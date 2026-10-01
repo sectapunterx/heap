@@ -343,6 +343,14 @@ ApplicationWindow {
         AppController.appSettingsJson = JSON.stringify(s);
     }
     onClosing: (close) => {
+        // Hiding to the tray keeps the editor as it is; a quit asks about what
+        // is typed in it first, then closes again (SHELL-29).
+        const quits = !win._minimizeToTray || win._closeToTrayPref() === false;
+        if (quits && taskEditor.isDirty()) {
+            close.accepted = false;
+            taskEditor.settleThen(() => win.close());
+            return;
+        }
         if (!win._minimizeToTray) return;
         const pref = win._closeToTrayPref();
         if (pref === false) return;   // a real quit
@@ -401,8 +409,10 @@ ApplicationWindow {
                 onClicked: {
                     win._setCloseToTray(false);
                     closeAsk.close();
-                    AppController.flushSave();
-                    Qt.quit();
+                    taskEditor.settleThen(() => {
+                        AppController.flushSave();
+                        Qt.quit();
+                    });
                 }
             }
             PillButton {
@@ -1259,7 +1269,8 @@ ApplicationWindow {
         function onOpenTaskRequested(taskId) {
             // Also reached from a notification click while heap is in the tray.
             win._summon();
-            taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+            // Edits to the task already open are not swapped out unasked (TASKS-18).
+            taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
         }
     }
 

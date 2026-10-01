@@ -240,6 +240,33 @@ TEST_F(KnowAuditTest, Know9_ImportDoesNotFollowAJunctionOutOfTheVault) {
 #endif
 }
 
+// KNOW-31 (audit 2026-09-30): a picture reached through a junction inside the
+// vault is a file outside it and stays a plain link.
+TEST_F(KnowAuditTest, Know31_AnImageBehindAJunctionIsNotTaken) {
+#ifdef Q_OS_WIN
+  writeFile(QStringLiteral("vault/N.md"), "![sec](linked/secret.png)\n");
+  writeFile(QStringLiteral("outside/secret.png"), "PNGDATA");
+  const int rc = QProcess::execute(QStringLiteral("cmd"),
+                                   {QStringLiteral("/c"),
+                                    QStringLiteral("mklink"),
+                                    QStringLiteral("/J"),
+                                    QDir::toNativeSeparators(path(QStringLiteral("vault/linked"))),
+                                    QDir::toNativeSeparators(path(QStringLiteral("outside")))});
+  if(rc != 0) {
+    GTEST_SKIP() << "could not create a junction";
+  }
+
+  app_->importNotesFolder(url(QStringLiteral("vault")));
+
+  ASSERT_EQ(app_->notes()->rowCount(), 1);
+  EXPECT_TRUE(app_->notes()->items().at(0).body.contains(QStringLiteral("](linked/secret.png)")))
+      << app_->notes()->items().at(0).body.toStdString();
+  EXPECT_TRUE(QDir(app_->attachmentsDir()).entryList(QDir::Files).isEmpty());
+#else
+  GTEST_SKIP() << "junctions are Windows-only";
+#endif
+}
+
 TEST_F(KnowAuditTest, Know10_BinaryAndHugeFilesAreSkippedWithAWarning) {
   writeFile(QStringLiteral("vault/Real.md"), "real");
   writeFile(QStringLiteral("vault/blob.md"), QByteArray("PK\x03\x04\0\0\0", 7));

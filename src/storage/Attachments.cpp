@@ -102,26 +102,67 @@ bool isDisplayableImage(const QString& mime) {
 }
 
 bool needsOpenConfirmation(const QString& name) {
-  // What Windows, macOS and the Linux desktops run, or hand to an interpreter,
-  // when a file of this type is opened.
-  static const QSet<QString> kRuns = {QStringLiteral("exe"),         QStringLiteral("com"),        QStringLiteral("bat"),
-                                      QStringLiteral("cmd"),         QStringLiteral("msi"),        QStringLiteral("msp"),
-                                      QStringLiteral("scr"),         QStringLiteral("pif"),        QStringLiteral("cpl"),
-                                      QStringLiteral("lnk"),         QStringLiteral("url"),        QStringLiteral("ps1"),
-                                      QStringLiteral("psm1"),        QStringLiteral("vbs"),        QStringLiteral("vbe"),
-                                      QStringLiteral("js"),          QStringLiteral("jse"),        QStringLiteral("wsf"),
-                                      QStringLiteral("wsh"),         QStringLiteral("hta"),        QStringLiteral("reg"),
-                                      QStringLiteral("jar"),         QStringLiteral("appx"),       QStringLiteral("msix"),
-                                      QStringLiteral("app"),         QStringLiteral("command"),    QStringLiteral("sh"),
-                                      QStringLiteral("bash"),        QStringLiteral("zsh"),        QStringLiteral("run"),
-                                      QStringLiteral("desktop"),     QStringLiteral("appimage"),   QStringLiteral("py"),
-                                      QStringLiteral("pyw"),         QStringLiteral("pl"),         QStringLiteral("rb"),
-                                      QStringLiteral("scpt"),        QStringLiteral("workflow"),   QStringLiteral("dll"),
-                                      QStringLiteral("sys"),         QStringLiteral("library-ms"), QStringLiteral("settingcontent-ms"),
-                                      QStringLiteral("application"), QStringLiteral("gadget")};
-  const QString suffix = QFileInfo(name).suffix().toLower();
+  // The shell hands far more types to a program than anyone can list (.msc,
+  // .chm, .jnlp, .xll, .iso...), so only the plain document, picture, media and
+  // archive types open without asking; anything else waits for a confirmation.
+  static const QSet<QString> kOpensQuietly = {// Pictures
+                                              QStringLiteral("png"),
+                                              QStringLiteral("jpg"),
+                                              QStringLiteral("jpeg"),
+                                              QStringLiteral("gif"),
+                                              QStringLiteral("webp"),
+                                              QStringLiteral("bmp"),
+                                              QStringLiteral("tif"),
+                                              QStringLiteral("tiff"),
+                                              QStringLiteral("heic"),
+                                              QStringLiteral("avif"),
+                                              QStringLiteral("ico"),
+                                              // Text and data
+                                              QStringLiteral("txt"),
+                                              QStringLiteral("md"),
+                                              QStringLiteral("markdown"),
+                                              QStringLiteral("log"),
+                                              QStringLiteral("csv"),
+                                              QStringLiteral("tsv"),
+                                              QStringLiteral("json"),
+                                              QStringLiteral("yaml"),
+                                              QStringLiteral("yml"),
+                                              QStringLiteral("toml"),
+                                              QStringLiteral("diff"),
+                                              QStringLiteral("patch"),
+                                              // Documents without macros
+                                              QStringLiteral("pdf"),
+                                              QStringLiteral("rtf"),
+                                              QStringLiteral("docx"),
+                                              QStringLiteral("xlsx"),
+                                              QStringLiteral("pptx"),
+                                              QStringLiteral("odt"),
+                                              QStringLiteral("ods"),
+                                              QStringLiteral("odp"),
+                                              // Audio and video
+                                              QStringLiteral("mp3"),
+                                              QStringLiteral("m4a"),
+                                              QStringLiteral("wav"),
+                                              QStringLiteral("flac"),
+                                              QStringLiteral("ogg"),
+                                              QStringLiteral("opus"),
+                                              QStringLiteral("mp4"),
+                                              QStringLiteral("m4v"),
+                                              QStringLiteral("mov"),
+                                              QStringLiteral("mkv"),
+                                              QStringLiteral("webm"),
+                                              QStringLiteral("avi"),
+                                              // Archives (opening one lists it, nothing inside runs)
+                                              QStringLiteral("zip"),
+                                              QStringLiteral("7z"),
+                                              QStringLiteral("tar"),
+                                              QStringLiteral("gz"),
+                                              QStringLiteral("tgz"),
+                                              QStringLiteral("bz2"),
+                                              QStringLiteral("xz"),
+                                              QStringLiteral("rar")};
   // No extension at all: on Unix that is how a program looks.
-  return suffix.isEmpty() || kRuns.contains(suffix);
+  return !kOpensQuietly.contains(QFileInfo(name).suffix().toLower());
 }
 
 QString markdownRef(const Attachment& a) {
@@ -543,7 +584,23 @@ QString resolveInVault(const QString& target, const QDir& root, const QString& r
     if(isLinkLike(fi) || !fi.isFile()) {
       continue;
     }
-    // The canonical path settles "..", and a junction somewhere up the path.
+    // canonicalFilePath does not resolve an NTFS junction on Windows, so walk
+    // every folder between the vault root and the file and refuse a link.
+    const QString rel = root.relativeFilePath(c);
+    if(rel.startsWith(QLatin1String("..")) || QDir::isAbsolutePath(rel)) {
+      continue;
+    }
+    bool viaLink = false;
+    QString walked = root.absolutePath();
+    const QStringList parts = rel.split(QLatin1Char('/'), Qt::SkipEmptyParts);
+    for(qsizetype i = 0; i + 1 < parts.size() && !viaLink; ++i) {
+      walked += QLatin1Char('/') + parts.at(i);
+      viaLink = isLinkLike(QFileInfo(walked));
+    }
+    if(viaLink) {
+      continue;
+    }
+    // The canonical path settles "..", and a symlink somewhere up the path.
     const QString real = fi.canonicalFilePath();
     if(real.isEmpty() || !real.startsWith(rootCanonical + QLatin1Char('/'), Qt::CaseInsensitive)) {
       continue;

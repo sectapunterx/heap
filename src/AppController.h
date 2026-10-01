@@ -832,6 +832,9 @@ class AppController : public QObject {
   // has to be told which. Keys: imported, updated, skipped, warnings.
   Q_INVOKABLE QVariantMap importIcs(const QUrl& fileUrl);
   Q_INVOKABLE bool exportIcsToFile(const QUrl& fileUrl) const;
+  // "<install id>.heap": what qualifies this install's event ids as .ics UIDs,
+  // so another heap's ev-2 is not taken for ours (TIME-25).
+  QString icsUidDomain() const;
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).
@@ -1341,6 +1344,7 @@ class AppController : public QObject {
   void setSavedViews(const QVector<heap::savedviews::SavedView>& views);
   bool m_welcomeSeen = false;  // onboarding: welcome dialog shown at least once
   bool m_demoActive = false;   // onboarding: profile still holds seeded demo
+  mutable QString m_installId;  // settings.installId, minted on first use
 
   // Profiles
   QVector<Profile> m_profiles;
@@ -1462,6 +1466,8 @@ class AppController : public QObject {
   void reloadStateFromDisk();
   // Whether an edit was made while saving was blocked (it will not persist).
   bool m_editsWhileBlocked = false;
+  // When the last "this edit is not saved" toast was shown, ms since epoch.
+  qint64 m_lastBlockedEditToastMs = 0;
   std::unique_ptr<heap::storage::AsyncSaver> m_saver;
   quint64 m_saveGeneration = 0;
   QTimer* m_saveRetryTimer = nullptr;

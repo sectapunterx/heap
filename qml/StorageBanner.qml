@@ -41,9 +41,8 @@ Rectangle {
             text: AppController.storageMessage
             color: Theme.text
             font.pixelSize: Theme.fsMd
+            // Never elided: the end says which backup is shown (PLAT-8).
             wrapMode: Text.WordWrap
-            maximumLineCount: 3
-            elide: Text.ElideRight
             Layout.fillWidth: true
         }
         PillButton {

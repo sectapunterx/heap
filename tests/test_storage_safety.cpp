@@ -21,6 +21,7 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
 
@@ -845,4 +846,64 @@ int main(int argc, char** argv) {
 
   ::testing::InitGoogleTest(&argc, argv);
   return RUN_ALL_TESTS();
+}
+
+// ── PLAT-11 (audit 2026-09-30): restoring does not eat the rotational copies ──
+
+TEST_F(StorageSafety, RestoringOneBackupAfterAnotherKeepsThemAll) {
+  writeRaw(statePath(), stateDoc({profileJson("work", {taskJson("NOW-1", "todo")})}, "work"));
+  // Taken in the last hour, so no rotational copy is due meanwhile: only the
+  // restores themselves could push one out.
+  QStringList names;
+  const QDateTime now = QDateTime::currentDateTime();
+  for(int i = 1; i <= 20; ++i) {
+    const QString name = QStringLiteral("state-") + now.addSecs(-60L * (21 - i)).toString("yyyyMMdd-HHmmss") + QStringLiteral(".json");
+    writeRaw(backupDir() + "/" + name, stateDoc({profileJson("work", {taskJson(QStringLiteral("B-%1").arg(i), "todo")})}, "work"));
+    names << name;
+  }
+
+  AppController app;
+  for(int i = 0; i < 4; ++i) {
+    ASSERT_TRUE(app.restoreFromBackup(names.at(i)));
+  }
+
+  const QStringList left = QDir(backupDir()).entryList({"state-*.json"}, QDir::Files);
+  for(const QString& name : names) {
+    EXPECT_TRUE(left.contains(name)) << name.toStdString() << " was pushed out by a restore";
+  }
+  int preRestore = 0;
+  for(const QString& name : left) {
+    preRestore += name.contains(QLatin1String("prerestore")) ? 1 : 0;
+  }
+  EXPECT_EQ(preRestore, 4);
+}
+
+// ── PLAT-8 (audit 2026-09-30): a read-only session says so at the edit ──
+
+TEST_F(StorageSafety, AnEditInAReadOnlySessionSaysItIsNotKept) {
+  writeRaw(statePath(), stateDoc({profileJson("work", {taskJson("REAL-1", "todo")})}, "work"));
+  // A backup taken while the demo was still up carries its flag.
+  QJsonObject backup = QJsonDocument::fromJson(stateDoc({profileJson("work", {taskJson("OLD-1", "todo")})}, "work")).object();
+  backup["settings"] = QJsonObject{{"welcomeSeen", true}, {"demoActive", true}};
+  writeRaw(backupDir() + "/state-20260101-000000.json", QJsonDocument(backup).toJson());
+  heap::storage::setReaderForTesting([](const QString&) {
+    heap::storage::ReadResult r;
+    r.kind = heap::storage::ReadResult::Unreadable;
+    r.error = QStringLiteral("locked");
+    return r;
+  });
+  AppController app;
+  ASSERT_EQ(app.storageState(), QStringLiteral("unreadable"));
+  EXPECT_FALSE(app.demoActive()) << "a backup shown read-only is not the demo";
+
+  QSignalSpy toasts(&app, &AppController::toast);
+  QVariantMap draft = app.newTaskDraft(QStringLiteral("todo"));
+  draft["title"] = QStringLiteral("typed while locked");
+  app.saveTask(draft);
+  bool said = false;
+  for(const QList<QVariant>& t : toasts) {
+    const QString text = t.at(0).toString();
+    said = said || text.contains(QStringLiteral("read-only")) || text.contains(QStringLiteral("только для чтения"));
+  }
+  EXPECT_TRUE(said) << "the edit itself must say it is not saved";
 }

@@ -305,6 +305,47 @@ TEST_F(TimeAudit, AFileThatIsNotACalendarIsAnError) {
   EXPECT_FALSE(r.value("error").toString().isEmpty());
 }
 
+// ── TIME-25 (audit 2026-09-30): another heap's ev-2 is not ours ──
+
+TEST_F(TimeAudit, AnotherHeapsEventWithOurIdIsANewEvent) {
+  const QString id = seed(QString());
+  const QString title = app_->eventById(id).value("title").toString();
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("colleague.ics"));
+  QFile f(path);
+  ASSERT_TRUE(f.open(QIODevice::WriteOnly));
+  f.write(QStringLiteral("BEGIN:VCALENDAR\r\nPRODID:-//heap//EN\r\nBEGIN:VEVENT\r\nUID:%1@0123456789ab.heap\r\n"
+                         "DTSTART:20261105T100000\r\nSUMMARY:Colleague's design review\r\nEND:VEVENT\r\nEND:VCALENDAR\r\n")
+              .arg(id)
+              .toUtf8());
+  f.close();
+
+  const QVariantMap r = app_->importIcs(QUrl::fromLocalFile(path));
+
+  EXPECT_EQ(r.value("imported").toInt(), 1);
+  EXPECT_EQ(r.value("updated").toInt(), 0);
+  EXPECT_EQ(app_->events()->rowCount(), 2);
+  EXPECT_EQ(app_->eventById(id).value("title").toString(), title) << "our own event is left alone";
+}
+
+TEST_F(TimeAudit, OurOwnExportComesBackAsAnUpdate) {
+  const QString id = seed(QString());
+  QTemporaryDir dir;
+  const QString path = dir.filePath(QStringLiteral("mine.ics"));
+  ASSERT_TRUE(app_->exportIcsToFile(QUrl::fromLocalFile(path)));
+  QFile f(path);
+  ASSERT_TRUE(f.open(QIODevice::ReadOnly));
+  const QString text = QString::fromUtf8(f.readAll());
+  f.close();
+  EXPECT_TRUE(text.contains(QStringLiteral("UID:") + id + QLatin1Char('@') + app_->icsUidDomain())) << text.toStdString();
+
+  const QVariantMap r = app_->importIcs(QUrl::fromLocalFile(path));
+
+  EXPECT_EQ(r.value("imported").toInt(), 0);
+  EXPECT_EQ(r.value("updated").toInt(), 1);
+  EXPECT_EQ(app_->events()->rowCount(), 1);
+}
+
 // ── TIME-7 / TASKS-17: today moves ──
 
 TEST_F(TimeAudit, TodayMovesAndASelectionOnTodayFollows) {

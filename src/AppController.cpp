@@ -361,6 +361,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
         "Только чтение: heap не смог открыть %1 (%2). Пока файл не откроется, поверх него ничего не "
         "сохраняется — изменения сейчас не сохранятся."}},
       {"storage.showingBackup", {"Showing backup %1.", "Показан бэкап %1."}},
+      {"storage.editNotKept",
+       {"Not saved: this session is read-only, the change is lost when heap closes",
+        "Не сохранено: сессия только для чтения, правка пропадёт при закрытии heap"}},
       {"storage.damagedLocked", {"the file is damaged and could not be set aside", "файл повреждён и его не удалось отложить в сторону"}},
       {"storage.writeFailed",
        {"Not saved: writing %1 failed (%2). Your changes are kept in memory and heap keeps retrying.",
@@ -3088,7 +3091,7 @@ QVariantMap AppController::importIcs(const QUrl& fileUrl) {
     out["error"] = tr_("ics.error.open");
     return out;
   }
-  const heap::cal::IcsImport parsed = heap::cal::parseIcs(QString::fromUtf8(f.readAll()));
+  const heap::cal::IcsImport parsed = heap::cal::parseIcs(QString::fromUtf8(f.readAll()), QTimeZone::systemTimeZone(), icsUidDomain());
   f.close();
   // A file with no calendar in it is an error to name, not "0 imported".
   if(!parsed.recognised) {
@@ -3155,6 +3158,14 @@ QVariantMap AppController::importIcs(const QUrl& fileUrl) {
   return out;
 }
 
+QString AppController::icsUidDomain() const {
+  if(m_installId.isEmpty()) {
+    // Saved with the next write of state.json (saveStateNow asks for it).
+    m_installId = QUuid::createUuid().toString(QUuid::Id128).left(12);
+  }
+  return m_installId + QStringLiteral(".heap");
+}
+
 bool AppController::exportIcsToFile(const QUrl& fileUrl) const {
   const QString path = fileUrl.isLocalFile() ? fileUrl.toLocalFile() : fileUrl.toString();
   if(path.isEmpty()) {
@@ -3162,7 +3173,7 @@ bool AppController::exportIcsToFile(const QUrl& fileUrl) const {
   }
   // Stored events, so a series leaves as one VEVENT with its RRULE rather than
   // as every occurrence heap happened to have expanded.
-  const QString doc = heap::cal::toIcs(m_events.items());
+  const QString doc = heap::cal::toIcs(m_events.items(), QTimeZone::systemTimeZone(), QDateTime::currentDateTimeUtc(), icsUidDomain());
   QSaveFile f(path);
   if(!f.open(QIODevice::WriteOnly)) {
     qWarning("todocpp: cannot open %s for writing: %s", qUtf8Printable(path), qUtf8Printable(f.errorString()));
@@ -7720,10 +7731,18 @@ void AppController::connectOAuth(const QString& providerId) {
 }
 
 void AppController::scheduleSave() {
-  if(m_saveBlocked && !m_loading && !m_editsWhileBlocked) {
-    // The banner already says nothing is saved; from here on a reload would
-    // throw work away, so the silent auto-reopen stops.
+  if(m_saveBlocked && !m_loading) {
+    // From here on a reload would throw work away, so the silent auto-reopen
+    // stops. The banner sits above the work, not at the edit, so the edit
+    // itself says it is not kept, at most every few seconds (PLAT-8, audit
+    // 2026-09-30).
     m_editsWhileBlocked = true;
+    constexpr qint64 kBlockedEditToastGapMs = 15 * 1000;
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    if(m_lastBlockedEditToastMs == 0 || now - m_lastBlockedEditToastMs >= kBlockedEditToastGapMs) {
+      m_lastBlockedEditToastMs = now;
+      emit toast(tr_("storage.editNotKept"));
+    }
   }
   if(m_loading || m_saveBlocked || !m_saveTimer) {
     return;
@@ -7907,6 +7926,7 @@ const QStringList& knownSettingsKeys() {
                                    QStringLiteral("crumbUser"),
                                    QStringLiteral("welcomeSeen"),
                                    QStringLiteral("demoActive"),
+                                   QStringLiteral("installId"),
                                    QStringLiteral("shortcuts"),
                                    QStringLiteral("shortcutsSchema"),
                                    QStringLiteral("app")};
@@ -7923,6 +7943,11 @@ QJsonObject unknownKeys(const QJsonObject& o, const QStringList& known) {
   return out;
 }
 
+// Snapshots taken before a restore. They count on their own, so going through
+// the backups one restore at a time does not push the rotational copies out
+// (PLAT-11, audit 2026-09-30).
+constexpr int kPreRestoreCopiesKept = 5;
+
 // Rotational snapshots only, newest first by the stamp in the name (which is
 // when the copy was taken). Pre-migration copies are exempt: the one taken
 // before an upgrade is the only image of the user's data at the old version.
@@ -7931,8 +7956,15 @@ void pruneBackupDir(const QString& dirPath, int keep) {
   QStringList all = d.entryList({"state-*.json"}, QDir::Files | QDir::NoSymLinks, QDir::Name);
   std::reverse(all.begin(), all.end());
   int kept = 0;
+  int keptPreRestore = 0;
   for(const QString& name : all) {
     if(name.contains(QLatin1String("premigration"))) {
+      continue;
+    }
+    if(name.contains(QLatin1String("prerestore"))) {
+      if(++keptPreRestore > kPreRestoreCopiesKept) {
+        d.remove(name);
+      }
       continue;
     }
     if(++kept > keep) {
@@ -8100,6 +8132,8 @@ void AppController::saveStateNow() {
   s["crumbUser"] = m_crumbUser;
   s["welcomeSeen"] = m_welcomeSeen;
   s["demoActive"] = m_demoActive;
+  icsUidDomain();  // mints the id on the first save
+  s["installId"] = m_installId;
 
   // Keyboard shortcut overrides — only entries the user actually changed.
   // Storing every entry pinned each binding to whatever the default happened
@@ -8289,6 +8323,10 @@ void AppController::enterUnreadableMode(const QString& error) {
   if(recoverFromNewestBackup(backup, from)) {
     loadStateDocument(backup, /*viewOnly=*/true);
     shown = QFileInfo(from).fileName();
+    // The backup's own flag would put "these are demo data — start from a
+    // clean slate" under the banner, over the user's real (backed-up) work.
+    m_demoActive = false;
+    emit onboardingChanged();
   }
   m_editsWhileBlocked = false;
   if(m_profiles.isEmpty()) {
@@ -8487,6 +8525,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     m_welcomeSeen = s.contains("welcomeSeen") ? s["welcomeSeen"].toBool() : true;
     m_demoActive = s.contains("demoActive") ? s["demoActive"].toBool() : false;
     emit onboardingChanged();
+    if(!viewOnly) {
+      m_installId = s.value("installId").toString();
+    }
     if(s.contains("shortcuts")) {
       // A file written before kShortcutsSchema 2 stored every binding, not
       // only the rebound ones, so there is no way to tell a deliberate choice
