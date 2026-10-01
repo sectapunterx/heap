@@ -203,6 +203,19 @@ TEST(QuietWindow, WrapsMidnight) {
   EXPECT_FALSE(heap::cal::inQuietWindow(QTime(19, 0), QTime(9, 0), QTime(9, 0)));
 }
 
+// SHELL-9 (audit 2026-09-30): a stored "9:30" parsed as invalid under a strict
+// "HH:mm" and the standup reminder stopped without a word.
+TEST(ClockTime, AcceptsOneOrTwoDigitHoursAndRejectsTheRest) {
+  EXPECT_EQ(heap::cal::clockTime(QStringLiteral("09:30")), QTime(9, 30));
+  EXPECT_EQ(heap::cal::clockTime(QStringLiteral("9:30")), QTime(9, 30));
+  EXPECT_EQ(heap::cal::clockTime(QStringLiteral(" 7:05 ")), QTime(7, 5));
+  EXPECT_EQ(heap::cal::clockTime(QStringLiteral("23:59")), QTime(23, 59));
+  EXPECT_FALSE(heap::cal::clockTime(QStringLiteral("25:00")).isValid());
+  EXPECT_FALSE(heap::cal::clockTime(QStringLiteral("abc")).isValid());
+  EXPECT_FALSE(heap::cal::clockTime(QString()).isValid());
+  EXPECT_FALSE(heap::cal::clockTime(QStringLiteral("9:3")).isValid());
+}
+
 // An all-day event has no start to count down to. Announcing "your holiday
 // begins in 0 minutes" at midnight is noise, not a reminder.
 TEST(MeetingWindow, AnAllDayEventIsNotAnnounced) {

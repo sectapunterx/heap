@@ -10369,8 +10369,8 @@ bool AppController::inQuietHours(const QDateTime& when) const {
   if(!notif.value("quietHours", true).toBool()) {
     return false;
   }
-  const QTime from = QTime::fromString(notif.value("quietFrom", "19:00").toString(), "HH:mm");
-  const QTime to = QTime::fromString(notif.value("quietTo", "09:00").toString(), "HH:mm");
+  const QTime from = heap::cal::clockTime(notif.value("quietFrom", "19:00").toString());
+  const QTime to = heap::cal::clockTime(notif.value("quietTo", "09:00").toString());
   // The window wraps midnight in the usual case (19:00..09:00).
   return heap::cal::inQuietWindow(from, to, when.time());
 }
@@ -10670,7 +10670,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // 5. Standup reminder, on working days only.
   if(notif.value("standupReminder", true).toBool() && isWorkDay(today)) {
     const QVariantMap cal = s.value("calendar").toMap();
-    const QTime standup = QTime::fromString(cal.value("standupTime", "10:00").toString(), "HH:mm");
+    const QTime standup = heap::cal::clockTime(cal.value("standupTime", "10:00").toString());
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
     if(standup.isValid()) {
       CalEvent st;

@@ -930,6 +930,7 @@ QtObject {
             "settings.cal.autoFocus.hint": "When a task moves to In Progress — add a block to the calendar.",
             "settings.cal.focusDuration": "Focus block duration",
             "settings.cal.standupTime": "Daily standup time",
+            "settings.cal.standupTime.invalid": "Use HH:MM, e.g. 10:00",
 
             // Tasks section
             "settings.tasks.idPrefix": "ID prefix",
@@ -2125,6 +2126,7 @@ QtObject {
             "settings.cal.autoFocus.hint": "Когда задача переходит «В работу» — добавлять блок в календарь.",
             "settings.cal.focusDuration": "Длительность фокус-блока",
             "settings.cal.standupTime": "Время стендапа",
+            "settings.cal.standupTime.invalid": "Формат ЧЧ:ММ, например 10:00",
 
             "settings.tasks.idPrefix": "Префикс ID",
             "settings.tasks.idPrefix.hint": "Новые задачи: %1-XXXX",

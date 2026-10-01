@@ -893,6 +893,16 @@ Item {
         // put back to the stored value instead of being saved ("xyz" as a
         // quiet-hours time used to be).
         property alias validator: textRowField.validator
+        // A time of day: only H:mm / HH:mm is accepted, and it is committed as
+        // HH:mm — what the C++ side parses (SHELL-9, audit 2026-09-30).
+        property bool clockTime: false
+        readonly property RegularExpressionValidator _clockValidator: RegularExpressionValidator {
+            regularExpression: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
+        }
+        function _clock(t) {
+            const m = /^(\d{1,2}):(\d{2})$/.exec(String(t).trim());
+            return m ? m[1].padStart(2, "0") + ":" + m[2] : t;
+        }
         readonly property bool invalid: textRowField.text.length > 0 && !textRowField.acceptableInput
         signal committed(string text)
         // What is typed right now, for fields that are never stored anywhere.
@@ -913,13 +923,15 @@ Item {
                 textRowField.text = textRow.value;
                 return;
             }
-            textRow.committed(t);
+            textRow.committed(textRow.clockTime ? textRow._clock(t) : t);
         }
         spacing: Theme.spXs
         Layout.fillWidth: true
         FieldLabel { label: textRow.label; hint: textRow.hint }
         TextField {
             id: textRowField
+            objectName: textRow.objectName.length > 0 ? textRow.objectName + "-field" : ""
+            validator: textRow.clockTime ? textRow._clockValidator : null
             Layout.fillWidth: true
             placeholderText: textRow.placeholder
             placeholderTextColor: Theme.textDim
@@ -1627,7 +1639,14 @@ Item {
                         onMoved: (value) => root.set("calendar", "focusBlockDuration", value)
                     }
                     TextRow {
+                        // Same rule as quiet hours: an invalid time is put back,
+                        // "9:30" is stored as "09:30". It used to store "25:00"
+                        // or "abc" and the standup reminder stopped (SHELL-9,
+                        // audit 2026-09-30).
+                        objectName: "standupTimeRow"
+                        clockTime: true
                         label: I18n.t("settings.cal.standupTime"); mono: true; placeholder: "10:00"
+                        hint: invalid ? I18n.t("settings.cal.standupTime.invalid") : ""
                         value: (root.settings.calendar && root.settings.calendar.standupTime) || ""
                         onCommitted: (text) => root.set("calendar", "standupTime", text)
                     }
