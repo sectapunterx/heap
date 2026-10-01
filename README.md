@@ -20,7 +20,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns with ticket ids and branches, today's calendar, people to ping">
+  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns, the git banner for the task you're on, today's calendar, people to ping">
 </p>
 
 Your tickets from GitHub, Jira, GitLab and nine more trackers, your meetings and focus time, your notes — side by side
@@ -34,9 +34,13 @@ on your own disk.
 Press `Ctrl+Shift+Space` from anywhere and write one line. heap. works out what it is and where it belongs — in
 English or Russian.
 
+<p align="center">
+  <img src="docs/assets/img/readme/quick-capture.png" width="70%" alt="Quick-capture parsing a ticket id, priority, date, label and mention out of one line">
+</p>
+
 | You type | You get |
 | --- | --- |
-| `APP-231 fix login race !! tomorrow #auth` | task `APP-231`, priority P1, due tomorrow, labelled `auth` |
+| `APP-231 fix login race !! tomorrow 15:00 #auth` | task `APP-231`, priority P1, due tomorrow at 15:00, labelled `auth` |
 | `1:1 with @anna thursday 12:00` | a 1:1 on Thursday's calendar with Anna as an attendee |
 | `focus refactor parser 10:00` | a focus block on today's calendar |
 | `review PRs every weekday 10:00` | a task that repeats every weekday at 10:00 |
@@ -46,8 +50,13 @@ Full syntax: [First day in heap.](docs/TUTORIAL.md#quick-capture-syntax)
 
 ### A board that knows your branch
 
-heap. watches your working copy. Check out `feature/app-101-login-rate-limit` and card `APP-101` shows its branch;
-a banner shows the focused repo's branch and PR state. No manual linking.
+heap. watches your working copy. Check out a branch with the ticket in its name — `feature/app-101-login-rate-limit`
+— and the top bar says you're working on `APP-101`, with its pull request and CI checks one click away. The card
+carries the PR state too. Need a branch? Create one from the task's menu. No manual linking.
+
+<p align="center">
+  <img src="docs/assets/img/readme/git.png" width="460" alt="Top bar: Working on APP-101, PR #214 open, CI passing; the APP-101 card shows PR #214 open">
+</p>
 
 ### Every tracker, one board
 
@@ -57,7 +66,7 @@ Move a card to Done and the issue is closed upstream (GitHub, GitLab, Gitea, For
 keychain. Mattermost brings in the people you work with. [More →](docs/INTEGRATIONS.md)
 
 <p align="center">
-  <img src="docs/assets/img/screens/settings-integrations.png" width="80%" alt="Tracker integrations in Settings">
+  <img src="docs/assets/img/readme/integrations.png" width="80%" alt="Tracker integrations in Settings">
 </p>
 
 ### Plan your day, not just your backlog
@@ -66,21 +75,18 @@ Tasks and calendar share one window. Drag a task onto the day to book a focus bl
 what still needs a slot. Repeating events with this-and-following edits, all-day and past-midnight events, meeting
 reminders, `.ics` import and export.
 
-<table>
-<tr>
-  <td width="65%" valign="top"><img src="docs/assets/img/screens/board-week.png" alt="Week view"></td>
-  <td width="35%" valign="top"><img src="docs/assets/img/screens/calendar-focus.png" alt="Day calendar with a focus block"></td>
-</tr>
-</table>
+<p align="center">
+  <img src="docs/assets/img/screens/board-week.png" width="100%" alt="Week view with events, deadlines and the Needs a slot rail">
+</p>
 
 ### Notes that link to your work
 
 Markdown notes with folders, a daily note, task lists, tables and highlighted code. `[[Wiki-links]]` with backlinks,
-`#APP-231` points at the ticket, `@lena` at the person. Import and export as a folder of `.md` files — Obsidian
+`#APP-101` points at the ticket, `@masha` at the person. Import and export as a folder of `.md` files — Obsidian
 works with the same files. Long-form docs, snippets and contact cards live next door.
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-notes.png" width="100%" alt="Notes with a live rendered view">
+  <img src="docs/assets/img/readme/notes.png" width="100%" alt="Notes in split view: markdown on the left, rendered on the right">
 </p>
 
 ### Never reach for the mouse
