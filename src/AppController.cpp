@@ -1231,6 +1231,8 @@ void AppController::renameNote(const QString& id, const QString& title) {
   emit aboutToChangeActiveNote();
   syncActiveNoteBody();
   const QString old = m_notes.items().at(row).title;
+  // Links are resolved against the titles as they stand before the rename.
+  const QVector<Note> before = m_notes.items();
   {
     const UndoScope scope(this, tr_("notes.undo.rename").arg(next));
     Note n = m_notes.items().at(row);
@@ -1242,13 +1244,15 @@ void AppController::renameNote(const QString& id, const QString& title) {
     }
     n.updated = QDateTime::currentDateTime();
     m_notes.upsert(n);
-    // And every [[Old]] elsewhere now says [[New]]: a rename used to leave
-    // each link to the note pointing at nothing.
-    for(const Note& other : QVector<Note>(m_notes.items())) {
+    // And every [[Old]] elsewhere that meant this note now says [[New]]: a
+    // rename used to leave each link to the note pointing at nothing. Only
+    // links that resolve here — a same-titled note in another folder keeps its
+    // own (KNOW-7, audit 2026-09-30).
+    for(const Note& other : before) {
       if(other.id == id) {
         continue;
       }
-      const QString body = heap::notes::retargetLinks(other.body, old, next);
+      const QString body = heap::notes::retargetLinksTo(other.body, other.id, before, id, old, next);
       if(body != other.body) {
         Note changed = other;
         changed.body = body;
@@ -1436,6 +1440,10 @@ void AppController::appendNoteEntry(const QString& text) {
   if(body.isEmpty()) {
     return;
   }
+  // The editor's debounced keystrokes go into notesState first: the entry is
+  // appended to notesState, and the view diffs the editor against it, so text
+  // typed in the last 250 ms was erased (KNOW-17, audit 2026-09-30).
+  emit aboutToChangeActiveNote();
   // Quick capture with no note open goes to Inbox, found or made. It used to
   // write into `notesState` with no note behind it, where it was shown in the
   // editor, listed nowhere, and dropped on the next save.
@@ -6065,7 +6073,8 @@ QString AppController::uniqueTaskId(const QString& base) const {
 AppController::MergeStats AppController::mergeExternalTasks(const QString& providerId,
                                                             const QString& idPrefix,
                                                             const QVector<heap::integrations::ExternalTask>& issues,
-                                                            bool complete) {
+                                                            bool complete,
+                                                            QStringList* goneCandidates) {
   using heap::integrations::StatusMap;
   MergeStats stats;
 
@@ -6334,6 +6343,11 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
       // An empty scope is a card from before scopes were kept: nothing says
       // which filter it came from, so it gets the benefit of the doubt.
       if(t.externalMeta.scope == scopeNow) {
+        if(goneCandidates != nullptr) {
+          // Not yet: a filter on status drops a closed issue too (INT-6).
+          goneCandidates->append(t.externalId);
+          continue;
+        }
         t.externalMeta.goneUpstream = true;
         ++stats.gone;
       } else {
@@ -6358,6 +6372,86 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     emit integrationStatesChanged();
   }
   return stats;
+}
+
+AppController::MergeStats AppController::settleMissingIssues(const QString& providerId,
+                                                             const QString& idPrefix,
+                                                             const QVector<heap::integrations::ExternalTask>& found,
+                                                             const QStringList& missing) {
+  // Still in the tracker: merged as a pull would merge it, so a card closed
+  // there under "statusCategory != Done" moves to Done instead of reading as
+  // deleted. Then marked outside the filter, which it is — and which keeps the
+  // next sync from asking about it again.
+  MergeStats stats = mergeExternalTasks(providerId, idPrefix, found, /*complete=*/false);
+  QSet<QString> foundIds;
+  for(const auto& e : found) {
+    foundIds.insert(e.externalId);
+  }
+  bool marked = false;
+  for(int i = 0; i < m_tasks.rowCount(); ++i) {
+    Task t = m_tasks.items().at(i);
+    if(t.externalProvider != providerId || t.externalId.isEmpty()) {
+      continue;
+    }
+    if(foundIds.contains(t.externalId) && !t.externalMeta.outOfScope) {
+      t.externalMeta.outOfScope = true;
+      // A closed issue that moved to Done is the news; an open one that left
+      // the filter is "outside filter", as for a changed filter (INT-1).
+      if(t.status != QStringLiteral("done")) {
+        ++stats.outOfScope;
+      }
+      m_tasks.upsert(t);
+      marked = true;
+    } else if(missing.contains(t.externalId) && !t.externalMeta.goneUpstream) {
+      t.externalMeta.goneUpstream = true;
+      ++stats.gone;
+      m_tasks.upsert(t);
+      marked = true;
+    }
+  }
+  if(marked) {
+    scheduleSave();
+    emit integrationStatesChanged();
+  }
+  return stats;
+}
+
+void AppController::reportSync(const QString& label, const MergeStats& stats, bool settlePull) {
+  const bool changed = stats.added > 0 || stats.updated > 0;
+  const bool news = changed || stats.gone > 0 || stats.outOfScope > 0 || stats.conflicts > 0;
+  if(settlePull && !news) {
+    return;
+  }
+  // "Synced 12 issues" every quarter of an hour says nothing about
+  // whether anything happened. Report what actually changed — and
+  // never "up to date" next to something that did (INT-7).
+  if(!news) {
+    emit toast(tr_("sync.upToDate").arg(label));
+    return;
+  }
+  QStringList parts;
+  if(changed) {
+    parts.append(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
+  }
+  if(stats.conflicts > 0) {
+    // Name the cards, so the user can go and pick a side (INT-4).
+    QStringList keys = stats.conflictKeys.mid(0, 3);
+    if(stats.conflictKeys.size() > 3) {
+      keys.append(QStringLiteral("…"));
+    }
+    parts.append(tr_("sync.conflicts").arg(stats.conflicts).arg(keys.join(QStringLiteral(", "))));
+  }
+  if(stats.gone > 0) {
+    parts.append(tr_("sync.gone").arg(stats.gone));
+  }
+  if(stats.outOfScope > 0) {
+    parts.append(tr_("sync.outOfScope").arg(stats.outOfScope));
+  }
+  QString message = parts.join(QStringLiteral(" · "));
+  if(!changed) {
+    message = tr_("sync.headline").arg(label, message);
+  }
+  emit toast(message);
 }
 
 QHash<QString, QString> AppController::statusOverridesFor(const QString& providerId) const {
@@ -6514,7 +6608,11 @@ void AppController::applyIntegrationSettings() {
               setProviderOffline(providerId, false);
               emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
               const bool settlePull = m_settlePulls.remove(providerId);
-              const MergeStats stats = mergeExternalTasks(providerId, idPrefix, issues, provider->lastPullComplete());
+              // Issues missing from the pull are looked up before anything
+              // calls them gone, where the tracker can (INT-6).
+              QStringList goneCandidates;
+              const MergeStats stats = mergeExternalTasks(
+                  providerId, idPrefix, issues, provider->lastPullComplete(), provider->canLookUpIssues() ? &goneCandidates : nullptr);
               // Moves made while the tracker was out of reach go now that it
               // answers (INT-6). Deferred: sending builds on the provider list,
               // which this handler's own settings writes may rebuild.
@@ -6531,41 +6629,41 @@ void AppController::applyIntegrationSettings() {
                   syncProviderNow(providerId);
                 });
               }
-              const bool changed = stats.added > 0 || stats.updated > 0;
-              const bool news = changed || stats.gone > 0 || stats.outOfScope > 0 || stats.conflicts > 0;
-              if(settlePull && !news) {
+              if(goneCandidates.isEmpty()) {
+                reportSync(label, stats, settlePull);
                 return;
               }
-              // "Synced 12 issues" every quarter of an hour says nothing about
-              // whether anything happened. Report what actually changed — and
-              // never "up to date" next to something that did (INT-7).
-              if(!news) {
-                emit toast(tr_("sync.upToDate").arg(label));
-                return;
-              }
-              QStringList parts;
-              if(changed) {
-                parts.append(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
-              }
-              if(stats.conflicts > 0) {
-                // Name the cards, so the user can go and pick a side (INT-4).
-                QStringList keys = stats.conflictKeys.mid(0, 3);
-                if(stats.conflictKeys.size() > 3) {
-                  keys.append(QStringLiteral("…"));
+              // The toast waits for the lookup, so it says once what happened.
+              m_pendingLookups.insert(providerId, {stats, settlePull});
+              // Deferred for the same reason as the pushes: the provider this
+              // handler was called from may be rebuilt by now.
+              QTimer::singleShot(0, this, [this, providerId, idPrefix, label, goneCandidates]() {
+                for(const auto& p : m_syncProviders) {
+                  if(p->id() == providerId) {
+                    p->lookUpIssues(goneCandidates);
+                    return;
+                  }
                 }
-                parts.append(tr_("sync.conflicts").arg(stats.conflicts).arg(keys.join(QStringLiteral(", "))));
-              }
-              if(stats.gone > 0) {
-                parts.append(tr_("sync.gone").arg(stats.gone));
-              }
-              if(stats.outOfScope > 0) {
-                parts.append(tr_("sync.outOfScope").arg(stats.outOfScope));
-              }
-              QString message = parts.join(QStringLiteral(" · "));
-              if(!changed) {
-                message = tr_("sync.headline").arg(label, message);
-              }
-              emit toast(message);
+                // Disconnected meanwhile: nothing to ask, so the old answer.
+                const PendingSyncReport pending = m_pendingLookups.take(providerId);
+                MergeStats total = pending.stats;
+                total.gone += settleMissingIssues(providerId, idPrefix, {}, goneCandidates).gone;
+                reportSync(label, total, pending.settlePull);
+              });
+            });
+    connect(provider,
+            &heap::integrations::IntegrationProvider::issuesLookedUp,
+            this,
+            [this, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& found, const QStringList& missing) {
+              const PendingSyncReport pending = m_pendingLookups.take(providerId);
+              const MergeStats settled = settleMissingIssues(providerId, idPrefix, found, missing);
+              MergeStats total = pending.stats;
+              total.updated += settled.updated;
+              total.gone += settled.gone;
+              total.outOfScope += settled.outOfScope;
+              total.conflicts += settled.conflicts;
+              total.conflictKeys += settled.conflictKeys;
+              reportSync(label, total, pending.settlePull);
             });
     // A failed pull used to arrive as an empty task list, so a bad token read
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
@@ -10503,8 +10601,8 @@ bool AppController::inQuietHours(const QDateTime& when) const {
   if(!notif.value("quietHours", true).toBool()) {
     return false;
   }
-  const QTime from = QTime::fromString(notif.value("quietFrom", "19:00").toString(), "HH:mm");
-  const QTime to = QTime::fromString(notif.value("quietTo", "09:00").toString(), "HH:mm");
+  const QTime from = heap::cal::clockTime(notif.value("quietFrom", "19:00").toString());
+  const QTime to = heap::cal::clockTime(notif.value("quietTo", "09:00").toString());
   // The window wraps midnight in the usual case (19:00..09:00).
   return heap::cal::inQuietWindow(from, to, when.time());
 }
@@ -10804,7 +10902,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // 5. Standup reminder, on working days only.
   if(notif.value("standupReminder", true).toBool() && isWorkDay(today)) {
     const QVariantMap cal = s.value("calendar").toMap();
-    const QTime standup = QTime::fromString(cal.value("standupTime", "10:00").toString(), "HH:mm");
+    const QTime standup = heap::cal::clockTime(cal.value("standupTime", "10:00").toString());
     const int lead = qMax(0, notif.value("meetingLead", 5).toInt());
     if(standup.isValid()) {
       CalEvent st;

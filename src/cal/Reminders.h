@@ -139,4 +139,17 @@ inline bool inQuietWindow(const QTime& from, const QTime& to, const QTime& when)
   return when >= from || when < to;
 }
 
+// A settings time of day: "HH:mm" or "H:mm", surrounding blanks ignored.
+// Anything else (25:00, abc, empty) is invalid. A strict "HH:mm" parse made a
+// standup stored as "9:30" invalid, and the reminder stopped without a word
+// (SHELL-9, audit 2026-09-30).
+inline QTime clockTime(const QString& text) {
+  const QString t = text.trimmed();
+  QTime out = QTime::fromString(t, QStringLiteral("HH:mm"));
+  if(!out.isValid()) {
+    out = QTime::fromString(t, QStringLiteral("H:mm"));
+  }
+  return out;
+}
+
 }  // namespace heap::cal

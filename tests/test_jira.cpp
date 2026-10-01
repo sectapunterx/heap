@@ -337,6 +337,41 @@ TEST_F(JiraNetwork, PullPostsTheBoundedDefaultJql) {
   EXPECT_FALSE(server.lastBody().contains("\"comment\"")) << server.lastBody().toStdString();
 }
 
+// INT-6 (audit 2026-09-30): an issue missing from a "statusCategory != Done"
+// pull is looked up by key — found when it was only closed, missing when the
+// tracker answers 404, and neither when the lookup itself failed.
+TEST_F(JiraNetwork, LookUpTellsAClosedIssueFromADeletedOne) {
+  FakeJira server;
+  server.route("GET /rest/api/3/issue/HT-11", {200, R"({"key":"HT-11","fields":{"summary":"S","status":{"name":"Done"}}})"});
+  server.route("GET /rest/api/3/issue/HT-12",
+               {404, R"({"errorMessages":["Issue does not exist or you do not have permission to see it."]})"});
+  server.route("GET /rest/api/3/issue/HT-13", {500, R"({})"});
+
+  heap::integrations::JiraProvider p;
+  p.setConfig(server.base(), QStringLiteral("me@example.com"), QStringLiteral("tok"), QString());
+  p.setDeployment(heap::integrations::JiraDeployment::Cloud);
+  ASSERT_TRUE(p.canLookUpIssues());
+
+  bool done = false;
+  QVector<ExternalTask> found;
+  QStringList missing;
+  QObject::connect(
+      &p, &heap::integrations::IntegrationProvider::issuesLookedUp, &p, [&](const QVector<ExternalTask>& f, const QStringList& m) {
+        found = f;
+        missing = m;
+        done = true;
+      });
+  p.lookUpIssues({QStringLiteral("HT-11"), QStringLiteral("HT-12"), QStringLiteral("HT-13")});
+  ASSERT_TRUE(waitFor(done)) << "issuesLookedUp never arrived";
+  ASSERT_EQ(found.size(), 1);
+  EXPECT_EQ(found[0].externalId, QStringLiteral("HT-11"));
+  EXPECT_EQ(found[0].status, QStringLiteral("Done"));
+  EXPECT_EQ(missing, QStringList{QStringLiteral("HT-12")});
+  // The fields a pull asks for, so the merge has what it needs.
+  EXPECT_TRUE(server.lastRequest("GET /rest/api/3/issue/HT-11").query.contains("fields=summary"))
+      << server.lastRequest("GET /rest/api/3/issue/HT-11").query.toStdString();
+}
+
 TEST_F(JiraNetwork, ReportsAFailedPullInsteadOfAnEmptyList) {
   FakeJira server;
   server.route("POST /rest/api/3/search/jql", {400, R"({"errorMessages":["Unbounded JQL queries are not allowed here."]})"});

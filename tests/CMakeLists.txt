@@ -896,6 +896,15 @@ if (HEAP_QMLLINT_QT AND EXISTS "${HEAP_QMLLINT_QT}/qml" AND NOT CMAKE_PROJECT_NA
     endif ()
 endif ()
 
+# ─── Command line of the real binary ───
+# heap refuses positional arguments and unknown options with exit 2 (PLAT-1,
+# REL-2). Runs the built app itself; skipped where only the tests are built.
+add_test(NAME heap_cli_args_tests
+        COMMAND ${CMAKE_COMMAND} -DHEAP_EXE=$<TARGET_FILE:heap>
+        -DWORK_DIR=${CMAKE_CURRENT_BINARY_DIR}/cli_args_data
+        -P ${CMAKE_CURRENT_SOURCE_DIR}/cli_args_check.cmake)
+set_tests_properties(heap_cli_args_tests PROPERTIES SKIP_REGULAR_EXPRESSION "SKIPPED:")
+
 # ─── Aggregate target ───
 # Build target that depends on every executable defined in this directory.
 # CI builds `heap_all_tests`; adding a new test exe via add_executable() in

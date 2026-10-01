@@ -8,6 +8,8 @@
 #include "CodeHighlighter.h"
 #include "Models.h"
 
+#include "notes/NoteGraph.h"
+
 #include <QApplication>
 #include <QClipboard>
 #include <QDir>
@@ -333,6 +335,41 @@ TEST_F(KnowAuditTest, Know11_RenameRewritesLinksAndHeadingAndIsUndoable) {
   EXPECT_EQ(app_->noteBody(other), QStringLiteral("see [[Plan]] and [[plan#Risks]]"));
   const int row = app_->notes()->indexOfId(target);
   EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("Plan"));
+}
+
+// KNOW-7 (audit 2026-09-30): two "Meeting" notes in different folders; a
+// rename of one must not repoint links that resolve to the other.
+TEST_F(KnowAuditTest, Know7_RenameLeavesLinksToASameTitledNoteElsewhere) {
+  const QString a = app_->newNote(QStringLiteral("Meeting"), QStringLiteral("teamA"));
+  const QString b = app_->newNote(QStringLiteral("Meeting"), QStringLiteral("teamB"));
+  const QString inB = app_->newNote(QStringLiteral("Notes B"), QStringLiteral("teamB"));
+  const QString inA = app_->newNote(QStringLiteral("Notes A"), QStringLiteral("teamA"));
+  app_->setNoteBody(inB, QStringLiteral("see [[Meeting]] and [[Meeting#Risks]]"));
+  app_->setNoteBody(inA, QStringLiteral("see [[Meeting]]"));
+
+  app_->renameNote(a, QStringLiteral("Meeting A renamed"));
+
+  EXPECT_EQ(app_->noteBody(inB), QStringLiteral("see [[Meeting]] and [[Meeting#Risks]]"));
+  EXPECT_EQ(app_->noteBody(inA), QStringLiteral("see [[Meeting A renamed]]"));
+  EXPECT_EQ(heap::notes::backlinksTo(b, app_->notes()->items()).size(), 1);
+}
+
+// KNOW-17 (audit 2026-09-30): quick capture into the open note while the
+// editor still holds unflushed keystrokes keeps them.
+TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
+  const QString id = app_->newNote(QStringLiteral("QN target"));
+  // The editor's pending text, written to notesState when asked to flush.
+  QObject::connect(app_.get(), &AppController::aboutToChangeActiveNote, app_.get(), [this]() {
+    if(!app_->notesState().contains(QStringLiteral("typing"))) {
+      app_->setNotesState(QStringLiteral("# QN target\n\ntyping"));
+    }
+  });
+
+  app_->appendNoteEntry(QStringLiteral("from quick capture"));
+
+  const QString body = app_->noteBody(id);
+  EXPECT_TRUE(body.contains(QStringLiteral("typing"))) << body.toStdString();
+  EXPECT_TRUE(body.contains(QStringLiteral("from quick capture"))) << body.toStdString();
 }
 
 TEST_F(KnowAuditTest, KnowC_TitleFollowsTheH1WhileTheyAgree) {

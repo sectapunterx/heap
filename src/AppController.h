@@ -661,10 +661,23 @@ class AppController : public QObject {
   // Public so the sync merge can be exercised without a live tracker.
   // `complete` says the batch holds every issue the provider's filter
   // matches; only then is a missing issue marked as gone upstream.
+  // `goneCandidates`, when given, collects the external ids that would be
+  // marked gone instead of marking them: the provider can look them up first
+  // (INT-6, audit 2026-09-30).
   MergeStats mergeExternalTasks(const QString& providerId,
                                 const QString& idPrefix,
                                 const QVector<heap::integrations::ExternalTask>& issues,
-                                bool complete = false);
+                                bool complete = false,
+                                QStringList* goneCandidates = nullptr);
+  // What a lookup of those candidates found. An issue that still exists only
+  // left the filter — closed under "statusCategory != Done", say: it is merged
+  // like any pulled issue (so a closed one moves to Done) and marked outside
+  // the filter. One the tracker says does not exist is gone. An id in neither
+  // list (the lookup failed) is left for the next sync.
+  MergeStats settleMissingIssues(const QString& providerId,
+                                 const QString& idPrefix,
+                                 const QVector<heap::integrations::ExternalTask>& found,
+                                 const QStringList& missing);
 
   // Fold fetched contacts into the active profile's Docs contact list and, for
   // the people actually talked to, the People rail. Returns how many contacts
@@ -1295,6 +1308,18 @@ class AppController : public QObject {
   QSet<QString> m_statusesAsked;
   // Providers whose next tasksFetched answers a quiet follow-up pull.
   QSet<QString> m_settlePulls;
+
+  // A pull whose missing issues are being looked up: its stats and whether it
+  // was a quiet follow-up, held so one toast reports both (INT-6).
+  struct PendingSyncReport {
+    MergeStats stats;
+    bool settlePull = false;
+  };
+
+  QHash<QString, PendingSyncReport> m_pendingLookups;
+  // The sync toast for one pull's stats; quiet when a follow-up pull found
+  // nothing.
+  void reportSync(const QString& label, const MergeStats& stats, bool settlePull);
 
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
