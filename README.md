@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="design/brand-export/surfaces/heap-og-card-outlined.svg" width="100%" alt="heap. — Work, in one place.">
+  <img src="design/brand-export/surfaces/heap-og-card-outlined.svg?v=0.5.5" width="100%" alt="heap. — Work, in one place.">
 </p>
 
 <h3 align="center">Tickets, calendar and notes for engineers — one native, keyboard-first window.</h3>
@@ -20,7 +20,7 @@
 </div>
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-kanban.png" width="100%" alt="heap. board: kanban columns, today's calendar, people to ping">
+  <img src="docs/assets/img/screens/board-kanban.png?v=0.5.5" width="100%" alt="heap. board: kanban columns, today's calendar, people to ping">
 </p>
 
 Your tickets from GitHub, Jira, GitLab and nine more trackers, your meetings and focus time, your notes — side by side
@@ -35,7 +35,7 @@ Press `Ctrl+Shift+Space` from anywhere and write one line. heap. works out what 
 English or Russian.
 
 <p align="center">
-  <img src="docs/assets/img/readme/quick-capture.png" width="70%" alt="Quick-capture parsing a ticket id, priority, date, label and mention out of one line">
+  <img src="docs/assets/img/readme/quick-capture.png?v=0.5.5" width="70%" alt="Quick-capture parsing a ticket id, priority, date, label and mention out of one line">
 </p>
 
 | You type | You get |
@@ -62,7 +62,7 @@ Move a card to Done and the issue is closed upstream (GitHub, GitLab, Gitea, For
 keychain. Mattermost brings in the people you work with. [More →](docs/INTEGRATIONS.md)
 
 <p align="center">
-  <img src="docs/assets/img/readme/integrations.png" width="80%" alt="Tracker integrations in Settings">
+  <img src="docs/assets/img/readme/integrations.png?v=0.5.5" width="80%" alt="Tracker integrations in Settings">
 </p>
 
 ### Plan your day, not just your backlog
@@ -72,7 +72,7 @@ what still needs a slot. Repeating events with this-and-following edits, all-day
 reminders, `.ics` import and export.
 
 <p align="center">
-  <img src="docs/assets/img/screens/board-week.png" width="100%" alt="Week view with events, deadlines and the Needs a slot rail">
+  <img src="docs/assets/img/screens/board-week.png?v=0.5.5" width="100%" alt="Week view with events, deadlines and the Needs a slot rail">
 </p>
 
 ### Notes that link to your work
@@ -82,7 +82,7 @@ Markdown notes with folders, a daily note, task lists, tables and highlighted co
 works with the same files. Long-form docs, snippets and contact cards live next door.
 
 <p align="center">
-  <img src="docs/assets/img/readme/notes.png" width="100%" alt="Notes in split view: markdown on the left, rendered on the right">
+  <img src="docs/assets/img/readme/notes.png?v=0.5.5" width="100%" alt="Notes in split view: markdown on the left, rendered on the right">
 </p>
 
 ### Never reach for the mouse
