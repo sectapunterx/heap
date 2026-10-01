@@ -1228,6 +1228,8 @@ void AppController::renameNote(const QString& id, const QString& title) {
   emit aboutToChangeActiveNote();
   syncActiveNoteBody();
   const QString old = m_notes.items().at(row).title;
+  // Links are resolved against the titles as they stand before the rename.
+  const QVector<Note> before = m_notes.items();
   {
     const UndoScope scope(this, tr_("notes.undo.rename").arg(next));
     Note n = m_notes.items().at(row);
@@ -1239,13 +1241,15 @@ void AppController::renameNote(const QString& id, const QString& title) {
     }
     n.updated = QDateTime::currentDateTime();
     m_notes.upsert(n);
-    // And every [[Old]] elsewhere now says [[New]]: a rename used to leave
-    // each link to the note pointing at nothing.
-    for(const Note& other : QVector<Note>(m_notes.items())) {
+    // And every [[Old]] elsewhere that meant this note now says [[New]]: a
+    // rename used to leave each link to the note pointing at nothing. Only
+    // links that resolve here — a same-titled note in another folder keeps its
+    // own (KNOW-7, audit 2026-09-30).
+    for(const Note& other : before) {
       if(other.id == id) {
         continue;
       }
-      const QString body = heap::notes::retargetLinks(other.body, old, next);
+      const QString body = heap::notes::retargetLinksTo(other.body, other.id, before, id, old, next);
       if(body != other.body) {
         Note changed = other;
         changed.body = body;
