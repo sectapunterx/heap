@@ -113,6 +113,12 @@ CliOptions parseCommandLine(const QStringList& args) {
   if(!parsed) {
     usageError(parser, parser.errorText());
   }
+  // heap takes no positional arguments. A path left over from a forgotten
+  // `--data-dir` used to be ignored and the GUI opened — and migrated — the
+  // real profile instead of the folder meant (PLAT-1, audit 2026-09-30).
+  if(!parser.positionalArguments().isEmpty()) {
+    usageError(parser, QStringLiteral("unexpected argument '%1'").arg(parser.positionalArguments().constFirst()));
+  }
 
   CliOptions opts;
   opts.initialView = parser.value(viewOption);
