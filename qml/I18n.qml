@@ -258,6 +258,7 @@ QtObject {
 
             // ── Kanban / TaskCard ──
             "kanban.empty": "— empty —",
+            "board.sorted.noReorder": "The board is sorted — switch the sort to Manual to reorder cards",
             "board.empty.title": "No tasks yet",
             "board.empty.hint": "Press %1 to add your first task, or use quick-capture (%2).",
             "day.noEvents": "No events today — drag an empty slot to create one, or drop a task to schedule it.",
@@ -1467,6 +1468,7 @@ QtObject {
             "filter.counts": "%1 задач · %2 в работе · %3 заблокировано · %4 на ревью",
 
             "kanban.empty": "— пусто —",
+            "board.sorted.noReorder": "Доска отсортирована — чтобы менять порядок карточек, включите сортировку «Вручную»",
             "board.empty.title": "Пока нет задач",
             "board.empty.hint": "Нажмите %1, чтобы добавить первую задачу, или откройте быстрый ввод (%2).",
             "day.noEvents": "Событий сегодня нет — потяни пустой слот, чтобы создать, или брось задачу для планирования.",

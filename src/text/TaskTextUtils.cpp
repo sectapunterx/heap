@@ -208,101 +208,105 @@ QString slugifyPersonName(QStringView name) {
     return QString(firstAscii.front()) + QChar('.') + lastAscii;
 }
 
-TaskMeta extractMeta(QStringView raw) {
-    TaskMeta out;
-    QString text = raw.toString();
+TaskMeta extractMeta(QStringView raw, bool keepTicketKey) {
+  TaskMeta out;
+  QString text = raw.toString();
 
-    // 1. "// comment" → desc. Split on the first occurrence outside a URL:
-    //    "see https://example.com/a" used to lose everything after "https:".
-    static const QRegularExpression urlRx(QStringLiteral("[A-Za-z][A-Za-z0-9+.\\-]*://\\S*"));
-    int dslash = text.indexOf(QStringLiteral("//"));
-    while(dslash >= 0) {
-      bool inUrl = false;
-      QRegularExpressionMatchIterator ui = urlRx.globalMatch(text);
-      while(ui.hasNext() && !inUrl) {
-        const auto m = ui.next();
-        inUrl = dslash >= m.capturedStart(0) && dslash < m.capturedEnd(0);
-      }
-      if(!inUrl) {
-        break;
-      }
-      dslash = text.indexOf(QStringLiteral("//"), dslash + 2);
+  // 1. "// comment" → desc. Split on the first occurrence outside a URL:
+  //    "see https://example.com/a" used to lose everything after "https:".
+  static const QRegularExpression urlRx(QStringLiteral("[A-Za-z][A-Za-z0-9+.\\-]*://\\S*"));
+  int dslash = text.indexOf(QStringLiteral("//"));
+  while(dslash >= 0) {
+    bool inUrl = false;
+    QRegularExpressionMatchIterator ui = urlRx.globalMatch(text);
+    while(ui.hasNext() && !inUrl) {
+      const auto m = ui.next();
+      inUrl = dslash >= m.capturedStart(0) && dslash < m.capturedEnd(0);
     }
-    QString body = text;
-    if (dslash >= 0) {
-        out.desc = text.mid(dslash + 2).trimmed();
-        body     = text.left(dslash);
+    if(!inUrl) {
+      break;
     }
-    out.head = body;
+    dslash = text.indexOf(QStringLiteral("//"), dslash + 2);
+  }
+  QString body = text;
+  if(dslash >= 0) {
+    out.desc = text.mid(dslash + 2).trimmed();
+    body = text.left(dslash);
+  }
+  out.head = body;
 
-    // 2. "@handle" tokens → collected into handles[], but LEFT IN PLACE in
-    //    the title so the user keeps the context they typed ("синк с
-    //    @viktor"). Leading boundary must be start-of-string or one of
-    //    whitespace / punctuation, so e-mail addresses are not picked up.
-    static const QRegularExpression rx(
-        QStringLiteral("(?:^|[\\s,;\\(])@([A-Za-zА-Яа-яЁё0-9_.\\-]+)"));
-    QRegularExpressionMatchIterator it = rx.globalMatch(body);
-    while (it.hasNext()) {
-        const auto m = it.next();
-        out.handles.append(m.captured(1));
-    }
+  // 2. "@handle" tokens → collected into handles[], but LEFT IN PLACE in
+  //    the title so the user keeps the context they typed ("синк с
+  //    @viktor"). Leading boundary must be start-of-string or one of
+  //    whitespace / punctuation, so e-mail addresses are not picked up.
+  static const QRegularExpression rx(QStringLiteral("(?:^|[\\s,;\\(])@([A-Za-zА-Яа-яЁё0-9_.\\-]+)"));
+  QRegularExpressionMatchIterator it = rx.globalMatch(body);
+  while(it.hasNext()) {
+    const auto m = it.next();
+    out.handles.append(m.captured(1));
+  }
 
-    // 3. A tracker key ("LTE-2398", "HEAP-12") names the ticket the task is
-    //    about; it becomes the task id, so it leaves the title. Upper-case
-    //    only: "covid-19" or "utf-8" in a sentence are not tickets.
-    static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])([A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
-    const auto km = keyRx.match(body);
-    if(km.hasMatch()) {
-      out.ticketKey = km.captured(1);
+  // 3. A tracker key ("LTE-2398", "HEAP-12") names the ticket the task is
+  //    about; it becomes the task id, so it leaves the title. Upper-case
+  //    only: "covid-19" or "utf-8" in a sentence are not tickets. A key the
+  //    caller cannot use as the id stays where it was typed: "APP-101 follow
+  //    up" used to become "follow up" with the ticket gone (TASKS-22, audit
+  //    2026-09-30).
+  static const QRegularExpression keyRx(QStringLiteral("(?:^|[\\s,;(\\[])([A-Z][A-Z0-9]{1,9}-\\d{1,7})(?=$|[\\s,;:)\\]])"));
+  const auto km = keyRx.match(body);
+  if(km.hasMatch()) {
+    out.ticketKey = km.captured(1);
+    if(!keepTicketKey) {
       body.remove(km.capturedStart(1), km.capturedLength(1));
     }
+  }
 
-    // 4. Priority: "p1", "!!", "срочно", "urgent". The first one wins and is
-    //    removed from the title; any other stays as typed.
-    const QString lowered = body.toLower();
-    for(const PriorityWord& pw : kPriorityWords) {
-      const QString w = QString::fromUtf8(pw.word);
-      const QString boundary = w.startsWith(QChar('!')) ? QStringLiteral("(?:^|\\s)") : QStringLiteral("(?:^|") + kWordRx + ")";
-      const QString tail = w.startsWith(QChar('!')) ? QStringLiteral("(?=$|\\s)") : QStringLiteral("(?=$|") + kWordRx + ")";
-      const QRegularExpression rx(boundary + QStringLiteral("(") + QRegularExpression::escape(w) + QStringLiteral(")") + tail);
-      const auto pm = rx.match(lowered);
-      if(pm.hasMatch()) {
-        out.priority = QString::fromLatin1(pw.priority);
-        body.remove(pm.capturedStart(1), pm.capturedLength(1));
-        break;
-      }
+  // 4. Priority: "p1", "!!", "срочно", "urgent". The first one wins and is
+  //    removed from the title; any other stays as typed.
+  const QString lowered = body.toLower();
+  for(const PriorityWord& pw : kPriorityWords) {
+    const QString w = QString::fromUtf8(pw.word);
+    const QString boundary = w.startsWith(QChar('!')) ? QStringLiteral("(?:^|\\s)") : QStringLiteral("(?:^|") + kWordRx + ")";
+    const QString tail = w.startsWith(QChar('!')) ? QStringLiteral("(?=$|\\s)") : QStringLiteral("(?=$|") + kWordRx + ")";
+    const QRegularExpression rx(boundary + QStringLiteral("(") + QRegularExpression::escape(w) + QStringLiteral(")") + tail);
+    const auto pm = rx.match(lowered);
+    if(pm.hasMatch()) {
+      out.priority = QString::fromLatin1(pw.priority);
+      body.remove(pm.capturedStart(1), pm.capturedLength(1));
+      break;
     }
+  }
 
-    // 5. "#label" tokens are labels, the way p1 is a priority: they leave the
-    //    title. "#42" is an issue number and "C#" is a word, so a label needs
-    //    a boundary before it and a letter first.
-    static const QRegularExpression labelRx(QStringLiteral("(?:^|(?<=[\\s,;(]))#([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_.\\-/]*)"));
-    QRegularExpressionMatchIterator li = labelRx.globalMatch(body);
-    QVector<QPair<int, int>> spans;
-    while(li.hasNext()) {
-      const auto m = li.next();
-      QString label = m.captured(1);
-      while(label.endsWith(QChar('.')) || label.endsWith(QChar('-')) || label.endsWith(QChar('/'))) {
-        label.chop(1);  // sentence punctuation, not part of the label
-      }
-      if(!label.isEmpty() && !out.labels.contains(label, Qt::CaseInsensitive)) {
-        out.labels.append(label);
-      }
-      spans.append({m.capturedStart(0), m.capturedLength(0)});
+  // 5. "#label" tokens are labels, the way p1 is a priority: they leave the
+  //    title. "#42" is an issue number and "C#" is a word, so a label needs
+  //    a boundary before it and a letter first.
+  static const QRegularExpression labelRx(QStringLiteral("(?:^|(?<=[\\s,;(]))#([A-Za-zА-Яа-яЁё][A-Za-zА-Яа-яЁё0-9_.\\-/]*)"));
+  QRegularExpressionMatchIterator li = labelRx.globalMatch(body);
+  QVector<QPair<int, int>> spans;
+  while(li.hasNext()) {
+    const auto m = li.next();
+    QString label = m.captured(1);
+    while(label.endsWith(QChar('.')) || label.endsWith(QChar('-')) || label.endsWith(QChar('/'))) {
+      label.chop(1);  // sentence punctuation, not part of the label
     }
-    for(int i = static_cast<int>(spans.size()) - 1; i >= 0; --i) {
-      body.remove(spans[i].first, spans[i].second);
+    if(!label.isEmpty() && !out.labels.contains(label, Qt::CaseInsensitive)) {
+      out.labels.append(label);
     }
+    spans.append({m.capturedStart(0), m.capturedLength(0)});
+  }
+  for(int i = static_cast<int>(spans.size()) - 1; i >= 0; --i) {
+    body.remove(spans[i].first, spans[i].second);
+  }
 
-    // 6. A leading "ticket:" / "task:" / "todo:" / "задача:" says what the
-    //    line is; it is not part of what the task is called.
-    static const QRegularExpression markerRx(QStringLiteral("^\\s*(?:ticket|task|todo|тикет|задача)\\s*:\\s*"),
-                                             QRegularExpression::CaseInsensitiveOption);
-    body.remove(markerRx);
+  // 6. A leading "ticket:" / "task:" / "todo:" / "задача:" says what the
+  //    line is; it is not part of what the task is called.
+  static const QRegularExpression markerRx(QStringLiteral("^\\s*(?:ticket|task|todo|тикет|задача)\\s*:\\s*"),
+                                           QRegularExpression::CaseInsensitiveOption);
+  body.remove(markerRx);
 
-    // Collapse whitespace but otherwise preserve body verbatim.
-    out.title = body.simplified();
-    return out;
+  // Collapse whitespace but otherwise preserve body verbatim.
+  out.title = body.simplified();
+  return out;
 }
 
 } // namespace heap::text

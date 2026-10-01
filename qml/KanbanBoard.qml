@@ -292,13 +292,24 @@ Item {
 
     // Move the card under the cursor. Vertically it swaps with its neighbour;
     // horizontally it changes column, landing at the same depth.
+    //
+    // Under a sort the column order on screen is not the manual order: Shift+K
+    // under "Priority" moved nothing visible and rewrote the manual order
+    // behind it (TASKS-1, audit 2026-09-30). A sorted column has no position
+    // to move to, so a vertical move says so and a column change keeps the
+    // card where the sort puts it - the same rule as a drop.
     function moveCursorCard(dx, dy) {
         root.cursorVisible = true;
         const cols = _visibleByColumn();
         const pos = _cursorPos(cols);
         if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
         const id = root.cursorTaskId;
+        const manual = root.sortMode === "manual";
 
+        if (dy !== 0 && !manual) {
+            AppController.showToast(I18n.t("board.sorted.noReorder"));
+            return;
+        }
         if (dy !== 0) {
             const ids = cols[pos.col].ids;
             const target = pos.row + dy;
@@ -315,7 +326,7 @@ Item {
         let c = pos.col + dx;
         if (c < 0 || c >= cols.length) return;
         const destIds = cols[c].ids;
-        const beforeId = pos.row < destIds.length ? destIds[pos.row] : "";
+        const beforeId = manual && pos.row < destIds.length ? destIds[pos.row] : "";
         AppController.moveTaskTo(id, cols[c].statusId, beforeId);
     }
 
@@ -1015,12 +1026,17 @@ Item {
                                     if (!src || !src.taskId) return;
                                     // Under a sort, a drop still changes the
                                     // column — it just cannot choose where in
-                                    // it the card lands.
-                                    const target = root.sortMode === "manual" ? colDrop.beforeId : "";
+                                    // it the card lands. A drop back into its
+                                    // own column is no move at all: with no
+                                    // anchor it used to send the card to the
+                                    // end of the manual order (TASKS-1).
+                                    const manual = root.sortMode === "manual";
+                                    const target = manual ? colDrop.beforeId : "";
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
-                                        AppController.moveSelectedTasksTo(col.statusId, target);
-                                    } else {
+                                        if (manual) AppController.moveSelectedTasksTo(col.statusId, target);
+                                        else AppController.moveSelectedTasksToStatus(col.statusId);
+                                    } else if (manual || AppController.taskById(src.taskId).status !== col.statusId) {
                                         AppController.moveTaskTo(src.taskId, col.statusId, target);
                                     }
                                     drop.accept(Qt.MoveAction);

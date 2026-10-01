@@ -1892,6 +1892,7 @@ void AppController::moveTaskTo(const QString& id, const QString& statusId, const
 }
 
 void AppController::moveSelectedTasksTo(const QString& statusId, const QString& beforeTaskId) {
+  pruneSelectionToFilter_();
   if(m_selectedTaskIdsList.isEmpty()) {
     return;
   }
@@ -2079,6 +2080,11 @@ void AppController::createTaskFromTemplate(const QString& name) {
   const QVector<::Task> ordered = columnTasks(t.status, t.id);
   t.rank = heap::board::beforeFirst(ordered.isEmpty() ? 0.0 : ordered.first().rank, !ordered.isEmpty());
   m_tasks.upsert(t);
+  // The same bookkeeping saveTask does for a new task: without the
+  // high-water mark, deleting a template task handed its id to the next
+  // task (TASKS-2, audit 2026-09-30; TASKS-31 by the template path).
+  noteTaskIdUsed(t.id);
+  focusBlockOnStatusChange(t.id, QString(), t.status);
   scheduleSave();
   emit toast(tr_("task.fromTemplate").arg(it->name));
   emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
@@ -5323,8 +5329,8 @@ QString AppController::meetingType(const QString& text) const {
   return heap::text::meetingType(text);
 }
 
-QVariantMap AppController::extractTaskMeta(const QString& text) const {
-  const auto m = heap::text::extractMeta(text);
+QVariantMap AppController::extractTaskMeta(const QString& text, bool keepTicketKey) const {
+  const auto m = heap::text::extractMeta(text, keepTicketKey);
   QVariantMap out;
   out["title"] = m.title;
   out["desc"] = m.desc;
@@ -10146,6 +10152,9 @@ void AppController::clearSelection() {
 }
 
 void AppController::deleteSelectedTasks() {
+  // A card selected and then hidden by the search was deleted with the ones
+  // on screen: "1 visible, 3 deleted" (TASKS-13, audit 2026-09-30).
+  pruneSelectionToFilter_();
   if(m_selectedTaskIdsList.isEmpty()) {
     return;
   }
@@ -10198,6 +10207,7 @@ void AppController::deleteSelectedTasks() {
 }
 
 void AppController::moveSelectedTasksToStatus(const QString& statusId) {
+  pruneSelectionToFilter_();
   if(m_selectedTaskIdsList.isEmpty() || statusId.isEmpty()) {
     return;
   }
@@ -10233,6 +10243,7 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
 }
 
 void AppController::setSelectedTasksArchived(bool archived) {
+  pruneSelectionToFilter_();
   if(m_selectedTaskIdsList.isEmpty()) {
     return;
   }
