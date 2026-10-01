@@ -193,6 +193,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"git.branchCreated", {"Created branch %1", "Создана ветка %1"}},
       {"contacts.updated", {"%1: %2 contact(s) updated", "%1: обновлено контактов — %2"}},
       {"event.editUndone", {"Event change undone: %1", "Изменение события отменено: %1"}},
+      {"event.cannotMoveSeries",
+       {"This repeat rule can't be moved by dragging — change the days in the editor",
+        "Это правило повтора нельзя перенести перетаскиванием — измените дни в редакторе"}},
       {"event.badRule",
        {"Repeat rule not supported, saved as a single event: %1", "Правило повтора не поддерживается, сохранено одно событие: %1"}},
       {"task.idRequired", {"A task needs an id", "У задачи должен быть id"}},
@@ -2353,6 +2356,28 @@ void AppController::deleteTask(const QString& id) {
   scheduleSave();
 }
 
+namespace {
+
+// Where a series whose rule or start the user just set really begins: on the
+// first of the rule's own days (heap::cal::firstRuleDay, TIME-5). The event
+// moves whole, its end with it.
+void startOnRuleDay(CalEvent& e) {
+  if(e.rrule.isEmpty() || !e.masterId.isEmpty() || !e.date.isValid()) {
+    return;
+  }
+  const QDate first = heap::cal::firstRuleDay(heap::cal::parseRRule(e.rrule), e.date, e.date);
+  if(!first.isValid() || first == e.date) {
+    return;
+  }
+  const qint64 shift = e.date.daysTo(first);
+  e.date = first;
+  if(e.endDate.isValid()) {
+    e.endDate = e.endDate.addDays(shift);
+  }
+}
+
+}  // namespace
+
 QString AppController::mintEventId() {
   return QString("ev-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
 }
@@ -2423,6 +2448,13 @@ void AppController::saveEvent(const QVariantMap& draft) {
   if(prev) {
     e.exdates = prev->exdates;
     e.extra = prev->extra;  // keys a newer build wrote (PLAT-15)
+  }
+  // A series the user just made, or just gave new days or a new start, begins
+  // on one of its days (TIME-5, audit 2026-09-30). One that is only renamed
+  // keeps its stored start: an imported series may legally begin off its
+  // rule, and that first occurrence is the organiser's.
+  if(prev == nullptr || prev->rrule != e.rrule || prev->date != e.date) {
+    startOnRuleDay(e);
   }
   storeEvent(e);
 }
@@ -2575,6 +2607,102 @@ QString shiftWeekdays(const QString& text, qint64 days) {
     return a.ord != b.ord ? a.ord < b.ord : a.day < b.day;
   });
   return heap::cal::toRRuleText(r);
+}
+
+// The rule a series has once the occurrence on `from` is dragged to `to` for
+// every event. A weekly rule's weekdays shift (shiftWeekdays). A monthly or
+// yearly one that names its day used to keep it: moving "all" of a series on
+// the 15th to the 16th re-dated only the first occurrence and left the rest,
+// the dragged one included, on the 15th (TIME-7, audit 2026-09-30). The day
+// is now re-read from where the occurrence landed, as Google does: the 16th,
+// or "the third Wednesday" for a second Tuesday dropped on the 15th.
+// std::nullopt when the rule cannot say the new day in its own terms (several
+// ordinal weekdays, BYSETPOS, a weekday-and-monthday intersection).
+std::optional<QString> moveRuleDays(const QString& text, const QDate& from, const QDate& to) {
+  heap::cal::RRule r = heap::cal::parseRRule(text);
+  const qint64 days = (from.isValid() && to.isValid()) ? from.daysTo(to) : 0;
+  if(!r.isValid() || days == 0) {
+    return text;
+  }
+  if(r.freq == heap::cal::RRule::Weekly || r.freq == heap::cal::RRule::Daily) {
+    return shiftWeekdays(text, days);
+  }
+  const bool namesDay = !r.byMonthDay.isEmpty() || !r.byDay.isEmpty();
+  if(namesDay && !r.bySetPos.isEmpty()) {
+    return std::nullopt;
+  }
+  if(!r.byMonthDay.isEmpty() && !r.byDay.isEmpty()) {
+    return std::nullopt;
+  }
+  if(!r.byMonth.isEmpty() && to.month() != from.month()) {
+    if(r.byMonth.size() != 1) {
+      return std::nullopt;
+    }
+    r.byMonth = {to.month()};
+  }
+  if(r.byMonthDay.size() == 1) {
+    r.byMonthDay = {r.byMonthDay.first() > 0 ? to.day() : to.day() - to.daysInMonth() - 1};
+  } else if(!r.byMonthDay.isEmpty()) {
+    for(int& md : r.byMonthDay) {
+      const int moved = md + static_cast<int>(days);
+      if((md > 0 && (moved < 1 || moved > 31)) || (md < 0 && (moved > -1 || moved < -31))) {
+        return std::nullopt;
+      }
+      md = moved;
+    }
+    std::sort(r.byMonthDay.begin(), r.byMonthDay.end());
+  }
+  bool anyOrd = false;
+  for(const heap::cal::WeekdayNum& w : r.byDay) {
+    anyOrd = anyOrd || w.ord != 0;
+  }
+  if(anyOrd) {
+    if(r.byDay.size() != 1) {
+      return std::nullopt;
+    }
+    // Counted within the month, or within the year for a yearly rule with no
+    // month (monthCandidates / periodDates count the same way).
+    const bool inYear = r.freq == heap::cal::RRule::Yearly && r.byMonth.isEmpty();
+    const int pos = inYear ? to.dayOfYear() : to.day();
+    const int span = inYear ? to.daysInYear() : to.daysInMonth();
+    const int ord = r.byDay.first().ord > 0 ? (pos - 1) / 7 + 1 : -((span - pos) / 7 + 1);
+    r.byDay = {heap::cal::WeekdayNum{ord, to.dayOfWeek()}};
+  } else if(!r.byDay.isEmpty()) {
+    // "Every Monday of the month": the weekdays shift like a weekly rule's.
+    const int shift = static_cast<int>(((days % 7) + 7) % 7);
+    for(heap::cal::WeekdayNum& w : r.byDay) {
+      w.day = ((w.day - 1 + shift) % 7) + 1;
+    }
+    std::sort(r.byDay.begin(), r.byDay.end(), [](const heap::cal::WeekdayNum& a, const heap::cal::WeekdayNum& b) {
+      return a.ord != b.ord ? a.ord < b.ord : a.day < b.day;
+    });
+  }
+  return heap::cal::toRRuleText(r);
+}
+
+// Where occurrence `d` of the old series is in the new one: the same place in
+// the sequence. A series whose rule was re-read for a new day (moveRuleDays)
+// does not move its deleted and moved occurrences by a fixed number of days —
+// the second Tuesday becoming the third Wednesday is 8 days one month and 1
+// the next. An invalid date when `d` is not one of the old series' days.
+QDate mapOccurrence(const QString& oldText, const QDate& oldStart, const QString& newText, const QDate& newStart, const QDate& d) {
+  heap::cal::RRule oldRule = heap::cal::parseRRule(oldText);
+  heap::cal::RRule newRule = heap::cal::parseRRule(newText);
+  if(!oldRule.isValid() || !newRule.isValid() || !d.isValid() || d < oldStart) {
+    return {};
+  }
+  oldRule.count = 0;
+  oldRule.until = QDate();
+  oldRule.untilAt = QDateTime();
+  const QVector<QDate> before = heap::cal::expand(oldRule, oldStart, oldStart, d);
+  if(before.isEmpty() || before.last() != d) {
+    return {};
+  }
+  newRule.count = static_cast<int>(before.size());
+  newRule.until = QDate();
+  newRule.untilAt = QDateTime();
+  const QVector<QDate> after = heap::cal::expand(newRule, newStart, newStart, d.addYears(100));
+  return after.size() == before.size() ? after.last() : QDate();
 }
 
 }  // namespace
@@ -2760,9 +2888,30 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
     // Moving one occurrence of "all" moves the anchor by the same number of
     // days, and the end with it — the end used to stay behind, so every
     // occurrence became a multi-day event.
+    // A rule that names its day takes the day the occurrence landed on
+    // (TIME-7); one that cannot say it is not moved at all rather than moved
+    // in part.
+    const std::optional<QString> movedRule = moveRuleDays(master.rrule, original, original.addDays(shift));
+    if(!movedRule.has_value() && draftRule == master.rrule) {
+      emit toast(tr_("event.cannotMoveSeries"), QStringLiteral("warning"));
+      return;
+    }
+    const QString shiftedOld = movedRule.value_or(master.rrule);
+    // Re-read rather than shifted: its days are not a fixed distance from the
+    // old ones, and the series starts on the first of them in the month the
+    // old start moves to.
+    const bool reread = shiftedOld != shiftWeekdays(master.rrule, shift);
     m.date = master.date.addDays(shift);
+    if(reread) {
+      const QDate first = heap::cal::firstRuleDay(
+          heap::cal::parseRRule(shiftedOld), QDate(m.date.year(), m.date.month(), 1), QDate(m.date.year(), m.date.month(), 1));
+      m.date = first.isValid() ? first : m.date;
+    }
     m.endDate = seriesLength > 0 ? m.date.addDays(seriesLength) : QDate();
-    const QString shiftedOld = shiftWeekdays(master.rrule, shift);
+    const auto movedDay = [&](const QDate& d) {
+      const QDate mapped = reread ? mapOccurrence(master.rrule, master.date, shiftedOld, m.date, d) : QDate();
+      return mapped.isValid() ? mapped : d.addDays(shift);
+    };
     // Compared by the days they produce: "FREQ=WEEKLY;BYDAY=MO" on a Monday
     // series (how Google and Outlook store it) is the editor's "FREQ=WEEKLY".
     const bool likeShifted = rulePattern(draftRule, m.date) == rulePattern(shiftedOld, m.date);
@@ -2784,7 +2933,9 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       }
     }
     if(patternChanged) {
-      // New days: the old deletions and moves were about other dates.
+      // New days: the old deletions and moves were about other dates, and the
+      // series begins on the first of the new ones (TIME-5).
+      startOnRuleDay(m);
       m.exdates.clear();
       for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
         m_events.removeById(id);
@@ -2795,7 +2946,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       // A moved occurrence also takes what the edit changed — a new title is
       // the whole series' — unless it had its own value there already.
       for(QDate& d : m.exdates) {
-        d = d.addDays(shift);
+        d = movedDay(d);
       }
       const auto follow = [](QString& own, const QString& was, const QString& now) {
         if(now != was && own == was) {
@@ -2805,7 +2956,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       for(const QString& id : overridesFrom(QDate(1, 1, 1))) {
         const CalEvent before = m_events.items().at(m_events.indexOfId(id));
         CalEvent ov = before;
-        ov.originalDate = ov.originalDate.addDays(shift);
+        ov.originalDate = movedDay(ov.originalDate);
         follow(ov.title, master.title, m.title);
         follow(ov.type, master.type, m.type);
         follow(ov.attendees, master.attendees, m.attendees);
@@ -2868,15 +3019,38 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
   // The new half repeats by the editor's rule. A COUNT carried over from the
   // old one is what is LEFT of it: a ten-time series split at the sixth is
   // five more, not ten more.
-  heap::cal::RRule tailRule = heap::cal::parseRRule(draftRule == master.rrule ? shiftWeekdays(master.rrule, dayShift) : draftRule);
-  const bool samePattern = rulePattern(draftRule) == rulePattern(master.rrule);
-  if(tailRule.isValid() && samePattern && tailRule.count > 0 && draftRule == master.rrule) {
+  //
+  // Whether the editor kept the series' rule is a question about the days and
+  // the end it describes, not its spelling: the editor hands an imported
+  // "FREQ=WEEKLY;BYDAY=TU;COUNT=6" back as "FREQ=WEEKLY;COUNT=6", and the text
+  // compare left the new half all six again — nine in total (TIME-3, audit
+  // 2026-09-30).
+  const std::optional<QString> movedRule = moveRuleDays(master.rrule, original, newDate);
+  const QString shiftedMaster = movedRule.value_or(shiftWeekdays(master.rrule, dayShift));
+  const bool reread = movedRule.has_value() && shiftedMaster != shiftWeekdays(master.rrule, dayShift);
+  const heap::cal::RRule draftParsed = heap::cal::parseRRule(draftRule);
+  const heap::cal::RRule masterParsed = heap::cal::parseRRule(master.rrule);
+  const bool sameDays =
+      draftRule == master.rrule || (draftParsed.isValid() && rulePattern(draftRule, newDate) == rulePattern(shiftedMaster, newDate));
+  const bool sameEnd = draftParsed.isValid() && masterParsed.isValid() && draftParsed.count == masterParsed.count &&
+                       draftParsed.until == masterParsed.until && draftParsed.untilAt == masterParsed.untilAt;
+  const bool keepsRule = draftRule == master.rrule || (sameDays && sameEnd);
+  heap::cal::RRule tailRule = heap::cal::parseRRule(keepsRule ? shiftedMaster : draftRule);
+  const bool samePattern = sameDays || rulePattern(draftRule) == rulePattern(master.rrule);
+  if(tailRule.isValid() && keepsRule && tailRule.count > 0) {
     tailRule.count = std::max(1, tailRule.count - usedBefore);
   }
   tail.rrule = tailRule.isValid() ? heap::cal::toRRuleText(tailRule) : QString();
+  if(!keepsRule) {
+    startOnRuleDay(tail);  // new days: the new half begins on one (TIME-5)
+  }
+  const auto carriedDay = [&](const QDate& d0) {
+    const QDate mapped = reread ? mapOccurrence(master.rrule, original, tail.rrule, tail.date, d0) : QDate();
+    return mapped.isValid() ? mapped : d0.addDays(dayShift);
+  };
   if(!tail.rrule.isEmpty() && samePattern) {
     for(const QDate& d0 : carried) {
-      tail.exdates.append(d0.addDays(dayShift));
+      tail.exdates.append(carriedDay(d0));
     }
   }
 
@@ -2890,7 +3064,7 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
       continue;
     }
     ov.masterId = tail.id;
-    ov.originalDate = ov.originalDate.addDays(dayShift);
+    ov.originalDate = carriedDay(ov.originalDate);
     m_events.upsert(ov);
   }
   // The split may land on the very first occurrence, and then there is
@@ -3107,6 +3281,29 @@ QVariantMap AppController::importIcs(const QUrl& fileUrl) {
     UndoScope scope(this, tr_("undo.importIcs"));
     for(const CalEvent& incoming : parsed.events) {
       CalEvent e = incoming;
+      // A moved occurrence is known by its series and the date it replaces,
+      // not by an id: a file names it UID + RECURRENCE-ID, which the codec
+      // turns into "<uid>-yyyyMMdd" while heap's own is an ev-… id. Matched
+      // by id, every moved occurrence in our own export came back a second
+      // time, and again on each round trip (TIME-10, audit 2026-09-30).
+      // Copies an earlier import already doubled are folded into the one
+      // that is kept.
+      if(!e.masterId.isEmpty() && e.originalDate.isValid()) {
+        QStringList same;
+        for(const CalEvent& s0 : m_events.items()) {
+          if(s0.masterId == e.masterId && s0.originalDate == e.originalDate) {
+            same << s0.id;
+          }
+        }
+        if(!same.isEmpty() && !same.contains(e.id)) {
+          e.id = same.first();
+        }
+        for(const QString& dup : std::as_const(same)) {
+          if(dup != e.id) {
+            m_events.removeById(dup);
+          }
+        }
+      }
       // The UID is what makes importing the same file twice an update rather
       // than a second copy of everybody's calendar.
       const int existing = m_events.indexOfId(e.id);
@@ -3144,6 +3341,30 @@ QVariantMap AppController::importIcs(const QUrl& fileUrl) {
         imported++;
       }
       m_events.upsert(e);
+    }
+    // Occurrences the file cancels in a series it does not carry are deleted
+    // from the stored series, as deleteOccurrence would (TIME-9).
+    for(const heap::cal::IcsImport::Cancelled& c : parsed.cancelled) {
+      const int row = m_events.indexOfId(c.masterId);
+      if(row < 0 || !m_events.items().at(row).masterId.isEmpty()) {
+        continue;
+      }
+      CalEvent master = m_events.items().at(row);
+      QStringList doomed;
+      for(const CalEvent& ov : m_events.items()) {
+        if(ov.masterId == c.masterId && ov.originalDate == c.date) {
+          doomed << ov.id;
+        }
+      }
+      for(const QString& id : std::as_const(doomed)) {
+        m_events.removeById(id);
+      }
+      if(!master.exdates.contains(c.date)) {
+        master.exdates.append(c.date);
+        std::sort(master.exdates.begin(), master.exdates.end());
+        m_events.upsert(master);
+        updated++;
+      }
     }
     scope.setRedoLabel(tr_("ics.reimported").arg(imported + updated));
   }

@@ -642,6 +642,34 @@ inline QVector<QDate> expand(const RRule& rule, const QDate& start, const QDate&
   return out;
 }
 
+// The first day on or after `from` that the rule's own days produce for a
+// series starting on `start`, or an invalid date when there is none before the
+// series ends. Unlike expand(), DTSTART gets no special treatment: this is the
+// question "where should a series created on `from` really begin?". A weekly
+// Tue/Thu meeting created by a click on Monday starts on Tuesday, as in Google
+// and Outlook — the RFC would otherwise make that Monday an occurrence too
+// (TIME-5, audit 2026-09-30).
+inline QDate firstRuleDay(RRule rule, const QDate& start, const QDate& from) {
+  if(!rule.isValid() || !start.isValid() || !from.isValid()) {
+    return {};
+  }
+  rule.count = 0;
+  // The same guard expand() walks under.
+  constexpr qint64 kMaxPeriods = 40000;
+  for(qint64 p = 0; p < kMaxPeriods; ++p) {
+    for(const QDate& d : detail::periodDates(rule, start, p)) {
+      if(d < from) {
+        continue;
+      }
+      if(rule.until.isValid() && d > rule.until) {
+        return {};
+      }
+      return d;
+    }
+  }
+  return {};
+}
+
 // The first occurrence strictly after `after`, or an invalid date when the
 // series has ended. Used where only "the next one" is wanted.
 inline QDate nextAfter(const RRule& rule, const QDate& start, const QDate& after) {

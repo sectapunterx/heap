@@ -49,6 +49,17 @@ struct IcsImport {
   QVector<CalEvent> events;
   // VEVENTs that could not be read at all: no start, or cancelled.
   int skipped = 0;
+
+  // Occurrences a calendar cancelled (RECURRENCE-ID + STATUS:CANCELLED) of a
+  // series this file does not carry: the importer deletes them from the
+  // stored series of that id. One whose series is in the file is already an
+  // EXDATE on it (TIME-9, audit 2026-09-30).
+  struct Cancelled {
+    QString masterId;
+    QDate date;  // in the series' own clock, like an EXDATE
+  };
+
+  QVector<Cancelled> cancelled;
   // One line per thing that was degraded rather than lost.
   QStringList warnings;
   // False when the text had no VCALENDAR or VEVENT at all — not a calendar,
@@ -663,6 +674,8 @@ inline IcsImport parseIcs(const QString& text,
   };
 
   QVector<PendingOverride> pending;
+  // Cancelled occurrences, by the UID of their series; settled like overrides.
+  QVector<QPair<QString, detail::Instant>> cancelledIds;
 
   const auto reset = [&]() {
     uid.clear();
@@ -733,6 +746,14 @@ inline IcsImport parseIcs(const QString& text,
       }
       inEvent = false;
 
+      // A cancelled occurrence of a series is how Google, Outlook and CalDAV
+      // delete one meeting of many. It is a deletion, not an event that
+      // failed to read: counted as skipped, it left the meeting standing
+      // (TIME-9, audit 2026-09-30).
+      if(cancelled && recurrenceId.valid && !uid.isEmpty()) {
+        cancelledIds.append({uid, recurrenceId});
+        continue;
+      }
       if(cancelled || !dtStart.valid) {
         out.skipped++;
         continue;
@@ -954,6 +975,35 @@ inline IcsImport parseIcs(const QString& text,
     const QTimeZone mz = it != masters.constEnd() ? zoneOf(out.events.at(*it)) : QTimeZone();
     const QDateTime at = detail::instantFor(rid, zones, display);
     ov.originalDate = at.toTimeZone(mz.isValid() ? mz : display).date();
+  }
+  QSet<QString> dropped;
+  for(const auto& [masterUid, rid] : std::as_const(cancelledIds)) {
+    const auto it = masters.constFind(masterUid);
+    QDate day = rid.date;
+    if(!rid.dateOnly && (!rid.tzid.isEmpty() || rid.utc)) {
+      const QTimeZone mz = it != masters.constEnd() ? zoneOf(out.events.at(*it)) : QTimeZone();
+      day = detail::instantFor(rid, zones, display).toTimeZone(mz.isValid() ? mz : display).date();
+    }
+    if(!day.isValid()) {
+      continue;
+    }
+    if(it == masters.constEnd()) {
+      out.cancelled.append({masterUid, day});
+      continue;
+    }
+    CalEvent& m = out.events[*it];
+    if(!m.exdates.contains(day)) {
+      m.exdates.append(day);
+      std::sort(m.exdates.begin(), m.exdates.end());
+    }
+    dropped.insert(masterUid + QLatin1Char('|') + day.toString(Qt::ISODate));
+  }
+  // An override of a cancelled occurrence in the same file goes with it.
+  // Removed only now: `masters` holds indices into the list.
+  if(!dropped.isEmpty()) {
+    out.events.removeIf([&](const CalEvent& e) {
+      return !e.masterId.isEmpty() && dropped.contains(e.masterId + QLatin1Char('|') + e.originalDate.toString(Qt::ISODate));
+    });
   }
   return out;
 }
