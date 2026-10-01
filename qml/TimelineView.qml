@@ -315,8 +315,9 @@ Item {
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
+                    objectName: "timeline-show-done"
                     radius: Theme.radiusPill
-                    color: root.showDone ? Theme.accentSoft : Theme.panel2
+                    color: root.showDone ? Theme.accentSoft : (showDoneMA.hovered ? Theme.panel3 : Theme.panel2)
                     border.color: root.showDone ? Theme.accent : Theme.border
                     border.width: 1
                     implicitWidth: showDoneRow.implicitWidth + 16
@@ -328,10 +329,14 @@ Item {
                         Rectangle { width: 8; height: 8; radius: Theme.radiusXs; color: Theme.stDone }
                         Text { text: I18n.t("timeline.showDone"); color: root.showDone ? Theme.accentStrong : Theme.textMuted; font.pixelSize: Theme.fsMd }
                     }
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.toggleShowDone()
+                    ClickArea {
+                        id: showDoneMA
+                        label: I18n.t("timeline.showDone")
+                        showTip: false
+                        role: Accessible.CheckBox
+                        checkable: true
+                        checked: root.showDone
+                        onActivated: root.toggleShowDone()
                     }
                 }
             }
@@ -391,13 +396,22 @@ Item {
                     // Left side — label / marker, on the bucket's first row only
                     ColumnLayout {
                         id: labelCol
+                        objectName: "timeline-label-col"
+                        // One width for every bucket (design audit DES-12): a
+                        // preferred width alone let "На следующей неделе" push
+                        // its column wider, and that bucket's rows started
+                        // ~32px right of the others. A long name wraps instead.
                         Layout.preferredWidth: 160
+                        Layout.minimumWidth: 160
+                        Layout.maximumWidth: 160
                         Layout.alignment: Qt.AlignTop
                         spacing: Theme.spXs
                         opacity: rowItem.first ? 1 : 0
                         RowLayout {
+                            Layout.fillWidth: true
                             spacing: Theme.spMd
                             Rectangle {
+                                Layout.alignment: Qt.AlignTop
                                 width: 26; height: 26; radius: 13
                                 color: rowItem.meta ? rowItem.meta.color : "transparent"
                                 Text {
@@ -415,6 +429,8 @@ Item {
                                      : Theme.text
                                 font.pixelSize: Theme.fsLg
                                 font.weight: Font.DemiBold
+                                Layout.fillWidth: true
+                                wrapMode: Text.Wrap
                             }
                         }
                         Text {
@@ -466,7 +482,7 @@ Item {
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t(root._filtering ? "timeline.empty.hint" : "timeline.empty.none.hint")
+                        text: root._filtering ? I18n.t("timeline.empty.hint") : I18n.t("timeline.empty.none.hint").arg(AppController.shortcutFor("task.new"))
                         color: Theme.textDim; font.pixelSize: Theme.fsMd
                     }
                 }

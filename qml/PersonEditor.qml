@@ -248,16 +248,19 @@ Popup {
                     Repeater {
                         model: root.swatches
                         delegate: Rectangle {
+                            id: swatch
                             required property string modelData
                             required property int index
                             width: 22; height: 22; radius: 11
                             color: modelData
                             border.color: colorSwatch.selectedIndex === index ? Theme.text : "transparent"
                             border.width: 2
-                            MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: colorSwatch.selectedIndex = index
+                            ClickArea {
+                                label: I18n.t("swatch.name").arg(swatch.index + 1)
+                                role: Accessible.RadioButton
+                                checkable: true
+                                checked: colorSwatch.selectedIndex === swatch.index
+                                onActivated: colorSwatch.selectedIndex = swatch.index
                             }
                         }
                     }

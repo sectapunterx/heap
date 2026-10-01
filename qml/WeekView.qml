@@ -457,8 +457,16 @@ Item {
                 anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.sp2xl
                 spacing: Theme.spMd
 
+                // An arrow says nothing to a screen reader, and the tooltip
+                // names the key as bound now (design audit DES-22).
                 PillButton {
+                    id: prevWeekBtn
+                    objectName: "week-prev"
                     text: "←"
+                    Accessible.name: I18n.t("miniweek.prevWeek")
+                    ToolTip.visible: prevWeekBtn.hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: I18n.t("miniweek.prevWeek") + "  " + AppController.shortcutFor("cal.prev")
                     onClicked: root.step(-1)
                 }
                 ColumnLayout {
@@ -496,11 +504,21 @@ Item {
                     onClicked: root.railWanted = !root.railWanted
                 }
                 PillButton {
+                    id: todayBtn
                     text: I18n.t("common.today")
+                    ToolTip.visible: todayBtn.hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: I18n.t("common.today") + "  " + AppController.shortcutFor("cal.today")
                     onClicked: AppController.selectedDate = AppController.today
                 }
                 PillButton {
+                    id: nextWeekBtn
+                    objectName: "week-next"
                     text: "→"
+                    Accessible.name: I18n.t("miniweek.nextWeek")
+                    ToolTip.visible: nextWeekBtn.hovered
+                    ToolTip.delay: 500
+                    ToolTip.text: I18n.t("miniweek.nextWeek") + "  " + AppController.shortcutFor("cal.next")
                     onClicked: root.step(1)
                 }
             }
@@ -629,6 +647,7 @@ Item {
                                 Repeater {
                                     model: headCol.modelData.tasks.slice(0, 4)
                                     delegate: Rectangle {
+                                        id: dueChip
                                         required property var modelData
                                         readonly property bool _selected: AppController.selectionCount >= 0
                                             && AppController.isTaskSelected(modelData.id)
@@ -671,12 +690,29 @@ Item {
                                                 color: Theme.priorityColor(modelData.priority)
                                             }
                                         }
+                                        // The keyboard's way in (design audit
+                                        // DES-19). Under the MouseArea and deaf
+                                        // to the pointer: a click still goes
+                                        // there, with its Ctrl / Shift.
+                                        ClickArea {
+                                            objectName: "week-due-" + dueChip.modelData.id
+                                            label: dueChip.modelData.title
+                                            showTip: false
+                                            acceptedButtons: Qt.NoButton
+                                            onActivated: chipMA.open()
+                                        }
                                         MouseArea {
                                             id: chipMA
                                             anchors.fill: parent
                                             hoverEnabled: true
                                             cursorShape: Qt.PointingHandCursor
                                             acceptedButtons: Qt.LeftButton
+                                            // A plain click, and Return on the
+                                            // ClickArea above.
+                                            function open() {
+                                                if (AppController.selectionCount > 0) AppController.clearSelection();
+                                                root.taskClicked(modelData.id);
+                                            }
                                             onClicked: (mouse) => {
                                                 const ctrl = (mouse.modifiers & Qt.ControlModifier) !== 0;
                                                 const shift = (mouse.modifiers & Qt.ShiftModifier) !== 0;
@@ -685,8 +721,7 @@ Item {
                                                 } else if (shift) {
                                                     root._rangeSelect(modelData.id);
                                                 } else {
-                                                    if (AppController.selectionCount > 0) AppController.clearSelection();
-                                                    root.taskClicked(modelData.id);
+                                                    chipMA.open();
                                                 }
                                             }
                                             ToolTip.visible: containsMouse
@@ -702,16 +737,13 @@ Item {
                                 Text {
                                     visible: headCol.modelData.tasks.length > 4
                                     text: I18n.t("week.more").arg(headCol.modelData.tasks.length - 4)
-                                    color: moreMA.containsMouse ? Theme.accentStrong : Theme.textDim
+                                    color: moreMA.hovered ? Theme.accentStrong : Theme.textDim
                                     font.family: Theme.fontMono
                                     font.pixelSize: Theme.fsXs
-                                    MouseArea {
+                                    ClickArea {
                                         id: moreMA
-                                        anchors.fill: parent
-                                        anchors.margins: -4
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: AppController.selectedDate = headCol.modelData.date
+                                        label: I18n.t("cal.moreOnDay").arg(headCol.modelData.tasks.length - 4)
+                                        onActivated: AppController.selectedDate = headCol.modelData.date
                                     }
                                 }
                                 Text {
@@ -785,7 +817,11 @@ Item {
                             elide: Text.ElideRight
                         }
 
-                        TapHandler { onTapped: root.eventClicked(weekBar.modelData.id, weekBar.modelData.occ) }
+                        ClickArea {
+                            label: weekBar.modelData.title || ""
+                            showTip: false
+                            onActivated: root.eventClicked(weekBar.modelData.id, weekBar.modelData.occ)
+                        }
                     }
                 }
             }
@@ -1065,6 +1101,18 @@ Item {
                                 }
                             }
 
+                            // Opening from the keyboard (design audit DES-19).
+                            // Under the drag areas and deaf to the pointer, so
+                            // a press still starts a move or a resize.
+                            ClickArea {
+                                objectName: "week-event-open"
+                                label: weEv.modelData.title
+                                showTip: false
+                                acceptedButtons: Qt.NoButton
+                                cursorShape: Qt.ArrowCursor
+                                onActivated: weMove.open()
+                            }
+
                             // Move-drag — vertical = time, horizontal = day.
                             MouseArea {
                                 id: weMove
@@ -1080,6 +1128,9 @@ Item {
                                 property real baseX: 0
                                 property real baseY: 0
                                 property bool didDrag: false
+                                // A click that did not drag, and Return on the
+                                // ClickArea below.
+                                function open() { root.eventClicked(weEv.modelData.id, weEv.modelData.occ); }
 
                                 onPressed: (mouse) => {
                                     grabX = mouse.x; grabY = mouse.y;
@@ -1120,7 +1171,7 @@ Item {
                                                          () => { if (weEv) { weEv.dragDx = 0; weEv.dragDy = 0; } });
                                         return;
                                     }
-                                    root.eventClicked(weEv.modelData.id, weEv.modelData.occ);
+                                    weMove.open();
                                     weEv.dragDx = 0; weEv.dragDy = 0;
                                     didDrag = false;
                                 }
@@ -1203,7 +1254,7 @@ Item {
                             width: _slotW - (_slot.cols > 1 ? 2 : 0)
                             height: Math.max(18, (wkBlock.modelData.end - wkBlock.modelData.start) * root.hourH - 2)
                             radius: Theme.radiusSm
-                            color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.containsMouse ? 0.18 : 0.10)
+                            color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.hovered ? 0.18 : 0.10)
                             border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.6)
                             border.width: 1
                             z: 5
@@ -1216,12 +1267,11 @@ Item {
                                 font.weight: Font.DemiBold
                                 elide: Text.ElideRight
                             }
-                            MouseArea {
+                            ClickArea {
                                 id: wkBlockMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: root.taskClicked(wkBlock.modelData.id)
+                                label: wkBlock.modelData.title || ""
+                                showTip: false
+                                onActivated: root.taskClicked(wkBlock.modelData.id)
                             }
                         }
                     }

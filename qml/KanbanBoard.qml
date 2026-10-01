@@ -397,6 +397,13 @@ Item {
         contentHeight: height
         flickableDirection: Flickable.HorizontalFlick
         clip: true
+        // The columns that do not fit sit off to the right with nothing to
+        // say so but a card cut in half (design audit DES-6): while the board
+        // overflows, its scrollbar stays in view.
+        ScrollBar.horizontal: ThinScrollBar {
+            objectName: "board-hscrollbar"
+            policy: hscroll.contentWidth > hscroll.width ? ScrollBar.AlwaysOn : ScrollBar.AsNeeded
+        }
         // pressDelay: 0 — keep card-drag activation instant on press.
         // Horizontal flick by dragging empty board space is rarely used
         // on desktop (mouse wheel handles it via WheelHandler below).
@@ -462,6 +469,12 @@ Item {
                     // pointer touched the column name (or one of the icons),
                     // which made them impossible to click.
                     property bool headerHovered: false
+                    // The icons also show while the keyboard is on one of them
+                    // (design audit DES-19): hidden at rest, they stay on the
+                    // Tab path, as IconButton's do.
+                    readonly property bool headerKeyFocus: moveLeftIcon.keyFocused || moveRightIcon.keyFocused
+                                                           || deleteIcon.keyFocused || foldIcon.keyFocused
+                    readonly property bool headerRevealed: col.headerHovered || col.headerKeyFocus
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
@@ -513,14 +526,13 @@ Item {
                                 }
                             }
                         }
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.toggleCollapsed(col.statusId)
-                            ToolTip.visible: containsMouse
-                            ToolTip.delay: 400
-                            ToolTip.text: I18n.t("kanban.expand")
-                            hoverEnabled: true
+                        ClickArea {
+                            objectName: "column-expand"
+                            enabled: col.folded
+                            label: I18n.t("kanban.expand") + " " + col.statusName
+                            tip: I18n.t("kanban.expand")
+                            shortcutId: "board.collapseColumn"
+                            onActivated: root.toggleCollapsed(col.statusId)
                         }
                         DropArea {
                             anchors.fill: parent
@@ -543,6 +555,16 @@ Item {
                             Layout.preferredHeight: 38
                             color: Theme.panel2
                             HoverHandler { onHoveredChanged: col.headerHovered = hovered }
+                            // The header's menu from the keyboard: Menu or
+                            // Shift+F10 on any of its buttons, which pass the
+                            // key up to here.
+                            Keys.onMenuPressed: colHeaderMenu.popup()
+                            Keys.onPressed: (event) => {
+                                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                                    colHeaderMenu.popup();
+                                    event.accepted = true;
+                                }
+                            }
                             Rectangle {
                                 anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
                                 height: 1; color: Theme.border
@@ -562,22 +584,18 @@ Item {
                                     Rectangle {
                                         anchors.fill: parent
                                         radius: Theme.radiusSm
-                                        color: swatchMA.containsMouse ? Theme.panel3 : "transparent"
+                                        color: swatchMA.hovered ? Theme.panel3 : "transparent"
                                     }
                                     Rectangle {
                                         anchors.centerIn: parent
                                         width: 8; height: 8; radius: 4
                                         color: col.statusColor
                                     }
-                                    MouseArea {
+                                    ClickArea {
                                         id: swatchMA
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: colorPopup.openFor(col.statusId, col.statusColor, colorSwatch)
-                                        ToolTip.visible: containsMouse
-                                        ToolTip.delay: 400
-                                        ToolTip.text: I18n.t("kanban.changeColor")
+                                        objectName: "column-color"
+                                        label: I18n.t("kanban.changeColor")
+                                        onActivated: colorPopup.openFor(col.statusId, col.statusColor, colorSwatch)
                                     }
                                 }
                                 Item {
@@ -585,6 +603,7 @@ Item {
                                     Layout.preferredHeight: 22
                                     Text {
                                         id: colName
+                                        objectName: "column-name"
                                         visible: !col.renaming
                                         anchors.verticalCenter: parent.verticalCenter
                                         // The name as the user wrote it. Uppercase with
@@ -633,6 +652,7 @@ Item {
                                     }
                                 }
                                 Rectangle {
+                                    id: cntPill
                                     radius: Theme.radiusPill
                                     color: col.overWip ? Theme.withAlpha(Theme.danger, 0.18) : Theme.panel3
                                     border.color: col.overWip ? Theme.danger : "transparent"
@@ -654,52 +674,79 @@ Item {
                                     HoverHandler { id: wipHover }
                                 }
 
-                                // Move-left / Move-right / Delete. `visible` only
-                                // carries the structural conditions; the reveal
-                                // rides on opacity so the header doesn't reflow
-                                // (name and counter used to jump sideways) and
-                                // the icons keep a stable position to click.
-                                HoverIcon {
-                                    glyph: "‹"; tip: I18n.t("kanban.moveLeft")
-                                    visible: !col.isFirst
-                                    revealed: col.headerHovered
-                                    onActivated: AppController.moveStatus(col.statusId, col.index - 1)
-                                }
-                                HoverIcon {
-                                    glyph: "›"; tip: I18n.t("kanban.moveRight")
-                                    visible: !col.isLast
-                                    revealed: col.headerHovered
-                                    onActivated: AppController.moveStatus(col.statusId, col.index + 1)
-                                }
-                                HoverIcon {
-                                    glyph: "×"; tip: I18n.t("kanban.deleteColumn")
-                                    danger: true
-                                    visible: AppController.statuses.length > 1
-                                    revealed: col.headerHovered
-                                    onActivated: root.requestDeleteColumn(col.statusId, col.statusName)
-                                }
-
-                                HoverIcon {
-                                    objectName: "column-fold"
-                                    glyph: "⇤"; tip: I18n.t("kanban.collapse")
-                                    revealed: col.headerHovered
-                                    onActivated: root.toggleCollapsed(col.statusId)
-                                }
                                 Rectangle {
                                     width: 22; height: 22; radius: Theme.radiusSm
-                                    color: addMA.containsMouse ? Theme.panel3 : "transparent"
+                                    color: addMA.hovered || addMA.keyboardFocused ? Theme.panel3 : "transparent"
                                     Text {
                                         anchors.centerIn: parent
                                         text: "+"
-                                        color: addMA.containsMouse ? Theme.text : Theme.textDim
+                                        color: addMA.hovered || addMA.keyboardFocused ? Theme.text : Theme.textDim
                                         font.pixelSize: Theme.fsLg
                                     }
-                                    MouseArea {
+                                    ClickArea {
                                         id: addMA
-                                        anchors.fill: parent
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: root.createInStatus(col.statusId)
+                                        objectName: "column-add"
+                                        label: I18n.t("kanban.addTask")
+                                        onActivated: root.createInStatus(col.statusId)
+                                    }
+                                }
+                            }
+                            // Move-left / Move-right / Delete / Fold, laid over the
+                            // end of the name while the pointer is on the header
+                            // (design audit DES-6). They used to hold four slots
+                            // in the row even while hidden, which left the name
+                            // about 100px: "To Do" read "To …" and "К выполнению"
+                            // "К вып…" on a 1600px window. Laid over, the name
+                            // gets the whole width at rest and still nothing
+                            // reflows when the icons fade in. `visible` carries
+                            // only the structural conditions.
+                            Rectangle {
+                                objectName: "column-hover-icons"
+                                anchors.verticalCenter: parent.verticalCenter
+                                anchors.right: parent.right
+                                anchors.rightMargin: Theme.spMd + 22 + Theme.spMd + cntPill.width + Theme.spMd
+                                width: hoverIcons.implicitWidth + Theme.spSm
+                                height: hoverIcons.implicitHeight
+                                color: Theme.panel2
+                                opacity: col.headerRevealed ? 1 : 0
+                                visible: !col.renaming
+                                z: 2
+                                Row {
+                                    id: hoverIcons
+                                    anchors.right: parent.right
+                                    spacing: Theme.spXs
+                                    HoverIcon {
+                                        id: moveLeftIcon
+                                        objectName: "column-move-left"
+                                        glyph: "‹"; tip: I18n.t("kanban.moveLeft")
+                                        visible: !col.isFirst
+                                        revealed: col.headerRevealed
+                                        onActivated: AppController.moveStatus(col.statusId, col.index - 1)
+                                    }
+                                    HoverIcon {
+                                        id: moveRightIcon
+                                        objectName: "column-move-right"
+                                        glyph: "›"; tip: I18n.t("kanban.moveRight")
+                                        visible: !col.isLast
+                                        revealed: col.headerRevealed
+                                        onActivated: AppController.moveStatus(col.statusId, col.index + 1)
+                                    }
+                                    HoverIcon {
+                                        id: deleteIcon
+                                        objectName: "column-delete"
+                                        glyph: "×"; tip: I18n.t("kanban.deleteColumn")
+                                        danger: true
+                                        visible: AppController.statuses.length > 1
+                                        revealed: col.headerRevealed
+                                        onActivated: root.requestDeleteColumn(col.statusId, col.statusName)
+                                    }
+                                    HoverIcon {
+                                        id: foldIcon
+                                        objectName: "column-fold"
+                                        glyph: "⇤"; tip: I18n.t("kanban.collapse")
+                                        shortcutId: "board.collapseColumn"
+                                        revealed: col.headerRevealed
+                                        onActivated: root.toggleCollapsed(col.statusId)
                                     }
                                 }
                             }
@@ -1034,7 +1081,7 @@ Item {
                 width: 200
                 height: rowL.height
                 radius: Theme.radius
-                color: addColMA.containsMouse ? Theme.panel2 : "transparent"
+                color: addColMA.hovered || addColMA.keyboardFocused ? Theme.panel2 : "transparent"
                 border.color: Theme.border
                 border.width: 1
 
@@ -1044,22 +1091,22 @@ Item {
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: "+"
-                        color: addColMA.containsMouse ? Theme.text : Theme.textDim
+                        color: addColMA.hovered || addColMA.keyboardFocused ? Theme.text : Theme.textDim
                         font.pixelSize: Theme.fsXl
                     }
                     Text {
                         anchors.horizontalCenter: parent.horizontalCenter
                         text: I18n.t("kanban.newColumn")
-                        color: addColMA.containsMouse ? Theme.text : Theme.textDim
+                        color: addColMA.hovered || addColMA.keyboardFocused ? Theme.text : Theme.textDim
                         font.pixelSize: Theme.fsMd
                     }
                 }
-                MouseArea {
+                ClickArea {
                     id: addColMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: addColumnPopup.open()
+                    objectName: "board-add-column"
+                    label: I18n.t("kanban.newColumn")
+                    showTip: false
+                    onActivated: addColumnPopup.open()
                 }
             }
         }
@@ -1119,13 +1166,22 @@ Item {
                 Repeater {
                     model: addColumnPopup.swatches
                     delegate: Rectangle {
+                        id: newSwatch
                         required property string modelData
+                        required property int index
+                        readonly property bool isPicked: String(addColumnPopup.picked).toLowerCase() === modelData.toLowerCase()
                         width: 24; height: 24; radius: 12
                         color: modelData
-                        border.color: String(addColumnPopup.picked).toLowerCase() === modelData.toLowerCase() ? Theme.text : Theme.border
+                        border.color: newSwatch.isPicked ? Theme.text : Theme.border
                         border.width: 2
-                        MouseArea { anchors.fill: parent; cursorShape: Qt.PointingHandCursor
-                                   onClicked: addColumnPopup.picked = modelData }
+                        ClickArea {
+                            label: I18n.t("kanban.swatch").arg(newSwatch.index + 1)
+                            showTip: false
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: newSwatch.isPicked
+                            onActivated: addColumnPopup.picked = newSwatch.modelData
+                        }
                     }
                 }
             }
@@ -1187,16 +1243,18 @@ Item {
             Repeater {
                 model: colorPopup.swatches
                 delegate: Rectangle {
+                    id: pickSwatch
                     required property string modelData
+                    required property int index
                     width: 22; height: 22; radius: 11
                     color: modelData
                     border.color: Theme.border
                     border.width: 1
-                    MouseArea {
-                        anchors.fill: parent
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            AppController.setStatusColor(colorPopup.forStatusId, modelData);
+                    ClickArea {
+                        label: I18n.t("kanban.swatch").arg(pickSwatch.index + 1)
+                        showTip: false
+                        onActivated: {
+                            AppController.setStatusColor(colorPopup.forStatusId, pickSwatch.modelData);
                             colorPopup.close();
                         }
                     }
@@ -1221,39 +1279,42 @@ Item {
         id: hoverIcon
         property string glyph: ""
         property string tip: ""
+        property string shortcutId: ""
         property bool danger: false
         // Faded out rather than hidden: the slot stays in the header layout, so
         // nothing shifts when the pointer arrives and the icon is already under
-        // the cursor when it fades in. `enabled` keeps the invisible state from
-        // being clickable.
+        // the cursor when it fades in. Hidden, it takes no clicks, but it stays
+        // on the Tab path and shows itself when the keyboard lands on it
+        // (design audit DES-19).
         property bool revealed: false
+        readonly property bool keyFocused: hoverIconMA.keyboardFocused
+        readonly property bool shown: revealed || keyFocused
+        readonly property bool hot: hoverIconMA.hovered || keyFocused
         signal activated()
-        Layout.preferredWidth: 20
-        Layout.preferredHeight: 20
+        width: 20
+        height: 20
         radius: Theme.radiusSm
-        opacity: revealed ? 1 : 0
-        enabled: revealed
+        opacity: shown ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
-        color: hoverIconMA.containsMouse ? (danger ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel3)
-                                         : "transparent"
-        border.color: hoverIconMA.containsMouse ? (danger ? Theme.danger : Theme.border) : "transparent"
+        color: hoverIcon.hot ? (danger ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel3)
+                             : "transparent"
+        border.color: hoverIcon.hot ? (danger ? Theme.danger : Theme.border) : "transparent"
         border.width: 1
         Text {
             anchors.centerIn: parent
             text: hoverIcon.glyph
-            color: hoverIconMA.containsMouse ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
+            color: hoverIcon.hot ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
             font.pixelSize: Theme.fsMd
             font.weight: Font.DemiBold
         }
-        MouseArea {
+        ClickArea {
             id: hoverIconMA
-            anchors.fill: parent
-            hoverEnabled: true
-            cursorShape: Qt.PointingHandCursor
-            onClicked: hoverIcon.activated()
-            ToolTip.visible: containsMouse && hoverIcon.tip.length > 0
-            ToolTip.text: hoverIcon.tip
-            ToolTip.delay: 400
+            label: hoverIcon.tip
+            shortcutId: hoverIcon.shortcutId
+            showTip: hoverIcon.shown
+            acceptedButtons: hoverIcon.shown ? Qt.LeftButton : Qt.NoButton
+            cursorShape: hoverIcon.shown ? Qt.PointingHandCursor : Qt.ArrowCursor
+            onActivated: hoverIcon.activated()
         }
     }
 
@@ -1300,7 +1361,10 @@ Item {
             width: parent.width
             horizontalAlignment: Text.AlignHCenter
             wrapMode: Text.WordWrap
-            text: root._allRows > 0 ? I18n.t("board.empty.archivedHint") : I18n.t("board.empty.hint")
+            // The keys as bound now, not as they shipped (design audit DES-15).
+            text: root._allRows > 0
+                  ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
+                  : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
             color: Theme.textMuted
             font.pixelSize: Theme.fsMd
         }

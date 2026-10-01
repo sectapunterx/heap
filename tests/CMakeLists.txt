@@ -356,6 +356,8 @@ heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 # with the no-op fallback.
 set(HEAP_PLATFORM_SOURCES
         test_global_hotkey.cpp
+        test_accessibility.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Accessibility.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
 )

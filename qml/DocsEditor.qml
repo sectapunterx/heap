@@ -266,17 +266,20 @@ Popup {
                 Repeater {
                     model: root.accentPalette
                     delegate: Rectangle {
+                        id: accentSwatch
                         required property string modelData
                         required property int index
+                        readonly property bool picked: String(root.draft.accent || "").toLowerCase() === modelData.toLowerCase()
                         width: 24; height: 24; radius: 12
                         color: modelData
-                        border.color: String(root.draft.accent || "").toLowerCase() === modelData.toLowerCase()
-                                      ? Theme.text : Theme.border
+                        border.color: picked ? Theme.text : Theme.border
                         border.width: 2
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.draft.accent = modelData
+                        ClickArea {
+                            label: I18n.t("swatch.name").arg(accentSwatch.index + 1)
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: accentSwatch.picked
+                            onActivated: root.draft.accent = accentSwatch.modelData
                         }
                     }
                 }
@@ -297,6 +300,7 @@ Popup {
                 Repeater {
                     model: (root.draft.customFields || []).length
                     delegate: RowLayout {
+                        id: fieldRow
                         required property int index
                         Layout.fillWidth: true
                         spacing: Theme.spSm
@@ -328,16 +332,15 @@ Popup {
                         }
                         Rectangle {
                             width: 26; height: 26; radius: Theme.radiusSm
-                            color: upMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            color: upMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             Text { anchors.centerIn: parent; text: "↑"; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
-                            MouseArea {
+                            ClickArea {
                                 id: upMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const i = parent.parent.index;
+                                objectName: "docs-field-up"
+                                label: I18n.t("docs.a11y.fieldUp")
+                                onActivated: {
+                                    const i = fieldRow.index;
                                     if (i <= 0) return;
                                     const list = root.draft.customFields.slice();
                                     const t = list[i]; list[i] = list[i-1]; list[i-1] = t;
@@ -347,16 +350,15 @@ Popup {
                         }
                         Rectangle {
                             width: 26; height: 26; radius: Theme.radiusSm
-                            color: dnMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            color: dnMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             Text { anchors.centerIn: parent; text: "↓"; color: Theme.textMuted; font.pixelSize: Theme.fsMd }
-                            MouseArea {
+                            ClickArea {
                                 id: dnMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const i = parent.parent.index;
+                                objectName: "docs-field-down"
+                                label: I18n.t("docs.a11y.fieldDown")
+                                onActivated: {
+                                    const i = fieldRow.index;
                                     const cur = root.draft.customFields || [];
                                     if (i >= cur.length - 1) return;
                                     const list = cur.slice();
@@ -367,16 +369,15 @@ Popup {
                         }
                         Rectangle {
                             width: 26; height: 26; radius: Theme.radiusSm
-                            color: delFMA.containsMouse ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
-                            border.color: delFMA.containsMouse ? Theme.danger : Theme.border; border.width: 1
-                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.containsMouse ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
-                            MouseArea {
+                            color: delFMA.hovered ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel2
+                            border.color: delFMA.hovered ? Theme.danger : Theme.border; border.width: 1
+                            Text { anchors.centerIn: parent; text: "×"; color: delFMA.hovered ? Theme.danger : Theme.textMuted; font.pixelSize: Theme.fsMd }
+                            ClickArea {
                                 id: delFMA
-                                anchors.fill: parent
-                                hoverEnabled: true
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: {
-                                    const i = parent.parent.index;
+                                objectName: "docs-field-remove"
+                                label: I18n.t("docs.a11y.fieldRemove")
+                                onActivated: {
+                                    const i = fieldRow.index;
                                     const list = (root.draft.customFields || []).slice();
                                     list.splice(i, 1);
                                     root.draft.customFields = list;
@@ -429,16 +430,19 @@ Popup {
                 Repeater {
                     model: root.contactPalette
                     delegate: Rectangle {
+                        id: avatarSwatch
                         required property string modelData
                         required property int index
                         width: 24; height: 24; radius: 12
                         color: modelData
                         border.color: root.draft.color === modelData ? Theme.text : Theme.border
                         border.width: 2
-                        MouseArea {
-                            anchors.fill: parent
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: root.draft.color = modelData
+                        ClickArea {
+                            label: I18n.t("swatch.name").arg(avatarSwatch.index + 1)
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: root.draft.color === avatarSwatch.modelData
+                            onActivated: root.draft.color = avatarSwatch.modelData
                         }
                     }
                 }

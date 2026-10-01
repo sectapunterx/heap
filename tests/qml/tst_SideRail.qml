@@ -71,6 +71,17 @@ TestCase {
         AppController.currentView = "board";
     }
 
+    // Design audit DES-11: Blocked and Review jump to their column on the
+    // board; the board stays the one place lit, not the board and "Blocked".
+    function test_a_column_jump_does_not_light_a_second_place() {
+        const rail = make('import TodoCpp; SideRail { height: 700 }');
+        AppController.focusStatusColumn("blocked");
+        compare(AppController.currentView, "board");
+        verify(findChild(rail, "rail-board").active);
+        verify(!findChild(rail, "rail-blocked").active);
+        verify(!findChild(rail, "rail-review").active);
+    }
+
     function test_shortcut_is_in_the_catalog() {
         verify(AppController.shortcutFor("rail.toggle").length > 0);
     }

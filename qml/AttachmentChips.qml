@@ -144,6 +144,10 @@ Flow {
         property string tip
         signal activated()
         text: glyph
+        // Not a Tab stop, but a screen reader can still name and press it.
+        Accessible.role: Accessible.Button
+        Accessible.name: cb.tip
+        Accessible.onPressAction: cb.activated()
         color: cbMA.containsMouse ? Theme.text : Theme.textDim
         font.pixelSize: Theme.fsSm
         MouseArea {

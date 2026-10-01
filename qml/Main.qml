@@ -1184,10 +1184,11 @@ ApplicationWindow {
         border.width: 1
 
         // Click anywhere on the pill → resume the tour.
-        MouseArea {
-            anchors.fill: parent
-            cursorShape: Qt.PointingHandCursor
-            onClicked: welcome.open()
+        ClickArea {
+            objectName: "resume-guide"
+            label: I18n.t("welcome.resume")
+            showTip: false
+            onActivated: welcome.open()
         }
         RowLayout {
             id: pillRow
@@ -1207,19 +1208,18 @@ ApplicationWindow {
                 Layout.preferredWidth: 22
                 Layout.preferredHeight: 22
                 radius: Theme.radiusSm
-                color: giveUpMA.containsMouse ? Theme.panel3 : "transparent"
+                color: giveUpMA.hovered ? Theme.panel3 : "transparent"
                 Text {
                     anchors.centerIn: parent
                     text: "✕"
-                    color: giveUpMA.containsMouse ? Theme.text : Theme.textMuted
+                    color: giveUpMA.hovered ? Theme.text : Theme.textMuted
                     font.pixelSize: Theme.fsMd
                 }
-                MouseArea {
+                ClickArea {
                     id: giveUpMA
-                    anchors.fill: parent
-                    hoverEnabled: true
-                    cursorShape: Qt.PointingHandCursor
-                    onClicked: welcome._finish()
+                    objectName: "resume-guide-give-up"
+                    label: I18n.t("welcome.giveUp")
+                    onActivated: welcome._finish()
                 }
             }
         }

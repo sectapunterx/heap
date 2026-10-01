@@ -156,12 +156,13 @@ Item {
             Repeater {
                 model: root.tocModel
                 delegate: Rectangle {
+                    id: tocRow
                     required property var modelData
                     Layout.fillWidth: true
                     Layout.preferredHeight: 28
                     radius: Theme.radiusMd
-                    color: tocMa.containsMouse ? Theme.panel2 : "transparent"
-                    border.color: tocMa.containsMouse ? Theme.border : "transparent"
+                    color: tocMa.hovered ? Theme.panel2 : "transparent"
+                    border.color: tocMa.hovered ? Theme.border : "transparent"
                     border.width: 1
                     RowLayout {
                         anchors.fill: parent
@@ -176,18 +177,19 @@ Item {
                         }
                         Text {
                             text: modelData.label
-                            color: tocMa.containsMouse ? Theme.accentStrong : Theme.text
+                            color: tocMa.hovered ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsMd
                             Layout.fillWidth: true
                             elide: Text.ElideRight
                         }
                     }
-                    MouseArea {
+                    ClickArea {
                         id: tocMa
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: root.anchorRequested(modelData.anchor)
+                        objectName: "help-toc-" + tocRow.modelData.anchor
+                        role: Accessible.Link
+                        label: tocRow.modelData.label
+                        showTip: false
+                        onActivated: root.anchorRequested(tocRow.modelData.anchor)
                     }
                 }
             }
@@ -1136,15 +1138,6 @@ Item {
             Body {
                 text: root.tr2("The horizontal line — the current time. Updates once a minute. Visible only when today is selected.",
                               "Горизонтальная линия — текущее время. Обновляется раз в минуту. Видна, только если выбран сегодняшний день.")
-            }
-
-            H3 {
-                text: root.tr2("Breadcrumbs in TopBar",
-                              "Хлебные крошки в верхней панели")
-            }
-            Body {
-                text: root.tr2("'Project / sprint / user' can be edited in place — click the breadcrumb you need. It's saved in settings.",
-                              "«Проект / неделя / пользователь» правятся на месте — нажмите нужную крошку (или Tab и Enter). Сохраняется в настройках.")
             }
 
             H3 {

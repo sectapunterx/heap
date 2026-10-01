@@ -894,7 +894,7 @@ Popup {
                             Layout.preferredWidth: 32
                             Layout.preferredHeight: 32
                             radius: Theme.radiusMd
-                            color: deadlineCalMA.containsMouse ? Theme.panel3 : Theme.panel2
+                            color: deadlineCalMA.hovered ? Theme.panel3 : Theme.panel2
                             border.color: Theme.border; border.width: 1
                             Rectangle {   // mini calendar glyph
                                 anchors.centerIn: parent
@@ -903,10 +903,11 @@ Popup {
                                 border.color: Theme.textMuted; border.width: 1
                                 Rectangle { width: parent.width; height: 3; color: Theme.textMuted; anchors.top: parent.top }
                             }
-                            MouseArea {
+                            ClickArea {
                                 id: deadlineCalMA
-                                anchors.fill: parent; hoverEnabled: true; cursorShape: Qt.PointingHandCursor
-                                onClicked: {
+                                objectName: "te-deadline-pick"
+                                label: I18n.t("editor.a11y.pickDeadline")
+                                onActivated: {
                                     const seed = (root._deadlinePreview && root._deadlinePreview.ok && root._deadlinePreview.start)
                                         ? root._deadlinePreview.start : null;
                                     deadlinePicker.openAt(seed, deadlineCalBtn);
@@ -1351,6 +1352,7 @@ Popup {
                     Repeater {
                         model: root._comments
                         delegate: ColumnLayout {
+                            id: commentRow
                             required property var modelData
                             Layout.fillWidth: true
                             spacing: Theme.sp2xs
@@ -1371,16 +1373,18 @@ Popup {
                                     objectName: "te-comment-link"
                                     visible: String(modelData.url || "").length > 0
                                     text: "↗ " + I18n.t("ticket.openComment")
-                                    color: commentLinkMA.containsMouse ? Theme.accent : Theme.accentStrong
+                                    // Hover underlines rather than turning
+                                    // to `accent`, which is 3.7:1 on heap.
+                                    // light (design audit DES-25).
+                                    color: Theme.accentStrong
+                                    font.underline: commentLinkMA.hovered || commentLinkMA.keyboardFocused
                                     font.pixelSize: Theme.fsXs
-                                    MouseArea {
+                                    ClickArea {
                                         id: commentLinkMA
-                                        anchors.fill: parent
-                                        anchors.margins: -3
-                                        hoverEnabled: true
-                                        cursorShape: Qt.PointingHandCursor
-                                        onClicked: {
-                                            const url = String(modelData.url || "");
+                                        role: Accessible.Link
+                                        label: I18n.t("ticket.a11y.openComment").arg(String(commentRow.modelData.author || ""))
+                                        onActivated: {
+                                            const url = String(commentRow.modelData.url || "");
                                             if (AppController.isSafeLink(url)) Qt.openUrlExternally(url);
                                         }
                                     }

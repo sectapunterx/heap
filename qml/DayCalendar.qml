@@ -930,8 +930,8 @@ Item {
                                 width: Math.max(20, colW - 3)
                                 height: Math.max(20, (taskBlock.modelData.end - taskBlock.modelData.start) * Theme.hourH - 2)
                                 radius: Theme.radiusMd
-                                color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.18 : 0.10)
-                                border.color: Theme.withAlpha(Theme.eventColor("focus"), openArea.containsMouse ? 0.9 : 0.5)
+                                color: Theme.withAlpha(Theme.eventColor("focus"), openArea.hovered ? 0.18 : 0.10)
+                                border.color: Theme.withAlpha(Theme.eventColor("focus"), openArea.hovered ? 0.9 : 0.5)
                                 border.width: 1
                                 z: 5
 
@@ -947,12 +947,14 @@ Item {
                                 // The block carried no MouseArea, so a click on it was
                                 // swallowed and the task never opened. Clicks must not
                                 // reach the create-an-event area underneath either.
-                                MouseArea {
+                                // The day's ↑/↓ walk only its events, so the
+                                // block is a Tab stop of its own (DES-19).
+                                ClickArea {
                                     id: openArea
-                                    anchors.fill: parent
-                                    hoverEnabled: true
-                                    cursorShape: Qt.PointingHandCursor
-                                    onClicked: root.taskClicked(taskBlock.id)
+                                    objectName: "taskblock-open"
+                                    label: taskBlock.title
+                                    showTip: false
+                                    onActivated: root.taskClicked(taskBlock.id)
                                 }
                             }
                         }

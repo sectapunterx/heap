@@ -91,6 +91,7 @@ Rectangle {
             NavButton {
                 text: "•"
                 tip: I18n.t("common.today")
+                shortcutId: "cal.today"
                 accent: true
                 onClicked: AppController.selectedDate = AppController.today
             }
@@ -201,6 +202,9 @@ Rectangle {
         id: nav
         property string text: ""
         property string tip: ""
+        // A catalogue shortcut the tooltip names, as bound now.
+        property string shortcutId: ""
+        readonly property string _keys: nav.shortcutId.length > 0 ? AppController.shortcutFor(nav.shortcutId) : ""
         property bool accent: false
         signal clicked()
         implicitWidth: 24; implicitHeight: 24
@@ -211,6 +215,8 @@ Rectangle {
         Accessible.name: nav.tip
         Keys.onSpacePressed: nav.clicked()
         Keys.onReturnPressed: nav.clicked()
+        Keys.onEnterPressed: nav.clicked()
+        Accessible.onPressAction: nav.clicked()
         FocusRing {}
         Text {
             anchors.centerIn: parent
@@ -226,7 +232,7 @@ Rectangle {
             onClicked: nav.clicked()
             ToolTip.visible: containsMouse && nav.tip.length > 0
             ToolTip.delay: 400
-            ToolTip.text: nav.tip
+            ToolTip.text: nav._keys.length > 0 ? nav.tip + "  " + nav._keys : nav.tip
         }
     }
 }

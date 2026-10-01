@@ -139,6 +139,10 @@ Rectangle {
                     objectName: "rail-board"
                     iconSource: "qrc:/brand/icons/heap-01-board.svg"
                     label: I18n.t("siderail.board"); tooltipText: I18n.t("siderail.tip.board"); shortcutId: "view.board"
+                    // Blocked and Review below jump to their column on the
+                    // board; they are not places of their own, so they do not
+                    // light up next to it (design audit DES-11: the board and
+                    // "Blocked" read as two places open at once).
                     active: AppController.currentView === "board"
                     onActivated: AppController.currentView = "board" }
                 RailBtn {
@@ -181,7 +185,6 @@ Rectangle {
                     label: I18n.t("siderail.blocked"); tooltipText: I18n.t("siderail.tip.blocked")
                     countText: root._blockedCount > 0 ? root._blockedCount : ""
                     countColor: Theme.danger
-                    active: AppController.currentView === "board" && AppController.focusedStatus === "blocked"
                     onActivated: AppController.focusStatusColumn("blocked") }
                 RailBtn {
                     expanded: root.expanded
@@ -190,7 +193,6 @@ Rectangle {
                     label: I18n.t("siderail.review"); tooltipText: I18n.t("siderail.tip.review")
                     countText: root._reviewCount > 0 ? root._reviewCount : ""
                     countColor: Theme.accent
-                    active: AppController.currentView === "board" && AppController.focusedStatus === "review"
                     onActivated: AppController.focusStatusColumn("review") }
 
                 SectionHead {

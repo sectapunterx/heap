@@ -170,7 +170,7 @@ Item {
                         visible: card.modelData.actionLabel.length > 0
                         anchors.verticalCenter: parent.verticalCenter
                         radius: Theme.radiusSm
-                        color: actionMA.containsMouse ? Theme.accentSoft : "transparent"
+                        color: actionMA.hovered ? Theme.accentSoft : "transparent"
                         border.color: Theme.accent
                         border.width: 1
                         implicitWidth: actionT.implicitWidth + 14
@@ -183,12 +183,12 @@ Item {
                             font.pixelSize: Theme.fsSm
                             font.weight: Font.DemiBold
                         }
-                        MouseArea {
+                        ClickArea {
                             id: actionMA
-                            anchors.fill: parent
-                            hoverEnabled: true
-                            cursorShape: Qt.PointingHandCursor
-                            onClicked: {
+                            objectName: "toast-action"
+                            label: card.modelData.actionLabel
+                            showTip: false
+                            onActivated: {
                                 const fn = card.modelData.actionFn;
                                 root.dismiss(card.modelData.id);
                                 if (typeof fn === "function") fn();
