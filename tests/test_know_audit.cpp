@@ -256,12 +256,15 @@ TEST_F(KnowAuditTest, Know31_AnImageBehindAJunctionIsNotTaken) {
     GTEST_SKIP() << "could not create a junction";
   }
 
+  // The test profile is shared between runs, so judge what the import added.
+  const QStringList before = QDir(app_->attachmentsDir()).entryList(QDir::Files);
+
   app_->importNotesFolder(url(QStringLiteral("vault")));
 
   ASSERT_EQ(app_->notes()->rowCount(), 1);
   EXPECT_TRUE(app_->notes()->items().at(0).body.contains(QStringLiteral("](linked/secret.png)")))
       << app_->notes()->items().at(0).body.toStdString();
-  EXPECT_TRUE(QDir(app_->attachmentsDir()).entryList(QDir::Files).isEmpty());
+  EXPECT_EQ(QDir(app_->attachmentsDir()).entryList(QDir::Files), before);
 #else
   GTEST_SKIP() << "junctions are Windows-only";
 #endif
