@@ -125,6 +125,25 @@ TestCase {
 
     // ── Recents ──────────────────────────────────────────────────────
 
+    // KNOW-5: two notes' title rows (same profile, line 0) shared one recent
+    // key, so opening "Beta" put "Alpha" in the recents.
+    function test_recent_note_is_the_note_that_was_opened() {
+        const saved = AppController.appSettingsJson;
+        const cp = make('import TodoCpp; CommandPalette { }');
+        cp._entries = [
+            { kind: "note", noteId: "n-alpha", profileId: "p", line: 0, label: "Alpha note", sub: "" },
+            { kind: "note", noteId: "n-beta", profileId: "p", line: 0, label: "Beta note", sub: "" },
+            { kind: "docPage", pageId: "d-1", line: 0, label: "Same", sub: "" },
+            { kind: "docPage", pageId: "d-2", line: 0, label: "Same", sub: "" }
+        ];
+        verify(cp._key(cp._entries[0]) !== cp._key(cp._entries[1]));
+        verify(cp._key(cp._entries[2]) !== cp._key(cp._entries[3]));
+        cp._remember(cp._entries[1]);
+        const out = cp._filterAndScore("");
+        AppController.appSettingsJson = saved;
+        compare(out[0].noteId, "n-beta");
+    }
+
     function test_empty_query_shows_recents_then_commands() {
         const saved = AppController.appSettingsJson;
         const cp = make('import TodoCpp; CommandPalette { }');

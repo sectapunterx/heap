@@ -95,7 +95,10 @@ Popup {
     function _key(e) {
         if (!e) return "";
         const id = e.commandId || e.taskId || e.personId || e.templateName || e.eventId
-                || (e.kind === "note" ? (e.profileId || "") + "#" + (e.line || 0) : "")
+                // Which note and which heading in it: profile + line alone
+                // made every note's title row the same key (KNOW-5).
+                || (e.kind === "note" ? (e.profileId || "") + "#" + (e.noteId || "") + "#" + (e.line || 0) : "")
+                || (e.kind === "docPage" ? (e.pageId || "") + "#" + (e.line || 0) : "")
                 || (e.kind === "doc" ? (e.sectionId || "") + "#" + e.label : "")
                 || (e.kind === "profile" ? e.profileId : "")
                 || e.label;
