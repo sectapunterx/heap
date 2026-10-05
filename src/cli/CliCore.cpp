@@ -115,7 +115,10 @@ ParsedArgs parseArgs(const QStringList& args) {
   const QCommandLineOption status(QStringLiteral("status"), QString(), QStringLiteral("status"));
   const QCommandLineOption format(QStringLiteral("format"), QString(), QStringLiteral("format"));
   const QCommandLineOption json(QStringLiteral("json"), QString());
-  parser.addOptions({help, version, dataDir, profile, status, format, json});
+  // Window-launch switches that may ride along with --help/--version; known
+  // here so they are not refused, and otherwise ignored.
+  const QCommandLineOption perfLog(QStringLiteral("perf-log"), QString());
+  parser.addOptions({help, version, dataDir, profile, status, format, json, perfLog});
 
   QStringList withProgram = args;
   withProgram.prepend(QStringLiteral("heap"));

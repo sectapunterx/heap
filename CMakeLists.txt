@@ -233,6 +233,7 @@ qt_add_library(heap_core STATIC
     src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
+    src/diag/PerfLog.cpp
     # ── audit-int: end ──
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
@@ -357,6 +358,8 @@ qt_add_qml_module(heap_core
         qml/NotesView.qml
         qml/MdView.qml
         qml/SettingsView.qml
+        qml/SettingsGroup.qml
+        qml/SettingsRow.qml
         qml/HelpContent.qml
         qml/ThinScrollBar.qml
         qml/Brand.qml
