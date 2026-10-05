@@ -4,6 +4,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
 import "PlainText.js" as MdPlain
+import "Motion.js" as Motion
 
 Rectangle {
     id: card
@@ -127,7 +128,9 @@ Rectangle {
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0
-    Behavior on scale { NumberAnimation { duration: Theme.scaledMs(120); easing.type: Easing.OutCubic } }
+    // A dropped card settles with a little overshoot, as if it had weight
+    // (APP-167); with reduced motion it simply is where it was put.
+    Behavior on scale { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
     Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
 
     implicitWidth: parent ? parent.width : 260
@@ -160,6 +163,28 @@ Rectangle {
     // drop into another column.
     readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
     property Item _homeParent: null
+    // Where the card was let go, in window coordinates: a card dropped back
+    // where it came from springs home from there instead of jumping (APP-167).
+    property var _dropAt: null
+    transform: Translate { id: settle }
+    ParallelAnimation {
+        id: settleAnim
+        NumberAnimation { target: settle; property: "x"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
+        NumberAnimation { target: settle; property: "y"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
+    }
+    function _settleHome() {
+        settleAnim.stop();
+        settle.x = 0;
+        settle.y = 0;
+        if (!card._dropAt || Theme.motion === 0) return;
+        const home = card.mapToItem(null, 0, 0);
+        const off = Motion.settleFrom(card._dropAt.x, card._dropAt.y, home.x, home.y, Theme.motion);
+        card._dropAt = null;
+        if (off.x === 0 && off.y === 0) return;
+        settle.x = off.x;
+        settle.y = off.y;
+        settleAnim.start();
+    }
     on_LiftedChanged: {
         if (card._lifted) {
             const p = card.mapToItem(card.dragLayer, 0, 0);
@@ -174,7 +199,56 @@ Rectangle {
             // was pressed rather than where the drag left it.
             card.x = card.homeX;
             card.y = card.homeY;
+            card._settleHome();
         }
+    }
+
+    // ── Done (APP-167) ───────────────────────────────────────────────
+    // A check mark grows over the card and fades when the task is marked
+    // done — on this card, or just before it was built: the board makes a new
+    // card in the Done column for a moved task. Each step is under 150 ms;
+    // nothing plays with reduced motion.
+    function playDone() {
+        if (Theme.motion > 0) doneAnim.restart();
+    }
+    readonly property var _changedAt: card.task ? card.task.statusChangedAt : undefined
+    on_DoneChanged: {
+        if (!card._done) return;
+        // A view that does not pass the change time animates any change it
+        // sees; the board, which recycles cards, only a recent one.
+        if (card._changedAt === undefined || Motion.justCompleted("done", card._changedAt, Date.now())) card.playDone();
+    }
+    Component.onCompleted: {
+        if (card.task && Motion.justCompleted(card.task.status, card._changedAt, Date.now())) card.playDone();
+    }
+    Rectangle {
+        id: doneMark
+        objectName: "tc-done-mark"
+        anchors.centerIn: parent
+        width: 28
+        height: 28
+        radius: width / 2
+        color: Theme.success
+        opacity: 0
+        scale: 0.6
+        visible: opacity > 0
+        z: 50
+        Text {
+            anchors.centerIn: parent
+            text: "✓"
+            color: Theme.textOn(Theme.success)
+            font.pixelSize: Theme.fsLg
+            font.weight: Font.Bold
+        }
+    }
+    SequentialAnimation {
+        id: doneAnim
+        ParallelAnimation {
+            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durFast }
+            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durFast; easing.type: Easing.OutBack }
+        }
+        PauseAnimation { duration: Theme.durBase }
+        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durFast }
     }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any
@@ -660,7 +734,11 @@ Rectangle {
             card.homeX = card.x; card.homeY = card.y; didDrag = false;
             if (mouse.button === Qt.RightButton) card.contextMenu().popup();
         }
-        onPositionChanged: if (drag.active) didDrag = true
+        onPositionChanged: {
+            if (!drag.active) return;
+            didDrag = true;
+            card._dropAt = card.mapToItem(null, 0, 0);
+        }
         onReleased: (mouse) => {
             const wasDrag = didDrag;
             card.Drag.drop();

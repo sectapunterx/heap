@@ -309,6 +309,8 @@ qt_add_qml_module(heap_core
         qml/DialogHeader.qml
         qml/DialogFooter.qml
         qml/ActionButton.qml
+        qml/EmptyState.qml
+        qml/Motion.js
         qml/IntegrationActivity.qml
         # ── audit-ux: end ──
         # ── audit-int: begin ──

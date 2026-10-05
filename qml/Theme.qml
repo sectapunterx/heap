@@ -287,6 +287,15 @@ QtObject {
     readonly property bool highContrast:  contrast === "high"
     readonly property int animMs: reducedMotion ? 0 : 160
     function scaledMs(n) { return reducedMotion ? 0 : n; }
+    // 1, or 0 with "Reduce motion" on: a factor for anything that moves by a
+    // distance (a springy drop, a check mark that grows), not only by time.
+    readonly property real motion: reducedMotion ? 0 : 1
+    // Duration steps (APP-167). Feedback that answers a click is fast, a
+    // change of place is base, a panel that slides is slow; all 0 with
+    // "Reduce motion" on.
+    readonly property int durFast: reducedMotion ? 0 : 120
+    readonly property int durBase: reducedMotion ? 0 : 160
+    readonly property int durSlow: reducedMotion ? 0 : 240
 
     // ── Typography — Brand defaults, overrideable via settings ───────
     readonly property string fontUi: _appearance.fontUI

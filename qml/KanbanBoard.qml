@@ -975,6 +975,7 @@ Item {
                                             required property var    ticket
                                             required property string searchText
                                             required property int    attachmentCount
+                                            required property var    statusChangedAt
                                             width: bodyFlick.width
                                             // A pooled card waits, culled but still
                                             // a child of the list, until a row needs
@@ -1008,7 +1009,8 @@ Item {
                                                 labels: tc.labels, dueAt: tc.dueAt, dueHasTime: tc.dueHasTime,
                                                 scheduledAt: tc.scheduledAt, scheduledHasTime: tc.scheduledHasTime,
                                                 ticket: tc.ticket, searchText: tc.searchText,
-                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount
+                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount,
+                                                statusChangedAt: tc.statusChangedAt
                                             })
                                             // Which card a bare "O" acts on when
                                             // nothing is selected.
@@ -1034,15 +1036,23 @@ Item {
                                             Component.onDestruction: if (menuOpen) root._openCardMenus--
                                         }
 
-                                Text {
+                                // An empty column says how a card gets here
+                                // (APP-167); one whose cards the search or a
+                                // filter hides, that nothing in it matches.
+                                Item {
                                     visible: col.visibleCount === 0
                                     width: bodyFlick.width
-                                    topPadding: Theme.spXl
-                                    text: I18n.t("kanban.empty")
-                                    color: Theme.textDim
-                                    font.italic: true
-                                    font.pixelSize: Theme.fsSm
-                                    horizontalAlignment: Text.AlignHCenter
+                                    height: colEmpty.implicitHeight + Theme.spXl
+                                    EmptyState {
+                                        id: colEmpty
+                                        objectName: "column-empty"
+                                        y: Theme.spXl
+                                        width: parent.width
+                                        compact: true
+                                        icon: "heap-01-board"
+                                        title: I18n.t("kanban.empty")
+                                        line: (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
+                                    }
                                 }
                             }
 
