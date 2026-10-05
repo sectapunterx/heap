@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import QtQuick.Dialogs
 import TodoCpp
+import "PopupStack.js" as PopupStack
 
 Popup {
     id: root
@@ -24,8 +25,9 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: Rectangle {
         color: Theme.scrim
-        TapHandler { onTapped: root.requestClose() }
     }
+    // A press beside the editor (APP-126); see PopupStack.js.
+    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root.requestClose()
 
     property var draft: ({})
     // What the fields held when the editor opened; anything else is an edit.
@@ -1617,6 +1619,7 @@ Popup {
         // An image pasted into the description lives in the attachments folder.
         imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
+        ticketTitles: AppController.taskTitles
     }
 
 }

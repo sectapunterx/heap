@@ -223,6 +223,7 @@ qt_add_library(heap_core STATIC
     # ── audit-ux: end ──
     # ── audit-int: begin ──
     src/integrations/TrackerMerge.cpp
+    src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
     # ── audit-int: end ──
@@ -290,6 +291,7 @@ qt_add_qml_module(heap_core
         qml/SeriesScopeDialog.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
+        qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
@@ -367,6 +369,7 @@ qt_add_qml_module(heap_core
         qml/Overlap.js
         qml/Segments.js
         qml/Search.js
+        qml/PopupStack.js
     SOURCES
         src/AppController.h
         src/Models.h

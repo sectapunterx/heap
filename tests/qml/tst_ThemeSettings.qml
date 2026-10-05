@@ -66,7 +66,7 @@ TestCase {
         verify(high !== null && low !== null);
         for (const id of ["heap-dark", "heap-light", "heap-ink", "crimson", "graphite"])
             compare(Presets.category(Presets.builtin(id), []), "high", id);
-        for (const id of ["ochre", "fjord", "dusk"])
+        for (const id of ["ochre", "fjord", "dusk", "minimal-dark"])
             compare(Presets.category(Presets.builtin(id), []), "low", id);
         for (const t of Presets.PRESETS)
             verify(t.contrast === "high" || t.contrast === "low", t.id + " has no contrast group");
@@ -178,6 +178,15 @@ TestCase {
         ts.pick(copy);
         ts.remove(copy);
         compare(Theme.activePresetId, "crimson");
+    }
+
+    // APP-127: a second copy of the same theme is "… (2)", not a twin.
+    function test_a_second_copy_gets_a_number() {
+        const ts = make();
+        const a = ts.duplicate("heap-dark");
+        const b = ts.duplicate("heap-dark");
+        const first = ts._custom(a).name;
+        compare(ts._custom(b).name, first + " (2)");
     }
 
     function test_rename_and_base() {

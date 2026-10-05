@@ -81,6 +81,9 @@ class AppController : public QObject {
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
+  // task id → title for every task in the profile, archived included. The
+  // rendered markdown shows a "#APP-12" mention as its title (APP-121).
+  Q_PROPERTY(QVariantMap taskTitles READ taskTitles NOTIFY taskTitlesChanged)
   // The active profile's saved views, in sidebar order: [{id, name, query,
   // priorities, sort, archived, showDone, view, problems}] — `problems` is what
   // the search box would flag in the query (a deleted column, a typo).
@@ -958,6 +961,12 @@ class AppController : public QObject {
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
   // Advisory limit on how many cards a column should hold. 0 = none.
   Q_INVOKABLE void setStatusWipLimit(const QString& id, int limit);
+  // Auto-archive per column (APP-122): a card that has sat in the column for
+  // `days` days goes to the archive; 0 = never. Done keeps its Settings →
+  // Tasks slider as the one place its number lives; any other column stores
+  // it on the column.
+  Q_INVOKABLE int statusArchiveDays(const QString& id) const;
+  Q_INVOKABLE void setStatusArchiveDays(const QString& id, int days);
   Q_INVOKABLE void moveStatus(const QString& id, int newIndex);
   Q_INVOKABLE void deleteStatus(const QString& id);
 
@@ -967,6 +976,10 @@ class AppController : public QObject {
   // top bar used to ask for six separate counts per task edit, each a full
   // scan. Archived tasks are not counted; "_total" is the live task count.
   QVariantMap statusCounts() const;
+
+  QVariantMap taskTitles() const {
+    return m_taskTitles;
+  }
 
   // ---- Saved views (src/AppControllerSavedViews.cpp) ----
   // `state` is the filter state as Main.qml holds it: {query, priorities
@@ -1243,6 +1256,7 @@ class AppController : public QObject {
   void shortcutsChanged();
   void blockedStuckChanged();
   void statusCountsChanged();
+  void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
@@ -1424,6 +1438,12 @@ class AppController : public QObject {
   // every mutation path is covered without each one remembering to.
   mutable QVariantMap m_statusCounts;
   mutable bool m_statusCountsDirty = true;
+  // taskTitles: rebuilt once per event-loop turn after the task model
+  // changes, and announced only when a title or id really changed, so a
+  // status drag does not re-render every open note.
+  QVariantMap m_taskTitles;
+  bool m_taskTitlesQueued = false;
+  void refreshTaskTitles();
   // The active profile's saved views and savedViewCounts()' cache. The count
   // signal is coalesced: a bulk edit fires the model's signals per row.
   QVector<heap::savedviews::SavedView> m_savedViews;
@@ -1715,8 +1735,25 @@ class AppController : public QObject {
   QHash<QString, QString> m_directoryConfigHash;
   // Access tokens for the trackers, kept in the OS keychain (HEAP-74/75).
   heap::integrations::SecretStore* m_secretStore = nullptr;
-  // Drives optional periodic pulls (integrations.autoSyncMinutes).
+  // Looks for a due periodic pull (integrations.autoSyncMinutes, up to a
+  // month; APP-123). The last sync's time lives in autosync.json so a
+  // restart does not start the wait over.
   QTimer* m_syncTimer = nullptr;
+  QDateTime m_lastTrackerSync;
+  QString autoSyncFilePath() const;
+  void loadLastTrackerSync();
+  void saveLastTrackerSync() const;
+
+ public:
+  // The periodic-sync check at `now` (the timer passes the clock). Public
+  // for the tests, like runAutomationAt.
+  void autoSyncTickAt(const QDateTime& now);
+
+  QDateTime lastTrackerSync() const {
+    return m_lastTrackerSync;
+  }
+
+ private:
   // Reconcile the active providers with the current integrations settings.
   void applyIntegrationSettings();
   // Merge a provider's non-secret settings with its keychain secrets.

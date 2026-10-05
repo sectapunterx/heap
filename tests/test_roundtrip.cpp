@@ -323,6 +323,21 @@ TEST(FieldCountGuard, SyncSerializerEmitsAKeyForEveryEventField) {
 
 // ── Fully-populated round trips ──
 
+// APP-122: a column's auto-archive days survive a save, 0 included; a
+// column that never had one stays without the key.
+TEST(RoundTrip, ColumnArchiveDaysSurvive) {
+  QVariantMap obsolete{{"id", "obsolete"}, {"name", "Obsolete"}, {"color", "#8a8e98"}, {"archiveDays", 14}};
+  QVariantMap never{{"id", "later"}, {"name", "Later"}, {"color", "#8a8e98"}, {"archiveDays", 0}};
+  QVariantMap plain{{"id", "todo"}, {"name", "To Do"}, {"color", "#8a8e98"}};
+  const QVariantList back = heap::state::statusesFromJson(heap::state::statusesToJson({obsolete, never, plain}));
+  ASSERT_EQ(back.size(), 3);
+  EXPECT_EQ(back.at(0).toMap().value("archiveDays").toInt(), 14);
+  EXPECT_TRUE(back.at(1).toMap().contains("archiveDays"));
+  EXPECT_EQ(back.at(1).toMap().value("archiveDays").toInt(), 0);
+  EXPECT_FALSE(back.at(2).toMap().contains("archiveDays"));
+  EXPECT_FALSE(back.at(0).toMap().contains("_extra")) << "archiveDays is a known key, not an extra";
+}
+
 TEST(RoundTrip, FullTaskSurvivesLiveSerializer) {
   const Task t = makeFullTask();
   EXPECT_EQ(t, heap::state::taskFromJson(heap::state::taskToJson(t)));

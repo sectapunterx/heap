@@ -3,6 +3,7 @@ import QtQuick.Layouts
 import QtQuick.Controls
 import TodoCpp
 import "Attendees.js" as Attendees
+import "PopupStack.js" as PopupStack
 
 Popup {
     id: root
@@ -18,11 +19,9 @@ Popup {
     // Dimmed backdrop so the underlying app stays visible behind the popup.
     Overlay.modal: Rectangle {
         color: Theme.scrim
-        MouseArea {
-            anchors.fill: parent
-            onPressed: root._requestClose()
-        }
     }
+    // A press beside the editor (APP-126); see PopupStack.js.
+    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._requestClose()
 
     property string eventId: ""
     // A meeting from a calendar link (APP-118): that calendar owns it, so the
@@ -769,6 +768,7 @@ Popup {
                 }
                 DatePickerPopup {
                     id: eventDatePicker
+                    objectName: "event-date-picker"
                     y: parent.height + 4
                     onPicked: (value) => {
                         // Moving the start moves the whole event and keeps its

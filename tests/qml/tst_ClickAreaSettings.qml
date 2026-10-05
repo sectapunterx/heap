@@ -75,10 +75,29 @@ TestCase {
     function test_settings_auto_sync_option_runs_on_return() {
         const sv = settingsAt("integrations");
         let opt = null;
-        tryVerify(function () { opt = find(sv, "settings-autosync-30"); return opt !== null; }, 2000);
-        reachable(opt, "30m auto-sync");
-        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 30; }, 1000);
+        tryVerify(function () { opt = find(sv, "settings-autosync-1440"); return opt !== null; }, 2000);
+        reachable(opt, "daily auto-sync");
+        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 1440; }, 1000);
         verify(opt.checked);
+    }
+
+    // APP-123: any cadence up to a month — a number and a unit.
+    function test_settings_auto_sync_custom_period() {
+        const sv = settingsAt("integrations");
+        let field = null;
+        tryVerify(function () { field = find(sv, "settings-autosync-custom"); return field !== null; }, 2000);
+        const days = find(sv, "settings-autosync-unit-1440");
+        verify(days !== null);
+        field.text = "30";
+        days.activated();
+        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 30 * 1440; }, 1000,
+                  "30 days did not save as minutes");
+        field.text = "99";
+        field.editingFinished();
+        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 44640; }, 1000,
+                  "a cadence past a month is not capped");
+        find(sv, "settings-autosync-0").activated();
+        tryVerify(function () { return sv.settings.integrations.autoSyncMinutes === 0; }, 1000);
     }
 
     function test_settings_card_header_expands_on_return() {
