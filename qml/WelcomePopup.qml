@@ -8,6 +8,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
+import "PopupStack.js" as PopupStack
 
 Popup {
     id: root
@@ -38,6 +39,9 @@ Popup {
     Overlay.modal: Rectangle {
         color: Theme.scrim
     }
+    // A press beside the tour ends it like ✕ and Esc do (APP-126); it can be
+    // replayed from Settings → Help. See PopupStack.js.
+    Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._finish()
 
     background: Rectangle {
         radius: Theme.radiusXl

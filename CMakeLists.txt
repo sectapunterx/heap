@@ -367,6 +367,7 @@ qt_add_qml_module(heap_core
         qml/Overlap.js
         qml/Segments.js
         qml/Search.js
+        qml/PopupStack.js
     SOURCES
         src/AppController.h
         src/Models.h
