@@ -37,6 +37,7 @@
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
 #include "query/TaskQuery.h"
+#include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
@@ -670,6 +671,24 @@ AppController::AppController(QObject* parent) :
   connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::dataChanged, this, dropStatusCounts);
+  // Status moves for the Monday recap, noticed the same way: from the model,
+  // so a drag, the editor, a bulk move, a sync and an undo are all seen.
+  connect(&m_tasks, &QAbstractItemModel::modelReset, this, [this]() {
+    rememberStatuses();
+  });
+  connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex&, int first, int last) {
+    for(int r = first; r <= last && r < m_tasks.items().size(); ++r) {
+      m_knownStatus.insert(m_tasks.items().at(r).id, m_tasks.items().at(r).status);
+    }
+  });
+  connect(&m_tasks,
+          &QAbstractItemModel::dataChanged,
+          this,
+          [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) {
+            if(roles.isEmpty() || roles.contains(TaskModel::StatusRole)) {
+              noteStatusMoves(topLeft.row(), bottomRight.row());
+            }
+          });
   wireSavedViews();
 
   // A fresh install speaks the system's language (a saved one overrides it in
@@ -5303,6 +5322,97 @@ QString formatTrackedDuration(int secs) {
 }
 }  // namespace
 
+void AppController::rememberStatuses() {
+  m_knownStatus.clear();
+  for(const Task& t : m_tasks.items()) {
+    m_knownStatus.insert(t.id, t.status);
+  }
+}
+
+void AppController::noteStatusMoves(int first, int last) {
+  bool moved = false;
+  for(int r = qMax(0, first); r <= last && r < m_tasks.items().size(); ++r) {
+    const Task& t = m_tasks.items().at(r);
+    const auto it = m_knownStatus.find(t.id);
+    if(it == m_knownStatus.end()) {
+      m_knownStatus.insert(t.id, t.status);
+      continue;
+    }
+    if(*it == t.status) {
+      continue;
+    }
+    m_statusLog.append({.taskId = t.id,
+                        .from = *it,
+                        .to = t.status,
+                        .at = t.statusChangedAt.isValid() ? t.statusChangedAt : QDateTime::currentDateTime()});
+    *it = t.status;
+    moved = true;
+  }
+  if(moved) {
+    // A recap looks back one week; a quarter of a year is plenty.
+    const QDateTime horizon = QDateTime::currentDateTime().addDays(-92);
+    if(m_statusLog.size() > 2000 || m_statusLog.constFirst().at < horizon) {
+      m_statusLog = heap::recap::pruned(m_statusLog, horizon);
+    }
+    scheduleSave();
+  }
+}
+
+QVariantMap AppController::weeklyRecap() const {
+  return weeklyRecapFor(QDate::currentDate());
+}
+
+QVariantMap AppController::weeklyRecapFor(const QDate& today) const {
+  const QDate thisWeek = heap::recap::weekStart(today);
+  const QDate lastWeek = thisWeek.addDays(-7);
+  const QVector<heap::recap::Move> moves = heap::recap::netMoves(m_statusLog, lastWeek.startOfDay(), thisWeek.startOfDay());
+
+  QHash<QString, int> column;
+  QHash<QString, QVariantMap> statusById;
+  for(int i = 0; i < m_statuses.size(); ++i) {
+    const QVariantMap st = m_statuses.at(i).toMap();
+    const QString id = st.value(QStringLiteral("id")).toString();
+    column.insert(id, i);
+    statusById.insert(id, st);
+  }
+  const auto colOf = [&](const QString& id) {
+    return column.value(id, static_cast<int>(m_statuses.size()));
+  };
+
+  // (from, to) -> its tasks, in the order the tasks first moved.
+  QList<QPair<QString, QString>> keys;
+  QHash<QPair<QString, QString>, QVariantList> tasks;
+  for(const heap::recap::Move& m : moves) {
+    const int row = m_tasks.indexOfId(m.taskId);
+    if(row < 0) {
+      continue;  // deleted since: nothing to open
+    }
+    const Task& t = m_tasks.items().at(row);
+    const QPair<QString, QString> key{m.from, m.to};
+    if(!tasks.contains(key)) {
+      keys.append(key);
+    }
+    tasks[key].append(QVariantMap{{"id", t.id}, {"title", t.title}, {"priority", t.priority}});
+  }
+  std::stable_sort(keys.begin(), keys.end(), [&](const auto& a, const auto& b) {
+    return std::pair(colOf(a.first), colOf(a.second)) < std::pair(colOf(b.first), colOf(b.second));
+  });
+
+  QVariantList groups;
+  for(const auto& key : keys) {
+    const QVariantMap from = statusById.value(key.first);
+    const QVariantMap to = statusById.value(key.second);
+    groups.append(QVariantMap{{"from", key.first},
+                              {"fromName", from.value(QStringLiteral("name"), key.first)},
+                              {"fromColor", from.value(QStringLiteral("color"))},
+                              {"to", key.second},
+                              {"toName", to.value(QStringLiteral("name"), key.second)},
+                              {"toColor", to.value(QStringLiteral("color"))},
+                              {"tasks", tasks.value(key)}});
+  }
+  return QVariantMap{{"weekStart", lastWeek.toString(Qt::ISODate)}, {"weekEnd", thisWeek.toString(Qt::ISODate)}, {"groups", groups}};
+}
+
 void AppController::copyWeeklyReportToClipboard() {
   snapshotActiveProfile();
   const int pi = profileIndexOf(m_activeProfileId);
@@ -8221,10 +8331,12 @@ void AppController::snapshotActiveProfile() {
   p.docPages = m_docPages.items();
   p.activeDocPageId = m_activeDocPageId;
   p.savedViews = m_savedViews;
+  p.statusLog = m_statusLog;
   // Events are global — not snapshotted into the profile.
 }
 
 void AppController::applyProfileToModels(const Profile& p) {
+  m_statusLog = p.statusLog;
   // Imports and hand-edited files may still carry rank ties (see Rank.h).
   QVector<Task> tasks = p.tasks;
   heap::board::spreadTiedRanks(tasks);

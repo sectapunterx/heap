@@ -1055,6 +1055,18 @@ class AppController : public QObject {
   // Weekly "what I shipped" report (HEAP-78): done tasks from the last 7 days
   // with tracked time, copied to the clipboard as Markdown.
   Q_INVOKABLE void copyWeeklyReportToClipboard();
+  // The Monday recap (WEAK PECAP): last week's column moves, grouped by
+  // from -> to. { weekStart, weekEnd ("yyyy-MM-dd", end exclusive),
+  // groups: [{ from, fromName, fromColor, to, toName, toColor,
+  // tasks: [{ id, title, priority }] }] }, groups in board column order.
+  Q_INVOKABLE QVariantMap weeklyRecap() const;
+  // The same for the week before the one `today` falls in.
+  Q_INVOKABLE QVariantMap weeklyRecapFor(const QDate& today) const;
+
+  // Every recorded move of the active profile, oldest first.
+  QVector<StatusChange> statusLog() const {
+    return m_statusLog;
+  }
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 
@@ -1380,6 +1392,12 @@ class AppController : public QObject {
   // The active profile's saved views and savedViewCounts()' cache. The count
   // signal is coalesced: a bulk edit fires the model's signals per row.
   QVector<heap::savedviews::SavedView> m_savedViews;
+  // Column moves of the active profile (WEAK PECAP), and the status each task
+  // was last seen in, which is how a move is noticed whatever path made it.
+  QVector<StatusChange> m_statusLog;
+  QHash<QString, QString> m_knownStatus;
+  void rememberStatuses();
+  void noteStatusMoves(int first, int last);
   mutable QVariantMap m_savedViewCounts;
   mutable bool m_savedViewCountsDirty = true;
   QTimer m_savedViewCountsTimer;

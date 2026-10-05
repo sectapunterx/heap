@@ -303,6 +303,18 @@ struct DocPage {
   bool operator==(const DocPage&) const = default;
 };
 
+// One move of a task between columns, as it happened (WEAK PECAP: the
+// Monday recap lists what moved last week). Kept per profile, newest last,
+// pruned to a few months.
+struct StatusChange {
+  QString taskId;
+  QString from;
+  QString to;
+  QDateTime at;
+
+  bool operator==(const StatusChange&) const = default;
+};
+
 struct Profile {
   QString id;     // slug, unique
   QString name;   // human-readable
@@ -322,6 +334,8 @@ struct Profile {
   QString activeDocPageId;
   // Named filter snapshots, in sidebar order (profile key `savedViews`).
   QVector<heap::savedviews::SavedView> savedViews;
+  // Status moves, oldest first (profile key `statusLog`; absent = none).
+  QVector<StatusChange> statusLog;
   // Keys of the profile object this build does not read, carried through a
   // save untouched (PLAT-26). Only filled for a document at the current schema.
   QJsonObject extra;
