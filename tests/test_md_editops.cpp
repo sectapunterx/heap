@@ -423,3 +423,36 @@ TEST(MdEditOpsTest, OperationsRefuseANullDocument) {
   EXPECT_EQ(continueLine(nullptr, start, &handled).caret(), 3);
   EXPECT_FALSE(handled);
 }
+
+// ── KNOW-19 (audit 2026-09-30): several selected lines ──
+
+TEST(MdEditOpsTest, Know19_BoldOverListLinesWrapsEachItem) {
+  Editor editor(QStringLiteral("- a\n- b"));
+  editor.select(0, static_cast<int>(editor.text().size()));
+  editor.setSelection(toggleInlineStyle(editor.document(), editor.selection(), InlineStyle::Bold));
+  EXPECT_EQ(editor.text(), QStringLiteral("- **a**\n- **b**"));
+  // A toggle: the same key takes it back off.
+  editor.setSelection(toggleInlineStyle(editor.document(), editor.selection(), InlineStyle::Bold));
+  EXPECT_EQ(editor.text(), QStringLiteral("- a\n- b"));
+}
+
+TEST(MdEditOpsTest, Know19_ItalicSkipsHeadingHashesQuotesAndBlankLines) {
+  Editor editor(QStringLiteral("# H\ntext\n\n> quoted\n- [ ] task"));
+  editor.select(0, static_cast<int>(editor.text().size()));
+  editor.setSelection(toggleInlineStyle(editor.document(), editor.selection(), InlineStyle::Italic));
+  EXPECT_EQ(editor.text(), QStringLiteral("# _H_\n_text_\n\n> _quoted_\n- [ ] _task_"));
+}
+
+TEST(MdEditOpsTest, Know19_APartialSelectionWrapsOnlyWhatIsSelected) {
+  Editor editor(QStringLiteral("one two\nthree four"));
+  editor.select(4, 13);  // "two\nthree"
+  editor.setSelection(toggleInlineStyle(editor.document(), editor.selection(), InlineStyle::Bold));
+  EXPECT_EQ(editor.text(), QStringLiteral("one **two**\n**three** four"));
+}
+
+TEST(MdEditOpsTest, Know19_CodeFenceLinesAreLeftAlone) {
+  Editor editor(QStringLiteral("a\n```\ncode\n```\nb"));
+  editor.select(0, static_cast<int>(editor.text().size()));
+  editor.setSelection(toggleInlineStyle(editor.document(), editor.selection(), InlineStyle::Bold));
+  EXPECT_EQ(editor.text(), QStringLiteral("**a**\n```\ncode\n```\n**b**"));
+}
