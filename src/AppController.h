@@ -1173,7 +1173,14 @@ class AppController : public QObject {
   Q_INVOKABLE QString defaultShortcutFor(const QString& id) const;
   Q_INVOKABLE QString shortcutDescription(const QString& id) const;
   Q_INVOKABLE QString shortcutLabel(const QString& id) const;
+  // The catalog action holding `sequence` (or the built-in key that does, as a
+  // catalog id or a builtin.* id shortcutLabel() names); empty when free.
   Q_INVOKABLE QString findShortcutConflict(const QString& id, const QString& sequence) const;
+
+  // Only the built-in half of that: a key no rebinding can free.
+  Q_INVOKABLE QString builtinShortcutConflict(const QString& id, const QString& sequence) const {
+    return builtinShortcutOwner(id, normalizeSequence(sequence));
+  }
   Q_INVOKABLE bool setShortcut(const QString& id, const QString& sequence);
   Q_INVOKABLE void resetShortcut(const QString& id);
   Q_INVOKABLE void resetAllShortcuts();
@@ -1517,6 +1524,9 @@ class AppController : public QObject {
   void seedShortcutCatalog();
   void applyShortcutOverrides(const QVariantMap& overrides);
   QString normalizeSequence(const QString& raw) const;
+  // Settings → Tasks → ID prefix, upper-cased; "TASK" when unset or not a
+  // usable ticket stem (a letter, then letters and digits).
+  QString taskIdPrefix() const;
 
   // Global hotkeys — OS-level Quick-capture triggers (work unfocused). Re-armed
   // from the matching catalog sequences whenever they change. Each combination
@@ -1862,6 +1872,9 @@ class AppController : public QObject {
   // Point the Docs contact `contactKey` at `personId`. No-op when the contact
   // is gone or already links there.
   void linkDocsContact(const QString& contactKey, const QString& personId);
+  // Point every Docs contact linked to `fromPersonId` at `toPersonId`: the
+  // person was renamed.
+  void relinkDocsContacts(const QString& fromPersonId, const QString& toPersonId);
   // Append a Docs contact for a Person created through the rail's picker, so
   // the next search finds them among the contacts.
   void appendDocsContact(const Person& p);
@@ -1932,6 +1945,15 @@ class AppController : public QObject {
   // to, as of the last pull. Only trackers that report transitions (Jira)
   // fill it; an issue without an entry is not second-guessed.
   QHash<QString, QStringList> m_trackerTransitions;
+  // The same answers keyed by where in the workflow they were seen (provider,
+  // project, issue type, status): after a push moves an issue, the moves out of
+  // its new status are known from any other issue the last pull saw there,
+  // instead of the guard dropping until the next pull (INT-4).
+  QHash<QString, QStringList> m_workflowTransitions;
+  static QString workflowTransitionsKey(const QString& providerId, const QString& project, const QString& issueType, const QString& status);
+  // The built-in key `normalized` would collide with if action `id` took it;
+  // empty when none. See kBuiltinKeys.
+  static QString builtinShortcutOwner(const QString& id, const QString& normalized);
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name

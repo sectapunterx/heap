@@ -69,6 +69,22 @@ TestCase {
         compare(ed.parseHour("23:59"), 23 + 59 / 60);
     }
 
+    // TIME-22: an end at midnight is the end of the event's day. In 12h the
+    // field shows it as "12:00am", which read back as 0 — before any start —
+    // and the event could not be saved.
+    function test_midnight_end_is_end_of_day() {
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.pickedDate = new Date(2026, 9, 5);
+        ed.pickedEndDate = new Date(2026, 9, 5);
+        compare(ed.parseEndStrict("12:00am"), 24);
+        compare(ed.parseEndStrict("00:00"), 24);
+        compare(ed.parseEndStrict("24:00"), 24);
+        compare(ed.parseEndStrict("12:00pm"), 12);
+        // Across midnight the end date says which midnight it is.
+        ed.pickedEndDate = new Date(2026, 9, 6);
+        compare(ed.parseEndStrict("00:00"), 0);
+    }
+
     // parseHourRange: a numeric time range expands to [start, end]; a single
     // time or empty input yields null (the invalid-end guard). Numeric range
     // forms are locale-independent in the chrono parser (see

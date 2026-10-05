@@ -12,6 +12,7 @@
 #include <QCommandLineParser>
 #include <QDir>
 #include <QFile>
+#include <QFileInfo>
 #include <QIcon>
 #include <QImageReader>
 #include <QMessageBox>
@@ -25,6 +26,7 @@
 #include <QTimer>
 
 #include <csignal>
+#include <cstdio>
 #include <cstdlib>
 
 #ifdef Q_OS_MACOS
@@ -90,8 +92,8 @@ CliOptions parseCommandLine(const QStringList& args) {
   const QCommandLineOption smokeOption(
       QStringLiteral("smoke"),
       QStringLiteral("Load the whole UI against a throwaway profile (a copy of --data-dir's state.json, if given), "
-                     "report any QML error, missing plugin or image format, and exit: 0 when healthy. Used to "
-                     "check a packaged build."));
+                     "report any QML error, missing plugin or image format on stderr, and exit: 0 when healthy. "
+                     "With --data-dir the run's log is kept as <dir>/logs/smoke.log. Used to check a packaged build."));
   parser.addOption(smokeOption);
 
   // A macOS Finder launch may still append -psn_<n>_<m>; it is not the user's.
@@ -137,9 +139,11 @@ CliOptions parseCommandLine(const QStringList& args) {
   return opts;
 }
 
-// Judges a --smoke run once the UI has settled. Everything goes through the
-// logger, so it reaches stderr and heap.log — the latter is what a CI step can
-// read back from a Windows GUI-subsystem build, which has no console.
+// Judges a --smoke run once the UI has settled. Each line goes to the log and
+// straight to stderr: the logger hands messages on to Qt's own handler, which
+// in a Windows GUI-subsystem build is OutputDebugString, so a redirected
+// stderr stayed empty (PLAT-2). The run's whole log is also kept next to the
+// profile it was given — see LogCloser.
 int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qmlWarnings) {
   QStringList problems;
 
@@ -161,8 +165,14 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
 
   for(const QString& problem : problems) {
     qCritical("smoke: %s", qUtf8Printable(problem));
+    static_cast<void>(fprintf(stderr, "smoke: %s\n", qUtf8Printable(problem)));
   }
-  qInfo("smoke: %s (%lld problem(s))", problems.isEmpty() ? "OK" : "FAILED", static_cast<long long>(problems.size()));
+  const QString verdict = QStringLiteral("smoke: %1 (%2 problem(s))")
+                              .arg(problems.isEmpty() ? QStringLiteral("OK") : QStringLiteral("FAILED"))
+                              .arg(problems.size());
+  qInfo("%s", qUtf8Printable(verdict));
+  static_cast<void>(fprintf(stderr, "%s\n", qUtf8Printable(verdict)));
+  static_cast<void>(fflush(stderr));
   return problems.isEmpty() ? 0 : 1;
 }
 
@@ -170,12 +180,24 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
 // dir and the QML engine, so it runs after the engine (and AppController's
 // final save) and before the temp dir is removed: an open log is what used to
 // keep every --smoke run's %TEMP%\heap-XXXXXX behind (PLAT-16).
+//
+// With --data-dir, the closed log is first copied to <dir>/logs/smoke.log:
+// the temp folder goes, and with it the only record of *why* a packaged build
+// failed its smoke test (PLAT-2). The profile's own heap.log is not touched.
 struct LogCloser {
   bool enabled = false;
+  QString keepAs;  // where the smoke run's log is copied; empty = nowhere
 
   ~LogCloser() {
-    if(enabled) {
-      heap::logging::closeFileLogger();
+    if(!enabled) {
+      return;
+    }
+    heap::logging::closeFileLogger();
+    if(!keepAs.isEmpty() && QDir().mkpath(QFileInfo(keepAs).absolutePath())) {
+      QFile::remove(keepAs);
+      if(!QFile::copy(heap::logging::logFilePath(), keepAs)) {
+        static_cast<void>(fprintf(stderr, "heap: could not keep the smoke log as %s\n", qUtf8Printable(keepAs)));
+      }
     }
   }
 };
@@ -204,8 +226,12 @@ int main(int argc, char* argv[]) {
   // test loads real data without migrating or rewriting it (PLAT-16).
   const QTemporaryDir smokeDataDir;
   QString dataDir = cli.dataDirSet ? cli.dataDir : qEnvironmentVariable("HEAP_DATA_DIR");
+  QString smokeLogKeep;
   if(cli.smoke) {
     const QString source = dataDir;
+    if(!source.isEmpty()) {
+      smokeLogKeep = QDir(source).filePath(QStringLiteral("logs/smoke.log"));
+    }
     dataDir = smokeDataDir.path();
     if(!source.isEmpty()) {
       QFile::copy(QDir(source).filePath(QStringLiteral("state.json")), QDir(dataDir).filePath(QStringLiteral("state.json")));
@@ -249,7 +275,7 @@ int main(int argc, char* argv[]) {
   // Route qDebug/qWarning/… to a rotating log file (must come after the
   // org/app names are set so AppDataLocation resolves to the heap folder).
   heap::logging::installFileLogger();
-  LogCloser logCloser{cli.smoke};
+  LogCloser logCloser{cli.smoke, smokeLogKeep};
   qInfo("heap %s starting", qUtf8Printable(app.applicationVersion()));
   if(heap::paths::dataDirOverridden()) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));

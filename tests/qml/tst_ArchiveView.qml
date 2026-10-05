@@ -23,6 +23,30 @@ TestCase {
         return o;
     }
 
+    // TASKS-5: status: names a column as the board shows it, in the archive
+    // too. The archive's proxy had no column list, so only ids matched.
+    function test_status_by_column_name() {
+        const sts = AppController.statuses;
+        let col = null;
+        for (let i = 0; i < sts.length; i++)
+            if (sts[i].name.toLowerCase() !== sts[i].id.toLowerCase()) { col = sts[i]; break; }
+        verify(col !== null, "no column whose name differs from its id");
+
+        const t = AppController.newTaskDraft(col.id);
+        t.title = "qzarch name probe";
+        AppController.saveTask(t);
+        AppController.setArchived(t.id, true);
+
+        const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
+        av.searchText = 'qzarch status:"' + col.name + '"';
+        const items = av.buildItems();
+        let found = false;
+        for (let i = 0; i < items.length; i++) if (items[i].id === t.id) found = true;
+        verify(found, "status:\"" + col.name + "\" did not find the archived task");
+
+        AppController.deleteTask(t.id);
+    }
+
     function test_smoke_load() {
         const av = make('import TodoCpp; ArchiveView { anchors.fill: parent }');
         verify(av !== null);

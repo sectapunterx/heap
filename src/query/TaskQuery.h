@@ -29,7 +29,8 @@ namespace heap::query {
 //   due:friday due:none       anything the date parser reads, or no date
 //   is:open  is:done  is:archived  is:overdue  is:recurring
 //   -clause   -#tag  -word    negation
-//   a OR b    a | b           either side (clauses on each side are ANDed)
+//   a OR b    a | b           either side (clauses on each side are ANDed;
+//                             a side's words are one of its clauses)
 //
 // Tokens that are not clauses stay free text, so `status:blocked login`
 // narrows by status *and* by the word "login". A `word:word` token whose field
@@ -64,8 +65,11 @@ class TaskQuery {
 
   // Does this task satisfy the query? A query with no clauses matches
   // everything, so free-text-only input leaves the caller to do its own
-  // substring test.
-  bool matches(const Task& t) const;
+  // substring test. `haystack` is the task's lowercased search text (the
+  // model's cached one); empty = built from the task. Search words are only
+  // matched here when an OR split them into groups — otherwise they are all
+  // in freeText().
+  bool matches(const Task& t, const QString& haystack = QString()) const;
 
  private:
   struct Clause {
@@ -79,7 +83,7 @@ class TaskQuery {
     bool negate = false;
   };
 
-  bool clauseMatches(const Clause& c, const Task& t) const;
+  bool clauseMatches(const Clause& c, const Task& t, const QString& haystack) const;
 
   // OR of AND-groups.
   QVector<QVector<Clause>> m_groups;

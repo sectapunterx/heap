@@ -896,6 +896,8 @@ Item {
         // A time of day: only H:mm / HH:mm is accepted, and it is committed as
         // HH:mm — what the C++ side parses (SHELL-9, audit 2026-09-30).
         property bool clockTime: false
+        // Stored upper-case, so typed and shown that way too.
+        property bool upperCase: false
         readonly property RegularExpressionValidator _clockValidator: RegularExpressionValidator {
             regularExpression: /^([01]?[0-9]|2[0-3]):[0-5][0-9]$/
         }
@@ -937,6 +939,7 @@ Item {
             placeholderTextColor: Theme.textDim
             color: Theme.text
             font.family: textRow.mono ? Theme.fontMono : Theme.fontUi
+            font.capitalization: textRow.upperCase ? Font.AllUppercase : Font.MixedCase
             // Secrets stay masked until focused, so a shoulder-surfer (or a
             // screenshot) never catches a token sitting in the panel.
             echoMode: (textRow.alwaysMasked || (textRow.secret && !activeFocus)) ? TextInput.Password : TextInput.Normal
@@ -1696,6 +1699,11 @@ Item {
                             Layout.fillWidth: true
                             Layout.alignment: Qt.AlignTop
                             label: I18n.t("settings.tasks.idPrefix"); mono: true; placeholder: "TASK"
+                            // What a #KEY-1 link and a branch name can carry
+                            // (SHELL-10): a letter, then letters and digits.
+                            // Shown as stored — upper case.
+                            validator: RegularExpressionValidator { regularExpression: /^([A-Za-z][A-Za-z0-9]{0,15})?$/ }
+                            upperCase: true
                             hint: I18n.t("settings.tasks.idPrefix.hint").arg((root.settings.tasks && root.settings.tasks.idPrefix) || "TASK")
                             value: (root.settings.tasks && root.settings.tasks.idPrefix) || ""
                             onCommitted: (text) => {

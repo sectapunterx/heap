@@ -47,6 +47,11 @@ Item {
         objectName: "archive-filter"
         sourceModel: AppController.tasks
         archivedOnly: true
+        // As on the board: status: by column name and relative dates need
+        // the columns and today, or "status:\"Code Review\"" finds nothing
+        // here while a saved view counts it (TASKS-5).
+        statuses: AppController.statuses
+        today: AppController.today
         searchText: root.searchText
         priorities: root.activePriorities
         sortMode: "priority"
