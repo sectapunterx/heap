@@ -3,6 +3,7 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "notify/NotifyPayload.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -864,6 +865,23 @@ class AppController : public QObject {
   // an error toast) when the OS refused the change.
   Q_INVOKABLE bool setAutostart(bool enabled, bool minimized);
 
+  // ---- Reminder buttons (APP-155) ----
+  // A heap://notify URI from a toast click, forwarded by the launch the shell
+  // started (main.cpp). Routes to the same handlers as a native button.
+  Q_INVOKABLE bool handleNotificationUri(const QString& uri);
+  // A sample reminder with the real buttons, from Settings → Notifications,
+  // shown even while heap has focus: it is how the user checks that the OS
+  // lets heap's notifications through.
+  Q_INVOKABLE void sendTestNotification();
+  // Puts a shown reminder off: it comes back `minutes` after `now`, with the
+  // same text, through the usual quiet-hours rules. Kept in snoozes.json.
+  void snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now);
+
+  // Snoozed reminders waiting (tests).
+  QVector<heap::notify::SnoozedReminder> pendingSnoozes() const {
+    return m_snoozed;
+  }
+
   // ---- Event ops ----
   // A fresh event id. Shared by the draft and the series edits, which both
   // need one and must not invent different shapes.
@@ -1302,7 +1320,9 @@ class AppController : public QObject {
   void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
-  void notification(const QString& title, const QString& body, const QString& kind);
+  // `routeId` ("meeting:<event id>") makes it a reminder with buttons
+  // (APP-155); empty for a plain heads-up.
+  void notification(const QString& title, const QString& body, const QString& kind, const QString& routeId = QString());
   // `kind` tints the toast: "info" (default when empty), "success", "warning"
   // or "error". Every C++ toast used to arrive as info, failures included.
   void toast(const QString& message, const QString& kind = QString());
@@ -1342,6 +1362,9 @@ class AppController : public QObject {
   void trackerPushFailed(const QString& taskId, const QString& message);
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
+  // "Open" on a meeting / standup reminder: the calendar at `date`, and the
+  // event's editor when `eventId` names a stored event (APP-155).
+  void openEventRequested(const QString& eventId, const QDate& date);
   void selectedTaskIdsChanged();
   // Raised by the OS-level global hotkeys (Quick-capture from anywhere). QML
   // brings the window forward and opens the matching capture popup.
@@ -1561,6 +1584,24 @@ class AppController : public QObject {
   QVector<HeldNotification> m_heldNotifications;
   QString remindersFilePath() const;
   void loadSentReminders();
+  // Reminder buttons (APP-155): what each kind offers, what was last shown
+  // under an id (so a snooze can bring the same text back), and the snoozes.
+  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind) const;
+
+  struct ShownReminder {
+    QString title;
+    QString body;
+    QString kind;
+    QDate date;  // meetings: the occurrence's day, for "Open"
+  };
+
+  QHash<QString, ShownReminder> m_shownReminders;
+  QVector<heap::notify::SnoozedReminder> m_snoozed;
+  QString snoozesFilePath() const;
+  void loadSnoozes();
+  void saveSnoozes() const;
+  void fireDueSnoozes(const QDateTime& now);
+  void openReminder(const QString& notificationId);
   void saveSentReminders() const;
   bool reminderSent(const QString& key) const;
   QSet<QString> sentReminderKeys() const;

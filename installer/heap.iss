@@ -51,9 +51,20 @@ Name: "desktopicon"; Description: "Create a desktop shortcut"; GroupDescription:
 Source: "{#BundleDir}\*"; DestDir: "{app}"; Flags: recursesubdirs createallsubdirs ignoreversion
 
 [Icons]
-Name: "{group}\heap."; Filename: "{app}\heap.exe"
+; The AppUserModelID is what Windows shows toasts under (APP-155); heap.exe
+; sets the same one on its process (NotificationCenter_win.cpp).
+Name: "{group}\heap."; Filename: "{app}\heap.exe"; AppUserModelID: "local.heap.app"
 Name: "{group}\Uninstall heap."; Filename: "{uninstallexe}"
-Name: "{autodesktop}\heap."; Filename: "{app}\heap.exe"; Tasks: desktopicon
+Name: "{autodesktop}\heap."; Filename: "{app}\heap.exe"; AppUserModelID: "local.heap.app"; Tasks: desktopicon
+
+[Registry]
+; heap:// — toast buttons start heap with a heap://notify URI (APP-155). heap
+; also registers it per user at startup; this covers the first toast.
+Root: HKA; Subkey: "Software\Classes\heap"; ValueType: string; ValueName: ""; ValueData: "URL:heap"; Flags: uninsdeletekey
+Root: HKA; Subkey: "Software\Classes\heap"; ValueType: string; ValueName: "URL Protocol"; ValueData: ""
+Root: HKA; Subkey: "Software\Classes\heap\shell\open\command"; ValueType: string; ValueName: ""; ValueData: """{app}\heap.exe"" ""%1"""
+; Start at login (APP-154) is written by heap itself; uninstalling removes it.
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "heap"; Flags: uninsdeletevalue dontcreatekey
 
 [Run]
 Filename: "{app}\heap.exe"; Description: "Launch heap."; Flags: nowait postinstall skipifsilent

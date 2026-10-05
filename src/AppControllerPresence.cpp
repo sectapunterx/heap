@@ -1,10 +1,19 @@
-// heap staying around: start at login (APP-154).
+// heap staying around: start at login (APP-154) and reminders with buttons
+// that put them off or open what they are about (APP-155).
 #include "AppController.h"
 
+#include "notify/NotificationCenter.h"
 #include "platform/Autostart.h"
+#include "platform/Paths.h"
 
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSaveFile>
+
+#include <algorithm>
 
 QVariantMap AppController::autostartState() const {
   namespace as = heap::platform::autostart;
@@ -36,4 +45,168 @@ bool AppController::setAutostart(bool enabled, bool minimized) {
   root[QStringLiteral("system")] = sys;
   setAppSettingsJson(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
   return ok;
+}
+
+// ── Reminder buttons (APP-155) ──────────────────────────────────────
+
+namespace {
+
+// A meeting or the standup is an appointment: it has a day to open, not a task.
+bool isAppointment(const QString& kind) {
+  return kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
+}
+
+}  // namespace
+
+QVector<heap::notify::NotificationAction> AppController::reminderActions(const QString& kind) const {
+  namespace hn = heap::notify;
+  const QVariantMap notif = settingsMap().value(QStringLiteral("notifications")).toMap();
+  const bool ru = m_language == QStringLiteral("ru");
+  const int shortMin = notif.value(QStringLiteral("snoozeShortMin"), hn::kDefaultSnoozeShortMin).toInt();
+  const int longMin = notif.value(QStringLiteral("snoozeLongMin"), hn::kDefaultSnoozeLongMin).toInt();
+  const QString snoozeShort = QString::fromLatin1(hn::kSnoozeShort);
+  const QString snoozeLong = QString::fromLatin1(hn::kSnoozeLong);
+  QVector<hn::NotificationAction> out{{snoozeShort, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeShort, shortMin, longMin), ru)},
+                                      {snoozeLong, hn::snoozeLabel(hn::snoozeMinutesFor(snoozeLong, shortMin, longMin), ru)},
+                                      {QString::fromLatin1(hn::kOpen), tr_(QStringLiteral("notify.action.open"))}};
+  // A task's reminder can also close it, as the Linux toasts always could.
+  if(!isAppointment(kind) && kind != QStringLiteral("test")) {
+    out.append({QString::fromLatin1(hn::kDone), tr_(QStringLiteral("notify.action.done"))});
+  }
+  return out;
+}
+
+bool AppController::handleNotificationUri(const QString& uri) {
+  return m_notifier && m_notifier->handleActivationUri(uri);
+}
+
+void AppController::sendTestNotification() {
+  if(!m_notifier) {
+    return;
+  }
+  heap::notify::Notification n;
+  n.id = heap::notify::routingId(QStringLiteral("test"), QStringLiteral("heap"));
+  n.title = tr_(QStringLiteral("notify.test.title"));
+  n.body = tr_(QStringLiteral("notify.test.body"));
+  n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+  n.category = QStringLiteral("test");
+  if(m_notifier->supportsActions()) {
+    n.actions = reminderActions(n.category);
+  }
+  m_shownReminders.insert(n.id, {n.title, n.body, n.category, QDate()});
+  m_notifier->post(n);
+}
+
+void AppController::snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now) {
+  const auto [kind, ref] = heap::notify::parseRoutingId(notificationId);
+  if(ref.isEmpty()) {
+    return;
+  }
+  ShownReminder shown = m_shownReminders.value(notificationId);
+  // Shown before a restart: the words are gone, the task's title is not.
+  if(shown.title.isEmpty()) {
+    shown.title = tr_(QStringLiteral("notify.reminderTitle"));
+    shown.body = taskById(ref).value(QStringLiteral("title")).toString();
+  }
+  heap::notify::SnoozedReminder s;
+  s.id = notificationId;
+  s.title = shown.title;
+  s.body = shown.body;
+  s.kind = shown.kind.isEmpty() ? kind : shown.kind;
+  s.fireAt = heap::notify::snoozeUntil(now, minutes);
+  heap::notify::upsertSnooze(m_snoozed, s);
+  saveSnoozes();
+  if(m_notifier) {
+    m_notifier->dismiss(notificationId);
+  }
+  emit toast(tr_(QStringLiteral("notify.snoozedUntil")).arg(s.fireAt.time().toString(QStringLiteral("HH:mm"))));
+}
+
+void AppController::fireDueSnoozes(const QDateTime& now) {
+  const QVector<heap::notify::SnoozedReminder> due = heap::notify::takeDueSnoozes(m_snoozed, now);
+  if(due.isEmpty()) {
+    return;
+  }
+  saveSnoozes();
+  // A task finished or deleted since the snooze has nothing left to say. Any
+  // profile: reminders cover them all.
+  const auto stillOpen = [this](const QString& taskId) {
+    const auto open = [&taskId](const QVector<Task>& tasks) {
+      return std::any_of(tasks.cbegin(), tasks.cend(), [&taskId](const Task& t) {
+        return t.id == taskId && !t.archived && t.status != QStringLiteral("done");
+      });
+    };
+    if(open(m_tasks.items())) {
+      return true;
+    }
+    return std::any_of(m_profiles.cbegin(), m_profiles.cend(), [this, &open](const Profile& p) {
+      return p.id != m_activeProfileId && open(p.tasks);
+    });
+  };
+  for(const heap::notify::SnoozedReminder& s : due) {
+    const auto [kind, ref] = heap::notify::parseRoutingId(s.id);
+    if(isAppointment(kind) || kind == QStringLiteral("test")) {
+      emit notification(s.title, s.body, s.kind, s.id);
+    } else if(stillOpen(ref)) {
+      notifyTaskAt(ref, s.title, s.body, kind, now);
+    }
+  }
+}
+
+void AppController::openReminder(const QString& notificationId) {
+  const auto [kind, ref] = heap::notify::parseRoutingId(notificationId);
+  if(isAppointment(kind)) {
+    const QDate date = m_shownReminders.value(notificationId).date;
+    emit openEventRequested(kind == QStringLiteral("meeting") ? ref : QString(), date.isValid() ? date : today());
+    return;
+  }
+  // Reminders cover every profile; opening one switches to the workspace it is in.
+  activateProfileOfTask(ref);
+  if(!ref.isEmpty() && m_tasks.indexOfId(ref) >= 0) {
+    emit openTaskRequested(ref);
+  } else {
+    emit showWindowRequested();
+  }
+}
+
+QString AppController::snoozesFilePath() const {
+  return heap::paths::dataDir() + QStringLiteral("/snoozes.json");
+}
+
+void AppController::loadSnoozes() {
+  m_snoozed.clear();
+  QFile f(snoozesFilePath());
+  if(!f.open(QIODevice::ReadOnly)) {
+    return;
+  }
+  const QJsonArray arr = QJsonDocument::fromJson(f.readAll()).array();
+  for(const auto& v : arr) {
+    const QJsonObject o = v.toObject();
+    heap::notify::SnoozedReminder s;
+    s.id = o.value(QStringLiteral("id")).toString();
+    s.title = o.value(QStringLiteral("title")).toString();
+    s.body = o.value(QStringLiteral("body")).toString();
+    s.kind = o.value(QStringLiteral("kind")).toString();
+    s.fireAt = QDateTime::fromString(o.value(QStringLiteral("fireAt")).toString(), Qt::ISODate);
+    if(!s.id.isEmpty() && s.fireAt.isValid()) {
+      m_snoozed.append(s);
+    }
+  }
+}
+
+void AppController::saveSnoozes() const {
+  QJsonArray arr;
+  for(const heap::notify::SnoozedReminder& s : m_snoozed) {
+    arr.append(QJsonObject{{QStringLiteral("id"), s.id},
+                           {QStringLiteral("title"), s.title},
+                           {QStringLiteral("body"), s.body},
+                           {QStringLiteral("kind"), s.kind},
+                           {QStringLiteral("fireAt"), s.fireAt.toString(Qt::ISODate)}});
+  }
+  QDir().mkpath(heap::paths::dataDir());
+  QSaveFile f(snoozesFilePath());
+  if(f.open(QIODevice::WriteOnly)) {
+    f.write(QJsonDocument(arr).toJson(QJsonDocument::Compact));
+    f.commit();
+  }
 }

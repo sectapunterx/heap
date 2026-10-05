@@ -1466,6 +1466,24 @@ Item {
                                ? (root.settings.notifications.meetingLead ?? 5) : 5
                         onMoved: (value) => root.set("notifications", "meetingLead", value)
                     }
+                    // The two snooze buttons on a reminder (APP-155).
+                    SliderRow {
+                        objectName: "settings-snooze-short"
+                        label: I18n.t("settings.notif.snoozeShort")
+                        hint: I18n.t("settings.notif.snoozeShort.hint")
+                        unit: " " + I18n.t("common.minutes"); min: 5; max: 60; step: 5
+                        value: root.settings.notifications
+                               ? (root.settings.notifications.snoozeShortMin ?? 10) : 10
+                        onMoved: (value) => root.set("notifications", "snoozeShortMin", value)
+                    }
+                    SliderRow {
+                        objectName: "settings-snooze-long"
+                        label: I18n.t("settings.notif.snoozeLong")
+                        unit: " " + I18n.t("common.minutes"); min: 15; max: 240; step: 15
+                        value: root.settings.notifications
+                               ? (root.settings.notifications.snoozeLongMin ?? 60) : 60
+                        onMoved: (value) => root.set("notifications", "snoozeLongMin", value)
+                    }
                 }
             }
             SectionCard {
@@ -1479,6 +1497,13 @@ Item {
                         label: I18n.t("settings.notif.desktopNotif")
                         checked: !!(root.settings.notifications && root.settings.notifications.desktopNotif)
                         onToggled: (checked) => root.set("notifications", "desktopNotif", checked)
+                    }
+                    // Shows a sample reminder with its buttons now, so the
+                    // user can see the OS lets heap's notifications through.
+                    PillButton {
+                        objectName: "settings-test-notification"
+                        text: I18n.t("settings.notif.test")
+                        onClicked: AppController.sendTestNotification()
                     }
                     SwitchRow {
                         label: I18n.t("settings.notif.blockedDigest")

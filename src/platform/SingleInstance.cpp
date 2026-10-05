@@ -71,6 +71,21 @@ SingleInstance::Result SingleInstance::acquire(const QByteArray& message) {
   return Result::Busy;
 }
 
+bool SingleInstance::forwardOnly(const QString& dataDir, const QByteArray& message) {
+#ifdef Q_OS_WIN
+  AllowSetForegroundWindow(ASFW_ANY);
+#endif
+  const QString name = serverName(QDir(dataDir).absolutePath());
+  const QDeadlineTimer deadline(kForwardWindowMs / 2);
+  while(!deadline.hasExpired()) {
+    if(forward(name, message)) {
+      return true;
+    }
+    QThread::msleep(100);
+  }
+  return false;
+}
+
 bool SingleInstance::listen() {
   const QString name = serverName(m_dataDir);
   // A crashed owner can leave its socket file behind on Unix. We hold the

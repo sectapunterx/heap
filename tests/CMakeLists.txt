@@ -227,6 +227,8 @@ add_test(NAME heap_text_tests COMMAND heap_text_tests)
 # OS backend is linked, so the tests run headless on any CI runner.
 add_executable(heap_notify_tests
     test_notification.cpp
+    test_notify_payload.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotifyPayload.cpp
     # AUTOMOC needs the header explicitly listed so the moc artifacts for
     # NotificationCenter (Q_OBJECT in the abstract base) are emitted into
     # this exe. Otherwise the linker complains about the missing vtable.

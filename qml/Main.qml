@@ -1332,6 +1332,14 @@ ApplicationWindow {
             // Edits to the task already open are not swapped out unasked (TASKS-18).
             taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
         }
+        // "Open" on a meeting / standup reminder (APP-155): that day in the
+        // week view, and the meeting itself when it is a stored event.
+        function onOpenEventRequested(eventId, date) {
+            win._summon();
+            AppController.selectedDate = date;
+            AppController.currentView = "week";
+            if (eventId) eventEditor.showForId(eventId);
+        }
     }
 
     // What a palette command does. Ids are the shortcut catalog's, so the
