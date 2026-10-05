@@ -1525,6 +1525,25 @@ Item {
                     onMoved: (value) => root.set("safety", "staleDays", value)
                 }
             }
+            // APP-158: a task waiting on someone's reply.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.waiting")
+                SwitchRow {
+                    objectName: "settings-safety-waiting"
+                    label: I18n.t("settings.safety.waiting")
+                    hint: I18n.t("settings.safety.waiting.hint")
+                    checked: !!(root.settings.safety && root.settings.safety.waitingOn)
+                    onToggled: (checked) => root.set("safety", "waitingOn", checked)
+                }
+                SliderRow {
+                    objectName: "settings-safety-waitingDays"
+                    visible: !!(root.settings.safety && root.settings.safety.waitingOn)
+                    label: I18n.t("settings.safety.waitingDays")
+                    unit: " " + I18n.t("common.days"); min: 1; max: 7; step: 1
+                    value: root.settings.safety ? (root.settings.safety.waitingDays ?? 2) : 2
+                    onMoved: (value) => root.set("safety", "waitingDays", value)
+                }
+            }
         }
     }
 

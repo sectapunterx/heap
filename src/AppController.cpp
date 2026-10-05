@@ -803,6 +803,8 @@ AppController::AppController(QObject* parent) :
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::workingTreeChecked, this, &AppController::onWorkingTreeChecked);
+  // "Waiting 2d" counts calendar days, so it moves on at midnight (APP-158).
+  connect(this, &AppController::todayChanged, this, &AppController::waitingOnChanged);
   connect(
       m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
         const heap::git::BranchTaskMatcher m(collectPrefixes());
@@ -4842,12 +4844,18 @@ double AppController::nextFreeSlot(const QDate& date, double durationHours) cons
 }
 
 void AppController::cyclePerson(const QString& id) {
+  const int row = m_people.indexOfId(id);
+  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
   m_people.cycleState(id);
+  personStateMoved(id, before);
   scheduleSave();
 }
 
 void AppController::setPersonState(const QString& id, const QString& state) {
+  const int row = m_people.indexOfId(id);
+  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
   m_people.setState(id, state);
+  personStateMoved(id, before);
   scheduleSave();
 }
 
@@ -4979,7 +4987,10 @@ bool AppController::savePerson(const QVariantMap& draft) {
     return false;
   }
   const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
+  const int beforeRow = m_people.indexOfId(p.id);
+  const QString stateBefore = beforeRow >= 0 ? m_people.items().at(beforeRow).state : QString();
   m_people.upsert(p);
+  personStateMoved(p.id, stateBefore);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
   // Mattermost sync, reuse this Person instead of making a second one); a
@@ -5210,6 +5221,7 @@ void AppController::deletePerson(const QString& id) {
   const Person removedPerson = m_people.items().at(row);
   const UndoScope scope(this, tr_("person.restored").arg(removedPerson.name));
   m_people.removeById(id);
+  personStateMoved(id, removedPerson.state);
   emit undoableToast(tr_("person.deleted").arg(removedPerson.name), 5);
   scheduleSave();
 }
@@ -8947,11 +8959,14 @@ void AppController::snapshotActiveProfile() {
   p.activeDocPageId = m_activeDocPageId;
   p.savedViews = m_savedViews;
   p.statusLog = m_statusLog;
+  p.waitingOn = m_waitingOn;
   // Events are global — not snapshotted into the profile.
 }
 
 void AppController::applyProfileToModels(const Profile& p) {
   m_statusLog = p.statusLog;
+  m_waitingOn = p.waitingOn;
+  emit waitingOnChanged();
   // Imports and hand-edited files may still carry rank ties (see Rank.h).
   QVector<Task> tasks = p.tasks;
   heap::board::spreadTiedRanks(tasks);
@@ -11751,6 +11766,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
 
   // 6. The safety net (APP-157…): each off unless switched on.
   checkEndOfDayAt(now);
+  checkWaitingAt(now);
 
   // Anything else that arrived during quiet hours goes out now.
   if(!quiet) {

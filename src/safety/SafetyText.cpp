@@ -28,6 +28,11 @@ const QHash<QString, Entry>& table() {
       {QStringLiteral("safety.eod.stale"), {"%1 %2 in progress without a move for %3+ %4", "%1 %2 в работе без движения %3+ %4"}},
       {QStringLiteral("safety.dayForms"), {"day|days|days", "день|дня|дней"}},
       {QStringLiteral("safety.eod.taskForms"), {"task|tasks|tasks", "задача|задачи|задач"}},
+      // ── APP-158: waiting on a reply ──
+      {QStringLiteral("safety.waiting.title"), {"Still waiting on a reply", "Ждёте ответа"}},
+      // %1 person, %2 days, %3 "day(s)", %4 task title. No declension of the
+      // name in Russian: "спрашивали Олег" would read wrong, so it leads.
+      {QStringLiteral("safety.waiting.body"), {"You asked %1 %2 %3 ago: %4", "%1 · спрашивали %2 %3 назад: %4"}},
   };
   return t;
 }

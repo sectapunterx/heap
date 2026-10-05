@@ -3,6 +3,7 @@
 
 #include "safety/EndOfDay.h"
 #include "safety/SafetyText.h"
+#include "safety/WaitingOn.h"
 
 #include <gtest/gtest.h>
 
@@ -123,6 +124,48 @@ TEST(EndOfDayText, TheSummaryReadsLikeTheSpec) {
             QStringLiteral("Таймер всё ещё идёт · 3 незакоммиченных файла в heap · 2 задачи в работе без движения 3+ дня"));
   EXPECT_EQ(endOfDaySummary(f, 3, false),
             QStringLiteral("Timer still running · 3 uncommitted files in heap · 2 tasks in progress without a move for 3+ days"));
+}
+
+// ── APP-158: waiting on a reply ──
+
+TEST(Waiting, TheReminderIsDueAfterTheSetDays) {
+  const WaitingOn w{.taskId = QStringLiteral("T-1"), .personId = QStringLiteral("oleg"), .since = kEvening, .remindedAt = {}};
+  EXPECT_FALSE(waitingReminderDue(w, kEvening.addDays(2).addSecs(-60), 2));
+  EXPECT_TRUE(waitingReminderDue(w, kEvening.addDays(2), 2));
+  EXPECT_TRUE(waitingReminderDue(w, kEvening.addDays(9), 2));
+}
+
+TEST(Waiting, OncePerLink) {
+  WaitingOn w{.taskId = QStringLiteral("T-1"), .personId = QStringLiteral("oleg"), .since = kEvening, .remindedAt = {}};
+  w.remindedAt = kEvening.addDays(2);
+  EXPECT_FALSE(waitingReminderDue(w, kEvening.addDays(5), 2));
+}
+
+// Asking again starts the wait over: a new `since`, the reminder cleared.
+TEST(Waiting, ReArmingStartsOver) {
+  WaitingOn w{.taskId = QStringLiteral("T-1"), .personId = QStringLiteral("oleg"), .since = kEvening, .remindedAt = kEvening.addDays(2)};
+  w.since = kEvening.addDays(3);
+  w.remindedAt = {};
+  EXPECT_FALSE(waitingReminderDue(w, kEvening.addDays(4), 2));
+  EXPECT_TRUE(waitingReminderDue(w, kEvening.addDays(5), 2));
+}
+
+TEST(Waiting, ZeroDaysMeansOne) {
+  const WaitingOn w{.taskId = QStringLiteral("T-1"), .personId = QStringLiteral("oleg"), .since = kEvening, .remindedAt = {}};
+  EXPECT_FALSE(waitingReminderDue(w, kEvening.addSecs(3600), 0));
+}
+
+TEST(Waiting, DaysAreCalendarDays) {
+  EXPECT_EQ(waitingDays(QDateTime(kDay, QTime(23, 0)), kDay.addDays(1)), 1);
+  EXPECT_EQ(waitingDays(QDateTime(kDay, QTime(9, 0)), kDay), 0);
+  EXPECT_EQ(waitingDays({}, kDay), 0);
+}
+
+TEST(Waiting, OnlyAMoveToRepliedEndsIt) {
+  EXPECT_TRUE(replyEndsWaiting(QStringLiteral("pinged"), QStringLiteral("replied")));
+  EXPECT_TRUE(replyEndsWaiting(QStringLiteral("todo"), QStringLiteral("replied")));
+  EXPECT_FALSE(replyEndsWaiting(QStringLiteral("replied"), QStringLiteral("replied")));
+  EXPECT_FALSE(replyEndsWaiting(QStringLiteral("todo"), QStringLiteral("pinged")));
 }
 
 TEST(EndOfDayText, RussianPluralForms) {

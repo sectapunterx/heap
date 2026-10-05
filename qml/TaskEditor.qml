@@ -1111,6 +1111,49 @@ Popup {
                     }
                 }
 
+                // ── Waiting on a reply (APP-158): who this task waits on ──
+                // Only for a saved task, and only once the heads-up is on in
+                // Settings → Safety net. Applies at once, like the timer.
+                RowLayout {
+                    id: waitingRow
+                    objectName: "te-waiting"
+                    readonly property var link: AppController.waitingOn[root._originalId]
+                    visible: !root.isNew && root._originalId.length > 0
+                             && !!(AppController.safety && AppController.safety.waitingOn)
+                    Layout.fillWidth: true
+                    Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
+                    spacing: Theme.spSm
+                    FieldLabel { text: I18n.t("waiting.label").toUpperCase() }
+                    Text {
+                        objectName: "te-waiting-who"
+                        Layout.fillWidth: true
+                        text: waitingRow.link
+                              ? I18n.t("waiting.since").arg(waitingRow.link.name).arg(waitingRow.link.days)
+                              : I18n.t("waiting.none")
+                        textFormat: Text.PlainText
+                        color: waitingRow.link ? Theme.text : Theme.textDim
+                        font.pixelSize: Theme.fsSm
+                        elide: Text.ElideRight
+                    }
+                    PillButton {
+                        objectName: "te-waiting-pick"
+                        text: waitingRow.link ? I18n.t("waiting.change") : I18n.t("waiting.pick")
+                        onClicked: waitingPicker.open_()
+                    }
+                    PillButton {
+                        objectName: "te-waiting-clear"
+                        visible: !!waitingRow.link
+                        text: I18n.t("waiting.clear")
+                        onClicked: AppController.clearWaitingOn(root._originalId)
+                    }
+                    PersonPicker {
+                        id: waitingPicker
+                        pickOnly: true
+                        title: I18n.t("waiting.pickTitle")
+                        onPersonPicked: (personId) => AppController.setWaitingOn(root._originalId, personId)
+                    }
+                }
+
                 // ── Details: everything that is not needed to pick the task up ──
                 Rectangle {
                     Layout.fillWidth: true

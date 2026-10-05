@@ -1953,6 +1953,25 @@ class AppController : public QObject {
   // The end-of-day check (APP-157) at `now`. runAutomationAt() calls it on
   // every tick; it fires at most once a day, at settings.safety.endOfDayTime.
   void checkEndOfDayAt(const QDateTime& now);
+  // The "waiting on a reply" reminder (APP-158) at `now`, from the same tick.
+  void checkWaitingAt(const QDateTime& now);
+
+  // settings.safety, for QML: which heads-ups are on.
+  Q_PROPERTY(QVariantMap safety READ safetySettings NOTIFY appSettingsJsonChanged)
+  // Waiting on a reply (APP-158), active profile: task id →
+  // { personId, name, color, since, days }.
+  Q_PROPERTY(QVariantMap waitingOn READ waitingOnMap NOTIFY waitingOnChanged)
+  QVariantMap waitingOnMap() const;
+
+  QVector<WaitingOn> waitingOnLinks() const {
+    return m_waitingOn;
+  }
+
+  // Link a task to the person whose answer it waits on, from now. Picking
+  // someone again (or the same person) starts the wait over and re-arms its
+  // one reminder.
+  Q_INVOKABLE void setWaitingOn(const QString& taskId, const QString& personId);
+  Q_INVOKABLE void clearWaitingOn(const QString& taskId);
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;
@@ -1963,6 +1982,7 @@ class AppController : public QObject {
   void safetyNotice(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds);
   // Bring the board up narrowed to these tasks (a notice was clicked).
   void safetyOpenTasksRequested(const QStringList& taskIds);
+  void waitingOnChanged();
 
  private:
   QVariantMap safetySettings() const;
@@ -1977,4 +1997,9 @@ class AppController : public QObject {
   QString m_eodPendingRepo;
   // Task id → the newest commit naming it, from the watcher's log.
   QHash<QString, QDateTime> m_lastCommitAt;
+  // The active profile's waiting-on links (the others' are in m_profiles).
+  QVector<WaitingOn> m_waitingOn;
+  // A person's state went from `before` to their current one: a reply ends
+  // every wait on them; a deleted person's waits go with them.
+  void personStateMoved(const QString& personId, const QString& before);
 };

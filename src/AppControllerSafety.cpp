@@ -16,6 +16,7 @@
 #include <QFileInfo>
 #include <QGuiApplication>
 
+#include <algorithm>
 #include <utility>
 
 using heap::safety::EndOfDayFacts;
@@ -141,4 +142,120 @@ void AppController::finishEndOfDay(const QDateTime& now, const RepoDirt& dirt) {
                heap::safety::endOfDaySummary(f, settings.staleDays, ru),
                f.taskIds(),
                now);
+}
+
+// ── APP-158: waiting on a reply ──
+
+QVariantMap AppController::waitingOnMap() const {
+  QVariantMap out;
+  for(const WaitingOn& w : m_waitingOn) {
+    const int row = m_people.indexOfId(w.personId);
+    if(row < 0 || m_tasks.indexOfId(w.taskId) < 0) {
+      continue;
+    }
+    const Person& p = m_people.items().at(row);
+    out.insert(w.taskId,
+               QVariantMap{{QStringLiteral("personId"), p.id},
+                           {QStringLiteral("name"), p.name},
+                           {QStringLiteral("color"), p.color},
+                           {QStringLiteral("since"), w.since},
+                           {QStringLiteral("days"), heap::safety::waitingDays(w.since, m_today)}});
+  }
+  return out;
+}
+
+void AppController::setWaitingOn(const QString& taskId, const QString& personId) {
+  if(m_tasks.indexOfId(taskId) < 0 || m_people.indexOfId(personId) < 0) {
+    return;
+  }
+  const WaitingOn link{.taskId = taskId, .personId = personId, .since = QDateTime::currentDateTime(), .remindedAt = {}};
+  bool replaced = false;
+  for(WaitingOn& w : m_waitingOn) {
+    if(w.taskId == taskId) {
+      w = link;
+      replaced = true;
+    }
+  }
+  if(!replaced) {
+    m_waitingOn.append(link);
+  }
+  emit waitingOnChanged();
+  scheduleSave();
+}
+
+void AppController::clearWaitingOn(const QString& taskId) {
+  const qsizetype removed = m_waitingOn.removeIf([&taskId](const WaitingOn& w) {
+    return w.taskId == taskId;
+  });
+  if(removed > 0) {
+    emit waitingOnChanged();
+    scheduleSave();
+  }
+}
+
+void AppController::personStateMoved(const QString& personId, const QString& before) {
+  const int row = m_people.indexOfId(personId);
+  if(row >= 0 && !heap::safety::replyEndsWaiting(before, m_people.items().at(row).state)) {
+    return;
+  }
+  const qsizetype removed = m_waitingOn.removeIf([&personId](const WaitingOn& w) {
+    return w.personId == personId;
+  });
+  if(removed > 0) {
+    emit waitingOnChanged();
+    scheduleSave();
+  }
+}
+
+void AppController::checkWaitingAt(const QDateTime& now) {
+  const QVariantMap s = safetySettings();
+  if(!s.value(QStringLiteral("waitingOn"), false).toBool()) {
+    return;
+  }
+  const int days = qMax(1, s.value(QStringLiteral("waitingDays"), 2).toInt());
+  // One profile's links against that profile's tasks and people; the active
+  // one's live in the models, the others' in m_profiles (PLAT-9).
+  const auto remind = [&](QVector<WaitingOn>& links, const QVector<Task>& tasks, const QVector<Person>& people) {
+    bool changed = false;
+    for(WaitingOn& w : links) {
+      if(!heap::safety::waitingReminderDue(w, now, days)) {
+        continue;
+      }
+      const auto task = std::ranges::find_if(tasks, [&w](const Task& t) {
+        return t.id == w.taskId;
+      });
+      const auto person = std::ranges::find_if(people, [&w](const Person& p) {
+        return p.id == w.personId;
+      });
+      // Finished or archived work is not waiting on anyone any more.
+      if(task == tasks.cend() || person == people.cend() || task->archived || task->status == QLatin1String("done")) {
+        continue;
+      }
+      w.remindedAt = now;
+      changed = true;
+      const int ago = heap::safety::waitingDays(w.since, now.date());
+      safetyNotify(
+          QStringLiteral("waiting"),
+          tr_(QStringLiteral("safety.waiting.title")),
+          // One multi-arg call: a name or title holding "%2" is
+          // not substituted into.
+          tr_(QStringLiteral("safety.waiting.body"))
+              .arg(person->name, QString::number(ago), heap::safety::plural(ago, tr_(QStringLiteral("safety.dayForms"))), task->title),
+          {task->id},
+          now);
+    }
+    return changed;
+  };
+  bool changed = remind(m_waitingOn, m_tasks.items(), m_people.items());
+  if(changed) {
+    emit waitingOnChanged();
+  }
+  for(Profile& p : m_profiles) {
+    if(p.id != m_activeProfileId) {
+      changed = remind(p.waitingOn, p.tasks, p.people) || changed;
+    }
+  }
+  if(changed) {
+    scheduleSave();
+  }
 }

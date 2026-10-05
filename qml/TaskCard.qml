@@ -418,8 +418,22 @@ Rectangle {
                      || !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
                      || !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
                      || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
-                     || card._attachmentCount > 0
+                     || card._attachmentCount > 0 || waitT.link !== undefined
             spacing: Theme.spLg
+
+            // Waiting on someone's reply (APP-158): "waiting: Oleg · 2d".
+            Text {
+                id: waitT
+                objectName: "tc-waiting"
+                readonly property var link: (AppController.safety && AppController.safety.waitingOn)
+                                            ? AppController.waitingOn[card.taskId] : undefined
+                visible: link !== undefined
+                text: link ? I18n.t("waiting.chip").arg(link.name).arg(link.days) : ""
+                textFormat: Text.PlainText
+                color: Theme.warning
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+            }
 
             // How many files are attached. Opening them is the editor's job.
             Text {
