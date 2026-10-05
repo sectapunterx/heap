@@ -606,13 +606,17 @@ namespace {
 // "- [ ] **Ship** the [build](http://…)" verbatim.
 QString plainLine(QString line) {
   static const QRegularExpression marker(QStringLiteral(R"(^(?:[-*+]|\d+[.)])\s+(?:\[[ xX]\]\s+)?)"));
-  static const QRegularExpression labelledWiki(QStringLiteral(R"(\[\[[^\]|]*\|([^\]]+)\]\])"));
+  // A backslash keeps # or | in a note name literal ([[A\|B options]]), so an
+  // escaped bar is part of the name, not the label separator (KNOW-6).
+  static const QRegularExpression labelledWiki(QStringLiteral(R"(\[\[(?:\\.|[^\]|\\])*\|([^\]]+)\]\])"));
   static const QRegularExpression wiki(QStringLiteral(R"(\[\[([^\]]*)\]\])"));
+  static const QRegularExpression escapedLinkChar(QStringLiteral(R"(\\([#|]))"));
   static const QRegularExpression link(QStringLiteral(R"(!?\[([^\]]*)\]\([^)]*\))"));
   static const QRegularExpression emphasis(QStringLiteral(R"((\*\*|__|~~|==|`|\*|_)(?=\S)(.+?)(?<=\S)\1)"));
   line.remove(marker);
   line.replace(labelledWiki, QStringLiteral("\\1"));
   line.replace(wiki, QStringLiteral("\\1"));
+  line.replace(escapedLinkChar, QStringLiteral("\\1"));
   line.replace(link, QStringLiteral("\\1"));
   for(int pass = 0; pass < 3 && line.contains(emphasis); ++pass) {
     line.replace(emphasis, QStringLiteral("\\2"));

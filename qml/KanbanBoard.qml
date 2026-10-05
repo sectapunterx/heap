@@ -746,6 +746,7 @@ Item {
                                     }
                                     TextField {
                                         id: renameField
+                                        ContextMenu.menu: TextEditMenu { editor: renameField }
                                         visible: col.renaming
                                         anchors.fill: parent
                                         text: col.statusName
@@ -1272,6 +1273,7 @@ Item {
             }
             TextField {
                 id: nameField
+                ContextMenu.menu: TextEditMenu { editor: nameField }
                 objectName: "add-column-name"
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
                 placeholderText: I18n.t("kanban.colName.ph")
@@ -1606,6 +1608,7 @@ Item {
             spacing: Theme.spMd
             TextField {
                 id: wipField
+                ContextMenu.menu: TextEditMenu { editor: wipField }
                 objectName: "wip-field"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 220
@@ -1676,6 +1679,7 @@ Item {
             spacing: Theme.spMd
             TextField {
                 id: archiveField
+                ContextMenu.menu: TextEditMenu { editor: archiveField }
                 objectName: "archive-field"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 220

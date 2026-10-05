@@ -107,6 +107,7 @@ Popup {
 
         TextField {
             id: searchField
+            ContextMenu.menu: TextEditMenu { editor: searchField }
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spXl
             Layout.fillWidth: true
             placeholderText: I18n.t("people.pick.ph")

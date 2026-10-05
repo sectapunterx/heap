@@ -347,6 +347,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
                             id: settingsSearch
+                            ContextMenu.menu: TextEditMenu { editor: settingsSearch }
                             objectName: "settings-search"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("settings.search")
@@ -949,6 +950,7 @@ Item {
         FieldLabel { label: textRow.label; hint: textRow.hint }
         TextField {
             id: textRowField
+            ContextMenu.menu: TextEditMenu { editor: textRowField }
             objectName: textRow.objectName.length > 0 ? textRow.objectName + "-field" : ""
             validator: textRow.clockTime ? textRow._clockValidator : null
             Layout.fillWidth: true
@@ -2720,6 +2722,7 @@ Item {
                         spacing: Theme.spMd
                         TextField {
                             id: newRepoField
+                            ContextMenu.menu: TextEditMenu { editor: newRepoField }
                             Layout.fillWidth: true
                             placeholderText: "C:/path/to/repo"
                             color: Theme.text

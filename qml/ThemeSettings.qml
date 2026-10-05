@@ -289,6 +289,7 @@ ColumnLayout {
 
         TextField {
             id: nameField
+            ContextMenu.menu: TextEditMenu { editor: nameField }
             objectName: "theme-name"
             Layout.preferredWidth: 200
             enabled: !ts.currentIsBuiltin
@@ -353,6 +354,7 @@ ColumnLayout {
             spacing: Theme.spMd
             TextField {
                 id: importField
+                ContextMenu.menu: TextEditMenu { editor: importField }
                 objectName: "theme-import-field"
                 Layout.fillWidth: true
                 placeholderText: I18n.t("settings.theme.importPh")
@@ -426,6 +428,8 @@ ColumnLayout {
         }
     }
     TextField {
+        id: tokenFilterField
+        ContextMenu.menu: TextEditMenu { editor: tokenFilterField }
         objectName: "theme-token-filter"
         visible: ts.colorsOpen
         Layout.preferredWidth: 220
@@ -517,6 +521,8 @@ ColumnLayout {
                             elide: Text.ElideRight
                         }
                         TextField {
+                            id: tokenHexField
+                            ContextMenu.menu: TextEditMenu { editor: tokenHexField }
                             objectName: "theme-hex-" + tokRow.key
                             Layout.preferredWidth: 92
                             text: tokRow.value

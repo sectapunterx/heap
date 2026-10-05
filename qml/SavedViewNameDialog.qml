@@ -66,6 +66,7 @@ Popup {
         }
         TextField {
             id: nameField
+            ContextMenu.menu: TextEditMenu { editor: nameField }
             objectName: "saved-view-name-field"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             Layout.fillWidth: true
