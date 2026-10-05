@@ -7,6 +7,7 @@ import QtQuick.Controls as QQC
 import QtQuick.Dialogs
 import TodoCpp
 import "DocsStarter.js" as DocsStarter
+import "ThemePresets.js" as Presets
 
 ApplicationWindow {
     id: win
@@ -329,7 +330,18 @@ ApplicationWindow {
         return out;
     }
 
+    // A built-in theme the update retired is kept as the user's own theme
+    // with the palette it had, instead of being swapped for another (APP-127).
+    function _keepRetiredThemes() {
+        const s = _settingsObject();
+        const next = Presets.adoptRetired(s.appearance);
+        if (!next) return;
+        s.appearance = next;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+
     Component.onCompleted: {
+        _keepRetiredThemes();
         _restoreGeometry();
         _restoreFilters();
         _syncSelectionFilter();

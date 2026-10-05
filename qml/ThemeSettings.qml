@@ -57,10 +57,11 @@ ColumnLayout {
         return null;
     }
 
-    // Adds `theme` as a new custom theme and puts it in the current slot.
+    // Adds `theme` as a new custom theme and puts it in the current slot. A
+    // name already in the picker gets " (2)", " (3)"… (APP-127).
     function _add(name, base, colors, from) {
         const id = Presets.newId(customs);
-        const t = { id: id, name: name, base: base, from: from || "", colors: colors };
+        const t = { id: id, name: Presets.uniqueName(name, customs), base: base, from: from || "", colors: colors };
         _saveCustoms(customs.concat([t]));
         pick(id);
         return id;

@@ -308,6 +308,184 @@ var RETIRED = {
     "muted-mauve": "dusk", "moss-mono": "fjord", "nocturne": "dusk"
 };
 
+// The palettes the retired built-ins had, exactly as they shipped, so a
+// user who had one in a slot, or had made a theme from it, keeps it: on the
+// first launch after the update it becomes their own theme (adoptRetired).
+// An update adds and replaces themes; it never takes one away (APP-127).
+var RETIRED_PALETTES = {
+    "minimal-light": {
+        name: "Minimal light", base: "light",
+        colors: {
+            bg: "#ffffff", bg2: "#fafafa", panel: "#fafafa", panel2: "#f5f5f5", panel3: "#ebebeb",
+            border: "#14000000", borderStrong: "#1f000000", text: "#262626", textMuted: "#525252",
+            textDim: "#686868", textOnAccent: "#fafafa", textOnDanger: "#ffffff", textOnBadge: "#ffffff",
+            accent: "#262626", accentStrong: "#0a0a0a", accentSoft: "#12000000", knob: "#ffffff",
+            danger: "#dc2626", warning: "#d97706", success: "#059669", info: "#2563eb", toastBg: "#ffffff",
+            toastBorder: "#14000000", toastText: "#262626", scrim: "#66000000", p0: "#dc2626", p1: "#ea580c",
+            p2: "#737373", p3: "#a3a3a3", stBacklog: "#a3a3a3", stTodo: "#737373", stProg: "#2563eb",
+            stHalf: "#d97706", stBlocked: "#dc2626", stReview: "#7c3aed", stDone: "#059669",
+            mStandup: "#2563eb", mOneone: "#7c3aed", mSync: "#0d9488", mFocus: "#059669", nowLine: "#dc2626",
+            synKeyword: "#7c3aed", synString: "#059669", synNumber: "#b45309", synComment: "#a3a3a3",
+            synType: "#2563eb", synBuiltin: "#262626", codeBg: "#fafafa", code: "#404040", mention: "#2563eb",
+            ticket: "#525252", tag: "#7c3aed", math: "#b45309", heading: "#a3a3a3", highlightBg: "#12000000",
+            mdLink: "#2563eb", mdCode: "#262626", mdCodeBg: "#f5f5f5", mdMention: "#2563eb",
+            mdTicket: "#262626", mdTag: "#7c3aed", mdMath: "#b45309", mdHighlight: "#12000000"
+        }
+    },
+    "muted-mauve": {
+        name: "Muted Mauve", base: "dark",
+        colors: {
+            bg: "#17141f", bg2: "#131019", panel: "#1e1a29", panel2: "#262035", panel3: "#3a3050",
+            border: "#332b45", borderStrong: "#4a425b", text: "#c0b9cc", textMuted: "#a79fb5",
+            textDim: "#8e879e", textOnAccent: "#17141f", textOnDanger: "#17141f", textOnBadge: "#17141f",
+            accent: "#b49bd0", accentStrong: "#c2add8", accentSoft: "#2eb49bd0", knob: "#c0b9cc",
+            danger: "#b98a95", warning: "#d8c19c", success: "#93ab97", info: "#9aa7cf", toastBg: "#262035",
+            toastBorder: "#5cb49bd0", toastText: "#c0b9cc", scrim: "#8c0c0a10", p0: "#b98a95", p1: "#d8c19c",
+            p2: "#93a8ad", p3: "#78718a", stBacklog: "#78718a", stTodo: "#a79fb5", stProg: "#9aa7cf",
+            stHalf: "#d8c19c", stBlocked: "#b98a95", stReview: "#b49bd0", stDone: "#93ab97",
+            mStandup: "#9aa7cf", mOneone: "#b49bd0", mSync: "#93a8ad", mFocus: "#93ab97", nowLine: "#d8c19c",
+            synKeyword: "#b49bd0", synString: "#93ab97", synNumber: "#93a8ad", synComment: "#655e75",
+            synType: "#8f7aa8", synBuiltin: "#9aa7cf", codeBg: "#1e1a29", code: "#93a8ad", mention: "#9aa7cf",
+            ticket: "#93a8ad", tag: "#b49bd0", math: "#8f7aa8", heading: "#b49bd0", highlightBg: "#3a3050",
+            mdLink: "#9aa7cf", mdCode: "#c0b9cc", mdCodeBg: "#262035", mdMention: "#9aa7cf",
+            mdTicket: "#b49bd0", mdTag: "#b49bd0", mdMath: "#93a8ad", mdHighlight: "#3a3050"
+        }
+    },
+    "moss-mono": {
+        name: "moss-mono", base: "dark",
+        colors: {
+            bg: "#212121", bg2: "#1c1c1c", panel: "#1d1d1d", panel2: "#2a2a2a", panel3: "#373737",
+            border: "#2f2f2f", borderStrong: "#4c4c4c", text: "#d9d9d9", textMuted: "#a6a6a6",
+            textDim: "#969696", textOnAccent: "#212121", textOnDanger: "#212121", textOnBadge: "#212121",
+            accent: "#7db07a", accentStrong: "#94be92", accentSoft: "#2e7db07a", knob: "#e6e6e6",
+            danger: "#c07a70", warning: "#c2a97a", success: "#7db07a", info: "#a5a5a5", toastBg: "#2a2a2a",
+            toastBorder: "#4c4c4c", toastText: "#d9d9d9", scrim: "#8c000000", p0: "#c07a70", p1: "#c2a97a",
+            p2: "#b0a377", p3: "#969696", stBacklog: "#818181", stTodo: "#aeaeae", stProg: "#e6e6e6",
+            stHalf: "#c2a97a", stBlocked: "#c07a70", stReview: "#b9b9b9", stDone: "#7db07a",
+            mStandup: "#c6c6c6", mOneone: "#aeaeae", mSync: "#bdbdbd", mFocus: "#7db07a", nowLine: "#7db07a",
+            synKeyword: "#7db07a", synString: "#a6a6a6", synNumber: "#bdbdbd", synComment: "#777777",
+            synType: "#c6c6c6", synBuiltin: "#e6e6e6", codeBg: "#1c1c1c", code: "#bdbdbd", mention: "#d0d0d0",
+            ticket: "#c6c6c6", tag: "#aeaeae", math: "#b9b9b9", heading: "#7db07a", highlightBg: "#373737",
+            mdLink: "#7db07a", mdCode: "#d9d9d9", mdCodeBg: "#2a2a2a", mdMention: "#d0d0d0",
+            mdTicket: "#7db07a", mdTag: "#aeaeae", mdMath: "#bdbdbd", mdHighlight: "#373737"
+        }
+    },
+    "nocturne": {
+        name: "nocturne", base: "dark",
+        colors: {
+            bg: "#15181d", bg2: "#111418", panel: "#1a1e24", panel2: "#1f262d", panel3: "#253039",
+            border: "#2b353e", borderStrong: "#39414a", text: "#a8b2bd", textMuted: "#929da8",
+            textDim: "#828d99", textOnAccent: "#15181d", textOnDanger: "#15181d", textOnBadge: "#15181d",
+            accent: "#7d9cc0", accentStrong: "#9cb4ce", accentSoft: "#2e7d9cc0", knob: "#e6ebf0",
+            danger: "#b57f7f", warning: "#b5a67f", success: "#7fa8a0", info: "#7d9cc0", toastBg: "#1f262d",
+            toastBorder: "#39414a", toastText: "#a8b2bd", scrim: "#8c000000", p0: "#b57f7f", p1: "#b5a67f",
+            p2: "#a89ab8", p3: "#7d9cc0", stBacklog: "#7d8894", stTodo: "#a8b2bd", stProg: "#7d9cc0",
+            stHalf: "#b5a67f", stBlocked: "#b57f7f", stReview: "#a89ab8", stDone: "#7fa8a0",
+            mStandup: "#7d9cc0", mOneone: "#a89ab8", mSync: "#7fa8a0", mFocus: "#e6ebf0", nowLine: "#b57f7f",
+            synKeyword: "#7d9cc0", synString: "#7fa8a0", synNumber: "#a89ab8", synComment: "#5a646f",
+            synType: "#7fa8a0", synBuiltin: "#e6ebf0", codeBg: "#1a1e24", code: "#a89ab8", mention: "#7d9cc0",
+            ticket: "#a89ab8", tag: "#7fa8a0", math: "#a89ab8", heading: "#7d9cc0", highlightBg: "#253039",
+            mdLink: "#7d9cc0", mdCode: "#e6ebf0", mdCodeBg: "#1a1e24", mdMention: "#7d9cc0",
+            mdTicket: "#a89ab8", mdTag: "#7fa8a0", mdMath: "#a89ab8", mdHighlight: "#253039"
+        }
+    },
+    "ash": {
+        name: "Ash", base: "dark",
+        colors: {
+            bg: "#161616", bg2: "#121212", panel: "#1a1a1a", panel2: "#1f1f1f", panel3: "#262626",
+            border: "#0fffffff", borderStrong: "#1affffff", text: "#d4d4d4", textMuted: "#a3a3a3",
+            textDim: "#8c8c8c", textOnAccent: "#1a1a1a", textOnDanger: "#161616", textOnBadge: "#161616",
+            accent: "#d4d4d4", accentStrong: "#e5e5e5", accentSoft: "#14ffffff", knob: "#a3a3a3",
+            danger: "#cf7a7c", warning: "#c9ab70", success: "#83b39b", info: "#86a3c9", toastBg: "#1f1f1f",
+            toastBorder: "#14ffffff", toastText: "#d4d4d4", scrim: "#99000000", p0: "#cf7a7c", p1: "#c99470",
+            p2: "#a3a3a3", p3: "#8e8e8e", stBacklog: "#6e6e6e", stTodo: "#a3a3a3", stProg: "#86a3c9",
+            stHalf: "#c9ab70", stBlocked: "#cf7a7c", stReview: "#a59bc6", stDone: "#83b39b",
+            mStandup: "#86a3c9", mOneone: "#a59bc6", mSync: "#7eaeaa", mFocus: "#83b39b", nowLine: "#cf7a7c",
+            synKeyword: "#a59bc6", synString: "#83b39b", synNumber: "#c9ab70", synComment: "#7e7e7e",
+            synType: "#86a3c9", synBuiltin: "#d4d4d4", codeBg: "#121212", code: "#c4c4c4", mention: "#86a3c9",
+            ticket: "#a3a3a3", tag: "#a59bc6", math: "#c9ab70", heading: "#a3a3a3", highlightBg: "#4dc9ab70",
+            mdLink: "#94add0", mdCode: "#d4d4d4", mdCodeBg: "#1f1f1f", mdMention: "#86a3c9",
+            mdTicket: "#d4d4d4", mdTag: "#a59bc6", mdMath: "#c9ab70", mdHighlight: "#4dc9ab70"
+        }
+    },
+    "stone": {
+        name: "Stone", base: "dark",
+        colors: {
+            bg: "#171514", bg2: "#131110", panel: "#1b1918", panel2: "#211e1c", panel3: "#2a2724",
+            border: "#0fffffff", borderStrong: "#1affffff", text: "#d6d1cb", textMuted: "#a8a29d",
+            textDim: "#958f8a", textOnAccent: "#1b1918", textOnDanger: "#171514", textOnBadge: "#171514",
+            accent: "#d6d1cb", accentStrong: "#e7e2dc", accentSoft: "#14ffffff", knob: "#a8a29d",
+            danger: "#c97b72", warning: "#c6a66c", success: "#95ad88", info: "#91a3b5", toastBg: "#211e1c",
+            toastBorder: "#14ffffff", toastText: "#d6d1cb", scrim: "#99000000", p0: "#c97b72", p1: "#c79166",
+            p2: "#a8a29d", p3: "#98928e", stBacklog: "#716b66", stTodo: "#a8a29d", stProg: "#91a3b5",
+            stHalf: "#c6a66c", stBlocked: "#c97b72", stReview: "#b09ba8", stDone: "#95ad88",
+            mStandup: "#91a3b5", mOneone: "#b09ba8", mSync: "#8dab9f", mFocus: "#95ad88", nowLine: "#c97b72",
+            synKeyword: "#b09ba8", synString: "#95ad88", synNumber: "#c6a66c", synComment: "#847d77",
+            synType: "#91a3b5", synBuiltin: "#d6d1cb", codeBg: "#131110", code: "#c9c3bc", mention: "#91a3b5",
+            ticket: "#a8a29d", tag: "#b09ba8", math: "#c6a66c", heading: "#a8a29d", highlightBg: "#4dc6a66c",
+            mdLink: "#a3b1be", mdCode: "#d6d1cb", mdCodeBg: "#211e1c", mdMention: "#91a3b5",
+            mdTicket: "#d6d1cb", mdTag: "#b09ba8", mdMath: "#c6a66c", mdHighlight: "#4dc6a66c"
+        }
+    },
+    "slate": {
+        name: "Slate", base: "dark",
+        colors: {
+            bg: "#13161a", bg2: "#0f1215", panel: "#171a1f", panel2: "#1c2026", panel3: "#242931",
+            border: "#0fffffff", borderStrong: "#1affffff", text: "#cdd3db", textMuted: "#9da5b0",
+            textDim: "#8b949f", textOnAccent: "#171a1f", textOnDanger: "#13161a", textOnBadge: "#13161a",
+            accent: "#bcc7d6", accentStrong: "#d3dbe6", accentSoft: "#14ffffff", knob: "#9da5b0",
+            danger: "#c77c84", warning: "#c2a772", success: "#80ad9d", info: "#84a0c6", toastBg: "#1c2026",
+            toastBorder: "#14ffffff", toastText: "#cdd3db", scrim: "#99000000", p0: "#c77c84", p1: "#c49174",
+            p2: "#9da5b0", p3: "#8d95a1", stBacklog: "#687280", stTodo: "#9da5b0", stProg: "#84a0c6",
+            stHalf: "#c2a772", stBlocked: "#c77c84", stReview: "#9d98c8", stDone: "#80ad9d",
+            mStandup: "#84a0c6", mOneone: "#9d98c8", mSync: "#7aa8ad", mFocus: "#80ad9d", nowLine: "#c77c84",
+            synKeyword: "#9d98c8", synString: "#80ad9d", synNumber: "#c2a772", synComment: "#747f8e",
+            synType: "#84a0c6", synBuiltin: "#cdd3db", codeBg: "#0f1215", code: "#c0c7d0", mention: "#84a0c6",
+            ticket: "#9da5b0", tag: "#9d98c8", math: "#c2a772", heading: "#9da5b0", highlightBg: "#4dc2a772",
+            mdLink: "#90aad0", mdCode: "#cdd3db", mdCodeBg: "#1c2026", mdMention: "#84a0c6",
+            mdTicket: "#cdd3db", mdTag: "#9d98c8", mdMath: "#c2a772", mdHighlight: "#4dc2a772"
+        }
+    },
+    "sage": {
+        name: "Sage", base: "dark",
+        colors: {
+            bg: "#141613", bg2: "#101210", panel: "#181a17", panel2: "#1d201c", panel3: "#252923",
+            border: "#0fffffff", borderStrong: "#1affffff", text: "#d0d6cc", textMuted: "#a0a79c",
+            textDim: "#8e958a", textOnAccent: "#181a17", textOnDanger: "#141613", textOnBadge: "#141613",
+            accent: "#aebfa5", accentStrong: "#c3d1bb", accentSoft: "#14ffffff", knob: "#a0a79c",
+            danger: "#c47d73", warning: "#c1a96f", success: "#95b489", info: "#8aa5b3", toastBg: "#1d201c",
+            toastBorder: "#14ffffff", toastText: "#d0d6cc", scrim: "#99000000", p0: "#c47d73", p1: "#c29269",
+            p2: "#a0a79c", p3: "#8f968c", stBacklog: "#6b7268", stTodo: "#a0a79c", stProg: "#8aa5b3",
+            stHalf: "#c1a96f", stBlocked: "#c47d73", stReview: "#a79db6", stDone: "#95b489",
+            mStandup: "#8aa5b3", mOneone: "#a79db6", mSync: "#89aea2", mFocus: "#95b489", nowLine: "#c47d73",
+            synKeyword: "#a79db6", synString: "#95b489", synNumber: "#c1a96f", synComment: "#788075",
+            synType: "#8aa5b3", synBuiltin: "#d0d6cc", codeBg: "#101210", code: "#c3c9bf", mention: "#8aa5b3",
+            ticket: "#a0a79c", tag: "#a79db6", math: "#c1a96f", heading: "#a0a79c", highlightBg: "#4dc1a96f",
+            mdLink: "#9db6c0", mdCode: "#d0d6cc", mdCodeBg: "#1d201c", mdMention: "#8aa5b3",
+            mdTicket: "#d0d6cc", mdTag: "#a79db6", mdMath: "#c1a96f", mdHighlight: "#4dc1a96f"
+        }
+    },
+    "minimal-dark": {
+        name: "Minimal dark", base: "dark",
+        colors: {
+            bg: "#141414", bg2: "#111111", panel: "#171717", panel2: "#1c1c1c", panel3: "#232323",
+            border: "#0fffffff", borderStrong: "#1affffff", text: "#f5f5f5", textMuted: "#a3a3a3",
+            textDim: "#8c8c8c", textOnAccent: "#262626", textOnDanger: "#141414", textOnBadge: "#141414",
+            accent: "#f5f5f5", accentStrong: "#ffffff", accentSoft: "#14ffffff", knob: "#a3a3a3",
+            danger: "#fb4b53", warning: "#fbbf24", success: "#34d399", info: "#60a5fa", toastBg: "#1c1c1c",
+            toastBorder: "#14ffffff", toastText: "#f5f5f5", scrim: "#99000000", p0: "#fb4b53", p1: "#fb923c",
+            p2: "#a3a3a3", p3: "#8b8b8b", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
+            stHalf: "#fbbf24", stBlocked: "#f87171", stReview: "#a78bfa", stDone: "#34d399",
+            mStandup: "#60a5fa", mOneone: "#a78bfa", mSync: "#2dd4bf", mFocus: "#34d399", nowLine: "#fb414a",
+            synKeyword: "#a78bfa", synString: "#34d399", synNumber: "#fbbf24", synComment: "#7d7d7d",
+            synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111", code: "#d4d4d4", mention: "#60a5fa",
+            ticket: "#a3a3a3", tag: "#a78bfa", math: "#fbbf24", heading: "#8b8b8b", highlightBg: "#4dfbbf24",
+            mdLink: "#60a5fa", mdCode: "#e5e5e5", mdCodeBg: "#1c1c1c", mdMention: "#60a5fa",
+            mdTicket: "#f5f5f5", mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#4dfbbf24"
+        }
+    }
+};
+
 var DEFAULT_DARK = "heap-dark";
 var DEFAULT_LIGHT = "heap-light";
 
@@ -350,7 +528,7 @@ function category(t, customThemes) {
     var seen = {};
     while (t && t.contrast !== "high" && t.contrast !== "low" && t.from && !seen[t.from]) {
         seen[t.from] = true;
-        var from = builtin(t.from) || builtin(RETIRED[t.from]) || _custom(t.from, customThemes);
+        var from = builtin(t.from) || _custom(t.from, customThemes) || builtin(RETIRED[t.from]);
         if (!from) break;
         t = from;
     }
@@ -414,6 +592,49 @@ function newId(customThemes) {
     var n = 1;
     while (_custom("custom-" + n, customThemes)) n++;
     return "custom-" + n;
+}
+
+// `name`, or "name (2)", "name (3)"… when a theme in the picker already
+// has it, so a copy, an import or a kept theme never shares a name with
+// another one (APP-127).
+function uniqueName(name, customThemes) {
+    var taken = {};
+    var list = all(customThemes);
+    for (var i = 0; i < list.length; i++)
+        if (list[i] && typeof list[i].name === "string") taken[list[i].name.toLowerCase()] = true;
+    if (!taken[name.toLowerCase()]) return name;
+    var n = 2;
+    while (taken[(name + " (" + n + ")").toLowerCase()]) n++;
+    return name + " (" + n + ")";
+}
+
+// The retired built-ins `appearance` still uses — in a slot, or as the
+// source of one of the user's themes — turned into custom themes with the
+// palette they had, under the same id, so every reference keeps working.
+// Returns the new appearance, or null when there is nothing to keep. A theme
+// that came back as a built-in (Minimal dark) is not copied: its id resolves
+// to the built-in again.
+function adoptRetired(appearance) {
+    if (!appearance || typeof appearance !== "object") return null;
+    var customs = Array.isArray(appearance.customThemes) ? appearance.customThemes.slice() : [];
+    var wanted = [appearance.darkPreset, appearance.lightPreset];
+    for (var i = 0; i < customs.length; i++)
+        if (customs[i] && customs[i].from) wanted.push(customs[i].from);
+    var changed = false;
+    for (var j = 0; j < wanted.length; j++) {
+        var id = wanted[j];
+        var p = typeof id === "string" ? RETIRED_PALETTES[id] : undefined;
+        if (!p || builtin(id) || _custom(id, customs)) continue;
+        var colors = {};
+        for (var k in p.colors) colors[k] = p.colors[k];
+        customs.push({ id: id, name: uniqueName(p.name, customs), base: p.base, from: "", colors: colors });
+        changed = true;
+    }
+    if (!changed) return null;
+    var next = {};
+    for (var key in appearance) next[key] = appearance[key];
+    next.customThemes = customs;
+    return next;
 }
 
 // What export writes: the full resolved palette, so the JSON is complete
