@@ -2020,10 +2020,20 @@ void AppController::onTaskPushed(const QString& providerId,
     m_tasks.upsert(t);
     scheduleSave();
   }
-  if(ok) {
-    // The issue sits somewhere else in its workflow now; what it can move to
-    // is unknown until the next pull says.
-    m_trackerTransitions.remove(providerId + QChar('\n') + externalId);
+  if(wrote) {
+    // The issue sits somewhere else in its workflow now. What it can move to
+    // from there is what the last pull saw for an issue of the same kind in
+    // that status; with no such issue it is unknown until the next pull says
+    // (INT-4: dropping the guard outright let the next bad move go out).
+    const QString issueKey = providerId + QChar('\n') + externalId;
+    const auto seen = remoteStatus.isEmpty() ? m_workflowTransitions.constEnd()
+                                             : m_workflowTransitions.constFind(workflowTransitionsKey(
+                                                   providerId, t.externalMeta.project, t.externalMeta.issueType, remoteStatus));
+    if(seen != m_workflowTransitions.constEnd()) {
+      m_trackerTransitions.insert(issueKey, *seen);
+    } else {
+      m_trackerTransitions.remove(issueKey);
+    }
   }
   if(!ok) {
     qWarning() << providerId << "push failed for" << externalId << ":" << error;
@@ -7069,6 +7079,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     const QString transitionsKey = providerId + QChar('\n') + ext.externalId;
     if(ext.transitionsKnown) {
       m_trackerTransitions.insert(transitionsKey, ext.transitions);
+      m_workflowTransitions.insert(workflowTransitionsKey(providerId, ext.project, ext.issueType, ext.status), ext.transitions);
     } else {
       m_trackerTransitions.remove(transitionsKey);
     }
@@ -11133,6 +11144,13 @@ QVariantMap AppController::settingsMap() const {
   }
   m_settingsCache = doc.object().toVariantMap();
   return m_settingsCache;
+}
+
+QString AppController::workflowTransitionsKey(const QString& providerId,
+                                              const QString& project,
+                                              const QString& issueType,
+                                              const QString& status) {
+  return QStringList{providerId, project, issueType, status.toCaseFolded()}.join(QChar('\n'));
 }
 
 bool AppController::canTransitionStatus(const QString& taskId, const QString& newStatus) {

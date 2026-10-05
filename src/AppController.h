@@ -1932,6 +1932,12 @@ class AppController : public QObject {
   // to, as of the last pull. Only trackers that report transitions (Jira)
   // fill it; an issue without an entry is not second-guessed.
   QHash<QString, QStringList> m_trackerTransitions;
+  // The same answers keyed by where in the workflow they were seen (provider,
+  // project, issue type, status): after a push moves an issue, the moves out of
+  // its new status are known from any other issue the last pull saw there,
+  // instead of the guard dropping until the next pull (INT-4).
+  QHash<QString, QStringList> m_workflowTransitions;
+  static QString workflowTransitionsKey(const QString& providerId, const QString& project, const QString& issueType, const QString& status);
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
