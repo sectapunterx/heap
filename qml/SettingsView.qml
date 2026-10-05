@@ -2802,6 +2802,25 @@ Item {
                         ]
                         onSelected: (value) => root.set("data", "backupInterval", value)
                     }
+                    // APP-162: hourly history, browsed in its own dialog.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Theme.spXl
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 1
+                            Text { text: I18n.t("settings.data.timeMachine"); color: Theme.text; font.pixelSize: Theme.fsMd }
+                            Text {
+                                text: I18n.t("settings.data.timeMachine.hint")
+                                color: Theme.textMuted; font.pixelSize: Theme.fsSm; wrapMode: Text.WordWrap; Layout.fillWidth: true
+                            }
+                        }
+                        ActionButton {
+                            objectName: "settings-open-time-machine"
+                            text: I18n.t("settings.data.timeMachine.open")
+                            onActivated: settingsBridge.timeMachineRequested()
+                        }
+                    }
                 }
             }
             SectionCard {
@@ -3227,11 +3246,13 @@ Item {
         signal openHotkeysRequested()
         signal exportJsonRequested()
         signal importJsonRequested()
+        signal timeMachineRequested()
     }
     Connections {
         target: settingsBridge
         function onOpenHotkeysRequested() { if (typeof settingsBus !== "undefined") settingsBus.openHotkeys() }
         function onExportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.exportJson() }
         function onImportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.importJson() }
+        function onTimeMachineRequested() { if (typeof settingsBus !== "undefined") settingsBus.openTimeMachine() }
     }
 }

@@ -1164,6 +1164,34 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantList listBackups() const;
   Q_INVOKABLE bool restoreFromBackup(const QString& fileName);
 
+  // ---- Time machine (APP-162, src/storage/Snapshots.h) ----
+  // Hourly snapshots in <dataDir>/history, newest first: { name, at (ISO),
+  // day ("yyyy-MM-dd"), time ("HH:mm"), sizeKb, tag, profiles, tasks, notes,
+  // docs }. The counts come from each file's summary line, nothing is inflated.
+  Q_INVOKABLE QVariantList listSnapshots() const;
+  // One snapshot, read-only, next to the state as it is now: { ok, error,
+  // name, at, profiles: [{ id, name, color, tasks, notes, docs, existsNow,
+  // tasksAdded, tasksRemoved, tasksChanged, notesAdded, notesRemoved,
+  // notesChanged }], totals: { the same six }, missing: [{ kind ("task" |
+  // "note" | "doc"), id, title, profileId, profileName, profileExists }],
+  // changed: [same shape] }. "Removed" = in the snapshot, gone now.
+  Q_INVOKABLE QVariantMap previewSnapshot(const QString& name);
+  // The whole state goes back to the snapshot. The state it replaces is
+  // snapshotted first (tag "pre"), so a restore is itself restorable.
+  Q_INVOKABLE bool restoreSnapshot(const QString& name);
+  // The snapshot's profile `profileId` comes back as a new profile, "<name>
+  // (restored HH:MM)", beside the current one. Returns the new id, "" on failure.
+  Q_INVOKABLE QString restoreSnapshotProfile(const QString& name, const QString& profileId);
+  // One task, note or doc page (`kind` "task" | "note" | "doc") from the
+  // snapshot's profile `profileId` goes back into that profile: re-inserted
+  // when it is gone, overwritten when it is there. Switches to the profile
+  // first; undoable.
+  Q_INVOKABLE bool restoreSnapshotItem(const QString& name, const QString& kind, const QString& profileId, const QString& itemId);
+  // Writes the current state into history right now under `tag`. Returns the
+  // file name, "" on failure.
+  QString takeSnapshotNow(const QString& tag);
+  QString historyDirPath() const;
+
   // ---- Shortcuts (rebindable keyboard catalog) ----
   QVariantList shortcuts() const {
     return m_shortcuts;
@@ -1589,6 +1617,14 @@ class AppController : public QObject {
   void loadStateDocument(QJsonObject root, bool viewOnly);
   QString stateFilePath() const;
   QString backupDirPath() const;
+  // Writes `bytes` over state.json and reloads from it (a restore's last step).
+  bool replaceStateFile(const QByteArray& bytes);
+  // The time machine's parsed snapshot: one at a time, kept while the dialog
+  // looks at it so a restore does not inflate it again.
+  bool loadSnapshot(const QString& name, QString* error);
+  QString m_snapName;
+  QVector<Profile> m_snapProfiles;
+  QVector<CalEvent> m_snapEvents;
   // When the newest rotational backup on disk was taken; invalid when none.
   QDateTime newestBackupTime() const;
   // Crash/corruption recovery for loadStateOnStart(): find the newest backup
