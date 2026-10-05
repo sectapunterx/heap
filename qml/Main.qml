@@ -695,10 +695,23 @@ ApplicationWindow {
                 AppController.undoEntry(serial)
             });
         }
-        // A newer release was found — offer a one-click jump to the release page.
+        // A newer release was found. When heap can update this copy itself
+        // the action downloads it (APP-125); otherwise it opens the release page.
         function onUpdateAvailable(version, url) {
+            if (AppController.updateCanInstall) {
+                toast.showWithAction(I18n.t("update.available").arg(version), I18n.t("update.install"), 10, function () {
+                    AppController.downloadUpdate()
+                });
+                return;
+            }
             toast.showWithAction(I18n.t("update.available").arg(version), I18n.t("update.download"), 10, function () {
                 Qt.openUrlExternally(url)
+            });
+        }
+        // Downloaded and matched against the release's SHA-256: offer the restart.
+        function onUpdateReadyToInstall(version, sha256) {
+            toast.showWithAction(I18n.t("update.ready").arg(version), I18n.t("update.restart"), 30, function () {
+                AppController.installUpdate()
             });
         }
     }

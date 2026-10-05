@@ -245,6 +245,7 @@ qt_add_library(heap_core STATIC
     src/sync/SyncSerializer.cpp
     src/sync/JsonMerger.cpp
     src/update/Updater.cpp
+    src/update/UpdateInstall.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
         # Meetings from the desktop Outlook over COM (APP-118); a stub elsewhere.
@@ -416,6 +417,7 @@ qt_add_qml_module(heap_core
         src/sync/SyncSerializer.h
         src/sync/JsonMerger.h
         src/update/Updater.h
+        src/update/UpdateInstall.h
 )
 
 # src/markdown too: qt_add_qml_module's generated registration file includes
@@ -502,6 +504,26 @@ qt_add_executable(heap WIN32 MACOSX_BUNDLE
 # Main.qml) fail to load at runtime. Linking the plugin force-references them.
 target_link_libraries(heap PRIVATE heap_core heap_coreplugin heap_provider_registry)
 target_compile_options(heap PRIVATE "${HEAP_WARNING_OPTIONS}")
+
+# ── heap-updater (APP-125) — puts a downloaded update in place on Windows ──
+# A running exe and its DLLs cannot be overwritten there, so heap starts this
+# from the temp folder and quits; it waits, installs, and starts heap again.
+# No Qt and a static runtime: it has to run on its own, away from the bundle.
+# macOS and Linux swap the bundle / AppImage from inside heap instead.
+if(WIN32)
+    add_executable(heap-updater WIN32
+        src/updater/main_win.cpp
+        src/updater/BundleSwap.cpp
+    )
+    target_include_directories(heap-updater PRIVATE src)
+    target_compile_definitions(heap-updater PRIVATE UNICODE _UNICODE)
+    target_link_libraries(heap-updater PRIVATE shell32 advapi32)
+    target_compile_options(heap-updater PRIVATE "${HEAP_WARNING_OPTIONS}")
+    if(MINGW)
+        target_link_options(heap-updater PRIVATE -municode -static)
+    endif()
+    add_dependencies(heap heap-updater)
+endif()
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
 # On heap_core, not the app, so every binary that loads the QML — the test
@@ -672,10 +694,11 @@ if(WIN32)
         endif()
 
         add_custom_target(portable
-                DEPENDS heap
+                DEPENDS heap heap-updater
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-updater>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
                         ${WINDEPLOYQT_EXECUTABLE}
                         --no-translations
@@ -701,6 +724,10 @@ if(WIN32)
                 # ucrt64/bin; fails the build if the closure is incomplete.
                 COMMAND bash "${CMAKE_SOURCE_DIR}/packaging/windows/copy-deps.sh"
                         "${PORTABLE_DIR}" "${MSYS_BIN_DIR}"
+                # Tells an in-app update this folder is a release's portable
+                # bundle (APP-125). The installer packs it too, but there
+                # unins000.exe beside heap.exe decides first.
+                COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_SOURCE_DIR}/packaging/windows/heap-portable.txt" "${PORTABLE_DIR}/"
                 COMMENT "Assembling portable bundle → ${PORTABLE_DIR}"
         )
     else()

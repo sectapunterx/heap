@@ -21,6 +21,15 @@ AppName=heap.
 AppVersion={#AppVersion}
 AppPublisher=heap.
 DefaultDirName={autopf}\heap
+; Always ask where to install, also on an upgrade (prefilled with the folder
+; of the previous install).
+DisableDirPage=no
+; "Install for all users" (Program Files, needs admin) stays the default;
+; "only for me" installs anywhere without elevation. The in-app updater
+; (APP-125) passes /ALLUSERS or /CURRENTUSER to stay in the mode the
+; previous install used.
+PrivilegesRequired=admin
+PrivilegesRequiredOverridesAllowed=dialog commandline
 DefaultGroupName=heap.
 DisableProgramGroupPage=yes
 UninstallDisplayIcon={app}\heap.exe

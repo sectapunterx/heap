@@ -47,6 +47,7 @@
 #include "storage/StateIO.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
+#include "update/UpdateInstall.h"
 #include "update/Updater.h"
 
 #include <QApplication>
@@ -161,6 +162,25 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"recovery.saved", {"Recovery log saved", "Журнал восстановления сохранён"}},
       {"recovery.empty", {"No recovery log to export", "Журнал восстановления пуст"}},
       {"update.checking", {"Checking for updates…", "Проверка обновлений…"}},
+      {"update.downloading", {"Downloading %1…", "Скачивание %1…"}},
+      {"update.verifying", {"Checking the SHA-256 checksum…", "Проверка контрольной суммы SHA-256…"}},
+      {"update.verified",
+       {"%1 is downloaded. Its SHA-256 checksum matches the one published with the release, so the file is "
+        "intact and exactly what was released: %2",
+        "%1 скачано. Контрольная сумма SHA-256 совпала с опубликованной в релизе — файл целый и именно тот, "
+        "что был выпущен: %2"}},
+      {"update.mismatch",
+       {"Update not installed: the file's SHA-256 checksum does not match the release's. It was deleted; try "
+        "again later or download from the release page.",
+        "Обновление не установлено: контрольная сумма SHA-256 файла не совпала с опубликованной в релизе. Файл "
+        "удалён; попробуйте позже или скачайте со страницы релиза."}},
+      {"update.noChecksum",
+       {"Update not installed: the release publishes no SHA-256 checksum for this file, so it cannot be checked.",
+        "Обновление не установлено: в релизе нет контрольной суммы SHA-256 для этого файла, проверить его нельзя."}},
+      {"update.downloadFailed", {"Download failed: %1", "Не удалось скачать: %1"}},
+      {"update.installing", {"Installing — heap will restart…", "Установка — heap перезапустится…"}},
+      {"update.installFailed", {"Could not install the update: %1", "Не удалось установить обновление: %1"}},
+      {"update.installed", {"Updated to %1", "Обновлено до %1"}},
       {"sync.noTracker", {"Connect a tracker in Settings → Integrations first", "Сначала подключите трекер: Настройки → Интеграции"}},
       {"sync.running", {"Syncing…", "Синхронизация…"}},
       {"sync.failed", {"%1 sync failed: %2", "%1: синхронизация не удалась — %2"}},
@@ -831,6 +851,49 @@ AppController::AppController(QObject* parent) :
     }
     emit updateStatusChanged();
   });
+  // ---- In-app update (APP-125) ----
+  m_packageKind = static_cast<int>(heap::update::detectPackageKind(heap::update::currentPackageEnv()));
+  connect(m_updater.get(), &heap::update::Updater::downloadProgress, this, [this](qint64 received, qint64 total) {
+    m_updateProgress = total > 0 ? static_cast<double>(received) / static_cast<double>(total) : 0.0;
+    emit updateProgressChanged();
+    if(total > 0 && received >= total && m_updatePhase == QLatin1String("downloading")) {
+      setUpdatePhase(QStringLiteral("verifying"), QStringLiteral("update.verifying"));
+    }
+  });
+  connect(m_updater.get(), &heap::update::Updater::downloadVerified, this, [this](const QString& path, const QString& sha) {
+    m_updatePackage = path;
+    m_updateSha256 = sha;
+    const QString version = m_updater->latestTag();
+    // The status names the version and the checksum, so the user sees what
+    // was checked, not just that something was.
+    setUpdatePhase(QStringLiteral("ready"), QStringLiteral("update.verified"), version);
+    emit updateReadyToInstall(version, sha);
+  });
+  connect(m_updater.get(), &heap::update::Updater::downloadFailed, this, [this](int kind, const QString& error) {
+    qWarning() << "update download failed:" << kind << error;
+    using heap::update::DownloadFailure;
+    if(kind == static_cast<int>(DownloadFailure::ChecksumMismatch)) {
+      setUpdatePhase(QStringLiteral("error"), QStringLiteral("update.mismatch"));
+    } else if(kind == static_cast<int>(DownloadFailure::NoChecksum)) {
+      setUpdatePhase(QStringLiteral("error"), QStringLiteral("update.noChecksum"));
+    } else {
+      setUpdatePhase(QStringLiteral("error"), QStringLiteral("update.downloadFailed"), error);
+    }
+    emit toast(updateStatus(), QStringLiteral("warning"));
+  });
+  // What the update an earlier run started came to.
+  QTimer::singleShot(1500, this, [this]() {
+    const heap::update::InstallOutcome outcome = heap::update::takeInstallOutcome();
+    if(!outcome.present) {
+      return;
+    }
+    if(outcome.ok) {
+      emit toast(tr_("update.installed").arg(appVersion()));
+    } else {
+      emit toast(tr_("update.installFailed").arg(outcome.error), QStringLiteral("warning"));
+    }
+  });
+
   // Opt-out background check shortly after startup (never auto-downloads). The
   // delay lets settings load and the QML toast bar come up first.
   QTimer::singleShot(3000, this, [this]() {
@@ -6666,6 +6729,75 @@ void AppController::openLatestRelease() const {
   if(!m_latestReleaseUrl.isEmpty()) {
     QDesktopServices::openUrl(QUrl(m_latestReleaseUrl));
   }
+}
+
+bool AppController::updateCanInstall() const {
+  const auto kind = static_cast<heap::update::PackageKind>(m_packageKind);
+  return m_updater && kind != heap::update::PackageKind::None &&
+         m_updater->latestAssets().contains(heap::update::assetNameFor(kind, m_updater->latestTag()));
+}
+
+void AppController::setUpdatePhase(const QString& phase, const QString& statusKey, const QString& arg) {
+  m_updatePhase = phase;
+  m_updateStatus = statusKey;
+  m_updateStatusArg = arg;
+  emit updateStatusChanged();
+}
+
+void AppController::downloadUpdate() {
+  if(!updateCanInstall()) {
+    openLatestRelease();
+    return;
+  }
+  if(m_updater->isDownloading() || m_updatePhase == QLatin1String("installing")) {
+    return;
+  }
+  if(m_updatePhase == QLatin1String("ready")) {
+    emit updateReadyToInstall(m_updater->latestTag(), m_updateSha256);
+    return;
+  }
+  const QString asset = heap::update::assetNameFor(static_cast<heap::update::PackageKind>(m_packageKind), m_updater->latestTag());
+  m_updateProgress = 0.0;
+  m_updateSha256.clear();
+  emit updateProgressChanged();
+  setUpdatePhase(QStringLiteral("downloading"), QStringLiteral("update.downloading"), m_updater->latestTag());
+  m_updater->downloadAsset(asset, heap::update::updateWorkDir());
+}
+
+void AppController::cancelUpdateDownload() {
+  if(!m_updater || !m_updater->isDownloading()) {
+    return;
+  }
+  m_updater->cancelDownload();
+  setUpdatePhase(QString(), QStringLiteral("update.available"), m_updater->latestTag());
+}
+
+void AppController::installUpdate() {
+  if(m_updatePhase != QLatin1String("ready") || m_updatePackage.isEmpty()) {
+    return;
+  }
+  // The package was checked when it arrived; check it again now, so a file
+  // touched on disk since then is not what gets installed.
+  if(heap::update::sha256OfFile(m_updatePackage) != m_updateSha256) {
+    QFile::remove(m_updatePackage);
+    m_updatePackage.clear();
+    setUpdatePhase(QStringLiteral("error"), QStringLiteral("update.mismatch"));
+    emit toast(updateStatus(), QStringLiteral("warning"));
+    return;
+  }
+  flushSave();
+  QString error;
+  if(!heap::update::startInstall(static_cast<heap::update::PackageKind>(m_packageKind), m_updatePackage, error)) {
+    qWarning() << "update install failed:" << error;
+    setUpdatePhase(QStringLiteral("error"), QStringLiteral("update.installFailed"), error);
+    emit toast(updateStatus(), QStringLiteral("warning"));
+    return;
+  }
+  setUpdatePhase(QStringLiteral("installing"), QStringLiteral("update.installing"));
+  // Quit from the event loop, after this call has returned to QML.
+  QTimer::singleShot(0, this, []() {
+    QCoreApplication::quit();
+  });
 }
 
 void AppController::syncNow() {
