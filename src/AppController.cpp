@@ -12175,7 +12175,9 @@ void AppController::createBranchForTask(const QString& taskId) {
 void AppController::onGitCommits(const QString& repo, const QVariantMap& commitsByTask) {
   Q_UNUSED(repo);
   for(auto it = commitsByTask.constBegin(); it != commitsByTask.constEnd(); ++it) {
-    // The newest commit naming a task is a sign of life (APP-157).
+    // The newest commit naming a task is a sign of life (APP-157), and its
+    // commits are part of the standup draft (APP-170).
+    m_taskCommits.insert(taskIdForBranchMatch(it.key()), it.value().toList());
     for(const QVariant& c : it.value().toList()) {
       const QDateTime at = c.toMap().value(QStringLiteral("at")).toDateTime();
       if(!at.isValid()) {

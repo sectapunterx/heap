@@ -76,6 +76,9 @@ Popup {
         out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), sub: "" });
         out.push({ kind: "command", commandId: "welcome.replay", label: I18n.t("palette.cmd.replayTour"), sub: "" });
         out.push({ kind: "command", commandId: "recap.open", label: I18n.t("palette.cmd.weeklyRecap"), sub: "" });
+        // The standup draft (APP-170), once Settings → Safety net turns it on.
+        if (AppController.safety && AppController.safety.standupDraft)
+            out.push({ kind: "command", commandId: "standup.draft", label: I18n.t("palette.cmd.standupDraft"), sub: "" });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
         const views = AppController.savedViews;

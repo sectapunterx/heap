@@ -485,7 +485,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened
+        || weeklyRecap.opened || standupDraft.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -1447,6 +1447,7 @@ ApplicationWindow {
         case "welcome.replay":       AppController.replayWelcome(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
         case "focus.immersion":      win.toggleImmersion(); break;
+        case "standup.draft":        standupDraft.showNow(); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1839,7 +1840,10 @@ ApplicationWindow {
     WeeklyRecapDialog {
         id: weeklyRecap
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onStandupDraftRequested: standupDraft.showNow()
     }
+    // The standup draft (APP-170): text to edit and copy, sent nowhere.
+    StandupDraftDialog { id: standupDraft }
     Connections {
         target: AppController
         function onTodayChanged() {

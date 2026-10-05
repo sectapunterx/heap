@@ -337,6 +337,21 @@ TEST_F(SafetyNetTest, FocusModeWithNoTaskIsOnlyQuiet) {
   EXPECT_FALSE(app_->immersion());
 }
 
+// ── APP-170 ──
+
+TEST_F(SafetyNetTest, StandupDraftFromTheWorkspace) {
+  app_->events()->reset({});
+  const Task blocked = task(QStringLiteral("T-9"), QStringLiteral("blocked"));
+  app_->tasks()->reset({task(QStringLiteral("T-1"), QStringLiteral("prog")), blocked});
+  const QString draft = app_->standupDraftFor(QDate::currentDate());
+  EXPECT_TRUE(draft.contains(QStringLiteral("T-1 T-1 title")));
+  EXPECT_TRUE(draft.contains(QStringLiteral("T-9 T-9 title")));
+  // Today's in-progress task is under "Today", the blocked one under
+  // "Blockers" — and the draft changed nothing.
+  EXPECT_LT(draft.indexOf(QStringLiteral("T-1 T-1 title")), draft.indexOf(QStringLiteral("T-9 T-9 title")));
+  EXPECT_EQ(app_->tasks()->items().at(1).status, QStringLiteral("blocked"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

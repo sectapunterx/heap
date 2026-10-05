@@ -214,6 +214,7 @@ qt_add_library(heap_core STATIC
     src/AppControllerSafety.cpp
     src/safety/SafetyText.cpp
     src/safety/ErrorSignature.cpp
+    src/safety/Standup.cpp
     src/views/SavedViewMatch.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
@@ -356,6 +357,7 @@ qt_add_qml_module(heap_core
         qml/SettingsGroup.qml
         qml/SettingsRow.qml
         qml/SeenBeforeHint.qml
+        qml/StandupDraftDialog.qml
         qml/HelpContent.qml
         qml/ThinScrollBar.qml
         qml/Brand.qml

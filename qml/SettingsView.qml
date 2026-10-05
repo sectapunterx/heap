@@ -1574,6 +1574,17 @@ Item {
                     onToggled: (checked) => root.set("safety", "immersionPassMeetings", checked)
                 }
             }
+            // APP-170: a standup draft from yesterday's facts.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.standup")
+                SwitchRow {
+                    objectName: "settings-safety-standupDraft"
+                    label: I18n.t("settings.safety.standup")
+                    hint: I18n.t("settings.safety.standup.hint")
+                    checked: !!(root.settings.safety && root.settings.safety.standupDraft)
+                    onToggled: (checked) => root.set("safety", "standupDraft", checked)
+                }
+            }
         }
     }
 

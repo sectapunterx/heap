@@ -2012,6 +2012,12 @@ class AppController : public QObject {
   // Hands over what focus mode held back, through the usual paths. Returns
   // how many there were.
   Q_INVOKABLE int releaseImmersionHeld();
+
+  // The standup draft (APP-170): "Yesterday / Today / Blockers" from the last
+  // working day's column moves, commits and timer, today's work and meetings,
+  // and the blocked cards. Text for the user to edit; nothing is sent.
+  Q_INVOKABLE QString standupDraft();
+  QString standupDraftFor(const QDate& today);
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;
@@ -2050,6 +2056,8 @@ class AppController : public QObject {
   QString m_immersionTaskId;
   bool m_immersionStartedTimer = false;
   QVector<HeldNotification> m_immersionHeld;
+  // Task id → its recent commits ({sha, subject, at}) from the watcher.
+  QHash<QString, QVariantList> m_taskCommits;
   // Holds `n` when focus mode says so; true when it did.
   bool holdForImmersion(const HeldNotification& n);
 };

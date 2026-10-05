@@ -37,6 +37,8 @@ Dialog {
     }
 
     signal taskActivated(string id)
+    // "Standup draft" in the footer (APP-170), when that is switched on.
+    signal standupDraftRequested()
 
     // The Monday of the week `d` falls in, as "yyyy-MM-dd": the key a week is
     // remembered by.
@@ -199,6 +201,15 @@ Dialog {
     }
 
     footer: DialogFooter {
+        PillButton {
+            objectName: "weekly-recap-standup"
+            visible: !!(AppController.safety && AppController.safety.standupDraft)
+            text: I18n.t("standup.open")
+            onClicked: {
+                root.close();
+                root.standupDraftRequested();
+            }
+        }
         PillButton {
             id: closeBtn
             objectName: "weekly-recap-close"

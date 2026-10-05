@@ -33,6 +33,13 @@ const QHash<QString, Entry>& table() {
       {QStringLiteral("shortcut.focus.immersion.desc"),
        {"Hold notifications back and time the current task; again to leave.",
         "Придержать уведомления и засечь время текущей задачи; ещё раз — выйти."}},
+      // ── APP-170: standup draft ──
+      {QStringLiteral("safety.standup.yesterday"), {"Yesterday:", "Вчера:"}},
+      {QStringLiteral("safety.standup.today"), {"Today:", "Сегодня:"}},
+      {QStringLiteral("safety.standup.blockers"), {"Blockers:", "Блокеры:"}},
+      {QStringLiteral("safety.standup.meeting"), {"Meeting: %1", "Встреча: %1"}},
+      {QStringLiteral("safety.standup.timer"), {"worked on it (timer)", "работа по таймеру"}},
+      {QStringLiteral("safety.standup.commitForms"), {"commit|commits|commits", "коммит|коммита|коммитов"}},
       // ── APP-158: waiting on a reply ──
       {QStringLiteral("safety.waiting.title"), {"Still waiting on a reply", "Ждёте ответа"}},
       // %1 person, %2 days, %3 "day(s)", %4 task title. No declension of the

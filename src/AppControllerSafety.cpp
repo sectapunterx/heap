@@ -7,12 +7,14 @@
 
 #include "AppController.h"
 
+#include "cal/Occurrences.h"
 #include "cal/Reminders.h"
 #include "git/GitWatcher.h"
 #include "notify/NotificationCenter.h"
 #include "safety/ErrorSignature.h"
 #include "safety/Immersion.h"
 #include "safety/SafetyText.h"
+#include "safety/Standup.h"
 
 #include <QApplication>
 #include <QFileInfo>
@@ -394,4 +396,49 @@ int AppController::releaseImmersionHeld() {
     }
   }
   return static_cast<int>(held.size());
+}
+
+// ── APP-170: standup draft ──
+
+QString AppController::standupDraft() {
+  return standupDraftFor(QDate::currentDate());
+}
+
+QString AppController::standupDraftFor(const QDate& today) {
+  heap::safety::StandupFacts f;
+  f.today = today;
+  f.previousDay = heap::safety::previousWorkDay(today, [this](const QDate& d) {
+    return isWorkDay(d);
+  });
+  for(const QVariant& v : m_statuses) {
+    const QVariantMap m = v.toMap();
+    f.statusNames.insert(m.value(QStringLiteral("id")).toString(), m.value(QStringLiteral("name")).toString());
+  }
+  for(const Task& t : m_tasks.items()) {
+    f.tasks.append({.id = t.id,
+                    .title = t.title,
+                    .status = t.status,
+                    .doing = isDoingStatus(t.status),
+                    .blocked = t.status == QLatin1String("blocked"),
+                    .done = t.status == QLatin1String("done"),
+                    .archived = t.archived,
+                    .scheduledAt = t.scheduledAt,
+                    .timerStartedAt = t.timerStartedAt});
+    for(const QVariant& c : m_taskCommits.value(t.id)) {
+      const QVariantMap cm = c.toMap();
+      f.commits.append(
+          {.taskId = t.id, .subject = cm.value(QStringLiteral("subject")).toString(), .at = cm.value(QStringLiteral("at")).toDateTime()});
+    }
+  }
+  for(const StatusChange& c : m_statusLog) {
+    f.moves.append({.taskId = c.taskId, .from = c.from, .to = c.to, .at = c.at});
+  }
+  // Meetings, not the user's own focus blocks.
+  for(const CalEvent& e : heap::cal::expandedEvents(m_events.items(), f.previousDay, today)) {
+    if(e.type == QLatin1String("focus")) {
+      continue;
+    }
+    f.meetings.append({.title = e.title, .date = e.date, .start = e.start, .allDay = e.allDay});
+  }
+  return heap::safety::buildStandup(f, m_language == QStringLiteral("ru"));
 }

@@ -5,6 +5,7 @@
 #include "safety/ErrorSignature.h"
 #include "safety/Immersion.h"
 #include "safety/SafetyText.h"
+#include "safety/Standup.h"
 #include "safety/WaitingOn.h"
 
 #include <gtest/gtest.h>
@@ -322,6 +323,97 @@ TEST(Immersion, WholeMinutes) {
   EXPECT_EQ(immersionMinutes(-5), 0);
   EXPECT_EQ(immersionMinutes(59), 0);
   EXPECT_EQ(immersionMinutes((25 * 60) + 59), 25);
+}
+
+// ── APP-170: standup draft ──
+
+namespace {
+
+StandupTask standupTask(const QString& id, const QString& title, const QString& status) {
+  StandupTask t;
+  t.id = id;
+  t.title = title;
+  t.status = status;
+  t.doing = status == QLatin1String("prog");
+  t.blocked = status == QLatin1String("blocked");
+  t.done = status == QLatin1String("done");
+  return t;
+}
+
+// Tuesday 2026-10-06; the working day before is Monday the 5th.
+StandupFacts standupFacts() {
+  StandupFacts f;
+  f.today = kDay;
+  f.previousDay = kDay.addDays(-1);
+  f.statusNames = {{QStringLiteral("todo"), QStringLiteral("To do")},
+                   {QStringLiteral("prog"), QStringLiteral("In progress")},
+                   {QStringLiteral("review"), QStringLiteral("Review")},
+                   {QStringLiteral("blocked"), QStringLiteral("Blocked")}};
+  f.tasks = {standupTask(QStringLiteral("APP-12"), QStringLiteral("Login rate limit"), QStringLiteral("review")),
+             standupTask(QStringLiteral("APP-14"), QStringLiteral("CSV export"), QStringLiteral("prog")),
+             standupTask(QStringLiteral("APP-20"), QStringLiteral("Deploy pipeline"), QStringLiteral("blocked"))};
+  const QDateTime mon(kDay.addDays(-1), QTime(11, 0));
+  f.moves = {{.taskId = QStringLiteral("APP-12"), .from = QStringLiteral("prog"), .to = QStringLiteral("review"), .at = mon},
+             // Older than the previous day: not yesterday's news.
+             {.taskId = QStringLiteral("APP-14"), .from = QStringLiteral("todo"), .to = QStringLiteral("prog"), .at = mon.addDays(-3)}};
+  f.commits = {{.taskId = QStringLiteral("APP-14"), .subject = QStringLiteral("APP-14 csv"), .at = mon.addSecs(3600)},
+               {.taskId = QStringLiteral("APP-14"), .subject = QStringLiteral("APP-14 more"), .at = mon.addSecs(7200)}};
+  f.meetings = {{.title = QStringLiteral("Sync with the team"), .date = kDay.addDays(-1), .start = 10.0, .allDay = false},
+                {.title = QStringLiteral("1:1 with Oleg"), .date = kDay, .start = 15.0, .allDay = false}};
+  return f;
+}
+
+}  // namespace
+
+TEST(Standup, PreviousWorkDaySkipsTheWeekend) {
+  const auto weekdays = [](const QDate& d) {
+    return d.dayOfWeek() <= 5;
+  };
+  EXPECT_EQ(previousWorkDay(QDate(2026, 10, 5), weekdays), QDate(2026, 10, 2));  // Monday → Friday
+  EXPECT_EQ(previousWorkDay(QDate(2026, 10, 6), weekdays), QDate(2026, 10, 5));
+  EXPECT_EQ(previousWorkDay(QDate(2026, 10, 6),
+                            [](const QDate&) {
+                              return false;
+                            }),
+            QDate(2026, 10, 5));
+}
+
+TEST(Standup, TheThreeSections) {
+  EXPECT_EQ(buildStandup(standupFacts(), false),
+            QStringLiteral("Yesterday:\n"
+                           "- APP-12 Login rate limit: In progress → Review\n"
+                           "- APP-14 CSV export: 2 commits\n"
+                           "- Meeting: Sync with the team\n"
+                           "Today:\n"
+                           "- APP-14 CSV export\n"
+                           "- 15:00 1:1 with Oleg\n"
+                           "Blockers:\n"
+                           "- APP-20 Deploy pipeline"));
+}
+
+TEST(Standup, RussianHeadingsAndPlurals) {
+  const QString ru = buildStandup(standupFacts(), true);
+  EXPECT_TRUE(ru.startsWith(QStringLiteral("Вчера:\n")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("APP-14 CSV export: 2 коммита")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("\nСегодня:\n")));
+  EXPECT_TRUE(ru.contains(QStringLiteral("\nБлокеры:\n- APP-20 Deploy pipeline")));
+}
+
+// An empty section keeps its place, so the shape is there to fill in.
+TEST(Standup, EmptySectionsSaySo) {
+  StandupFacts f;
+  f.today = kDay;
+  f.previousDay = kDay.addDays(-1);
+  EXPECT_EQ(buildStandup(f, false), QStringLiteral("Yesterday:\n- —\nToday:\n- —\nBlockers:\n- —"));
+}
+
+// Moved there and back the same day: nothing to report.
+TEST(Standup, ARoundTripIsNotAMove) {
+  StandupFacts f = standupFacts();
+  const QDateTime mon(kDay.addDays(-1), QTime(9, 0));
+  f.moves = {{.taskId = QStringLiteral("APP-12"), .from = QStringLiteral("prog"), .to = QStringLiteral("review"), .at = mon},
+             {.taskId = QStringLiteral("APP-12"), .from = QStringLiteral("review"), .to = QStringLiteral("prog"), .at = mon.addSecs(60)}};
+  EXPECT_FALSE(buildStandup(f, false).contains(QStringLiteral("APP-12 Login rate limit:")));
 }
 
 TEST(EndOfDayText, RussianPluralForms) {
