@@ -286,6 +286,40 @@ TEST_F(AppControllerTest, FindShortcutConflict) {
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QString()), QString());
 }
 
+// SHELL-5 (2026-09-30-1): a space typed as the key is the Space key, and
+// something that is no key sequence never reads as "unbind".
+TEST_F(AppControllerTest, SpaceTypedAsTheKeyIsSpace) {
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QStringLiteral("Ctrl+Shift+ ")), QString("quick-capture"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QStringLiteral(" ")), QString("board.toggleSelect"));
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+Alt+ ")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString("Ctrl+Alt+Space"));
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+Shift+")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString("Ctrl+Alt+Space"));
+}
+
+// SHELL-4 (2026-09-30-1): the keys QML wires next to the catalog (Ctrl+P, the
+// board's arrows, Enter, Menu, Ctrl+arrows, the notes' Ctrl+Shift+M) count as
+// taken, and a rebind onto one is refused instead of killing both.
+TEST_F(AppControllerTest, BuiltinKeysAreConflicts) {
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")), QString("palette.open"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Up")), QString("board.cursorUp"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("board.archive"), QStringLiteral("Menu")), QString("board.cardMenu"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Shift+M")), QString("builtin.notesMode"));
+  EXPECT_FALSE(app_->shortcutLabel(QStringLiteral("builtin.notesMode")).isEmpty());
+  // The action the key belongs to, and a view where the key is not live.
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")), QString());
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("cal.prev"), QStringLiteral("Up")), QString());
+
+  const QString before = app_->shortcutFor(QStringLiteral("theme.toggle"));
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("theme.toggle")), before);
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("palette.open")), QString("Ctrl+K"));
+  ASSERT_EQ(toasts.count(), 1);
+  EXPECT_EQ(toasts.last().at(1).toString(), QStringLiteral("warning"));
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")));
+}
+
 TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {
   app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+K"));  // frees palette.open
   app_->resetShortcut(QStringLiteral("palette.open"));                      // default Ctrl+K conflicts with task.new

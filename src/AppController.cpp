@@ -466,6 +466,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"deadline.inDays", {"+%1d", "+%1 д"}},
       {"deadline.inDaysShort", {"+%1d", "+%1 д"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
+      {"hotkeys.builtinTaken", {"%1 is built in for “%2” and can't be reassigned", "%1 встроено в «%2» и не переназначается"}},
+      {"hotkeys.builtin.notesMode", {"Notes: cycle editor / split / preview", "Заметки: редактор / разделённый / просмотр"}},
+      {"hotkeys.builtin.attach", {"Attach files", "Прикрепить файлы"}},
       {"import.emptyJson", {"Empty JSON", "Пустой JSON"}},
       {"import.invalidJson", {"Invalid JSON", "Невалидный JSON"}},
       {"import.missingProfile", {"JSON has no 'profile' block or expected fields", "В JSON нет блока 'profile' или ожидаемых полей"}},
@@ -11029,7 +11032,15 @@ int AppController::shortcutIndexOf(const QString& id) const {
 }
 
 QString AppController::normalizeSequence(const QString& raw) const {
-  const QString trimmed = raw.trimmed();
+  // A space typed as the key itself (" ", "Ctrl+Shift+ ") is the Space key;
+  // trimming it away left nothing, or a dangling "+", and unbound the action
+  // (SHELL-5).
+  QString spelled = raw;
+  if(spelled == QStringLiteral(" ") || spelled.endsWith(QStringLiteral("+ "))) {
+    spelled.chop(1);
+    spelled += QStringLiteral("Space");
+  }
+  const QString trimmed = spelled.trimmed();
   if(trimmed.isEmpty()) {
     return QString();
   }
@@ -11078,7 +11089,69 @@ QString AppController::shortcutDescription(const QString& id) const {
 
 QString AppController::shortcutLabel(const QString& id) const {
   const int i = shortcutIndexOf(id);
-  return i < 0 ? QString() : m_shortcuts[i].toMap().value("label").toString();
+  if(i < 0) {
+    // The built-in keys that have no catalog entry of their own.
+    return id.startsWith(QStringLiteral("builtin.")) ? tr_(QStringLiteral("hotkeys.") + id) : QString();
+  }
+  return m_shortcuts[i].toMap().value("label").toString();
+}
+
+namespace {
+
+// Keys wired in QML next to the catalog's own binding, which no rebinding
+// moves: Main.qml's Ctrl+P and the board's arrows, Enter, Menu and Ctrl+arrows,
+// and the editors' fixed Ctrl+Shift+M / Ctrl+Shift+A. Two live shortcuts on
+// one sequence are ambiguous to Qt and neither fires, so a catalog action
+// that would share one with them in the same place is refused (SHELL-4).
+struct BuiltinKey {
+  const char* sequence;
+  const char* owner;  // the catalog action it aliases, or a builtin.* label
+  const char* scope;  // where it is live
+};
+
+constexpr BuiltinKey kBuiltinKeys[] = {
+    {"Ctrl+P", "palette.open", "app"},
+    {"Down", "board.cursorDown", "board"},
+    {"Up", "board.cursorUp", "board"},
+    {"Left", "board.cursorLeft", "board"},
+    {"Right", "board.cursorRight", "board"},
+    {"Enter", "board.open", "board"},
+    {"Menu", "board.cardMenu", "board"},
+    {"Ctrl+Down", "board.moveDown", "board"},
+    {"Ctrl+Up", "board.moveUp", "board"},
+    {"Ctrl+Left", "board.moveLeft", "board"},
+    {"Ctrl+Right", "board.moveRight", "board"},
+    {"Ctrl+Shift+M", "builtin.notesMode", "notes"},
+    {"Ctrl+Shift+A", "builtin.attach", "editor"},
+};
+
+// Where a catalog action is live: the board's, calendar's and notes' keys only
+// in their view, everything else everywhere.
+QString shortcutScope(const QString& id) {
+  for(const char* scope : {"board", "cal", "notes"}) {
+    if(id.startsWith(QLatin1String(scope) + QLatin1Char('.'))) {
+      return QString::fromLatin1(scope);
+    }
+  }
+  return QStringLiteral("app");
+}
+
+}  // namespace
+
+QString AppController::builtinShortcutOwner(const QString& id, const QString& normalized) {
+  const QString scope = shortcutScope(id);
+  for(const BuiltinKey& k : kBuiltinKeys) {
+    if(normalized != QLatin1String(k.sequence) || id == QLatin1String(k.owner)) {
+      continue;
+    }
+    // An editor's keys are live over every view, an app-wide action's over
+    // every scope; otherwise only the same view's keys meet.
+    const QLatin1String keyScope(k.scope);
+    if(scope == QLatin1String("app") || keyScope == QLatin1String("app") || keyScope == QLatin1String("editor") || scope == keyScope) {
+      return QString::fromLatin1(k.owner);
+    }
+  }
+  return QString();
 }
 
 QString AppController::findShortcutConflict(const QString& id, const QString& sequence) const {
@@ -11095,7 +11168,7 @@ QString AppController::findShortcutConflict(const QString& id, const QString& se
       return m.value("id").toString();
     }
   }
-  return QString();
+  return builtinShortcutOwner(id, want);
 }
 
 bool AppController::setShortcut(const QString& id, const QString& sequence) {
@@ -11104,9 +11177,23 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
     return false;
   }
   const QString seq = normalizeSequence(sequence);
+  // Something typed that is no key sequence must not read as "unbind".
+  if(seq.isEmpty() && !sequence.trimmed().isEmpty()) {
+    return false;
+  }
   QVariantMap m = m_shortcuts[i].toMap();
   if(m.value("sequence").toString() == seq) {
     return true;
+  }
+
+  // A built-in key stays where it is whatever the catalog says, so there is
+  // nothing to swap: taking it would only make both dead (SHELL-4).
+  if(!seq.isEmpty()) {
+    const QString builtin = builtinShortcutOwner(id, seq);
+    if(!builtin.isEmpty()) {
+      emit toast(tr_("hotkeys.builtinTaken").arg(seq, shortcutLabel(builtin)), QStringLiteral("warning"));
+      return false;
+    }
   }
 
   // VS-Code-style swap: clear the conflicting owner so the new binding wins.

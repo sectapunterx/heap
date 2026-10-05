@@ -1173,7 +1173,14 @@ class AppController : public QObject {
   Q_INVOKABLE QString defaultShortcutFor(const QString& id) const;
   Q_INVOKABLE QString shortcutDescription(const QString& id) const;
   Q_INVOKABLE QString shortcutLabel(const QString& id) const;
+  // The catalog action holding `sequence` (or the built-in key that does, as a
+  // catalog id or a builtin.* id shortcutLabel() names); empty when free.
   Q_INVOKABLE QString findShortcutConflict(const QString& id, const QString& sequence) const;
+
+  // Only the built-in half of that: a key no rebinding can free.
+  Q_INVOKABLE QString builtinShortcutConflict(const QString& id, const QString& sequence) const {
+    return builtinShortcutOwner(id, normalizeSequence(sequence));
+  }
   Q_INVOKABLE bool setShortcut(const QString& id, const QString& sequence);
   Q_INVOKABLE void resetShortcut(const QString& id);
   Q_INVOKABLE void resetAllShortcuts();
@@ -1944,6 +1951,9 @@ class AppController : public QObject {
   // instead of the guard dropping until the next pull (INT-4).
   QHash<QString, QStringList> m_workflowTransitions;
   static QString workflowTransitionsKey(const QString& providerId, const QString& project, const QString& issueType, const QString& status);
+  // The built-in key `normalized` would collide with if action `id` took it;
+  // empty when none. See kBuiltinKeys.
+  static QString builtinShortcutOwner(const QString& id, const QString& normalized);
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
