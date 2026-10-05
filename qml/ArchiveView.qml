@@ -100,19 +100,35 @@ Item {
 
     // Keyboard (SHELL-17): every archived card is a Tab stop with its name;
     // ↑/↓ also walk the list from card to card, Return opens one (TaskCard),
-    // the Menu key (or Shift+F10) opens its menu — restore and delete are there. ↓ on
-    // the view itself, where a view switch leaves focus, enters the list.
+    // the Menu key (or Shift+F10) opens its menu — restore and delete are
+    // there. ↓ on the view itself, where a view switch leaves focus, enters
+    // the list. The keys a card does not take reach the list, which handles
+    // them for whichever card holds focus.
+    function _cardAt(i) {
+        const it = archList.itemAtIndex(i);
+        if (!it) return null;
+        const kids = it.children;
+        for (let k = 0; k < kids.length; k++)
+            if (typeof kids[k].openMenu === "function") return kids[k];
+        return null;
+    }
+    function _focusedRow() {
+        const f = root.Window.activeFocusItem;
+        if (!f) return -1;
+        const p = f.mapToItem(archList.contentItem, f.width / 2, f.height / 2);
+        return archList.indexAt(p.x, p.y);
+    }
     function focusRow(i) {
         if (archList.count === 0) return false;
         const at = Math.max(0, Math.min(archList.count - 1, i));
         archList.currentIndex = at;
         archList.positionViewAtIndex(at, ListView.Contain);
-        const it = archList.itemAtIndex(at);
-        if (!it) return false;
-        it.card.forceActiveFocus(Qt.TabFocusReason);
+        const card = root._cardAt(at);
+        if (!card) return false;
+        card.forceActiveFocus(Qt.TabFocusReason);
         return true;
     }
-    Keys.onDownPressed: root.focusRow(archList.currentIndex < 0 ? 0 : archList.currentIndex)
+    Keys.onDownPressed: root.focusRow(Math.max(0, archList.currentIndex))
     Accessible.role: Accessible.Pane
     Accessible.name: I18n.t("archive.title")
 
@@ -176,8 +192,20 @@ Item {
             objectName: "archive-list"
             Accessible.role: Accessible.List
             Accessible.name: I18n.t("archive.title")
-            // The cards are the stops, not the list; arrows are theirs (below).
+            // The cards are the stops, not the list.
             keyNavigationEnabled: false
+            Keys.onUpPressed: root.focusRow(root._focusedRow() - 1)
+            Keys.onDownPressed: {
+                const at = root._focusedRow();
+                root.focusRow(at < 0 ? 0 : at + 1);
+            }
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                    const card = root._cardAt(root._focusedRow());
+                    if (card) card.openMenu();
+                    event.accepted = true;
+                }
+            }
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -226,7 +254,6 @@ Item {
             // and let the height follow.
             delegate: Item {
                 id: row
-                required property int index
                 required property string id
                 required property string title
                 required property string desc
@@ -252,7 +279,6 @@ Item {
                 required property var checklist
                 required property int attachmentCount
                 readonly property var st: root.statusInfo(row.status)
-                readonly property alias card: archCard
                 x: Theme.inset
                 width: archList.width - 2 * Theme.inset
                 height: archCard.implicitHeight
@@ -311,15 +337,6 @@ Item {
                         checklist: row.checklist, attachmentCount: row.attachmentCount
                     })
                     onClicked: root.taskClicked(row.id)
-                    onActiveFocusChanged: if (activeFocus) archList.currentIndex = row.index
-                    Keys.onUpPressed: root.focusRow(row.index - 1)
-                    Keys.onDownPressed: root.focusRow(row.index + 1)
-                    Keys.onPressed: (event) => {
-                        if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
-                            archCard.openMenu();
-                            event.accepted = true;
-                        }
-                    }
                     onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                     onHoveredChanged: {
                         if (hovered) root.hoveredTaskId = row.id;

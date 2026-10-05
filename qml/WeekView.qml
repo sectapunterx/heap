@@ -439,9 +439,6 @@ Item {
     // 10:00 were drawn exactly on top of each other here: the second hid the
     // first, and only the top one could be clicked. The day grid had solved
     // this; this one had never been taught. Both call the same module now.
-    // The narrowest an overlapping event's lane gets before the lanes
-    // cascade instead of splitting the day further.
-    readonly property int minLaneW: 64
     function buildOverlaps() {
         const perDay = [];
         for (let i = 0; i < days.length; i++) {
@@ -1065,11 +1062,11 @@ Item {
                             readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
                             // Tiled, or cascaded once lanes would get
                             // narrower than a readable title (VISU-15).
-                            readonly property var _lane: Overlap.lane(_col, _cols, gridHost.dayW - 4, root.minLaneW)
+                            readonly property var _lane: Overlap.lane(weEv._col, weEv._cols, gridHost.dayW - 4)
 
-                            x: gridHost.gutterW + effDayIndex * gridHost.dayW + 2 + _lane.x
-                            y: (effStart - root.hoursStart) * root.hourH + dragDy
-                            width: _lane.w - (_cols > 1 ? 2 : 0)
+                            x: gridHost.gutterW + weEv.effDayIndex * gridHost.dayW + 2 + weEv._lane.x
+                            y: (weEv.effStart - root.hoursStart) * root.hourH + weEv.dragDy
+                            width: weEv._lane.w - (weEv._cols > 1 ? 2 : 0)
                             height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
                             // A half-hour meeting is the most common kind and
                             // the block is too short for two lines of text:
@@ -1083,7 +1080,7 @@ Item {
                             border.width: 1
                             // A later lane is drawn over an earlier one where
                             // they cascade; a dragged event above them all.
-                            z: (dragDx !== 0 || dragDy !== 0) ? 7 : 5 + _col / Math.max(1, _cols)
+                            z: (weEv.dragDx !== 0 || weEv.dragDy !== 0) ? 7 : 5 + weEv._col / Math.max(1, weEv._cols)
 
                             Rectangle {
                                 anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
@@ -1286,16 +1283,16 @@ Item {
                             required property var modelData
                             objectName: "week-taskblock-" + wkBlock.modelData.id
                             readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
-                            readonly property var _lane: Overlap.lane(_slot.col, _slot.cols, gridHost.dayW - 4, root.minLaneW)
-                            x: gridHost.gutterW + wkBlock.modelData.dayIndex * gridHost.dayW + 2 + _lane.x
+                            readonly property var _lane: Overlap.lane(wkBlock._slot.col, wkBlock._slot.cols, gridHost.dayW - 4)
+                            x: gridHost.gutterW + wkBlock.modelData.dayIndex * gridHost.dayW + 2 + wkBlock._lane.x
                             y: (wkBlock.modelData.start - root.hoursStart) * root.hourH
-                            width: _lane.w - (_slot.cols > 1 ? 2 : 0)
+                            width: wkBlock._lane.w - (wkBlock._slot.cols > 1 ? 2 : 0)
                             height: Math.max(18, (wkBlock.modelData.end - wkBlock.modelData.start) * root.hourH - 2)
                             radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.hovered ? 0.18 : 0.10)
                             border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.6)
                             border.width: 1
-                            z: 5 + _slot.col / Math.max(1, _slot.cols)
+                            z: 5 + wkBlock._slot.col / Math.max(1, wkBlock._slot.cols)
                             Text {
                                 anchors.fill: parent
                                 anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs

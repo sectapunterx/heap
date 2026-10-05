@@ -80,7 +80,11 @@ function computeByDay(days) {
 // of what is left, the later column drawn over the earlier one. Clusters are
 // sorted by start, so an earlier event's top — where its title is — still
 // shows above the one that covers its right side.
+// The narrowest a lane gets before the lanes cascade (`minW` overrides).
+const MIN_LANE_W = 64;
+
 function lane(col, cols, avail, minW) {
+    if (minW === undefined) minW = MIN_LANE_W;
     const n = Math.max(1, cols);
     const tile = avail / n;
     if (n === 1 || tile >= minW) return { x: col * tile, w: tile };
