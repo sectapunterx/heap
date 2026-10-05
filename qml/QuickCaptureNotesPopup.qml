@@ -2,6 +2,7 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
+import "PopupStack.js" as PopupStack
 
 // Quick-capture popup for Notes — triggered by Ctrl+Shift+N.
 //
@@ -32,6 +33,9 @@ Popup {
     Overlay.modal: Rectangle {
         color: Theme.scrim
     }
+    // A press beside the popup acts like Esc (APP-126): close when empty,
+    // otherwise ask before dropping the text. See PopupStack.js.
+    Overlay.onPressed: if (!root.standalone && PopupStack.isTopmost(root, Overlay.overlay)) root._maybeDiscard()
 
     // The note just saved, for the owner's confirmation (see QuickCapturePopup).
     signal captured(string title, string body, string taskId)
@@ -106,6 +110,7 @@ Popup {
 
             TextArea {
                 id: editor
+                objectName: "quicknote-editor"
                 wrapMode: TextEdit.Wrap
                 font.pixelSize: Theme.fsLg
                 color: Theme.text

@@ -264,6 +264,31 @@ var DUSK = {
     }
 };
 
+// Minimal dark, back in the low-contrast set (APP-124): the retired Minimal
+// recipe — neutral greys, translucent white hairlines, a monochrome accent —
+// eased like Ochre, Fjord and Dusk: text a fifth of the way to the ground,
+// secondary text an eighth, fainter hairlines, signal colours a fifth less
+// saturated, textDim and the headings left where they cleared AA.
+var MINIMAL_DARK = {
+    id: "minimal-dark", name: "Minimal dark", base: "dark", contrast: "low", builtin: true,
+    colors: {
+        bg: "#141414", bg2: "#111111", panel: "#171717", panel2: "#1c1c1c", panel3: "#232323",
+        border: "#0cffffff", borderStrong: "#14ffffff", text: "#c8c8c8", textMuted: "#929292",
+        textDim: "#8c8c8c", textOnAccent: "#262626", textOnDanger: "#141414", textOnBadge: "#141414",
+        accent: "#c8c8c8", accentStrong: "#d0d0d0", accentSoft: "#10ffffff", knob: "#929292",
+        danger: "#e95d63", warning: "#e6b639", success: "#44c395", info: "#6fa7eb", toastBg: "#1c1c1c",
+        toastBorder: "#14ffffff", toastText: "#c8c8c8", scrim: "#99000000", p0: "#e95d63", p1: "#e8944f",
+        p2: "#929292", p3: "#8b8b8b", stBacklog: "#737373", stTodo: "#929292", stProg: "#6fa7eb",
+        stHalf: "#e6b639", stBlocked: "#ea7e7e", stReview: "#ac96ef", stDone: "#44c395", mStandup: "#6fa7eb",
+        mOneone: "#ac96ef", mSync: "#3ec3b3", mFocus: "#44c395", nowLine: "#e8545b", synKeyword: "#ac96ef",
+        synString: "#44c395", synNumber: "#e6b639", synComment: "#7d7d7d", synType: "#6fa7eb",
+        synBuiltin: "#c8c8c8", codeBg: "#111111", code: "#aeaeae", mention: "#6fa7eb", ticket: "#929292",
+        tag: "#ac96ef", math: "#e6b639", heading: "#8b8b8b", highlightBg: "#4de6b639", mdLink: "#6fa7eb",
+        mdCode: "#bbbbbb", mdCodeBg: "#1c1c1c", mdMention: "#6fa7eb", mdTicket: "#c8c8c8", mdTag: "#ac96ef",
+        mdMath: "#e6b639", mdHighlight: "#4de6b639"
+    }
+};
+
 // heap. ink: the Minimal recipe (neutral surfaces, translucent hairlines, a
 // monochrome accent) in the brand's own colours. Navy-black
 // surfaces and the mark's ink greys from design/brand-export, a monochrome
@@ -298,12 +323,12 @@ var HEAP_INK = {
 var SWATCHES = ["#5cc2dd", "#5aa9e6", "#a4a4d6", "#c07acf", "#e6624c",
                 "#e69854", "#dcb86b", "#6ec18a", "#9aa3b4", "#8a8e98"];
 
-var PRESETS = [HEAP_DARK, HEAP_LIGHT, HEAP_INK, CRIMSON, GRAPHITE, OCHRE, FJORD, DUSK];
+var PRESETS = [HEAP_DARK, HEAP_LIGHT, HEAP_INK, CRIMSON, GRAPHITE, OCHRE, FJORD, DUSK, MINIMAL_DARK];
 
 // Built-ins that were retired, and the one that replaces each, so a user who
 // picked one lands on its nearest relative instead of the slot default.
 var RETIRED = {
-    "minimal-light": "heap-light", "minimal-dark": "crimson",
+    "minimal-light": "heap-light",
     "ash": "graphite", "stone": "ochre", "slate": "graphite", "sage": "fjord",
     "muted-mauve": "dusk", "moss-mono": "fjord", "nocturne": "dusk"
 };
