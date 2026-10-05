@@ -29,6 +29,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "integrations/SyncState.h"
 #include "integrations/TrackerMerge.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
@@ -1956,6 +1957,8 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   // offer to send the same status again.
   const QString key = pushKey(providerId, project, externalId);
   m_pendingPushes.insert(key, taskId);
+  // The card says "sending" until the tracker answers (APP-163).
+  m_tasks.setPushRuntime(taskId, true, QString());
   ensureFreshToken(
       providerId,
       [this, providerId, externalId, status, project, key, taskId]() {
@@ -2012,12 +2015,19 @@ void AppController::onTaskPushed(const QString& providerId,
   // wrote nothing, so the base still holds.
   const bool wrote = ok && error != QStringLiteral("pull-only");
   const bool baseMoves = wrote && t.externalMeta.status != remoteStatus;
-  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves) {
+  // A status the tracker took settles a status conflict: the user's side is
+  // now the tracker's too (APP-163).
+  const bool settlesConflict = ok && t.externalMeta.conflicts.contains(QStringLiteral("status"));
+  m_tasks.setPushRuntime(t.id, false, ok ? QString() : providerReason(error));
+  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves || settlesConflict) {
     t.externalMeta.unsyncedStatus = wanted;
     // The tracker answered: the move is no longer waiting to be sent.
     t.externalMeta.pushQueued = false;
     if(wrote) {
       t.externalMeta.status = remoteStatus;
+    }
+    if(settlesConflict) {
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
     }
     m_tasks.upsert(t);
     scheduleSave();
@@ -7025,10 +7035,6 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
         t.priority = QStringLiteral("P2");
       }
     }
-    if(conflicted) {
-      ++stats.conflicts;
-    }
-
     if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
       seenStatuses.append(ext.status);
     }
@@ -7036,32 +7042,37 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     // A status that has not changed since the last pull says nothing new, so
     // the column the user picked here stands; that is what lets a card sit in
     // In Progress or Blocked against a tracker that only knows open/closed.
+    // The tracker moving the issue while a local move is still unsent (refused
+    // or queued) is a conflict: the local column stays, nothing is pushed, and
+    // the user picks a side (APP-163) — it used to drop the local move.
     const QString mapped = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
-    const QString prevRemote = t.externalMeta.status;
-    const bool remoteMoved = !prevRemote.isEmpty() && prevRemote != ext.status;
     const auto isDone = [](const QString& column) {
       return column == QStringLiteral("done");
     };
-    if(isNewRow) {
+    using heap::integrations::StatusPull;
+    const StatusPull statusPull =
+        isNewRow ? StatusPull::TakeRemote
+                 : heap::integrations::mergeStatusOnPull(
+                       t.status, t.externalMeta.unsyncedStatus, t.externalMeta.status, ext.status, mapped, t.externalMeta.column);
+    if(statusPull == StatusPull::TakeRemote) {
       t.status = mapped;
-    } else if(remoteMoved) {
-      // Someone moved the issue in the tracker: that is news, and it wins —
-      // over a queued move too, which would now undo theirs.
-      t.status = mapped;
-      t.externalMeta.unsyncedStatus.clear();
-      t.externalMeta.pushQueued = false;
-    } else if(!t.externalMeta.unsyncedStatus.isEmpty()) {
-      // A move the tracker refused: keep it here until a push goes through.
-    } else if(prevRemote.isEmpty()) {
-      // Stored before the last-seen status was kept. Only a change of kind
-      // (open ↔ closed) is evidence; the rest is the user's arrangement.
-      if(isDone(mapped) != isDone(t.status)) {
-        t.status = mapped;
+      if(!t.externalMeta.unsyncedStatus.isEmpty() && t.externalMeta.status != ext.status) {
+        // The tracker moved it (to where the card already is, or with
+        // nothing of ours waiting): there is nothing left to send.
+        t.externalMeta.unsyncedStatus.clear();
+        t.externalMeta.pushQueued = false;
       }
-    } else if(t.status == t.externalMeta.column) {
-      // Still where the last pull put it, so the user has not placed it:
-      // follow the mapping, which may have changed since.
-      t.status = mapped;
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+    } else if(statusPull == StatusPull::Conflict) {
+      // Held, not sent: a queued move would now undo theirs unasked.
+      t.externalMeta.pushQueued = false;
+      if(!t.externalMeta.conflicts.contains(QStringLiteral("status"))) {
+        conflicted = true;
+      }
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), true);
+    }
+    if(conflicted) {
+      ++stats.conflicts;
     }
     t.externalMeta.column = mapped;
     t.externalMeta.status = ext.status;
@@ -8497,6 +8508,7 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
   if(row < 0) {
     return;
   }
+  m_tasks.setPushRuntime(taskId, false, QString());
   Task t = m_tasks.items().at(row);
   if(t.externalMeta.pushQueued && t.externalMeta.unsyncedStatus == status) {
     return;
@@ -8516,7 +8528,8 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
 void AppController::flushQueuedPushes(const QString& providerId) {
   QStringList ids;
   for(const Task& t : m_tasks.items()) {
-    if(t.externalProvider == providerId && t.externalMeta.pushQueued) {
+    // A move held by a status conflict waits for the user, not for a sync.
+    if(t.externalProvider == providerId && t.externalMeta.pushQueued && !t.externalMeta.conflicts.contains(QStringLiteral("status"))) {
       ids.append(t.id);
     }
   }
@@ -8542,27 +8555,73 @@ void AppController::resolveTrackerConflict(const QString& taskId, bool useTracke
   if(row < 0) {
     return;
   }
-  Task t = m_tasks.items().at(row);
-  if(t.externalMeta.conflicts.isEmpty()) {
-    return;
-  }
-  const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+  const QStringList fields = m_tasks.items().at(row).externalMeta.conflicts;
+  resolveTrackerConflictFields(taskId, fields, useTracker);
+}
+
+void AppController::resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker) {
+  resolveTrackerConflictFields(taskId, {field}, useTracker);
+}
+
+namespace {
+
+// One side of one conflicting field (APP-163). Returns true when the choice
+// means the card's status has to go to the tracker now: keeping my status is
+// keeping it *and sending it*, since the tracker still says otherwise.
+bool applyConflictChoice(Task& t, const QString& field, bool useTracker) {
   if(useTracker) {
-    for(const QString& field : t.externalMeta.conflicts) {
-      if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
-        t.title = t.externalMeta.title;
-      } else if(field == QStringLiteral("body")) {
-        t.desc = t.externalMeta.body;
-      } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
-        t.priority = t.externalMeta.priority;
+    if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
+      t.title = t.externalMeta.title;
+    } else if(field == QStringLiteral("body")) {
+      t.desc = t.externalMeta.body;
+    } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
+      t.priority = t.externalMeta.priority;
+    } else if(field == QStringLiteral("status")) {
+      if(!t.externalMeta.column.isEmpty() && t.status != t.externalMeta.column) {
+        t.status = t.externalMeta.column;
+        t.statusChangedAt = QDateTime::currentDateTime();
       }
+      // The local move is dropped by the user's own choice: nothing to send.
+      t.externalMeta.unsyncedStatus.clear();
+      t.externalMeta.pushQueued = false;
     }
   }
-  // Keeping mine only stops the flag: the base stays what the tracker sent,
-  // so the next upstream change to the same field is flagged again.
-  t.externalMeta.conflicts.clear();
-  m_tasks.upsert(t);
-  scheduleSave();
+  // Keeping mine for a text field only stops the flag: the base stays what
+  // the tracker sent, so the next upstream change to it is flagged again.
+  heap::integrations::setConflict(t.externalMeta.conflicts, field, false);
+  return !useTracker && field == QStringLiteral("status");
+}
+
+}  // namespace
+
+void AppController::resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  QStringList pending;
+  for(const QString& f : fields) {
+    if(t.externalMeta.conflicts.contains(f)) {
+      pending.append(f);
+    }
+  }
+  if(pending.isEmpty()) {
+    return;
+  }
+  bool send = false;
+  {
+    const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+    for(const QString& f : pending) {
+      send = applyConflictChoice(t, f, useTracker) || send;
+    }
+    m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(send) {
+    pushStatusToTracker(taskId, t.status);
+  }
+  emit trackerConflictResolved(taskId);
   emit toast(tr_(useTracker ? "task.conflictTookTracker" : "task.conflictKeptMine").arg(externalKeyOf(t)));
 }
 

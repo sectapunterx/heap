@@ -184,6 +184,12 @@ target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(heap_recur_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_recur_tests COMMAND heap_recur_tests)
 
+# Sync state of a mirrored card and the status rule of a pull (APP-163). Header-only.
+add_executable(heap_sync_state_tests test_sync_state.cpp)
+target_include_directories(heap_sync_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sync_state_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_sync_state_tests COMMAND heap_sync_state_tests)
+
 add_executable(heap_git_tests
     test_branch_task_matcher.cpp
     test_git_watcher_parse.cpp

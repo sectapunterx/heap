@@ -557,6 +557,9 @@ class AppController : public QObject {
   // version of every conflicting field (true), or keep the local one and stop
   // flagging it (false). Undoable.
   Q_INVOKABLE void resolveTrackerConflict(const QString& taskId, bool useTracker);
+  // One field of it ("title" | "body" | "priority" | "status"). Keeping my
+  // status sends it to the tracker; taking the tracker's drops the unsent move.
+  Q_INVOKABLE void resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker);
   // Archive every card of this tracker the current filter no longer covers.
   Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
   // Whether a link from user or tracker content may open without asking. See
@@ -1336,6 +1339,8 @@ class AppController : public QObject {
   void undoableToast(const QString& message, int seconds);
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
+  // A conflict on this task was settled, one field or all (APP-163).
+  void trackerConflictResolved(const QString& taskId);
   void focusedGitChanged();
   void showWhoseMoveChanged();
   void openTaskRequested(const QString& id);
@@ -1932,6 +1937,7 @@ class AppController : public QObject {
   // A move that could not be sent (tracker disconnected or unreachable):
   // flagged on the card and sent after the next successful pull.
   void queueTrackerPush(const QString& taskId, const QString& status);
+  void resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker);
   void flushQueuedPushes(const QString& providerId);
   // What a pull under the card's current settings is scoped to. See
   // heap::integrations::scopeFingerprint.

@@ -517,6 +517,16 @@ class TaskModel : public QAbstractListModel {
   void setGitInfoForId(const QString& id, const QVariantMap& info);
   void clearAllGitInfo();
 
+  // Runtime half of a card's sync state (APP-163): a status write in flight
+  // and the reason the tracker gave for refusing the last one. Not saved —
+  // the refusal itself is (ExternalMeta::unsyncedStatus), its wording is not.
+  // Read back through TicketRole as `syncState` / `syncError`.
+  void setPushRuntime(const QString& id, bool pushing, const QString& error);
+
+  bool isPushing(const QString& id) const {
+    return m_pushing.contains(id);
+  }
+
   int rowCount(const QModelIndex& = {}) const override {
     return m_items.size();
   }
@@ -569,6 +579,8 @@ class TaskModel : public QAbstractListModel {
   QVector<Task> m_items;
   QSet<QString> m_blockedStuck;
   QHash<QString, GitInfo> m_git;  // not persisted; runtime only
+  QSet<QString> m_pushing;        // task ids with a push in flight
+  QHash<QString, QString> m_pushErrors;  // task id → the tracker's last refusal
   // indexOfId's id→row map, rebuilt lazily whenever rows are added, removed or
   // replaced wholesale. Mutable so the lookup can stay const.
   mutable QHash<QString, int> m_index;

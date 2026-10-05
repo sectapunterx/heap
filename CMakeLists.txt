@@ -291,6 +291,7 @@ qt_add_qml_module(heap_core
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
+        qml/SyncConflictDialog.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
         qml/AutoSyncCard.qml
@@ -402,6 +403,7 @@ qt_add_qml_module(heap_core
         src/TypeAhead.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
+        src/integrations/SyncState.h
         src/integrations/GithubProvider.h
         src/integrations/JiraProvider.h
         src/integrations/GitlabProvider.h

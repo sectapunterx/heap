@@ -173,6 +173,13 @@ Popup {
             if (f === "title") out.push({ label: I18n.t("ticket.conflict.title"), value: String(t.remoteTitle || "") });
             else if (f === "body") out.push({ label: I18n.t("ticket.conflict.body"), value: String(t.remoteBody || "") || "—" });
             else if (f === "priority") out.push({ label: I18n.t("ticket.conflict.priority"), value: String(t.remotePriority || "") });
+            else if (f === "status") {
+                const names = root.statusNames();
+                const at = root.statusList().indexOf(String(t.remoteColumn || ""));
+                out.push({ label: I18n.t("ticket.conflict.status"),
+                           value: (at >= 0 ? names[at] : String(t.remoteColumn || ""))
+                                  + (t.remoteStatus ? " (" + t.remoteStatus + ")" : "") });
+            }
         }
         return out;
     }
@@ -185,6 +192,10 @@ Popup {
         if (fields.indexOf("body") >= 0) descField.text = String(t.remoteBody || "");
         if (fields.indexOf("priority") >= 0 && String(t.remotePriority || "").length > 0)
             priBox.currentIndex = Math.max(0, ["P0", "P1", "P2", "P3"].indexOf(t.remotePriority));
+        if (fields.indexOf("status") >= 0) {
+            const at = root.statusList().indexOf(String(t.remoteColumn || ""));
+            if (at >= 0) statusBox.currentIndex = at;
+        }
         AppController.resolveTrackerConflict(root._originalId, true);
         root._conflictResolved = true;
     }

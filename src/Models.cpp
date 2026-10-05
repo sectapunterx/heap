@@ -1,6 +1,8 @@
 #include "Models.h"
 #include "TaskDefer.h"
 
+#include "integrations/SyncState.h"
+
 #include <QRegularExpression>
 
 #include <algorithm>
@@ -52,6 +54,10 @@ QVariantMap ticketToVariant(const Task& t) {
       {QStringLiteral("remoteTitle"), t.externalMeta.title},
       {QStringLiteral("remoteBody"), t.externalMeta.body},
       {QStringLiteral("remotePriority"), t.externalMeta.priority},
+      // The tracker's status as the last pull saw it, raw and as a column:
+      // the other side of a status conflict (APP-163).
+      {QStringLiteral("remoteStatus"), t.externalMeta.status},
+      {QStringLiteral("remoteColumn"), t.externalMeta.column},
   };
 }
 
@@ -273,8 +279,20 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return labelsToVariant(t.labels);
     case AssigneeRole:
       return t.assignee;
-    case TicketRole:
-      return ticketToVariant(t);
+    case TicketRole: {
+      QVariantMap m = ticketToVariant(t);
+      if(!m.isEmpty()) {
+        heap::integrations::SyncFacts f;
+        f.pushing = m_pushing.contains(t.id);
+        f.queued = t.externalMeta.pushQueued;
+        f.unsyncedStatus = t.externalMeta.unsyncedStatus;
+        f.conflicts = t.externalMeta.conflicts;
+        f.gone = t.externalMeta.goneUpstream;
+        m.insert(QStringLiteral("syncState"), heap::integrations::syncStateName(heap::integrations::syncStateOf(f)));
+        m.insert(QStringLiteral("syncError"), m_pushErrors.value(t.id));
+      }
+      return m;
+    }
     case SearchTextRole:
       return searchTextAt(idx.row());
     case RankRole:
@@ -301,6 +319,8 @@ void TaskModel::reset(QVector<Task> items) {
   m_items = std::move(items);
   m_searchCache = QVector<QString>(m_items.size());
   m_git.clear();
+  m_pushing.clear();
+  m_pushErrors.clear();
   m_indexDirty = true;
   endResetModel();
 }
@@ -336,6 +356,29 @@ void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   const QModelIndex mi = index(row, 0);
   emit dataChanged(
       mi, mi, {PrStateRole, PrNumberRole, PrUrlRole, PrMoveRole, PrMoveReasonRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
+}
+
+void TaskModel::setPushRuntime(const QString& id, bool pushing, const QString& error) {
+  const bool wasPushing = m_pushing.contains(id);
+  const QString oldError = m_pushErrors.value(id);
+  if(wasPushing == pushing && oldError == error) {
+    return;
+  }
+  if(pushing) {
+    m_pushing.insert(id);
+  } else {
+    m_pushing.remove(id);
+  }
+  if(error.isEmpty()) {
+    m_pushErrors.remove(id);
+  } else {
+    m_pushErrors.insert(id, error);
+  }
+  const int row = indexOfId(id);
+  if(row >= 0) {
+    const QModelIndex mi = index(row, 0);
+    emit dataChanged(mi, mi, {TicketRole});
+  }
 }
 
 void TaskModel::clearAllGitInfo() {

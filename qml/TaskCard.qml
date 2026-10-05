@@ -50,6 +50,25 @@ Rectangle {
     }
     Keys.onMenuPressed: card.openMenu()
 
+    // Here vs tracker, field by field (APP-163). Made on first use: a board of
+    // cards must not each carry a dialog.
+    Loader {
+        id: conflictLoader
+        active: false
+        sourceComponent: SyncConflictDialog {
+            // Not from inside its own signal: that would destroy the sender.
+            onClosed: Qt.callLater(() => { conflictLoader.active = false; })
+        }
+    }
+    readonly property var conflictDialog: conflictLoader.item
+    function openConflictDialog() {
+        if (!card.task) return;
+        conflictLoader.active = true;
+        const fresh = AppController.taskById(card.task.id);
+        const dlg = conflictLoader.item as SyncConflictDialog;
+        if (dlg) dlg.showFor(fresh && fresh.id ? fresh : card.task);
+    }
+
     // When the work is planned, for a task that has a scheduledAt of its own
     // worth showing: no deadline, a different day, or a clock time. Before,
     // a task with only a schedule looked undated (TASKS-12).
@@ -238,25 +257,44 @@ Rectangle {
             }
             // The tracker refused the last status change, or the issue is no
             // longer in the tracker. Either way the card is out of step with it.
+            // Shown only when the card is not in step (APP-163): a status write
+            // on its way ("sending", quiet), one waiting for the tracker to be
+            // reachable, one the tracker refused (with its reason), or an issue
+            // that is gone. A conflict has its own chip below.
             Rectangle {
+                id: syncChip
                 objectName: "tc-sync-state"
-                visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
+                // syncState comes from the model; a hand-built task map (the
+                // archive, tests) may only carry the older flags.
+                readonly property string state: card._ticket.syncState
+                    || (card._ticket.gone ? "gone"
+                        : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced")
+                readonly property bool quiet: state === "pushing"
+                visible: card._isTicket && (state === "pushing" || state === "queued" || state === "error" || state === "gone")
                 radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.warning, 0.14)
+                color: syncChip.quiet ? "transparent" : Theme.withAlpha(Theme.warning, 0.14)
                 implicitWidth: syncStateT.implicitWidth + 10
                 implicitHeight: syncStateT.implicitHeight + 2
                 Text {
                     id: syncStateT
+                    objectName: "tc-sync-state-text"
                     anchors.centerIn: parent
-                    text: card._ticket.gone ? I18n.t("taskcard.gone") : I18n.t("taskcard.unsynced")
+                    text: syncChip.state === "gone" ? I18n.t("taskcard.gone")
+                        : syncChip.state === "pushing" ? I18n.t("taskcard.pushing")
+                        : syncChip.state === "queued" ? I18n.t("taskcard.queued")
+                        : I18n.t("taskcard.unsynced")
                     textFormat: Text.PlainText
-                    color: Theme.warning
+                    color: syncChip.quiet ? Theme.textDim : Theme.warning
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: syncChip.quiet ? Font.Normal : Font.DemiBold
                 }
+                readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
+                    : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
+                    : syncChip.state === "queued" ? I18n.t("taskcard.queued.tip")
+                    : I18n.t("taskcard.unsynced.tip")
+                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
                 QQC.ToolTip.visible: syncStateHover.hovered
-                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip")
-                                  : (card._ticket.queued ? I18n.t("taskcard.queued.tip") : I18n.t("taskcard.unsynced.tip"))
+                QQC.ToolTip.text: syncChip.tip
                 HoverHandler { id: syncStateHover }
                 // The retry had no keyboard path: the card menu does not
                 // offer it (design audit DES-19). The HoverHandler above keeps
@@ -290,6 +328,13 @@ Rectangle {
                 QQC.ToolTip.visible: conflictHover.hovered
                 QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
                 HoverHandler { id: conflictHover }
+                // Opens the side-by-side choice (APP-163). heap never picks.
+                ClickArea {
+                    objectName: "tc-conflict-open"
+                    label: I18n.t("sync.conflict.open")
+                    showTip: false
+                    onActivated: card.openConflictDialog()
+                }
             }
             // Left behind by a filter change: still a live issue, just not one
             // this connection pulls any more. Quiet on purpose.
