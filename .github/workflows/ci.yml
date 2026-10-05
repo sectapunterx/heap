@@ -373,6 +373,9 @@ jobs:
       # STATUS_DLL_NOT_FOUND (0xc0000135).
       - name: Run ctest (windows)
         if: runner.os == 'Windows'
+        # A suite that hangs past ctest's --timeout held the step for 30+ min,
+        # and a cancelled job keeps no log; fail it instead.
+        timeout-minutes: 15
         shell: msys2 {0}
         run: |
           bash .github/scripts/ctest_with_retry.sh build/tests \
@@ -445,7 +448,10 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: test-results-${{ matrix.os }}
-          path: build/tests/ctest-${{ matrix.os }}.xml
+          # heap_qml_tests.txt: the QML cases as they ran (stdout is lost on Windows).
+          path: |
+            build/tests/ctest-${{ matrix.os }}.xml
+            build/tests/heap_qml_tests.txt
 
       - name: Render test report
         if: always()
