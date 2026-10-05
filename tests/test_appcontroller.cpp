@@ -11,6 +11,7 @@
 
 #include "cal/OutlookDesktop.h"
 #include "git/BranchTaskMatcher.h"
+#include "integrations/AutoSync.h"
 #include "integrations/IntegrationTypes.h"
 
 #include <QApplication>
@@ -1606,6 +1607,31 @@ TEST_F(AppControllerTest, StatusCountsAreOnePassAndFollowTheModel) {
   app_->tasks()->reset({});
   EXPECT_EQ(app_->countByStatus(QStringLiteral("todo")), 0);
   EXPECT_TRUE(app_->statusCounts().isEmpty());
+}
+
+// APP-123: a periodic sync can wait up to a month. The timer only checks
+// (never less often than hourly) and the last sync's time decides.
+TEST(AutoSyncTest, DueByTheLastSyncNotTheTimer) {
+  using namespace heap::integrations;
+  const QDateTime t0(QDate(2026, 10, 1), QTime(9, 0));
+  EXPECT_FALSE(autoSyncDue(t0, t0.addDays(400), 0)) << "off is never due";
+  EXPECT_TRUE(autoSyncDue({}, t0, 15)) << "never synced is due";
+  EXPECT_FALSE(autoSyncDue(t0, t0.addSecs(14 * 60), 15));
+  EXPECT_TRUE(autoSyncDue(t0, t0.addSecs(15 * 60 - 1), 15)) << "a timer a hair early still counts";
+  const int month = 30 * 24 * 60;
+  EXPECT_FALSE(autoSyncDue(t0, t0.addDays(29), month));
+  EXPECT_TRUE(autoSyncDue(t0, t0.addDays(30), month));
+  EXPECT_EQ(autoSyncCheckMinutes(15), 15);
+  EXPECT_EQ(autoSyncCheckMinutes(month), 60) << "a month-long wait is checked hourly";
+  EXPECT_LE(static_cast<qint64>(autoSyncCheckMinutes(kMaxAutoSyncMinutes)) * 60 * 1000, static_cast<qint64>(INT_MAX));
+}
+
+// With no tracker connected the check does nothing, and records nothing.
+TEST_F(AppControllerTest, AutoSyncTickWithoutTrackersIsQuiet) {
+  app_->setAppSettingsJson(QStringLiteral(R"({"integrations":{"autoSyncMinutes":15}})"));
+  const QDateTime before = app_->lastTrackerSync();
+  app_->autoSyncTickAt(QDateTime::currentDateTime().addDays(1));
+  EXPECT_EQ(app_->lastTrackerSync(), before);
 }
 
 TEST_F(AppControllerTest, SettingsMapIsCachedButNeverStale) {
