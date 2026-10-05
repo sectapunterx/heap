@@ -174,8 +174,11 @@ jobs:
           set -uo pipefail
           # clang-tidy-diff exits non-zero on its own findings; the verdict is
           # taken from the log below, so the step must not stop here first.
-          git diff -U0 HEAD^1 -- '*.cpp' '*.h' '*.mm' \
-            | clang-tidy-diff-18.py -p1 -path build -iregex '.*\.(cpp|mm)' \
+          # Windows- and macOS-only sources (*_win.cpp, *.mm) are not in this
+          # Linux compile database; tidy would only report their system
+          # headers as missing, so they are left to their own platforms.
+          git diff -U0 HEAD^1 -- '*.cpp' '*.h' \
+            | clang-tidy-diff-18.py -p1 -path build -iregex '(?!.*_win\.cpp$).*\.cpp' \
                 -clang-tidy-binary clang-tidy-18 -j "$(nproc)" -quiet \
                 -checks='-readability-identifier-naming' > tidy.log 2>&1 || true
           cat tidy.log

@@ -8,7 +8,9 @@
 // inside a VEVENT ends the event early if the first END: is trusted.
 
 #include "cal/IcsCodec.h"
+#include "cal/IcsSubscription.h"
 #include "cal/Occurrences.h"
+#include "cal/OutlookDesktop.h"
 
 #include <gtest/gtest.h>
 
@@ -719,4 +721,106 @@ TEST(Ics, ACancellationAloneIsReportedForTheStoredSeries) {
   ASSERT_EQ(in.cancelled.size(), 1);
   EXPECT_EQ(in.cancelled.first().masterId, QStringLiteral("s"));
   EXPECT_EQ(in.cancelled.first().date, QDate(2036, 5, 26));
+}
+
+// ── Calendar subscriptions (APP-118) ─────────────────────────────────
+
+// Outlook and Apple hand out webcal:// links; they are fetched over HTTPS.
+TEST(IcsSubscription, WebcalLinksAreFetchedOverHttps) {
+  EXPECT_EQ(heap::cal::subscriptionFetchUrl(QStringLiteral(" webcal://outlook.office365.com/owa/calendar/x/reachcalendar.ics ")).toString(),
+            QStringLiteral("https://outlook.office365.com/owa/calendar/x/reachcalendar.ics"));
+  EXPECT_EQ(heap::cal::subscriptionFetchUrl(QStringLiteral("webcals://p01.icloud.com/a.ics")).scheme(), QStringLiteral("https"));
+  EXPECT_EQ(heap::cal::subscriptionFetchUrl(QStringLiteral("https://calendar.google.com/x/basic.ics")).host(),
+            QStringLiteral("calendar.google.com"));
+  EXPECT_TRUE(heap::cal::subscriptionFetchUrl(QStringLiteral("file:///etc/passwd")).isEmpty());
+  EXPECT_TRUE(heap::cal::subscriptionFetchUrl(QStringLiteral("not a link")).isEmpty());
+  EXPECT_TRUE(heap::cal::subscriptionFetchUrl(QString()).isEmpty());
+}
+
+TEST(IcsSubscription, EventIdsSayWhichCalendarTheyCameFrom) {
+  EXPECT_EQ(heap::cal::subscriptionPrefix(QStringLiteral("ab12")), QStringLiteral("sub:ab12:"));
+  EXPECT_TRUE(heap::cal::isSubscriptionEventId(QStringLiteral("sub:ab12:uid-1")));
+  EXPECT_FALSE(heap::cal::isSubscriptionEventId(QStringLiteral("ev-123")));
+  EXPECT_EQ(heap::cal::subscriptionOfEventId(QStringLiteral("sub:ab12:uid-1")), QStringLiteral("ab12"));
+  EXPECT_TRUE(heap::cal::subscriptionOfEventId(QStringLiteral("ev-123")).isEmpty());
+}
+
+// A feed's events take the subscription's prefix, series links included; an
+// occurrence the feed cancels becomes an exdate; an override whose series the
+// feed does not carry is dropped rather than left floating.
+TEST(IcsSubscription, FeedEventsArePrefixedAndCancellationsApplied) {
+  const IcsImport in = parseIcs(QStringLiteral(
+      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+      "BEGIN:VEVENT\r\nUID:standup\r\nSUMMARY:Standup\r\nDTSTART:20261005T090000\r\nDTEND:20261005T091500\r\nRRULE:FREQ=DAILY\r\nEND:"
+      "VEVENT\r\n"
+      "BEGIN:VEVENT\r\nUID:standup\r\nRECURRENCE-ID:20261007T090000\r\nSUMMARY:Standup\r\nDTSTART:20261007T100000\r\nDTEND:"
+      "20261007T101500\r\nEND:VEVENT\r\n"
+      "BEGIN:VEVENT\r\nUID:standup\r\nRECURRENCE-ID:20261008T090000\r\nSTATUS:CANCELLED\r\nDTSTART:20261008T090000\r\nEND:VEVENT\r\n"
+      "BEGIN:VEVENT\r\nUID:orphan\r\nRECURRENCE-ID:20261009T090000\r\nSUMMARY:Gone\r\nDTSTART:20261009T090000\r\nDTEND:"
+      "20261009T093000\r\nEND:VEVENT\r\n"
+      "END:VCALENDAR\r\n"));
+  const QVector<CalEvent> evs = heap::cal::subscriptionEvents(in, QStringLiteral("s1"));
+  ASSERT_EQ(evs.size(), 2);
+  for(const CalEvent& e : evs) {
+    EXPECT_TRUE(e.id.startsWith(QStringLiteral("sub:s1:"))) << e.id.toStdString();
+    EXPECT_TRUE(e.profileId.isEmpty());
+  }
+  const CalEvent& master = evs.at(0).masterId.isEmpty() ? evs.at(0) : evs.at(1);
+  const CalEvent& moved = evs.at(0).masterId.isEmpty() ? evs.at(1) : evs.at(0);
+  EXPECT_EQ(moved.masterId, master.id);
+  EXPECT_TRUE(master.exdates.contains(QDate(2026, 10, 8)));
+}
+
+// ── The desktop Outlook (APP-118, Exchange) ──────────────────────────
+
+TEST(OutlookDesktop, TheJoinLinkIsTheFirstUrlInLocationThenBody) {
+  EXPECT_EQ(heap::cal::firstMeetingUrl(QStringLiteral("Talk: https://talk.corp.ru/j/42."), QStringLiteral("https://other")),
+            QStringLiteral("https://talk.corp.ru/j/42"));
+  EXPECT_EQ(heap::cal::firstMeetingUrl(QStringLiteral("Room 5"), QStringLiteral("Join <https://talk.corp.ru/j/7?pwd=x> now")),
+            QStringLiteral("https://talk.corp.ru/j/7?pwd=x"));
+  EXPECT_TRUE(heap::cal::firstMeetingUrl(QStringLiteral("Room 5"), QStringLiteral("no link")).isEmpty());
+}
+
+TEST(OutlookDesktop, OccurrencesBecomeReadOnlyMeetings) {
+  heap::cal::OutlookItem timed;
+  timed.key = QStringLiteral("G1-202610061100");
+  timed.subject = QStringLiteral(" Sprint sync ");
+  timed.start = QDateTime(QDate(2026, 10, 6), QTime(11, 0));
+  timed.end = QDateTime(QDate(2026, 10, 6), QTime(11, 30));
+  timed.location = QStringLiteral("https://talk.corp.ru/j/1");
+  heap::cal::OutlookItem allDay;
+  allDay.key = QStringLiteral("G2-202610090000");
+  allDay.subject = QStringLiteral("Offsite");
+  allDay.start = QDateTime(QDate(2026, 10, 9), QTime(0, 0));
+  allDay.end = QDateTime(QDate(2026, 10, 11), QTime(0, 0));  // Outlook: the next midnight
+  allDay.allDay = true;
+  heap::cal::OutlookItem keyless;
+  keyless.start = timed.start;
+  keyless.end = timed.end;
+
+  const QVector<CalEvent> evs = heap::cal::outlookEvents({timed, allDay, keyless}, QStringLiteral("outlook"));
+  ASSERT_EQ(evs.size(), 2);
+  EXPECT_EQ(evs.at(0).id, QStringLiteral("sub:outlook:G1-202610061100"));
+  EXPECT_EQ(evs.at(0).title, QStringLiteral("Sprint sync"));
+  EXPECT_EQ(evs.at(0).date, QDate(2026, 10, 6));
+  EXPECT_DOUBLE_EQ(evs.at(0).start, 11.0);
+  EXPECT_DOUBLE_EQ(evs.at(0).end, 11.5);
+  EXPECT_EQ(evs.at(0).url, QStringLiteral("https://talk.corp.ru/j/1"));
+  EXPECT_TRUE(evs.at(1).allDay);
+  EXPECT_EQ(evs.at(1).date, QDate(2026, 10, 9));
+  EXPECT_EQ(evs.at(1).endDate, QDate(2026, 10, 10));
+}
+
+// A meeting that runs to midnight ends on its own day, not on a zero-length
+// sliver of the next one.
+TEST(OutlookDesktop, AMeetingUntilMidnightStaysOnItsDay) {
+  heap::cal::OutlookItem late;
+  late.key = QStringLiteral("G3");
+  late.start = QDateTime(QDate(2026, 10, 6), QTime(22, 0));
+  late.end = QDateTime(QDate(2026, 10, 7), QTime(0, 0));
+  const QVector<CalEvent> evs = heap::cal::outlookEvents({late}, QStringLiteral("outlook"));
+  ASSERT_EQ(evs.size(), 1);
+  EXPECT_EQ(evs.at(0).date, QDate(2026, 10, 6));
+  EXPECT_FALSE(evs.at(0).endDate.isValid());
+  EXPECT_DOUBLE_EQ(evs.at(0).end, 24.0);
 }

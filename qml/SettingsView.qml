@@ -1968,6 +1968,11 @@ Item {
                 font.pixelSize: Theme.fsSm
             }
 
+            // What integrations do and do not do, before any of them.
+            IntegrationsInfoCard {}
+            // Outlook / Google / iCloud meetings by link (APP-118).
+            CalendarSubscriptionsCard {}
+
             // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
             SectionCard {
                 RowLayout {
