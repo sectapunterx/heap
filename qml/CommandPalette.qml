@@ -50,8 +50,8 @@ Popup {
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0;
     }
 
-    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "calendar",
-                                              "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
+    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "safety",
+                                              "calendar", "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
 
     // Commands: every app-wide action in the shortcut catalog (so the palette
     // and the keys never disagree on what exists or what it is called), each
