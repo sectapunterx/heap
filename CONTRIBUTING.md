@@ -53,6 +53,30 @@ Once that Qt is in `C:/Qt/6.9.1`, `~/Qt/6.9.1` or `HEAP_QMLLINT_QT`, configuring
 same check as `heap_qmllint_qt69` (lines changed since `origin/master`), so a green `ctest` means a green ratchet.
 Set `-DHEAP_QMLLINT_QT=` to another Qt 6.9 dir, or leave the Qt out to skip it.
 
+### Performance budgets
+
+Speed is a feature, so it is gated. `heap_perf_tests` (`tests/test_perf_budget.cpp`) generates a 10k-task profile
+and times state parse, app boot, save, full-text search, the board's filter proxies, 1k capture strings through the
+date parser and a 256 KB note through the markdown renderer. Each is the median of several runs, compared against
+the table in `tests/PerfBudgets.h`; every run prints measured vs budget, so CI logs show the trend:
+
+```sh
+build/heap_perf_tests --gtest_filter=PerfBudget*      # [ perf-budget ] lines
+```
+
+Budgets are about 4x a local median (noted next to each one), because CI runners are slow and noisy — they catch
+an accidental quadratic or a lost cache, not a 10% drift. A median over budget is measured twice more before it
+counts, and ctest runs the suite alone (`RUN_SERIAL`). The gate is armed only in an optimised build without
+sanitizers or coverage; elsewhere the table is printed and nothing fails. `HEAP_PERF_REPORT_ONLY=1` disarms it by hand.
+
+When a budget fails, find what got slower first. Change a budget only on purpose (a feature that costs time, a
+deliberately larger fixture): re-measure locally in a Release build, take the middle of three runs, update `localMs`
+and `budgetMs` together, and say why in the commit.
+
+For the UI, `heap --perf-log` (or `HEAP_PERF_LOG=1`) writes `perf:` lines to the log: time from `main()` to the QML
+being loaded and to the main window's first frame, and from the capture hotkey (or `open()`) to the first frame
+showing the capture popup. It only logs.
+
 ## Project layout
 
 ```

@@ -368,6 +368,9 @@ Popup {
         root._finish(root._summary("task", draft, null));
     }
 
+    // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
+    // first frame that shows the popup. Logs only; a no-op otherwise.
+    onAboutToShow: AppController.perfMarkShown("capture", contentItem)
     onOpened: {
         inputField.text = "";
         _preview = {ok: false};

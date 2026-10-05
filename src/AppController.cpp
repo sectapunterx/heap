@@ -16,6 +16,7 @@
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "diag/IssueReport.h"
+#include "diag/PerfLog.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
 #include "integrations/AutoSync.h"
@@ -71,6 +72,8 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPair>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QSysInfo>
@@ -5710,6 +5713,29 @@ QVariantMap AppController::parseDateTime(const QString& input, const QDateTime& 
   return m;
 }
 
+void AppController::perfMarkShown(const QString& name, QObject* item) const {
+  if(!heap::perf::enabled()) {
+    return;
+  }
+  heap::perf::beginIfIdle(name);
+  const auto* quickItem = qobject_cast<QQuickItem*>(item);
+  const QQuickWindow* window = quickItem != nullptr ? quickItem->window() : nullptr;
+  if(window == nullptr) {
+    heap::perf::end(name);
+    return;
+  }
+  // frameSwapped comes from the render thread under the threaded loop; the
+  // perf log is thread-safe, so the end is stamped right there.
+  QObject::connect(
+      window,
+      &QQuickWindow::frameSwapped,
+      window,
+      [name]() {
+        heap::perf::end(name);
+      },
+      static_cast<Qt::ConnectionType>(Qt::DirectConnection | Qt::SingleShotConnection));
+}
+
 QVariantList AppController::parseAllDateTimes(const QString& input, const QDateTime& reference) const {
   QVariantList out;
   if(!m_chrono) {
@@ -10956,9 +10982,11 @@ void AppController::registerGlobalHotkeys() {
 void AppController::onGlobalHotkey(int id) {
   switch(id) {
     case HotkeyQuickCapture:
+      heap::perf::begin(QStringLiteral("capture"));
       emit quickCaptureRequested();
       break;
     case HotkeyQuickCaptureNotes:
+      heap::perf::begin(QStringLiteral("capture-notes"));
       emit quickCaptureNotesRequested();
       break;
     default:
