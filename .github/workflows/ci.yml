@@ -2,7 +2,7 @@ name: CI
 
 on:
   push:
-    branches: [master, develop]
+    branches: [master, feature]
   pull_request:
     branches: ["**"]
 
@@ -17,7 +17,7 @@ permissions:
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: ${{ github.ref != 'refs/heads/master' }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/master' && github.ref != 'refs/heads/feature' }}
 
 jobs:
 
@@ -25,7 +25,7 @@ jobs:
   # 0. Does this change need a build at all?
   # A PR that touches only docs/ or Markdown skips build, sanitizers and the
   # macOS package smoke test; `ci` counts a skipped job as passed. Pushes
-  # (master, develop) always build everything. Not `paths-ignore` on the
+  # (master, feature) always build everything. Not `paths-ignore` on the
   # trigger: then no `ci` check would report and the PR could not merge.
   # ──────────────────────────────────────────────────────────────────
   changes:
@@ -50,6 +50,28 @@ jobs:
               - '**'
               - '!docs/**'
               - '!**/*.md'
+
+  # ──────────────────────────────────────────────────────────────────
+  # Branch flow: master is the stable line and only takes a release from
+  # `feature` (where new work lands and is tested) or an urgent `hotfix/*`.
+  # Any other PR into master fails here, and so fails `ci`.
+  # ──────────────────────────────────────────────────────────────────
+  branch-flow:
+    name: branch flow
+    if: github.event_name == 'pull_request' && github.base_ref == 'master'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - name: Only feature or hotfix/* may target master
+        env:
+          HEAD_REF: ${{ github.head_ref }}
+        run: |
+          case "$HEAD_REF" in
+            feature|hotfix/*) echo "branch flow OK: $HEAD_REF -> master" ;;
+            *)
+              echo "::error::PRs into master come from 'feature' (a release) or 'hotfix/*' — retarget '$HEAD_REF' to 'feature'"
+              exit 1 ;;
+          esac
 
   # ──────────────────────────────────────────────────────────────────
   # 1. clang-format on the changed lines (PR only).
@@ -556,6 +578,7 @@ jobs:
     if: always()
     needs:
       - changes
+      - branch-flow
       - lint-actions
       - ui-tokens
       - format-cpp
