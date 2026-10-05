@@ -140,6 +140,7 @@ Rectangle {
         renamePopup.openFor(AppController.activeNoteId, String(m.data(idx, m.roleOf("title")) || ""),
                             String(m.data(idx, m.roleOf("folder")) || ""));
     }
+    function takeFocus() { list.forceActiveFocus(); }
     function focusFilter() {
         filterField.forceActiveFocus();
         filterField.selectAll();

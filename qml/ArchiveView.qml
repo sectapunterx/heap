@@ -98,6 +98,24 @@ Item {
         AppController.setSelectedTaskIds(merged);
     }
 
+    // Keyboard (SHELL-17): every archived card is a Tab stop with its name;
+    // ↑/↓ also walk the list from card to card, Return opens one (TaskCard),
+    // the Menu key (or Shift+F10) opens its menu — restore and delete are there. ↓ on
+    // the view itself, where a view switch leaves focus, enters the list.
+    function focusRow(i) {
+        if (archList.count === 0) return false;
+        const at = Math.max(0, Math.min(archList.count - 1, i));
+        archList.currentIndex = at;
+        archList.positionViewAtIndex(at, ListView.Contain);
+        const it = archList.itemAtIndex(at);
+        if (!it) return false;
+        it.card.forceActiveFocus(Qt.TabFocusReason);
+        return true;
+    }
+    Keys.onDownPressed: root.focusRow(archList.currentIndex < 0 ? 0 : archList.currentIndex)
+    Accessible.role: Accessible.Pane
+    Accessible.name: I18n.t("archive.title")
+
     Rectangle {
         anchors.fill: parent; color: Theme.bg
     }
@@ -156,6 +174,10 @@ Item {
         ListView {
             id: archList
             objectName: "archive-list"
+            Accessible.role: Accessible.List
+            Accessible.name: I18n.t("archive.title")
+            // The cards are the stops, not the list; arrows are theirs (below).
+            keyNavigationEnabled: false
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -204,6 +226,7 @@ Item {
             // and let the height follow.
             delegate: Item {
                 id: row
+                required property int index
                 required property string id
                 required property string title
                 required property string desc
@@ -229,6 +252,7 @@ Item {
                 required property var checklist
                 required property int attachmentCount
                 readonly property var st: root.statusInfo(row.status)
+                readonly property alias card: archCard
                 x: Theme.inset
                 width: archList.width - 2 * Theme.inset
                 height: archCard.implicitHeight
@@ -287,6 +311,15 @@ Item {
                         checklist: row.checklist, attachmentCount: row.attachmentCount
                     })
                     onClicked: root.taskClicked(row.id)
+                    onActiveFocusChanged: if (activeFocus) archList.currentIndex = row.index
+                    Keys.onUpPressed: root.focusRow(row.index - 1)
+                    Keys.onDownPressed: root.focusRow(row.index + 1)
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                            archCard.openMenu();
+                            event.accepted = true;
+                        }
+                    }
                     onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                     onHoveredChanged: {
                         if (hovered) root.hoveredTaskId = row.id;

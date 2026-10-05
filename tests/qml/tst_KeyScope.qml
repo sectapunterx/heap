@@ -246,8 +246,14 @@ TestCase {
         tryVerify(function () { return card._priorityMenu.activeFocus; }, 2000, "the list opened without the keyboard");
         compare(tc.win.activeFocusItem.text, "P3");
 
+        // G is a view key: it waits while a menu holds the keyboard (SHELL-3).
         keyClick(Qt.Key_G);
         const go = popup("go-to-date");
+        wait(50);
+        compare(go.opened, false, "G opened go-to-date over a menu");
+        verify(card._priorityMenu.opened);
+        // Something else opening over the list still takes it down with it.
+        go.openAt(AppController.selectedDate, tc.win.contentItem);
         tryCompare(go, "opened", true);
         tryCompare(card._priorityMenu, "visible", false, 2000, "a menu the keyboard left stays open");
         keyClick(Qt.Key_Escape);
