@@ -4367,7 +4367,8 @@ QStringList AppController::unresolvedNoteLinks() const {
 }
 
 QString AppController::createNoteForLink(const QString& target) {
-  const QString title = target.trimmed();
+  // "[[C\# basics]]" asks for a note called "C# basics".
+  const QString title = heap::notes::detail::unescapeLink(target).trimmed();
   if(title.isEmpty()) {
     return {};
   }

@@ -455,6 +455,13 @@ Item {
     }
 
     function _slugifyName(s) { return (s || "").replace(/\s+/g, "_"); }
+    // A note title or heading as it goes between [[ ]]: "#" and "|" would
+    // start a heading and a label, so they are escaped, as is a backslash
+    // that would escape what follows it. NoteGraph.h escapeLinkName is the
+    // same rule; resolveLink reads it back.
+    function _escapeLinkName(s) {
+        return (s || "").replace(/\\(?=[!-\/:-@\[-`{-~]|$)/g, "\\\\").replace(/[#|]/g, "\\$&");
+    }
 
     function _commitAutocomplete() {
         if (acMatches.length === 0 || acSelected < 0 || acSelected >= acMatches.length) {
@@ -463,7 +470,7 @@ Item {
         }
         const e = acMatches[acSelected];
         const insert = (acTrigger === "@")  ? "@" + _slugifyName(e.label) + " "
-                     : (acTrigger === "[[") ? "[[" + e.label + "]] "
+                     : (acTrigger === "[[") ? "[[" + root._escapeLinkName(e.label) + "]] "
                      : "#" + e.id + " ";
         const pos = editor.cursorPosition;
         // Replace the "@filter" / "#filter" span in place (remove + insert) so
