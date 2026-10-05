@@ -1,0 +1,5 @@
+This folder holds a portable copy of heap.
+
+heap's in-app update (Settings > About > Updates) replaces the files of this
+folder with the new version's and leaves everything else in it alone. Delete
+this file to turn that off; heap will then only point you to the release page.

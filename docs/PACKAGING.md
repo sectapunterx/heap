@@ -44,6 +44,33 @@ Every asset is listed in `SHA256SUMS` and, in the same form, in a collapsed
 "SHA-256 checksums" block of the release notes; each also has a build-provenance
 attestation (`gh attestation verify <file> --repo sectapunterx/heap`).
 
+## In-app update (APP-125)
+
+Settings → About → Updates (or the "Update" action of the update toast)
+downloads this copy's package from the latest release, checks it against
+`SHA256SUMS`, and, after the user presses **Restart and update**, puts it in
+place and starts heap again. The file is installed only if its SHA-256 matches
+the published one (and is checked once more right before installing); the
+checksum is shown to the user. A mismatch deletes the file.
+
+| Copy of heap | Detected by | Package | How it is replaced |
+|---|---|---|---|
+| Windows installer | `unins000.exe` beside `heap.exe` | `…-windows-setup.exe` | `heap-updater.exe` runs it `/VERYSILENT` (same AppId → in-place upgrade; UAC prompt for a per-machine install) |
+| Windows portable | `heap-portable.txt` beside `heap.exe` | `…-windows-portable.zip` | `heap-updater.exe` unpacks it with Windows' `tar.exe` and swaps the shipped entries, rolling back on any failure; other files in the folder stay |
+| macOS | running from `*.app/Contents/MacOS` | `…-macos.dmg` | heap mounts the dmg, `ditto`s `heap.app` beside itself and swaps the bundles |
+| Linux | `$APPIMAGE` set | `…-linux-x86_64.AppImage` | heap writes it beside the old one and `rename(2)`s it over |
+
+Anything else (a build folder, Scoop, Flatpak/Snap, a folder heap cannot write)
+keeps the old behaviour: "Download" opens the release page.
+
+`heap-updater.exe` (CMake target `heap-updater`, [`src/updater/`](../src/updater))
+exists because Windows cannot overwrite a running exe or its DLLs. It has no Qt
+and a static runtime; heap copies it to `%TEMP%\heap-update` and quits, it waits
+for heap's process to end, installs, writes `outcome.txt`, and starts heap
+again, which reports the outcome in a toast. On macOS and Linux the files of a
+running program can be replaced, so heap does the swap itself and a detached
+`/bin/sh` waits for it to exit before starting the new version.
+
 The Windows bundle carries only the Qt Quick Controls style heap uses (Basic;
 `main.cpp` forces it). [`packaging/windows/prune-bundle.sh`](../packaging/windows/prune-bundle.sh)
 drops the other styles and the unused Particles / LocalStorage (Qt6Sql) modules

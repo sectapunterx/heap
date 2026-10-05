@@ -536,14 +536,18 @@ target_link_libraries(heap_integrations_tests PRIVATE
 )
 add_test(NAME heap_integrations_tests COMMAND heap_integrations_tests)
 
-# ─── Update (GitHub-Releases version compare) tests ───
-# Covers heap::update::isNewerVersion. Updater.cpp carries a QObject (the QNAM
-# client) so AUTOMOC + Qt6::Network are needed, but the tests exercise only the
-# pure comparison — no network I/O.
+# ─── Update tests (HEAP-63 version compare, APP-125 in-app update) ───
+# Version compare, package detection, SHA256SUMS, a download + checksum check
+# against FakeHttpServer, and heap-updater's folder swap (BundleSwap is plain
+# std::filesystem, so it is tested on every platform).
 add_executable(heap_update_tests
         test_update.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/Updater.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/UpdateInstall.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/update/UpdateInstall.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/updater/BundleSwap.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/updater/BundleSwap.h
 )
 set_target_properties(heap_update_tests PROPERTIES AUTOMOC ON)
 target_include_directories(heap_update_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
