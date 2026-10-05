@@ -126,6 +126,13 @@ Item {
         root.insertAttachmentRefs(AppController.importClipboardAttachments());
         return true;
     }
+    // Whether the character at `i` is backslash-escaped: an odd run of
+    // backslashes before it.
+    function _isEscapedAt(text, i) {
+        let n = 0;
+        while (i - n - 1 >= 0 && text.charAt(i - n - 1) === "\\") n++;
+        return n % 2 === 1;
+    }
     // Takes every link to the file out of the note. The file stays in the
     // attachments folder (Settings → Data cleans up what nothing uses).
     function removeAttachmentRefs(attachmentId) {
@@ -136,7 +143,12 @@ Item {
         while (at >= 0) {
             const lineStart = text.lastIndexOf("\n", at - 1) + 1;
             const open = text.lastIndexOf("](", at);
+            // The label's own "[" — not one escaped inside it: a file called
+            // a[1].png is labelled "a\[1\].png", and stopping at "\[" left
+            // "![a\" behind in the note.
             let first = open >= lineStart ? text.lastIndexOf("[", open) : -1;
+            while (first > lineStart && root._isEscapedAt(text, first))
+                first = text.lastIndexOf("[", first - 1);
             const close = text.indexOf(")", at);
             if (first < lineStart || close < 0) { at = text.indexOf(needle, at + needle.length); continue; }
             if (first > lineStart && text.charAt(first - 1) === "!") first--;
