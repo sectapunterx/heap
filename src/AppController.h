@@ -154,6 +154,15 @@ class AppController : public QObject {
   // Human-readable result of the last update check, shown in Settings → About:
   // "" (idle), a "checking" string, "up to date", or "update available: vX".
   Q_PROPERTY(QString updateStatus READ updateStatus NOTIFY updateStatusChanged)
+  // In-app update (APP-125). canInstall: this copy is one heap can update
+  // itself (installer, portable zip, heap.app, AppImage) and the release has
+  // its package; otherwise "Download" opens the release page as before.
+  // phase: "" | "downloading" | "verifying" | "ready" | "installing" | "error".
+  // sha256: the checksum the package was verified against, once "ready".
+  Q_PROPERTY(bool updateCanInstall READ updateCanInstall NOTIFY updateStatusChanged)
+  Q_PROPERTY(QString updatePhase READ updatePhase NOTIFY updateStatusChanged)
+  Q_PROPERTY(double updateProgress READ updateProgress NOTIFY updateProgressChanged)
+  Q_PROPERTY(QString updateSha256 READ updateSha256 NOTIFY updateStatusChanged)
 
   // Per tracker: { offline: bool, outOfScope: int }. `offline` is set while
   // the token endpoint or the tracker cannot be reached and heap is retrying
@@ -628,8 +637,25 @@ class AppController : public QObject {
     if(m_updateStatusArg.isEmpty()) {
       return text;
     }
+    if(m_updateStatus == QLatin1String("update.verified")) {
+      return text.arg(m_updateStatusArg, m_updateSha256);  // version, checksum
+    }
     // The argument is itself a key when it names a reason ("update.offline").
     return text.arg(m_updateStatusArg.startsWith(QLatin1String("update.")) ? tr_(m_updateStatusArg) : m_updateStatusArg);
+  }
+
+  bool updateCanInstall() const;
+
+  QString updatePhase() const {
+    return m_updatePhase;
+  }
+
+  double updateProgress() const {
+    return m_updateProgress;
+  }
+
+  QString updateSha256() const {
+    return m_updateSha256;
   }
 
   // ---- Diagnostics (HEAP-64) ----
@@ -715,6 +741,12 @@ class AppController : public QObject {
   Q_INVOKABLE void checkForUpdates();
   // Open the latest release's page in the browser — the "Download" action.
   Q_INVOKABLE void openLatestRelease() const;
+  // APP-125: download this copy's package from the latest release and check it
+  // against the release's SHA256SUMS; then installUpdate() puts it in place
+  // and quits (heap starts again on the new version).
+  Q_INVOKABLE void downloadUpdate();
+  Q_INVOKABLE void cancelUpdateDownload();
+  Q_INVOKABLE void installUpdate();
 
   // ---- Tracker sync (HEAP-74/75) ----
   QVariantMap providerBadges() const;
@@ -1290,6 +1322,10 @@ class AppController : public QObject {
   void integrationStatesChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
+  void updateProgressChanged();
+  // The package arrived and matches the release's SHA-256 — Main.qml offers
+  // the restart.
+  void updateReadyToInstall(const QString& version, const QString& sha256);
   void undoableToast(const QString& message, int seconds);
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
@@ -1724,6 +1760,12 @@ class AppController : public QObject {
   QString m_updateStatus;  // a tr_() key, "" before the first check
   QString m_updateStatusArg;
   QString m_latestReleaseUrl;
+  int m_packageKind = 0;  // a heap::update::PackageKind, read once at startup
+  QString m_updatePhase;
+  double m_updateProgress = 0.0;
+  QString m_updateSha256;
+  QString m_updatePackage;  // the verified file, once "ready"
+  void setUpdatePhase(const QString& phase, const QString& statusKey, const QString& arg = QString());
 
   // ---- Tracker sync (HEAP-74 GitHub, HEAP-75 Jira + GitLab) ----
   // Every connected + configured provider runs concurrently; a task's

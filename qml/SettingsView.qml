@@ -3141,19 +3141,51 @@ Item {
                         wrapMode: Text.WordWrap
                         Layout.fillWidth: true
                     }
+                    // Download progress (APP-125).
+                    Rectangle {
+                        objectName: "settings-update-progress"
+                        visible: AppController.updatePhase === "downloading"
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Theme.spSm
+                        radius: height / 2
+                        color: Theme.panel3
+                        Rectangle {
+                            width: parent.width * Math.max(0, Math.min(1, AppController.updateProgress))
+                            height: parent.height
+                            radius: parent.radius
+                            color: Theme.accent
+                        }
+                    }
                     RowLayout {
                         spacing: Theme.spMd
                         ActionButton {
                             objectName: "settings-check-updates"
                             text: I18n.t("settings.about.checkUpdates")
+                            enabled: AppController.updatePhase !== "downloading" && AppController.updatePhase !== "installing"
                             onActivated: AppController.checkForUpdates()
                         }
+                        // Installs in place when heap can update this copy itself;
+                        // otherwise opens the release page, as before.
                         ActionButton {
                             objectName: "settings-download-update"
-                            visible: updatesCol.updateReady
+                            visible: updatesCol.updateReady && AppController.updatePhase === ""
+                                || AppController.updatePhase === "error"
                             hoverAccent: true
-                            text: I18n.t("settings.about.download")
-                            onActivated: AppController.openLatestRelease()
+                            text: AppController.updateCanInstall ? I18n.t("settings.about.install") : I18n.t("settings.about.download")
+                            onActivated: AppController.updateCanInstall ? AppController.downloadUpdate() : AppController.openLatestRelease()
+                        }
+                        ActionButton {
+                            objectName: "settings-cancel-update"
+                            visible: AppController.updatePhase === "downloading"
+                            text: I18n.t("settings.about.cancelUpdate")
+                            onActivated: AppController.cancelUpdateDownload()
+                        }
+                        ActionButton {
+                            objectName: "settings-restart-update"
+                            visible: AppController.updatePhase === "ready"
+                            kind: "primary"
+                            text: I18n.t("settings.about.restartToUpdate")
+                            onActivated: AppController.installUpdate()
                         }
                     }
                     SwitchRow {
