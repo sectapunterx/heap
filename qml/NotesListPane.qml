@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic as QQC
@@ -403,11 +405,61 @@ Rectangle {
                         anchors.fill: parent
                         hoverEnabled: true
                         acceptedButtons: Qt.LeftButton | Qt.RightButton
-                        cursorShape: Qt.PointingHandCursor
+                        cursorShape: drag.active ? Qt.ClosedHandCursor : Qt.PointingHandCursor
+                        // APP-116: drag a note onto another to merge it in.
+                        // The ghost moves, not the row, so the list stays put.
+                        drag.target: dragGhost
+                        drag.threshold: Theme.spMd
+                        onPressed: (mouse) => {
+                            if (mouse.button !== Qt.LeftButton) return;
+                            const p = row.mapToItem(root, 0, 0);
+                            dragGhost.x = p.x; dragGhost.y = p.y;
+                            dragGhost.width = row.width;
+                            dragGhost.noteId = row.note.id;
+                            dragGhost.title = row.note.title || "";
+                        }
+                        onReleased: {
+                            if (dragGhost.dragging) dragGhost.Drag.drop();
+                            dragGhost.dragging = false;
+                            dragGhost.noteId = "";
+                            dragGhost.overTitle = "";
+                        }
                         onClicked: (mouse) => {
                             if (mouse.button === Qt.RightButton) rowMenu.popup();
                             else root.noteActivated(row.note.id);
                         }
+                    }
+                    Connections {
+                        target: rowMA.drag
+                        function onActiveChanged() {
+                            if (rowMA.drag.active) dragGhost.dragging = true;
+                        }
+                    }
+                    DropArea {
+                        id: rowDrop
+                        objectName: "note-drop-" + (row.note.id || "")
+                        anchors.fill: parent
+                        keys: ["heap-note"]
+                        onEntered: (drag) => {
+                            drag.accepted = drag.source === dragGhost && dragGhost.noteId !== row.note.id;
+                            if (drag.accepted) dragGhost.overTitle = row.note.title || "";
+                        }
+                        onExited: if (dragGhost.overTitle === (row.note.title || "")) dragGhost.overTitle = ""
+                        onDropped: (drop) => {
+                            if (drop.source !== dragGhost || dragGhost.noteId === row.note.id) return;
+                            drop.accept();
+                            AppController.mergeNotes(dragGhost.noteId, row.note.id);
+                        }
+                    }
+                    // Where a drop would land: outlined, and the ghost says so.
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: parent.radius
+                        color: Theme.accentSoft
+                        border.color: Theme.accent
+                        border.width: 1
+                        visible: rowDrop.containsDrag && dragGhost.noteId !== row.note.id
+                        z: 9
                     }
 
                     AppMenu {
@@ -420,6 +472,14 @@ Rectangle {
                             text: I18n.t("notes.rename")
                             onTriggered: renamePopup.openFor(row.note.id, row.note.title, row.note.folder)
                         }
+                        // The keyboard's way to merge: this note into the one open.
+                        AppMenuItem {
+                            objectName: "note-merge-into-open"
+                            visible: !row.current && AppController.activeNoteId.length > 0
+                            height: visible ? implicitHeight : 0
+                            text: I18n.t("notes.mergeIntoOpen")
+                            onTriggered: AppController.mergeNotes(row.note.id, AppController.activeNoteId)
+                        }
                         AppMenuSeparator {}
                         AppMenuItem {
                             text: I18n.t("common.delete")
@@ -429,6 +489,41 @@ Rectangle {
                     }
                 }
             }
+        }
+    }
+
+    // What a note drag carries: the note's id, drawn as a chip under the
+    // pointer. Dropped on another row, that row merges it in (APP-116).
+    Rectangle {
+        id: dragGhost
+        objectName: "note-drag-ghost"
+        property string noteId: ""
+        property string title: ""
+        // Set by the row being dragged while its drag is live.
+        property bool dragging: false
+        // The note under the pointer that would take this one in.
+        property string overTitle: ""
+        visible: dragging
+        height: 32
+        z: 100
+        radius: Theme.radiusMd
+        color: Theme.panel3
+        border.color: Theme.borderStrong
+        opacity: 0.95
+        Drag.active: dragging
+        Drag.keys: ["heap-note"]
+        Drag.source: dragGhost
+        Drag.hotSpot.x: Theme.spXl
+        Drag.hotSpot.y: height / 2
+        Text {
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spXl; anchors.rightMargin: Theme.spMd
+            verticalAlignment: Text.AlignVCenter
+            elide: Text.ElideRight
+            text: dragGhost.overTitle.length > 0 ? I18n.t("notes.dropToMerge").arg(dragGhost.overTitle) : dragGhost.title
+            color: Theme.text
+            font.pixelSize: Theme.fsSm
+            font.weight: Font.DemiBold
         }
     }
 
