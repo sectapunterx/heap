@@ -110,6 +110,7 @@ Popup {
 
             TextArea {
                 id: editor
+                ContextMenu.menu: TextEditMenu { editor: editor }
                 objectName: "quicknote-editor"
                 wrapMode: TextEdit.Wrap
                 font.pixelSize: Theme.fsLg

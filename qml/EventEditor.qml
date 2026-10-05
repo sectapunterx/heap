@@ -466,6 +466,8 @@ Popup {
         font.letterSpacing: 1
     }
     component Field: TextField {
+        id: fieldRoot
+        ContextMenu.menu: TextEditMenu { editor: fieldRoot }
         background: FieldFrame {}
         color: Theme.text
         placeholderTextColor: Theme.textDim
@@ -532,12 +534,10 @@ Popup {
             FieldLabel { text: I18n.t("editor.label.eventType").toUpperCase() }
             FieldLabel { text: I18n.t("editor.label.attendees").toUpperCase() }
 
-            ComboBox {
+            AppComboBox {
                 id: typeBox
                 Layout.fillWidth: true
                 model: root.types.map(t => I18n.t("event.type." + t))
-                background: FieldFrame {}
-                contentItem: Text { text: typeBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
             }
             Field {
                 id: attField
@@ -831,7 +831,7 @@ Popup {
                 visible: root._kind() !== "never" && root._kind() !== "custom"
                 text: I18n.t("repeat.ends").toUpperCase()
             }
-            ComboBox {
+            AppComboBox {
                 id: repeatBox
                 objectName: "event-repeat"
                 Layout.fillWidth: true
@@ -839,8 +839,6 @@ Popup {
                 model: [I18n.t("repeat.never"), I18n.t("repeat.daily"), I18n.t("repeat.weekdays"), I18n.t("repeat.weekly"),
                         I18n.t("repeat.biweekly"), I18n.t("repeat.monthly"), I18n.t("repeat.yearly"),
                         I18n.t("repeat.custom")]
-                background: FieldFrame {}
-                contentItem: Text { text: repeatBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                 onActivated: {
                     // A weekly rule starts from the event's own weekday.
                     if ((root._kind() === "weekly" || root._kind() === "biweekly") && root.repeatDays.length === 0
@@ -854,7 +852,7 @@ Popup {
                 visible: root._kind() !== "never" && root._kind() !== "custom"
                 Layout.fillWidth: true
                 spacing: Theme.spSm
-                ComboBox {
+                AppComboBox {
                     id: endBox
                     objectName: "event-repeat-end"
                     Layout.fillWidth: true
@@ -867,8 +865,6 @@ Popup {
                             root.untilDate = new Date(d.getFullYear(), d.getMonth() + 1, d.getDate());
                         }
                     }
-                    background: FieldFrame {}
-                    contentItem: Text { text: endBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
                 }
                 Field {
                     id: countField
@@ -1008,13 +1004,11 @@ Popup {
                 Layout.fillWidth: true
                 placeholderText: I18n.t("event.ph.context")
             }
-            ComboBox {
+            AppComboBox {
                 id: reminderBox
                 objectName: "event-reminder"
                 Layout.fillWidth: true
                 model: root.reminderChoices.map(v => root._reminderLabel(v))
-                background: FieldFrame {}
-                contentItem: Text { text: reminderBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter; elide: Text.ElideRight }
             }
         }
 
@@ -1027,6 +1021,7 @@ Popup {
                 Layout.preferredHeight: 64
                 TextArea {
                     id: notesField
+                    ContextMenu.menu: TextEditMenu { editor: notesField }
                     objectName: "event-notes"
                     readOnly: root.readOnly
                     placeholderText: I18n.t("event.ph.notes")

@@ -341,6 +341,8 @@ qt_add_qml_module(heap_core
         qml/AppMenu.qml
         qml/AppMenuItem.qml
         qml/AppMenuSeparator.qml
+        qml/AppComboBox.qml
+        qml/TextEditMenu.qml
         qml/ThemeSettings.qml
         qml/ColorPickerPopup.qml
         qml/PillButton.qml

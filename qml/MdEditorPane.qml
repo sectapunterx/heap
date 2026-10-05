@@ -202,6 +202,7 @@ Item {
 
                 QQC.TextArea {
                     id: area
+                    QQC.ContextMenu.menu: TextEditMenu { editor: area }
                     objectName: "docpage-text"
                     wrapMode: TextEdit.Wrap
                     selectByMouse: true

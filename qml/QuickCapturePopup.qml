@@ -403,6 +403,7 @@ Popup {
 
         TextField {
             id: inputField
+            ContextMenu.menu: TextEditMenu { editor: inputField }
             objectName: "qc-input"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("quick.fieldPh")
