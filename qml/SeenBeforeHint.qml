@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Layouts
 import TodoCpp
 
 // "You've seen this before" (APP-159): one quiet line under a field —

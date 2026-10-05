@@ -423,6 +423,7 @@ Rectangle {
 
         // Search: 280px when there is room, down to 160 when there is not.
         Rectangle {
+            id: searchBox
             Layout.fillWidth: true
             Layout.preferredWidth: 280
             Layout.maximumWidth: 280
@@ -473,33 +474,6 @@ Rectangle {
                     QQC.ToolTip.delay: 600
                     QQC.ToolTip.text: I18n.t("topbar.searchQueryHint").arg(AppController.searchFields().join(": · ") + ":")
                 }
-                // An error pasted into search that this workspace has met
-                // before (APP-159): a line under the box, over the view.
-                QQC.Popup {
-                    id: seenPopup
-                    parent: searchField
-                    y: searchField.height + Theme.spSm
-                    x: -Theme.spLg
-                    width: Math.max(searchField.width + Theme.spLg, 320)
-                    padding: Theme.spSm
-                    focus: false
-                    closePolicy: QQC.Popup.NoAutoClose
-                    visible: seenHint.shown && searchField.text.length > 0
-                    background: Rectangle {
-                        radius: Theme.radiusMd
-                        color: Theme.panel
-                        border.color: Theme.border
-                        border.width: 1
-                    }
-                    contentItem: SeenBeforeHint {
-                        id: seenHint
-                        text: searchField.text
-                        onActivated: (hit) => {
-                            searchField.clear();
-                            root.seenBeforeActivated(hit);
-                        }
-                    }
-                }
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {
                     objectName: "search-query-badge"
@@ -546,6 +520,32 @@ Rectangle {
                         activeFocusOnTab: false
                         label: I18n.t("topbar.searchHint").arg(kbd.text)
                         onActivated: root.focusSearch()
+                    }
+                }
+            }
+            // An error pasted into search that this workspace has met
+            // before (APP-159): a line under the box, over the view.
+            QQC.Popup {
+                id: seenPopup
+                y: searchBox.height + Theme.spXs
+                x: 0
+                width: Math.max(searchBox.width, 320)
+                padding: Theme.spSm
+                focus: false
+                closePolicy: QQC.Popup.NoAutoClose
+                visible: seenHint.shown && searchField.text.length > 0
+                background: Rectangle {
+                    radius: Theme.radiusMd
+                    color: Theme.panel
+                    border.color: Theme.border
+                    border.width: 1
+                }
+                contentItem: SeenBeforeHint {
+                    id: seenHint
+                    text: searchField.text
+                    onActivated: (hit) => {
+                        searchField.clear();
+                        root.seenBeforeActivated(hit);
                     }
                 }
             }
