@@ -19,6 +19,9 @@ Rectangle {
     // is where the next key acts, a selection is what a bulk action acts on,
     // and a card can be either, both or neither.
     property bool cursored: false
+    // On the board, where Return / E act on the card under the cursor: its
+    // menu shows those keys (APP-166).
+    property bool boardKeys: false
     readonly property bool _selected: AppController.selectionCount >= 0
         && AppController.isTaskSelected(card.taskId)
     // Ticket identity (HEAP-117). `ticket` is empty for a locally-created task,
@@ -689,6 +692,9 @@ Rectangle {
             card._menu = taskMenuComponent.createObject(card);
             card._menu.subMenuRequested.connect(card.openSubMenu);
         }
+        // The keys its rows show (APP-166), as they stand when it opens.
+        card._menu.editKey = card.boardKeys ? "board.open" : "";
+        card._menu.archiveKey = card.boardKeys && !card._isArchived ? "board.archive" : "";
         return card._menu;
     }
     // The status and priority lists are built the same way, on first use.
@@ -726,6 +732,9 @@ Rectangle {
     AppMenu {
         id: taskMenu
         objectName: "tc-menu"
+        // Set by contextMenu(): the catalogue ids of Return and E on the board.
+        property string editKey: ""
+        property string archiveKey: ""
         AppMenuItem {
             enabled: false
             contentItem: Text {
@@ -741,6 +750,7 @@ Rectangle {
         }
         AppMenuItem {
             glyph: "✎"; text: I18n.t("taskcard.edit"); onTriggered: card.clicked()
+            shortcutId: taskMenu.editKey
         }
         // Status and priority without opening the editor (UX-26). Each opens
         // its own list at the card, so the keyboard can walk it too.
@@ -770,6 +780,7 @@ Rectangle {
             objectName: "tc-menu-archive"
             glyph: card._isArchived ? "↺" : "▣"
             text: card._isArchived ? I18n.t("taskcard.unarchive") : I18n.t("taskcard.archive")
+            shortcutId: taskMenu.archiveKey
             onTriggered: AppController.setArchived(card.taskId, !card._isArchived)
         }
         AppMenuItem {

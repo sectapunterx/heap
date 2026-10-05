@@ -18,6 +18,7 @@
 #include "diag/IssueReport.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "hints/ShortcutHints.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
@@ -6192,7 +6193,8 @@ void AppController::resetSettingsToDefaults() {
                                      QStringLiteral("data"),
                                      QStringLiteral("updates"),
                                      QStringLiteral("git"),
-                                     QStringLiteral("developer")};
+                                     QStringLiteral("developer"),
+                                     QStringLiteral("shortcuts")};
   QJsonObject next;
   for(auto it = current.constBegin(); it != current.constEnd(); ++it) {
     if(!kReset.contains(it.key())) {
@@ -10989,6 +10991,21 @@ void AppController::applyShortcutOverrides(const QVariantMap& overrides) {
 QString AppController::shortcutFor(const QString& id) const {
   const int i = shortcutIndexOf(id);
   return i < 0 ? QString() : m_shortcuts[i].toMap().value("sequence").toString();
+}
+
+void AppController::noteMouseAction(const QString& shortcutId) {
+  const bool enabled = heap::hints::hintsEnabled(QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object());
+  const QString sequence = shortcutFor(shortcutId);
+  QJsonObject uses = m_settingsExtra.value(QStringLiteral("shortcutHints")).toObject();
+  const heap::hints::MouseUseResult r = heap::hints::recordMouseUse(uses, shortcutId, !sequence.isEmpty(), enabled);
+  if(!r.changed) {
+    return;
+  }
+  m_settingsExtra.insert(QStringLiteral("shortcutHints"), uses);
+  scheduleSave();
+  if(r.showHint) {
+    emit shortcutHintRequested(shortcutId, sequence, shortcutLabel(shortcutId));
+  }
 }
 
 QString AppController::defaultShortcutFor(const QString& id) const {

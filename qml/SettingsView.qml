@@ -1745,6 +1745,14 @@ Item {
                         }
                     }
                 }
+                // On by default: it speaks once per action, ever (APP-166).
+                SwitchRow {
+                    objectName: "settings-shortcut-hints"
+                    label: I18n.t("settings.shortcuts.mouseHints")
+                    hint: I18n.t("settings.shortcuts.mouseHints.hint")
+                    checked: !(root.settings.shortcuts && root.settings.shortcuts.mouseHints === false)
+                    onToggled: (checked) => root.set("shortcuts", "mouseHints", checked)
+                }
             }
             SettingsGroup {
                 title: I18n.t("settings.shortcuts.group.all")

@@ -188,6 +188,53 @@ TEST_F(OnboardingTest, ResetToFirstRunRebuildsFreshInstall) {
   EXPECT_GT(b.tasks()->rowCount(), 0);
 }
 
+// "There is a key for that" (APP-166): the third mouse use of an action names
+// its key once, and the "once" survives a restart.
+TEST_F(OnboardingTest, ThirdMouseUseSuggestsTheKeyOnceEver) {
+  {
+    AppController a;
+    const QSignalSpy spy(&a, &AppController::shortcutHintRequested);
+    a.noteMouseAction(QStringLiteral("palette.open"));
+    a.noteMouseAction(QStringLiteral("palette.open"));
+    EXPECT_EQ(spy.count(), 0);
+    a.noteMouseAction(QStringLiteral("palette.open"));
+    ASSERT_EQ(spy.count(), 1);
+    EXPECT_EQ(spy.at(0).at(0).toString(), QStringLiteral("palette.open"));
+    EXPECT_EQ(spy.at(0).at(1).toString(), a.shortcutFor(QStringLiteral("palette.open")));
+    a.noteMouseAction(QStringLiteral("palette.open"));
+    EXPECT_EQ(spy.count(), 1);
+    // Two uses of another action, carried over the restart.
+    a.noteMouseAction(QStringLiteral("view.week"));
+    a.noteMouseAction(QStringLiteral("view.week"));
+    a.flushSave();
+  }
+  AppController b;
+  const QSignalSpy spy(&b, &AppController::shortcutHintRequested);
+  for(int i = 0; i < 5; ++i) {
+    b.noteMouseAction(QStringLiteral("palette.open"));
+  }
+  EXPECT_EQ(spy.count(), 0) << "already suggested before the restart";
+  b.noteMouseAction(QStringLiteral("view.week"));
+  EXPECT_EQ(spy.count(), 1) << "the third use, counting the two before the restart";
+}
+
+TEST_F(OnboardingTest, NoKeySuggestionsWhenSwitchedOff) {
+  AppController app;
+  app.setAppSettingsJson(QStringLiteral(R"({"shortcuts":{"mouseHints":false}})"));
+  const QSignalSpy spy(&app, &AppController::shortcutHintRequested);
+  for(int i = 0; i < 5; ++i) {
+    app.noteMouseAction(QStringLiteral("task.new"));
+  }
+  EXPECT_EQ(spy.count(), 0);
+  // An action with nothing bound has no key to suggest.
+  app.setAppSettingsJson(QStringLiteral("{}"));
+  app.setShortcut(QStringLiteral("task.new"), QString());
+  for(int i = 0; i < 5; ++i) {
+    app.noteMouseAction(QStringLiteral("task.new"));
+  }
+  EXPECT_EQ(spy.count(), 0);
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

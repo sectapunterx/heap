@@ -947,6 +947,7 @@ Item {
 
                                 delegate: TaskCard {
                                             id: tc
+                                            boardKeys: true
                                             required property string id
                                             required property string title
                                             required property string desc

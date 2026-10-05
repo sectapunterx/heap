@@ -152,4 +152,14 @@ TestCase {
         keyClick(Qt.Key_Space);
         compare(clicks, 1);
     }
+
+    // APP-166: the pill's own click handler (it counts mouse uses of the
+    // shortcut) does not replace the caller's.
+    function test_shortcut_id_keeps_the_callers_handler() {
+        const b = make('import TodoCpp; PillButton { text: "New"; width: 120; height: 32; shortcutId: "task.new";'
+                       + ' property int hits: 0; onClicked: hits++ }');
+        mouseClick(b);
+        compare(b.hits, 1);
+        parkCursor();
+    }
 }

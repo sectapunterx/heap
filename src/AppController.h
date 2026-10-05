@@ -1177,6 +1177,10 @@ class AppController : public QObject {
   Q_INVOKABLE bool setShortcut(const QString& id, const QString& sequence);
   Q_INVOKABLE void resetShortcut(const QString& id);
   Q_INVOKABLE void resetAllShortcuts();
+  // A control that has a catalogue shortcut was used with the mouse (APP-166).
+  // The third time for an action, shortcutHintRequested fires — once, never
+  // again for that action. Off with Settings → Shortcuts "Suggest shortcuts".
+  Q_INVOKABLE void noteMouseAction(const QString& shortcutId);
 
   // ---- Undo ----
   // Undo/redo the last recorded operation. undoLastDeletion() is the old name,
@@ -1283,6 +1287,8 @@ class AppController : public QObject {
   // Emitted by replayWelcome() — Main.qml re-opens the Welcome guide from step 0
   // without changing any persisted onboarding flags.
   void welcomeReplayRequested();
+  // noteMouseAction() decided it is time to mention `sequence` for `label`.
+  void shortcutHintRequested(const QString& shortcutId, const QString& sequence, const QString& label);
   void profilesChanged();
   void activeProfileChanged();
   void shortcutsChanged();

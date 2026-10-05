@@ -397,6 +397,7 @@ qt_add_qml_module(heap_core
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/platform/AltGrGuard.h
+        src/hints/ShortcutHints.h
         src/TypeAhead.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h

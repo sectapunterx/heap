@@ -10,6 +10,12 @@ Button {
     // action a screen offers, and a toggle painted the same way competed
     // with "+ Task" for it.
     property bool selected: false
+    // A catalogue shortcut that does what this pill does. A third click with
+    // the mouse suggests the key once (APP-166).
+    property string shortcutId: ""
+    // A Button's clicked() is the same for Space and the mouse; a pill only
+    // takes focus from Tab, so the pointer over it means it was clicked.
+    onClicked: if (root.shortcutId.length > 0 && root.hovered && !root.visualFocus) AppController.noteMouseAction(root.shortcutId)
 
     padding: Theme.spMd
     leftPadding: Theme.spXl
