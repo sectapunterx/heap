@@ -691,6 +691,11 @@ QJsonArray statusesToJson(const QVariantList& xs) {
     if(wip > 0) {
       o["wip"] = wip;
     }
+    // Days before a card in the column is archived (APP-122). Absent = the
+    // column's default: Settings → Tasks for Done, never for the others.
+    if(m.contains(QStringLiteral("archiveDays"))) {
+      o["archiveDays"] = qMax(0, m.value("archiveDays").toInt());
+    }
     a.append(o);
   }
   return a;
@@ -705,7 +710,11 @@ QVariantList statusesFromJson(const QJsonArray& a) {
     m["name"] = o["name"].toString();
     m["color"] = QColor(o["color"].toString());
     m["wip"] = o["wip"].toInt(0);
-    static const QStringList kKnown = {QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("color"), QStringLiteral("wip")};
+    if(o.contains("archiveDays")) {
+      m["archiveDays"] = qMax(0, o["archiveDays"].toInt(0));
+    }
+    static const QStringList kKnown = {
+        QStringLiteral("id"), QStringLiteral("name"), QStringLiteral("color"), QStringLiteral("wip"), QStringLiteral("archiveDays")};
     const QJsonObject extra = unknownKeys(o, kKnown);
     if(!extra.isEmpty()) {
       m[QLatin1String(kStatusExtraKey)] = extra.toVariantMap();
