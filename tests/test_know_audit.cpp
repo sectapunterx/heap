@@ -422,6 +422,38 @@ TEST_F(KnowAuditTest, App116_MergeRefusesItselfAndUnknownNotes) {
   EXPECT_GE(app_->notes()->indexOfId(a), 0);
 }
 
+// APP-1: a note started by typing into the editor has no heading; it used
+// to stay "Untitled note" for good. It takes its first line instead, follows
+// it while typing, and stops once the user names it.
+TEST_F(KnowAuditTest, App1_AnUntitledNoteIsNamedAfterItsFirstLine) {
+  // Typing with no note open adopts the text into a new, unnamed note.
+  app_->setActiveNoteId(QString());
+  app_->setNotesState(QStringLiteral("S"));
+  const QString id = app_->activeNoteId();
+  ASSERT_FALSE(id.isEmpty());
+  const auto title = [&] {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id)).title;
+  };
+  EXPECT_EQ(title(), QStringLiteral("S"));
+  app_->setNotesState(QStringLiteral("Sprint review\nwhat went well"));
+  EXPECT_EQ(title(), QStringLiteral("Sprint review"));
+  app_->setNotesState(QStringLiteral("- [ ] Sprint review prep\nwhat went well"));
+  EXPECT_EQ(title(), QStringLiteral("Sprint review prep"));
+
+  app_->renameNote(id, QStringLiteral("Retro"));
+  app_->setNotesState(QStringLiteral("# Retro\n\nAnother line"));
+  app_->setNotesState(QStringLiteral("# Retro\n\nAnother line, edited"));
+  EXPECT_EQ(title(), QStringLiteral("Retro"));
+}
+
+TEST_F(KnowAuditTest, App1_TitleIsCutToSixtyCharacters) {
+  app_->setActiveNoteId(QString());
+  app_->setNotesState(QStringLiteral("a"));
+  const QString id = app_->activeNoteId();
+  app_->setNotesState(QString(80, QLatin1Char('a')));
+  EXPECT_EQ(app_->notes()->items().at(app_->notes()->indexOfId(id)).title.size(), 60);
+}
+
 TEST_F(KnowAuditTest, KnowC_PinAndMoveAreUndoable) {
   const QString id = app_->newNote(QStringLiteral("N"));
   app_->setNotePinned(id, true);

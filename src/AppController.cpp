@@ -1060,6 +1060,32 @@ QString firstH1(const QString& body) {
   return line.mid(2).trimmed();
 }
 
+// The title a note's text suggests: its leading H1, else its first line that
+// has words in it, with the Markdown markers in front taken off ("- [ ] ",
+// "> ", "## ") and cut to 60 characters. Empty when the body has no text.
+QString titleFromBody(const QString& body) {
+  const QString h1 = firstH1(body);
+  if(!h1.isEmpty()) {
+    return h1.left(60).trimmed();
+  }
+  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
+  for(const QString& raw : body.split(QLatin1Char('\n'))) {
+    QString line = raw.trimmed();
+    line.remove(kMarkers);
+    line = line.trimmed();
+    if(!line.isEmpty()) {
+      return line.left(60).trimmed();
+    }
+  }
+  return {};
+}
+
+// The title a note gets when nobody named it, in either language: a profile
+// written in one and opened in the other still has the other's word.
+bool isPlaceholderNoteTitle(const QString& title) {
+  return title.isEmpty() || title == QStringLiteral("Untitled note") || title == QStringLiteral("Без названия");
+}
+
 // `body` with its leading H1 replaced by `title`.
 QString withH1(const QString& body, const QString& title) {
   qsizetype start = 0;
@@ -1136,7 +1162,8 @@ void AppController::setNotesState(const QString& v) {
 QString AppController::createActiveNote(const QString& title) {
   Note n;
   n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-  n.title = title.trimmed().isEmpty() ? tr_("notes.untitled") : title.trimmed();
+  const QString fromText = titleFromBody(m_notesState);
+  n.title = !title.trimmed().isEmpty() ? title.trimmed() : (!fromText.isEmpty() ? fromText : tr_("notes.untitled"));
   n.created = QDateTime::currentDateTime();
   n.updated = n.created;
   n.body = m_notesState;
@@ -1151,9 +1178,9 @@ void AppController::adoptOrphanNotesState() {
   if(m_notes.indexOfId(m_activeNoteId) >= 0 || m_notesState.trimmed().isEmpty()) {
     return;
   }
-  // Untitled rather than named after its first line: the text is adopted
-  // mid-typing, so the first line is whatever had been typed 250 ms in. The
-  // list shows an excerpt of the body under the title anyway.
+  // Named after what had been typed so far; the title keeps following the
+  // first line as typing goes on (syncActiveNoteBody), so the half-typed
+  // word the adoption caught does not stick.
   createActiveNote(QString());
 }
 
@@ -1166,14 +1193,21 @@ void AppController::syncActiveNoteBody() {
   if(n.body == m_notesState) {
     return;
   }
-  // The title follows the note's H1 while the two agree: a new note opens as
-  // "# Untitled note", and retyping that heading left the list saying
-  // "Untitled note" forever. Only while nothing links to the note by its
-  // title, which an automatic rename would silently break.
-  const QString wasH1 = firstH1(n.body);
-  const QString nowH1 = firstH1(m_notesState);
-  if(!nowH1.isEmpty() && wasH1 == n.title && nowH1 != n.title && heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
-    n.title = nowH1;
+  // The title follows the note's text (its H1, else its first line) while
+  // the two agree, and names a note nobody named: a new note opens as
+  // "# Untitled note", retyping that heading left the list saying "Untitled
+  // note" forever, and a note started by typing into the editor had no
+  // heading to follow at all, so every one of them was "Untitled note"
+  // (APP-1). Only while nothing links to the note by its title, which an
+  // automatic rename would silently break.
+  // A title that came from the H1 stops following once the heading is gone:
+  // the user named that note, and its first line is just text.
+  const QString was = titleFromBody(n.body);
+  const QString now = titleFromBody(m_notesState);
+  const bool followed = was == n.title && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
+  if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title)) &&
+     heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
+    n.title = now;
   }
   n.body = m_notesState;
   n.updated = QDateTime::currentDateTime();
@@ -8214,6 +8248,16 @@ void AppController::applyProfileToModels(const Profile& p) {
     n.updated = n.created;
     notes.append(n);
     activeId = n.id;
+  }
+  // Notes saved before APP-1 kept "Untitled note" whatever they said; they
+  // take the title their text suggests now. Saved with the next write.
+  for(Note& n : notes) {
+    if(isPlaceholderNoteTitle(n.title)) {
+      const QString t = titleFromBody(n.body);
+      if(!t.isEmpty() && heap::notes::backlinksTo(n.id, notes).isEmpty()) {
+        n.title = t;
+      }
+    }
   }
   m_notes.reset(notes);
   if(activeId.isEmpty() && !notes.isEmpty()) {

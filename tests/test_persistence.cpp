@@ -154,6 +154,32 @@ TEST_F(PersistenceTest, TrackedSecondsSurvivesReload) {
   EXPECT_EQ(app2.tasks()->items().at(row).trackedSeconds, 4242);
 }
 
+// APP-1: notes saved as "Untitled note" before their titles followed their
+// text are named after it on the next load; a note somebody named is not.
+TEST_F(PersistenceTest, UntitledNotesAreNamedAfterTheirTextOnLoad) {
+  {
+    AppController app;
+    Note untitled;
+    untitled.id = QStringLiteral("note-old");
+    untitled.title = QStringLiteral("Untitled note");
+    untitled.body = QStringLiteral("\n- Groceries for Friday\nmilk");
+    Note named;
+    named.id = QStringLiteral("note-named");
+    named.title = QStringLiteral("Recipes");
+    named.body = QStringLiteral("Pancakes\nflour");
+    app.notes()->reset({untitled, named});
+    app.setCrumbUser(QStringLiteral("arm-save"));
+    app.flushSave();
+  }
+  AppController app2;
+  const auto title = [&](const char* id) {
+    const int row = app2.notes()->indexOfId(QString::fromLatin1(id));
+    return row >= 0 ? app2.notes()->items().at(row).title : QString();
+  };
+  EXPECT_EQ(title("note-old"), QStringLiteral("Groceries for Friday"));
+  EXPECT_EQ(title("note-named"), QStringLiteral("Recipes"));
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

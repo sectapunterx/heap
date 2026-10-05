@@ -5,6 +5,7 @@
 import QtQuick
 import QtTest
 import TodoCpp
+import "../../qml/ThemePresets.js" as Presets
 
 TestCase {
     id: tc
@@ -54,6 +55,44 @@ TestCase {
         compare(ts.appearance.lightPreset, undefined);
         compare(Theme.activePresetId, "heap-light");
         compare(String(Theme.bg), "#f3f5f8");
+    }
+
+    // APP-119: the picker groups themes by contrast. Every built-in names its
+    // group, a copy follows its source, and a theme with no source is measured.
+    function test_themes_are_grouped_by_contrast() {
+        const ts = make();
+        const high = findChild(ts, "theme-cards-high");
+        const low = findChild(ts, "theme-cards-low");
+        verify(high !== null && low !== null);
+        for (const id of ["heap-dark", "heap-light", "heap-ink", "crimson", "graphite"])
+            compare(Presets.category(Presets.builtin(id), []), "high", id);
+        for (const id of ["ochre", "fjord", "dusk"])
+            compare(Presets.category(Presets.builtin(id), []), "low", id);
+        for (const t of Presets.PRESETS)
+            verify(t.contrast === "high" || t.contrast === "low", t.id + " has no contrast group");
+
+        const copy = ts.duplicate("dusk");
+        compare(Presets.category(ts._custom(copy), ts.customs), "low");
+        const lowCards = ts.themes.filter((t) => Presets.category(t, ts.customs) === "low").map((t) => t.id);
+        verify(lowCards.indexOf(copy) >= 0, "a copy of Dusk is not under low contrast");
+
+        compare(Presets.category({ colors: { text: "#ffffff", bg: "#000000" } }, []), "high");
+        compare(Presets.category({ colors: { text: "#9a9a9a", bg: "#202020" } }, []), "low");
+        // a copy-of-a-copy cycle must not hang
+        compare(Presets.category({ id: "a", from: "b", colors: { text: "#ffffff", bg: "#000000" } },
+                                 [{ id: "b", from: "a" }]), "high");
+    }
+
+    // The colour editor opens folded; the header unfolds it.
+    function test_colour_editor_folds() {
+        const ts = make();
+        verify(!ts.colorsOpen);
+        const row = findChild(ts, "theme-token-danger");
+        verify(row !== null);
+        verify(!row.parent.parent.visible, "token rows show while folded");
+        mouseClick(findChild(ts, "theme-colors-header"));
+        verify(ts.colorsOpen);
+        tryVerify(() => row.parent.parent.visible);
     }
 
     // Editing a built-in leaves it alone: a copy is made, put in the slot,
@@ -130,15 +169,15 @@ TestCase {
     // not on heap. dark — a copy of a copy included.
     function test_deleting_a_copy_falls_back_to_its_source() {
         const ts = make();
-        ts.pick("minimal-dark");
-        const copy = ts.duplicate("minimal-dark");
+        ts.pick("crimson");
+        const copy = ts.duplicate("crimson");
         const copyOfCopy = ts.duplicate(copy);
         compare(Theme.activePresetId, copyOfCopy);
         ts.remove(copyOfCopy);
-        compare(ts.appearance.darkPreset, "minimal-dark");
+        compare(ts.appearance.darkPreset, "crimson");
         ts.pick(copy);
         ts.remove(copy);
-        compare(Theme.activePresetId, "minimal-dark");
+        compare(Theme.activePresetId, "crimson");
     }
 
     function test_rename_and_base() {
