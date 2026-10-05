@@ -36,7 +36,7 @@ workflow refuses to publish if the two disagree.
 | Platform | Format | How it is built |
 |----------|--------|-----------------|
 | Windows  | `…-windows-portable.zip` | CMake `portable` target (windeployqt bundle) |
-| Windows  | `…-windows-setup.exe`    | Inno Setup ([`installer/heap.iss`](../installer/heap.iss)) wrapping the portable bundle |
+| Windows  | `…-windows-setup.exe`    | Inno Setup ([`installer/heap.iss`](../installer/heap.iss)) wrapping the portable bundle. Asks for all users (Program Files, admin; the default) or only for me (no elevation), and always lets you pick the folder |
 | Linux    | `…-linux-x86_64.AppImage`| `linuxdeploy` + the Qt plugin over a Qt 6.9.1 build (install-qt-action), smoke-tested in a clean `ubuntu:24.04` ([`packaging/linux/smoke-appimage.sh`](../packaging/linux/smoke-appimage.sh)) |
 | macOS    | `…-macos.dmg`            | `macdeployqt` → `hdiutil` drag-to-Applications dmg, **ad-hoc codesigned** (Developer ID + notarized when signing secrets are set) |
 
@@ -55,7 +55,7 @@ checksum is shown to the user. A mismatch deletes the file.
 
 | Copy of heap | Detected by | Package | How it is replaced |
 |---|---|---|---|
-| Windows installer | `unins000.exe` beside `heap.exe` | `…-windows-setup.exe` | `heap-updater.exe` runs it `/VERYSILENT` (same AppId → in-place upgrade; UAC prompt for a per-machine install) |
+| Windows installer | `unins000.exe` beside `heap.exe` | `…-windows-setup.exe` | `heap-updater.exe` runs it `/VERYSILENT` with `/ALLUSERS` or `/CURRENTUSER`, whichever the previous install used (same AppId → in-place upgrade; UAC only for an all-users install) |
 | Windows portable | `heap-portable.txt` beside `heap.exe` | `…-windows-portable.zip` | `heap-updater.exe` unpacks it with Windows' `tar.exe` and swaps the shipped entries, rolling back on any failure; other files in the folder stay |
 | macOS | running from `*.app/Contents/MacOS` | `…-macos.dmg` | heap mounts the dmg, `ditto`s `heap.app` beside itself and swaps the bundles |
 | Linux | `$APPIMAGE` set | `…-linux-x86_64.AppImage` | heap writes it beside the old one and `rename(2)`s it over |

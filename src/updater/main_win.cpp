@@ -7,9 +7,9 @@
 //   heap-updater --pid <heap's pid> --mode setup|portable --package <file>
 //                --target <install folder> --exe <heap.exe> --result <file>
 //
-// setup:    run the new Inno Setup installer silently. It upgrades the install
-//           in place (same AppId) and asks for elevation itself when the
-//           install is per-machine.
+// setup:    run the new Inno Setup installer silently, in the same mode (all
+//           users / only me) as the install it replaces. It upgrades in place
+//           (same AppId) and asks for elevation itself when per-machine.
 // portable: unpack the zip with Windows' own tar.exe, then swapBundle().
 //
 // The outcome goes to --result ("ok" or "error\n<why>"); heap reads it on its
@@ -84,10 +84,26 @@ std::wstring quoted(const fs::path& p) {
   return L"\"" + p.wstring() + L"\"";
 }
 
+// The installer can install for all users or only for the current one; an
+// update has to stay in the mode the install it replaces used, or a per-user
+// copy would be "upgraded" by a second install in Program Files. Inno Setup
+// keeps a per-user install's uninstall entry under HKCU.
+bool installedForCurrentUserOnly() {
+  const wchar_t* key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
+                       L"{6F4C9E2A-3B7D-4E1F-9A6C-0D2B1E8F5A44}_is1";
+  HKEY h = nullptr;
+  if(RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h) != ERROR_SUCCESS) {
+    return false;
+  }
+  RegCloseKey(h);
+  return true;
+}
+
 std::string installSetup(const fs::path& package) {
   DWORD code = 0;
   std::string error;
-  if(!runAndWait(package.wstring(), L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-", false, code, error)) {
+  const std::wstring scope = installedForCurrentUserOnly() ? L" /CURRENTUSER" : L" /ALLUSERS";
+  if(!runAndWait(package.wstring(), L"/VERYSILENT /SUPPRESSMSGBOXES /NORESTART /SP-" + scope, false, code, error)) {
     return error;
   }
   return code == 0 ? std::string() : "the installer exited with code " + std::to_string(code);
