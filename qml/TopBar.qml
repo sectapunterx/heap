@@ -416,6 +416,7 @@ Rectangle {
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0
                     QQC.ToolTip.delay: 600
                     QQC.ToolTip.text: I18n.t("topbar.searchQueryHint").arg(AppController.searchFields().join(": · ") + ":")
+                                                        .arg(AppController.shortcutFor("palette.open"))
                 }
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {

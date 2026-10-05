@@ -91,6 +91,13 @@ QString TaskModel::searchTextOf(const Task& t) {
   for(const Label& l : t.labels) {
     parts.append(l.id);
   }
+  // The search box promises branches (PERA-9). Also with its separators read
+  // as spaces, so "rate limit" finds fix/login-rate-limit.
+  if(!t.branch.isEmpty()) {
+    static const QRegularExpression kBranchSeparators(QStringLiteral("[-_/.]+"));
+    parts.append(t.branch);
+    parts.append(QString(t.branch).replace(kBranchSeparators, QStringLiteral(" ")));
+  }
   return parts.join(QChar(' ')).toLower();
 }
 
