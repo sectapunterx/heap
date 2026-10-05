@@ -240,6 +240,47 @@ TestCase {
         row.menu.close();
     }
 
+    // APP-116: dragging one note onto another merges it in, the dragged one's
+    // text below the target's.
+    function test_dragging_a_note_onto_another_merges_them() {
+        const target = note("aaa merge probe", { body: "# aaa merge probe\n\ntarget text" });
+        const source = note("bbb merge probe", { body: "# bbb merge probe\n\nsource text" });
+        const pane = makePane();
+        pane.filter = "merge probe";
+        waitForRendering(pane);
+        const from = findChild(pane, "note-row-" + source);
+        const to = findChild(pane, "note-row-" + target);
+        verify(from !== null && to !== null);
+
+        const start = from.mapToItem(pane, from.width / 2, from.height / 2);
+        const end = to.mapToItem(pane, to.width / 2, to.height / 2);
+        mousePress(pane, start.x, start.y);
+        for (let i = 1; i <= 8; i++)
+            mouseMove(pane, start.x, start.y + (end.y - start.y) * i / 8);
+        verify(findChild(pane, "note-drag-ghost").visible, "no drag ghost while dragging");
+        mouseRelease(pane, end.x, end.y);
+
+        tryVerify(function () { return AppController.notes.indexOfId(source) < 0; }, 1000, "the dragged note is still there");
+        const body = AppController.noteBody(target);
+        verify(body.indexOf("target text") < body.indexOf("## bbb merge probe"), body);
+        verify(body.indexOf("source text") > 0, body);
+        verify(!findChild(pane, "note-drag-ghost").visible);
+    }
+
+    // A note dropped on itself stays as it is.
+    function test_dropping_a_note_on_itself_does_nothing() {
+        const only = note("self merge probe", { body: "just me" });
+        const pane = makePane();
+        pane.filter = "self merge probe";
+        waitForRendering(pane);
+        const row = findChild(pane, "note-row-" + only);
+        mousePress(row, 20, 10);
+        for (let i = 1; i <= 6; i++) mouseMove(row, 20, 10 + i * 4);
+        mouseRelease(row, 20, 30);
+        verify(AppController.notes.indexOfId(only) >= 0);
+        compare(AppController.noteBody(only), "just me");
+    }
+
     function test_stepping_stops_at_the_ends() {
         const a = note("only step probe");
         const pane = makePane();
