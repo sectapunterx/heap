@@ -366,6 +366,8 @@ set(HEAP_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Accessibility.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.h
 )
 if (WIN32)
     list(APPEND HEAP_PLATFORM_SOURCES
@@ -394,6 +396,17 @@ target_link_libraries(heap_platform_tests PRIVATE
 )
 if (WIN32)
     target_link_libraries(heap_platform_tests PRIVATE user32)
+endif ()
+# GlobalHotkey::create() reaches the X11 / portal backend on Linux (APP-171).
+if (UNIX AND NOT APPLE)
+    target_sources(heap_platform_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_linux.cpp)
+    find_package(Qt6 REQUIRED COMPONENTS DBus)
+    target_link_libraries(heap_platform_tests PRIVATE Qt6::DBus)
+    if (HEAP_XCB_FOUND)
+        target_link_libraries(heap_platform_tests PRIVATE PkgConfig::HEAP_XCB)
+        target_compile_definitions(heap_platform_tests PRIVATE HEAP_HAVE_XCB=1)
+    endif ()
 endif ()
 
 add_test(NAME heap_platform_tests COMMAND heap_platform_tests)

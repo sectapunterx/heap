@@ -1761,6 +1761,14 @@ Item {
                         }
                     }
                 }
+                // Where heap cannot listen for the capture hotkey system-wide
+                // (Wayland without the shortcuts portal), the desktop can run
+                // `heap --capture` instead (APP-171).
+                NoteRow {
+                    objectName: "settings-capture-command-hint"
+                    visible: Qt.platform.os === "linux" && AppController.globalHotkeyBackend() === "none"
+                    text: I18n.t("settings.shortcuts.captureCommand").arg("heap --capture")
+                }
                 // On by default: it speaks once per action, ever (APP-166).
                 SwitchRow {
                     objectName: "settings-shortcut-hints"

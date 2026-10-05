@@ -1181,6 +1181,10 @@ class AppController : public QObject {
   // The third time for an action, shortcutHintRequested fires — once, never
   // again for that action. Off with Settings → Shortcuts "Suggest shortcuts".
   Q_INVOKABLE void noteMouseAction(const QString& shortcutId);
+  // How the capture hotkey reaches heap from other apps (APP-171): "native"
+  // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
+  // says to bind `heap --capture` in the desktop's own keyboard settings.
+  Q_INVOKABLE QString globalHotkeyBackend() const;
 
   // ---- Undo ----
   // Undo/redo the last recorded operation. undoLastDeletion() is the old name,

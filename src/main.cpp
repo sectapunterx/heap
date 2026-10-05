@@ -48,6 +48,7 @@ struct CliOptions {
   QString dataDir;
   bool dataDirSet = false;
   bool smoke = false;
+  bool capture = false;
 };
 
 // Exit code for a command line heap cannot act on (the usual "usage" code).
@@ -94,6 +95,13 @@ CliOptions parseCommandLine(const QStringList& args) {
                      "check a packaged build."));
   parser.addOption(smokeOption);
 
+  // Bindable from the desktop's own keyboard settings where heap cannot grab
+  // a global key itself (Wayland without the shortcuts portal, APP-171).
+  const QCommandLineOption captureOption(QStringLiteral("capture"),
+                                         QStringLiteral("Open quick capture - in the heap already running for this data "
+                                                        "directory, or in a new one."));
+  parser.addOption(captureOption);
+
   // A macOS Finder launch may still append -psn_<n>_<m>; it is not the user's.
   QStringList filtered;
   for(const QString& a : args) {
@@ -125,6 +133,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  opts.capture = parser.isSet(captureOption);
   if(parser.isSet(viewOption) && !heap::views::isKnown(opts.initialView)) {
     usageError(parser,
                QStringLiteral("unknown view '%1' (valid: %2)").arg(opts.initialView, heap::views::all().join(QStringLiteral(", "))));
@@ -226,7 +235,7 @@ int main(int argc, char* argv[]) {
   // window forward (switching view if --view was given) and exits.
   heap::platform::SingleInstance instance(heap::paths::dataDir());
   if(!cli.smoke) {
-    QByteArray hello = "activate";
+    QByteArray hello = cli.capture ? QByteArrayLiteral("capture") : QByteArrayLiteral("activate");
     if(!cli.initialView.isEmpty()) {
       hello += " view=" + cli.initialView.toUtf8();
     }
@@ -292,6 +301,14 @@ int main(int argc, char* argv[]) {
   QObject::connect(&instance, &heap::platform::SingleInstance::messageReceived, &app, [&engine](const QByteArray& message) {
     const QList<QObject*> roots = engine.rootObjects();
     if(roots.isEmpty()) {
+      return;
+    }
+    // `heap --capture` from a desktop shortcut: the capture popup, the way
+    // the global hotkey opens it, without raising the whole window.
+    if(message.startsWith("capture")) {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        emit controller->quickCaptureRequested();
+      }
       return;
     }
     const qsizetype at = message.indexOf("view=");

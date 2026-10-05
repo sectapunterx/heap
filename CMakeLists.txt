@@ -199,6 +199,7 @@ qt_add_library(heap_core STATIC
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
     src/platform/GlobalHotkey.cpp
+    src/platform/X11Keys.cpp
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
@@ -248,6 +249,8 @@ qt_add_library(heap_core STATIC
     src/update/UpdateInstall.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
+        # X11 grab / Wayland portal (APP-171).
+        $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_linux.cpp>
         # Meetings from the desktop Outlook over COM (APP-118); a stub elsewhere.
         $<IF:$<PLATFORM_ID:Windows>,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_win.cpp,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_stub.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
@@ -399,6 +402,7 @@ qt_add_qml_module(heap_core
         src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
+        src/platform/X11Keys.h
         src/platform/AltGrGuard.h
         src/hints/ShortcutHints.h
         src/TypeAhead.h
@@ -449,6 +453,20 @@ if (WIN32)
 endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
+    # The X11 global hotkey (APP-171) grabs keys through the xcb connection
+    # Qt's own xcb platform plugin opens, so it only needs libxcb's headers
+    # (libxcb1-dev). Without them the X11 backend is left out and the app
+    # still builds: Wayland's portal and the `heap --capture` hint remain.
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(HEAP_XCB QUIET IMPORTED_TARGET xcb)
+    endif()
+    if(HEAP_XCB_FOUND)
+        target_link_libraries(heap_core PUBLIC PkgConfig::HEAP_XCB)
+        target_compile_definitions(heap_core PUBLIC HEAP_HAVE_XCB=1)
+    else()
+        message(STATUS "xcb not found: the X11 global hotkey is left out (install libxcb1-dev)")
+    endif()
 endif()
 # Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm;
 # AppKit backs the unified title bar (NSWindow restyle) in MacWindow.mm.

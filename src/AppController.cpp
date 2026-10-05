@@ -10993,6 +10993,10 @@ QString AppController::shortcutFor(const QString& id) const {
   return i < 0 ? QString() : m_shortcuts[i].toMap().value("sequence").toString();
 }
 
+QString AppController::globalHotkeyBackend() const {
+  return m_globalHotkey ? m_globalHotkey->backend() : QStringLiteral("none");
+}
+
 void AppController::noteMouseAction(const QString& shortcutId) {
   const bool enabled = heap::hints::hintsEnabled(QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object());
   const QString sequence = shortcutFor(shortcutId);
