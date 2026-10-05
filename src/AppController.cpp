@@ -5259,6 +5259,57 @@ void AppController::setStatusWipLimit(const QString& id, int limit) {
   scheduleSave();
 }
 
+namespace {
+
+// Each column's auto-archive days for a set of statuses (APP-122). Done
+// takes `doneDays` (Settings → Tasks); another column its own archiveDays,
+// absent meaning never.
+QHash<QString, int> archiveDaysByStatus(const QVariantList& statuses, int doneDays) {
+  QHash<QString, int> out;
+  out.insert(QStringLiteral("done"), doneDays);
+  for(const QVariant& v : statuses) {
+    const QVariantMap m = v.toMap();
+    const QString id = m.value("id").toString();
+    if(id != QStringLiteral("done") && m.contains(QStringLiteral("archiveDays"))) {
+      out.insert(id, qMax(0, m.value("archiveDays").toInt()));
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+int AppController::statusArchiveDays(const QString& id) const {
+  const int doneDays = qMax(0, settingsMap().value("tasks").toMap().value("archiveDoneAfterDays", 7).toInt());
+  return archiveDaysByStatus(m_statuses, doneDays).value(id, 0);
+}
+
+void AppController::setStatusArchiveDays(const QString& id, int days) {
+  const int clamped = qBound(0, days, 3650);
+  if(id == QStringLiteral("done")) {
+    QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+    QJsonObject tasks = settings.value(QStringLiteral("tasks")).toObject();
+    tasks.insert(QStringLiteral("archiveDoneAfterDays"), clamped);
+    settings.insert(QStringLiteral("tasks"), tasks);
+    setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+    emit statusesChanged();  // the column menu reads the number through statuses
+    return;
+  }
+  const int i = statusIndexOf(id);
+  if(i < 0) {
+    return;
+  }
+  QVariantMap m = m_statuses[i].toMap();
+  if(m.contains(QStringLiteral("archiveDays")) && m.value("archiveDays").toInt() == clamped) {
+    return;
+  }
+  const UndoScope scope(this, tr_("undo.column").arg(m.value("name").toString()));
+  m["archiveDays"] = clamped;
+  m_statuses[i] = m;
+  emit statusesChanged();
+  scheduleSave();
+}
+
 void AppController::setStatusColor(const QString& id, const QString& color) {
   const int i = statusIndexOf(id);
   if(i < 0) {
@@ -11389,22 +11440,20 @@ void AppController::runAutomationAt(const QDateTime& now) {
     }
   }
 
-  // 2. Auto-archive done tasks past retention.
-  const int archDays = qMax(0, tasksCfg.value("archiveDoneAfterDays", 7).toInt());
+  // 2. Auto-archive: a card that has sat in its column past that column's
+  // limit (APP-122). Done's limit is the Settings → Tasks slider; any other
+  // column's is set from its menu, and is never by default.
+  const int doneDays = qMax(0, tasksCfg.value("archiveDoneAfterDays", 7).toInt());
+  const auto archiveDue = [&now](const Task& t, const QHash<QString, int>& days) {
+    const int limit = days.value(t.status, 0);
+    return !t.archived && limit > 0 && t.statusChangedAt.isValid() && t.statusChangedAt.daysTo(now) >= limit;
+  };
   bool persistedAny = false;
-  if(archDays > 0) {
+  {
+    const QHash<QString, int> days = archiveDaysByStatus(m_statuses, doneDays);
     QStringList toArchive;
     for(const Task& t : m_tasks.items()) {
-      if(t.archived) {
-        continue;
-      }
-      if(t.status != QStringLiteral("done")) {
-        continue;
-      }
-      if(!t.statusChangedAt.isValid()) {
-        continue;
-      }
-      if(t.statusChangedAt.daysTo(now) >= archDays) {
+      if(archiveDue(t, days)) {
         toArchive << t.id;
       }
     }
@@ -11417,8 +11466,9 @@ void AppController::runAutomationAt(const QDateTime& now) {
       if(p.id == m_activeProfileId) {
         continue;
       }
+      const QHash<QString, int> theirs = archiveDaysByStatus(p.statuses, doneDays);
       for(Task& t : p.tasks) {
-        if(!t.archived && t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.daysTo(now) >= archDays) {
+        if(archiveDue(t, theirs)) {
           t.archived = true;
           persistedAny = true;
         }

@@ -958,6 +958,12 @@ class AppController : public QObject {
   Q_INVOKABLE void setStatusColor(const QString& id, const QString& color);
   // Advisory limit on how many cards a column should hold. 0 = none.
   Q_INVOKABLE void setStatusWipLimit(const QString& id, int limit);
+  // Auto-archive per column (APP-122): a card that has sat in the column for
+  // `days` days goes to the archive; 0 = never. Done keeps its Settings →
+  // Tasks slider as the one place its number lives; any other column stores
+  // it on the column.
+  Q_INVOKABLE int statusArchiveDays(const QString& id) const;
+  Q_INVOKABLE void setStatusArchiveDays(const QString& id, int days);
   Q_INVOKABLE void moveStatus(const QString& id, int newIndex);
   Q_INVOKABLE void deleteStatus(const QString& id);
 

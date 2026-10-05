@@ -103,7 +103,7 @@ Item {
     // One of the board's own dialogs or menus is up (new column, WIP limit,
     // delete confirmation, a card menu). Main.qml keeps Ctrl+Z from acting
     // on the board behind it.
-    readonly property bool dialogOpen: cardMenuOpen || addColumnPopup.opened || wipPopup.opened
+    readonly property bool dialogOpen: cardMenuOpen || addColumnPopup.opened || wipPopup.opened || archivePopup.opened
                                        || confirmDelete.opened || colorPopup.opened
 
     // One source of truth for the column width. focusColumn() scrolls by
@@ -775,6 +775,7 @@ Item {
                                 AppMenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
                                 AppMenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
                                 AppMenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
+                                AppMenuItem { objectName: "col-archive-menu"; text: I18n.t("kanban.archive.set"); onTriggered: archivePopup.openFor(col.statusId, col.statusName) }
                                 AppMenuItem { text: I18n.t("kanban.collapse"); onTriggered: root.toggleCollapsed(col.statusId) }
                                 // A "doing" column books a focus block for a card
                                 // that enters it, like In Progress (always on).
@@ -1524,6 +1525,76 @@ Item {
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: wipPopup.close() }
             PillButton { text: I18n.t("common.save"); onClicked: wipPopup.commit() }
+            Item { Layout.preferredWidth: 10 }
+        }
+    }
+
+    // ── Auto-archive (APP-122) ────────────────────────────────────────
+    // Cards that sit in the column this many days go to the archive. For
+    // Done it is the same number as Settings → Tasks.
+    QQC.Dialog {
+        id: archivePopup
+        objectName: "archive-popup"
+        property string statusId: ""
+        property string statusName: ""
+
+        function openFor(id, name) {
+            archivePopup.statusId = id;
+            archivePopup.statusName = name;
+            const days = AppController.statusArchiveDays(id);
+            archiveField.text = days > 0 ? String(days) : "";
+            archivePopup.open();
+            archiveField.forceActiveFocus();
+            archiveField.selectAll();
+        }
+
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: Theme.inset
+        title: I18n.t("kanban.archive.title").arg(archivePopup.statusName)
+
+        background: Rectangle {
+            radius: Theme.radiusXl
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        function commit() {
+            AppController.setStatusArchiveDays(archivePopup.statusId, parseInt(archiveField.text || "0") || 0);
+            archivePopup.close();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spMd
+            TextField {
+                id: archiveField
+                objectName: "archive-field"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 220
+                inputMethodHints: Qt.ImhDigitsOnly
+                validator: IntValidator { bottom: 0; top: 3650 }
+                placeholderText: "0"
+                color: Theme.text
+                font.family: Theme.fontMono
+                background: FieldFrame {}
+                onAccepted: archivePopup.commit()
+            }
+            Text {
+                Layout.preferredWidth: 220
+                text: I18n.t("kanban.archive.hint")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.Wrap
+            }
+        }
+
+        footer: RowLayout {
+            spacing: Theme.spMd
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: archivePopup.close() }
+            PillButton { objectName: "archive-save"; text: I18n.t("common.save"); onClicked: archivePopup.commit() }
             Item { Layout.preferredWidth: 10 }
         }
     }
