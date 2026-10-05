@@ -106,7 +106,7 @@ var TOKENS = [
 // - textMuted sits between text and textDim; it used to be within a few
 //   points of textDim, so the app had two text levels, not three.
 var HEAP_DARK = {
-    id: "heap-dark", name: "heap. dark", base: "dark", builtin: true,
+    id: "heap-dark", name: "heap. dark", base: "dark", contrast: "high", builtin: true,
     colors: {
         bg: "#0b0e13", bg2: "#11151c", panel: "#14181f", panel2: "#1a1f29", panel3: "#1f2530",
         border: "#262d39", borderStrong: "#313a4a",
@@ -130,7 +130,7 @@ var HEAP_DARK = {
 };
 
 var HEAP_LIGHT = {
-    id: "heap-light", name: "heap. light", base: "light", builtin: true,
+    id: "heap-light", name: "heap. light", base: "light", contrast: "high", builtin: true,
     colors: {
         bg: "#f3f5f8", bg2: "#eaecee", panel: "#ffffff", panel2: "#f8f8f8", panel3: "#f1f1f1",
         border: "#dde3ec", borderStrong: "#b8bdc5",
@@ -153,132 +153,124 @@ var HEAP_LIGHT = {
     }
 };
 
-// The kaneo family: dark, low-contrast, one hue family per theme. Built
-// from the Minimal recipe (translucent hairline borders, a monochrome accent,
-// colour kept to dots, chips and dates) with the neutrals tinted — Ash
-// neutral, Stone warm, Slate cool, Sage green-grey — and every signal colour
-// pulled toward grey. Body text sits near 12:1 on bg rather than Minimal's
-// 17:1; textDim still clears 4.5:1 on bg, panel and panel2. Design source:
-// the "heap themes" Claude Design project (tokens/<id>.css).
-var ASH = {
-    id: "ash", name: "Ash", base: "dark", builtin: true,
+// The APP-119 family: five dark themes, each a near-black ground tinted
+// toward one hue and a single saturated accent for the primary button,
+// selection, focus and the now line. Signal colours stay distinct from the
+// accent (Crimson's blockers sit lighter and more coral than its red; Ochre's
+// P1 is terracotta beside the amber; Fjord's done is yellow-green beside the
+// teal; Dusk's review is pink beside the lavender). Design source: the
+// "heap — dark themes" Claude Design canvas (one artboard per theme).
+// Crimson and Graphite are high contrast as drawn. Ochre, Fjord and Dusk are
+// the low-contrast set: body text eased toward the ground (about 11:1),
+// hairlines closer to it and the colours a fifth less saturated, with textDim
+// left where it was so it still clears AA.
+var CRIMSON = {
+    id: "crimson", name: "Crimson", base: "dark", contrast: "high", builtin: true,
     colors: {
-        bg: "#161616", bg2: "#121212", panel: "#1a1a1a", panel2: "#1f1f1f",
-        panel3: "#262626", border: "#0fffffff", borderStrong: "#1affffff", text: "#d4d4d4",
-        textMuted: "#a3a3a3", textDim: "#8c8c8c", textOnAccent: "#1a1a1a", textOnDanger: "#161616",
-        textOnBadge: "#161616", accent: "#d4d4d4", accentStrong: "#e5e5e5", accentSoft: "#14ffffff",
-        knob: "#a3a3a3", danger: "#cf7a7c", warning: "#c9ab70", success: "#83b39b",
-        info: "#86a3c9", toastBg: "#1f1f1f", toastBorder: "#14ffffff", toastText: "#d4d4d4",
-        scrim: "#99000000", p0: "#cf7a7c", p1: "#c99470", p2: "#a3a3a3",
-        p3: "#8e8e8e", stBacklog: "#6e6e6e", stTodo: "#a3a3a3", stProg: "#86a3c9",
-        stHalf: "#c9ab70", stBlocked: "#cf7a7c", stReview: "#a59bc6", stDone: "#83b39b",
-        mStandup: "#86a3c9", mOneone: "#a59bc6", mSync: "#7eaeaa", mFocus: "#83b39b",
-        nowLine: "#cf7a7c", synKeyword: "#a59bc6", synString: "#83b39b", synNumber: "#c9ab70",
-        synComment: "#7e7e7e", synType: "#86a3c9", synBuiltin: "#d4d4d4", codeBg: "#121212",
-        code: "#c4c4c4", mention: "#86a3c9", ticket: "#a3a3a3", tag: "#a59bc6",
-        math: "#c9ab70", heading: "#a3a3a3", highlightBg: "#4dc9ab70", mdLink: "#94add0",
-        mdCode: "#d4d4d4", mdCodeBg: "#1f1f1f", mdMention: "#86a3c9", mdTicket: "#d4d4d4",
-        mdTag: "#a59bc6", mdMath: "#c9ab70", mdHighlight: "#4dc9ab70"
+        bg: "#090707", bg2: "#100e0e", panel: "#100e0e", panel2: "#181515", panel3: "#201d1d",
+        border: "#272424", borderStrong: "#3a3737", text: "#edeaea", textMuted: "#c0bdbd",
+        textDim: "#9b9797", textOnAccent: "#ffffff", textOnDanger: "#090707", textOnBadge: "#090707",
+        accent: "#d42f34", accentStrong: "#ff6d67", accentSoft: "#331415", knob: "#edeaea",
+        danger: "#f66c6d", warning: "#ebb854", success: "#5dc47e", info: "#61b1e6", toastBg: "#181515",
+        toastBorder: "#3a3737", toastText: "#edeaea", scrim: "#99000000", p0: "#f66c6d", p1: "#f49752",
+        p2: "#c0bdbd", p3: "#9b9797", stBacklog: "#6f6c6c", stTodo: "#c0bdbd", stProg: "#61b1e6",
+        stHalf: "#ebb854", stBlocked: "#f66c6d", stReview: "#b88fe6", stDone: "#5dc47e", mStandup: "#61b1e6",
+        mOneone: "#b88fe6", mSync: "#5fbab2", mFocus: "#5dc47e", nowLine: "#d42f34", synKeyword: "#ff6d67",
+        synString: "#5dc47e", synNumber: "#ebb854", synComment: "#9b9797", synType: "#61b1e6",
+        synBuiltin: "#b88fe6", codeBg: "#100e0e", code: "#c0bdbd", mention: "#61b1e6", ticket: "#c0bdbd",
+        tag: "#b88fe6", math: "#ebb854", heading: "#ff6d67", highlightBg: "#4debb854", mdLink: "#ff6d67",
+        mdCode: "#edeaea", mdCodeBg: "#181515", mdMention: "#61b1e6", mdTicket: "#ff6d67", mdTag: "#b88fe6",
+        mdMath: "#ebb854", mdHighlight: "#4debb854"
     }
 };
 
-var STONE = {
-    id: "stone", name: "Stone", base: "dark", builtin: true,
+var GRAPHITE = {
+    id: "graphite", name: "Graphite", base: "dark", contrast: "high", builtin: true,
     colors: {
-        bg: "#171514", bg2: "#131110", panel: "#1b1918", panel2: "#211e1c",
-        panel3: "#2a2724", border: "#0fffffff", borderStrong: "#1affffff", text: "#d6d1cb",
-        textMuted: "#a8a29d", textDim: "#958f8a", textOnAccent: "#1b1918", textOnDanger: "#171514",
-        textOnBadge: "#171514", accent: "#d6d1cb", accentStrong: "#e7e2dc", accentSoft: "#14ffffff",
-        knob: "#a8a29d", danger: "#c97b72", warning: "#c6a66c", success: "#95ad88",
-        info: "#91a3b5", toastBg: "#211e1c", toastBorder: "#14ffffff", toastText: "#d6d1cb",
-        scrim: "#99000000", p0: "#c97b72", p1: "#c79166", p2: "#a8a29d",
-        p3: "#98928e", stBacklog: "#716b66", stTodo: "#a8a29d", stProg: "#91a3b5",
-        stHalf: "#c6a66c", stBlocked: "#c97b72", stReview: "#b09ba8", stDone: "#95ad88",
-        mStandup: "#91a3b5", mOneone: "#b09ba8", mSync: "#8dab9f", mFocus: "#95ad88",
-        nowLine: "#c97b72", synKeyword: "#b09ba8", synString: "#95ad88", synNumber: "#c6a66c",
-        synComment: "#847d77", synType: "#91a3b5", synBuiltin: "#d6d1cb", codeBg: "#131110",
-        code: "#c9c3bc", mention: "#91a3b5", ticket: "#a8a29d", tag: "#b09ba8",
-        math: "#c6a66c", heading: "#a8a29d", highlightBg: "#4dc6a66c", mdLink: "#a3b1be",
-        mdCode: "#d6d1cb", mdCodeBg: "#211e1c", mdMention: "#91a3b5", mdTicket: "#d6d1cb",
-        mdTag: "#b09ba8", mdMath: "#c6a66c", mdHighlight: "#4dc6a66c"
+        bg: "#0e1115", bg2: "#16181d", panel: "#16181d", panel2: "#1e2125", panel3: "#26292e",
+        border: "#2d3035", borderStrong: "#40444a", text: "#e9ebef", textMuted: "#bbbec3",
+        textDim: "#95989f", textOnAccent: "#0a1018", textOnDanger: "#0e1115", textOnBadge: "#0e1115",
+        accent: "#659ff4", accentStrong: "#75a9f6", accentSoft: "#232e3f", knob: "#e9ebef",
+        danger: "#ef6663", warning: "#ebb854", success: "#5dc47e", info: "#51c6e0", toastBg: "#1e2125",
+        toastBorder: "#40444a", toastText: "#e9ebef", scrim: "#99000000", p0: "#ef6663", p1: "#f49752",
+        p2: "#bbbec3", p3: "#95989f", stBacklog: "#6c7076", stTodo: "#bbbec3", stProg: "#51c6e0",
+        stHalf: "#ebb854", stBlocked: "#ef6663", stReview: "#b88fe6", stDone: "#5dc47e", mStandup: "#51c6e0",
+        mOneone: "#b88fe6", mSync: "#57c5af", mFocus: "#5dc47e", nowLine: "#659ff4", synKeyword: "#75a9f6",
+        synString: "#5dc47e", synNumber: "#ebb854", synComment: "#95989f", synType: "#51c6e0",
+        synBuiltin: "#b88fe6", codeBg: "#16181d", code: "#bbbec3", mention: "#51c6e0", ticket: "#bbbec3",
+        tag: "#b88fe6", math: "#ebb854", heading: "#75a9f6", highlightBg: "#4debb854", mdLink: "#75a9f6",
+        mdCode: "#e9ebef", mdCodeBg: "#1e2125", mdMention: "#51c6e0", mdTicket: "#75a9f6", mdTag: "#b88fe6",
+        mdMath: "#ebb854", mdHighlight: "#4debb854"
     }
 };
 
-var SLATE = {
-    id: "slate", name: "Slate", base: "dark", builtin: true,
+var OCHRE = {
+    id: "ochre", name: "Ochre", base: "dark", contrast: "low", builtin: true,
     colors: {
-        bg: "#13161a", bg2: "#0f1215", panel: "#171a1f", panel2: "#1c2026",
-        panel3: "#242931", border: "#0fffffff", borderStrong: "#1affffff", text: "#cdd3db",
-        textMuted: "#9da5b0", textDim: "#8b949f", textOnAccent: "#171a1f", textOnDanger: "#13161a",
-        textOnBadge: "#13161a", accent: "#bcc7d6", accentStrong: "#d3dbe6", accentSoft: "#14ffffff",
-        knob: "#9da5b0", danger: "#c77c84", warning: "#c2a772", success: "#80ad9d",
-        info: "#84a0c6", toastBg: "#1c2026", toastBorder: "#14ffffff", toastText: "#cdd3db",
-        scrim: "#99000000", p0: "#c77c84", p1: "#c49174", p2: "#9da5b0",
-        p3: "#8d95a1", stBacklog: "#687280", stTodo: "#9da5b0", stProg: "#84a0c6",
-        stHalf: "#c2a772", stBlocked: "#c77c84", stReview: "#9d98c8", stDone: "#80ad9d",
-        mStandup: "#84a0c6", mOneone: "#9d98c8", mSync: "#7aa8ad", mFocus: "#80ad9d",
-        nowLine: "#c77c84", synKeyword: "#9d98c8", synString: "#80ad9d", synNumber: "#c2a772",
-        synComment: "#747f8e", synType: "#84a0c6", synBuiltin: "#cdd3db", codeBg: "#0f1215",
-        code: "#c0c7d0", mention: "#84a0c6", ticket: "#9da5b0", tag: "#9d98c8",
-        math: "#c2a772", heading: "#9da5b0", highlightBg: "#4dc2a772", mdLink: "#90aad0",
-        mdCode: "#cdd3db", mdCodeBg: "#1c2026", mdMention: "#84a0c6", mdTicket: "#cdd3db",
-        mdTag: "#9d98c8", mdMath: "#c2a772", mdHighlight: "#4dc2a772"
+        bg: "#120d09", bg2: "#1a1511", panel: "#1a1511", panel2: "#221d18", panel3: "#2b2521",
+        border: "#27211d", borderStrong: "#37302b", text: "#c3beba", textMuted: "#aea7a3",
+        textDim: "#9e9791", textOnAccent: "#150e06", textOnDanger: "#120d09", textOnBadge: "#120d09",
+        accent: "#e0a85d", accentStrong: "#e7b574", accentSoft: "#3c2d1b", knob: "#c3beba",
+        danger: "#e17371", warning: "#d8c96a", success: "#67ba82", info: "#6eaed9", toastBg: "#221d18",
+        toastBorder: "#37302b", toastText: "#c3beba", scrim: "#99000000", p0: "#e17371", p1: "#e3876b",
+        p2: "#aea7a3", p3: "#9e9791", stBacklog: "#746e68", stTodo: "#aea7a3", stProg: "#6eaed9",
+        stHalf: "#d8c96a", stBlocked: "#e17371", stReview: "#b998dd", stDone: "#67ba82", mStandup: "#6eaed9",
+        mOneone: "#b998dd", mSync: "#6ab4ae", mFocus: "#67ba82", nowLine: "#e0a85d", synKeyword: "#e7b574",
+        synString: "#67ba82", synNumber: "#d8c96a", synComment: "#9e9791", synType: "#6eaed9",
+        synBuiltin: "#b998dd", codeBg: "#1a1511", code: "#aea7a3", mention: "#6eaed9", ticket: "#aea7a3",
+        tag: "#b998dd", math: "#d8c96a", heading: "#e7b574", highlightBg: "#4dd8c96a", mdLink: "#e7b574",
+        mdCode: "#c3beba", mdCodeBg: "#221d18", mdMention: "#6eaed9", mdTicket: "#e7b574", mdTag: "#b998dd",
+        mdMath: "#d8c96a", mdHighlight: "#4dd8c96a"
     }
 };
 
-var SAGE = {
-    id: "sage", name: "Sage", base: "dark", builtin: true,
+var FJORD = {
+    id: "fjord", name: "Fjord", base: "dark", contrast: "low", builtin: true,
     colors: {
-        bg: "#141613", bg2: "#101210", panel: "#181a17", panel2: "#1d201c",
-        panel3: "#252923", border: "#0fffffff", borderStrong: "#1affffff", text: "#d0d6cc",
-        textMuted: "#a0a79c", textDim: "#8e958a", textOnAccent: "#181a17", textOnDanger: "#141613",
-        textOnBadge: "#141613", accent: "#aebfa5", accentStrong: "#c3d1bb", accentSoft: "#14ffffff",
-        knob: "#a0a79c", danger: "#c47d73", warning: "#c1a96f", success: "#95b489",
-        info: "#8aa5b3", toastBg: "#1d201c", toastBorder: "#14ffffff", toastText: "#d0d6cc",
-        scrim: "#99000000", p0: "#c47d73", p1: "#c29269", p2: "#a0a79c",
-        p3: "#8f968c", stBacklog: "#6b7268", stTodo: "#a0a79c", stProg: "#8aa5b3",
-        stHalf: "#c1a96f", stBlocked: "#c47d73", stReview: "#a79db6", stDone: "#95b489",
-        mStandup: "#8aa5b3", mOneone: "#a79db6", mSync: "#89aea2", mFocus: "#95b489",
-        nowLine: "#c47d73", synKeyword: "#a79db6", synString: "#95b489", synNumber: "#c1a96f",
-        synComment: "#788075", synType: "#8aa5b3", synBuiltin: "#d0d6cc", codeBg: "#101210",
-        code: "#c3c9bf", mention: "#8aa5b3", ticket: "#a0a79c", tag: "#a79db6",
-        math: "#c1a96f", heading: "#a0a79c", highlightBg: "#4dc1a96f", mdLink: "#9db6c0",
-        mdCode: "#d0d6cc", mdCodeBg: "#1d201c", mdMention: "#8aa5b3", mdTicket: "#d0d6cc",
-        mdTag: "#a79db6", mdMath: "#c1a96f", mdHighlight: "#4dc1a96f"
+        bg: "#051013", bg2: "#0c181b", panel: "#0c181b", panel2: "#142023", panel3: "#1c292c",
+        border: "#192528", borderStrong: "#263438", text: "#b7c1c4", textMuted: "#9fabae",
+        textDim: "#8c9b9f", textOnAccent: "#051210", textOnDanger: "#051013", textOnBadge: "#051013",
+        accent: "#60bfb1", accentStrong: "#77c9bb", accentSoft: "#183534", knob: "#b7c1c4",
+        danger: "#e17371", warning: "#dcb363", success: "#8fc270", info: "#6eaed9", toastBg: "#142023",
+        toastBorder: "#263438", toastText: "#b7c1c4", scrim: "#99000000", p0: "#e17371", p1: "#e49962",
+        p2: "#9fabae", p3: "#8c9b9f", stBacklog: "#647175", stTodo: "#9fabae", stProg: "#6eaed9",
+        stHalf: "#dcb363", stBlocked: "#e17371", stReview: "#b998dd", stDone: "#8fc270", mStandup: "#6eaed9",
+        mOneone: "#b998dd", mSync: "#7eb8a4", mFocus: "#8fc270", nowLine: "#60bfb1", synKeyword: "#77c9bb",
+        synString: "#8fc270", synNumber: "#dcb363", synComment: "#8c9b9f", synType: "#6eaed9",
+        synBuiltin: "#b998dd", codeBg: "#0c181b", code: "#9fabae", mention: "#6eaed9", ticket: "#9fabae",
+        tag: "#b998dd", math: "#dcb363", heading: "#77c9bb", highlightBg: "#4ddcb363", mdLink: "#77c9bb",
+        mdCode: "#b7c1c4", mdCodeBg: "#142023", mdMention: "#6eaed9", mdTicket: "#77c9bb", mdTag: "#b998dd",
+        mdMath: "#dcb363", mdHighlight: "#4ddcb363"
     }
 };
 
-// Minimal: neutral surfaces, hairline translucent borders, a monochrome
-// accent, and colour kept to the small things — dots, chips, dates. Tokens
-// read off kaneo.app's stylesheet (its shadcn .dark / :root variables).
-var MINIMAL_DARK = {
-    id: "minimal-dark", name: "Minimal dark", base: "dark", builtin: true,
+var DUSK = {
+    id: "dusk", name: "Dusk", base: "dark", contrast: "low", builtin: true,
     colors: {
-        bg: "#141414", bg2: "#111111", panel: "#171717", panel2: "#1c1c1c",
-        panel3: "#232323", border: "#0fffffff", borderStrong: "#1affffff", text: "#f5f5f5",
-        textMuted: "#a3a3a3", textDim: "#8c8c8c", textOnAccent: "#262626", textOnDanger: "#141414",
-        textOnBadge: "#141414", accent: "#f5f5f5", accentStrong: "#ffffff", accentSoft: "#14ffffff",
-        knob: "#a3a3a3", danger: "#fb4b53", warning: "#fbbf24", success: "#34d399",
-        info: "#60a5fa", toastBg: "#1c1c1c", toastBorder: "#14ffffff", toastText: "#f5f5f5",
-        scrim: "#99000000", p0: "#fb4b53", p1: "#fb923c", p2: "#a3a3a3",
-        p3: "#8b8b8b", stBacklog: "#737373", stTodo: "#a3a3a3", stProg: "#60a5fa",
-        stHalf: "#fbbf24", stBlocked: "#f87171", stReview: "#a78bfa", stDone: "#34d399",
-        mStandup: "#60a5fa", mOneone: "#a78bfa", mSync: "#2dd4bf", mFocus: "#34d399",
-        nowLine: "#fb414a", synKeyword: "#a78bfa", synString: "#34d399", synNumber: "#fbbf24",
-        synComment: "#7d7d7d", synType: "#60a5fa", synBuiltin: "#f5f5f5", codeBg: "#111111",
-        code: "#d4d4d4", mention: "#60a5fa", ticket: "#a3a3a3", tag: "#a78bfa",
-        math: "#fbbf24", heading: "#8b8b8b", highlightBg: "#4dfbbf24", mdLink: "#60a5fa",
-        mdCode: "#e5e5e5", mdCodeBg: "#1c1c1c", mdMention: "#60a5fa", mdTicket: "#f5f5f5",
-        mdTag: "#a78bfa", mdMath: "#fbbf24", mdHighlight: "#4dfbbf24"
+        bg: "#0e0d16", bg2: "#16151f", panel: "#16151f", panel2: "#1e1d27", panel3: "#262530",
+        border: "#22212b", borderStrong: "#32303c", text: "#bfbec7", textMuted: "#a8a7b3",
+        textDim: "#9896a4", textOnAccent: "#0f0e17", textOnDanger: "#0e0d16", textOnBadge: "#0e0d16",
+        accent: "#afa1e9", accentStrong: "#b8abed", accentSoft: "#2e2a41", knob: "#bfbec7",
+        danger: "#e17371", warning: "#dcb363", success: "#67ba82", info: "#6eaed9", toastBg: "#1e1d27",
+        toastBorder: "#32303c", toastText: "#bfbec7", scrim: "#99000000", p0: "#e17371", p1: "#e49962",
+        p2: "#a8a7b3", p3: "#9896a4", stBacklog: "#6f6d79", stTodo: "#a8a7b3", stProg: "#6eaed9",
+        stHalf: "#dcb363", stBlocked: "#e17371", stReview: "#de8fbd", stDone: "#67ba82", mStandup: "#6eaed9",
+        mOneone: "#de8fbd", mSync: "#6ab4ae", mFocus: "#67ba82", nowLine: "#afa1e9", synKeyword: "#b8abed",
+        synString: "#67ba82", synNumber: "#dcb363", synComment: "#9896a4", synType: "#6eaed9",
+        synBuiltin: "#de8fbd", codeBg: "#16151f", code: "#a8a7b3", mention: "#6eaed9", ticket: "#a8a7b3",
+        tag: "#de8fbd", math: "#dcb363", heading: "#b8abed", highlightBg: "#4ddcb363", mdLink: "#b8abed",
+        mdCode: "#bfbec7", mdCodeBg: "#1e1d27", mdMention: "#6eaed9", mdTicket: "#b8abed", mdTag: "#de8fbd",
+        mdMath: "#dcb363", mdHighlight: "#4ddcb363"
     }
 };
 
-// heap. ink: the Minimal recipe in the brand's own colours. Navy-black
+// heap. ink: the Minimal recipe (neutral surfaces, translucent hairlines, a
+// monochrome accent) in the brand's own colours. Navy-black
 // surfaces and the mark's ink greys from design/brand-export, a monochrome
 // accent like the logo, hairlines tinted with the ink, and the brand cyan
 // kept for links, mentions and keywords.
 var HEAP_INK = {
-    id: "heap-ink", name: "heap. ink", base: "dark", builtin: true,
+    id: "heap-ink", name: "heap. ink", base: "dark", contrast: "high", builtin: true,
     colors: {
         bg: "#0b0e13", bg2: "#080a0e", panel: "#0f1218", panel2: "#141820",
         panel3: "#1a1f29", border: "#14c6d0dc", borderStrong: "#26c6d0dc", text: "#e5ecf3",
@@ -306,13 +298,14 @@ var HEAP_INK = {
 var SWATCHES = ["#5cc2dd", "#5aa9e6", "#a4a4d6", "#c07acf", "#e6624c",
                 "#e69854", "#dcb86b", "#6ec18a", "#9aa3b4", "#8a8e98"];
 
-var PRESETS = [HEAP_DARK, HEAP_LIGHT, MINIMAL_DARK, HEAP_INK, ASH, STONE, SLATE, SAGE];
+var PRESETS = [HEAP_DARK, HEAP_LIGHT, HEAP_INK, CRIMSON, GRAPHITE, OCHRE, FJORD, DUSK];
 
 // Built-ins that were retired, and the one that replaces each, so a user who
 // picked one lands on its nearest relative instead of the slot default.
 var RETIRED = {
-    "minimal-light": "heap-light", "muted-mauve": "stone", "graphite": "ash",
-    "moss-mono": "sage", "nocturne": "slate"
+    "minimal-light": "heap-light", "minimal-dark": "crimson",
+    "ash": "graphite", "stone": "ochre", "slate": "graphite", "sage": "fjord",
+    "muted-mauve": "dusk", "moss-mono": "fjord", "nocturne": "dusk"
 };
 
 var DEFAULT_DARK = "heap-dark";
@@ -343,6 +336,29 @@ function _custom(id, customThemes) {
         if (t && t.id === id) return t;
     }
     return null;
+}
+
+// The two groups the theme picker shows: high contrast (crisp text, strong
+// signal colours) and low contrast (softer text and hairlines, for long
+// sessions and dark rooms).
+var CATEGORIES = ["high", "low"];
+
+// Which group `t` belongs in. A built-in says so; a custom theme takes its
+// source's group while it has one, else is measured: body text under 13:1 on
+// the ground reads as low contrast.
+function category(t, customThemes) {
+    var seen = {};
+    while (t && t.contrast !== "high" && t.contrast !== "low" && t.from && !seen[t.from]) {
+        seen[t.from] = true;
+        var from = builtin(t.from) || builtin(RETIRED[t.from]) || _custom(t.from, customThemes);
+        if (!from) break;
+        t = from;
+    }
+    if (!t) return "high";
+    if (t.contrast === "high" || t.contrast === "low") return t.contrast;
+    var c = t.colors || {};
+    if (!isHex(c.text) || !isHex(c.bg)) return "high";
+    return contrast(c.text, c.bg) >= 13 ? "high" : "low";
 }
 
 // Every theme the user can pick: built-ins first, then their own.

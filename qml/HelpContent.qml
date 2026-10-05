@@ -720,8 +720,8 @@ Item {
                               "Темы")
             }
             Body {
-                text: root.tr2("One dot per theme — heap., Minimal and the kaneo family, plus any of your own. A click puts it in the slot on screen (dark or light); hovering or focusing a dot names it.",
-                              "По точке на тему — heap., Minimal и семейство kaneo, плюс ваши собственные. Клик ставит тему в показанный слот (тёмный или светлый); при наведении или фокусе точка называет тему.")
+                text: root.tr2("Themes come in two groups: high contrast (heap. dark, light and ink, Crimson, Graphite) and low contrast (Ochre, Fjord, Dusk); your own join the group they read as. A click on one puts it in the slot on screen (dark or light); hovering or focusing a dot names it.",
+                              "Темы разбиты на две группы: высокий контраст (heap. dark, light и ink, Crimson, Graphite) и низкий (Ochre, Fjord, Dusk); ваши попадают в ту, которой соответствуют. Клик по теме ставит её в показанный слот (тёмный или светлый); при наведении или фокусе точка называет тему.")
             }
 
             H3 {
