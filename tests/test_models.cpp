@@ -9,6 +9,8 @@
 #include "TaskDefer.h"
 #include "TaskFilterProxy.h"
 
+#include "recap/WeeklyRecap.h"
+
 #include <QColor>
 #include <QDate>
 #include <QDateTime>
@@ -686,6 +688,29 @@ TEST(TaskFilterProxy, ShowsOnlyItsOwnColumn) {
   // filtered set rather than one lane.
   proxy.setStatus(QString());
   EXPECT_EQ(proxy.count(), 3);
+}
+
+// WEAK PECAP: a task's net move over a week, from where it first left to
+// where it last landed; one that came back is not a move at all.
+TEST(WeeklyRecap, NetMovesFollowAChainAndDropRoundTrips) {
+  const QDateTime start(QDate(2026, 9, 28), QTime(0, 0));
+  const QDateTime end = start.addDays(7);
+  const auto at = [&](int day) {
+    return start.addDays(day).addSecs(3600);
+  };
+  const QVector<StatusChange> log = {
+      {.taskId = "A", .from = "todo", .to = "prog", .at = at(0)},
+      {.taskId = "B", .from = "todo", .to = "prog", .at = at(1)},
+      {.taskId = "A", .from = "prog", .to = "review", .at = at(2)},
+      {.taskId = "B", .from = "prog", .to = "todo", .at = at(3)},
+      {.taskId = "C", .from = "todo", .to = "done", .at = start.addDays(-1)},
+      {.taskId = "D", .from = "todo", .to = "done", .at = end},
+  };
+  const QVector<heap::recap::Move> moves = heap::recap::netMoves(log, start, end);
+  ASSERT_EQ(moves.size(), 1);
+  EXPECT_EQ(moves.at(0), (heap::recap::Move{.taskId = "A", .from = "todo", .to = "review"}));
+  EXPECT_EQ(heap::recap::weekStart(QDate(2026, 10, 4)), QDate(2026, 9, 28));
+  EXPECT_EQ(heap::recap::weekStart(QDate(2026, 10, 5)), QDate(2026, 10, 5));
 }
 
 TEST(TaskFilterProxy, HidesArchivedUnlessAsked) {
