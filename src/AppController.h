@@ -23,6 +23,7 @@
 #include <vector>
 
 class QNetworkAccessManager;
+class QThread;
 
 namespace heap::chrono {
 class ChronoParser;
@@ -881,6 +882,11 @@ class AppController : public QObject {
   QVariantList calendarSubscriptions() const;
   // { ok, id } or { ok: false, error }. Fetches straight away.
   Q_INVOKABLE QVariantMap addCalendarSubscription(const QString& name, const QString& link, int minutes);
+  // The Outlook installed on this computer, read over COM (Windows): the way
+  // in when an Exchange server will not publish a calendar as a link. Same
+  // read-only subscription, kind "outlook", no link.
+  Q_INVOKABLE bool outlookDesktopAvailable() const;
+  Q_INVOKABLE QVariantMap addOutlookDesktopCalendar(int minutes);
   // Drops the subscription, its link and the events it brought.
   Q_INVOKABLE void removeCalendarSubscription(const QString& id);
   Q_INVOKABLE void refreshCalendarSubscription(const QString& id);
@@ -891,6 +897,9 @@ class AppController : public QObject {
   // replace the subscription's events. Returns how many events it now holds,
   // or -1 with `error` set when the text is not a calendar.
   int applyCalendarSubscriptionFeed(const QString& id, const QByteArray& body, QString* error = nullptr);
+  // Replaces subscription `id`'s events with `incoming` (already prefixed).
+  // Returns how many single events and series it now holds.
+  int replaceSubscriptionEvents(const QString& id, const QVector<CalEvent>& incoming);
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).
@@ -1807,6 +1816,8 @@ class AppController : public QObject {
 
   QNetworkAccessManager* m_calNam = nullptr;
   QTimer* m_calTimer = nullptr;
+  // The worker reading the desktop Outlook; waited for on exit.
+  QThread* m_outlookThread = nullptr;
   QHash<QString, CalSubState> m_calSubState;
   QSet<QString> m_calSubSecretsLoaded;
   QVariantList calendarSubscriptionSettings() const;

@@ -12,6 +12,7 @@
 #include "cal/IcsCodec.h"
 #include "cal/IcsSubscription.h"
 #include "cal/Occurrences.h"
+#include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "diag/IssueReport.h"
@@ -72,6 +73,7 @@
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
+#include <QThread>
 #include <QTime>
 #include <QUrl>
 #include <QUrlQuery>
@@ -80,6 +82,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -235,6 +238,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"The link is not in the keychain any more — add the calendar again",
         "Ссылки больше нет в хранилище ключей — добавьте календарь заново"}},
       {"calsub.defaultName", {"Outlook calendar", "Календарь Outlook"}},
+      {"calsub.desktopName", {"Outlook on this computer", "Outlook на этом компьютере"}},
+      {"calsub.noDesktop", {"No Outlook on this computer answers", "На этом компьютере Outlook не отвечает"}},
+      {"calsub.desktopTwice", {"Outlook on this computer is already added", "Outlook этого компьютера уже добавлен"}},
       {"notes.merged", {"“%1” merged into “%2”", "«%1» добавлена в «%2»"}},
       {"notes.undo.merge", {"Merge undone: %1", "Объединение отменено: %1"}},
       {"docs.untitledPage", {"Untitled page", "Без названия"}},
@@ -905,6 +911,12 @@ AppController::~AppController() {
     group->abandon();
   }
   m_undoGroups.clear();
+  // An Outlook read still running would call back into a dead controller.
+  if(m_outlookThread != nullptr) {
+    m_outlookThread->wait();
+    delete m_outlookThread;
+    m_outlookThread = nullptr;
+  }
   flushSave();
 }
 
@@ -3443,6 +3455,7 @@ QVariantList AppController::calendarSubscriptions() const {
     const QString id = m.value(QStringLiteral("id")).toString();
     const CalSubState st = m_calSubState.value(id);
     m.insert(QStringLiteral("minutes"), m.value(QStringLiteral("minutes"), kCalSubDefaultMinutes).toInt());
+    m.insert(QStringLiteral("kind"), m.value(QStringLiteral("kind"), QStringLiteral("link")).toString());
     m.insert(QStringLiteral("events"), counts.value(id));
     m.insert(QStringLiteral("lastSync"), st.lastSync.isValid() ? st.lastSync.toString(Qt::ISODate) : QString());
     m.insert(QStringLiteral("error"), st.error);
@@ -3463,6 +3476,30 @@ QVariantMap AppController::addCalendarSubscription(const QString& name, const QS
   QVariantList list = calendarSubscriptionSettings();
   const QString shown = name.trimmed().isEmpty() ? tr_("calsub.defaultName") : name.trimmed().left(60);
   list.append(QVariantMap{{"id", id}, {"name", shown}, {"minutes", qBound(5, minutes > 0 ? minutes : kCalSubDefaultMinutes, 24 * 60)}});
+  writeCalendarSubscriptionSettings(list);
+  fetchCalendarSubscription(id);
+  return {{"ok", true}, {"id", id}};
+}
+
+bool AppController::outlookDesktopAvailable() const {
+  return heap::cal::outlookDesktopAvailable();
+}
+
+QVariantMap AppController::addOutlookDesktopCalendar(int minutes) {
+  if(!heap::cal::outlookDesktopAvailable()) {
+    return {{"ok", false}, {"error", tr_("calsub.noDesktop")}};
+  }
+  QVariantList list = calendarSubscriptionSettings();
+  for(const QVariant& v : std::as_const(list)) {
+    if(v.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("outlook")) {
+      return {{"ok", false}, {"error", tr_("calsub.desktopTwice")}};
+    }
+  }
+  const QString id = QStringLiteral("outlook");
+  list.append(QVariantMap{{"id", id},
+                          {"kind", "outlook"},
+                          {"name", tr_("calsub.desktopName")},
+                          {"minutes", qBound(5, minutes > 0 ? minutes : kCalSubDefaultMinutes, 24 * 60)}});
   writeCalendarSubscriptionSettings(list);
   fetchCalendarSubscription(id);
   return {{"ok", true}, {"id", id}};
@@ -3531,6 +3568,9 @@ void AppController::applyCalendarSubscriptions() {
   QVector<QPair<QString, QString>> toLoad;
   for(const QVariant& v : list) {
     const QString id = v.toMap().value(QStringLiteral("id")).toString();
+    if(v.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("outlook")) {
+      continue;  // no link to load
+    }
     if(!id.isEmpty() && !m_calSubSecretsLoaded.contains(id)) {
       toLoad.append({kCalSubSecretProvider, id});
     }
@@ -3563,6 +3603,50 @@ void AppController::fetchCalendarSubscription(const QString& id) {
     return;
   }
   st.lastAttempt = QDateTime::currentDateTime();
+  bool desktop = false;
+  for(const QVariant& v : calendarSubscriptionSettings()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == id && m.value(QStringLiteral("kind")).toString() == QStringLiteral("outlook")) {
+      desktop = true;
+    }
+  }
+  if(desktop) {
+    if(m_outlookThread != nullptr) {
+      return;  // one read at a time; the next tick tries again
+    }
+    // Two weeks back (what just happened still reads as context) and three
+    // months ahead.
+    const QDateTime from = QDate::currentDate().addDays(-14).startOfDay();
+    const QDateTime to = QDate::currentDate().addDays(92).startOfDay();
+    auto result = std::make_shared<heap::cal::OutlookRead>();
+    QThread* worker = QThread::create([result, from, to]() {
+      *result = heap::cal::readOutlookCalendar(from, to);
+    });
+    m_outlookThread = worker;
+    st.busy = true;
+    emit calendarSubscriptionsChanged();
+    connect(worker, &QThread::finished, this, [this, worker, result, id]() {
+      if(m_outlookThread == worker) {
+        m_outlookThread = nullptr;
+      }
+      worker->deleteLater();
+      if(!m_calSubState.contains(id)) {
+        return;
+      }
+      CalSubState& state = m_calSubState[id];
+      state.busy = false;
+      if(result->ok) {
+        replaceSubscriptionEvents(id, heap::cal::outlookEvents(result->items, id));
+        m_calSubState[id].lastSync = QDateTime::currentDateTime();
+        m_calSubState[id].error.clear();
+      } else {
+        state.error = result->error;
+      }
+      emit calendarSubscriptionsChanged();
+    });
+    worker->start();
+    return;
+  }
   const QUrl url = heap::cal::subscriptionFetchUrl(m_secretStore->value(kCalSubSecretProvider, id));
   if(url.isEmpty()) {
     st.error = tr_("calsub.noLink");
@@ -3620,7 +3704,10 @@ int AppController::applyCalendarSubscriptionFeed(const QString& id, const QByteA
     }
     return -1;
   }
-  const QVector<CalEvent> incoming = heap::cal::subscriptionEvents(parsed, id);
+  return replaceSubscriptionEvents(id, heap::cal::subscriptionEvents(parsed, id));
+}
+
+int AppController::replaceSubscriptionEvents(const QString& id, const QVector<CalEvent>& incoming) {
   QSet<QString> keep;
   for(const CalEvent& e : incoming) {
     keep.insert(e.id);

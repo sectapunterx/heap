@@ -20,6 +20,9 @@ Rectangle {
     border.width: 1
 
     readonly property var subs: AppController.calendarSubscriptions
+    // A desktop Outlook answers COM here (Windows) and is not added yet.
+    readonly property bool canAddDesktop: AppController.outlookDesktopAvailable()
+        && !root.subs.some((s) => s.kind === "outlook")
     readonly property var intervals: [5, 15, 30, 60]
     property string addError: ""
     // Which of `intervals` a new calendar refreshes at; 15 minutes to start.
@@ -35,6 +38,12 @@ Rectangle {
         } else {
             root.addError = r.error || "";
         }
+        return !!r.ok;
+    }
+
+    function addDesktop() {
+        const r = AppController.addOutlookDesktopCalendar(root.intervals[root.everyIndex]);
+        root.addError = r.ok ? "" : (r.error || "");
         return !!r.ok;
     }
 
@@ -65,6 +74,28 @@ Rectangle {
             color: Theme.textMuted
             font.pixelSize: Theme.fsSm
             wrapMode: Text.WordWrap
+        }
+
+        // Exchange that will not publish a link: read the Outlook on this
+        // computer instead.
+        RowLayout {
+            objectName: "calsub-desktop"
+            visible: root.canAddDesktop
+            Layout.fillWidth: true
+            spacing: Theme.spMd
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("calsub.desktopHint")
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.WordWrap
+            }
+            PillButton {
+                objectName: "calsub-add-desktop"
+                text: I18n.t("calsub.addDesktop")
+                primary: true
+                onClicked: root.addDesktop()
+            }
         }
 
         // The calendars already added.

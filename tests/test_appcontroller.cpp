@@ -9,6 +9,7 @@
 #include "FakeHttpServer.h"
 #include "Models.h"
 
+#include "cal/OutlookDesktop.h"
 #include "git/BranchTaskMatcher.h"
 #include "integrations/IntegrationTypes.h"
 
@@ -210,6 +211,22 @@ TEST_F(AppControllerTest, RemovingASubscriptionTakesItsEvents) {
   app_->removeCalendarSubscription(QStringLiteral("t1"));
   EXPECT_LT(app_->events()->indexOfId(QStringLiteral("sub:t1:sync-1")), 0);
   EXPECT_GE(app_->events()->indexOfId(QStringLiteral("sub:t2:retro-1")), 0);
+}
+
+// Outlook occurrences go through the same replace-and-read-only path.
+TEST_F(AppControllerTest, DesktopOutlookEventsAreMirroredReadOnly) {
+  heap::cal::OutlookItem it;
+  it.key = QStringLiteral("G1-202610061100");
+  it.subject = QStringLiteral("Sprint sync");
+  it.start = QDateTime(QDate(2026, 10, 6), QTime(11, 0));
+  it.end = QDateTime(QDate(2026, 10, 6), QTime(11, 30));
+  EXPECT_EQ(app_->replaceSubscriptionEvents(QStringLiteral("outlook"), heap::cal::outlookEvents({it}, QStringLiteral("outlook"))), 1);
+  const QString id = QStringLiteral("sub:outlook:G1-202610061100");
+  ASSERT_GE(app_->events()->indexOfId(id), 0);
+  app_->deleteEvent(id);
+  EXPECT_GE(app_->events()->indexOfId(id), 0);
+  EXPECT_EQ(app_->replaceSubscriptionEvents(QStringLiteral("outlook"), {}), 0);
+  EXPECT_LT(app_->events()->indexOfId(id), 0);
 }
 
 TEST_F(AppControllerTest, ABadLinkIsRefusedBeforeAnythingIsStored) {

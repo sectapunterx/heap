@@ -10,6 +10,7 @@
 #include "cal/IcsCodec.h"
 #include "cal/IcsSubscription.h"
 #include "cal/Occurrences.h"
+#include "cal/OutlookDesktop.h"
 
 #include <gtest/gtest.h>
 
@@ -768,4 +769,58 @@ TEST(IcsSubscription, FeedEventsArePrefixedAndCancellationsApplied) {
   const CalEvent& moved = evs.at(0).masterId.isEmpty() ? evs.at(1) : evs.at(0);
   EXPECT_EQ(moved.masterId, master.id);
   EXPECT_TRUE(master.exdates.contains(QDate(2026, 10, 8)));
+}
+
+// ── The desktop Outlook (APP-118, Exchange) ──────────────────────────
+
+TEST(OutlookDesktop, TheJoinLinkIsTheFirstUrlInLocationThenBody) {
+  EXPECT_EQ(heap::cal::firstMeetingUrl(QStringLiteral("Talk: https://talk.corp.ru/j/42."), QStringLiteral("https://other")),
+            QStringLiteral("https://talk.corp.ru/j/42"));
+  EXPECT_EQ(heap::cal::firstMeetingUrl(QStringLiteral("Room 5"), QStringLiteral("Join <https://talk.corp.ru/j/7?pwd=x> now")),
+            QStringLiteral("https://talk.corp.ru/j/7?pwd=x"));
+  EXPECT_TRUE(heap::cal::firstMeetingUrl(QStringLiteral("Room 5"), QStringLiteral("no link")).isEmpty());
+}
+
+TEST(OutlookDesktop, OccurrencesBecomeReadOnlyMeetings) {
+  heap::cal::OutlookItem timed;
+  timed.key = QStringLiteral("G1-202610061100");
+  timed.subject = QStringLiteral(" Sprint sync ");
+  timed.start = QDateTime(QDate(2026, 10, 6), QTime(11, 0));
+  timed.end = QDateTime(QDate(2026, 10, 6), QTime(11, 30));
+  timed.location = QStringLiteral("https://talk.corp.ru/j/1");
+  heap::cal::OutlookItem allDay;
+  allDay.key = QStringLiteral("G2-202610090000");
+  allDay.subject = QStringLiteral("Offsite");
+  allDay.start = QDateTime(QDate(2026, 10, 9), QTime(0, 0));
+  allDay.end = QDateTime(QDate(2026, 10, 11), QTime(0, 0));  // Outlook: the next midnight
+  allDay.allDay = true;
+  heap::cal::OutlookItem keyless;
+  keyless.start = timed.start;
+  keyless.end = timed.end;
+
+  const QVector<CalEvent> evs = heap::cal::outlookEvents({timed, allDay, keyless}, QStringLiteral("outlook"));
+  ASSERT_EQ(evs.size(), 2);
+  EXPECT_EQ(evs.at(0).id, QStringLiteral("sub:outlook:G1-202610061100"));
+  EXPECT_EQ(evs.at(0).title, QStringLiteral("Sprint sync"));
+  EXPECT_EQ(evs.at(0).date, QDate(2026, 10, 6));
+  EXPECT_DOUBLE_EQ(evs.at(0).start, 11.0);
+  EXPECT_DOUBLE_EQ(evs.at(0).end, 11.5);
+  EXPECT_EQ(evs.at(0).url, QStringLiteral("https://talk.corp.ru/j/1"));
+  EXPECT_TRUE(evs.at(1).allDay);
+  EXPECT_EQ(evs.at(1).date, QDate(2026, 10, 9));
+  EXPECT_EQ(evs.at(1).endDate, QDate(2026, 10, 10));
+}
+
+// A meeting that runs to midnight ends on its own day, not on a zero-length
+// sliver of the next one.
+TEST(OutlookDesktop, AMeetingUntilMidnightStaysOnItsDay) {
+  heap::cal::OutlookItem late;
+  late.key = QStringLiteral("G3");
+  late.start = QDateTime(QDate(2026, 10, 6), QTime(22, 0));
+  late.end = QDateTime(QDate(2026, 10, 7), QTime(0, 0));
+  const QVector<CalEvent> evs = heap::cal::outlookEvents({late}, QStringLiteral("outlook"));
+  ASSERT_EQ(evs.size(), 1);
+  EXPECT_EQ(evs.at(0).date, QDate(2026, 10, 6));
+  EXPECT_FALSE(evs.at(0).endDate.isValid());
+  EXPECT_DOUBLE_EQ(evs.at(0).end, 24.0);
 }
