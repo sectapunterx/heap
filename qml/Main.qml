@@ -1720,6 +1720,17 @@ ApplicationWindow {
         onPicked: (value) => AppController.selectedDate = value
     }
 
+    // Type to search on the board (APP-117): a letter that is not one of the
+    // board's own shortcuts, typed with no text field focused, starts a search
+    // in the top bar. Esc clears it; Return hands the keyboard back to the
+    // board cursor, which walks what the search left.
+    TypeAhead {
+        id: boardTypeAhead
+        // A card's menu is a popup, so _viewKeysBlocked already covers it.
+        enabled: AppController.currentView === "board" && !win._viewKeysBlocked
+        onTyped: (text) => topBar.typeAhead(text)
+    }
+
     component BoardKey: Shortcut {
         context: Qt.ApplicationShortcut
         // Not while a card's menu is up: its arrows and letters belong to it.

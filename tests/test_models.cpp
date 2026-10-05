@@ -688,6 +688,16 @@ TEST(TaskFilterProxy, ShowsOnlyItsOwnColumn) {
   EXPECT_EQ(proxy.count(), 3);
 }
 
+// APP-117: the ID sort is natural — the key's text, then its number.
+TEST(TaskFilterProxy, TaskIdsCompareNaturally) {
+  EXPECT_LT(TaskFilterProxy::compareTaskIds(QStringLiteral("APP-9"), QStringLiteral("APP-10")), 0);
+  EXPECT_GT(TaskFilterProxy::compareTaskIds(QStringLiteral("APP-100"), QStringLiteral("APP-10")), 0);
+  EXPECT_EQ(TaskFilterProxy::compareTaskIds(QStringLiteral("APP-007"), QStringLiteral("app-7")), 0);
+  EXPECT_LT(TaskFilterProxy::compareTaskIds(QStringLiteral("APP-99"), QStringLiteral("BUG-1")), 0);
+  EXPECT_LT(TaskFilterProxy::compareTaskIds(QStringLiteral("WEAK PECAP"), QStringLiteral("WEAK PECAP-1")), 0);
+  EXPECT_LT(TaskFilterProxy::compareTaskIds(QStringLiteral("APP-12345678901234567890"), QStringLiteral("APP-123456789012345678901")), 0);
+}
+
 TEST(TaskFilterProxy, HidesArchivedUnlessAsked) {
   Task live = mk(QStringLiteral("A-1"), QStringLiteral("todo"));
   Task gone = mk(QStringLiteral("A-2"), QStringLiteral("todo"));

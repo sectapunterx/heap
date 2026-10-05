@@ -38,6 +38,13 @@ Rectangle {
         searchField.forceActiveFocus();
         searchField.selectAll();
     }
+    // Type to search (APP-117): the first letter typed on the board starts a
+    // fresh search with it, and the rest follow into the field.
+    function typeAhead(text) {
+        searchField.text = text;
+        searchField.forceActiveFocus();
+        searchField.cursorPosition = searchField.text.length;
+    }
 
     function _activeProfileMap() {
         const list = AppController.profiles;

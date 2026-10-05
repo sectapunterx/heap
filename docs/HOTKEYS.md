@@ -122,6 +122,11 @@ alongside each one.
 
 While a card's menu is open its arrows and letters belong to the menu.
 
+**Type to search.** On the board, start typing anywhere: any other letter or
+digit opens the search with it and the board narrows as you go. `Esc` clears
+it, `Return` hands the keyboard back to the cursor on what is left. Starting
+with one of the letters above? Press `Ctrl+F` first.
+
 ## Timeline
 
 `J` / `K` (or `↓` / `↑`) walk the rows, `Return` opens one, `Space` adds it to

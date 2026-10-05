@@ -202,6 +202,7 @@ qt_add_library(heap_core STATIC
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
+    src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
@@ -385,6 +386,7 @@ qt_add_qml_module(heap_core
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/platform/AltGrGuard.h
+        src/TypeAhead.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
         src/integrations/GithubProvider.h
