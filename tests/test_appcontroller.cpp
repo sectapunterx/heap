@@ -9,6 +9,7 @@
 #include "FakeHttpServer.h"
 #include "Models.h"
 
+#include "cal/OutlookDesktop.h"
 #include "git/BranchTaskMatcher.h"
 #include "integrations/IntegrationTypes.h"
 
@@ -80,6 +81,159 @@ class AppControllerTest : public ::testing::Test {
 
   std::unique_ptr<AppController> app_;
 };
+
+// ─── Weekly recap (WEAK PECAP) ────────────────────────────────────────
+
+// Every column move is logged whatever made it, and the recap lists last
+// week's net moves grouped by from -> to. A task moved and moved back is left
+// out. "Last week" relative to a day a week from now is this week.
+TEST_F(AppControllerTest, WeeklyRecapGroupsLastWeeksMoves) {
+  app_->tasks()->reset({mkTask(QStringLiteral("R-1"), QStringLiteral("one")),
+                        mkTask(QStringLiteral("R-2"), QStringLiteral("two")),
+                        mkTask(QStringLiteral("R-3"), QStringLiteral("three"))});
+  app_->moveTaskTo(QStringLiteral("R-1"), QStringLiteral("prog"), QString());
+  app_->moveTaskTo(QStringLiteral("R-2"), QStringLiteral("prog"), QString());
+  app_->moveTaskTo(QStringLiteral("R-3"), QStringLiteral("prog"), QString());
+  app_->moveTaskTo(QStringLiteral("R-3"), QStringLiteral("todo"), QString());
+  app_->moveTaskTo(QStringLiteral("R-2"), QStringLiteral("review"), QString());
+  EXPECT_EQ(app_->statusLog().size(), 5);
+
+  const QVariantMap recap = app_->weeklyRecapFor(QDate::currentDate().addDays(7));
+  const QVariantList groups = recap.value(QStringLiteral("groups")).toList();
+  ASSERT_EQ(groups.size(), 2);
+  // Board column order: todo -> prog before todo -> review.
+  const QVariantMap first = groups.at(0).toMap();
+  EXPECT_EQ(first.value(QStringLiteral("from")).toString(), QStringLiteral("todo"));
+  EXPECT_EQ(first.value(QStringLiteral("to")).toString(), QStringLiteral("prog"));
+  const QVariantList firstTasks = first.value(QStringLiteral("tasks")).toList();
+  ASSERT_EQ(firstTasks.size(), 1);
+  EXPECT_EQ(firstTasks.at(0).toMap().value(QStringLiteral("id")).toString(), QStringLiteral("R-1"));
+  const QVariantMap second = groups.at(1).toMap();
+  EXPECT_EQ(second.value(QStringLiteral("to")).toString(), QStringLiteral("review"));
+  EXPECT_FALSE(second.value(QStringLiteral("toName")).toString().isEmpty());
+}
+
+TEST_F(AppControllerTest, WeeklyRecapOnlyLooksAtLastWeek) {
+  app_->tasks()->reset({mkTask(QStringLiteral("R-1"), QStringLiteral("one"))});
+  app_->moveTaskTo(QStringLiteral("R-1"), QStringLiteral("prog"), QString());
+  // This week's moves are next week's recap, not this week's.
+  EXPECT_TRUE(app_->weeklyRecap().value(QStringLiteral("groups")).toList().isEmpty());
+  EXPECT_TRUE(app_->weeklyRecapFor(QDate::currentDate().addDays(14)).value(QStringLiteral("groups")).toList().isEmpty());
+}
+
+TEST_F(AppControllerTest, WeeklyRecapSkipsDeletedTasks) {
+  app_->tasks()->reset({mkTask(QStringLiteral("R-1"), QStringLiteral("one"))});
+  app_->moveTaskTo(QStringLiteral("R-1"), QStringLiteral("prog"), QString());
+  app_->tasks()->removeById(QStringLiteral("R-1"));
+  EXPECT_TRUE(app_->weeklyRecapFor(QDate::currentDate().addDays(7)).value(QStringLiteral("groups")).toList().isEmpty());
+}
+
+// Loading a profile is not a move: a reset only remembers where tasks are.
+TEST_F(AppControllerTest, AResetIsNotLoggedAsAMove) {
+  const qsizetype before = app_->statusLog().size();
+  Task t = mkTask(QStringLiteral("R-1"), QStringLiteral("one"));
+  app_->tasks()->reset({t});
+  t.status = QStringLiteral("done");
+  app_->tasks()->reset({t});
+  EXPECT_EQ(app_->statusLog().size(), before);
+}
+
+// ─── Calendar subscriptions (APP-118) ─────────────────────────────────
+
+namespace {
+QByteArray feed(const QStringList& vevents) {
+  QByteArray out = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n";
+  for(const QString& v : vevents) {
+    out += "BEGIN:VEVENT\r\n" + v.toUtf8() + "\r\nEND:VEVENT\r\n";
+  }
+  return out + "END:VCALENDAR\r\n";
+}
+
+const QString kSync = QStringLiteral("UID:sync-1\r\nSUMMARY:Sprint sync\r\nDTSTART:20261006T110000\r\nDTEND:20261006T113000");
+const QString kRetro = QStringLiteral("UID:retro-1\r\nSUMMARY:Retro\r\nDTSTART:20261009T150000\r\nDTEND:20261009T160000");
+}  // namespace
+
+// A fetched feed becomes the subscription's events; the next fetch replaces
+// them, so a meeting cancelled in Outlook disappears here too.
+TEST_F(AppControllerTest, ASubscriptionFeedIsMirroredAndReplaced) {
+  EXPECT_EQ(app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync, kRetro})), 2);
+  EXPECT_EQ(app_->events()->rowCount(), 2);
+  const QVariantMap sync = app_->eventById(QStringLiteral("sub:t1:sync-1"));
+  EXPECT_EQ(sync.value(QStringLiteral("title")).toString(), QStringLiteral("Sprint sync"));
+  EXPECT_TRUE(app_->isSubscriptionEvent(QStringLiteral("sub:t1:sync-1")));
+
+  EXPECT_EQ(app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync})), 1);
+  EXPECT_EQ(app_->events()->rowCount(), 1);
+  EXPECT_LT(app_->events()->indexOfId(QStringLiteral("sub:t1:retro-1")), 0);
+}
+
+// The user's own events are never touched by a feed.
+TEST_F(AppControllerTest, ASubscriptionFeedLeavesOwnEventsAlone) {
+  QVariantMap draft = app_->newEventDraft(9, QDate(2026, 10, 6));
+  draft["title"] = QStringLiteral("Mine");
+  app_->saveEvent(draft);
+  const QString mine = draft.value("id").toString();
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync}));
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({}));
+  EXPECT_GE(app_->events()->indexOfId(mine), 0);
+  EXPECT_EQ(app_->events()->rowCount(), 1);
+}
+
+// Outlook owns these meetings: every write path refuses them and says why.
+TEST_F(AppControllerTest, SubscriptionEventsAreReadOnly) {
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync}));
+  const QString id = QStringLiteral("sub:t1:sync-1");
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+
+  QVariantMap draft = app_->eventById(id);
+  draft["title"] = QStringLiteral("Renamed");
+  app_->saveEvent(draft);
+  app_->updateEvent(id, 14, 15, QDate(2026, 10, 6));
+  app_->deleteEvent(id);
+  app_->moveOccurrence(draft, 1.0, QStringLiteral("this"));
+
+  const QVariantMap after = app_->eventById(id);
+  EXPECT_EQ(after.value(QStringLiteral("title")).toString(), QStringLiteral("Sprint sync"));
+  EXPECT_DOUBLE_EQ(after.value(QStringLiteral("start")).toDouble(), 11.0);
+  EXPECT_EQ(toasts.count(), 4);
+}
+
+TEST_F(AppControllerTest, NotACalendarIsAnError) {
+  QString error;
+  EXPECT_EQ(app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), QByteArray("<html>login</html>"), &error), -1);
+  EXPECT_FALSE(error.isEmpty());
+  EXPECT_EQ(app_->events()->rowCount(), 0);
+}
+
+TEST_F(AppControllerTest, RemovingASubscriptionTakesItsEvents) {
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync}));
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t2"), feed({kRetro}));
+  app_->removeCalendarSubscription(QStringLiteral("t1"));
+  EXPECT_LT(app_->events()->indexOfId(QStringLiteral("sub:t1:sync-1")), 0);
+  EXPECT_GE(app_->events()->indexOfId(QStringLiteral("sub:t2:retro-1")), 0);
+}
+
+// Outlook occurrences go through the same replace-and-read-only path.
+TEST_F(AppControllerTest, DesktopOutlookEventsAreMirroredReadOnly) {
+  heap::cal::OutlookItem it;
+  it.key = QStringLiteral("G1-202610061100");
+  it.subject = QStringLiteral("Sprint sync");
+  it.start = QDateTime(QDate(2026, 10, 6), QTime(11, 0));
+  it.end = QDateTime(QDate(2026, 10, 6), QTime(11, 30));
+  EXPECT_EQ(app_->replaceSubscriptionEvents(QStringLiteral("outlook"), heap::cal::outlookEvents({it}, QStringLiteral("outlook"))), 1);
+  const QString id = QStringLiteral("sub:outlook:G1-202610061100");
+  ASSERT_GE(app_->events()->indexOfId(id), 0);
+  app_->deleteEvent(id);
+  EXPECT_GE(app_->events()->indexOfId(id), 0);
+  EXPECT_EQ(app_->replaceSubscriptionEvents(QStringLiteral("outlook"), {}), 0);
+  EXPECT_LT(app_->events()->indexOfId(id), 0);
+}
+
+TEST_F(AppControllerTest, ABadLinkIsRefusedBeforeAnythingIsStored) {
+  const QVariantMap r = app_->addCalendarSubscription(QStringLiteral("Work"), QStringLiteral("ftp://example.com/cal.ics"), 15);
+  EXPECT_FALSE(r.value(QStringLiteral("ok")).toBool());
+  EXPECT_TRUE(app_->calendarSubscriptions().isEmpty());
+}
 
 // ─── Shortcut catalog ─────────────────────────────────────────────────
 

@@ -756,6 +756,15 @@ QJsonObject profileToJson(const Profile& p) {
   if(!p.savedViews.isEmpty()) {
     o["savedViews"] = heap::savedviews::listToJson(p.savedViews);
   }
+  // Optional too, and no schema bump: a build that does not know the key
+  // carries it through a save in `extra` (PLAT-26).
+  if(!p.statusLog.isEmpty()) {
+    QJsonArray log;
+    for(const StatusChange& c : p.statusLog) {
+      log.append(QJsonObject{{"task", c.taskId}, {"from", c.from}, {"to", c.to}, {"at", dtToStr(c.at)}});
+    }
+    o["statusLog"] = log;
+  }
   return o;
 }
 
@@ -786,6 +795,14 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
   p.docPages = docPagesFromJson(o["docPages"].toArray());
   p.activeDocPageId = o["activeDocPageId"].toString();
   p.savedViews = heap::savedviews::listFromJson(o["savedViews"].toArray());
+  for(const auto& v : o["statusLog"].toArray()) {
+    const QJsonObject c = v.toObject();
+    const StatusChange change{
+        .taskId = c["task"].toString(), .from = c["from"].toString(), .to = c["to"].toString(), .at = dtFromStr(c["at"].toString())};
+    if(!change.taskId.isEmpty() && change.at.isValid()) {
+      p.statusLog.append(change);
+    }
+  }
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
   }
@@ -805,6 +822,7 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
                                      QStringLiteral("docPages"),
                                      QStringLiteral("activeDocPageId"),
                                      QStringLiteral("savedViews"),
+                                     QStringLiteral("statusLog"),
                                      QStringLiteral("events")};
   for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
     if(!kKnown.contains(it.key())) {

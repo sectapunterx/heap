@@ -15,14 +15,26 @@ ctest --test-dir build/tests --output-on-failure
 
 ## Workflow
 
-Work on a branch off `master` named `heap-<ticket>_<short-desc>` and open the PR against `master`. Keep the tree
-green.
+Two long-lived branches:
+
+- **`master`** — the stable line. Every release is tagged here. It only takes a PR from `feature` (a release,
+  merged with a merge commit so the two branches keep one history) or from `hotfix/*` (an urgent fix to the
+  released version, which is then merged back into `feature`). Any other PR into `master` fails the
+  `branch flow` job and with it `ci`.
+- **`feature`** — the next release in the making. New work lands here and is tested here before it ships.
+
+Work on a branch off `feature` named `heap-<ticket>_<short-desc>` and open the PR against `feature` (squash-merged).
+Keep the tree green. Both branches are protected by repository rulesets: no direct pushes, no force-pushes, no
+deletion, and a green `ci` check before a merge.
+
+To release: open a PR `feature` → `master`, merge it once `ci` is green, then bump the version on `master` and
+push the `vX.Y.Z` tag (see `release.yml`).
 
 ## CI
 
 CI (`.github/workflows/ci.yml`) checks clang-format and clang-tidy on the changed lines, builds and tests on Linux,
 Windows and macOS, runs an ASan/UBSan pass, a qmllint ratchet and actionlint, and smoke-tests the app — the `ci`
-check gates the merge into `master`. A PR that only touches docs or Markdown skips the build. A nightly run
+check gates the merge into `master` and `feature`. A PR that only touches docs or Markdown skips the build. A nightly run
 (`nightly.yml`) adds the next Qt, fuzzing, coverage and a full release build. The website in `site/` has its own
 workflow (`pages.yml`); see [`site/README.md`](site/README.md).
 

@@ -205,4 +205,32 @@ TestCase {
         ed.close();
         AppController.deletePerson(pid);
     }
+
+    // APP-118: a meeting from a calendar link opens read-only — no field takes
+    // input, Save and Delete are gone, and the join link is a button.
+    function test_a_subscription_meeting_opens_read_only() {
+        const ed = make('import TodoCpp; EventEditor { }');
+        const d = AppController.newEventDraft(10, new Date());
+        d.id = "sub:probe:meeting-1";
+        d.title = "Sprint sync";
+        d.url = "https://talk.example.com/j/123";
+        ed.showForDraft(d);
+        tryVerify(() => ed.opened);
+        verify(ed.readOnly);
+        verify(findChild(ed, "event-readonly-banner").visible);
+        verify(!findChild(ed, "event-title").enabled);
+        verify(findChild(ed, "event-notes").readOnly);
+        verify(findChild(ed, "event-join").visible);
+        ed.close();
+    }
+
+    function test_an_own_event_is_editable() {
+        const ed = make('import TodoCpp; EventEditor { }');
+        ed.showForDraft(AppController.newEventDraft(10, new Date()));
+        tryVerify(() => ed.opened);
+        verify(!ed.readOnly);
+        verify(!findChild(ed, "event-readonly-banner").visible);
+        verify(findChild(ed, "event-title").enabled);
+        ed.close();
+    }
 }

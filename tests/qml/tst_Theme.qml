@@ -532,19 +532,19 @@ TestCase {
                 verify(Presets.isHex(c[tok.key]), t.id + "." + tok.key + " = " + c[tok.key]);
         }
         // a translucent border fades by alpha, not by turning opaque
-        const b = Presets.soften(Presets.builtin("minimal-dark").colors).border;
-        verify(parseInt(b.slice(1, 3), 16) < 0x0f, "translucent border got " + b);
+        const b = Presets.soften(Presets.builtin("heap-ink").colors).border;
+        verify(parseInt(b.slice(1, 3), 16) < 0x14, "translucent border got " + b);
     }
 
     // High contrast must still strengthen a theme whose borders are
-    // translucent hairlines (Minimal): lightening a 6% white changes nothing.
+    // translucent hairlines (heap. ink): lightening a 6% white changes nothing.
     function test_high_contrast_strengthens_translucent_borders() {
         const saved = AppController.appSettingsJson;
         const savedTheme = AppController.theme;
         AppController.theme = "dark";
-        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "minimal-dark" } });
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-ink" } });
         const normal = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
-        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "minimal-dark", contrast: "high" } });
+        AppController.appSettingsJson = JSON.stringify({ appearance: { darkPreset: "heap-ink", contrast: "high" } });
         const high = _contrast(Qt.tint(Theme.bg, Theme.border), Theme.bg);
         const alpha = Theme.border.a;
         AppController.appSettingsJson = saved;
@@ -557,8 +557,9 @@ TestCase {
     // A built-in that was retired resolves to its replacement, so a user who
     // had picked it keeps a theme of the same kind instead of the slot default.
     function test_retired_presets_resolve_to_their_replacement() {
-        const cases = { "minimal-light": "heap-light", "muted-mauve": "stone", "graphite": "ash",
-                        "moss-mono": "sage", "nocturne": "slate" };
+        const cases = { "minimal-light": "heap-light", "minimal-dark": "crimson", "ash": "graphite",
+                        "stone": "ochre", "slate": "graphite", "sage": "fjord", "muted-mauve": "dusk",
+                        "moss-mono": "fjord", "nocturne": "dusk" };
         for (const old in cases) {
             verify(!Presets.builtin(old), old + " is still a built-in");
             compare(Presets.resolve(old, [], "dark").id, cases[old], old);

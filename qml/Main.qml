@@ -336,9 +336,12 @@ ApplicationWindow {
         win.seedStarterDocs();
         if (typeof INITIAL_VIEW !== "undefined" && INITIAL_VIEW && INITIAL_VIEW.length > 0)
             AppController.currentView = INITIAL_VIEW;
-        // First run: greet the user once the overlay is ready.
+        // First run: greet the user once the overlay is ready. Otherwise, on
+        // the first launch of a week, what moved last week (WEAK PECAP).
         if (!AppController.welcomeSeen)
             Qt.callLater(welcome.open);
+        else
+            Qt.callLater(weeklyRecap.showIfDue);
     }
 
     // Close-to-tray: on platforms that have a tray icon (Windows/macOS via the
@@ -470,6 +473,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
+        || weeklyRecap.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -1339,6 +1343,7 @@ ApplicationWindow {
         case "search.focus":         win._focusSearch(); break;
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
+        case "recap.open":           weeklyRecap.showNow(); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1708,6 +1713,20 @@ ApplicationWindow {
         onActivated: goToDatePopup.openAt(AppController.selectedDate, win.contentItem)
     }
 
+    // The Monday recap: last week's column moves (WEAK PECAP). Opens itself
+    // on the first launch of a week, and when the app is left running into
+    // Monday; the palette opens it any time.
+    WeeklyRecapDialog {
+        id: weeklyRecap
+        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+    }
+    Connections {
+        target: AppController
+        function onTodayChanged() {
+            if (AppController.welcomeSeen && !win._overlayOpen) weeklyRecap.showIfDue();
+        }
+    }
+
     // Jump straight to a day rather than paging to it. Anchored to the window
     // rather than to a view, because the view under it is swapped out.
     DatePickerPopup {
@@ -1718,6 +1737,17 @@ ApplicationWindow {
         x: parent ? Math.round((parent.width - width) / 2) : 0
         y: parent ? Math.round((parent.height - height) / 3) : 0
         onPicked: (value) => AppController.selectedDate = value
+    }
+
+    // Type to search on the board (APP-117): a letter that is not one of the
+    // board's own shortcuts, typed with no text field focused, starts a search
+    // in the top bar. Esc clears it; Return hands the keyboard back to the
+    // board cursor, which walks what the search left.
+    TypeAhead {
+        id: boardTypeAhead
+        // A card's menu is a popup, so _viewKeysBlocked already covers it.
+        enabled: AppController.currentView === "board" && !win._viewKeysBlocked
+        onTyped: (text) => topBar.typeAhead(text)
     }
 
     component BoardKey: Shortcut {

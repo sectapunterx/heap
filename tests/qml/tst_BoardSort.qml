@@ -169,4 +169,40 @@ TestCase {
         p.sortMode = "";
         compare(p.sortMode, "manual");
     }
+
+    // APP-117: by ID, in natural order — APP-9 before APP-10.
+    function test_id_sorts_naturally() {
+        seedCard("SORTN-10", {});
+        seedCard("SORTN-9", {});
+        seedCard("SORTN-100", {});
+
+        const p = makeProxy();
+        p.sortMode = "id";
+
+        compare(idsOf(p), ["SORTN-9", "SORTN-10", "SORTN-100"]);
+    }
+
+    // "-desc" turns any sort round.
+    function test_desc_reverses_a_sort() {
+        seedCard("SORT-LOW", { priority: "P3" });
+        seedCard("SORT-TOP", { priority: "P0" });
+        seedCard("SORT-MID", { priority: "P2" });
+
+        const p = makeProxy();
+        p.sortMode = "priority-desc";
+
+        compare(idsOf(p), ["SORT-LOW", "SORT-MID", "SORT-TOP"]);
+    }
+
+    // Reversed or not, a card with no due date stays at the bottom.
+    function test_undated_cards_stay_last_under_due_desc() {
+        seedCard("SORT-NONE", {});
+        seedCard("SORT-EARLY", { dueAt: new Date(2027, 0, 10, 9, 0) });
+        seedCard("SORT-LATE", { dueAt: new Date(2027, 5, 10, 9, 0) });
+
+        const p = makeProxy();
+        p.sortMode = "due-desc";
+
+        compare(idsOf(p), ["SORT-LATE", "SORT-EARLY", "SORT-NONE"]);
+    }
 }

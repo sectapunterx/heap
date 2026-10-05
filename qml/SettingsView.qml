@@ -1459,6 +1459,28 @@ Item {
                         checked: !!(root.settings.notifications && root.settings.notifications.blockedDailyDigest)
                         onToggled: (checked) => root.set("notifications", "blockedDailyDigest", checked)
                     }
+                    // On unless switched off: the recap is the point of the
+                    // feature, so an absent key means yes. Read and written
+                    // through the controller; this view reloads on the change.
+                    SwitchRow {
+                        objectName: "settings-weekly-recap"
+                        label: I18n.t("settings.notif.weeklyRecap")
+                        hint: I18n.t("settings.notif.weeklyRecap.hint")
+                        checked: {
+                            try {
+                                const n = (JSON.parse(AppController.appSettingsJson || "{}") || {}).notifications;
+                                return !(n && n.weeklyRecap === false);
+                            } catch (e) {
+                                return true;
+                            }
+                        }
+                        onToggled: (checked) => {
+                            let s = {};
+                            try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                            s.notifications = Object.assign({}, s.notifications || {}, { weeklyRecap: checked });
+                            AppController.appSettingsJson = JSON.stringify(s);
+                        }
+                    }
                     SwitchRow {
                         label: I18n.t("settings.notif.soundOnPing")
                         checked: !!(root.settings.notifications && root.settings.notifications.soundOnPing)
@@ -1945,6 +1967,11 @@ Item {
                 color: Theme.warning
                 font.pixelSize: Theme.fsSm
             }
+
+            // What integrations do and do not do, before any of them.
+            IntegrationsInfoCard {}
+            // Outlook / Google / iCloud meetings by link (APP-118).
+            CalendarSubscriptionsCard {}
 
             // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
             SectionCard {

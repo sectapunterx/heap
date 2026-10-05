@@ -23,6 +23,7 @@
 #include <vector>
 
 class QNetworkAccessManager;
+class QThread;
 
 namespace heap::chrono {
 class ChronoParser;
@@ -126,6 +127,8 @@ class AppController : public QObject {
   Q_PROPERTY(bool demoActive READ demoActive NOTIFY onboardingChanged)
 
   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
+  // Calendars read from a link (APP-118), with how their last fetch went.
+  Q_PROPERTY(QVariantList calendarSubscriptions READ calendarSubscriptions NOTIFY calendarSubscriptionsChanged)
   Q_PROPERTY(QString activeProfileId READ activeProfileId WRITE setActiveProfileId NOTIFY activeProfileChanged)
 
   Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
@@ -310,6 +313,10 @@ class AppController : public QObject {
   Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString());
   Q_INVOKABLE void renameNote(const QString& id, const QString& title);
   Q_INVOKABLE void deleteNote(const QString& id);
+  // APP-116: appends note `sourceId`'s text below note `targetId`'s and
+  // removes the source; links to the source now point at the target. One
+  // undo step. False when either is missing or they are the same note.
+  Q_INVOKABLE bool mergeNotes(const QString& sourceId, const QString& targetId);
   Q_INVOKABLE void setNoteBody(const QString& id, const QString& body);
   Q_INVOKABLE void setNotePinned(const QString& id, bool pinned);
   Q_INVOKABLE void moveNoteToFolder(const QString& id, const QString& folder);
@@ -862,6 +869,37 @@ class AppController : public QObject {
   // "<install id>.heap": what qualifies this install's event ids as .ics UIDs,
   // so another heap's ev-2 is not taken for ours (TIME-25).
   QString icsUidDomain() const;
+
+  // ── Calendar subscriptions (APP-118) ──
+  // A calendar heap reads from a link — Outlook's published ICS address, or
+  // Google's / iCloud's — and refreshes on its own. Read-only: its events are
+  // "sub:<id>:…" and every event write refuses them. The link is a secret
+  // (anyone holding it reads the calendar) and lives in the keychain; the
+  // list itself is settings.calendars.subscriptions [{ id, name, minutes }].
+  //
+  // Each entry: { id, name, minutes, events, lastSync (ISO, "" = never),
+  // error ("" = fine), busy }.
+  QVariantList calendarSubscriptions() const;
+  // { ok, id } or { ok: false, error }. Fetches straight away.
+  Q_INVOKABLE QVariantMap addCalendarSubscription(const QString& name, const QString& link, int minutes);
+  // The Outlook installed on this computer, read over COM (Windows): the way
+  // in when an Exchange server will not publish a calendar as a link. Same
+  // read-only subscription, kind "outlook", no link.
+  Q_INVOKABLE bool outlookDesktopAvailable() const;
+  Q_INVOKABLE QVariantMap addOutlookDesktopCalendar(int minutes);
+  // Drops the subscription, its link and the events it brought.
+  Q_INVOKABLE void removeCalendarSubscription(const QString& id);
+  Q_INVOKABLE void refreshCalendarSubscription(const QString& id);
+  Q_INVOKABLE bool isSubscriptionEvent(const QString& id) const;
+  // The name of the calendar an event came from, "" for the user's own.
+  Q_INVOKABLE QString subscriptionNameOf(const QString& eventId) const;
+  // What a fetch does with the body it got, without the network: parse, then
+  // replace the subscription's events. Returns how many events it now holds,
+  // or -1 with `error` set when the text is not a calendar.
+  int applyCalendarSubscriptionFeed(const QString& id, const QByteArray& body, QString* error = nullptr);
+  // Replaces subscription `id`'s events with `incoming` (already prefixed).
+  // Returns how many single events and series it now holds.
+  int replaceSubscriptionEvents(const QString& id, const QVector<CalEvent>& incoming);
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).
@@ -1051,6 +1089,18 @@ class AppController : public QObject {
   // Weekly "what I shipped" report (HEAP-78): done tasks from the last 7 days
   // with tracked time, copied to the clipboard as Markdown.
   Q_INVOKABLE void copyWeeklyReportToClipboard();
+  // The Monday recap (WEAK PECAP): last week's column moves, grouped by
+  // from -> to. { weekStart, weekEnd ("yyyy-MM-dd", end exclusive),
+  // groups: [{ from, fromName, fromColor, to, toName, toColor,
+  // tasks: [{ id, title, priority }] }] }, groups in board column order.
+  Q_INVOKABLE QVariantMap weeklyRecap() const;
+  // The same for the week before the one `today` falls in.
+  Q_INVOKABLE QVariantMap weeklyRecapFor(const QDate& today) const;
+
+  // Every recorded move of the active profile, oldest first.
+  QVector<StatusChange> statusLog() const {
+    return m_statusLog;
+  }
   Q_INVOKABLE QString importProfileFromJson(const QString& jsonText, bool activate = true);
   Q_INVOKABLE QString importProfileFromFile(const QUrl& fileUrl, bool activate = true);
 
@@ -1176,6 +1226,7 @@ class AppController : public QObject {
   void flushEditorsRequested();
   void activeDocPageChanged();
   void appSettingsJsonChanged();
+  void calendarSubscriptionsChanged();
   void statusesChanged();
   void pendingUndoChanged();
   void onboardingChanged();
@@ -1376,6 +1427,12 @@ class AppController : public QObject {
   // The active profile's saved views and savedViewCounts()' cache. The count
   // signal is coalesced: a bulk edit fires the model's signals per row.
   QVector<heap::savedviews::SavedView> m_savedViews;
+  // Column moves of the active profile (WEAK PECAP), and the status each task
+  // was last seen in, which is how a move is noticed whatever path made it.
+  QVector<StatusChange> m_statusLog;
+  QHash<QString, QString> m_knownStatus;
+  void rememberStatuses();
+  void noteStatusMoves(int first, int last);
   mutable QVariantMap m_savedViewCounts;
   mutable bool m_savedViewCountsDirty = true;
   QTimer m_savedViewCountsTimer;
@@ -1747,6 +1804,28 @@ class AppController : public QObject {
   // Used by refreshOAuthToken; providers are rebuilt whenever a secret changes,
   // so it cannot borrow a provider's own manager.
   QNetworkAccessManager* m_oauthNam = nullptr;
+
+  // Calendar subscriptions: the fetcher, the minute tick that decides who is
+  // due, and per-subscription state that is not worth saving.
+  struct CalSubState {
+    QDateTime lastAttempt;
+    QDateTime lastSync;
+    QString error;
+    bool busy = false;
+  };
+
+  QNetworkAccessManager* m_calNam = nullptr;
+  QTimer* m_calTimer = nullptr;
+  // The worker reading the desktop Outlook; waited for on exit.
+  QThread* m_outlookThread = nullptr;
+  QHash<QString, CalSubState> m_calSubState;
+  QSet<QString> m_calSubSecretsLoaded;
+  QVariantList calendarSubscriptionSettings() const;
+  void writeCalendarSubscriptionSettings(const QVariantList& list);
+  void applyCalendarSubscriptions();
+  void fetchCalendarSubscription(const QString& id);
+  // True (and says so) when `id` or `masterId` is a subscription's event.
+  bool refuseSubscriptionEdit(const QString& id, const QString& masterId = QString());
   // Providers whose refresh is already in flight — a sync and a push firing
   // together must not both spend the (single-use, rotated) refresh token.
   QSet<QString> m_refreshing;

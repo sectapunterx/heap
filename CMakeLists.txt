@@ -202,6 +202,7 @@ qt_add_library(heap_core STATIC
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
+    src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
@@ -245,6 +246,8 @@ qt_add_library(heap_core STATIC
     src/update/Updater.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
+        # Meetings from the desktop Outlook over COM (APP-118); a stub elsewhere.
+        $<IF:$<PLATFORM_ID:Windows>,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_win.cpp,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_stub.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/MacWindow.mm>
 )
@@ -285,6 +288,9 @@ qt_add_qml_module(heap_core
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
+        qml/IntegrationsInfoCard.qml
+        qml/CalendarSubscriptionsCard.qml
+        qml/WeeklyRecapDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml
@@ -385,6 +391,7 @@ qt_add_qml_module(heap_core
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
         src/platform/AltGrGuard.h
+        src/TypeAhead.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
         src/integrations/GithubProvider.h
@@ -426,6 +433,8 @@ target_link_libraries(heap_core PUBLIC
 # DPAPI (CryptProtectData) wraps the tokens in the secrets.json fallback.
 if (WIN32)
     target_link_libraries(heap_core PUBLIC crypt32)
+    # COM late binding for the desktop Outlook calendar (OutlookDesktop_win.cpp).
+    target_link_libraries(heap_core PUBLIC ole32 oleaut32 uuid)
 endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)

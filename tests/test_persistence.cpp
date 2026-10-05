@@ -154,6 +154,54 @@ TEST_F(PersistenceTest, TrackedSecondsSurvivesReload) {
   EXPECT_EQ(app2.tasks()->items().at(row).trackedSeconds, 4242);
 }
 
+// APP-1: notes saved as "Untitled note" before their titles followed their
+// text are named after it on the next load; a note somebody named is not.
+TEST_F(PersistenceTest, UntitledNotesAreNamedAfterTheirTextOnLoad) {
+  {
+    AppController app;
+    Note untitled;
+    untitled.id = QStringLiteral("note-old");
+    untitled.title = QStringLiteral("Untitled note");
+    untitled.body = QStringLiteral("\n- Groceries for Friday\nmilk");
+    Note named;
+    named.id = QStringLiteral("note-named");
+    named.title = QStringLiteral("Recipes");
+    named.body = QStringLiteral("Pancakes\nflour");
+    app.notes()->reset({untitled, named});
+    app.setCrumbUser(QStringLiteral("arm-save"));
+    app.flushSave();
+  }
+  AppController app2;
+  const auto title = [&](const char* id) {
+    const int row = app2.notes()->indexOfId(QString::fromLatin1(id));
+    return row >= 0 ? app2.notes()->items().at(row).title : QString();
+  };
+  EXPECT_EQ(title("note-old"), QStringLiteral("Groceries for Friday"));
+  EXPECT_EQ(title("note-named"), QStringLiteral("Recipes"));
+}
+
+// WEAK PECAP: the status log is the profile's, so it survives a restart.
+TEST_F(PersistenceTest, StatusLogSurvivesReload) {
+  {
+    AppController app;
+    Task t;
+    t.id = QStringLiteral("LOG-1");
+    t.title = QStringLiteral("moves");
+    t.status = QStringLiteral("todo");
+    t.priority = QStringLiteral("P2");
+    app.tasks()->reset({t});
+    app.moveTaskTo(QStringLiteral("LOG-1"), QStringLiteral("prog"), QString());
+    app.flushSave();
+  }
+  AppController app2;
+  const QVector<StatusChange> log = app2.statusLog();
+  ASSERT_FALSE(log.isEmpty());
+  EXPECT_EQ(log.constLast().taskId, QStringLiteral("LOG-1"));
+  EXPECT_EQ(log.constLast().from, QStringLiteral("todo"));
+  EXPECT_EQ(log.constLast().to, QStringLiteral("prog"));
+  EXPECT_TRUE(log.constLast().at.isValid());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

@@ -10,7 +10,9 @@
 #include "cal/EventClamp.h"
 #include "cal/EventSpan.h"
 #include "cal/IcsCodec.h"
+#include "cal/IcsSubscription.h"
 #include "cal/Occurrences.h"
+#include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "diag/IssueReport.h"
@@ -37,6 +39,7 @@
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
 #include "query/TaskQuery.h"
+#include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
@@ -63,11 +66,14 @@
 #include <QKeySequence>
 #include <QLocale>
 #include <QNetworkAccessManager>
+#include <QNetworkReply>
+#include <QNetworkRequest>
 #include <QPair>
 #include <QSaveFile>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
+#include <QThread>
 #include <QTime>
 #include <QUrl>
 #include <QUrlQuery>
@@ -76,6 +82,7 @@
 #include <algorithm>
 #include <cmath>
 #include <iterator>
+#include <memory>
 #include <optional>
 #include <utility>
 
@@ -221,6 +228,21 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"onboarding.freshUndone", {"Demo content restored", "Демо-данные возвращены"}},
       {"notes.deleted", {"Note deleted: %1", "Заметка удалена: %1"}},
       {"notes.restored", {"Note restored: %1", "Заметка восстановлена: %1"}},
+      {"calsub.readOnly", {"“%1” comes from the calendar “%2” — change it there", "«%1» из календаря «%2» — меняйте его там"}},
+      {"calsub.badLink",
+       {"Not a calendar link: it should start with https:// or webcal://",
+        "Это не ссылка на календарь: она должна начинаться с https:// или webcal://"}},
+      {"calsub.notCalendar", {"The link answered, but not with a calendar", "Ссылка ответила, но это не календарь"}},
+      {"calsub.tooBig", {"The calendar is larger than 20 MB", "Календарь больше 20 МБ"}},
+      {"calsub.noLink",
+       {"The link is not in the keychain any more — add the calendar again",
+        "Ссылки больше нет в хранилище ключей — добавьте календарь заново"}},
+      {"calsub.defaultName", {"Outlook calendar", "Календарь Outlook"}},
+      {"calsub.desktopName", {"Outlook on this computer", "Outlook на этом компьютере"}},
+      {"calsub.noDesktop", {"No Outlook on this computer answers", "На этом компьютере Outlook не отвечает"}},
+      {"calsub.desktopTwice", {"Outlook on this computer is already added", "Outlook этого компьютера уже добавлен"}},
+      {"notes.merged", {"“%1” merged into “%2”", "«%1» добавлена в «%2»"}},
+      {"notes.undo.merge", {"Merge undone: %1", "Объединение отменено: %1"}},
       {"docs.untitledPage", {"Untitled page", "Без названия"}},
       {"docs.undo.deletePage", {"Page deleted", "Страница удалена"}},
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
@@ -668,6 +690,24 @@ AppController::AppController(QObject* parent) :
   connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::dataChanged, this, dropStatusCounts);
+  // Status moves for the Monday recap, noticed the same way: from the model,
+  // so a drag, the editor, a bulk move, a sync and an undo are all seen.
+  connect(&m_tasks, &QAbstractItemModel::modelReset, this, [this]() {
+    rememberStatuses();
+  });
+  connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, [this](const QModelIndex&, int first, int last) {
+    for(int r = first; r <= last && r < m_tasks.items().size(); ++r) {
+      m_knownStatus.insert(m_tasks.items().at(r).id, m_tasks.items().at(r).status);
+    }
+  });
+  connect(&m_tasks,
+          &QAbstractItemModel::dataChanged,
+          this,
+          [this](const QModelIndex& topLeft, const QModelIndex& bottomRight, const QList<int>& roles) {
+            if(roles.isEmpty() || roles.contains(TaskModel::StatusRole)) {
+              noteStatusMoves(topLeft.row(), bottomRight.row());
+            }
+          });
   wireSavedViews();
 
   // A fresh install speaks the system's language (a saved one overrides it in
@@ -798,7 +838,14 @@ AppController::AppController(QObject* parent) :
   applyIntegrationSettings();
   connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
     applyIntegrationSettings();
+    applyCalendarSubscriptions();
   });
+  // Calendar subscriptions (APP-118): a minute tick fetches whichever is due.
+  m_calTimer = new QTimer(this);
+  m_calTimer->setInterval(60 * 1000);
+  connect(m_calTimer, &QTimer::timeout, this, &AppController::applyCalendarSubscriptions);
+  m_calTimer->start();
+  applyCalendarSubscriptions();
   connect(this, &AppController::activeProfileChanged, this, [this]() {
     if(m_gitWatcher) {
       m_gitWatcher->setPrefixes(collectPrefixes());
@@ -864,6 +911,12 @@ AppController::~AppController() {
     group->abandon();
   }
   m_undoGroups.clear();
+  // An Outlook read still running would call back into a dead controller.
+  if(m_outlookThread != nullptr) {
+    m_outlookThread->wait();
+    delete m_outlookThread;
+    m_outlookThread = nullptr;
+  }
   flushSave();
 }
 
@@ -1058,6 +1111,32 @@ QString firstH1(const QString& body) {
   return line.mid(2).trimmed();
 }
 
+// The title a note's text suggests: its leading H1, else its first line that
+// has words in it, with the Markdown markers in front taken off ("- [ ] ",
+// "> ", "## ") and cut to 60 characters. Empty when the body has no text.
+QString titleFromBody(const QString& body) {
+  const QString h1 = firstH1(body);
+  if(!h1.isEmpty()) {
+    return h1.left(60).trimmed();
+  }
+  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
+  for(const QString& raw : body.split(QLatin1Char('\n'))) {
+    QString line = raw.trimmed();
+    line.remove(kMarkers);
+    line = line.trimmed();
+    if(!line.isEmpty()) {
+      return line.left(60).trimmed();
+    }
+  }
+  return {};
+}
+
+// The title a note gets when nobody named it, in either language: a profile
+// written in one and opened in the other still has the other's word.
+bool isPlaceholderNoteTitle(const QString& title) {
+  return title.isEmpty() || title == QStringLiteral("Untitled note") || title == QStringLiteral("Без названия");
+}
+
 // `body` with its leading H1 replaced by `title`.
 QString withH1(const QString& body, const QString& title) {
   qsizetype start = 0;
@@ -1134,7 +1213,8 @@ void AppController::setNotesState(const QString& v) {
 QString AppController::createActiveNote(const QString& title) {
   Note n;
   n.id = QStringLiteral("note-") + QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
-  n.title = title.trimmed().isEmpty() ? tr_("notes.untitled") : title.trimmed();
+  const QString fromText = titleFromBody(m_notesState);
+  n.title = !title.trimmed().isEmpty() ? title.trimmed() : (!fromText.isEmpty() ? fromText : tr_("notes.untitled"));
   n.created = QDateTime::currentDateTime();
   n.updated = n.created;
   n.body = m_notesState;
@@ -1149,9 +1229,9 @@ void AppController::adoptOrphanNotesState() {
   if(m_notes.indexOfId(m_activeNoteId) >= 0 || m_notesState.trimmed().isEmpty()) {
     return;
   }
-  // Untitled rather than named after its first line: the text is adopted
-  // mid-typing, so the first line is whatever had been typed 250 ms in. The
-  // list shows an excerpt of the body under the title anyway.
+  // Named after what had been typed so far; the title keeps following the
+  // first line as typing goes on (syncActiveNoteBody), so the half-typed
+  // word the adoption caught does not stick.
   createActiveNote(QString());
 }
 
@@ -1164,14 +1244,21 @@ void AppController::syncActiveNoteBody() {
   if(n.body == m_notesState) {
     return;
   }
-  // The title follows the note's H1 while the two agree: a new note opens as
-  // "# Untitled note", and retyping that heading left the list saying
-  // "Untitled note" forever. Only while nothing links to the note by its
-  // title, which an automatic rename would silently break.
-  const QString wasH1 = firstH1(n.body);
-  const QString nowH1 = firstH1(m_notesState);
-  if(!nowH1.isEmpty() && wasH1 == n.title && nowH1 != n.title && heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
-    n.title = nowH1;
+  // The title follows the note's text (its H1, else its first line) while
+  // the two agree, and names a note nobody named: a new note opens as
+  // "# Untitled note", retyping that heading left the list saying "Untitled
+  // note" forever, and a note started by typing into the editor had no
+  // heading to follow at all, so every one of them was "Untitled note"
+  // (APP-1). Only while nothing links to the note by its title, which an
+  // automatic rename would silently break.
+  // A title that came from the H1 stops following once the heading is gone:
+  // the user named that note, and its first line is just text.
+  const QString was = titleFromBody(n.body);
+  const QString now = titleFromBody(m_notesState);
+  const bool followed = was == n.title && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
+  if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title)) &&
+     heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
+    n.title = now;
   }
   n.body = m_notesState;
   n.updated = QDateTime::currentDateTime();
@@ -1293,6 +1380,55 @@ void AppController::deleteNote(const QString& id) {
   }
   scheduleSave();
   emit undoableToast(tr_("notes.deleted").arg(title), 8);
+}
+
+bool AppController::mergeNotes(const QString& sourceId, const QString& targetId) {
+  if(sourceId == targetId || m_notes.indexOfId(sourceId) < 0 || m_notes.indexOfId(targetId) < 0) {
+    return false;
+  }
+  // Typing still in the editor belongs to its note before either text moves.
+  emit aboutToChangeActiveNote();
+  syncActiveNoteBody();
+  const QVector<Note> before = m_notes.items();
+  const Note source = before.at(m_notes.indexOfId(sourceId));
+  Note target = before.at(m_notes.indexOfId(targetId));
+  {
+    const UndoScope scope(this, tr_("notes.undo.merge").arg(source.title));
+    // The target keeps the one H1; the source's heading becomes a section
+    // under it, so what was merged in can still be found and linked to.
+    QString added = source.body;
+    if(firstH1(added).isEmpty()) {
+      added = QStringLiteral("## %1\n\n%2").arg(source.title, added.trimmed());
+    } else {
+      added = QStringLiteral("#") + added.trimmed();
+    }
+    QString body = target.body;
+    while(body.endsWith(QLatin1Char('\n'))) {
+      body.chop(1);
+    }
+    target.body = body.isEmpty() ? added + QLatin1Char('\n') : body + QStringLiteral("\n\n") + added + QLatin1Char('\n');
+    target.updated = QDateTime::currentDateTime();
+    m_notes.upsert(target);
+    m_notes.removeById(sourceId);
+    // [[Source]] anywhere (the target included) now means the target.
+    const QVector<Note> merged = m_notes.items();
+    for(const Note& other : merged) {
+      const QString linked = heap::notes::retargetLinksTo(other.body, other.id, before, sourceId, source.title, target.title);
+      if(linked != other.body) {
+        Note changed = other;
+        changed.body = linked;
+        m_notes.upsert(changed);
+      }
+    }
+    if(m_activeNoteId == sourceId) {
+      m_activeNoteId = targetId;
+      emit activeNoteChanged();
+    }
+  }
+  reconcileActiveNote();
+  scheduleSave();
+  emit undoableToast(tr_("notes.merged").arg(source.title, target.title), 8);
+  return true;
 }
 
 void AppController::reconcileActiveNote() {
@@ -2421,6 +2557,9 @@ QVariantMap AppController::newEventDraft(double startHour, const QDate& date) co
 }
 
 void AppController::saveEvent(const QVariantMap& draft) {
+  if(refuseSubscriptionEdit(draft.value("id").toString(), draft.value("masterId").toString())) {
+    return;
+  }
   // Creating or editing an event is one undoable step, like a task edit.
   const UndoScope scope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   CalEvent e;
@@ -2509,6 +2648,9 @@ void AppController::storeEvent(CalEvent e) {
 }
 
 void AppController::updateEvent(const QString& id, double start, double end, const QDate& date) {
+  if(refuseSubscriptionEdit(id)) {
+    return;
+  }
   const int row = m_events.indexOfId(id);
   if(row < 0) {
     return;
@@ -2758,6 +2900,9 @@ QVariantMap AppController::eventById(const QString& id) const {
 }
 
 void AppController::saveOccurrence(const QVariantMap& draft, const QString& scope) {
+  if(refuseSubscriptionEdit(draft.value("id").toString(), draft.value("masterId").toString())) {
+    return;
+  }
   const UndoScope editScope(this, tr_("event.editUndone").arg(draft.value("title").toString()));
   const QString masterId = draft.value("masterId").toString();
   const QDate original = draft.value("originalDate").toDate();
@@ -3092,6 +3237,9 @@ void AppController::saveOccurrence(const QVariantMap& draft, const QString& scop
 }
 
 void AppController::moveOccurrence(const QVariantMap& occurrence, double deltaHours, const QString& scope) {
+  if(refuseSubscriptionEdit(occurrence.value("id").toString(), occurrence.value("masterId").toString())) {
+    return;
+  }
   const QString id = occurrence.value("id").toString();
   if(id.isEmpty() || !std::isfinite(deltaHours)) {
     return;
@@ -3158,6 +3306,9 @@ void AppController::moveOccurrence(const QVariantMap& occurrence, double deltaHo
 }
 
 void AppController::resizeOccurrence(const QVariantMap& occurrence, double start, double end, const QString& scope) {
+  if(refuseSubscriptionEdit(occurrence.value("id").toString(), occurrence.value("masterId").toString())) {
+    return;
+  }
   const QString id = occurrence.value("id").toString();
   if(id.isEmpty() || occurrence.value("allDay").toBool()) {
     return;
@@ -3179,6 +3330,9 @@ void AppController::resizeOccurrence(const QVariantMap& occurrence, double start
 }
 
 void AppController::deleteOccurrence(const QString& masterId, const QDate& occurrenceDate, const QString& scope) {
+  if(refuseSubscriptionEdit(QString(), masterId)) {
+    return;
+  }
   const int masterRow = m_events.indexOfId(masterId);
   if(masterRow < 0) {
     return;
@@ -3264,6 +3418,329 @@ void AppController::deleteOccurrence(const QString& masterId, const QDate& occur
   m_events.upsert(master);
   emit undoableToast(tr_("event.deleted").arg(title), 5);
   scheduleSave();
+}
+
+// ── Calendar subscriptions (APP-118) ─────────────────────────────────
+
+namespace {
+constexpr int kCalSubDefaultMinutes = 15;
+constexpr qint64 kCalSubMaxBytes = 20LL * 1024 * 1024;
+const QString kCalSubSecretProvider = QStringLiteral("calsub");
+}  // namespace
+
+QVariantList AppController::calendarSubscriptionSettings() const {
+  const QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+  return settings.value(QStringLiteral("calendars")).toObject().value(QStringLiteral("subscriptions")).toArray().toVariantList();
+}
+
+void AppController::writeCalendarSubscriptionSettings(const QVariantList& list) {
+  QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+  QJsonObject calendars = settings.value(QStringLiteral("calendars")).toObject();
+  calendars.insert(QStringLiteral("subscriptions"), QJsonArray::fromVariantList(list));
+  settings.insert(QStringLiteral("calendars"), calendars);
+  setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+}
+
+QVariantList AppController::calendarSubscriptions() const {
+  QHash<QString, int> counts;
+  for(const CalEvent& e : m_events.items()) {
+    const QString sub = heap::cal::subscriptionOfEventId(e.id);
+    if(!sub.isEmpty() && e.masterId.isEmpty()) {
+      counts[sub]++;
+    }
+  }
+  QVariantList out;
+  for(const QVariant& v : calendarSubscriptionSettings()) {
+    QVariantMap m = v.toMap();
+    const QString id = m.value(QStringLiteral("id")).toString();
+    const CalSubState st = m_calSubState.value(id);
+    m.insert(QStringLiteral("minutes"), m.value(QStringLiteral("minutes"), kCalSubDefaultMinutes).toInt());
+    m.insert(QStringLiteral("kind"), m.value(QStringLiteral("kind"), QStringLiteral("link")).toString());
+    m.insert(QStringLiteral("events"), counts.value(id));
+    m.insert(QStringLiteral("lastSync"), st.lastSync.isValid() ? st.lastSync.toString(Qt::ISODate) : QString());
+    m.insert(QStringLiteral("error"), st.error);
+    m.insert(QStringLiteral("busy"), st.busy);
+    out.append(m);
+  }
+  return out;
+}
+
+QVariantMap AppController::addCalendarSubscription(const QString& name, const QString& link, int minutes) {
+  const QUrl url = heap::cal::subscriptionFetchUrl(link);
+  if(url.isEmpty()) {
+    return {{"ok", false}, {"error", tr_("calsub.badLink")}};
+  }
+  const QString id = QUuid::createUuid().toString(QUuid::WithoutBraces).left(8);
+  m_secretStore->setValue(kCalSubSecretProvider, id, url.toString(QUrl::FullyEncoded));
+  m_calSubSecretsLoaded.insert(id);
+  QVariantList list = calendarSubscriptionSettings();
+  const QString shown = name.trimmed().isEmpty() ? tr_("calsub.defaultName") : name.trimmed().left(60);
+  list.append(QVariantMap{{"id", id}, {"name", shown}, {"minutes", qBound(5, minutes > 0 ? minutes : kCalSubDefaultMinutes, 24 * 60)}});
+  writeCalendarSubscriptionSettings(list);
+  fetchCalendarSubscription(id);
+  return {{"ok", true}, {"id", id}};
+}
+
+bool AppController::outlookDesktopAvailable() const {
+  return heap::cal::outlookDesktopAvailable();
+}
+
+QVariantMap AppController::addOutlookDesktopCalendar(int minutes) {
+  if(!heap::cal::outlookDesktopAvailable()) {
+    return {{"ok", false}, {"error", tr_("calsub.noDesktop")}};
+  }
+  QVariantList list = calendarSubscriptionSettings();
+  for(const QVariant& v : std::as_const(list)) {
+    if(v.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("outlook")) {
+      return {{"ok", false}, {"error", tr_("calsub.desktopTwice")}};
+    }
+  }
+  const QString id = QStringLiteral("outlook");
+  list.append(QVariantMap{{"id", id},
+                          {"kind", "outlook"},
+                          {"name", tr_("calsub.desktopName")},
+                          {"minutes", qBound(5, minutes > 0 ? minutes : kCalSubDefaultMinutes, 24 * 60)}});
+  writeCalendarSubscriptionSettings(list);
+  fetchCalendarSubscription(id);
+  return {{"ok", true}, {"id", id}};
+}
+
+void AppController::removeCalendarSubscription(const QString& id) {
+  QVariantList list = calendarSubscriptionSettings();
+  for(qsizetype i = list.size() - 1; i >= 0; --i) {
+    if(list.at(i).toMap().value(QStringLiteral("id")).toString() == id) {
+      list.removeAt(i);
+    }
+  }
+  const QString prefix = heap::cal::subscriptionPrefix(id);
+  QStringList doomed;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.id.startsWith(prefix)) {
+      doomed << e.id;
+    }
+  }
+  for(const QString& eventId : std::as_const(doomed)) {
+    m_events.removeById(eventId);
+  }
+  m_secretStore->remove(kCalSubSecretProvider, id);
+  m_calSubSecretsLoaded.remove(id);
+  m_calSubState.remove(id);
+  writeCalendarSubscriptionSettings(list);
+  scheduleSave();
+  emit calendarSubscriptionsChanged();
+}
+
+void AppController::refreshCalendarSubscription(const QString& id) {
+  fetchCalendarSubscription(id);
+}
+
+bool AppController::isSubscriptionEvent(const QString& id) const {
+  return heap::cal::isSubscriptionEventId(id);
+}
+
+QString AppController::subscriptionNameOf(const QString& eventId) const {
+  const QString sub = heap::cal::subscriptionOfEventId(eventId);
+  if(sub.isEmpty()) {
+    return {};
+  }
+  for(const QVariant& v : calendarSubscriptionSettings()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == sub) {
+      return m.value(QStringLiteral("name")).toString();
+    }
+  }
+  return tr_("calsub.defaultName");
+}
+
+bool AppController::refuseSubscriptionEdit(const QString& id, const QString& masterId) {
+  const QString which = heap::cal::isSubscriptionEventId(id) ? id : (heap::cal::isSubscriptionEventId(masterId) ? masterId : QString());
+  if(which.isEmpty()) {
+    return false;
+  }
+  const int row = m_events.indexOfId(which);
+  const QString title = row >= 0 ? m_events.items().at(row).title : QString();
+  emit toast(tr_("calsub.readOnly").arg(title, subscriptionNameOf(which)));
+  return true;
+}
+
+void AppController::applyCalendarSubscriptions() {
+  const QVariantList list = calendarSubscriptionSettings();
+  QVector<QPair<QString, QString>> toLoad;
+  for(const QVariant& v : list) {
+    const QString id = v.toMap().value(QStringLiteral("id")).toString();
+    if(v.toMap().value(QStringLiteral("kind")).toString() == QStringLiteral("outlook")) {
+      continue;  // no link to load
+    }
+    if(!id.isEmpty() && !m_calSubSecretsLoaded.contains(id)) {
+      toLoad.append({kCalSubSecretProvider, id});
+    }
+  }
+  if(!toLoad.isEmpty()) {
+    for(const auto& key : toLoad) {
+      m_calSubSecretsLoaded.insert(key.second);
+    }
+    // The links come from the keychain asynchronously; fetch once they are in.
+    m_secretStore->load(toLoad, [this]() {
+      applyCalendarSubscriptions();
+    });
+    return;
+  }
+  const QDateTime now = QDateTime::currentDateTime();
+  for(const QVariant& v : list) {
+    const QVariantMap m = v.toMap();
+    const QString id = m.value(QStringLiteral("id")).toString();
+    const int minutes = m.value(QStringLiteral("minutes"), kCalSubDefaultMinutes).toInt();
+    const CalSubState st = m_calSubState.value(id);
+    if(!st.busy && (!st.lastAttempt.isValid() || st.lastAttempt.secsTo(now) >= qint64(minutes) * 60)) {
+      fetchCalendarSubscription(id);
+    }
+  }
+}
+
+void AppController::fetchCalendarSubscription(const QString& id) {
+  CalSubState& st = m_calSubState[id];
+  if(st.busy) {
+    return;
+  }
+  st.lastAttempt = QDateTime::currentDateTime();
+  bool desktop = false;
+  for(const QVariant& v : calendarSubscriptionSettings()) {
+    const QVariantMap m = v.toMap();
+    if(m.value(QStringLiteral("id")).toString() == id && m.value(QStringLiteral("kind")).toString() == QStringLiteral("outlook")) {
+      desktop = true;
+    }
+  }
+  if(desktop) {
+    if(m_outlookThread != nullptr) {
+      return;  // one read at a time; the next tick tries again
+    }
+    // Two weeks back (what just happened still reads as context) and three
+    // months ahead.
+    const QDateTime from = QDate::currentDate().addDays(-14).startOfDay();
+    const QDateTime to = QDate::currentDate().addDays(92).startOfDay();
+    auto result = std::make_shared<heap::cal::OutlookRead>();
+    QThread* worker = QThread::create([result, from, to]() {
+      *result = heap::cal::readOutlookCalendar(from, to);
+    });
+    m_outlookThread = worker;
+    st.busy = true;
+    emit calendarSubscriptionsChanged();
+    connect(worker, &QThread::finished, this, [this, worker, result, id]() {
+      if(m_outlookThread == worker) {
+        m_outlookThread = nullptr;
+      }
+      worker->deleteLater();
+      if(!m_calSubState.contains(id)) {
+        return;
+      }
+      CalSubState& state = m_calSubState[id];
+      state.busy = false;
+      if(result->ok) {
+        replaceSubscriptionEvents(id, heap::cal::outlookEvents(result->items, id));
+        m_calSubState[id].lastSync = QDateTime::currentDateTime();
+        m_calSubState[id].error.clear();
+      } else {
+        state.error = result->error;
+      }
+      emit calendarSubscriptionsChanged();
+    });
+    worker->start();
+    return;
+  }
+  const QUrl url = heap::cal::subscriptionFetchUrl(m_secretStore->value(kCalSubSecretProvider, id));
+  if(url.isEmpty()) {
+    st.error = tr_("calsub.noLink");
+    emit calendarSubscriptionsChanged();
+    return;
+  }
+  if(m_calNam == nullptr) {
+    m_calNam = new QNetworkAccessManager(this);
+  }
+  QNetworkRequest req(url);
+  req.setRawHeader("Accept", "text/calendar, */*;q=0.5");
+  req.setHeader(QNetworkRequest::UserAgentHeader, QStringLiteral("heap/%1").arg(QString::fromLatin1(HEAP_VERSION)));
+  req.setTransferTimeout(30 * 1000);
+  st.busy = true;
+  emit calendarSubscriptionsChanged();
+  QNetworkReply* reply = m_calNam->get(req);
+  connect(reply, &QNetworkReply::downloadProgress, reply, [reply](qint64 received, qint64) {
+    if(received > kCalSubMaxBytes) {
+      reply->setProperty("tooBig", true);
+      reply->abort();
+    }
+  });
+  connect(reply, &QNetworkReply::finished, this, [this, reply, id]() {
+    reply->deleteLater();
+    if(!m_calSubState.contains(id)) {
+      return;  // removed while it was being fetched
+    }
+    CalSubState& state = m_calSubState[id];
+    state.busy = false;
+    if(reply->property("tooBig").toBool()) {
+      state.error = tr_("calsub.tooBig");
+    } else if(reply->error() != QNetworkReply::NoError) {
+      // The link is a secret; the reply's message can quote it, so only the
+      // status goes on screen.
+      const int code = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
+      state.error = code > 0 ? QStringLiteral("HTTP %1").arg(code) : reply->errorString().section(QLatin1Char('-'), 0, 0).trimmed();
+    } else {
+      QString error;
+      if(applyCalendarSubscriptionFeed(id, reply->readAll(), &error) >= 0) {
+        m_calSubState[id].lastSync = QDateTime::currentDateTime();
+        m_calSubState[id].error.clear();
+      } else {
+        m_calSubState[id].error = error;
+      }
+    }
+    emit calendarSubscriptionsChanged();
+  });
+}
+
+int AppController::applyCalendarSubscriptionFeed(const QString& id, const QByteArray& body, QString* error) {
+  const heap::cal::IcsImport parsed = heap::cal::parseIcs(QString::fromUtf8(body), QTimeZone::systemTimeZone(), QString());
+  if(!parsed.recognised) {
+    if(error != nullptr) {
+      *error = tr_("calsub.notCalendar");
+    }
+    return -1;
+  }
+  return replaceSubscriptionEvents(id, heap::cal::subscriptionEvents(parsed, id));
+}
+
+int AppController::replaceSubscriptionEvents(const QString& id, const QVector<CalEvent>& incoming) {
+  QSet<QString> keep;
+  for(const CalEvent& e : incoming) {
+    keep.insert(e.id);
+  }
+  // The feed is the whole truth: what it no longer carries was cancelled or
+  // moved out of range over there.
+  const QString prefix = heap::cal::subscriptionPrefix(id);
+  QStringList gone;
+  for(const CalEvent& e : m_events.items()) {
+    if(e.id.startsWith(prefix) && !keep.contains(e.id)) {
+      gone << e.id;
+    }
+  }
+  bool changed = !gone.isEmpty();
+  for(const QString& eventId : std::as_const(gone)) {
+    m_events.removeById(eventId);
+  }
+  for(const CalEvent& e : incoming) {
+    const int row = m_events.indexOfId(e.id);
+    if(row >= 0 && m_events.items().at(row) == e) {
+      continue;
+    }
+    m_events.upsert(e);
+    changed = true;
+  }
+  if(changed) {
+    scheduleSave();
+  }
+  int masters = 0;
+  for(const CalEvent& e : incoming) {
+    masters += e.masterId.isEmpty() ? 1 : 0;
+  }
+  return masters;
 }
 
 QVariantMap AppController::importIcs(const QUrl& fileUrl) {
@@ -4100,6 +4577,9 @@ QVariantList AppController::calendarTasks(const QDate& from, const QDate& to, bo
 }
 
 void AppController::deleteEvent(const QString& id) {
+  if(refuseSubscriptionEdit(id)) {
+    return;
+  }
   const int row = m_events.indexOfId(id);
   if(row < 0) {
     return;
@@ -5217,6 +5697,97 @@ QString formatTrackedDuration(int secs) {
   return h > 0 ? QStringLiteral("%1h %2m").arg(h).arg(m) : QStringLiteral("%1m").arg(m);
 }
 }  // namespace
+
+void AppController::rememberStatuses() {
+  m_knownStatus.clear();
+  for(const Task& t : m_tasks.items()) {
+    m_knownStatus.insert(t.id, t.status);
+  }
+}
+
+void AppController::noteStatusMoves(int first, int last) {
+  bool moved = false;
+  for(int r = qMax(0, first); r <= last && r < m_tasks.items().size(); ++r) {
+    const Task& t = m_tasks.items().at(r);
+    const auto it = m_knownStatus.find(t.id);
+    if(it == m_knownStatus.end()) {
+      m_knownStatus.insert(t.id, t.status);
+      continue;
+    }
+    if(*it == t.status) {
+      continue;
+    }
+    m_statusLog.append({.taskId = t.id,
+                        .from = *it,
+                        .to = t.status,
+                        .at = t.statusChangedAt.isValid() ? t.statusChangedAt : QDateTime::currentDateTime()});
+    *it = t.status;
+    moved = true;
+  }
+  if(moved) {
+    // A recap looks back one week; a quarter of a year is plenty.
+    const QDateTime horizon = QDateTime::currentDateTime().addDays(-92);
+    if(m_statusLog.size() > 2000 || m_statusLog.constFirst().at < horizon) {
+      m_statusLog = heap::recap::pruned(m_statusLog, horizon);
+    }
+    scheduleSave();
+  }
+}
+
+QVariantMap AppController::weeklyRecap() const {
+  return weeklyRecapFor(QDate::currentDate());
+}
+
+QVariantMap AppController::weeklyRecapFor(const QDate& today) const {
+  const QDate thisWeek = heap::recap::weekStart(today);
+  const QDate lastWeek = thisWeek.addDays(-7);
+  const QVector<heap::recap::Move> moves = heap::recap::netMoves(m_statusLog, lastWeek.startOfDay(), thisWeek.startOfDay());
+
+  QHash<QString, int> column;
+  QHash<QString, QVariantMap> statusById;
+  for(int i = 0; i < m_statuses.size(); ++i) {
+    const QVariantMap st = m_statuses.at(i).toMap();
+    const QString id = st.value(QStringLiteral("id")).toString();
+    column.insert(id, i);
+    statusById.insert(id, st);
+  }
+  const auto colOf = [&](const QString& id) {
+    return column.value(id, static_cast<int>(m_statuses.size()));
+  };
+
+  // (from, to) -> its tasks, in the order the tasks first moved.
+  QList<QPair<QString, QString>> keys;
+  QHash<QPair<QString, QString>, QVariantList> tasks;
+  for(const heap::recap::Move& m : moves) {
+    const int row = m_tasks.indexOfId(m.taskId);
+    if(row < 0) {
+      continue;  // deleted since: nothing to open
+    }
+    const Task& t = m_tasks.items().at(row);
+    const QPair<QString, QString> key{m.from, m.to};
+    if(!tasks.contains(key)) {
+      keys.append(key);
+    }
+    tasks[key].append(QVariantMap{{"id", t.id}, {"title", t.title}, {"priority", t.priority}});
+  }
+  std::stable_sort(keys.begin(), keys.end(), [&](const auto& a, const auto& b) {
+    return std::pair(colOf(a.first), colOf(a.second)) < std::pair(colOf(b.first), colOf(b.second));
+  });
+
+  QVariantList groups;
+  for(const auto& key : keys) {
+    const QVariantMap from = statusById.value(key.first);
+    const QVariantMap to = statusById.value(key.second);
+    groups.append(QVariantMap{{"from", key.first},
+                              {"fromName", from.value(QStringLiteral("name"), key.first)},
+                              {"fromColor", from.value(QStringLiteral("color"))},
+                              {"to", key.second},
+                              {"toName", to.value(QStringLiteral("name"), key.second)},
+                              {"toColor", to.value(QStringLiteral("color"))},
+                              {"tasks", tasks.value(key)}});
+  }
+  return QVariantMap{{"weekStart", lastWeek.toString(Qt::ISODate)}, {"weekEnd", thisWeek.toString(Qt::ISODate)}, {"groups", groups}};
+}
 
 void AppController::copyWeeklyReportToClipboard() {
   snapshotActiveProfile();
@@ -8136,10 +8707,12 @@ void AppController::snapshotActiveProfile() {
   p.docPages = m_docPages.items();
   p.activeDocPageId = m_activeDocPageId;
   p.savedViews = m_savedViews;
+  p.statusLog = m_statusLog;
   // Events are global — not snapshotted into the profile.
 }
 
 void AppController::applyProfileToModels(const Profile& p) {
+  m_statusLog = p.statusLog;
   // Imports and hand-edited files may still carry rank ties (see Rank.h).
   QVector<Task> tasks = p.tasks;
   heap::board::spreadTiedRanks(tasks);
@@ -8163,6 +8736,16 @@ void AppController::applyProfileToModels(const Profile& p) {
     n.updated = n.created;
     notes.append(n);
     activeId = n.id;
+  }
+  // Notes saved before APP-1 kept "Untitled note" whatever they said; they
+  // take the title their text suggests now. Saved with the next write.
+  for(Note& n : notes) {
+    if(isPlaceholderNoteTitle(n.title)) {
+      const QString t = titleFromBody(n.body);
+      if(!t.isEmpty() && heap::notes::backlinksTo(n.id, notes).isEmpty()) {
+        n.title = t;
+      }
+    }
   }
   m_notes.reset(notes);
   if(activeId.isEmpty() && !notes.isEmpty()) {

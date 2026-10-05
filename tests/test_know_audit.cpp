@@ -379,6 +379,81 @@ TEST_F(KnowAuditTest, KnowC_TitleFollowsTheH1WhileTheyAgree) {
   EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("Release checklist"));
 }
 
+// APP-116: dropping one note on another merges them — the dropped note's text
+// goes below the target's, its heading becomes a section, links to it follow
+// it, and one undo puts both notes back.
+TEST_F(KnowAuditTest, App116_MergeAppendsTheSourceBelowTheTarget) {
+  const QString target = app_->newNote(QStringLiteral("Plan"));
+  const QString source = app_->newNote(QStringLiteral("Ideas"));
+  const QString other = app_->newNote(QStringLiteral("Diary"));
+  app_->setNoteBody(target, QStringLiteral("# Plan\n\nship it\n\n"));
+  app_->setNoteBody(source, QStringLiteral("# Ideas\n\ndark mode"));
+  app_->setNoteBody(other, QStringLiteral("see [[Ideas]]"));
+  app_->setActiveNoteId(source);
+
+  ASSERT_TRUE(app_->mergeNotes(source, target));
+
+  EXPECT_LT(app_->notes()->indexOfId(source), 0);
+  EXPECT_EQ(app_->noteBody(target), QStringLiteral("# Plan\n\nship it\n\n## Ideas\n\ndark mode\n"));
+  EXPECT_EQ(app_->noteBody(other), QStringLiteral("see [[Plan]]"));
+  EXPECT_EQ(app_->activeNoteId(), target);
+  EXPECT_EQ(app_->notesState(), app_->noteBody(target));
+
+  app_->undo();
+  ASSERT_GE(app_->notes()->indexOfId(source), 0);
+  EXPECT_EQ(app_->noteBody(source), QStringLiteral("# Ideas\n\ndark mode"));
+  EXPECT_EQ(app_->noteBody(target), QStringLiteral("# Plan\n\nship it\n\n"));
+  EXPECT_EQ(app_->noteBody(other), QStringLiteral("see [[Ideas]]"));
+}
+
+TEST_F(KnowAuditTest, App116_ASourceWithoutHeadingGetsItsTitleAsOne) {
+  const QString target = app_->newNote(QStringLiteral("Plan"));
+  const QString source = app_->newNote(QStringLiteral("Loose"));
+  app_->setNoteBody(source, QStringLiteral("just text"));
+  ASSERT_TRUE(app_->mergeNotes(source, target));
+  EXPECT_TRUE(app_->noteBody(target).endsWith(QStringLiteral("\n\n## Loose\n\njust text\n")));
+}
+
+TEST_F(KnowAuditTest, App116_MergeRefusesItselfAndUnknownNotes) {
+  const QString a = app_->newNote(QStringLiteral("A"));
+  EXPECT_FALSE(app_->mergeNotes(a, a));
+  EXPECT_FALSE(app_->mergeNotes(a, QStringLiteral("note-missing")));
+  EXPECT_FALSE(app_->mergeNotes(QStringLiteral("note-missing"), a));
+  EXPECT_GE(app_->notes()->indexOfId(a), 0);
+}
+
+// APP-1: a note started by typing into the editor has no heading; it used
+// to stay "Untitled note" for good. It takes its first line instead, follows
+// it while typing, and stops once the user names it.
+TEST_F(KnowAuditTest, App1_AnUntitledNoteIsNamedAfterItsFirstLine) {
+  // Typing with no note open adopts the text into a new, unnamed note.
+  app_->setActiveNoteId(QString());
+  app_->setNotesState(QStringLiteral("S"));
+  const QString id = app_->activeNoteId();
+  ASSERT_FALSE(id.isEmpty());
+  const auto title = [&] {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id)).title;
+  };
+  EXPECT_EQ(title(), QStringLiteral("S"));
+  app_->setNotesState(QStringLiteral("Sprint review\nwhat went well"));
+  EXPECT_EQ(title(), QStringLiteral("Sprint review"));
+  app_->setNotesState(QStringLiteral("- [ ] Sprint review prep\nwhat went well"));
+  EXPECT_EQ(title(), QStringLiteral("Sprint review prep"));
+
+  app_->renameNote(id, QStringLiteral("Retro"));
+  app_->setNotesState(QStringLiteral("# Retro\n\nAnother line"));
+  app_->setNotesState(QStringLiteral("# Retro\n\nAnother line, edited"));
+  EXPECT_EQ(title(), QStringLiteral("Retro"));
+}
+
+TEST_F(KnowAuditTest, App1_TitleIsCutToSixtyCharacters) {
+  app_->setActiveNoteId(QString());
+  app_->setNotesState(QStringLiteral("a"));
+  const QString id = app_->activeNoteId();
+  app_->setNotesState(QString(80, QLatin1Char('a')));
+  EXPECT_EQ(app_->notes()->items().at(app_->notes()->indexOfId(id)).title.size(), 60);
+}
+
 TEST_F(KnowAuditTest, KnowC_PinAndMoveAreUndoable) {
   const QString id = app_->newNote(QStringLiteral("N"));
   app_->setNotePinned(id, true);

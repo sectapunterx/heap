@@ -5,6 +5,9 @@ version: 2
 updates:
   - package-ecosystem: github-actions
     directory: /
+    # Updates are new work: they land in `feature` and ship with its next
+    # release, like everything else (master only takes releases).
+    target-branch: feature
     schedule:
       interval: weekly
     groups:
