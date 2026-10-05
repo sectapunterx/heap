@@ -16,7 +16,9 @@
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "diag/IssueReport.h"
+#include "diag/PerfLog.h"
 #include "git/BranchTaskMatcher.h"
+#include "git/BranchTaskResolve.h"
 #include "git/GitWatcher.h"
 #include "history/TaskHistory.h"
 #include "integrations/AutoSync.h"
@@ -46,6 +48,7 @@
 #include "recur/RecurrenceEngine.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
+#include "storage/Snapshots.h"
 #include "storage/StateIO.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
@@ -73,6 +76,8 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPair>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QSaveFile>
 #include <QScopedValueRollback>
 #include <QStandardPaths>
@@ -404,6 +409,19 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingSoon", {"In %1 min", "Через %1 мин"}},
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
+      {"history.notFound", {"That snapshot is gone", "Этого снимка больше нет"}},
+      {"history.damaged", {"That snapshot cannot be read", "Этот снимок не читается"}},
+      {"history.newer", {"That snapshot was made by a newer heap", "Этот снимок сделан более новой версией heap"}},
+      {"history.restored",
+       {"Restored to %1. The state before it is in the time machine too.",
+        "Состояние на %1 восстановлено. То, что было до него, тоже есть в машине времени."}},
+      {"history.restoredName", {"%1 (restored %2)", "%1 (восстановлен %2)"}},
+      {"history.profileRestored", {"Restored as profile %1", "Восстановлено как профиль «%1»"}},
+      {"history.profileGone",
+       {"Profile %1 no longer exists. Restore it as a copy first.", "Профиля «%1» больше нет. Сначала восстановите его копией."}},
+      {"history.taskElsewhere", {"%1 lives in profile %2 now", "%1 сейчас в профиле «%2»"}},
+      {"history.undo.item", {"Restore %1", "Восстановление «%1»"}},
+      {"history.itemRestored", {"Restored: %1", "Восстановлено: %1"}},
       {"data.recovered",
        {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
         "The damaged file is kept in the data folder as %2.",
@@ -673,16 +691,19 @@ AppController::AppController(QObject* parent) :
   // Native notification backend — Linux uses org.freedesktop.Notifications
   // (with real action buttons); Windows/macOS fall back to the legacy tray
   // balloon path. See src/notify/NotificationCenter.h for the contract.
-  m_notifier = heap::notify::NotificationCenter::create(this);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked, this, &AppController::onNotifierAction);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::activated, this, &AppController::onNotifierActivated);
-  // The tray backend (Windows/macOS) doubles as the app's presence when the
-  // window is hidden: clicking the icon or its "Show" entry restores the
-  // window, and "Quit" exits for real. Forwarded to QML / the event loop.
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this, &AppController::showWindowRequested);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
-    QCoreApplication::quit();
-  });
+  // A command-line run (`heap add`, no window) has no tray to put an icon in.
+  if(!s_headless) {
+    m_notifier = heap::notify::NotificationCenter::create(this);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked, this, &AppController::onNotifierAction);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::activated, this, &AppController::onNotifierActivated);
+    // The tray backend (Windows/macOS) doubles as the app's presence when the
+    // window is hidden: clicking the icon or its "Show" entry restores the
+    // window, and "Quit" exits for real. Forwarded to QML / the event loop.
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this, &AppController::showWindowRequested);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
+      QCoreApplication::quit();
+    });
+  }
 
   // Route notification(...) → native toast + in-app toast bar, respecting
   // quiet hours and the user's `notifications.desktopNotif` / `soundOnPing`
@@ -690,6 +711,9 @@ AppController::AppController(QObject* parent) :
   // notification(...)`) keep working — the lambda just forwards to the
   // NotificationCenter without action buttons (it carries no task id).
   connect(this, &AppController::notification, this, [this](const QString& title, const QString& body, const QString& kind) {
+    if(s_headless) {
+      return;  // nobody to show it to; a held one would be saved as pending
+    }
     // Quiet hours hold a notification until they end rather than dropping
     // it. A meeting or the standup is an appointment and goes through.
     const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
@@ -801,34 +825,38 @@ AppController::AppController(QObject* parent) :
   // Registered after loadStateOnStart() so any user rebind of the capture
   // sequences is already applied. On non-Windows platforms this is a no-op and
   // the app relies on the in-app QML shortcuts instead.
-  m_globalHotkey = heap::platform::GlobalHotkey::create(this);
-  connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
-  registerGlobalHotkeys();
+  // A command-line run neither grabs the capture hotkeys nor watches repos:
+  // the window that owns both may start a moment later.
+  if(!s_headless) {
+    m_globalHotkey = heap::platform::GlobalHotkey::create(this);
+    connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
+    registerGlobalHotkeys();
 
-  // ---- Git watcher ----
-  m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
-  connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
-  connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
-  connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
-  connect(
-      m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
-        const heap::git::BranchTaskMatcher m(collectPrefixes());
-        const auto mr = m.extract(br);
-        if(!mr.matched) {
-          return;
-        }
-        QVariantMap entry;
-        entry["prState"] = pr.value("state");
-        entry["prNumber"] = pr.value("number");
-        entry["prUrl"] = pr.value("url");
-        entry["prMove"] = pr.value("move");
-        entry["prMoveReason"] = pr.value("moveReason");
-        m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
-      });
-  applyGitSettingsFromMap(settingsMap().value("git").toMap());
-  connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+    // ---- Git watcher ----
+    m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
+    connect(
+        m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
+          const heap::git::BranchTaskMatcher m(collectPrefixes());
+          const auto mr = m.extract(br);
+          if(!mr.matched) {
+            return;
+          }
+          QVariantMap entry;
+          entry["prState"] = pr.value("state");
+          entry["prNumber"] = pr.value("number");
+          entry["prUrl"] = pr.value("url");
+          entry["prMove"] = pr.value("move");
+          entry["prMoveReason"] = pr.value("moveReason");
+          m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
+        });
     applyGitSettingsFromMap(settingsMap().value("git").toMap());
-  });
+    connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+      applyGitSettingsFromMap(settingsMap().value("git").toMap());
+    });
+  }  // !s_headless
 
   // ---- Auto-update (HEAP-63) ----
   m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
@@ -892,26 +920,29 @@ AppController::AppController(QObject* parent) :
     }
     emit toast(updateStatus(), QStringLiteral("warning"));
   });
-  // What the update an earlier run started came to.
-  QTimer::singleShot(1500, this, [this]() {
-    const heap::update::InstallOutcome outcome = heap::update::takeInstallOutcome();
-    if(!outcome.present) {
-      return;
-    }
-    if(outcome.ok) {
-      emit toast(tr_("update.installed").arg(appVersion()));
-    } else {
-      emit toast(tr_("update.installFailed").arg(outcome.error), QStringLiteral("warning"));
-    }
-  });
+  // What the update an earlier run started came to. Left for the window to
+  // report when this is a command-line run.
+  if(!s_headless) {
+    QTimer::singleShot(1500, this, [this]() {
+      const heap::update::InstallOutcome outcome = heap::update::takeInstallOutcome();
+      if(!outcome.present) {
+        return;
+      }
+      if(outcome.ok) {
+        emit toast(tr_("update.installed").arg(appVersion()));
+      } else {
+        emit toast(tr_("update.installFailed").arg(outcome.error), QStringLiteral("warning"));
+      }
+    });
 
-  // Opt-out background check shortly after startup (never auto-downloads). The
-  // delay lets settings load and the QML toast bar come up first.
-  QTimer::singleShot(3000, this, [this]() {
-    if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
-      checkForUpdates();
-    }
-  });
+    // Opt-out background check shortly after startup (never auto-downloads). The
+    // delay lets settings load and the QML toast bar come up first.
+    QTimer::singleShot(3000, this, [this]() {
+      if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
+        checkForUpdates();
+      }
+    });
+  }  // !s_headless
 
   // ---- Tracker sync (HEAP-74/75) ----
   m_secretStore = new heap::integrations::SecretStore(this);
@@ -921,36 +952,41 @@ AppController::AppController(QObject* parent) :
     autoSyncTickAt(QDateTime::currentDateTime());
   });
   loadLastTrackerSync();
-  // Move any legacy plaintext tokens out of state.json, then load the keychain.
-  migrateLegacySecrets();
-  QVector<QPair<QString, QString>> secretKeys;
-  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
-    for(const QString& f : d.secretKeys) {
-      secretKeys.append({d.id, f});
+  // A command-line run connects no tracker and fetches no calendar: a status
+  // it changes is queued for the window's next sync (queueTrackerPush), the
+  // same as a move made while disconnected.
+  if(!s_headless) {
+    // Move any legacy plaintext tokens out of state.json, then load the keychain.
+    migrateLegacySecrets();
+    QVector<QPair<QString, QString>> secretKeys;
+    for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+      for(const QString& f : d.secretKeys) {
+        secretKeys.append({d.id, f});
+      }
+      // The refresh token is written by the OAuth flow rather than by a card
+      // field, so it is not in secretKeys — but it still has to come back from
+      // the keychain, or the session ends at the first token expiry.
+      if(d.oauth.supported) {
+        secretKeys.append({d.id, QStringLiteral("refreshToken")});
+      }
     }
-    // The refresh token is written by the OAuth flow rather than by a card
-    // field, so it is not in secretKeys — but it still has to come back from
-    // the keychain, or the session ends at the first token expiry.
-    if(d.oauth.supported) {
-      secretKeys.append({d.id, QStringLiteral("refreshToken")});
-    }
-  }
-  // Providers that need a secret build after the async keychain read completes.
-  m_secretStore->load(secretKeys, [this]() {
+    // Providers that need a secret build after the async keychain read completes.
+    m_secretStore->load(secretKeys, [this]() {
+      applyIntegrationSettings();
+      emit integrationSecretsChanged();  // the Settings fields were rendered empty
+    });
     applyIntegrationSettings();
-    emit integrationSecretsChanged();  // the Settings fields were rendered empty
-  });
-  applyIntegrationSettings();
-  connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
-    applyIntegrationSettings();
+    connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+      applyIntegrationSettings();
+      applyCalendarSubscriptions();
+    });
+    // Calendar subscriptions (APP-118): a minute tick fetches whichever is due.
+    m_calTimer = new QTimer(this);
+    m_calTimer->setInterval(60 * 1000);
+    connect(m_calTimer, &QTimer::timeout, this, &AppController::applyCalendarSubscriptions);
+    m_calTimer->start();
     applyCalendarSubscriptions();
-  });
-  // Calendar subscriptions (APP-118): a minute tick fetches whichever is due.
-  m_calTimer = new QTimer(this);
-  m_calTimer->setInterval(60 * 1000);
-  connect(m_calTimer, &QTimer::timeout, this, &AppController::applyCalendarSubscriptions);
-  m_calTimer->start();
-  applyCalendarSubscriptions();
+  }  // !s_headless
   connect(this, &AppController::activeProfileChanged, this, [this]() {
     if(m_gitWatcher) {
       m_gitWatcher->setPrefixes(collectPrefixes());
@@ -960,7 +996,15 @@ AppController::AppController(QObject* parent) :
 
   // Fresh install or unreadable state — seed a single "Example" profile
   // from SampleData so the app boots with something sensible.
-  if(m_profiles.isEmpty()) {
+  if(m_profiles.isEmpty() && s_headless) {
+    // `heap add` before heap was ever opened: the task goes into an empty
+    // workspace, not into the demo, which is the window's first-run offer.
+    Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+    p.id = QStringLiteral("default");
+    m_profiles.push_back(p);
+    m_activeProfileId = p.id;
+    applyProfileToModels(p);
+  } else if(m_profiles.isEmpty()) {
     seedExampleProfile();
   }
 
@@ -2282,6 +2326,67 @@ QVariantMap AppController::newQuickTaskDraft(const QString& ticketKey) const {
     m["id"] = key;
   }
   return m;
+}
+
+QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& reference) const {
+  // A ticket key another task already holds cannot be the new task's id
+  // (newQuickTaskDraft falls back to the prefix), so it stays in the title:
+  // "APP-101 follow up with QA" used to lose its only link to the ticket
+  // (TASKS-22, audit 2026-09-30).
+  heap::text::TaskMeta meta = heap::text::extractMeta(raw);
+  if(!meta.ticketKey.isEmpty() && m_tasks.indexOfId(meta.ticketKey) >= 0) {
+    meta = heap::text::extractMeta(raw, /*keepTicketKey=*/true);
+  }
+  QVariantMap draft = newQuickTaskDraft(meta.ticketKey);
+  draft["_isNew"] = true;
+
+  // The date words the parser read are cut out of the title.
+  heap::chrono::ParseResult when;
+  if(m_chrono) {
+    when = m_chrono->parse(meta.title, reference.isValid() ? reference : QDateTime::currentDateTime());
+  }
+  QString title = meta.title.trimmed();
+  if(when.ok && !when.consumed.isEmpty() && when.startOffset >= 0 && when.endOffset >= when.startOffset) {
+    const QString left = meta.title.left(when.startOffset).trimmed();
+    const QString right = meta.title.mid(when.endOffset).trimmed();
+    title = (left + QChar(' ') + right).simplified();
+  }
+  draft["title"] = title;
+  if(!meta.priority.isEmpty()) {
+    draft["priority"] = meta.priority;
+  }
+  if(!meta.labels.isEmpty()) {
+    draft["labels"] = meta.labels;
+  }
+  if(!meta.desc.isEmpty()) {
+    draft["desc"] = meta.desc;
+  }
+  // The parsed datetime lands on the task itself — including the clock time,
+  // which used to survive only as a side calendar block (HEAP-115).
+  if(when.ok && when.start.isValid()) {
+    draft["scheduledAt"] = when.start;
+    draft["dueAt"] = when.start;
+    draft["scheduledHasTime"] = when.hasTime;
+    draft["dueHasTime"] = when.hasTime;
+  }
+  // A parsed recurrence ("every weekday…") makes completing the task
+  // regenerate it (HEAP-77).
+  if(when.ok && !when.recurrence.isEmpty()) {
+    draft["recurrence"] = when.recurrence;
+  }
+  return draft;
+}
+
+QVector<Profile> AppController::profilesSnapshot() const {
+  QVector<Profile> out = m_profiles;
+  for(Profile& p : out) {
+    if(p.id == m_activeProfileId) {
+      // The stored copy of the active profile lags its live models.
+      p.tasks = m_tasks.items();
+      p.statuses = m_statuses;
+    }
+  }
+  return out;
 }
 
 namespace {
@@ -5716,6 +5821,29 @@ QVariantMap AppController::parseDateTime(const QString& input, const QDateTime& 
   m.insert("startOffset", r.startOffset);
   m.insert("endOffset", r.endOffset);
   return m;
+}
+
+void AppController::perfMarkShown(const QString& name, QObject* item) const {
+  if(!heap::perf::enabled()) {
+    return;
+  }
+  heap::perf::beginIfIdle(name);
+  const auto* quickItem = qobject_cast<QQuickItem*>(item);
+  const QQuickWindow* window = quickItem != nullptr ? quickItem->window() : nullptr;
+  if(window == nullptr) {
+    heap::perf::end(name);
+    return;
+  }
+  // frameSwapped comes from the render thread under the threaded loop; the
+  // perf log is thread-safe, so the end is stamped right there.
+  QObject::connect(
+      window,
+      &QQuickWindow::frameSwapped,
+      window,
+      [name]() {
+        heap::perf::end(name);
+      },
+      static_cast<Qt::ConnectionType>(Qt::DirectConnection | Qt::SingleShotConnection));
 }
 
 QVariantList AppController::parseAllDateTimes(const QString& input, const QDateTime& reference) const {
@@ -9477,8 +9605,12 @@ void AppController::saveStateNow() {
   const AppController::StateWriter writer = g_stateWriter;
   // Serialized on the worker with the rest (implicitly shared copy).
   const heap::history::TaskHistory history = m_history;
+  // The time machine (APP-162): an hourly compressed copy, taken on the worker
+  // after the file landed, so neither the copy nor its retention costs the UI.
+  const QString historyDir = heap::history::dirFor(heap::paths::dataDir());
+  const heap::history::Policy historyPolicy = heap::history::policyFrom(settingsMap().value("data").toMap());
 
-  auto job = [head, profiles, events, history, path, backups, backupDue, writer]() {
+  auto job = [head, profiles, events, history, path, backups, backupDue, writer, historyDir, historyPolicy]() {
     QJsonObject root = head;
     QJsonArray profilesArr;
     for(const Profile& p : profiles) {
@@ -9508,6 +9640,8 @@ void AppController::saveStateNow() {
       heap::recovery::append(
           QString::fromLatin1(heap::recovery::kWriteFailed),
           {{QStringLiteral("path"), path}, {QStringLiteral("bytes"), bytes.size()}, {QStringLiteral("error"), outcome.error}});
+    } else {
+      heap::history::maybeSnapshot(historyDir, bytes, heap::history::summarize(root), QDateTime::currentDateTime(), historyPolicy);
     }
     return outcome;
   };
@@ -10414,16 +10548,22 @@ bool AppController::restoreFromBackup(const QString& fileName) {
     emit toast(tr_("backup.snapshotFailed"));
     return false;
   }
+  if(!replaceStateFile(bytes)) {
+    return false;
+  }
+  emit toast(tr_("backup.restored").arg(fileName));
+  return true;
+}
+
+bool AppController::replaceStateFile(const QByteArray& bytes) {
   QString error;
   if(!heap::storage::writeAtomically(stateFilePath(), bytes, &error)) {
     setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), error));
     return false;
   }
-
   // Reload from disk. The undo history described the state that was just
   // replaced, so it goes with it (reloadStateFromDisk clears it).
   reloadStateFromDisk();
-  emit toast(tr_("backup.restored").arg(fileName));
   return true;
 }
 
@@ -11097,9 +11237,11 @@ void AppController::registerGlobalHotkeys() {
 void AppController::onGlobalHotkey(int id) {
   switch(id) {
     case HotkeyQuickCapture:
+      heap::perf::begin(QStringLiteral("capture"));
       emit quickCaptureRequested();
       break;
     case HotkeyQuickCaptureNotes:
+      heap::perf::begin(QStringLiteral("capture-notes"));
       emit quickCaptureNotesRequested();
       break;
     default:
@@ -12056,49 +12198,15 @@ void AppController::flushHeldNotifications(const QDateTime& now) {
 // ---- Git watcher integration ----
 
 QStringList AppController::collectPrefixes() const {
-  QStringList out;
-  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
-  if(!def.isEmpty()) {
-    out << def;
-  }
-  // A mirrored issue's branch is named after the tracker's key ("PROJ-123"),
-  // never after the heap id the merge invented for it ("jira-PROJ-123"). Unless
-  // the project keys in play are registered here, such a branch cannot match
-  // its own ticket — and, with a single local prefix, the digits-only fallback
-  // used to answer with a different task entirely.
-  static const QRegularExpression keyStem(QStringLiteral("^([A-Za-z][A-Za-z0-9]*)-\\d+$"));
-  for(const Task& t : m_tasks.items()) {
-    if(t.externalId.isEmpty()) {
-      continue;
-    }
-    const QRegularExpressionMatch m = keyStem.match(externalKeyOf(t));
-    if(!m.hasMatch()) {
-      continue;  // a bare issue number has no key to register
-    }
-    const QString stem = m.captured(1).toUpper();
-    if(!out.contains(stem)) {
-      out << stem;
-    }
-  }
-  return out;
+  return heap::git::branchPrefixes(taskIdPrefix(), m_tasks.items());
+}
+
+QString AppController::taskIdPrefix() const {
+  return settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
 }
 
 QString AppController::taskIdForBranchMatch(const QString& matchedId) const {
-  if(matchedId.isEmpty()) {
-    return {};
-  }
-  // Rule 1 answers with the key it found in the branch. For a local task that
-  // is already the task id; for a mirrored issue the id is prefixed with the
-  // provider, so resolve through the tracker key instead.
-  if(m_tasks.indexOfId(matchedId) >= 0) {
-    return matchedId;
-  }
-  for(const Task& t : m_tasks.items()) {
-    if(!t.externalId.isEmpty() && externalKeyOf(t).compare(matchedId, Qt::CaseInsensitive) == 0) {
-      return t.id;
-    }
-  }
-  return matchedId;
+  return heap::git::taskIdForBranchMatch(matchedId, m_tasks.items());
 }
 
 void AppController::applyGitSettingsFromMap(const QVariantMap& g) {

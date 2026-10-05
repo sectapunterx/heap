@@ -194,6 +194,18 @@ class AppController : public QObject {
   explicit AppController(QObject* parent = nullptr);
   ~AppController() override;
 
+  // A command-line run (`heap add`, `heap done` with no window open, see
+  // src/cli): the same models and save path, but no tray icon, global
+  // hotkeys, git watcher, tracker sync, calendar fetches or update checks.
+  // Set before the controller is constructed.
+  static void setHeadless(bool headless) {
+    s_headless = headless;
+  }
+
+  static bool isHeadless() {
+    return s_headless;
+  }
+
   Q_INVOKABLE void flushSave();
 
   QString storageState() const {
@@ -545,6 +557,11 @@ class AppController : public QObject {
   // a tracker ticket ("LTE-2398 fix login") and no task has that id yet, is
   // the id instead.
   Q_INVOKABLE QVariantMap newQuickTaskDraft(const QString& ticketKey = QString()) const;
+  // The whole task QuickCapture makes of `raw`: newQuickTaskDraft with the
+  // title, "// description", priority, #labels and the date the text names
+  // (cut out of the title, read against `reference`, now when invalid). The
+  // popup and `heap add` both save this, so they cannot read text apart.
+  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw, const QDateTime& reference = QDateTime()) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.
@@ -1101,6 +1118,12 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap parseDateTime(const QString& input, const QDateTime& reference = QDateTime()) const;
   Q_INVOKABLE QVariantList parseAllDateTimes(const QString& input, const QDateTime& reference = QDateTime()) const;
 
+  // ---- Opt-in timing (APP-161, diag/PerfLog.h) ----
+  // A popup calls this as it starts to show: span `name` (begun earlier by the
+  // global hotkey, or now) ends on the next frame `item`'s window presents, and
+  // is logged. A no-op unless HEAP_PERF_LOG=1 or --perf-log.
+  Q_INVOKABLE void perfMarkShown(const QString& name, QObject* item) const;
+
   Q_INVOKABLE void copyToClipboard(const QString& text);
 
   // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
@@ -1182,6 +1205,34 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantList listBackups() const;
   Q_INVOKABLE bool restoreFromBackup(const QString& fileName);
 
+  // ---- Time machine (APP-162, src/storage/Snapshots.h) ----
+  // Hourly snapshots in <dataDir>/history, newest first: { name, at (ISO),
+  // day ("yyyy-MM-dd"), time ("HH:mm"), sizeKb, tag, profiles, tasks, notes,
+  // docs }. The counts come from each file's summary line, nothing is inflated.
+  Q_INVOKABLE QVariantList listSnapshots() const;
+  // One snapshot, read-only, next to the state as it is now: { ok, error,
+  // name, at, profiles: [{ id, name, color, tasks, notes, docs, existsNow,
+  // tasksAdded, tasksRemoved, tasksChanged, notesAdded, notesRemoved,
+  // notesChanged }], totals: { the same six }, missing: [{ kind ("task" |
+  // "note" | "doc"), id, title, profileId, profileName, profileExists }],
+  // changed: [same shape] }. "Removed" = in the snapshot, gone now.
+  Q_INVOKABLE QVariantMap previewSnapshot(const QString& name);
+  // The whole state goes back to the snapshot. The state it replaces is
+  // snapshotted first (tag "pre"), so a restore is itself restorable.
+  Q_INVOKABLE bool restoreSnapshot(const QString& name);
+  // The snapshot's profile `profileId` comes back as a new profile, "<name>
+  // (restored HH:MM)", beside the current one. Returns the new id, "" on failure.
+  Q_INVOKABLE QString restoreSnapshotProfile(const QString& name, const QString& profileId);
+  // One task, note or doc page (`kind` "task" | "note" | "doc") from the
+  // snapshot's profile `profileId` goes back into that profile: re-inserted
+  // when it is gone, overwritten when it is there. Switches to the profile
+  // first; undoable.
+  Q_INVOKABLE bool restoreSnapshotItem(const QString& name, const QString& kind, const QString& profileId, const QString& itemId);
+  // Writes the current state into history right now under `tag`. Returns the
+  // file name, "" on failure.
+  QString takeSnapshotNow(const QString& tag);
+  QString historyDirPath() const;
+
   // ---- Shortcuts (rebindable keyboard catalog) ----
   QVariantList shortcuts() const {
     return m_shortcuts;
@@ -1258,6 +1309,11 @@ class AppController : public QObject {
   // Task-id prefixes the branch matcher should recognise: the configured local
   // one, plus the project key of every mirrored issue in the profile.
   Q_INVOKABLE QStringList collectPrefixes() const;
+  // The configured local task-id prefix ("TASK" unless set), uppercased.
+  QString taskIdPrefix() const;
+  // Every profile as it stands now: the stored copies, with the active one's
+  // tasks and columns taken from the live models (the stored copy lags them).
+  QVector<Profile> profilesSnapshot() const;
   // Turn what the matcher found in a branch name into a task id. For a local
   // task the key IS the id; a mirrored issue's id carries the provider, so it
   // is resolved through the tracker key instead.
@@ -1617,6 +1673,14 @@ class AppController : public QObject {
   void loadStateDocument(QJsonObject root, bool viewOnly);
   QString stateFilePath() const;
   QString backupDirPath() const;
+  // Writes `bytes` over state.json and reloads from it (a restore's last step).
+  bool replaceStateFile(const QByteArray& bytes);
+  // The time machine's parsed snapshot: one at a time, kept while the dialog
+  // looks at it so a restore does not inflate it again.
+  bool loadSnapshot(const QString& name, QString* error);
+  QString m_snapName;
+  QVector<Profile> m_snapProfiles;
+  QVector<CalEvent> m_snapEvents;
   // When the newest rotational backup on disk was taken; invalid when none.
   QDateTime newestBackupTime() const;
   // Crash/corruption recovery for loadStateOnStart(): find the newest backup
@@ -1665,6 +1729,7 @@ class AppController : public QObject {
   QJsonObject m_settingsExtra;
   // Next number to mint per task id prefix, across every profile (TASKS-1/31).
   QHash<QString, int> m_taskSeq;
+  static inline bool s_headless = false;
   // What resetSettingsToDefaults() replaced, for its Undo.
   QString m_settingsBeforeReset;
   // The id newTaskDraft & co. hand out for `stem`: past the persisted counter
