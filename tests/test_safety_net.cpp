@@ -2,6 +2,7 @@
 // argument, so nothing here depends on when the suite runs.
 
 #include "safety/EndOfDay.h"
+#include "safety/ErrorSignature.h"
 #include "safety/SafetyText.h"
 #include "safety/WaitingOn.h"
 
@@ -166,6 +167,134 @@ TEST(Waiting, OnlyAMoveToRepliedEndsIt) {
   EXPECT_TRUE(replyEndsWaiting(QStringLiteral("todo"), QStringLiteral("replied")));
   EXPECT_FALSE(replyEndsWaiting(QStringLiteral("replied"), QStringLiteral("replied")));
   EXPECT_FALSE(replyEndsWaiting(QStringLiteral("todo"), QStringLiteral("pinged")));
+}
+
+// ── APP-159: you've seen this before ──
+
+TEST(SeenDetector, TypedErrorsAndTraces) {
+  EXPECT_TRUE(looksLikeError(QStringLiteral("TypeError: Cannot read properties of undefined (reading 'id')")));
+  EXPECT_TRUE(
+      looksLikeError(QStringLiteral("Exception in thread \"main\" java.lang.NullPointerException: name is null\n"
+                                    "    at com.acme.User.greet(User.java:42)")));
+  EXPECT_TRUE(
+      looksLikeError(QStringLiteral("Traceback (most recent call last):\n  File \"app.py\", line 3, in <module>\n"
+                                    "ValueError: invalid literal for int() with base 10: 'x'")));
+  EXPECT_TRUE(looksLikeError(QStringLiteral("panic: runtime error: index out of range [5] with length 3")));
+  EXPECT_TRUE(looksLikeError(QStringLiteral("src/main.cpp:12:5: error: expected ';' after expression")));
+  EXPECT_TRUE(looksLikeError(QStringLiteral("Segmentation fault (core dumped)")));
+}
+
+TEST(SeenDetector, AFrameOrTwoWithoutAHeadline) {
+  EXPECT_TRUE(looksLikeError(QStringLiteral("    at Object.run (/srv/app/index.js:10:5)\n    at main (/srv/app/main.js:3:1)")));
+  EXPECT_TRUE(looksLikeError(QStringLiteral("#0 0x00007ffff7a42428 in raise\n#1 0x00007ffff7a4402a in abort")));
+}
+
+// Prose that mentions an error is not one.
+TEST(SeenDetector, QuietOnProse) {
+  EXPECT_FALSE(looksLikeError(QStringLiteral("fix the error handling in login")));
+  EXPECT_FALSE(looksLikeError(QStringLiteral("Call Oleg about the deploy tomorrow 10:00")));
+  EXPECT_FALSE(looksLikeError(QStringLiteral("APP-12 review")));
+  EXPECT_FALSE(looksLikeError(QString()));
+}
+
+TEST(SeenSignature, KeepsTheTypeAndTheWords) {
+  const ErrorSignature s = signatureOf(QStringLiteral("Uncaught TypeError: Cannot read properties of undefined (reading 'userId')"));
+  EXPECT_EQ(s.type, QStringLiteral("typeerror"));
+  EXPECT_TRUE(s.words.contains(QStringLiteral("properties")));
+  EXPECT_TRUE(s.words.contains(QStringLiteral("undefined")));
+  EXPECT_TRUE(s.words.contains(QStringLiteral("userid")));
+}
+
+TEST(SeenSignature, TheQualifiedJavaTypeIsItsLastPart) {
+  const ErrorSignature s = signatureOf(QStringLiteral("Exception in thread \"main\" java.lang.NullPointerException: name is null"));
+  EXPECT_EQ(s.type, QStringLiteral("nullpointerexception"));
+  EXPECT_EQ(s.words, QStringList({QStringLiteral("name"), QStringLiteral("null")}));
+}
+
+TEST(SeenSignature, PythonNamesItsErrorLast) {
+  const ErrorSignature s =
+      signatureOf(QStringLiteral("Traceback (most recent call last):\n  File \"app.py\", line 3\n"
+                                 "KeyError: 'session_token'"));
+  EXPECT_EQ(s.type, QStringLiteral("keyerror"));
+  EXPECT_EQ(s.words, QStringList{QStringLiteral("session_token")});
+}
+
+// Two occurrences of one failure differ in numbers, addresses, paths, times.
+TEST(SeenSignature, StripsWhatChangesBetweenOccurrences) {
+  const ErrorSignature a = signatureOf(QStringLiteral("2026-09-12 10:31:07 panic: lock 0x7ffe12ab held by worker 17 in /srv/a/b.go"));
+  const ErrorSignature b = signatureOf(QStringLiteral("2026-10-06 18:02:44 panic: lock 0x1122aabb held by worker 3 in C:\\src\\b.go"));
+  EXPECT_EQ(a.type, QStringLiteral("panic"));
+  EXPECT_EQ(a, b);
+  EXPECT_EQ(a.words, QStringList({QStringLiteral("lock"), QStringLiteral("held"), QStringLiteral("worker")}));
+}
+
+TEST(SeenSignature, NothingForProse) {
+  EXPECT_TRUE(signatureOf(QStringLiteral("remember to water the plants")).isEmpty());
+}
+
+TEST(SeenMatch, FindsTheNoteThatMentionsIt) {
+  const ErrorSignature sig = signatureOf(QStringLiteral("TypeError: Cannot read properties of undefined (reading 'userId')"));
+  QVector<SeenCandidate> c;
+  c.append({.kind = QStringLiteral("note"),
+            .id = QStringLiteral("n1"),
+            .title = QStringLiteral("Groceries"),
+            .profileId = {},
+            .when = {},
+            .text = QStringLiteral("milk, bread")});
+  c.append({.kind = QStringLiteral("note"),
+            .id = QStringLiteral("n2"),
+            .title = QStringLiteral("Login crash after deploy"),
+            .profileId = {},
+            .when = kEvening.addDays(-20),
+            .text = QStringLiteral("Saw `TypeError: Cannot read properties of undefined (reading 'userId')` — the session was empty.")});
+  EXPECT_EQ(bestSeenMatch(sig, c), 1);
+}
+
+TEST(SeenMatch, TheTypeMustBeThere) {
+  const ErrorSignature sig = signatureOf(QStringLiteral("KeyError: 'session_token'"));
+  const QVector<SeenCandidate> c{{.kind = QStringLiteral("task"),
+                                  .id = QStringLiteral("T-1"),
+                                  .title = QStringLiteral("rotate session_token"),
+                                  .profileId = {},
+                                  .when = {},
+                                  .text = {}}};
+  EXPECT_EQ(bestSeenMatch(sig, c), -1);
+}
+
+TEST(SeenMatch, MostOfTheWordsAndTheNewestWins) {
+  const ErrorSignature sig = signatureOf(QStringLiteral("panic: lock held by worker during shutdown flush"));
+  const QString seen = QStringLiteral("panic: lock held by worker during shutdown");
+  QVector<SeenCandidate> c;
+  c.append({.kind = QStringLiteral("note"),
+            .id = QStringLiteral("old"),
+            .title = {},
+            .profileId = {},
+            .when = kEvening.addDays(-30),
+            .text = seen});
+  c.append({.kind = QStringLiteral("note"),
+            .id = QStringLiteral("new"),
+            .title = {},
+            .profileId = {},
+            .when = kEvening.addDays(-2),
+            .text = seen});
+  c.append({.kind = QStringLiteral("note"),
+            .id = QStringLiteral("weak"),
+            .title = {},
+            .profileId = {},
+            .when = kEvening,
+            .text = QStringLiteral("panic: worker")});
+  EXPECT_EQ(bestSeenMatch(sig, c), 1);
+}
+
+TEST(SeenMatch, ABareTypeIsTooCommonToSay) {
+  const ErrorSignature sig = signatureOf(QStringLiteral("TypeError"));
+  const QVector<SeenCandidate> c{{.kind = QStringLiteral("note"),
+                                  .id = QStringLiteral("n"),
+                                  .title = {},
+                                  .profileId = {},
+                                  .when = {},
+                                  .text = QStringLiteral("TypeError somewhere")}};
+  EXPECT_EQ(bestSeenMatch(sig, c), -1);
 }
 
 TEST(EndOfDayText, RussianPluralForms) {

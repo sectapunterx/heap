@@ -19,6 +19,8 @@ Rectangle {
     // shown on the badge, so a typo does not read as an empty board.
     readonly property var searchProblems: AppController.searchProblems(searchField.text)
     signal newTaskRequested()
+    // The "seen this before" hint under the search was clicked (APP-159).
+    signal seenBeforeActivated(var hit)
     // Esc on an empty search box, or Return in it: give the keyboard back.
     signal leaveRequested()
     signal rightPanelToggleRequested()
@@ -416,6 +418,33 @@ Rectangle {
                     QQC.ToolTip.visible: searchField.activeFocus && searchField.text.length === 0
                     QQC.ToolTip.delay: 600
                     QQC.ToolTip.text: I18n.t("topbar.searchQueryHint").arg(AppController.searchFields().join(": · ") + ":")
+                }
+                // An error pasted into search that this workspace has met
+                // before (APP-159): a line under the box, over the view.
+                QQC.Popup {
+                    id: seenPopup
+                    parent: searchField
+                    y: searchField.height + Theme.spSm
+                    x: -Theme.spLg
+                    width: Math.max(searchField.width + Theme.spLg, 320)
+                    padding: Theme.spSm
+                    focus: false
+                    closePolicy: QQC.Popup.NoAutoClose
+                    visible: seenHint.shown && searchField.text.length > 0
+                    background: Rectangle {
+                        radius: Theme.radiusMd
+                        color: Theme.panel
+                        border.color: Theme.border
+                        border.width: 1
+                    }
+                    contentItem: SeenBeforeHint {
+                        id: seenHint
+                        text: searchField.text
+                        onActivated: (hit) => {
+                            searchField.clear();
+                            root.seenBeforeActivated(hit);
+                        }
+                    }
                 }
                 // Clause count is not worth showing; that it *is* a query is.
                 Rectangle {

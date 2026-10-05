@@ -653,6 +653,28 @@ ApplicationWindow {
     // Bring the window to the foreground from any state (minimized, hidden to
     // tray, or merely unfocused). Shared by the two global-capture hotkeys and
     // the tray "Show" affordance.
+    // Where a "seen this before" hint points (APP-159): the note, doc page or
+    // task that already mentions the error, in its own profile.
+    function openSeenBefore(hit) {
+        if (!hit || !hit.id) return;
+        if (hit.profileId && hit.profileId !== AppController.activeProfileId)
+            AppController.activeProfileId = hit.profileId;
+        if (hit.kind === "note") {
+            AppController.activeNoteId = hit.id;
+            AppController.currentView = "notes";
+        } else if (hit.kind === "docPage") {
+            AppController.activeDocPageId = hit.id;
+            AppController.currentView = "docs";
+            docsBridge.requestedAnchor = "page:" + hit.id;
+        } else if (hit.kind === "task") {
+            // Edits to the task already open are not swapped out unasked.
+            taskEditor.settleThen(() => {
+                const t = AppController.taskById(hit.id);
+                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            });
+        }
+    }
+
     // The tasks a safety-net notice is about: one opens in the editor, several
     // narrow the board to them. Only what is shown changes.
     function showSafetyTasks(ids) {
@@ -772,6 +794,7 @@ ApplicationWindow {
                 onTriggered: win.searchText = topBar.searchText
             }
             onLeaveRequested: win.focusActiveView()
+            onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
@@ -1200,7 +1223,10 @@ ApplicationWindow {
         }
     }
 
-    TaskEditor    { id: taskEditor }
+    TaskEditor    {
+        id: taskEditor
+        onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+    }
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     PersonPicker  {
@@ -1311,6 +1337,10 @@ ApplicationWindow {
     QuickCapturePopup {
         id: quickCapture
         onCaptured: (title, body, taskId) => toast.show(title + " — " + body.replace(/\n/g, " · "))
+        onSeenBeforeActivated: (hit) => {
+            quickCapture.close();
+            win.openSeenBefore(hit);
+        }
     }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes
@@ -1332,6 +1362,10 @@ ApplicationWindow {
             // Nothing of heap is on screen to show it, so the confirmation is
             // an OS notification; clicking it opens the task.
             onCaptured: (title, body, taskId) => AppController.notifyCapture(taskId, title, body)
+            onSeenBeforeActivated: (hit) => {
+                win._summon();
+                win.openSeenBefore(hit);
+            }
         }
     }
 

@@ -28,6 +28,8 @@ Popup {
     // the app, an OS notification when captured from outside it. `taskId` is
     // the task behind it, if any, so clicking the notification can open it.
     signal captured(string title, string body, string taskId)
+    // The "seen this before" hint under the field was clicked (APP-159).
+    signal seenBeforeActivated(var hit)
 
     property var _preview: ({ok: false})
     property var _meta: ({title: "", desc: "", handles: [], ticketKey: "", priority: "", labels: []})
@@ -459,6 +461,13 @@ Popup {
                 at.dismiss();
                 root._submitFromKey((e.modifiers & Qt.ControlModifier) !== 0);
             }
+        }
+
+        // A pasted error this workspace has met before (APP-159).
+        SeenBeforeHint {
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            text: inputField.text
+            onActivated: (hit) => root.seenBeforeActivated(hit)
         }
 
         Timer {

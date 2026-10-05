@@ -10,6 +10,7 @@
 #include "cal/Reminders.h"
 #include "git/GitWatcher.h"
 #include "notify/NotificationCenter.h"
+#include "safety/ErrorSignature.h"
 #include "safety/SafetyText.h"
 
 #include <QApplication>
@@ -142,6 +143,51 @@ void AppController::finishEndOfDay(const QDateTime& now, const RepoDirt& dirt) {
                heap::safety::endOfDaySummary(f, settings.staleDays, ru),
                f.taskIds(),
                now);
+}
+
+// ── APP-159: you've seen this before ──
+
+QVariantMap AppController::seenBefore(const QString& text, const QString& excludeTaskId) {
+  if(!safetySettings().value(QStringLiteral("seenBefore"), false).toBool()) {
+    return {};
+  }
+  // A pasted log can be long; the headline is near the top.
+  constexpr qsizetype kMaxChars = 20000;
+  const heap::safety::ErrorSignature sig = heap::safety::signatureOf(text.left(kMaxChars));
+  if(sig.isEmpty()) {
+    return {};
+  }
+  // The profiles hold the active one's rows only as of the last save; push
+  // them across first, the way the palette's search does.
+  snapshotActiveProfile();
+  QVector<heap::safety::SeenCandidate> candidates;
+  for(const Profile& p : m_profiles) {
+    for(const Note& n : p.notes) {
+      candidates.append(
+          {.kind = QStringLiteral("note"), .id = n.id, .title = n.title, .profileId = p.id, .when = n.updated, .text = n.body});
+    }
+    for(const DocPage& d : p.docPages) {
+      candidates.append(
+          {.kind = QStringLiteral("docPage"), .id = d.id, .title = d.title, .profileId = p.id, .when = d.updated, .text = d.body});
+    }
+    for(const Task& t : p.tasks) {
+      if(t.id == excludeTaskId) {
+        continue;
+      }
+      candidates.append(
+          {.kind = QStringLiteral("task"), .id = t.id, .title = t.title, .profileId = p.id, .when = t.statusChangedAt, .text = t.desc});
+    }
+  }
+  const qsizetype best = heap::safety::bestSeenMatch(sig, candidates);
+  if(best < 0) {
+    return {};
+  }
+  const heap::safety::SeenCandidate& c = candidates.at(best);
+  return {{QStringLiteral("kind"), c.kind},
+          {QStringLiteral("id"), c.id},
+          {QStringLiteral("title"), c.title.isEmpty() ? c.id : c.title},
+          {QStringLiteral("profileId"), c.profileId},
+          {QStringLiteral("date"), c.when.isValid() ? QVariant(c.when.date()) : QVariant()}};
 }
 
 // ── APP-158: waiting on a reply ──

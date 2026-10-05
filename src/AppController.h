@@ -1972,6 +1972,13 @@ class AppController : public QObject {
   // one reminder.
   Q_INVOKABLE void setWaitingOn(const QString& taskId, const QString& personId);
   Q_INVOKABLE void clearWaitingOn(const QString& taskId);
+
+  // "You've seen this before" (APP-159): when `text` looks like an error or a
+  // stack trace, the note, doc page or task (any profile) that already
+  // mentions its gist — { kind, id, title, profileId, date } — or an empty
+  // map. Empty too while settings.safety.seenBefore is off. `excludeTaskId`
+  // is the task being edited, which would otherwise find itself.
+  Q_INVOKABLE QVariantMap seenBefore(const QString& text, const QString& excludeTaskId = QString());
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;

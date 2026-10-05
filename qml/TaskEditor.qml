@@ -36,6 +36,8 @@ Popup {
     property string _error: ""
     readonly property bool _archived: !!(root.draft && root.draft.archived)
     property bool isNew: false
+    // The "seen this before" hint under the description was clicked (APP-159).
+    signal seenBeforeActivated(var hit)
     // "edit" | "preview" for the description. Starts on edit — the editor is
     // where you go to change things.
     property string descMode: "edit"
@@ -1049,6 +1051,13 @@ Popup {
                                 event.accepted = true;
                             }
                         }
+                    }
+                    // A pasted error this workspace has met before (APP-159).
+                    SeenBeforeHint {
+                        Layout.fillWidth: true
+                        text: descField.text
+                        excludeTaskId: root._originalId
+                        onActivated: (hit) => root.seenBeforeActivated(hit)
                     }
                     // The checkbox write goes through the editor's own document,
                     // so ticking an item in the preview edits the text the Save

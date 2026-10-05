@@ -226,6 +226,7 @@ add_test(NAME heap_text_tests COMMAND heap_text_tests)
 add_executable(heap_safety_tests
     test_safety_net.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/safety/SafetyText.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/safety/ErrorSignature.cpp
 )
 target_include_directories(heap_safety_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
 target_link_libraries(heap_safety_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)

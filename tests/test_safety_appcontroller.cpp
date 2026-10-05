@@ -244,6 +244,27 @@ TEST(WaitingOnSerializer, RoundTripsThroughTheProfileObject) {
   EXPECT_FALSE(heap::state::profileToJson(Profile{}).contains(QStringLiteral("waitingOn")));
 }
 
+// ── APP-159 ──
+
+TEST_F(SafetyNetTest, SeenBeforeFindsTheTaskThatMentionedTheError) {
+  Task old = task(QStringLiteral("T-2"), QStringLiteral("done"));
+  old.desc = QStringLiteral("Crashed with KeyError: 'session_token' after the cache flush.");
+  app_->tasks()->reset({task(QStringLiteral("T-1"), QStringLiteral("todo")), old});
+  const QString pasted = QStringLiteral("Traceback (most recent call last):\n  File \"auth.py\", line 88\nKeyError: 'session_token'");
+
+  app_->setAppSettingsJson(settingsJson({}));
+  EXPECT_TRUE(app_->seenBefore(pasted).isEmpty());  // off by default
+
+  app_->setAppSettingsJson(settingsJson({{"seenBefore", true}}));
+  const QVariantMap hit = app_->seenBefore(pasted, QStringLiteral("T-1"));
+  EXPECT_EQ(hit.value(QStringLiteral("kind")).toString(), QStringLiteral("task"));
+  EXPECT_EQ(hit.value(QStringLiteral("id")).toString(), QStringLiteral("T-2"));
+  // The task being edited does not find itself.
+  EXPECT_TRUE(app_->seenBefore(pasted, QStringLiteral("T-2")).isEmpty());
+  // Prose is not looked up at all.
+  EXPECT_TRUE(app_->seenBefore(QStringLiteral("session token cache flush")).isEmpty());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

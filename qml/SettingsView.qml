@@ -1544,6 +1544,17 @@ Item {
                     onMoved: (value) => root.set("safety", "waitingDays", value)
                 }
             }
+            // APP-159: an error pasted somewhere that came up before.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.seen")
+                SwitchRow {
+                    objectName: "settings-safety-seenBefore"
+                    label: I18n.t("settings.safety.seen")
+                    hint: I18n.t("settings.safety.seen.hint")
+                    checked: !!(root.settings.safety && root.settings.safety.seenBefore)
+                    onToggled: (checked) => root.set("safety", "seenBefore", checked)
+                }
+            }
         }
     }
 
