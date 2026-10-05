@@ -1187,14 +1187,18 @@ ApplicationWindow {
     ProfileEditor { id: profileEditor }
     WelcomePopup {
         id: welcome
-        // Per-step "open →" actions route here so the guide stays decoupled from
-        // the popups/editors Main owns. Each _doAction() already finished the
-        // guide, so the target surface is visible when we open it.
+        // Per-step "open →" actions route here so the tour stays decoupled from
+        // the popups/editors Main owns. Each _doAction() has paused the tour,
+        // so the target surface is visible when we open it.
         onOpenAction: (id) => {
-            if (id === "task-new")           taskEditor.showFor(AppController.newTaskDraft("todo"));
-            else if (id === "quick-capture") quickCapture.open();
-            else if (id === "palette")       cmdPalette.open();
-            else if (id === "hotkeys")       rail.openHotkeys(rail.hotkeysAnchor);
+            if (id === "task-new")            taskEditor.showFor(AppController.newTaskDraft("todo"));
+            else if (id === "quick-capture")  quickCapture.open();
+            else if (id === "palette")        cmdPalette.open();
+            else if (id === "hotkeys")        rail.openHotkeys(rail.hotkeysAnchor);
+            // "Bring your stuff" (APP-169): the same pickers as the palette's.
+            else if (id === "vault-import")   importVaultDialog.open();
+            else if (id === "profile-import") importJsonDialog.open();
+            else if (id === "integrations")   win.runCommand("settings:integrations");
         }
         // "Learn more →" — jump to Settings and scroll the Help doc to the anchor.
         onOpenHelp: (anchor) => {
