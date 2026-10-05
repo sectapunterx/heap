@@ -66,7 +66,7 @@ TestCase {
         verify(high !== null && low !== null);
         for (const id of ["heap-dark", "heap-light", "heap-ink", "crimson", "graphite"])
             compare(Presets.category(Presets.builtin(id), []), "high", id);
-        for (const id of ["ochre", "fjord", "dusk"])
+        for (const id of ["ochre", "fjord", "dusk", "minimal-dark"])
             compare(Presets.category(Presets.builtin(id), []), "low", id);
         for (const t of Presets.PRESETS)
             verify(t.contrast === "high" || t.contrast === "low", t.id + " has no contrast group");
