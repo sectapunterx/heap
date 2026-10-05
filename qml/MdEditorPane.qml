@@ -54,6 +54,8 @@ Item {
     // remembering to do it first.
     onPageIdChanged: {
         root.flush();
+        // Remote images were allowed for the page they were allowed on only.
+        previewDoc.allowRemoteImages = false;
         root.load();
     }
     Component.onCompleted: root.load()
@@ -232,6 +234,21 @@ Item {
                         }
                         if (event.matches(StandardKey.Redo) && !area.canRedo && AppController.canRedo) {
                             AppController.redo();
+                            event.accepted = true;
+                            return;
+                        }
+                        // Tab indents, so the way out is Esc (back to what
+                        // came before — the page tree) or Ctrl+Tab / F6,
+                        // with Shift for backwards (SHELL-18).
+                        const mods = event.modifiers & ~Qt.KeypadModifier;
+                        const leaveBack = event.key === Qt.Key_Escape && mods === Qt.NoModifier;
+                        const ctrlTab = (event.key === Qt.Key_Tab || event.key === Qt.Key_Backtab)
+                                        && (mods & Qt.ControlModifier);
+                        const f6 = event.key === Qt.Key_F6 && (mods & ~Qt.ShiftModifier) === Qt.NoModifier;
+                        if (leaveBack || ctrlTab || f6) {
+                            const back = leaveBack || event.key === Qt.Key_Backtab || (mods & Qt.ShiftModifier);
+                            const next = area.nextItemInFocusChain(!back);
+                            if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
                             event.accepted = true;
                             return;
                         }

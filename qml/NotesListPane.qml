@@ -144,6 +144,12 @@ Rectangle {
         filterField.forceActiveFocus();
         filterField.selectAll();
     }
+    // Esc in the editor lands here, on the open note's row, so ↑/↓ walk the
+    // notes from where the reader was.
+    function focusList() {
+        list.forceActiveFocus(Qt.OtherFocusReason);
+        root._activeRowItem();
+    }
 
     // The ids on screen, in order, so a caller can step through them.
     function visibleIds() {

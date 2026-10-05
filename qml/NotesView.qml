@@ -212,6 +212,41 @@ Item {
         return "";
     }
 
+    // The notes.* catalog actions, for the command palette: the same thing the
+    // keys bound below do (SHELL-1). `cmd` is the id without "notes.".
+    function runNotesCommand(cmd) {
+        switch (cmd) {
+        case "new":        root.newNoteAndEdit(); break;
+        case "next":       notesList.step(1); break;
+        case "prev":       notesList.step(-1); break;
+        case "rename":     if (AppController.activeNoteId.length > 0) notesList.renameActive(); break;
+        case "toggleList": root.toggleList(); break;
+        default:           console.warn("notes: no command", cmd);
+        }
+    }
+
+    // The keys that take focus out of the editor (SHELL-18). True when the
+    // key was one of them and focus has moved.
+    function _leaveEditorKey(field: Item, key: int, modifiers: int): bool {
+        const mods = modifiers & ~Qt.KeypadModifier;
+        if (key === Qt.Key_Escape && mods === Qt.NoModifier) {
+            if (root._listShown) {
+                notesList.focusList();
+            } else {
+                const prev = field.nextItemInFocusChain(false);
+                if (prev) prev.forceActiveFocus(Qt.BacktabFocusReason);
+            }
+            return true;
+        }
+        const ctrlTab = (key === Qt.Key_Tab || key === Qt.Key_Backtab) && (mods & Qt.ControlModifier) !== 0;
+        const f6 = key === Qt.Key_F6 && (mods & ~Qt.ShiftModifier) === Qt.NoModifier;
+        if (!ctrlTab && !f6) return false;
+        const back = key === Qt.Key_Backtab || (mods & Qt.ShiftModifier) !== 0;
+        const next = field.nextItemInFocusChain(!back);
+        if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
+        return true;
+    }
+
     function newNoteAndEdit() {
         root._flushPending();
         AppController.newNote();
@@ -854,6 +889,16 @@ Item {
                             }
                         }
 
+                        // Tab indents here, so it cannot also be the way out
+                        // (SHELL-18). Esc steps out to the list of notes;
+                        // Ctrl+Tab / Ctrl+Shift+Tab and F6 / Shift+F6 move on
+                        // along the focus chain, as in any editor that keeps
+                        // Tab for itself.
+                        if (root._leaveEditorKey(editor, event.key, event.modifiers)) {
+                            event.accepted = true;
+                            return;
+                        }
+
                         // A file or a bare image on the clipboard is attached
                         // and linked; anything else pastes as text.
                         if (event.matches(StandardKey.Paste) && root.pasteAttachment()) {
@@ -1422,6 +1467,10 @@ Item {
         } else {
             editor.text = next;
         }
+        // "Load images" is consent for the note it was given in, not for the
+        // next one: an imported note must not ping its tracker pixel on open
+        // just because another note's images were allowed (KNOW-18).
+        if (root._loadedNoteId !== AppController.activeNoteId) mdDocument.allowRemoteImages = false;
         root._loadedNoteId = AppController.activeNoteId;
         _reloading = false;
         root._refreshTitle();

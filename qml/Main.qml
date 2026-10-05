@@ -1345,6 +1345,15 @@ ApplicationWindow {
             savedViewsHost.applyAt(Number(id.slice(10)));
             return;
         }
+        // Notes actions run in the Notes view, so go there first (SHELL-1).
+        if (id.indexOf("notes.") === 0) {
+            AppController.currentView = "notes";
+            Qt.callLater(function () {
+                const v = win.activeViewItem();
+                if (v && v.runNotesCommand) v.runNotesCommand(id.slice(6));
+            });
+            return;
+        }
         if (id === "savedview.save") {
             // After the palette has closed, so the dialog gets the keyboard.
             Qt.callLater(savedViewsHost.openSave);
