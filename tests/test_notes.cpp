@@ -501,8 +501,7 @@ TEST_F(NotesTest, TheExcerptReadsEscapedLinkNamesWhole) {
 
   const int role = app_->notes()->roleOf(QStringLiteral("excerpt"));
   const int row = app_->notes()->indexOfId(id);
-  EXPECT_EQ(app_->notes()->data(app_->notes()->index(row, 0), role).toString(),
-            QStringLiteral("see A|B options and intro"));
+  EXPECT_EQ(app_->notes()->data(app_->notes()->index(row, 0), role).toString(), QStringLiteral("see A|B options and intro"));
 }
 
 // ─── Notes as a folder of .md files ──────────────────────────────────
