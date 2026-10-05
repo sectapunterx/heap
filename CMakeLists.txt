@@ -215,6 +215,8 @@ qt_add_library(heap_core STATIC
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
+    src/storage/Snapshots.cpp
+    src/AppControllerHistory.cpp
     src/platform/SingleInstance.cpp
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
@@ -312,6 +314,7 @@ qt_add_qml_module(heap_core
         qml/CalendarSubscriptionsCard.qml
         qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
+        qml/TimeMachineDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml

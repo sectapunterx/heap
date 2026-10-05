@@ -46,6 +46,7 @@
 #include "recur/RecurrenceEngine.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
+#include "storage/Snapshots.h"
 #include "storage/StateIO.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
@@ -405,6 +406,19 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingSoon", {"In %1 min", "Через %1 мин"}},
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
+      {"history.notFound", {"That snapshot is gone", "Этого снимка больше нет"}},
+      {"history.damaged", {"That snapshot cannot be read", "Этот снимок не читается"}},
+      {"history.newer", {"That snapshot was made by a newer heap", "Этот снимок сделан более новой версией heap"}},
+      {"history.restored",
+       {"Restored to %1. The state before it is in the time machine too.",
+        "Состояние на %1 восстановлено. То, что было до него, тоже есть в машине времени."}},
+      {"history.restoredName", {"%1 (restored %2)", "%1 (восстановлен %2)"}},
+      {"history.profileRestored", {"Restored as profile %1", "Восстановлено как профиль «%1»"}},
+      {"history.profileGone",
+       {"Profile %1 no longer exists. Restore it as a copy first.", "Профиля «%1» больше нет. Сначала восстановите его копией."}},
+      {"history.taskElsewhere", {"%1 lives in profile %2 now", "%1 сейчас в профиле «%2»"}},
+      {"history.undo.item", {"Restore %1", "Восстановление «%1»"}},
+      {"history.itemRestored", {"Restored: %1", "Восстановлено: %1"}},
       {"data.recovered",
        {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
         "The damaged file is kept in the data folder as %2.",
@@ -9457,8 +9471,12 @@ void AppController::saveStateNow() {
   const QString path = stateFilePath();
   const QString backups = backupDirPath();
   const AppController::StateWriter writer = g_stateWriter;
+  // The time machine (APP-162): an hourly compressed copy, taken on the worker
+  // after the file landed, so neither the copy nor its retention costs the UI.
+  const QString historyDir = heap::history::dirFor(heap::paths::dataDir());
+  const heap::history::Policy historyPolicy = heap::history::policyFrom(settingsMap().value("data").toMap());
 
-  auto job = [head, profiles, events, path, backups, backupDue, writer]() {
+  auto job = [head, profiles, events, path, backups, backupDue, writer, historyDir, historyPolicy]() {
     QJsonObject root = head;
     QJsonArray profilesArr;
     for(const Profile& p : profiles) {
@@ -9485,6 +9503,8 @@ void AppController::saveStateNow() {
       heap::recovery::append(
           QString::fromLatin1(heap::recovery::kWriteFailed),
           {{QStringLiteral("path"), path}, {QStringLiteral("bytes"), bytes.size()}, {QStringLiteral("error"), outcome.error}});
+    } else {
+      heap::history::maybeSnapshot(historyDir, bytes, heap::history::summarize(root), QDateTime::currentDateTime(), historyPolicy);
     }
     return outcome;
   };
@@ -10387,16 +10407,22 @@ bool AppController::restoreFromBackup(const QString& fileName) {
     emit toast(tr_("backup.snapshotFailed"));
     return false;
   }
+  if(!replaceStateFile(bytes)) {
+    return false;
+  }
+  emit toast(tr_("backup.restored").arg(fileName));
+  return true;
+}
+
+bool AppController::replaceStateFile(const QByteArray& bytes) {
   QString error;
   if(!heap::storage::writeAtomically(stateFilePath(), bytes, &error)) {
     setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), error));
     return false;
   }
-
   // Reload from disk. The undo history described the state that was just
   // replaced, so it goes with it (reloadStateFromDisk clears it).
   reloadStateFromDisk();
-  emit toast(tr_("backup.restored").arg(fileName));
   return true;
 }
 
