@@ -4257,7 +4257,11 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
       skipped++;
       continue;
     }
-    f.write(file.contents.toUtf8());
+    // attachments/ sits at the root of the export, so a note in team/ links
+    // its files as ../attachments/<id>: relative to the file, which is how
+    // every other editor resolves it. Import reads it back.
+    const QString up = QStringLiteral("../").repeated(static_cast<int>(file.path.count(QLatin1Char('/'))));
+    f.write(heap::attachments::prefixRefLinks(file.contents, up).toUtf8());
     if(f.commit()) {
       written++;
       pathOf.insert(file.noteId, file.path);
@@ -4285,9 +4289,10 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
     scheduleSave();
   }
 
-  // The files the exported notes link, into attachments/ next to them. The
-  // links already say "attachments/<id>", so the folder reads the same in
-  // heap, in another editor and when it is imported back.
+  // The files the exported notes link, into attachments/ at the root. The
+  // links say "attachments/<id>" relative to each file (see above), so the
+  // folder reads the same in heap, in another editor and when it is imported
+  // back.
   int files = 0;
   {
     const heap::attachments::Store store(attachmentsDir());
