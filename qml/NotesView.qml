@@ -271,6 +271,14 @@ Item {
             editor.cursorPosition = editor.length;
         });
     }
+    // Where the keyboard goes when the view is switched to (PERA-5): the
+    // editor, caret where it was left; in preview there is nothing to type
+    // into, so the notes list.
+    function takeFocus() {
+        if (root.viewMode !== "preview") editor.forceActiveFocus();
+        else if (root._listShown) notesList.takeFocus();
+        else root.forceActiveFocus();
+    }
     // Ctrl+F in Notes filters the notes, not the task search in the top bar.
     function focusSearch() {
         if (!root._listShown) root._listPref = "shown";

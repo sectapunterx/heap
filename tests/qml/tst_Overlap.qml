@@ -106,4 +106,30 @@ TestCase {
         verify(m["a"] !== undefined);
         verify(m["b"] !== undefined);
     }
+
+    // VISU-15: lanes tile while each stays readable, and cascade past that —
+    // every lane keeps the minimum width, steps right evenly, and the last one
+    // ends at the day's edge.
+    function test_lanes_tile_while_wide_enough() {
+        const a = Overlap.lane(1, 2, 200, 64);
+        compare(a.x, 100);
+        compare(a.w, 100);
+        const solo = Overlap.lane(0, 1, 40, 64);
+        compare(solo.x, 0);
+        compare(solo.w, 40, "a lone event never grows past its day");
+    }
+
+    function test_narrow_lanes_cascade_at_the_minimum_width() {
+        const avail = 126, minW = 64, cols = 4;
+        let prevX = -1;
+        for (let c = 0; c < cols; c++) {
+            const l = Overlap.lane(c, cols, avail, minW);
+            compare(l.w, minW, "lane " + c + " is narrower than the minimum");
+            verify(l.x > prevX, "lanes must step right");
+            verify(l.x + l.w <= avail + 1e-9, "lane " + c + " runs past the day");
+            prevX = l.x;
+        }
+        compare(Overlap.lane(cols - 1, cols, avail, minW).x + minW, avail);
+        compare(Overlap.lane(0, 3, 50, 64).w, 50, "the minimum never exceeds the day");
+    }
 }

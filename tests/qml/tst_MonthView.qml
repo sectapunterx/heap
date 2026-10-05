@@ -357,4 +357,82 @@ TestCase {
         AppController.deleteTask(p1.id);
         AppController.selectedDate = prev;
     }
+
+    function _findAll(root, pred, out) {
+        if (!root) return out;
+        if (pred(root)) out.push(root);
+        const kids = root.children || [];
+        for (let i = 0; i < kids.length; i++) _findAll(kids[i], pred, out);
+        return out;
+    }
+
+    // VISU-12: the busiest day kept a fixed 3 tasks + 2 events and its clip
+    // cut the "+N" off. The chips now fit the cell, and "+N" is inside it and
+    // counts exactly what is not shown.
+    function test_a_busy_day_keeps_its_more_counter_inside_the_cell() {
+        const prev = AppController.selectedDate;
+        const day = new Date();
+        day.setDate(day.getDate() + 461);
+        day.setHours(0, 0, 0, 0);
+        const taskIds = [], eventIds = [];
+        for (let i = 0; i < 3; i++) {
+            const t = AppController.newTaskDraft("todo");
+            t.title = "month busy probe " + i;
+            t.scheduledAt = day; t.dueAt = day; t.hasTime = false;
+            AppController.saveTask(t);
+            taskIds.push(t.id);
+        }
+        for (let i = 0; i < 7; i++) {
+            const ev = AppController.newEventDraft(8 + i, day);
+            ev.title = "month busy probe ev " + i;
+            ev.date = day;
+            AppController.saveEvent(ev);
+            eventIds.push(ev.id);
+        }
+        AppController.selectedDate = day;
+        const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
+        wait(0);
+        const cells = _findAll(mv, function (it) {
+            return it.cell !== undefined && it.cell.date !== undefined && mv.isSameDay(it.cell.date, day);
+        }, []);
+        compare(cells.length, 1);
+        const cell = cells[0];
+        verify(cell.cell.tasks.length >= 3 && cell.cell.events.length >= 7);
+        const more = _findAll(cell, function (it) { return it.objectName === "month-more"; }, [])[0];
+        verify(more.visible, "the busy day shows no +N");
+        compare(more.text, "+" + (cell._total - cell._tasksShown - cell._eventsShown));
+        const p = more.mapToItem(cell, 0, 0);
+        verify(p.y + more.height <= cell.height, "+N is cut off: bottom " + (p.y + more.height) + " of " + cell.height);
+
+        mv.destroy();
+        for (const id of taskIds) AppController.deleteTask(id);
+        for (const id of eventIds) AppController.deleteEvent(id);
+        AppController.clearPendingUndo();
+        AppController.selectedDate = prev;
+    }
+
+    // SHELL-17: the grid is one Tab stop; arrows move the selected day by a
+    // day / a week, and the cells carry names for a screen reader.
+    function test_the_grid_moves_the_day_from_the_keyboard() {
+        const prev = AppController.selectedDate;
+        const day = new Date();
+        day.setDate(day.getDate() + 470);
+        day.setHours(0, 0, 0, 0);
+        AppController.selectedDate = day;
+        const mv = make('import TodoCpp; MonthView { anchors.fill: parent }');
+        const grid = findChild(mv, "month-grid");
+        verify(grid !== null);
+        verify(grid.activeFocusOnTab);
+        grid.forceActiveFocus();
+        keyClick(Qt.Key_Right);
+        verify(mv.isSameDay(AppController.selectedDate, new Date(day.getFullYear(), day.getMonth(), day.getDate() + 1)));
+        keyClick(Qt.Key_Down);
+        verify(mv.isSameDay(AppController.selectedDate, new Date(day.getFullYear(), day.getMonth(), day.getDate() + 8)));
+        keyClick(Qt.Key_Up);
+        keyClick(Qt.Key_Left);
+        verify(mv.isSameDay(AppController.selectedDate, day));
+        verify(mv.dayLabel(day).length > 0);
+        mv.destroy();
+        AppController.selectedDate = prev;
+    }
 }

@@ -392,8 +392,14 @@ Item {
                                 objectName: "settings-nav-" + modelData.id
                                 visible: root._sectionMatches(modelData)
                                 // A list box: Tab lands on it, ↑/↓ move and open,
-                                // Enter / Space open.
-                                activeFocusOnTab: true
+                                // Enter / Space open. One tab stop for the whole
+                                // list (the open section's row): every row used
+                                // to be one, focus opened its section, so Tab
+                                // walked Profile → … → About and only ever
+                                // entered About's body (SHELL-11). The `activeFocus`
+                                // term keeps a row that still holds focus a stop
+                                // after a click opened another section.
+                                activeFocusOnTab: activeFocus || index === root._navTabIndex
                                 Accessible.role: Accessible.PageTab
                                 Accessible.name: modelData.title
                                 Keys.onUpPressed: root._focusNav(index - 1, -1)
@@ -719,6 +725,17 @@ Item {
             }
         }
         return false;
+    }
+    // The nav row Tab lands on: the open section's, or the first one the
+    // search leaves when it hides that.
+    readonly property int _navTabIndex: {
+        let first = -1;
+        for (let i = 0; i < sections.length; i++) {
+            if (!_sectionMatches(sections[i])) continue;
+            if (sections[i].id === activeSection) return i;
+            if (first < 0) first = i;
+        }
+        return first;
     }
     // Focus the nav row at `from`, skipping rows the search hides in the
     // direction `dir` (1 down, -1 up).
