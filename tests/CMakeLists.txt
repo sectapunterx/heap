@@ -823,6 +823,12 @@ add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 # QPA + test-mode paths); links GlobalHotkey since AppController references it.
 heap_add_appcontroller_test(heap_appcontroller_tests test_appcontroller.cpp)
 
+# ─── Command line (APP-173) ───
+# Verb detection, argument parsing, the request/response wire format, `heap now`
+# resolution, list/today, and add/done through a headless AppController under a
+# plain QCoreApplication, read back from the saved state.json.
+heap_add_appcontroller_test(heap_cli_tests test_cli.cpp)
+
 # ─── Lossless serialization round-trip + field-count guard (HEAP-131) ───
 # Pure: exercises heap::state (the live save path) and heap::sync::SyncSerializer
 # side by side. No AppController, no QApplication.

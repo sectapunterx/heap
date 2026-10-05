@@ -190,6 +190,18 @@ class AppController : public QObject {
   explicit AppController(QObject* parent = nullptr);
   ~AppController() override;
 
+  // A command-line run (`heap add`, `heap done` with no window open, see
+  // src/cli): the same models and save path, but no tray icon, global
+  // hotkeys, git watcher, tracker sync, calendar fetches or update checks.
+  // Set before the controller is constructed.
+  static void setHeadless(bool headless) {
+    s_headless = headless;
+  }
+
+  static bool isHeadless() {
+    return s_headless;
+  }
+
   Q_INVOKABLE void flushSave();
 
   QString storageState() const {
@@ -541,6 +553,11 @@ class AppController : public QObject {
   // a tracker ticket ("LTE-2398 fix login") and no task has that id yet, is
   // the id instead.
   Q_INVOKABLE QVariantMap newQuickTaskDraft(const QString& ticketKey = QString()) const;
+  // The whole task QuickCapture makes of `raw`: newQuickTaskDraft with the
+  // title, "// description", priority, #labels and the date the text names
+  // (cut out of the title, read against `reference`, now when invalid). The
+  // popup and `heap add` both save this, so they cannot read text apart.
+  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw, const QDateTime& reference = QDateTime()) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.
@@ -1271,6 +1288,11 @@ class AppController : public QObject {
   // Task-id prefixes the branch matcher should recognise: the configured local
   // one, plus the project key of every mirrored issue in the profile.
   Q_INVOKABLE QStringList collectPrefixes() const;
+  // The configured local task-id prefix ("TASK" unless set), uppercased.
+  QString taskIdPrefix() const;
+  // Every profile as it stands now: the stored copies, with the active one's
+  // tasks and columns taken from the live models (the stored copy lags them).
+  QVector<Profile> profilesSnapshot() const;
   // Turn what the matcher found in a branch name into a task id. For a local
   // task the key IS the id; a mirrored issue's id carries the provider, so it
   // is resolved through the tracker key instead.
@@ -1695,6 +1717,7 @@ class AppController : public QObject {
   QJsonObject m_settingsExtra;
   // Next number to mint per task id prefix, across every profile (TASKS-1/31).
   QHash<QString, int> m_taskSeq;
+  static inline bool s_headless = false;
   // What resetSettingsToDefaults() replaced, for its Undo.
   QString m_settingsBeforeReset;
   // The id newTaskDraft & co. hand out for `stem`: past the persisted counter
