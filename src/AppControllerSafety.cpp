@@ -19,6 +19,8 @@
 #include <QApplication>
 #include <QFileInfo>
 #include <QGuiApplication>
+#include <QJsonDocument>
+#include <QJsonObject>
 
 #include <algorithm>
 #include <utility>
@@ -28,6 +30,18 @@ using heap::safety::RepoDirt;
 
 QVariantMap AppController::safetySettings() const {
   return settingsMap().value(QStringLiteral("safety")).toMap();
+}
+
+void AppController::setSafetySetting(const QString& key, const QVariant& value) {
+  QJsonObject root = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+  QJsonObject safety = root.value(QStringLiteral("safety")).toObject();
+  const QJsonValue v = QJsonValue::fromVariant(value);
+  if(safety.value(key) == v) {
+    return;
+  }
+  safety.insert(key, v);
+  root.insert(QStringLiteral("safety"), safety);
+  setAppSettingsJson(QString::fromUtf8(QJsonDocument(root).toJson(QJsonDocument::Compact)));
 }
 
 void AppController::safetyNotify(

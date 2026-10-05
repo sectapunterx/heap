@@ -1958,6 +1958,8 @@ class AppController : public QObject {
 
   // settings.safety, for QML: which heads-ups are on.
   Q_PROPERTY(QVariantMap safety READ safetySettings NOTIFY appSettingsJsonChanged)
+  // Writes settings.safety.<key>; Settings → Safety net's rows use it.
+  Q_INVOKABLE void setSafetySetting(const QString& key, const QVariant& value);
   // Waiting on a reply (APP-158), active profile: task id →
   // { personId, name, color, since, days }.
   Q_PROPERTY(QVariantMap waitingOn READ waitingOnMap NOTIFY waitingOnChanged)
