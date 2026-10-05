@@ -180,6 +180,28 @@ TEST_F(PersistenceTest, UntitledNotesAreNamedAfterTheirTextOnLoad) {
   EXPECT_EQ(title("note-named"), QStringLiteral("Recipes"));
 }
 
+// WEAK PECAP: the status log is the profile's, so it survives a restart.
+TEST_F(PersistenceTest, StatusLogSurvivesReload) {
+  {
+    AppController app;
+    Task t;
+    t.id = QStringLiteral("LOG-1");
+    t.title = QStringLiteral("moves");
+    t.status = QStringLiteral("todo");
+    t.priority = QStringLiteral("P2");
+    app.tasks()->reset({t});
+    app.moveTaskTo(QStringLiteral("LOG-1"), QStringLiteral("prog"), QString());
+    app.flushSave();
+  }
+  AppController app2;
+  const QVector<StatusChange> log = app2.statusLog();
+  ASSERT_FALSE(log.isEmpty());
+  EXPECT_EQ(log.constLast().taskId, QStringLiteral("LOG-1"));
+  EXPECT_EQ(log.constLast().from, QStringLiteral("todo"));
+  EXPECT_EQ(log.constLast().to, QStringLiteral("prog"));
+  EXPECT_TRUE(log.constLast().at.isValid());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

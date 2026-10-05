@@ -81,6 +81,62 @@ class AppControllerTest : public ::testing::Test {
   std::unique_ptr<AppController> app_;
 };
 
+// ─── Weekly recap (WEAK PECAP) ────────────────────────────────────────
+
+// Every column move is logged whatever made it, and the recap lists last
+// week's net moves grouped by from -> to. A task moved and moved back is left
+// out. "Last week" relative to a day a week from now is this week.
+TEST_F(AppControllerTest, WeeklyRecapGroupsLastWeeksMoves) {
+  app_->tasks()->reset({mkTask(QStringLiteral("R-1"), QStringLiteral("one")),
+                        mkTask(QStringLiteral("R-2"), QStringLiteral("two")),
+                        mkTask(QStringLiteral("R-3"), QStringLiteral("three"))});
+  app_->moveTaskTo(QStringLiteral("R-1"), QStringLiteral("prog"), QString());
+  app_->moveTaskTo(QStringLiteral("R-2"), QStringLiteral("prog"), QString());
+  app_->moveTaskTo(QStringLiteral("R-3"), QStringLiteral("prog"), QString());
+  app_->moveTaskTo(QStringLiteral("R-3"), QStringLiteral("todo"), QString());
+  app_->moveTaskTo(QStringLiteral("R-2"), QStringLiteral("review"), QString());
+  EXPECT_EQ(app_->statusLog().size(), 5);
+
+  const QVariantMap recap = app_->weeklyRecapFor(QDate::currentDate().addDays(7));
+  const QVariantList groups = recap.value(QStringLiteral("groups")).toList();
+  ASSERT_EQ(groups.size(), 2);
+  // Board column order: todo -> prog before todo -> review.
+  const QVariantMap first = groups.at(0).toMap();
+  EXPECT_EQ(first.value(QStringLiteral("from")).toString(), QStringLiteral("todo"));
+  EXPECT_EQ(first.value(QStringLiteral("to")).toString(), QStringLiteral("prog"));
+  const QVariantList firstTasks = first.value(QStringLiteral("tasks")).toList();
+  ASSERT_EQ(firstTasks.size(), 1);
+  EXPECT_EQ(firstTasks.at(0).toMap().value(QStringLiteral("id")).toString(), QStringLiteral("R-1"));
+  const QVariantMap second = groups.at(1).toMap();
+  EXPECT_EQ(second.value(QStringLiteral("to")).toString(), QStringLiteral("review"));
+  EXPECT_FALSE(second.value(QStringLiteral("toName")).toString().isEmpty());
+}
+
+TEST_F(AppControllerTest, WeeklyRecapOnlyLooksAtLastWeek) {
+  app_->tasks()->reset({mkTask(QStringLiteral("R-1"), QStringLiteral("one"))});
+  app_->moveTaskTo(QStringLiteral("R-1"), QStringLiteral("prog"), QString());
+  // This week's moves are next week's recap, not this week's.
+  EXPECT_TRUE(app_->weeklyRecap().value(QStringLiteral("groups")).toList().isEmpty());
+  EXPECT_TRUE(app_->weeklyRecapFor(QDate::currentDate().addDays(14)).value(QStringLiteral("groups")).toList().isEmpty());
+}
+
+TEST_F(AppControllerTest, WeeklyRecapSkipsDeletedTasks) {
+  app_->tasks()->reset({mkTask(QStringLiteral("R-1"), QStringLiteral("one"))});
+  app_->moveTaskTo(QStringLiteral("R-1"), QStringLiteral("prog"), QString());
+  app_->tasks()->removeById(QStringLiteral("R-1"));
+  EXPECT_TRUE(app_->weeklyRecapFor(QDate::currentDate().addDays(7)).value(QStringLiteral("groups")).toList().isEmpty());
+}
+
+// Loading a profile is not a move: a reset only remembers where tasks are.
+TEST_F(AppControllerTest, AResetIsNotLoggedAsAMove) {
+  const qsizetype before = app_->statusLog().size();
+  Task t = mkTask(QStringLiteral("R-1"), QStringLiteral("one"));
+  app_->tasks()->reset({t});
+  t.status = QStringLiteral("done");
+  app_->tasks()->reset({t});
+  EXPECT_EQ(app_->statusLog().size(), before);
+}
+
 // ─── Shortcut catalog ─────────────────────────────────────────────────
 
 TEST_F(AppControllerTest, SetShortcutSwapsConflictingOwner) {
