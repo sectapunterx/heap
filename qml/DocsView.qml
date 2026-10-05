@@ -631,6 +631,7 @@ Item {
                         Text { text: "⌕"; color: Theme.textDim; font.pixelSize: Theme.fsSm }
                         TextField {
                             id: docsSearch
+                            ContextMenu.menu: TextEditMenu { editor: docsSearch }
                             objectName: "docsSearchField"
                             Layout.fillWidth: true
                             placeholderText: I18n.t("docs.search.placeholder")

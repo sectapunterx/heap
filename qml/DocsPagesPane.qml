@@ -227,6 +227,7 @@ Item {
 
                 QQC.TextField {
                     id: pageFilter
+                    QQC.ContextMenu.menu: TextEditMenu { editor: pageFilter }
                     objectName: "docpage-filter"
                     Layout.fillWidth: true
                     placeholderText: I18n.t("docs.filterPages")

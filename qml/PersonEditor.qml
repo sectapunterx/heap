@@ -142,6 +142,7 @@ Popup {
                color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: nameField
+            ContextMenu.menu: TextEditMenu { editor: nameField }
             objectName: "pe-name"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("editor.ph.fullName")
@@ -162,6 +163,7 @@ Popup {
                color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: idField
+            ContextMenu.menu: TextEditMenu { editor: idField }
             objectName: "pe-id"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "e.zaharov"
@@ -189,6 +191,7 @@ Popup {
                color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
         TextField {
             id: roleField
+            ContextMenu.menu: TextEditMenu { editor: roleField }
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: "Tech Lead / QA / PHY team…"
             background: FieldFrame {}
@@ -204,6 +207,7 @@ Popup {
             Layout.preferredHeight: 64
             TextArea {
                 id: questionField
+                ContextMenu.menu: TextEditMenu { editor: questionField }
                 placeholderText: I18n.t("editor.ph.question")
                 wrapMode: TextEdit.Wrap
                 background: FieldFrame {}
@@ -221,7 +225,7 @@ Popup {
                 Text {
                     text: I18n.t("editor.label.status").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
                 }
-                ComboBox {
+                AppComboBox {
                     id: stateBox
                     Layout.fillWidth: true
                     // One entry per `root.states`, in the same order: _save()
@@ -231,8 +235,6 @@ Popup {
                     // how someone leaves the People rail without being deleted.
                     model: [I18n.t("editor.person.state.idle"), I18n.t("editor.person.state.todo"),
                             I18n.t("editor.person.state.pinged"), I18n.t("editor.person.state.replied")]
-                    background: FieldFrame {}
-                    contentItem: Text { text: stateBox.displayText; color: Theme.text; leftPadding: Theme.spLg; verticalAlignment: Text.AlignVCenter }
                 }
             }
             ColumnLayout {

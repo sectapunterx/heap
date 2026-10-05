@@ -328,6 +328,7 @@ Popup {
                 Text { text: "⌕"; color: Theme.textMuted; font.pixelSize: Theme.fsXl }
                 TextField {
                     id: searchField
+                    ContextMenu.menu: TextEditMenu { editor: searchField }
                     Layout.fillWidth: true
                     placeholderText: I18n.t("palette.placeholderLong")
                     background: Item {}

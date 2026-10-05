@@ -392,6 +392,7 @@ Rectangle {
                 }
                 TextField {
                     id: searchField
+                    ContextMenu.menu: TextEditMenu { editor: searchField }
                     objectName: "topbar-search"
                     Layout.fillWidth: true
                     placeholderText: I18n.t("topbar.search")

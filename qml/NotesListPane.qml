@@ -240,6 +240,7 @@ Rectangle {
 
         QQC.TextField {
             id: filterField
+            QQC.ContextMenu.menu: TextEditMenu { editor: filterField }
             objectName: "note-filter"
             Layout.fillWidth: true
             placeholderText: I18n.t("notes.filter")
@@ -619,6 +620,7 @@ Rectangle {
             spacing: Theme.spMd
             QQC.TextField {
                 id: titleField
+                QQC.ContextMenu.menu: TextEditMenu { editor: titleField }
                 objectName: "note-rename-title"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320
@@ -628,6 +630,7 @@ Rectangle {
             }
             QQC.TextField {
                 id: folderField
+                QQC.ContextMenu.menu: TextEditMenu { editor: folderField }
                 objectName: "note-rename-folder"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320

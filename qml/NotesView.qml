@@ -833,6 +833,7 @@ Item {
 
                 TextArea {
                     id: editor
+                    ContextMenu.menu: TextEditMenu { editor: editor }
                     objectName: "notesEditor"
                     x: 24; y: 16
                     width: notesScroll.width - 48
