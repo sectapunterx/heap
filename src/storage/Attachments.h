@@ -80,6 +80,13 @@ QHash<QString, QString> refLabelsIn(const QString& markdown);
 // Replaces every "attachments/<from>" with "attachments/<to>".
 QString remapRefs(const QString& markdown, const QHash<QString, QString>& idMap);
 
+// Puts `prefix` ("../", "../../") in front of every link target that is
+// "attachments/<id>", for a note written into a subfolder of an exported
+// vault whose attachments/ folder sits at the root. Only link targets: a
+// mention in plain text is not a path anyone resolves. Import reads the
+// prefixed form back to "attachments/<id>" (importVaultRefs).
+QString prefixRefLinks(const QString& markdown, const QString& prefix);
+
 // The stored metadata as QML sees it ({id, name, size, mime}) and back. Entries
 // whose id is not valid are dropped on the way in.
 QVariantList toVariantList(const QVector<Attachment>& xs);

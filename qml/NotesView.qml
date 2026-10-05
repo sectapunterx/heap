@@ -126,6 +126,13 @@ Item {
         root.insertAttachmentRefs(AppController.importClipboardAttachments());
         return true;
     }
+    // Whether the character at `i` is backslash-escaped: an odd run of
+    // backslashes before it.
+    function _isEscapedAt(text, i) {
+        let n = 0;
+        while (i - n - 1 >= 0 && text.charAt(i - n - 1) === "\\") n++;
+        return n % 2 === 1;
+    }
     // Takes every link to the file out of the note. The file stays in the
     // attachments folder (Settings → Data cleans up what nothing uses).
     function removeAttachmentRefs(attachmentId) {
@@ -136,7 +143,12 @@ Item {
         while (at >= 0) {
             const lineStart = text.lastIndexOf("\n", at - 1) + 1;
             const open = text.lastIndexOf("](", at);
+            // The label's own "[" — not one escaped inside it: a file called
+            // a[1].png is labelled "a\[1\].png", and stopping at "\[" left
+            // "![a\" behind in the note.
             let first = open >= lineStart ? text.lastIndexOf("[", open) : -1;
+            while (first > lineStart && root._isEscapedAt(text, first))
+                first = text.lastIndexOf("[", first - 1);
             const close = text.indexOf(")", at);
             if (first < lineStart || close < 0) { at = text.indexOf(needle, at + needle.length); continue; }
             if (first > lineStart && text.charAt(first - 1) === "!") first--;
@@ -478,6 +490,13 @@ Item {
     }
 
     function _slugifyName(s) { return (s || "").replace(/\s+/g, "_"); }
+    // A note title or heading as it goes between [[ ]]: "#" and "|" would
+    // start a heading and a label, so they are escaped, as is a backslash
+    // that would escape what follows it. NoteGraph.h escapeLinkName is the
+    // same rule; resolveLink reads it back.
+    function _escapeLinkName(s) {
+        return (s || "").replace(/\\(?=[!-\/:-@\[-`{-~]|$)/g, "\\\\").replace(/[#|]/g, "\\$&");
+    }
 
     function _commitAutocomplete() {
         if (acMatches.length === 0 || acSelected < 0 || acSelected >= acMatches.length) {
@@ -486,7 +505,7 @@ Item {
         }
         const e = acMatches[acSelected];
         const insert = (acTrigger === "@")  ? "@" + _slugifyName(e.label) + " "
-                     : (acTrigger === "[[") ? "[[" + e.label + "]] "
+                     : (acTrigger === "[[") ? "[[" + root._escapeLinkName(e.label) + "]] "
                      : "#" + e.id + " ";
         const pos = editor.cursorPosition;
         // Replace the "@filter" / "#filter" span in place (remove + insert) so
