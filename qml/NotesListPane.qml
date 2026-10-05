@@ -257,6 +257,7 @@ Rectangle {
         ListView {
             id: list
             objectName: "note-list"
+            Accessible.name: I18n.t("siderail.notes")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true

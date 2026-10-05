@@ -940,6 +940,10 @@ Item {
             id: textRowField
             objectName: textRow.objectName.length > 0 ? textRow.objectName + "-field" : ""
             validator: textRow.clockTime ? textRow._clockValidator : null
+            // The row's label is the field's name (APP-168); a field with no
+            // placeholder was announced as just "edit".
+            Accessible.name: textRow.label
+            Accessible.description: textRow.hint
             implicitWidth: textRow.fieldWidth
             placeholderText: textRow.placeholder
             placeholderTextColor: Theme.textDim
@@ -974,6 +978,7 @@ Item {
         activeFocusOnTab: true
         Accessible.role: Accessible.CheckBox
         Accessible.name: switchRow.label
+        Accessible.description: switchRow.hint
         Accessible.checked: switchRow.checked
         Keys.onSpacePressed: switchRow.toggled(!switchRow.checked)
         Keys.onReturnPressed: switchRow.toggled(!switchRow.checked)
@@ -1025,6 +1030,7 @@ Item {
             activeFocusOnTab: true
             Accessible.role: Accessible.RadioButton
             Accessible.name: segRow.label
+            Accessible.description: segRow.hint
             Keys.onLeftPressed: segRow._step(-1)
             Keys.onRightPressed: segRow._step(1)
             FocusRing {}
@@ -1088,6 +1094,7 @@ Item {
             // shows the focus ring while it has the keyboard.
             focusPolicy: Qt.StrongFocus
             Accessible.name: sliderRow.label
+            Accessible.description: sliderRow.hint
             background: Rectangle {
                 x: sliderCtl.leftPadding; y: sliderCtl.topPadding + sliderCtl.availableHeight / 2 - 2
                 implicitWidth: 200; implicitHeight: 4
@@ -1294,6 +1301,15 @@ Item {
                         ({value: "light", label: I18n.t("settings.appearance.theme.light")})
                     ]
                     onSelected: (value) => AppController.theme = value
+                }
+                // Type and spacing, live (APP-168).
+                SegRow {
+                    objectName: "settings-ui-scale"
+                    label: I18n.t("settings.appearance.scale")
+                    hint: I18n.t("settings.appearance.scale.hint")
+                    value: String(Math.round(Theme.scale * 100))
+                    options: Theme.scaleSteps.map((s) => ({ value: String(Math.round(s * 100)), label: Math.round(s * 100) + "%" }))
+                    onSelected: (value) => root.set("appearance", "uiScale", Number(value) / 100)
                 }
                 SegRow {
                     label: I18n.t("settings.appearance.density")

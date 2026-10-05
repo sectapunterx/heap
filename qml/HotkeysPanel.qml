@@ -194,6 +194,8 @@ Popup {
         // ── List of bindings ─────────────────────────────────
         ListView {
             id: listArea
+            Accessible.role: Accessible.List
+            Accessible.name: I18n.t("hotkeys.title")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
