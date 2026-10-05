@@ -131,6 +131,10 @@ class TaskFilterProxy : public QSortFilterProxyModel {
   // order the source model happens to be in.
   bool lessThan(const QModelIndex& left, const QModelIndex& right) const override;
 
+ public:
+  // Natural order of two task ids: "APP-9" < "APP-10" < "BUG-1". <0, 0, >0.
+  static int compareTaskIds(const QString& a, const QString& b);
+
  private:
   // invalidateFilter() with the per-range countChanged() held back.
   void refilter();

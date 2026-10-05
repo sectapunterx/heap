@@ -3,6 +3,8 @@
 #include <QDate>
 #include <QDateTime>
 
+#include <utility>
+
 TaskFilterProxy::TaskFilterProxy(QObject* parent) : QSortFilterProxyModel(parent) {
   // Board order. The task model is in insertion order, so without this a card
   // dropped between two others would show up wherever it happened to sit in
@@ -139,39 +141,74 @@ int priorityRank(const QString& p) {
 
 }  // namespace
 
+int TaskFilterProxy::compareTaskIds(const QString& a, const QString& b) {
+  // "APP-9" before "APP-10": the key's text first, then its trailing number
+  // as a number. A plain string compare put APP-10 between APP-1 and APP-2.
+  const auto split = [](const QString& id) {
+    qsizetype i = id.size();
+    while(i > 0 && id.at(i - 1).isDigit()) {
+      --i;
+    }
+    return std::pair<QString, QString>(id.left(i), id.mid(i));
+  };
+  const auto [ap, an] = split(a);
+  const auto [bp, bn] = split(b);
+  if(const int c = QString::compare(ap, bp, Qt::CaseInsensitive); c != 0) {
+    return c;
+  }
+  if(an.isEmpty() != bn.isEmpty()) {
+    return an.isEmpty() ? -1 : 1;
+  }
+  // Compared as digit strings, leading zeros off, so a forty-digit key
+  // cannot overflow.
+  const auto digits = [](const QString& n) {
+    qsizetype i = 0;
+    while(i + 1 < n.size() && n.at(i) == QLatin1Char('0')) {
+      ++i;
+    }
+    return n.mid(i);
+  };
+  const QString na = digits(an);
+  const QString nb = digits(bn);
+  if(na.size() != nb.size()) {
+    return na.size() < nb.size() ? -1 : 1;
+  }
+  return QString::compare(na, nb);
+}
+
 bool TaskFilterProxy::lessThan(const QModelIndex& left, const QModelIndex& right) const {
   const QAbstractItemModel* src = sourceModel();
+  // "priority-desc" is the priority sort turned round (APP-117); every mode
+  // but manual can be. The direction flips the mode's own comparison only:
+  // the tie-break below stays the manual order, so equal cards keep still.
+  const bool desc = m_sortMode.endsWith(QStringLiteral("-desc"));
+  const QString mode = desc ? m_sortMode.chopped(5) : m_sortMode;
+  int cmp = 0;
 
-  if(m_sortMode == QStringLiteral("priority")) {
-    const int lp = priorityRank(src->data(left, TaskModel::PriorityRole).toString());
-    const int rp = priorityRank(src->data(right, TaskModel::PriorityRole).toString());
-    if(lp != rp) {
-      return lp < rp;
-    }
-  } else if(m_sortMode == QStringLiteral("due")) {
+  if(mode == QStringLiteral("priority")) {
+    cmp = priorityRank(src->data(left, TaskModel::PriorityRole).toString()) -
+          priorityRank(src->data(right, TaskModel::PriorityRole).toString());
+  } else if(mode == QStringLiteral("due")) {
     const QDateTime ld = src->data(left, TaskModel::DueAtRole).toDateTime();
     const QDateTime rd = src->data(right, TaskModel::DueAtRole).toDateTime();
     // A task with no due date is not "due at the epoch" — it sorts last,
-    // behind everything that actually has a date.
+    // behind everything that actually has a date, in either direction.
     if(ld.isValid() != rd.isValid()) {
       return ld.isValid();
     }
-    if(ld.isValid() && ld != rd) {
-      return ld < rd;
-    }
-  } else if(m_sortMode == QStringLiteral("updated")) {
+    cmp = ld < rd ? -1 : (rd < ld ? 1 : 0);
+  } else if(mode == QStringLiteral("updated")) {
     const QDateTime lu = src->data(left, TaskModel::StatusChangedAtRole).toDateTime();
     const QDateTime ru = src->data(right, TaskModel::StatusChangedAtRole).toDateTime();
-    if(lu != ru) {
-      return lu > ru;  // most recently touched first
-    }
-  } else if(m_sortMode == QStringLiteral("title")) {
-    const QString lt = src->data(left, TaskModel::TitleRole).toString();
-    const QString rt = src->data(right, TaskModel::TitleRole).toString();
-    const int cmp = QString::compare(lt, rt, Qt::CaseInsensitive);
-    if(cmp != 0) {
-      return cmp < 0;
-    }
+    cmp = lu > ru ? -1 : (ru > lu ? 1 : 0);  // most recently touched first
+  } else if(mode == QStringLiteral("title")) {
+    cmp = QString::compare(
+        src->data(left, TaskModel::TitleRole).toString(), src->data(right, TaskModel::TitleRole).toString(), Qt::CaseInsensitive);
+  } else if(mode == QStringLiteral("id")) {
+    cmp = compareTaskIds(src->data(left, TaskModel::IdRole).toString(), src->data(right, TaskModel::IdRole).toString());
+  }
+  if(cmp != 0) {
+    return desc ? cmp > 0 : cmp < 0;
   }
 
   // Manual order, and the tie-break for every other mode: two cards that

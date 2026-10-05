@@ -1,3 +1,5 @@
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Layouts
 import QtQuick.Controls.Basic
@@ -27,7 +29,8 @@ Rectangle {
         ({ id: "priority", label: I18n.t("filter.sort.priority") }),
         ({ id: "due", label: I18n.t("filter.sort.due") }),
         ({ id: "updated", label: I18n.t("filter.sort.updated") }),
-        ({ id: "title", label: I18n.t("filter.sort.title") })
+        ({ id: "title", label: I18n.t("filter.sort.title") }),
+        ({ id: "id", label: I18n.t("filter.sort.id") })
     ]
 
     signal togglePriority(string p)
@@ -196,10 +199,13 @@ Rectangle {
             id: sortBtn
             objectName: "sort-button"
             visible: root.showSort
+            // "priority-desc" is the priority sort reversed (APP-117).
+            readonly property bool desc: root.sortMode.endsWith("-desc")
+            readonly property string baseMode: desc ? root.sortMode.slice(0, -5) : root.sortMode
             readonly property string label: {
                 const modes = root._sortModes;
                 for (let i = 0; i < modes.length; i++)
-                    if (modes[i].id === root.sortMode) return modes[i].label;
+                    if (modes[i].id === sortBtn.baseMode) return modes[i].label + (sortBtn.desc ? " ↓" : "");
                 return modes[0].label;
             }
             radius: Theme.radiusPill
@@ -251,11 +257,22 @@ Rectangle {
                         objectName: "sort-" + modelData.id
                         text: modelData.label
                         checkable: true
-                        checked: root.sortMode === modelData.id
-                        onTriggered: root.sortModeRequested(modelData.id)
+                        checked: sortBtn.baseMode === modelData.id
+                        // Picking a mode keeps the direction; manual has none.
+                        onTriggered: root.sortModeRequested(modelData.id !== "manual" && sortBtn.desc
+                                                            ? modelData.id + "-desc" : modelData.id)
                     }
                     onObjectAdded: (index, object) => sortMenu.insertItem(index, object)
                     onObjectRemoved: (index, object) => sortMenu.removeItem(object)
+                }
+                AppMenuSeparator {}
+                AppMenuItem {
+                    objectName: "sort-reverse"
+                    text: I18n.t("filter.sort.reverse")
+                    checkable: true
+                    checked: sortBtn.desc
+                    enabled: sortBtn.baseMode !== "manual"
+                    onTriggered: root.sortModeRequested(sortBtn.desc ? sortBtn.baseMode : sortBtn.baseMode + "-desc")
                 }
             }
         }
