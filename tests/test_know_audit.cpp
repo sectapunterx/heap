@@ -446,6 +446,23 @@ TEST_F(KnowAuditTest, App1_AnUntitledNoteIsNamedAfterItsFirstLine) {
   EXPECT_EQ(title(), QStringLiteral("Retro"));
 }
 
+// PERA-6: retyping a new note's heading from scratch left the title at the
+// last fragment saved before the heading was emptied ("Без н"), because the
+// empty "# " in between broke the follow.
+TEST_F(KnowAuditTest, Pera6_RetypingTheHeadingRenamesTheNote) {
+  const QString id = app_->newNote();
+  const auto title = [&] {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id)).title;
+  };
+  app_->setNotesState(QStringLiteral("# Untit\n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Untit"));
+  app_->setNotesState(QStringLiteral("# \n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Untit")) << "an empty heading is not a name";
+  app_->setNotesState(QStringLiteral("# S\n\n"));
+  app_->setNotesState(QStringLiteral("# Standup 30.09\n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Standup 30.09"));
+}
+
 TEST_F(KnowAuditTest, App1_TitleIsCutToSixtyCharacters) {
   app_->setActiveNoteId(QString());
   app_->setNotesState(QStringLiteral("a"));

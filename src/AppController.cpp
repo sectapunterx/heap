@@ -1213,7 +1213,10 @@ QString titleFromBody(const QString& body) {
   if(!h1.isEmpty()) {
     return h1.left(60).trimmed();
   }
-  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
+  // A heading marker with nothing after it yet ("# " trimmed to "#") is not
+  // the note's name either: half-way through retyping a heading the title
+  // used to become "#" (PERA-6).
+  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}(?:\s+|$)|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
   for(const QString& raw : body.split(QLatin1Char('\n'))) {
     QString line = raw.trimmed();
     line.remove(kMarkers);
@@ -1349,7 +1352,12 @@ void AppController::syncActiveNoteBody() {
   // the user named that note, and its first line is just text.
   const QString was = titleFromBody(n.body);
   const QString now = titleFromBody(m_notesState);
-  const bool followed = was == n.title && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
+  // A body with no text at all suggests nothing, so it cannot have been
+  // disagreeing with the title: retyping a heading from scratch ("# Old" →
+  // "# " → "# New") is still the heading naming the note. Without this the
+  // title stuck at whatever was left before the heading was emptied (PERA-6).
+  const bool wasFollowing = was == n.title || (was.isEmpty() && !firstH1(m_notesState).isEmpty());
+  const bool followed = wasFollowing && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
   if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title)) &&
      heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
     n.title = now;
