@@ -8,6 +8,7 @@
 // inside a VEVENT ends the event early if the first END: is trusted.
 
 #include "cal/IcsCodec.h"
+#include "cal/IcsSubscription.h"
 #include "cal/Occurrences.h"
 
 #include <gtest/gtest.h>
@@ -719,4 +720,52 @@ TEST(Ics, ACancellationAloneIsReportedForTheStoredSeries) {
   ASSERT_EQ(in.cancelled.size(), 1);
   EXPECT_EQ(in.cancelled.first().masterId, QStringLiteral("s"));
   EXPECT_EQ(in.cancelled.first().date, QDate(2036, 5, 26));
+}
+
+// ── Calendar subscriptions (APP-118) ─────────────────────────────────
+
+// Outlook and Apple hand out webcal:// links; they are fetched over HTTPS.
+TEST(IcsSubscription, WebcalLinksAreFetchedOverHttps) {
+  EXPECT_EQ(heap::cal::subscriptionFetchUrl(QStringLiteral(" webcal://outlook.office365.com/owa/calendar/x/reachcalendar.ics ")).toString(),
+            QStringLiteral("https://outlook.office365.com/owa/calendar/x/reachcalendar.ics"));
+  EXPECT_EQ(heap::cal::subscriptionFetchUrl(QStringLiteral("webcals://p01.icloud.com/a.ics")).scheme(), QStringLiteral("https"));
+  EXPECT_EQ(heap::cal::subscriptionFetchUrl(QStringLiteral("https://calendar.google.com/x/basic.ics")).host(),
+            QStringLiteral("calendar.google.com"));
+  EXPECT_TRUE(heap::cal::subscriptionFetchUrl(QStringLiteral("file:///etc/passwd")).isEmpty());
+  EXPECT_TRUE(heap::cal::subscriptionFetchUrl(QStringLiteral("not a link")).isEmpty());
+  EXPECT_TRUE(heap::cal::subscriptionFetchUrl(QString()).isEmpty());
+}
+
+TEST(IcsSubscription, EventIdsSayWhichCalendarTheyCameFrom) {
+  EXPECT_EQ(heap::cal::subscriptionPrefix(QStringLiteral("ab12")), QStringLiteral("sub:ab12:"));
+  EXPECT_TRUE(heap::cal::isSubscriptionEventId(QStringLiteral("sub:ab12:uid-1")));
+  EXPECT_FALSE(heap::cal::isSubscriptionEventId(QStringLiteral("ev-123")));
+  EXPECT_EQ(heap::cal::subscriptionOfEventId(QStringLiteral("sub:ab12:uid-1")), QStringLiteral("ab12"));
+  EXPECT_TRUE(heap::cal::subscriptionOfEventId(QStringLiteral("ev-123")).isEmpty());
+}
+
+// A feed's events take the subscription's prefix, series links included; an
+// occurrence the feed cancels becomes an exdate; an override whose series the
+// feed does not carry is dropped rather than left floating.
+TEST(IcsSubscription, FeedEventsArePrefixedAndCancellationsApplied) {
+  const IcsImport in = parseIcs(QStringLiteral(
+      "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n"
+      "BEGIN:VEVENT\r\nUID:standup\r\nSUMMARY:Standup\r\nDTSTART:20261005T090000\r\nDTEND:20261005T091500\r\nRRULE:FREQ=DAILY\r\nEND:"
+      "VEVENT\r\n"
+      "BEGIN:VEVENT\r\nUID:standup\r\nRECURRENCE-ID:20261007T090000\r\nSUMMARY:Standup\r\nDTSTART:20261007T100000\r\nDTEND:"
+      "20261007T101500\r\nEND:VEVENT\r\n"
+      "BEGIN:VEVENT\r\nUID:standup\r\nRECURRENCE-ID:20261008T090000\r\nSTATUS:CANCELLED\r\nDTSTART:20261008T090000\r\nEND:VEVENT\r\n"
+      "BEGIN:VEVENT\r\nUID:orphan\r\nRECURRENCE-ID:20261009T090000\r\nSUMMARY:Gone\r\nDTSTART:20261009T090000\r\nDTEND:"
+      "20261009T093000\r\nEND:VEVENT\r\n"
+      "END:VCALENDAR\r\n"));
+  const QVector<CalEvent> evs = heap::cal::subscriptionEvents(in, QStringLiteral("s1"));
+  ASSERT_EQ(evs.size(), 2);
+  for(const CalEvent& e : evs) {
+    EXPECT_TRUE(e.id.startsWith(QStringLiteral("sub:s1:"))) << e.id.toStdString();
+    EXPECT_TRUE(e.profileId.isEmpty());
+  }
+  const CalEvent& master = evs.at(0).masterId.isEmpty() ? evs.at(0) : evs.at(1);
+  const CalEvent& moved = evs.at(0).masterId.isEmpty() ? evs.at(1) : evs.at(0);
+  EXPECT_EQ(moved.masterId, master.id);
+  EXPECT_TRUE(master.exdates.contains(QDate(2026, 10, 8)));
 }

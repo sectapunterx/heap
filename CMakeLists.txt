@@ -286,6 +286,8 @@ qt_add_qml_module(heap_core
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
+        qml/IntegrationsInfoCard.qml
+        qml/CalendarSubscriptionsCard.qml
         qml/WeeklyRecapDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──

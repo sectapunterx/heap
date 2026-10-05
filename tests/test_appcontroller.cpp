@@ -137,6 +137,87 @@ TEST_F(AppControllerTest, AResetIsNotLoggedAsAMove) {
   EXPECT_EQ(app_->statusLog().size(), before);
 }
 
+// ─── Calendar subscriptions (APP-118) ─────────────────────────────────
+
+namespace {
+QByteArray feed(const QStringList& vevents) {
+  QByteArray out = "BEGIN:VCALENDAR\r\nVERSION:2.0\r\n";
+  for(const QString& v : vevents) {
+    out += "BEGIN:VEVENT\r\n" + v.toUtf8() + "\r\nEND:VEVENT\r\n";
+  }
+  return out + "END:VCALENDAR\r\n";
+}
+
+const QString kSync = QStringLiteral("UID:sync-1\r\nSUMMARY:Sprint sync\r\nDTSTART:20261006T110000\r\nDTEND:20261006T113000");
+const QString kRetro = QStringLiteral("UID:retro-1\r\nSUMMARY:Retro\r\nDTSTART:20261009T150000\r\nDTEND:20261009T160000");
+}  // namespace
+
+// A fetched feed becomes the subscription's events; the next fetch replaces
+// them, so a meeting cancelled in Outlook disappears here too.
+TEST_F(AppControllerTest, ASubscriptionFeedIsMirroredAndReplaced) {
+  EXPECT_EQ(app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync, kRetro})), 2);
+  EXPECT_EQ(app_->events()->rowCount(), 2);
+  const QVariantMap sync = app_->eventById(QStringLiteral("sub:t1:sync-1"));
+  EXPECT_EQ(sync.value(QStringLiteral("title")).toString(), QStringLiteral("Sprint sync"));
+  EXPECT_TRUE(app_->isSubscriptionEvent(QStringLiteral("sub:t1:sync-1")));
+
+  EXPECT_EQ(app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync})), 1);
+  EXPECT_EQ(app_->events()->rowCount(), 1);
+  EXPECT_LT(app_->events()->indexOfId(QStringLiteral("sub:t1:retro-1")), 0);
+}
+
+// The user's own events are never touched by a feed.
+TEST_F(AppControllerTest, ASubscriptionFeedLeavesOwnEventsAlone) {
+  QVariantMap draft = app_->newEventDraft(9, QDate(2026, 10, 6));
+  draft["title"] = QStringLiteral("Mine");
+  app_->saveEvent(draft);
+  const QString mine = draft.value("id").toString();
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync}));
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({}));
+  EXPECT_GE(app_->events()->indexOfId(mine), 0);
+  EXPECT_EQ(app_->events()->rowCount(), 1);
+}
+
+// Outlook owns these meetings: every write path refuses them and says why.
+TEST_F(AppControllerTest, SubscriptionEventsAreReadOnly) {
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync}));
+  const QString id = QStringLiteral("sub:t1:sync-1");
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+
+  QVariantMap draft = app_->eventById(id);
+  draft["title"] = QStringLiteral("Renamed");
+  app_->saveEvent(draft);
+  app_->updateEvent(id, 14, 15, QDate(2026, 10, 6));
+  app_->deleteEvent(id);
+  app_->moveOccurrence(draft, 1.0, QStringLiteral("this"));
+
+  const QVariantMap after = app_->eventById(id);
+  EXPECT_EQ(after.value(QStringLiteral("title")).toString(), QStringLiteral("Sprint sync"));
+  EXPECT_DOUBLE_EQ(after.value(QStringLiteral("start")).toDouble(), 11.0);
+  EXPECT_EQ(toasts.count(), 4);
+}
+
+TEST_F(AppControllerTest, NotACalendarIsAnError) {
+  QString error;
+  EXPECT_EQ(app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), QByteArray("<html>login</html>"), &error), -1);
+  EXPECT_FALSE(error.isEmpty());
+  EXPECT_EQ(app_->events()->rowCount(), 0);
+}
+
+TEST_F(AppControllerTest, RemovingASubscriptionTakesItsEvents) {
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t1"), feed({kSync}));
+  app_->applyCalendarSubscriptionFeed(QStringLiteral("t2"), feed({kRetro}));
+  app_->removeCalendarSubscription(QStringLiteral("t1"));
+  EXPECT_LT(app_->events()->indexOfId(QStringLiteral("sub:t1:sync-1")), 0);
+  EXPECT_GE(app_->events()->indexOfId(QStringLiteral("sub:t2:retro-1")), 0);
+}
+
+TEST_F(AppControllerTest, ABadLinkIsRefusedBeforeAnythingIsStored) {
+  const QVariantMap r = app_->addCalendarSubscription(QStringLiteral("Work"), QStringLiteral("ftp://example.com/cal.ics"), 15);
+  EXPECT_FALSE(r.value(QStringLiteral("ok")).toBool());
+  EXPECT_TRUE(app_->calendarSubscriptions().isEmpty());
+}
+
 // ─── Shortcut catalog ─────────────────────────────────────────────────
 
 TEST_F(AppControllerTest, SetShortcutSwapsConflictingOwner) {

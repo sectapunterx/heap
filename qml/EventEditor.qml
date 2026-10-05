@@ -25,6 +25,11 @@ Popup {
     }
 
     property string eventId: ""
+    // A meeting from a calendar link (APP-118): that calendar owns it, so the
+    // editor only shows it — no field takes input, Save and Delete are gone,
+    // and its join link is one click away.
+    readonly property string sourceCalendar: AppController.subscriptionNameOf(root.eventId.length > 0 ? root.eventId : root.masterId)
+    readonly property bool readOnly: root.sourceCalendar.length > 0
     // The day this event falls on — editable via the calendar picker below.
     property var pickedDate: AppController.selectedDate
     // The last day it covers. Equal to pickedDate for an ordinary event, which
@@ -395,6 +400,7 @@ Popup {
 
     // Shared by the Save button and the Ctrl+Return shortcut.
     function _save() {
+        if (root.readOnly) { root._openedAs = ""; root.close(); return; }
         root._error = root._validate();
         if (root._error.length > 0) return;
         if (root.masterId.length > 0 && root.originalDate) {
@@ -407,6 +413,7 @@ Popup {
     }
 
     function _delete() {
+        if (root.readOnly) return;
         if (root.masterId.length > 0 && root.originalDate) {
             scopePrompt.ask("delete", (scope) => root._commitDelete(scope), null);
             return;
@@ -478,16 +485,48 @@ Popup {
             font.weight: Font.DemiBold
         }
 
+        Rectangle {
+            objectName: "event-readonly-banner"
+            visible: root.readOnly
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            implicitHeight: bannerRow.implicitHeight + Theme.spMd * 2
+            radius: Theme.radiusMd
+            color: Theme.accentSoft
+            border.color: Theme.border
+            RowLayout {
+                id: bannerRow
+                anchors.fill: parent
+                anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+                spacing: Theme.spMd
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.t("event.fromCalendar").arg(root.sourceCalendar)
+                    color: Theme.text
+                    font.pixelSize: Theme.fsSm
+                    wrapMode: Text.Wrap
+                }
+                PillButton {
+                    objectName: "event-join"
+                    visible: linkField.text.length > 0
+                    text: I18n.t("event.join")
+                    primary: true
+                    onClicked: Qt.openUrlExternally(linkField.text)
+                }
+            }
+        }
+
         FieldLabel {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.title").toUpperCase()
         }
         Field {
             id: titleField
             objectName: "event-title"
+            enabled: !root.readOnly
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
         }
 
         GridLayout {
+            enabled: !root.readOnly
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             columns: 2; columnSpacing: Theme.spLg; rowSpacing: Theme.spXs
 
@@ -989,6 +1028,7 @@ Popup {
                 TextArea {
                     id: notesField
                     objectName: "event-notes"
+                    readOnly: root.readOnly
                     placeholderText: I18n.t("event.ph.notes")
                     placeholderTextColor: Theme.textDim
                     color: Theme.text
@@ -1014,13 +1054,16 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spSm; Layout.bottomMargin: Theme.sp2xl
             spacing: Theme.spMd
             PillButton {
+                visible: !root.readOnly
                 text: I18n.t("common.delete"); danger: true; onClicked: root._delete()
             }
             Item { Layout.fillWidth: true }
             PillButton {
-                text: I18n.t("common.cancel"); onClicked: { root._openedAs = ""; root.close(); }
+                text: root.readOnly ? I18n.t("common.close") : I18n.t("common.cancel")
+                onClicked: { root._openedAs = ""; root.close(); }
             }
             PillButton {
+                visible: !root.readOnly
                 text: I18n.t("editor.btn.save"); primary: true
                 onClicked: root._save()
             }

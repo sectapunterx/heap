@@ -126,6 +126,8 @@ class AppController : public QObject {
   Q_PROPERTY(bool demoActive READ demoActive NOTIFY onboardingChanged)
 
   Q_PROPERTY(QVariantList profiles READ profiles NOTIFY profilesChanged)
+  // Calendars read from a link (APP-118), with how their last fetch went.
+  Q_PROPERTY(QVariantList calendarSubscriptions READ calendarSubscriptions NOTIFY calendarSubscriptionsChanged)
   Q_PROPERTY(QString activeProfileId READ activeProfileId WRITE setActiveProfileId NOTIFY activeProfileChanged)
 
   Q_PROPERTY(QVariantList shortcuts READ shortcuts NOTIFY shortcutsChanged)
@@ -866,6 +868,29 @@ class AppController : public QObject {
   // "<install id>.heap": what qualifies this install's event ids as .ics UIDs,
   // so another heap's ev-2 is not taken for ours (TIME-25).
   QString icsUidDomain() const;
+
+  // ── Calendar subscriptions (APP-118) ──
+  // A calendar heap reads from a link — Outlook's published ICS address, or
+  // Google's / iCloud's — and refreshes on its own. Read-only: its events are
+  // "sub:<id>:…" and every event write refuses them. The link is a secret
+  // (anyone holding it reads the calendar) and lives in the keychain; the
+  // list itself is settings.calendars.subscriptions [{ id, name, minutes }].
+  //
+  // Each entry: { id, name, minutes, events, lastSync (ISO, "" = never),
+  // error ("" = fine), busy }.
+  QVariantList calendarSubscriptions() const;
+  // { ok, id } or { ok: false, error }. Fetches straight away.
+  Q_INVOKABLE QVariantMap addCalendarSubscription(const QString& name, const QString& link, int minutes);
+  // Drops the subscription, its link and the events it brought.
+  Q_INVOKABLE void removeCalendarSubscription(const QString& id);
+  Q_INVOKABLE void refreshCalendarSubscription(const QString& id);
+  Q_INVOKABLE bool isSubscriptionEvent(const QString& id) const;
+  // The name of the calendar an event came from, "" for the user's own.
+  Q_INVOKABLE QString subscriptionNameOf(const QString& eventId) const;
+  // What a fetch does with the body it got, without the network: parse, then
+  // replace the subscription's events. Returns how many events it now holds,
+  // or -1 with `error` set when the text is not a calendar.
+  int applyCalendarSubscriptionFeed(const QString& id, const QByteArray& body, QString* error = nullptr);
   Q_INVOKABLE void scheduleTask(const QString& taskId, double startHour, const QDate& date);
   // First hour on `date` where a block of `durationHours` does not land on top
   // of an existing event, starting from the workday (or from now, for today).
@@ -1192,6 +1217,7 @@ class AppController : public QObject {
   void flushEditorsRequested();
   void activeDocPageChanged();
   void appSettingsJsonChanged();
+  void calendarSubscriptionsChanged();
   void statusesChanged();
   void pendingUndoChanged();
   void onboardingChanged();
@@ -1769,6 +1795,26 @@ class AppController : public QObject {
   // Used by refreshOAuthToken; providers are rebuilt whenever a secret changes,
   // so it cannot borrow a provider's own manager.
   QNetworkAccessManager* m_oauthNam = nullptr;
+
+  // Calendar subscriptions: the fetcher, the minute tick that decides who is
+  // due, and per-subscription state that is not worth saving.
+  struct CalSubState {
+    QDateTime lastAttempt;
+    QDateTime lastSync;
+    QString error;
+    bool busy = false;
+  };
+
+  QNetworkAccessManager* m_calNam = nullptr;
+  QTimer* m_calTimer = nullptr;
+  QHash<QString, CalSubState> m_calSubState;
+  QSet<QString> m_calSubSecretsLoaded;
+  QVariantList calendarSubscriptionSettings() const;
+  void writeCalendarSubscriptionSettings(const QVariantList& list);
+  void applyCalendarSubscriptions();
+  void fetchCalendarSubscription(const QString& id);
+  // True (and says so) when `id` or `masterId` is a subscription's event.
+  bool refuseSubscriptionEdit(const QString& id, const QString& masterId = QString());
   // Providers whose refresh is already in flight — a sync and a push firing
   // together must not both spend the (single-use, rotated) refresh token.
   QSet<QString> m_refreshing;
