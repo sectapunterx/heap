@@ -221,6 +221,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"onboarding.freshUndone", {"Demo content restored", "Демо-данные возвращены"}},
       {"notes.deleted", {"Note deleted: %1", "Заметка удалена: %1"}},
       {"notes.restored", {"Note restored: %1", "Заметка восстановлена: %1"}},
+      {"notes.merged", {"“%1” merged into “%2”", "«%1» добавлена в «%2»"}},
+      {"notes.undo.merge", {"Merge undone: %1", "Объединение отменено: %1"}},
       {"docs.untitledPage", {"Untitled page", "Без названия"}},
       {"docs.undo.deletePage", {"Page deleted", "Страница удалена"}},
       {"notes.daily", {"Today's note", "Заметка на сегодня"}},
@@ -1327,6 +1329,55 @@ void AppController::deleteNote(const QString& id) {
   }
   scheduleSave();
   emit undoableToast(tr_("notes.deleted").arg(title), 8);
+}
+
+bool AppController::mergeNotes(const QString& sourceId, const QString& targetId) {
+  if(sourceId == targetId || m_notes.indexOfId(sourceId) < 0 || m_notes.indexOfId(targetId) < 0) {
+    return false;
+  }
+  // Typing still in the editor belongs to its note before either text moves.
+  emit aboutToChangeActiveNote();
+  syncActiveNoteBody();
+  const QVector<Note> before = m_notes.items();
+  const Note source = before.at(m_notes.indexOfId(sourceId));
+  Note target = before.at(m_notes.indexOfId(targetId));
+  {
+    const UndoScope scope(this, tr_("notes.undo.merge").arg(source.title));
+    // The target keeps the one H1; the source's heading becomes a section
+    // under it, so what was merged in can still be found and linked to.
+    QString added = source.body;
+    if(firstH1(added).isEmpty()) {
+      added = QStringLiteral("## %1\n\n%2").arg(source.title, added.trimmed());
+    } else {
+      added = QStringLiteral("#") + added.trimmed();
+    }
+    QString body = target.body;
+    while(body.endsWith(QLatin1Char('\n'))) {
+      body.chop(1);
+    }
+    target.body = body.isEmpty() ? added + QLatin1Char('\n') : body + QStringLiteral("\n\n") + added + QLatin1Char('\n');
+    target.updated = QDateTime::currentDateTime();
+    m_notes.upsert(target);
+    m_notes.removeById(sourceId);
+    // [[Source]] anywhere (the target included) now means the target.
+    const QVector<Note> merged = m_notes.items();
+    for(const Note& other : merged) {
+      const QString linked = heap::notes::retargetLinksTo(other.body, other.id, before, sourceId, source.title, target.title);
+      if(linked != other.body) {
+        Note changed = other;
+        changed.body = linked;
+        m_notes.upsert(changed);
+      }
+    }
+    if(m_activeNoteId == sourceId) {
+      m_activeNoteId = targetId;
+      emit activeNoteChanged();
+    }
+  }
+  reconcileActiveNote();
+  scheduleSave();
+  emit undoableToast(tr_("notes.merged").arg(source.title, target.title), 8);
+  return true;
 }
 
 void AppController::reconcileActiveNote() {

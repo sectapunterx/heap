@@ -310,6 +310,10 @@ class AppController : public QObject {
   Q_INVOKABLE QString newNote(const QString& title = QString(), const QString& folder = QString());
   Q_INVOKABLE void renameNote(const QString& id, const QString& title);
   Q_INVOKABLE void deleteNote(const QString& id);
+  // APP-116: appends note `sourceId`'s text below note `targetId`'s and
+  // removes the source; links to the source now point at the target. One
+  // undo step. False when either is missing or they are the same note.
+  Q_INVOKABLE bool mergeNotes(const QString& sourceId, const QString& targetId);
   Q_INVOKABLE void setNoteBody(const QString& id, const QString& body);
   Q_INVOKABLE void setNotePinned(const QString& id, bool pinned);
   Q_INVOKABLE void moveNoteToFolder(const QString& id, const QString& folder);
