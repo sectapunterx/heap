@@ -48,6 +48,8 @@ struct CliOptions {
   QString dataDir;
   bool dataDirSet = false;
   bool smoke = false;
+  // Started by the login entry (APP-154): come up hidden in the tray.
+  bool minimized = false;
 };
 
 // Exit code for a command line heap cannot act on (the usual "usage" code).
@@ -94,6 +96,12 @@ CliOptions parseCommandLine(const QStringList& args) {
                      "check a packaged build."));
   parser.addOption(smokeOption);
 
+  const QCommandLineOption minimizedOption(
+      QStringLiteral("minimized"),
+      QStringLiteral("Start hidden in the tray (minimized where there is no tray), and leave an already "
+                     "running heap where it is. The start-at-login entry passes it."));
+  parser.addOption(minimizedOption);
+
   // A macOS Finder launch may still append -psn_<n>_<m>; it is not the user's.
   QStringList filtered;
   for(const QString& a : args) {
@@ -125,6 +133,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  opts.minimized = parser.isSet(minimizedOption);
   if(parser.isSet(viewOption) && !heap::views::isKnown(opts.initialView)) {
     usageError(parser,
                QStringLiteral("unknown view '%1' (valid: %2)").arg(opts.initialView, heap::views::all().join(QStringLiteral(", "))));
@@ -226,8 +235,9 @@ int main(int argc, char* argv[]) {
   // window forward (switching view if --view was given) and exits.
   heap::platform::SingleInstance instance(heap::paths::dataDir());
   if(!cli.smoke) {
-    QByteArray hello = "activate";
-    if(!cli.initialView.isEmpty()) {
+    // A login start that finds heap already running leaves its window alone.
+    QByteArray hello = cli.minimized ? QByteArray("ping") : QByteArray("activate");
+    if(!cli.minimized && !cli.initialView.isEmpty()) {
       hello += " view=" + cli.initialView.toUtf8();
     }
     switch(instance.acquire(hello)) {
@@ -262,6 +272,7 @@ int main(int argc, char* argv[]) {
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("INITIAL_VIEW", cli.initialView);
+  engine.rootContext()->setContextProperty("START_MINIMIZED", cli.minimized && !cli.smoke);
   QList<QQmlError> smokeWarnings;
   if(cli.smoke) {
     QObject::connect(&engine, &QQmlEngine::warnings, &app, [&smokeWarnings](const QList<QQmlError>& warnings) {
@@ -291,7 +302,7 @@ int main(int argc, char* argv[]) {
   // the tray's "Show" does (it also restores a window hidden to the tray).
   QObject::connect(&instance, &heap::platform::SingleInstance::messageReceived, &app, [&engine](const QByteArray& message) {
     const QList<QObject*> roots = engine.rootObjects();
-    if(roots.isEmpty()) {
+    if(roots.isEmpty() || message == "ping") {
       return;
     }
     const qsizetype at = message.indexOf("view=");

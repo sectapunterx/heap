@@ -1361,6 +1361,32 @@ Item {
                         // "ask" drops the key: unset is what makes the next close ask.
                         onSelected: (v) => root.set("system", "closeToTray", v === "ask" ? undefined : v === "tray")
                     }
+                    // Start at login (APP-154). The OS entry is the truth, read
+                    // when this section opens: removed by hand, it shows off.
+                    SwitchRow {
+                        id: startAtLoginRow
+                        objectName: "settings-start-at-login"
+                        property var _os: AppController.autostartState()
+                        visible: !!_os.supported
+                        label: I18n.t("settings.system.startAtLogin")
+                        hint: I18n.t("settings.system.startAtLogin.hint")
+                        checked: !!_os.enabled
+                        onToggled: (checked) => {
+                            AppController.setAutostart(checked, !!startAtLoginRow._os.minimized);
+                            startAtLoginRow._os = AppController.autostartState();
+                        }
+                    }
+                    SwitchRow {
+                        objectName: "settings-start-minimized"
+                        visible: !!startAtLoginRow._os.supported && !!startAtLoginRow._os.enabled
+                        label: I18n.t("settings.system.startMinimized")
+                        hint: I18n.t("settings.system.startMinimized.hint")
+                        checked: !!startAtLoginRow._os.minimized
+                        onToggled: (checked) => {
+                            AppController.setAutostart(!!startAtLoginRow._os.enabled, checked);
+                            startAtLoginRow._os = AppController.autostartState();
+                        }
+                    }
                 }
             }
         }

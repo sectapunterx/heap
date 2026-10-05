@@ -853,6 +853,17 @@ class AppController : public QObject {
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
 
+  // ---- Start at login (APP-154) ----
+  // { supported, enabled, minimized }, read from the OS entry on every call so
+  // Settings shows what the next login will really do. While the entry is off,
+  // `minimized` is the remembered choice (settings.system.startMinimized).
+  Q_INVOKABLE QVariantMap autostartState() const;
+  // Writes or removes the OS entry and remembers the choice under
+  // settings.system. Starting at login implies staying in the tray: an
+  // unanswered close-to-tray question is answered "hide to tray". False (and
+  // an error toast) when the OS refused the change.
+  Q_INVOKABLE bool setAutostart(bool enabled, bool minimized);
+
   // ---- Event ops ----
   // A fresh event id. Shared by the draft and the series edits, which both
   // need one and must not invent different shapes.

@@ -449,6 +449,8 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
+      {"settings.system.startAtLogin.failed",
+       {"Could not change the login start: the system refused", "Не удалось изменить автозапуск: система не дала"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
       {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
       {"deadline.overdueLong", {"%1 overdue", "просрочено на %1"}},

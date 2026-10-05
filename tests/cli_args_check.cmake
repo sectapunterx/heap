@@ -44,6 +44,9 @@ expect_refused("unexpected argument 'positional_arg'" positional_arg)
 expect_refused("unexpected argument 'board'" board)
 expect_refused("unexpected argument 'extra'" --view board extra)
 expect_refused("unexpected argument 'C:/tmp/dd'" --data-dir "${WORK_DIR}" C:/tmp/dd)
+# --minimized (APP-154, the login entry) is a known flag: the refusal is about
+# the stray argument, not "Unknown option 'minimized'".
+expect_refused("unexpected argument 'extra'" --minimized extra)
 # REL-2: unknown options were already refused.
 expect_refused("Unknown option 'no-such-flag'" --no-such-flag)
 

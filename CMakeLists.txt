@@ -202,6 +202,7 @@ qt_add_library(heap_core STATIC
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
+    src/platform/Autostart.cpp
     src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
@@ -218,6 +219,7 @@ qt_add_library(heap_core STATIC
     # ── audit-know: begin ──
     src/storage/Attachments.cpp
     src/AppControllerAttachments.cpp
+    src/AppControllerPresence.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
@@ -252,6 +254,10 @@ qt_add_library(heap_core STATIC
         $<IF:$<PLATFORM_ID:Windows>,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_win.cpp,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_stub.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/MacWindow.mm>
+        # Start at login (APP-154): the Run key, a launch agent, an XDG entry.
+        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_mac.cpp>
+        $<$<NOT:$<OR:$<PLATFORM_ID:Windows>,$<PLATFORM_ID:Darwin>>>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_linux.cpp>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
