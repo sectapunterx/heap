@@ -49,6 +49,16 @@ void MdDocument::setPalette(const QVariantMap& palette) {
   reparse();
 }
 
+void MdDocument::setTicketTitles(const QVariantMap& titles) {
+  if(m_ticketTitles == titles) {
+    return;
+  }
+  m_ticketTitles = titles;
+  emit ticketTitlesChanged();
+  m_dirty = true;
+  scheduleParse();
+}
+
 void MdDocument::setAllowRemoteImages(bool allow) {
   if(m_allowRemoteImages == allow) {
     return;
@@ -112,6 +122,9 @@ MdHtmlOptions MdDocument::buildOptions() const {
   options.palette.math = colorAt(m_palette, "math");
   options.allowRemoteImages = m_allowRemoteImages;
   options.imageBaseDir = m_imageBaseDir;
+  for(auto it = m_ticketTitles.constBegin(); it != m_ticketTitles.constEnd(); ++it) {
+    options.ticketTitles.insert(it.key(), it.value().toString());
+  }
   return options;
 }
 

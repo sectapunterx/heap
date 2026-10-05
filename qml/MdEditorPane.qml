@@ -293,5 +293,6 @@ Item {
         // Relative image paths resolve here; absolute local paths work anywhere.
         imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
+        ticketTitles: AppController.taskTitles
     }
 }

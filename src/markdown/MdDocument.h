@@ -37,6 +37,9 @@ class MdDocument : public QObject {
   // "math", "dim". Set from QML's Theme so the rendered view matches the
   // editor in light and dark mode.
   Q_PROPERTY(QVariantMap palette READ palette WRITE setPalette NOTIFY paletteChanged)
+  // Ticket id → title: a "#APP-12" in the rendered view reads as the ticket's
+  // title (APP-121). Bound to AppController.taskTitles.
+  Q_PROPERTY(QVariantMap ticketTitles READ ticketTitles WRITE setTicketTitles NOTIFY ticketTitlesChanged)
   // Off by default. See MdHtmlOptions: rendering a remote image makes a
   // network request on the author's behalf, to a host chosen by whoever wrote
   // the note.
@@ -73,6 +76,12 @@ class MdDocument : public QObject {
   }
 
   void setPalette(const QVariantMap& palette);
+
+  QVariantMap ticketTitles() const {
+    return m_ticketTitles;
+  }
+
+  void setTicketTitles(const QVariantMap& titles);
 
   bool allowRemoteImages() const {
     return m_allowRemoteImages;
@@ -134,6 +143,7 @@ class MdDocument : public QObject {
  signals:
   void textChanged();
   void paletteChanged();
+  void ticketTitlesChanged();
   void allowRemoteImagesChanged();
   void liveChanged();
   void imageBaseDirChanged();
@@ -146,6 +156,7 @@ class MdDocument : public QObject {
 
   QString m_text;
   QVariantMap m_palette;
+  QVariantMap m_ticketTitles;
   bool m_allowRemoteImages = false;
   bool m_live = true;
   QString m_imageBaseDir;

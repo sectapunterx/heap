@@ -1609,6 +1609,33 @@ TEST_F(AppControllerTest, StatusCountsAreOnePassAndFollowTheModel) {
   EXPECT_TRUE(app_->statusCounts().isEmpty());
 }
 
+// APP-121: the id → title map the markdown views use follows the model,
+// and stays quiet when nothing it holds changed.
+TEST_F(AppControllerTest, TaskTitlesFollowTheModel) {
+  Task a;
+  a.id = QStringLiteral("A-1");
+  a.title = QStringLiteral("First");
+  a.status = QStringLiteral("todo");
+  app_->tasks()->reset({a});
+  QCoreApplication::processEvents();
+  EXPECT_EQ(app_->taskTitles().value(QStringLiteral("A-1")).toString(), QStringLiteral("First"));
+
+  int changes = 0;
+  QObject::connect(app_.get(), &AppController::taskTitlesChanged, [&changes]() {
+    ++changes;
+  });
+  app_->tasks()->setStatus(QStringLiteral("A-1"), QStringLiteral("prog"));
+  QCoreApplication::processEvents();
+  EXPECT_EQ(changes, 0) << "a status move is not a title change";
+
+  a.title = QStringLiteral("Renamed");
+  a.status = QStringLiteral("prog");
+  app_->tasks()->upsert(a);
+  QCoreApplication::processEvents();
+  EXPECT_EQ(changes, 1);
+  EXPECT_EQ(app_->taskTitles().value(QStringLiteral("A-1")).toString(), QStringLiteral("Renamed"));
+}
+
 // APP-123: a periodic sync can wait up to a month. The timer only checks
 // (never less often than hourly) and the last sync's time decides.
 TEST(AutoSyncTest, DueByTheLastSyncNotTheTimer) {

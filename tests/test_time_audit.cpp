@@ -815,7 +815,15 @@ TEST_F(TimeAudit, ReimportingOurExportDoesNotDoubleMovedOccurrences) {
 // ── APP-122: auto-archive for any column ──
 
 TEST_F(TimeAudit, AnyColumnArchivesAfterItsOwnDays) {
+  // The test profile outlives a run: drop the column an earlier run left.
+  app_->tasks()->reset({});
+  for(const QVariant& s : app_->statuses()) {
+    if(s.toMap().value("name").toString() == QStringLiteral("Obsolete")) {
+      app_->deleteStatus(s.toMap().value("id").toString());
+    }
+  }
   app_->addStatus(QStringLiteral("Obsolete"));
+  ASSERT_EQ(app_->statuses().constLast().toMap().value("name").toString(), QStringLiteral("Obsolete"));
   const QString obsolete = app_->statuses().constLast().toMap().value("id").toString();
   ASSERT_FALSE(obsolete.isEmpty());
   EXPECT_EQ(app_->statusArchiveDays(obsolete), 0) << "a new column never archives by default";
