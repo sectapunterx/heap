@@ -557,7 +557,7 @@ TestCase {
     // A built-in that was retired resolves to its replacement, so a user who
     // had picked it keeps a theme of the same kind instead of the slot default.
     function test_retired_presets_resolve_to_their_replacement() {
-        const cases = { "minimal-light": "heap-light", "minimal-dark": "crimson", "ash": "graphite",
+        const cases = { "minimal-light": "heap-light", "ash": "graphite",
                         "stone": "ochre", "slate": "graphite", "sage": "fjord", "muted-mauve": "dusk",
                         "moss-mono": "fjord", "nocturne": "dusk" };
         for (const old in cases) {
@@ -565,6 +565,16 @@ TestCase {
             compare(Presets.resolve(old, [], "dark").id, cases[old], old);
         }
         compare(Presets.resolve("no-such-theme", [], "dark").id, Presets.DEFAULT_DARK);
+    }
+
+    // Minimal dark came back (APP-124) as a low-contrast theme, under its old
+    // id, so a profile that still names it gets it again rather than Crimson.
+    function test_minimal_dark_is_back_in_the_low_set() {
+        const t = Presets.builtin("minimal-dark");
+        verify(t !== null, "minimal-dark is not a built-in");
+        compare(t.contrast, "low");
+        compare(Presets.resolve("minimal-dark", [], "dark").id, "minimal-dark");
+        compare(Presets.category(t, []), "low");
     }
 
     function test_new_id_is_unused() {
