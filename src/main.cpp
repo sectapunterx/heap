@@ -2,6 +2,7 @@
 #include "Logger.h"
 #include "ViewNames.h"
 
+#include "diag/PerfLog.h"
 #include "platform/AltGrGuard.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
@@ -48,6 +49,7 @@ struct CliOptions {
   QString dataDir;
   bool dataDirSet = false;
   bool smoke = false;
+  bool perfLog = false;
 };
 
 // Exit code for a command line heap cannot act on (the usual "usage" code).
@@ -94,6 +96,11 @@ CliOptions parseCommandLine(const QStringList& args) {
                      "check a packaged build."));
   parser.addOption(smokeOption);
 
+  const QCommandLineOption perfLogOption(QStringLiteral("perf-log"),
+                                         QStringLiteral("Log startup and capture timings to the log (perf: ... lines). "
+                                                        "Also settable with HEAP_PERF_LOG=1."));
+  parser.addOption(perfLogOption);
+
   // A macOS Finder launch may still append -psn_<n>_<m>; it is not the user's.
   QStringList filtered;
   for(const QString& a : args) {
@@ -125,6 +132,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  opts.perfLog = parser.isSet(perfLogOption);
   if(parser.isSet(viewOption) && !heap::views::isKnown(opts.initialView)) {
     usageError(parser,
                QStringLiteral("unknown view '%1' (valid: %2)").arg(opts.initialView, heap::views::all().join(QStringLiteral(", "))));
@@ -182,6 +190,7 @@ struct LogCloser {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  heap::perf::markProcessStart();
   QApplication app(argc, argv);
   QApplication::setOrganizationName("heap");
   QApplication::setOrganizationDomain("heap.local");
@@ -191,6 +200,9 @@ int main(int argc, char* argv[]) {
   QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
   const CliOptions cli = parseCommandLine(QApplication::arguments());
+  if(cli.perfLog) {
+    heap::perf::setEnabled(true);
+  }
 
   // AltGr+E in a text field types €, not "new event" (SHELL-2).
   heap::platform::AltGrGuard altGrGuard;
@@ -277,6 +289,22 @@ int main(int argc, char* argv[]) {
       },
       Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/TodoCpp/qml/Main.qml")));
+  heap::perf::log(QStringLiteral("startup qml-loaded"), heap::perf::sinceProcessStart());
+
+  // The first frame the main window presents, measured from main() (APP-161).
+  // frameSwapped may come from the render thread; logging there is safe.
+  if(heap::perf::enabled() && !engine.rootObjects().isEmpty()) {
+    if(auto* win = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst())) {
+      QObject::connect(
+          win,
+          &QQuickWindow::frameSwapped,
+          win,
+          []() {
+            heap::perf::log(QStringLiteral("startup first-frame"), heap::perf::sinceProcessStart());
+          },
+          static_cast<Qt::ConnectionType>(Qt::DirectConnection | Qt::SingleShotConnection));
+    }
+  }
 
 #ifdef Q_OS_MACOS
   // Unify the title bar with the app's top strip (traffic lights inlaid).

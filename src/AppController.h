@@ -1083,6 +1083,12 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap parseDateTime(const QString& input, const QDateTime& reference = QDateTime()) const;
   Q_INVOKABLE QVariantList parseAllDateTimes(const QString& input, const QDateTime& reference = QDateTime()) const;
 
+  // ---- Opt-in timing (APP-161, diag/PerfLog.h) ----
+  // A popup calls this as it starts to show: span `name` (begun earlier by the
+  // global hotkey, or now) ends on the next frame `item`'s window presents, and
+  // is logged. A no-op unless HEAP_PERF_LOG=1 or --perf-log.
+  Q_INVOKABLE void perfMarkShown(const QString& name, QObject* item) const;
+
   Q_INVOKABLE void copyToClipboard(const QString& text);
 
   // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
