@@ -312,16 +312,32 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Add or remove the card under the cursor from the selection.", "Добавить карточку под курсором в выделение или убрать из него."}},
       {"shortcut.board.moveDown.label", {"Board: move card down", "Доска: карточку вниз"}},
       {"shortcut.board.moveDown.desc",
-       {"Swap the card under the cursor with the one below.", "Поменять карточку под курсором местами с нижней."}},
+       {"Swap the card under the cursor with the one below. Also Ctrl+Down.",
+        "Поменять карточку под курсором местами с нижней. Также Ctrl+↓."}},
       {"shortcut.board.moveUp.label", {"Board: move card up", "Доска: карточку вверх"}},
       {"shortcut.board.moveUp.desc",
-       {"Swap the card under the cursor with the one above.", "Поменять карточку под курсором местами с верхней."}},
+       {"Swap the card under the cursor with the one above. Also Ctrl+Up.",
+        "Поменять карточку под курсором местами с верхней. Также Ctrl+↑."}},
       {"shortcut.board.moveLeft.label", {"Board: move card left", "Доска: карточку левее"}},
       {"shortcut.board.moveLeft.desc",
-       {"Move the card under the cursor to the previous column.", "Перенести карточку под курсором в предыдущую колонку."}},
+       {"Move the selection, or the card under the cursor, to the previous column. Also Ctrl+Left.",
+        "Перенести выделение или карточку под курсором в предыдущую колонку. Также Ctrl+←."}},
       {"shortcut.board.moveRight.label", {"Board: move card right", "Доска: карточку правее"}},
       {"shortcut.board.moveRight.desc",
-       {"Move the card under the cursor to the next column.", "Перенести карточку под курсором в следующую колонку."}},
+       {"Move the selection, or the card under the cursor, to the next column. Also Ctrl+Right.",
+        "Перенести выделение или карточку под курсором в следующую колонку. Также Ctrl+→."}},
+      {"shortcut.board.selectDown.label", {"Board: select down", "Доска: выделить вниз"}},
+      {"shortcut.board.selectDown.desc", {"Add the next card down to the selection.", "Добавить в выделение карточку ниже."}},
+      {"shortcut.board.selectUp.label", {"Board: select up", "Доска: выделить вверх"}},
+      {"shortcut.board.selectUp.desc", {"Add the next card up to the selection.", "Добавить в выделение карточку выше."}},
+      {"shortcut.board.selectColumnLeft.label", {"Board: select column, go left", "Доска: выделить колонку, влево"}},
+      {"shortcut.board.selectColumnLeft.desc",
+       {"Select every card in the cursor's column, then step to the previous column.",
+        "Выделить все карточки колонки с курсором и перейти в колонку левее."}},
+      {"shortcut.board.selectColumnRight.label", {"Board: select column, go right", "Доска: выделить колонку, вправо"}},
+      {"shortcut.board.selectColumnRight.desc",
+       {"Select every card in the cursor's column, then step to the next column.",
+        "Выделить все карточки колонки с курсором и перейти в колонку правее."}},
       {"shortcut.board.cardMenu.label", {"Board: card menu", "Доска: меню карточки"}},
       {"shortcut.board.cardMenu.desc",
        {"Open the menu of the card under the cursor: status, priority, archive…",
@@ -10632,6 +10648,13 @@ void AppController::seedShortcutCatalog() {
   add("board.cardMenu", "M");
   add("board.archive", "E");
   add("board.collapseColumn", "Z");
+  // Selecting from the keyboard (APP-128): Shift+Up/Down grows the selection
+  // a card at a time, Shift+Left/Right takes the whole column and steps on.
+  // Moving cards went from Shift+arrows to Ctrl+arrows (Main.qml) to make room.
+  add("board.selectDown", "Shift+Down");
+  add("board.selectUp", "Shift+Up");
+  add("board.selectColumnLeft", "Shift+Left");
+  add("board.selectColumnRight", "Shift+Right");
   // Calendar date navigation. Only live on a calendar view, where the board's
   // own bare letters are not, so the two sets cannot collide.
   add("cal.today", "T");

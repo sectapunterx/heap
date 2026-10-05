@@ -115,7 +115,9 @@ alongside each one.
 | Previous / next column | `H` / `L` |
 | Open the card | `Return` |
 | Add to the selection | `Space` |
-| Move the card | `Shift+J` / `Shift+K` / `Shift+H` / `Shift+L` |
+| Move the card (left / right: the selection, when there is one) | `Shift+J` / `Shift+K` / `Shift+H` / `Shift+L`, or `Ctrl+↓` / `Ctrl+↑` / `Ctrl+←` / `Ctrl+→` |
+| Grow / shrink the selection down / up | `Shift+Down` / `Shift+Up` |
+| Select the whole column, then step left / right | `Shift+Left` / `Shift+Right` |
 | Card menu (status, priority, archive, …) | `M` (or the `Menu` key) |
 | Archive the card (or the selection) | `E` |
 | Fold / unfold the cursor's column | `Z` |
