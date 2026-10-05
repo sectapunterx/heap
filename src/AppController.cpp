@@ -690,6 +690,17 @@ AppController::AppController(QObject* parent) :
   connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, dropStatusCounts);
   connect(&m_tasks, &QAbstractItemModel::dataChanged, this, dropStatusCounts);
+  const auto queueTaskTitles = [this]() {
+    if(m_taskTitlesQueued) {
+      return;
+    }
+    m_taskTitlesQueued = true;
+    QMetaObject::invokeMethod(this, &AppController::refreshTaskTitles, Qt::QueuedConnection);
+  };
+  connect(&m_tasks, &QAbstractItemModel::modelReset, this, queueTaskTitles);
+  connect(&m_tasks, &QAbstractItemModel::rowsInserted, this, queueTaskTitles);
+  connect(&m_tasks, &QAbstractItemModel::rowsRemoved, this, queueTaskTitles);
+  connect(&m_tasks, &QAbstractItemModel::dataChanged, this, queueTaskTitles);
   // Status moves for the Monday recap, noticed the same way: from the model,
   // so a drag, the editor, a bulk move, a sync and an undo are all seen.
   connect(&m_tasks, &QAbstractItemModel::modelReset, this, [this]() {
@@ -5150,6 +5161,19 @@ QVariantMap AppController::statusCounts() const {
   }
   m_statusCountsDirty = false;
   return m_statusCounts;
+}
+
+void AppController::refreshTaskTitles() {
+  m_taskTitlesQueued = false;
+  QVariantMap next;
+  for(const Task& t : m_tasks.items()) {
+    next.insert(t.id, t.title);
+  }
+  if(next == m_taskTitles) {
+    return;
+  }
+  m_taskTitles = next;
+  emit taskTitlesChanged();
 }
 
 int AppController::statusIndexOf(const QString& id) const {

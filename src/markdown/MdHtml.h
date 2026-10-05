@@ -49,6 +49,10 @@ struct MdHtmlOptions {
   // document with footnoteNumbers() so every block agrees.
   QHash<QString, int> footnoteNumbers;
 
+  // Ticket id → title (APP-121). A "#APP-12" with a title here reads as the
+  // title; an unknown id keeps the "#APP-12" it was written as.
+  QHash<QString, QString> ticketTitles;
+
   // Where a relative image path ("attachments/x.png") is looked up. Empty: a
   // relative path cannot be resolved, and the image says so.
   QString imageBaseDir;

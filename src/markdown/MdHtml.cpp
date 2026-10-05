@@ -69,7 +69,10 @@ QString decorate(const QString& text, const MdHtmlOptions& options) {
       const QString label = number > 0 ? QString::number(number) : escapeHtml(id);
       out += QStringLiteral("<sup>%1</sup>").arg(internalLink(QStringLiteral("fn"), id, label, options.palette.link));
     } else if(match.capturedStart(5) >= 0) {
-      out += internalLink(QStringLiteral("task"), match.captured(6), escapeHtml(match.captured(5)), options.palette.ticket);
+      // A known ticket reads as its title; the link still carries the id.
+      const QString title = options.ticketTitles.value(match.captured(6)).simplified();
+      out += internalLink(
+          QStringLiteral("task"), match.captured(6), escapeHtml(title.isEmpty() ? match.captured(5) : title), options.palette.ticket);
     } else if(match.capturedStart(7) >= 0) {
       out += internalLink(QStringLiteral("tag"), match.captured(8), escapeHtml(match.captured(7)), options.palette.tag);
     } else if(match.capturedStart(9) >= 0) {

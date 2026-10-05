@@ -1617,6 +1617,7 @@ Popup {
         // An image pasted into the description lives in the attachments folder.
         imageBaseDir: AppController.dataDir + "/attachments"
         palette: Theme.mdPalette
+        ticketTitles: AppController.taskTitles
     }
 
 }

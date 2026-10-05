@@ -228,6 +228,18 @@ TEST(MdHtmlTest, TicketReferenceWinsOverTag) {
   EXPECT_FALSE(html.contains(QStringLiteral("heap://tag/")));
 }
 
+// APP-121: a known ticket reads as its title, escaped like any document
+// text; the link still carries the id. An unknown one stays "#ID".
+TEST(MdHtmlTest, TicketReferenceShowsItsTitle) {
+  MdHtmlOptions options = testOptions();
+  options.ticketTitles.insert(QStringLiteral("HEAP-7"), QStringLiteral("Fix <login>\n  flow"));
+  const QString html = renderFirst(QStringLiteral("see #HEAP-7 and #HEAP-8\n"), BlockType::Paragraph, options);
+  EXPECT_TRUE(html.contains(QStringLiteral("heap://task/HEAP-7")));
+  EXPECT_TRUE(html.contains(QStringLiteral(">Fix &lt;login&gt; flow</a>")));
+  EXPECT_FALSE(html.contains(QStringLiteral(">#HEAP-7<")));
+  EXPECT_TRUE(html.contains(QStringLiteral(">#HEAP-8</a>")));
+}
+
 TEST(MdHtmlTest, DecorationsDoNotFireInsideCode) {
   // In a shell snippet "#tag" is a comment and "@host" is not a person.
   const QString html = renderParagraph(QStringLiteral("`ssh @host  # notatag`\n"));

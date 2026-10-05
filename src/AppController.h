@@ -81,6 +81,9 @@ class AppController : public QObject {
   // status id → task count, in one pass. The rail and the top bar read this
   // instead of calling countByStatus once per badge.
   Q_PROPERTY(QVariantMap statusCounts READ statusCounts NOTIFY statusCountsChanged)
+  // task id → title for every task in the profile, archived included. The
+  // rendered markdown shows a "#APP-12" mention as its title (APP-121).
+  Q_PROPERTY(QVariantMap taskTitles READ taskTitles NOTIFY taskTitlesChanged)
   // The active profile's saved views, in sidebar order: [{id, name, query,
   // priorities, sort, archived, showDone, view, problems}] — `problems` is what
   // the search box would flag in the query (a deleted column, a typo).
@@ -968,6 +971,10 @@ class AppController : public QObject {
   // scan. Archived tasks are not counted; "_total" is the live task count.
   QVariantMap statusCounts() const;
 
+  QVariantMap taskTitles() const {
+    return m_taskTitles;
+  }
+
   // ---- Saved views (src/AppControllerSavedViews.cpp) ----
   // `state` is the filter state as Main.qml holds it: {query, priorities
   // (list or {P0: true} map), sort, archived, showDone, view}. Every mutation
@@ -1243,6 +1250,7 @@ class AppController : public QObject {
   void shortcutsChanged();
   void blockedStuckChanged();
   void statusCountsChanged();
+  void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
   void notification(const QString& title, const QString& body, const QString& kind);
@@ -1424,6 +1432,12 @@ class AppController : public QObject {
   // every mutation path is covered without each one remembering to.
   mutable QVariantMap m_statusCounts;
   mutable bool m_statusCountsDirty = true;
+  // taskTitles: rebuilt once per event-loop turn after the task model
+  // changes, and announced only when a title or id really changed, so a
+  // status drag does not re-render every open note.
+  QVariantMap m_taskTitles;
+  bool m_taskTitlesQueued = false;
+  void refreshTaskTitles();
   // The active profile's saved views and savedViewCounts()' cache. The count
   // signal is coalesced: a bulk edit fires the model's signals per row.
   QVector<heap::savedviews::SavedView> m_savedViews;
