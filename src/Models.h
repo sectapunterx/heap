@@ -491,6 +491,10 @@ class TaskModel : public QAbstractListModel {
     DueHasTimeRole,
     // How many files are attached, for the card's paperclip chip.
     AttachmentCountRole,
+    // Whose move it is on the linked PR (APP-156): "mine" | "theirs" | "",
+    // and why (an I18n key suffix). Runtime only, like the rest of GitInfo.
+    PrMoveRole,
+    PrMoveReasonRole,
   };
 
   explicit TaskModel(QObject* parent = nullptr) : QAbstractListModel(parent) {
@@ -554,6 +558,8 @@ class TaskModel : public QAbstractListModel {
   struct GitInfo {
     QString prState;
     QString prUrl;
+    QString prMove;
+    QString prMoveReason;
     int prNumber = 0;
     int ahead = 0;
     int behind = 0;

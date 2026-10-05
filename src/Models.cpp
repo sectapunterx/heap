@@ -182,6 +182,8 @@ QHash<int, QByteArray> TaskModel::roleNames() const {
       {ScheduledHasTimeRole, "scheduledHasTime"},
       {DueHasTimeRole, "dueHasTime"},
       {AttachmentCountRole, "attachmentCount"},
+      {PrMoveRole, "prMove"},
+      {PrMoveReasonRole, "prMoveReason"},
   };
 }
 
@@ -228,6 +230,10 @@ QVariant TaskModel::data(const QModelIndex& idx, int role) const {
       return m_git.value(t.id).prState;
     case PrNumberRole:
       return m_git.value(t.id).prNumber;
+    case PrMoveRole:
+      return m_git.value(t.id).prMove;
+    case PrMoveReasonRole:
+      return m_git.value(t.id).prMoveReason;
     case PrUrlRole:
       return m_git.value(t.id).prUrl;
     case GitAheadRole:
@@ -314,6 +320,10 @@ void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
   if(info.contains(QStringLiteral("prUrl"))) {
     g.prUrl = info.value(QStringLiteral("prUrl")).toString();
   }
+  if(info.contains(QStringLiteral("prMove"))) {
+    g.prMove = info.value(QStringLiteral("prMove")).toString();
+    g.prMoveReason = info.value(QStringLiteral("prMoveReason")).toString();
+  }
   if(info.contains(QStringLiteral("ahead"))) {
     g.ahead = info.value(QStringLiteral("ahead")).toInt();
   }
@@ -324,7 +334,8 @@ void TaskModel::setGitInfoForId(const QString& id, const QVariantMap& info) {
     g.recentCommits = info.value(QStringLiteral("recentCommits")).toList();
   }
   const QModelIndex mi = index(row, 0);
-  emit dataChanged(mi, mi, {PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
+  emit dataChanged(
+      mi, mi, {PrStateRole, PrNumberRole, PrUrlRole, PrMoveRole, PrMoveReasonRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
 }
 
 void TaskModel::clearAllGitInfo() {
@@ -333,8 +344,9 @@ void TaskModel::clearAllGitInfo() {
     return;
   }
   m_git.clear();
-  emit dataChanged(
-      index(0, 0), index(m_items.size() - 1, 0), {PrStateRole, PrNumberRole, PrUrlRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
+  emit dataChanged(index(0, 0),
+                   index(m_items.size() - 1, 0),
+                   {PrStateRole, PrNumberRole, PrUrlRole, PrMoveRole, PrMoveReasonRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
 }
 
 int TaskModel::indexOfId(const QString& id) const {

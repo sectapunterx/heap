@@ -193,6 +193,7 @@ qt_add_library(heap_core STATIC
     src/chrono/ChronoParser.cpp
     src/git/BranchTaskMatcher.cpp
     src/git/GitWatcher.cpp
+    src/git/PrFacts.cpp
     src/text/TaskTextUtils.cpp
     src/query/QueryParser.cpp
     src/query/TaskQuery.cpp
@@ -387,6 +388,7 @@ qt_add_qml_module(heap_core
         src/git/BranchTaskMatcher.h
         src/git/GitTypes.h
         src/git/GitWatcher.h
+        src/git/PrFacts.h
         src/text/TaskTextUtils.h
         src/query/QueryParser.h
         src/query/TaskQuery.h

@@ -812,6 +812,8 @@ AppController::AppController(QObject* parent) :
         entry["prState"] = pr.value("state");
         entry["prNumber"] = pr.value("number");
         entry["prUrl"] = pr.value("url");
+        entry["prMove"] = pr.value("move");
+        entry["prMoveReason"] = pr.value("moveReason");
         m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
       });
   applyGitSettingsFromMap(settingsMap().value("git").toMap());
@@ -11939,6 +11941,11 @@ QString AppController::taskIdForBranchMatch(const QString& matchedId) const {
 }
 
 void AppController::applyGitSettingsFromMap(const QVariantMap& g) {
+  const bool showMove = g.value("showWhoseMove", true).toBool();
+  if(showMove != m_showWhoseMove) {
+    m_showWhoseMove = showMove;
+    emit showWhoseMoveChanged();
+  }
   if(!m_gitWatcher) {
     return;
   }
@@ -12036,6 +12043,8 @@ void AppController::onGitRepoState(const QString& repo, const QVariantMap& state
   entry["prState"] = pr.value("state");
   entry["prNumber"] = pr.value("number");
   entry["prUrl"] = pr.value("url");
+  entry["prMove"] = pr.value("move");
+  entry["prMoveReason"] = pr.value("moveReason");
   m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
 }
 

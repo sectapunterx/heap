@@ -187,7 +187,9 @@ add_test(NAME heap_recur_tests COMMAND heap_recur_tests)
 add_executable(heap_git_tests
     test_branch_task_matcher.cpp
     test_git_watcher_parse.cpp
+    test_whose_move.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/PrFacts.cpp
 )
 
 target_include_directories(heap_git_tests PRIVATE

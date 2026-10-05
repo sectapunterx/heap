@@ -2662,6 +2662,13 @@ Item {
                     checked: !!(root.settings.git && root.settings.git.watchPrState)
                     onToggled: (checked) => root.set("git", "watchPrState", checked)
                 }
+                SwitchRow {
+                    objectName: "settings-git-show-move"
+                    label: I18n.t("settings.git.showMove")
+                    hint: I18n.t("settings.git.showMove.hint")
+                    checked: !(root.settings.git && root.settings.git.showWhoseMove === false)
+                    onToggled: (checked) => root.set("git", "showWhoseMove", checked)
+                }
             }
         }
     }

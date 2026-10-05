@@ -176,6 +176,9 @@ class AppController : public QObject {
   Q_PROPERTY(QString focusedRepo READ focusedRepo NOTIFY focusedGitChanged)
   Q_PROPERTY(QVariantMap focusedRepoState READ focusedRepoState NOTIFY focusedGitChanged)
   Q_PROPERTY(bool focusedBannerDismissed READ focusedBannerDismissed NOTIFY focusedGitChanged)
+  // Settings → Git → "Show whose move" (APP-156). On by default: it is a fact
+  // read off the PR, not a nudge.
+  Q_PROPERTY(bool showWhoseMove READ showWhoseMove NOTIFY showWhoseMoveChanged)
 
   // ---- Storage health (PLAT-1/4/5) ----
   // "ok", "unreadable" (state.json exists but could not be opened: read-only
@@ -1227,6 +1230,10 @@ class AppController : public QObject {
     return m_focusedRepoState;
   }
 
+  bool showWhoseMove() const {
+    return m_showWhoseMove;
+  }
+
   bool focusedBannerDismissed() const {
     return m_dismissedBranches.contains(m_focusedBranch);
   }
@@ -1330,6 +1337,7 @@ class AppController : public QObject {
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
   void focusedGitChanged();
+  void showWhoseMoveChanged();
   void openTaskRequested(const QString& id);
   void selectedTaskIdsChanged();
   // Raised by the OS-level global hotkeys (Quick-capture from anywhere). QML
@@ -1935,6 +1943,7 @@ class AppController : public QObject {
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
+  bool m_showWhoseMove = true;        // settings.git.showWhoseMove, cached for the cards
   void applyGitSettingsFromMap(const QVariantMap& git);
   // Re-derive the focused branch's task id under the current id-prefix and
   // refresh the banner. Needed because a prefix change (settings/profile) does

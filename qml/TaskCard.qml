@@ -498,6 +498,38 @@ Rectangle {
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.Medium
             }
+            // Whose move it is on that PR (APP-156): read off the PR — a review
+            // asked of me, red CI, an approval — and only ever shown, never
+            // acted on. "Mine" gets the chip; "waiting" stays dim text.
+            Rectangle {
+                id: moveChip
+                objectName: "tc-move"
+                readonly property string move: card.task ? String(card.task.prMove || "") : ""
+                readonly property string reason: card.task ? String(card.task.prMoveReason || "") : ""
+                readonly property bool mine: move === "mine"
+                visible: AppController.showWhoseMove && move.length > 0 && prT.state.length > 0
+                radius: Theme.radiusSm
+                color: mine ? Theme.withAlpha(Theme.accent, 0.14) : "transparent"
+                implicitWidth: moveT.implicitWidth + (mine ? 10 : 0)
+                implicitHeight: moveT.implicitHeight + 2
+                Text {
+                    id: moveT
+                    objectName: "tc-move-text"
+                    anchors.centerIn: parent
+                    text: moveChip.mine ? I18n.t("taskcard.move.mine") : I18n.t("taskcard.move.theirs")
+                    textFormat: Text.PlainText
+                    color: moveChip.mine ? Theme.accentStrong : Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsXs
+                    font.weight: moveChip.mine ? Font.DemiBold : Font.Normal
+                }
+                readonly property string tip: moveChip.reason.length > 0 ? I18n.t("taskcard.move." + moveChip.reason) : ""
+                QQC.ToolTip.visible: moveHover.hovered && moveChip.tip.length > 0
+                QQC.ToolTip.text: moveChip.tip
+                HoverHandler { id: moveHover }
+                Accessible.role: Accessible.StaticText
+                Accessible.name: moveT.text + (moveChip.tip.length > 0 ? " — " + moveChip.tip : "")
+            }
             // Time tracking — click to start/stop; live while running.
             Text {
                 id: timerT
