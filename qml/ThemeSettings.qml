@@ -8,6 +8,8 @@
 //
 // Writes go through setKey(key, value) into settings.appearance; SettingsView
 // persists them and Theme repaints from the blob, so every edit is live.
+pragma ComponentBehavior: Bound
+
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
@@ -184,7 +186,7 @@ ColumnLayout {
         delegate: ColumnLayout {
             id: catCol
             required property string modelData
-            readonly property var members: ts.themes.filter((t) => Presets.category(t, ts.customs) === modelData)
+            readonly property var members: ts.themes.filter((t) => Presets.category(t, ts.customs) === catCol.modelData)
             objectName: "theme-category-" + modelData
             visible: members.length > 0
             Layout.fillWidth: true
@@ -215,8 +217,8 @@ ColumnLayout {
                     delegate: Rectangle {
                         id: card
                         required property var modelData
-                        readonly property var t: Presets.resolve(modelData.id, ts.customs, ts.slot)
-                        readonly property bool selected: modelData.id === ts.currentId
+                        readonly property var t: Presets.resolve(card.modelData.id, ts.customs, ts.slot)
+                        readonly property bool selected: card.modelData.id === ts.currentId
                         objectName: "theme-card-" + modelData.id
                         width: 150; height: 92
                         radius: Theme.radius
@@ -454,7 +456,7 @@ ColumnLayout {
                 return t.key.toLowerCase().indexOf(ts.filter) >= 0
                     || I18n.t("theme.token." + t.key).toLowerCase().indexOf(ts.filter) >= 0;
             })
-            visible: ts.colorsOpen && tokens.length > 0
+            visible: ts.colorsOpen && grp.tokens.length > 0
             Layout.fillWidth: true
             spacing: Theme.spXs
 
