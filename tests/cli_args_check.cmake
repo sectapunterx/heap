@@ -39,6 +39,8 @@ endfunction()
 
 # The binary starts at all; without this a missing DLL would look like a pass.
 expect_ok(--version)
+# APP-161: the opt-in timing flag is a known option.
+expect_ok(--perf-log --version)
 
 expect_refused("unexpected argument 'positional_arg'" positional_arg)
 expect_refused("unexpected argument 'board'" board)

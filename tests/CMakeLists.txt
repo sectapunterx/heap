@@ -861,6 +861,18 @@ target_compile_definitions(heap_state_fixture_tests PRIVATE
 # RUN_SERIAL runs each one alone; everything else stays parallel.
 set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
 
+# ─── Performance budget gate (APP-161) ───
+# Median timings of the heavy-profile operations against tests/PerfBudgets.h;
+# prints a measured-vs-budget table every run. The gate is armed only in an
+# optimised build without sanitizers or coverage — elsewhere the numbers are
+# meaningless as a pass/fail signal, so the table is printed and nothing fails.
+heap_add_appcontroller_test(heap_perf_tests test_perf_budget.cpp)
+if (NOT HEAP_ENABLE_SANITIZERS AND NOT HEAP_ENABLE_COVERAGE
+        AND CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+    target_compile_definitions(heap_perf_tests PRIVATE HEAP_PERF_GATE=1)
+endif ()
+set_tests_properties(heap_perf_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
+
 # ─── CI's qmllint, locally ───
 # CI judges QML with Qt 6.9.1's qmllint (the qmllint ratchet). A newer local
 # Qt reports different findings, so a PR that built and tested green here
