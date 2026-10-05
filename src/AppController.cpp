@@ -5570,9 +5570,10 @@ QVariantMap AppController::compileSearch(const QString& text) const {
   // largest thing this call could return.
   QStringList ids;
   if(q.isQuery()) {
-    for(const Task& t : m_tasks.items()) {
-      if(q.matches(t)) {
-        ids << t.id;
+    const QVector<Task>& items = m_tasks.items();
+    for(int row = 0; row < items.size(); ++row) {
+      if(q.matches(items.at(row), m_tasks.searchTextAt(row))) {
+        ids << items.at(row).id;
       }
     }
   }

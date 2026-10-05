@@ -26,7 +26,7 @@ bool accepts(const CompiledView& c, const Task& t, const QString& haystack) {
   if(!c.freeText.isEmpty() && !haystack.contains(c.freeText)) {
     return false;
   }
-  return !c.query.isQuery() || c.query.matches(t);
+  return !c.query.isQuery() || c.query.matches(t, haystack);
 }
 
 QHash<QString, int> countMatches(const QVector<SavedView>& views,

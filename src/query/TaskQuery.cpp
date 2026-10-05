@@ -177,12 +177,20 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
   TaskQuery q;
   q.m_today = today;
   q.m_groups.append(QVector<Clause>());
-  QStringList free;
+  // The search words of each OR group, parallel to m_groups. Without an OR
+  // they are the one free text the caller substring-matches; with one, each
+  // group's words are a clause of that group, so "a OR b" means either word
+  // rather than the phrase "a b" (TASKS-4).
+  QVector<QStringList> groupWords(1);
+  const auto addWord = [&groupWords](const QString& w) {
+    groupWords.last() << w;
+  };
 
   for(QString token : tokenize(text)) {
     if(token == QStringLiteral("OR") || token == QStringLiteral("|")) {
-      if(!q.m_groups.constLast().isEmpty()) {
+      if(!q.m_groups.constLast().isEmpty() || !groupWords.constLast().isEmpty()) {
         q.m_groups.append(QVector<Clause>());
+        groupWords.append(QStringList());
       }
       q.m_isQuery = true;
       continue;
@@ -204,7 +212,7 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
         q.m_negatedWords << token.toLower();
         q.m_isQuery = true;
       } else {
-        free << token.toLower();
+        addWord(token.toLower());
       }
       continue;
     }
@@ -212,7 +220,7 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
     if(!knownFields().contains(field)) {
       // Not a field: searched for as typed, and said so.
       q.m_unknown << typed;
-      free << (negate ? QStringLiteral("-") : QString()) + token.toLower();
+      addWord((negate ? QStringLiteral("-") : QString()) + token.toLower());
       continue;
     }
     // Recognised as a clause, so it is never also matched as a search word.
@@ -311,14 +319,29 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
     }
     q.m_groups.last().append(cl);
   }
-  if(q.m_groups.size() > 1 && q.m_groups.constLast().isEmpty()) {
+  if(q.m_groups.size() > 1 && q.m_groups.constLast().isEmpty() && groupWords.constLast().isEmpty()) {
     q.m_groups.removeLast();  // a trailing OR
+    groupWords.removeLast();
   }
-  q.m_freeText = free.join(QChar(' '));
+  if(q.m_groups.size() == 1) {
+    q.m_freeText = groupWords.constFirst().join(QChar(' '));
+    return q;
+  }
+  for(int i = 0; i < q.m_groups.size(); ++i) {
+    if(!groupWords.at(i).isEmpty()) {
+      Clause words;
+      words.field = QStringLiteral("text");
+      words.values << groupWords.at(i).join(QChar(' '));
+      q.m_groups[i].append(words);
+    }
+  }
   return q;
 }
 
-bool TaskQuery::clauseMatches(const Clause& c, const Task& t) const {
+bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& haystack) const {
+  if(c.field == QLatin1String("text")) {
+    return haystack.contains(c.values.constFirst());
+  }
   if(c.field == QLatin1String("status")) {
     return c.statusIds.contains(t.status) || c.statusIds.contains(t.status.toLower());
   }
@@ -384,11 +407,22 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t) const {
   return true;
 }
 
-bool TaskQuery::matches(const Task& t) const {
+bool TaskQuery::matches(const Task& t, const QString& haystack) const {
+  // The caller's haystack when it has one (the model's cached search text,
+  // which the free text is matched against too), else built here.
+  QString built;
+  const auto hay = [&]() -> const QString& {
+    if(!haystack.isEmpty()) {
+      return haystack;
+    }
+    if(built.isEmpty()) {
+      built = haystackOf(t);
+    }
+    return built;
+  };
   if(!m_negatedWords.isEmpty()) {
-    const QString hay = haystackOf(t);
     for(const QString& w : m_negatedWords) {
-      if(hay.contains(w)) {
+      if(hay().contains(w)) {
         return false;
       }
     }
@@ -401,7 +435,8 @@ bool TaskQuery::matches(const Task& t) const {
     anyClauses = true;
     bool all = true;
     for(const Clause& c : group) {
-      if(clauseMatches(c, t) == c.negate) {
+      const bool hit = c.field == QLatin1String("text") ? clauseMatches(c, t, hay()) : clauseMatches(c, t, QString());
+      if(hit == c.negate) {
         all = false;
         break;
       }

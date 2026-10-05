@@ -268,6 +268,37 @@ TEST(TaskQuery, NegationAndOr) {
   EXPECT_FALSE(noTitle.matches(other)) << "every mk() title contains 'title'";
 }
 
+// TASKS-4 (2026-09-30-1): OR splits search words too. "alpha OR beta" used to
+// search for the phrase "alpha beta" and find nothing.
+TEST(TaskQuery, OrBetweenWords) {
+  Task alpha = mk(QStringLiteral("A"));
+  alpha.title = QStringLiteral("qzalpha login");
+  Task beta = mk(QStringLiteral("B"), QStringLiteral("done"));
+  beta.title = QStringLiteral("qzbeta signup");
+  Task other = mk(QStringLiteral("C"), QStringLiteral("done"));
+
+  for(const char* text : {"qzalpha OR qzbeta", "qzalpha | qzbeta"}) {
+    const TaskQuery either = qc(QString::fromLatin1(text));
+    EXPECT_TRUE(either.isQuery()) << text;
+    EXPECT_TRUE(either.freeText().isEmpty()) << "the words must not also be ANDed as one phrase: " << text;
+    EXPECT_TRUE(either.matches(alpha)) << text;
+    EXPECT_TRUE(either.matches(beta)) << text;
+    EXPECT_FALSE(either.matches(other)) << text;
+  }
+  // A clause on one side, a word on the other.
+  const TaskQuery mixed = qc(QStringLiteral("is:open OR qzbeta"));
+  EXPECT_TRUE(mixed.matches(alpha)) << "open";
+  EXPECT_TRUE(mixed.matches(beta)) << "qzbeta, though done";
+  EXPECT_FALSE(mixed.matches(other));
+  // Words of one side stay a phrase, as without OR; the caller's haystack wins.
+  const TaskQuery phrase = qc(QStringLiteral("qzalpha login OR nothing-here"));
+  EXPECT_TRUE(phrase.matches(alpha));
+  EXPECT_TRUE(phrase.matches(other, QStringLiteral("cached haystack: qzalpha login")));
+  // No OR: unchanged — one free text for the caller.
+  EXPECT_EQ(qc(QStringLiteral("status:done qzbeta")).freeText(), QStringLiteral("qzbeta"));
+  EXPECT_EQ(qc(QStringLiteral("qzalpha OR")).freeText(), QStringLiteral("qzalpha"));
+}
+
 TEST(TaskQuery, NonsenseIsReportedNotSilentlySearched) {
   const TaskQuery query = qc(QStringLiteral("stauts:done status:nope priority:p9 due:banana is:weird login"));
   const QStringList bad = query.unknownClauses();
