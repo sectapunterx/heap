@@ -2,12 +2,12 @@
 #include "Logger.h"
 #include "ViewNames.h"
 
-#include "notify/NotificationCenter.h"
-#include "notify/NotifyPayload.h"
 #include "cli/CliCore.h"
 #include "cli/CliExecutor.h"
 #include "cli/CliMain.h"
 #include "diag/PerfLog.h"
+#include "notify/NotificationCenter.h"
+#include "notify/NotifyPayload.h"
 #include "platform/AltGrGuard.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
@@ -153,8 +153,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   }
   if(!positional.isEmpty()) {
     usageError(parser,
-               QStringLiteral("unexpected argument '%1' (commands: add, now, list, today, done, open, help)")
-                   .arg(positional.constFirst()));
+               QStringLiteral("unexpected argument '%1' (commands: add, now, list, today, done, open, help)").arg(positional.constFirst()));
   }
 
   opts.initialView = parser.value(viewOption);
