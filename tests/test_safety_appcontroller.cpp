@@ -265,6 +265,78 @@ TEST_F(SafetyNetTest, SeenBeforeFindsTheTaskThatMentionedTheError) {
   EXPECT_TRUE(app_->seenBefore(QStringLiteral("session token cache flush")).isEmpty());
 }
 
+// ── APP-160 ──
+
+TEST_F(SafetyNetTest, FocusModeHoldsNotificationsUntilAsked) {
+  app_->setAppSettingsJson(settingsJson({{"immersion", true}}));
+  app_->tasks()->reset({task(QStringLiteral("T-1"), QStringLiteral("prog"))});
+  const QSignalSpy toasts(app_.get(), &AppController::toast);
+  const QSignalSpy ended(app_.get(), &AppController::immersionEnded);
+
+  app_->startImmersion(QStringLiteral("T-1"));
+  ASSERT_TRUE(app_->immersion());
+  emit app_->notification(QStringLiteral("Deadline in 1 hour"), QStringLiteral("T-1"), QStringLiteral("deadline"));
+  emit app_->notification(QStringLiteral("Deadline in 1 hour"), QStringLiteral("T-1"), QStringLiteral("deadline"));
+  emit app_->notification(QStringLiteral("Working on T-1"), QStringLiteral("Branch x"), QStringLiteral("git"));
+  // A meeting still gets through.
+  emit app_->notification(QStringLiteral("Starting now"), QStringLiteral("Sync"), QStringLiteral("meeting"));
+  EXPECT_EQ(toasts.count(), 1);
+  EXPECT_EQ(app_->immersionHeldCount(), 2);  // one of each
+
+  app_->stopImmersion();
+  ASSERT_EQ(ended.count(), 1);
+  EXPECT_EQ(ended.at(0).at(0).toInt(), 2);
+  // Ending it delivers nothing by itself …
+  EXPECT_EQ(toasts.count(), 1);
+  // … only when asked.
+  EXPECT_EQ(app_->releaseImmersionHeld(), 2);
+  EXPECT_EQ(toasts.count(), 3);
+  EXPECT_EQ(app_->immersionHeldCount(), 0);
+}
+
+TEST_F(SafetyNetTest, FocusModeCanHoldMeetingsToo) {
+  app_->setAppSettingsJson(settingsJson({{"immersion", true}, {"immersionPassMeetings", false}}));
+  const QSignalSpy toasts(app_.get(), &AppController::toast);
+
+  app_->startImmersion();
+  emit app_->notification(QStringLiteral("Starting now"), QStringLiteral("Sync"), QStringLiteral("meeting"));
+  EXPECT_EQ(toasts.count(), 0);
+  app_->stopImmersion();
+}
+
+TEST_F(SafetyNetTest, FocusModeTimesTheCurrentTaskAndStopsOnlyItsOwnTimer) {
+  app_->setAppSettingsJson(settingsJson({{"immersion", true}}));
+  Task running = task(QStringLiteral("T-2"), QStringLiteral("prog"));
+  running.timerStartedAt = QDateTime::currentDateTime().addSecs(-600);
+  app_->tasks()->reset({task(QStringLiteral("T-1"), QStringLiteral("prog")), running});
+
+  app_->startImmersion(QStringLiteral("T-1"));
+  EXPECT_EQ(app_->immersionTaskId(), QStringLiteral("T-1"));
+  EXPECT_TRUE(app_->tasks()->items().at(0).timerStartedAt.isValid());
+  app_->stopImmersion();
+  EXPECT_FALSE(app_->tasks()->items().at(0).timerStartedAt.isValid());
+
+  // A timer the user had running is theirs: focus mode leaves it on. (Timing
+  // T-1 above stopped it — one timer runs at a time — so it runs again here.)
+  app_->tasks()->reset({task(QStringLiteral("T-1"), QStringLiteral("prog")), running});
+  app_->startImmersion(QStringLiteral("T-2"));
+  app_->stopImmersion();
+  EXPECT_TRUE(app_->tasks()->items().at(1).timerStartedAt.isValid());
+}
+
+TEST_F(SafetyNetTest, FocusModeWithNoTaskIsOnlyQuiet) {
+  app_->setAppSettingsJson(settingsJson({{"immersion", true}}));
+  app_->tasks()->reset({task(QStringLiteral("T-1"), QStringLiteral("todo"))});
+  app_->clearSelection();
+
+  app_->startImmersion();
+  EXPECT_TRUE(app_->immersion());
+  EXPECT_TRUE(app_->immersionTaskId().isEmpty());
+  EXPECT_FALSE(app_->tasks()->items().at(0).timerStartedAt.isValid());
+  app_->stopImmersion();
+  EXPECT_FALSE(app_->immersion());
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

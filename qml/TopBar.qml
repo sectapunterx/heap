@@ -367,6 +367,60 @@ Rectangle {
             }
         }
 
+        // Focus mode is on (APP-160): how long, quietly; a click leaves it.
+        Rectangle {
+            id: immersionPill
+            objectName: "topbar-immersion"
+            visible: AppController.immersion
+            Layout.preferredHeight: 24
+            Layout.preferredWidth: immersionRow.implicitWidth + 2 * Theme.spLg
+            radius: Theme.radiusMd
+            color: immersionMA.hovered ? Theme.panel3 : Theme.accentSoft
+            border.color: Theme.accent
+            border.width: 1
+            property int _tick: 0
+            Timer {
+                interval: 1000
+                repeat: true
+                running: AppController.immersion
+                onTriggered: immersionPill._tick++
+            }
+            function _elapsed() {
+                immersionPill._tick;
+                const start = AppController.immersionStartedAt;
+                if (!start || !start.getTime) return "0:00";
+                const s = Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
+                const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
+                const p2 = (n) => (n < 10 ? "0" : "") + n;
+                return h > 0 ? h + ":" + p2(m) + ":" + p2(sec) : m + ":" + p2(sec);
+            }
+            RowLayout {
+                id: immersionRow
+                anchors.centerIn: parent
+                spacing: Theme.spSm
+                Rectangle { implicitWidth: 6; implicitHeight: 6; radius: 3; color: Theme.accentStrong }
+                Text {
+                    text: I18n.t("immersion.on")
+                    color: Theme.accentStrong
+                    font.pixelSize: Theme.fsXs
+                    font.weight: Font.DemiBold
+                }
+                Text {
+                    objectName: "topbar-immersion-time"
+                    text: immersionPill._elapsed()
+                    color: Theme.accentStrong
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsXs
+                }
+            }
+            ClickArea {
+                id: immersionMA
+                objectName: "topbar-immersion-exit"
+                label: I18n.t("immersion.exit")
+                onActivated: AppController.stopImmersion()
+            }
+        }
+
         // Search: 280px when there is room, down to 160 when there is not.
         Rectangle {
             Layout.fillWidth: true

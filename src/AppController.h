@@ -1979,6 +1979,39 @@ class AppController : public QObject {
   // map. Empty too while settings.safety.seenBefore is off. `excludeTaskId`
   // is the task being edited, which would otherwise find itself.
   Q_INVOKABLE QVariantMap seenBefore(const QString& text, const QString& excludeTaskId = QString());
+
+  // Focus mode (APP-160). On: notifications are held back (meetings pass
+  // unless settings.safety.immersionPassMeetings is false) and the timer runs
+  // on the current task — `preferredTaskId` if it names one, else the single
+  // selected task, else the current branch's. Off: the timer it started stops
+  // and immersionEnded() says how many notifications wait; nothing is
+  // delivered until releaseImmersionHeld(). Not persisted: a restart ends it.
+  Q_PROPERTY(bool immersion READ immersion NOTIFY immersionChanged)
+  Q_PROPERTY(QDateTime immersionStartedAt READ immersionStartedAt NOTIFY immersionChanged)
+  Q_PROPERTY(QString immersionTaskId READ immersionTaskId NOTIFY immersionChanged)
+
+  bool immersion() const {
+    return m_immersionStartedAt.isValid();
+  }
+
+  QDateTime immersionStartedAt() const {
+    return m_immersionStartedAt;
+  }
+
+  QString immersionTaskId() const {
+    return m_immersionTaskId;
+  }
+
+  qsizetype immersionHeldCount() const {
+    return m_immersionHeld.size();
+  }
+
+  Q_INVOKABLE void startImmersion(const QString& preferredTaskId = QString());
+  Q_INVOKABLE void stopImmersion();
+  Q_INVOKABLE void toggleImmersion(const QString& preferredTaskId = QString());
+  // Hands over what focus mode held back, through the usual paths. Returns
+  // how many there were.
+  Q_INVOKABLE int releaseImmersionHeld();
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;
@@ -1990,6 +2023,9 @@ class AppController : public QObject {
   // Bring the board up narrowed to these tasks (a notice was clicked).
   void safetyOpenTasksRequested(const QStringList& taskIds);
   void waitingOnChanged();
+  void immersionChanged();
+  // Focus mode ended after `minutes`, holding back `held` notifications.
+  void immersionEnded(int held, int minutes);
 
  private:
   QVariantMap safetySettings() const;
@@ -2009,4 +2045,11 @@ class AppController : public QObject {
   // A person's state went from `before` to their current one: a reply ends
   // every wait on them; a deleted person's waits go with them.
   void personStateMoved(const QString& personId, const QString& before);
+  // Focus mode (APP-160).
+  QDateTime m_immersionStartedAt;
+  QString m_immersionTaskId;
+  bool m_immersionStartedTimer = false;
+  QVector<HeldNotification> m_immersionHeld;
+  // Holds `n` when focus mode says so; true when it did.
+  bool holdForImmersion(const HeldNotification& n);
 };

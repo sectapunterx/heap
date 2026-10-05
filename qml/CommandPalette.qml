@@ -62,6 +62,14 @@ Popup {
         for (let i = 0; i < list.length; i++) {
             const c = list[i];
             if (_isContextual(c.id)) continue;
+            // Focus mode (APP-160) is offered once Settings → Safety net
+            // turns it on, and says which way it goes.
+            if (c.id === "focus.immersion") {
+                if (!(AppController.safety && AppController.safety.immersion)) continue;
+                out.push({ kind: "command", commandId: c.id, sub: c.sequence || "", body: c.description || "",
+                           label: AppController.immersion ? I18n.t("palette.cmd.immersionOff") : c.label });
+                continue;
+            }
             out.push({ kind: "command", commandId: c.id, label: c.label, sub: c.sequence || "",
                        body: c.description || "" });
         }

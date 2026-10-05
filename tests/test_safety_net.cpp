@@ -3,6 +3,7 @@
 
 #include "safety/EndOfDay.h"
 #include "safety/ErrorSignature.h"
+#include "safety/Immersion.h"
 #include "safety/SafetyText.h"
 #include "safety/WaitingOn.h"
 
@@ -295,6 +296,32 @@ TEST(SeenMatch, ABareTypeIsTooCommonToSay) {
                                   .when = {},
                                   .text = QStringLiteral("TypeError somewhere")}};
   EXPECT_EQ(bestSeenMatch(sig, c), -1);
+}
+
+// ── APP-160: focus mode ──
+
+TEST(Immersion, OutsideFocusEverythingIsDelivered) {
+  EXPECT_EQ(immersionDelivery(QStringLiteral("deadline"), false, true), Delivery::Deliver);
+  EXPECT_EQ(immersionDelivery(QStringLiteral("meeting"), false, false), Delivery::Deliver);
+}
+
+TEST(Immersion, FocusHoldsAllButMeetings) {
+  EXPECT_EQ(immersionDelivery(QStringLiteral("deadline"), true, true), Delivery::Hold);
+  EXPECT_EQ(immersionDelivery(QStringLiteral("git"), true, true), Delivery::Hold);
+  EXPECT_EQ(immersionDelivery(QStringLiteral("endOfDay"), true, true), Delivery::Hold);
+  EXPECT_EQ(immersionDelivery(QStringLiteral("meeting"), true, true), Delivery::Deliver);
+  EXPECT_EQ(immersionDelivery(QStringLiteral("standup"), true, true), Delivery::Deliver);
+}
+
+TEST(Immersion, MeetingsCanBeHeldToo) {
+  EXPECT_EQ(immersionDelivery(QStringLiteral("meeting"), true, false), Delivery::Hold);
+  EXPECT_EQ(immersionDelivery(QStringLiteral("standup"), true, false), Delivery::Hold);
+}
+
+TEST(Immersion, WholeMinutes) {
+  EXPECT_EQ(immersionMinutes(-5), 0);
+  EXPECT_EQ(immersionMinutes(59), 0);
+  EXPECT_EQ(immersionMinutes((25 * 60) + 59), 25);
 }
 
 TEST(EndOfDayText, RussianPluralForms) {

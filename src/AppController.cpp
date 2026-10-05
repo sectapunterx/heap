@@ -688,6 +688,10 @@ AppController::AppController(QObject* parent) :
   // notification(...)`) keep working — the lambda just forwards to the
   // NotificationCenter without action buttons (it carries no task id).
   connect(this, &AppController::notification, this, [this](const QString& title, const QString& body, const QString& kind) {
+    // Focus mode holds it until the user asks (APP-160).
+    if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = QString()})) {
+      return;
+    }
     // Quiet hours hold a notification until they end rather than dropping
     // it. A meeting or the standup is an appointment and goes through.
     const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
@@ -10911,6 +10915,8 @@ void AppController::seedShortcutCatalog() {
   add("cal.prevDay", "Alt+Left");
   add("cal.nextDay", "Alt+Right");
   add("cal.newEvent", "Ctrl+Alt+E");
+  // Focus mode (APP-160); live only once Settings → Safety net turns it on.
+  add("focus.immersion", "Ctrl+Shift+F");
   // The first nine saved views, in sidebar order. Alt+digit is free in the
   // catalog and in every text field, and Ctrl+digit already means "view".
   add("savedView.1", "Alt+1");
@@ -12197,6 +12203,9 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
 
 void AppController::notifyTaskAt(
     const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now) {
+  if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = taskId})) {
+    return;
+  }
   if(inQuietHours(now)) {
     holdNotification({title, body, kind, taskId});
     return;

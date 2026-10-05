@@ -1555,6 +1555,25 @@ Item {
                     onToggled: (checked) => root.set("safety", "seenBefore", checked)
                 }
             }
+            // APP-160: focus mode, from the palette or its shortcut.
+            SettingsGroup {
+                title: I18n.t("settings.safety.group.immersion")
+                SwitchRow {
+                    objectName: "settings-safety-immersion"
+                    label: I18n.t("settings.safety.immersion")
+                    hint: I18n.t("settings.safety.immersion.hint").arg(AppController.shortcutFor("focus.immersion"))
+                    checked: !!(root.settings.safety && root.settings.safety.immersion)
+                    onToggled: (checked) => root.set("safety", "immersion", checked)
+                }
+                SwitchRow {
+                    objectName: "settings-safety-immersionPassMeetings"
+                    visible: !!(root.settings.safety && root.settings.safety.immersion)
+                    label: I18n.t("settings.safety.immersionPassMeetings")
+                    hint: I18n.t("settings.safety.immersionPassMeetings.hint")
+                    checked: !(root.settings.safety && root.settings.safety.immersionPassMeetings === false)
+                    onToggled: (checked) => root.set("safety", "immersionPassMeetings", checked)
+                }
+            }
         }
     }
 

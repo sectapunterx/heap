@@ -675,6 +675,12 @@ ApplicationWindow {
         }
     }
 
+    // Focus mode (APP-160) on the task in front of the user: the one open in
+    // the editor, else whatever AppController picks (selection, branch).
+    function toggleImmersion() {
+        AppController.toggleImmersion(taskEditor.opened ? taskEditor._originalId : "");
+    }
+
     // The tasks a safety-net notice is about: one opens in the editor, several
     // narrow the board to them. Only what is shown changes.
     function showSafetyTasks(ids) {
@@ -720,6 +726,15 @@ ApplicationWindow {
             const msg = title.length > 0 ? title + " · " + body : body;
             if (taskIds && taskIds.length > 0)
                 toast.showWithAction(msg, I18n.t("safety.show"), 10, function () { win.showSafetyTasks(taskIds) });
+            else
+                toast.show(msg, "info");
+        }
+        // Focus mode ended: one toast with how much was held back, and a way
+        // to see it. Nothing arrives unless asked for.
+        function onImmersionEnded(held, minutes) {
+            const msg = I18n.t("immersion.ended").arg(held);
+            if (held > 0)
+                toast.showWithAction(msg, I18n.t("immersion.showHeld"), 15, function () { AppController.releaseImmersionHeld() });
             else
                 toast.show(msg, "info");
         }
@@ -1431,6 +1446,7 @@ ApplicationWindow {
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
+        case "focus.immersion":      win.toggleImmersion(); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1636,6 +1652,23 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyActiveProfileMarkdownToClipboard()
+    }
+    // Focus mode (APP-160): on, and again to leave. Esc leaves it too when
+    // nothing nearer would take the Esc (a selection, the board cursor, a
+    // field, a dialog) — those stand the shortcut down, so the two never
+    // compete for the same key.
+    Shortcut {
+        sequence: _kbd("focus.immersion")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
+        onActivated: win.toggleImmersion()
+    }
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: AppController.immersion && !win._viewKeysBlocked && AppController.selectionCount === 0
+                 && !(AppController.currentView === "board" && !!boardLoader.item && boardLoader.item.cursorVisible === true)
+        onActivated: AppController.stopImmersion()
     }
     Shortcut {
         sequence: _kbd("profile.weeklyReport")

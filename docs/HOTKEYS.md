@@ -172,6 +172,7 @@ a repeating event, `Enter` answers "This event".
 | Open Hotkeys panel | `Ctrl+/` |
 | Show / hide the calendar column | `Ctrl+\` |
 | Expand / collapse the sidebar | `Ctrl+Shift+B` |
+| Focus mode on / off (once turned on in Settings → Safety net; `Esc` also leaves it) | `Ctrl+Shift+F` |
 
 ## Selection (Board / Timeline / Week / Archive)
 

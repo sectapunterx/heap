@@ -11,6 +11,7 @@
 #include "git/GitWatcher.h"
 #include "notify/NotificationCenter.h"
 #include "safety/ErrorSignature.h"
+#include "safety/Immersion.h"
 #include "safety/SafetyText.h"
 
 #include <QApplication>
@@ -29,8 +30,11 @@ QVariantMap AppController::safetySettings() const {
 
 void AppController::safetyNotify(
     const QString& kind, const QString& title, const QString& body, const QStringList& taskIds, const QDateTime& now) {
-  // Quiet hours hold it like any other notification; it arrives when they end,
-  // as a plain one.
+  // Focus mode and quiet hours hold it like any other notification; it
+  // arrives later, as a plain one.
+  if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = QString()})) {
+    return;
+  }
   if(inQuietHours(now)) {
     holdNotification({.title = title, .body = body, .kind = kind, .taskId = QString()});
     return;
@@ -304,4 +308,90 @@ void AppController::checkWaitingAt(const QDateTime& now) {
   if(changed) {
     scheduleSave();
   }
+}
+
+// ── APP-160: focus mode ──
+
+bool AppController::holdForImmersion(const HeldNotification& n) {
+  const bool passMeetings = safetySettings().value(QStringLiteral("immersionPassMeetings"), true).toBool();
+  if(heap::safety::immersionDelivery(n.kind, immersion(), passMeetings) == heap::safety::Delivery::Deliver) {
+    return false;
+  }
+  // One of each is enough, and a long session keeps the newest.
+  for(const HeldNotification& h : m_immersionHeld) {
+    if(h.title == n.title && h.body == n.body && h.kind == n.kind && h.taskId == n.taskId) {
+      return true;
+    }
+  }
+  constexpr qsizetype kMaxHeld = 50;
+  if(m_immersionHeld.size() >= kMaxHeld) {
+    m_immersionHeld.removeFirst();
+  }
+  m_immersionHeld.append(n);
+  return true;
+}
+
+void AppController::startImmersion(const QString& preferredTaskId) {
+  if(immersion()) {
+    return;
+  }
+  // The task in front of the user: the one asked for, the one selected, the
+  // one the current branch is for. None is fine: then it is only quiet.
+  QString taskId;
+  if(!preferredTaskId.isEmpty() && m_tasks.indexOfId(preferredTaskId) >= 0) {
+    taskId = preferredTaskId;
+  } else if(m_selectedTaskIdsList.size() == 1 && m_tasks.indexOfId(m_selectedTaskIdsList.constFirst()) >= 0) {
+    taskId = m_selectedTaskIdsList.constFirst();
+  } else if(!m_focusedTaskId.isEmpty() && m_tasks.indexOfId(m_focusedTaskId) >= 0) {
+    taskId = m_focusedTaskId;
+  }
+  m_immersionHeld.clear();
+  m_immersionStartedAt = QDateTime::currentDateTime();
+  m_immersionTaskId = taskId;
+  m_immersionStartedTimer = false;
+  if(!taskId.isEmpty() && !m_tasks.items().at(m_tasks.indexOfId(taskId)).timerStartedAt.isValid()) {
+    startTaskTimer(taskId);
+    m_immersionStartedTimer = true;
+  }
+  emit immersionChanged();
+}
+
+void AppController::stopImmersion() {
+  if(!immersion()) {
+    return;
+  }
+  const int minutes = heap::safety::immersionMinutes(m_immersionStartedAt.secsTo(QDateTime::currentDateTime()));
+  // Only the timer focus mode started; one the user had running stays on.
+  if(m_immersionStartedTimer) {
+    const int row = m_tasks.indexOfId(m_immersionTaskId);
+    if(row >= 0 && m_tasks.items().at(row).timerStartedAt.isValid()) {
+      stopTaskTimer(m_immersionTaskId);
+    }
+  }
+  m_immersionStartedAt = {};
+  m_immersionTaskId.clear();
+  m_immersionStartedTimer = false;
+  emit immersionChanged();
+  emit immersionEnded(static_cast<int>(m_immersionHeld.size()), minutes);
+}
+
+void AppController::toggleImmersion(const QString& preferredTaskId) {
+  if(immersion()) {
+    stopImmersion();
+  } else {
+    startImmersion(preferredTaskId);
+  }
+}
+
+int AppController::releaseImmersionHeld() {
+  const QVector<HeldNotification> held = std::exchange(m_immersionHeld, {});
+  const QDateTime now = QDateTime::currentDateTime();
+  for(const HeldNotification& h : held) {
+    if(h.taskId.isEmpty()) {
+      emit notification(h.title, h.body, h.kind);
+    } else {
+      notifyTaskAt(h.taskId, h.title, h.body, h.kind, now);
+    }
+  }
+  return static_cast<int>(held.size());
 }
