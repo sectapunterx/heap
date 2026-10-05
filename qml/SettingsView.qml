@@ -2696,6 +2696,16 @@ Item {
                     ]
                     onSelected: (value) => root.set("data", "backupInterval", value)
                 }
+                // APP-162: hourly history, browsed in its own dialog.
+                SettingsRow {
+                    label: I18n.t("settings.data.timeMachine")
+                    hint: I18n.t("settings.data.timeMachine.hint")
+                    ActionButton {
+                        objectName: "settings-open-time-machine"
+                        text: I18n.t("settings.data.timeMachine.open")
+                        onActivated: settingsBridge.timeMachineRequested()
+                    }
+                }
             }
             SettingsGroup {
                 title: I18n.t("settings.data.restore")
@@ -3045,11 +3055,13 @@ Item {
         signal openHotkeysRequested()
         signal exportJsonRequested()
         signal importJsonRequested()
+        signal timeMachineRequested()
     }
     Connections {
         target: settingsBridge
         function onOpenHotkeysRequested() { if (typeof settingsBus !== "undefined") settingsBus.openHotkeys() }
         function onExportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.exportJson() }
         function onImportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.importJson() }
+        function onTimeMachineRequested() { if (typeof settingsBus !== "undefined") settingsBus.openTimeMachine() }
     }
 }
