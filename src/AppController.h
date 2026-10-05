@@ -3,6 +3,7 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -1943,4 +1944,37 @@ class AppController : public QObject {
   void onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
+
+  // ── Safety net (APP-157…) ──────────────────────────────────────────
+  // Quiet, opt-in heads-ups, each off until switched on under
+  // settings.safety. They say what they noticed, once; none of them changes
+  // a task, a timer or a status. See AppControllerSafety.cpp.
+ public:
+  // The end-of-day check (APP-157) at `now`. runAutomationAt() calls it on
+  // every tick; it fires at most once a day, at settings.safety.endOfDayTime.
+  void checkEndOfDayAt(const QDateTime& now);
+  // What the end-of-day check reads from the workspace at `now`; the
+  // repository part is filled in by git, asynchronously.
+  heap::safety::EndOfDayFacts endOfDayFacts() const;
+
+ signals:
+  // A safety-net notice for the in-app toast. `taskIds` are the tasks its
+  // "Show" opens the board on (may be empty).
+  void safetyNotice(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds);
+  // Bring the board up narrowed to these tasks (a notice was clicked).
+  void safetyOpenTasksRequested(const QStringList& taskIds);
+
+ private:
+  QVariantMap safetySettings() const;
+  // Delivers a safety-net notice: held during quiet hours like any other,
+  // an OS notification when the window is in the background, the in-app
+  // toast (safetyNotice) always.
+  void safetyNotify(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds, const QDateTime& now);
+  void finishEndOfDay(const QDateTime& now, const heap::safety::RepoDirt& dirt);
+  void onWorkingTreeChecked(const QString& repo, int changedFiles, int stashes, bool ok);
+  // An end-of-day check waiting for git's answer about m_eodPendingRepo.
+  QDateTime m_eodPendingAt;
+  QString m_eodPendingRepo;
+  // Task id → the newest commit naming it, from the watcher's log.
+  QHash<QString, QDateTime> m_lastCommitAt;
 };

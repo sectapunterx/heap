@@ -1491,18 +1491,38 @@ Item {
     }
 
     // Safety net (APP-172): gentle, opt-in heads-ups, every one off by
-    // default. Empty-ready — each ticket that brings one adds a SwitchRow
-    // (or a SettingsGroup) here and drops the placeholder when it is the
-    // first.
+    // default. Each says what it noticed once and changes nothing by itself.
     Component {
         id: sectionSafety
         ColumnLayout {
             spacing: root.groupGap
+            // APP-157: one notice at the end of the day.
             SettingsGroup {
-                objectName: "settings-safety-empty"
-                SettingsRow {
-                    label: I18n.t("settings.safety.empty.title")
-                    hint: I18n.t("settings.safety.empty.body")
+                title: I18n.t("settings.safety.group.endOfDay")
+                SwitchRow {
+                    objectName: "settings-safety-endOfDay"
+                    label: I18n.t("settings.safety.endOfDay")
+                    hint: I18n.t("settings.safety.endOfDay.hint")
+                    checked: !!(root.settings.safety && root.settings.safety.endOfDay)
+                    onToggled: (checked) => root.set("safety", "endOfDay", checked)
+                }
+                TextRow {
+                    objectName: "settings-safety-endOfDayTime"
+                    visible: !!(root.settings.safety && root.settings.safety.endOfDay)
+                    label: I18n.t("settings.safety.endOfDayTime"); mono: true; placeholder: "18:00"
+                    fieldWidth: 120
+                    hint: invalid ? I18n.t("settings.safety.time.invalid") : ""
+                    validator: RegularExpressionValidator { regularExpression: root._hhmmRe }
+                    value: (root.settings.safety && root.settings.safety.endOfDayTime) || "18:00"
+                    onCommitted: (text) => root.set("safety", "endOfDayTime", root._hhmm(text))
+                }
+                SliderRow {
+                    objectName: "settings-safety-staleDays"
+                    visible: !!(root.settings.safety && root.settings.safety.endOfDay)
+                    label: I18n.t("settings.safety.staleDays")
+                    unit: " " + I18n.t("common.days"); min: 1; max: 14; step: 1
+                    value: root.settings.safety ? (root.settings.safety.staleDays ?? 3) : 3
+                    onMoved: (value) => root.set("safety", "staleDays", value)
                 }
             }
         }

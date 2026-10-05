@@ -221,6 +221,16 @@ target_link_libraries(heap_text_tests PRIVATE
 
 add_test(NAME heap_text_tests COMMAND heap_text_tests)
 
+# The safety net's pure rules (APP-157…): end of day, waiting on someone, the
+# error signature, focus mode, the standup draft.
+add_executable(heap_safety_tests
+    test_safety_net.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/safety/SafetyText.cpp
+)
+target_include_directories(heap_safety_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_safety_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_safety_tests COMMAND heap_safety_tests)
+
 # ─── Notification module tests ───
 # Cover the routing-id helpers, the data structs, and the abstract
 # NotificationCenter signal contract via an in-test mock backend. No real
@@ -287,6 +297,9 @@ endfunction()
 # Widgets/Qml + Test. Uses offscreen QGuiApplication + AppDataLocation test
 # mode so it runs headless and never touches the user's real state file.
 heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
+
+# ─── Safety net (APP-157…) as AppController runs it ───
+heap_add_appcontroller_test(heap_safety_net_tests test_safety_appcontroller.cpp)
 
 # ─── Meeting reminders ───
 heap_add_appcontroller_test(heap_meeting_reminders_tests test_meeting_reminders.cpp)

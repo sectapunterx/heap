@@ -15,6 +15,8 @@
 #include <QTimer>
 #include <QVariantMap>
 
+#include <functional>
+
 namespace heap::git {
 
 class GitWatcher : public QObject {
@@ -56,6 +58,12 @@ class GitWatcher : public QObject {
   // still emitted with the reason so one handler covers every outcome.
   bool createBranch(const QString& repoPath, const QString& branchName, QString* errorOut);
 
+  // How much is not committed in `repoPath`: `git status --porcelain` and
+  // `git stash list`, run asynchronously one after the other (APP-157). The
+  // answer arrives as workingTreeChecked(); `ok` is false when git could not
+  // be run or failed, and the counts are then zero.
+  void checkWorkingTree(const QString& repoPath);
+
  signals:
   void branchChanged(const QString& repoPath, const QString& branch, const QString& taskId);
   void repoStateUpdated(const QString& repoPath, const QVariantMap& state);
@@ -65,6 +73,8 @@ class GitWatcher : public QObject {
   void commitsUpdated(const QString& repoPath, const QVariantMap& commitsByTask);
   // The outcome of a createBranch() request. `error` is empty on success.
   void branchCreated(const QString& repoPath, const QString& branchName, bool ok, const QString& error);
+  // The outcome of a checkWorkingTree() request.
+  void workingTreeChecked(const QString& repoPath, int changedFiles, int stashes, bool ok);
 
  private slots:
   void onFsPathChanged(const QString& path);
@@ -90,6 +100,7 @@ class GitWatcher : public QObject {
   static constexpr qint64 kPrTtlMs = 60'000;
 
   QHash<QString, QPointer<QProcess>> m_inflight;  // dedup spawns by key
+  QSet<QString> m_workingTreeChecks;              // checkWorkingTree() in flight
 
   QString m_ghPath, m_glabPath, m_gitPath;
   bool m_prEnabled = true;
@@ -103,6 +114,9 @@ class GitWatcher : public QObject {
   void fetchAheadBehindAsync(const QString& repoPath, const QString& branch);
   void fetchCommitsAsync(const QString& repoPath);
   void fetchPrAsync(const QString& repoPath, const QString& branch, bool emitOneShot);
+  // One git command in `repoPath`, killed after 15 s; `done` gets the exit
+  // code (-1 when it did not start or did not finish) and stdout.
+  void runGitAsync(const QString& repoPath, const QStringList& args, const std::function<void(int, const QByteArray&)>& done);
 
   static QString cacheKey(const QString& repo, const QString& branch);
   static QString readHeadText(const QString& gitDir);

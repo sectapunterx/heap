@@ -42,6 +42,7 @@
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
+#include "safety/SafetyText.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
 #include "storage/StateIO.h"
@@ -801,6 +802,7 @@ AppController::AppController(QObject* parent) :
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
   connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
+  connect(m_gitWatcher.get(), &heap::git::GitWatcher::workingTreeChecked, this, &AppController::onWorkingTreeChecked);
   connect(
       m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
         const heap::git::BranchTaskMatcher m(collectPrefixes());
@@ -1102,6 +1104,9 @@ QString AppController::tr_(const QString& key) const {
     QString own = heap::integrations::integrationText(key, m_language == QStringLiteral("ru"));
     if(own.isNull()) {
       own = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
+    }
+    if(own.isNull()) {
+      own = heap::safety::text(key, m_language == QStringLiteral("ru"));
     }
     return own.isNull() ? key : own;
   }
@@ -11744,6 +11749,9 @@ void AppController::runAutomationAt(const QDateTime& now) {
     }
   }
 
+  // 6. The safety net (APP-157…): each off unless switched on.
+  checkEndOfDayAt(now);
+
   // Anything else that arrived during quiet hours goes out now.
   if(!quiet) {
     flushHeldNotifications(now);
@@ -12145,6 +12153,17 @@ void AppController::createBranchForTask(const QString& taskId) {
 void AppController::onGitCommits(const QString& repo, const QVariantMap& commitsByTask) {
   Q_UNUSED(repo);
   for(auto it = commitsByTask.constBegin(); it != commitsByTask.constEnd(); ++it) {
+    // The newest commit naming a task is a sign of life (APP-157).
+    for(const QVariant& c : it.value().toList()) {
+      const QDateTime at = c.toMap().value(QStringLiteral("at")).toDateTime();
+      if(!at.isValid()) {
+        continue;
+      }
+      QDateTime& last = m_lastCommitAt[taskIdForBranchMatch(it.key())];
+      if(!last.isValid() || at > last) {
+        last = at;
+      }
+    }
     if(m_tasks.indexOfId(it.key()) < 0) {
       continue;
     }
@@ -12281,7 +12300,11 @@ void AppController::activateProfileOfTask(const QString& taskId) {
 
 void AppController::onNotifierActivated(const QString& notificationId) {
   const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
-  Q_UNUSED(kind);
+  // The end-of-day notice is about several tasks at once (APP-157).
+  if(kind == QLatin1String("endOfDay")) {
+    emit safetyOpenTasksRequested(taskId == QLatin1String("-") ? QStringList() : taskId.split(QLatin1Char(',')));
+    return;
+  }
   activateProfileOfTask(taskId);
   if(!taskId.isEmpty() && m_tasks.indexOfId(taskId) >= 0) {
     emit openTaskRequested(taskId);

@@ -653,6 +653,21 @@ ApplicationWindow {
     // Bring the window to the foreground from any state (minimized, hidden to
     // tray, or merely unfocused). Shared by the two global-capture hotkeys and
     // the tray "Show" affordance.
+    // The tasks a safety-net notice is about: one opens in the editor, several
+    // narrow the board to them. Only what is shown changes.
+    function showSafetyTasks(ids) {
+        const list = (ids || []).filter(id => id && id.length > 0);
+        if (list.length === 0) return;
+        AppController.currentView = "board";
+        if (list.length === 1) {
+            const t = AppController.taskById(list[0]);
+            if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            return;
+        }
+        topBar.searchText = list.join(" OR ");
+        win.searchText = topBar.searchText;
+    }
+
     function _summon() {
         if (win.visibility === Window.Minimized || win.visibility === Window.Hidden || !win.visible)
             win.show();
@@ -677,6 +692,19 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg, kind) { toast.show(msg, kind || "info") }
+        // A safety-net notice (APP-157…): one toast, and "Show" takes the
+        // board to the tasks it is about.
+        function onSafetyNotice(kind, title, body, taskIds) {
+            const msg = title.length > 0 ? title + " · " + body : body;
+            if (taskIds && taskIds.length > 0)
+                toast.showWithAction(msg, I18n.t("safety.show"), 10, function () { win.showSafetyTasks(taskIds) });
+            else
+                toast.show(msg, "info");
+        }
+        function onSafetyOpenTasksRequested(taskIds) {
+            win._summon();
+            win.showSafetyTasks(taskIds);
+        }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
