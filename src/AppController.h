@@ -1715,8 +1715,25 @@ class AppController : public QObject {
   QHash<QString, QString> m_directoryConfigHash;
   // Access tokens for the trackers, kept in the OS keychain (HEAP-74/75).
   heap::integrations::SecretStore* m_secretStore = nullptr;
-  // Drives optional periodic pulls (integrations.autoSyncMinutes).
+  // Looks for a due periodic pull (integrations.autoSyncMinutes, up to a
+  // month; APP-123). The last sync's time lives in autosync.json so a
+  // restart does not start the wait over.
   QTimer* m_syncTimer = nullptr;
+  QDateTime m_lastTrackerSync;
+  QString autoSyncFilePath() const;
+  void loadLastTrackerSync();
+  void saveLastTrackerSync() const;
+
+ public:
+  // The periodic-sync check at `now` (the timer passes the clock). Public
+  // for the tests, like runAutomationAt.
+  void autoSyncTickAt(const QDateTime& now);
+
+  QDateTime lastTrackerSync() const {
+    return m_lastTrackerSync;
+  }
+
+ private:
   // Reconcile the active providers with the current integrations settings.
   void applyIntegrationSettings();
   // Merge a provider's non-secret settings with its keychain secrets.

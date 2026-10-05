@@ -18,6 +18,7 @@
 #include "diag/IssueReport.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "integrations/AutoSync.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
 #include "integrations/MattermostClient.h"
@@ -815,7 +816,10 @@ AppController::AppController(QObject* parent) :
   m_secretStore = new heap::integrations::SecretStore(this);
   m_syncTimer = new QTimer(this);
   m_syncTimer->setSingleShot(false);
-  connect(m_syncTimer, &QTimer::timeout, this, &AppController::syncNow);
+  connect(m_syncTimer, &QTimer::timeout, this, [this]() {
+    autoSyncTickAt(QDateTime::currentDateTime());
+  });
+  loadLastTrackerSync();
   // Move any legacy plaintext tokens out of state.json, then load the keychain.
   migrateLegacySecrets();
   QVector<QPair<QString, QString>> secretKeys;
@@ -6589,6 +6593,9 @@ void AppController::syncNow() {
     return;
   }
   emit toast(tr_("sync.running"));
+  // A pull by hand counts too: the next periodic one is a full period away.
+  m_lastTrackerSync = QDateTime::currentDateTime();
+  saveLastTrackerSync();
   // Collect the ids first: refreshing a token rebuilds m_syncProviders.
   QStringList ids;
   ids.reserve(static_cast<qsizetype>(m_syncProviders.size()));
@@ -7323,11 +7330,15 @@ void AppController::applyIntegrationSettings() {
     }
   }
 
-  // Optional periodic auto-sync (integrations.autoSyncMinutes: 0 = off).
-  const int mins = integrations.value(QStringLiteral("autoSyncMinutes")).toInt();
+  // Optional periodic auto-sync (integrations.autoSyncMinutes: 0 = off, up
+  // to a month). The timer only checks; autoSyncTickAt decides.
+  const int mins = qBound(0, integrations.value(QStringLiteral("autoSyncMinutes")).toInt(), heap::integrations::kMaxAutoSyncMinutes);
   if(m_syncTimer) {
     if(mins > 0 && !m_syncProviders.empty()) {
-      m_syncTimer->start(mins * 60 * 1000);
+      const int check = heap::integrations::autoSyncCheckMinutes(mins) * 60 * 1000;
+      if(!m_syncTimer->isActive() || m_syncTimer->interval() != check) {
+        m_syncTimer->start(check);
+      }
     } else {
       m_syncTimer->stop();
     }
@@ -11523,6 +11534,43 @@ bool AppController::isWorkDay(const QDate& day) const {
     }
   }
   return false;
+}
+
+// ── Periodic tracker sync (APP-123) ──
+
+QString AppController::autoSyncFilePath() const {
+  return heap::paths::dataDir() + QStringLiteral("/autosync.json");
+}
+
+void AppController::loadLastTrackerSync() {
+  QFile f(autoSyncFilePath());
+  if(!f.open(QIODevice::ReadOnly)) {
+    return;
+  }
+  const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+  m_lastTrackerSync = QDateTime::fromString(o.value(QStringLiteral("lastSync")).toString(), Qt::ISODate);
+}
+
+void AppController::saveLastTrackerSync() const {
+  QDir().mkpath(heap::paths::dataDir());
+  QSaveFile f(autoSyncFilePath());
+  if(f.open(QIODevice::WriteOnly)) {
+    f.write(
+        QJsonDocument(QJsonObject{{QStringLiteral("lastSync"), m_lastTrackerSync.toString(Qt::ISODate)}}).toJson(QJsonDocument::Compact));
+    f.commit();
+  }
+}
+
+void AppController::autoSyncTickAt(const QDateTime& now) {
+  const int mins = qBound(0,
+                          settingsMap().value(QStringLiteral("integrations")).toMap().value(QStringLiteral("autoSyncMinutes")).toInt(),
+                          heap::integrations::kMaxAutoSyncMinutes);
+  if(m_syncProviders.empty() || !heap::integrations::autoSyncDue(m_lastTrackerSync, now, mins)) {
+    return;
+  }
+  syncNow();
+  m_lastTrackerSync = now;  // the clock the check ran on, so a test's `now` holds
+  saveLastTrackerSync();
 }
 
 // ── Reminders already sent ──
