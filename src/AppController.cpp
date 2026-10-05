@@ -1203,8 +1203,8 @@ void AppController::syncActiveNoteBody() {
   const QString was = titleFromBody(n.body);
   const QString now = titleFromBody(m_notesState);
   const bool followed = was == n.title && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
-  if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title))
-     && heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
+  if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title)) &&
+     heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
     n.title = now;
   }
   n.body = m_notesState;

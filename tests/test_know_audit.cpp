@@ -388,7 +388,9 @@ TEST_F(KnowAuditTest, App1_AnUntitledNoteIsNamedAfterItsFirstLine) {
   app_->setNotesState(QStringLiteral("S"));
   const QString id = app_->activeNoteId();
   ASSERT_FALSE(id.isEmpty());
-  const auto title = [&] { return app_->notes()->items().at(app_->notes()->indexOfId(id)).title; };
+  const auto title = [&] {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id)).title;
+  };
   EXPECT_EQ(title(), QStringLiteral("S"));
   app_->setNotesState(QStringLiteral("Sprint review\nwhat went well"));
   EXPECT_EQ(title(), QStringLiteral("Sprint review"));
