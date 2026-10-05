@@ -203,6 +203,79 @@ Item {
         return "";
     }
 
+    // ── Selecting from the keyboard (APP-128) ─────────────────────────
+    // Shift+Up/Down grows a range from an anchor, the card the run started
+    // on, over whatever was selected before it; walking back shrinks the
+    // range again. Any other cursor move (plain arrows, a click, a column
+    // change) ends the run.
+    property string _selAnchor: ""
+    property var _selBase: []
+    property bool _extending: false
+    onCursorTaskIdChanged: if (!root._extending) root._selAnchor = ""
+    function _placeCursor(id) {
+        root._extending = true;
+        root.cursorTaskId = id;
+        root._extending = false;
+    }
+    function _union(a, b) {
+        const out = a.slice();
+        for (const id of b) if (out.indexOf(id) < 0) out.push(id);
+        return out;
+    }
+
+    function extendSelection(dy) {
+        root.cursorVisible = true;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
+        const ids = cols[pos.col].ids;
+        if (root._selAnchor === "" || ids.indexOf(root._selAnchor) < 0) {
+            root._selAnchor = root.cursorTaskId;
+            root._selBase = AppController.selectedTaskIds.filter((id) => id !== root.cursorTaskId);
+        }
+        const r = Math.max(0, Math.min(ids.length - 1, pos.row + dy));
+        root._placeCursor(ids[r]);
+        const a = ids.indexOf(root._selAnchor);
+        const range = ids.slice(Math.min(a, r), Math.max(a, r) + 1);
+        AppController.setSelectedTaskIds(root._union(root._selBase, range));
+    }
+
+    // Shift+Left/Right: the whole column the cursor is in joins the
+    // selection, and the cursor steps to the next column with cards, so a
+    // second press takes that one too.
+    function selectColumnAndStep(dx) {
+        root.cursorVisible = true;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
+        AppController.setSelectedTaskIds(root._union(AppController.selectedTaskIds, cols[pos.col].ids));
+        for (let c = pos.col + dx; c >= 0 && c < cols.length; c += dx) {
+            if (cols[c].ids.length > 0) {
+                root.cursorTaskId = cols[c].ids[Math.min(pos.row, cols[c].ids.length - 1)];
+                return;
+            }
+        }
+    }
+
+    // Ctrl+Left/Right: the selection, when there is one, goes to the column
+    // beside the cursor's (or beside the first selected card's); otherwise
+    // the cursor's card moves, as Shift+H/L always did.
+    function moveSelectionOrCard(dx) {
+        if (AppController.selectionCount === 0) { root.moveCursorCard(dx, 0); return; }
+        const cols = _visibleByColumn();
+        let from = _cursorPos(cols);
+        if (!from || !AppController.isTaskSelected(root.cursorTaskId)) {
+            const first = AppController.selectedTaskIds[0];
+            from = null;
+            for (let c = 0; c < cols.length && !from; c++)
+                if (cols[c].ids.indexOf(first) >= 0) from = { col: c, row: 0 };
+        }
+        if (!from) return;
+        const c = from.col + dx;
+        if (c < 0 || c >= cols.length || !cols[c].statusId) return;
+        AppController.moveSelectedTasksToStatus(cols[c].statusId);
+    }
+
     function moveCursor(dx, dy) {
         root.cursorVisible = true;
         const cols = _visibleByColumn();

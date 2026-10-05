@@ -195,8 +195,8 @@ TestCase {
         verify(!AppController.isTaskSelected(ids[0]));
     }
 
-    // Moving a card is the point of the Shift+ bindings: the card moves, and
-    // the cursor stays on it.
+    // Moving a card (Shift+H/J/K/L, Ctrl+arrows): the card moves, and the
+    // cursor stays on it.
     function test_moving_a_card_down_swaps_it_with_its_neighbour() {
         seed(3);
         const b = makeBoard();
@@ -251,6 +251,78 @@ TestCase {
         const after = columns(b);
         verify(after[0].ids.indexOf(moving) < 0, "it left the old column");
         verify(after[1].ids.indexOf(moving) >= 0, "it arrived in the next one");
+    }
+
+    // ── APP-128: selecting from the keyboard ──
+
+    // Shift+Down grows a range from where the run started; Shift+Up walks it
+    // back. What was selected before the run stays selected.
+    function test_shift_down_grows_and_shift_up_shrinks_the_range() {
+        seed(4);
+        const b = makeBoard();
+        const ids = columns(b)[0].ids;
+        const other = columns(b)[1].ids[0];
+        AppController.setSelectedTaskIds([other]);
+
+        b.cursorTaskId = ids[0];
+        b.extendSelection(1);
+        b.extendSelection(1);
+        compare(b.cursorTaskId, ids[2]);
+        verify(AppController.isTaskSelected(ids[0]) && AppController.isTaskSelected(ids[1]) && AppController.isTaskSelected(ids[2]));
+        verify(!AppController.isTaskSelected(ids[3]));
+        verify(AppController.isTaskSelected(other), "the earlier selection was dropped");
+
+        b.extendSelection(-1);
+        verify(!AppController.isTaskSelected(ids[2]), "walking back did not shrink the range");
+        verify(AppController.isTaskSelected(ids[1]));
+
+        // A plain move ends the run: the next Shift+Down starts a new one.
+        b.moveCursor(0, 1);
+        compare(b._selAnchor, "");
+        AppController.clearSelection();
+    }
+
+    // Shift+Right takes the whole column and steps on, so a second press
+    // takes the next column too.
+    function test_shift_right_selects_the_column_and_steps_on() {
+        seed(2);
+        const b = makeBoard();
+        const cols = columns(b);
+        AppController.clearSelection();
+
+        b.cursorTaskId = cols[0].ids[1];
+        b.selectColumnAndStep(1);
+        verify(AppController.isTaskSelected(cols[0].ids[0]) && AppController.isTaskSelected(cols[0].ids[1]));
+        verify(cols[1].ids.indexOf(b.cursorTaskId) >= 0, "the cursor did not step right");
+        compare(b.cursorTaskId, cols[1].ids[1], "the cursor keeps its depth");
+
+        b.selectColumnAndStep(1);
+        verify(AppController.isTaskSelected(cols[1].ids[0]) && AppController.isTaskSelected(cols[1].ids[1]));
+        compare(AppController.selectionCount, 4);
+        AppController.clearSelection();
+    }
+
+    // Ctrl+Right moves the whole selection to the next column; with nothing
+    // selected it moves the cursor's card, as before.
+    function test_ctrl_right_moves_the_selection() {
+        seed(2);
+        const b = makeBoard();
+        const cols = columns(b);
+        const a = cols[0].ids[0];
+        const c = cols[0].ids[1];
+        AppController.setSelectedTaskIds([a, c]);
+        b.cursorTaskId = a;
+
+        b.moveSelectionOrCard(1);
+        wait(0);
+        const after = columns(b);
+        verify(after[1].ids.indexOf(a) >= 0 && after[1].ids.indexOf(c) >= 0, "the selection did not move");
+        AppController.clearSelection();
+
+        b.cursorTaskId = a;
+        b.moveSelectionOrCard(1);
+        wait(0);
+        verify(columns(b)[2].ids.indexOf(a) >= 0, "the cursor's card did not move alone");
     }
 
     // A cursor pointing at a card a filter has hidden must not strand the
