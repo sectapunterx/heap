@@ -115,7 +115,9 @@ exits with the usage text (code 2). Run `heap --help` for the full option list.
 
 `heap --smoke --data-dir <dir>` checks a build against a *copy* of that
 profile's `state.json` in a temporary folder: the real file is never migrated
-or rewritten, and the temporary folder is removed on exit.
+or rewritten, and the temporary folder is removed on exit. The verdict
+(`smoke: OK` or `smoke: FAILED (n problem(s))` with one line per problem) is
+printed to stderr, and the run's full log is kept as `<dir>/logs/smoke.log`.
 
 ### One heap per data folder
 

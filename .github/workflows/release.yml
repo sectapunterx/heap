@@ -213,10 +213,14 @@ jobs:
         run: |
           $env:PATH = "$env:SystemRoot\System32;$env:SystemRoot"
           $dataDir = Join-Path $env:RUNNER_TEMP 'smoke'
-          # GUI-subsystem binary: no console, so read the verdict from its log.
+          # GUI-subsystem binary with no console: the verdict goes to the
+          # redirected stderr, the run's log is kept as logs\smoke.log.
+          $err = Join-Path $env:RUNNER_TEMP 'smoke-stderr.txt'
           $p = Start-Process -FilePath build\heap-portable\heap.exe `
-                 -ArgumentList '--smoke', '--data-dir', $dataDir -Wait -PassThru
-          Get-Content (Join-Path $dataDir 'logs\heap.log') -ErrorAction SilentlyContinue
+                 -ArgumentList '--smoke', '--data-dir', $dataDir `
+                 -RedirectStandardError $err -Wait -PassThru
+          Get-Content $err -ErrorAction SilentlyContinue
+          Get-Content (Join-Path $dataDir 'logs\smoke.log') -ErrorAction SilentlyContinue
           if ($p.ExitCode -ne 0) { Write-Error "smoke failed with exit code $($p.ExitCode)"; exit 1 }
 
       # Authenticode-sign heap.exe + the bundled Qt DLLs before they are
