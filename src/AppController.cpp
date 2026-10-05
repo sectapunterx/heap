@@ -18,6 +18,7 @@
 #include "diag/IssueReport.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "integrations/AutoSync.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
 #include "integrations/MattermostClient.h"
@@ -312,16 +313,32 @@ const QHash<QString, I18nEntry>& i18nTable() {
        {"Add or remove the card under the cursor from the selection.", "Добавить карточку под курсором в выделение или убрать из него."}},
       {"shortcut.board.moveDown.label", {"Board: move card down", "Доска: карточку вниз"}},
       {"shortcut.board.moveDown.desc",
-       {"Swap the card under the cursor with the one below.", "Поменять карточку под курсором местами с нижней."}},
+       {"Swap the card under the cursor with the one below. Also Ctrl+Down.",
+        "Поменять карточку под курсором местами с нижней. Также Ctrl+↓."}},
       {"shortcut.board.moveUp.label", {"Board: move card up", "Доска: карточку вверх"}},
       {"shortcut.board.moveUp.desc",
-       {"Swap the card under the cursor with the one above.", "Поменять карточку под курсором местами с верхней."}},
+       {"Swap the card under the cursor with the one above. Also Ctrl+Up.",
+        "Поменять карточку под курсором местами с верхней. Также Ctrl+↑."}},
       {"shortcut.board.moveLeft.label", {"Board: move card left", "Доска: карточку левее"}},
       {"shortcut.board.moveLeft.desc",
-       {"Move the card under the cursor to the previous column.", "Перенести карточку под курсором в предыдущую колонку."}},
+       {"Move the selection, or the card under the cursor, to the previous column. Also Ctrl+Left.",
+        "Перенести выделение или карточку под курсором в предыдущую колонку. Также Ctrl+←."}},
       {"shortcut.board.moveRight.label", {"Board: move card right", "Доска: карточку правее"}},
       {"shortcut.board.moveRight.desc",
-       {"Move the card under the cursor to the next column.", "Перенести карточку под курсором в следующую колонку."}},
+       {"Move the selection, or the card under the cursor, to the next column. Also Ctrl+Right.",
+        "Перенести выделение или карточку под курсором в следующую колонку. Также Ctrl+→."}},
+      {"shortcut.board.selectDown.label", {"Board: select down", "Доска: выделить вниз"}},
+      {"shortcut.board.selectDown.desc", {"Add the next card down to the selection.", "Добавить в выделение карточку ниже."}},
+      {"shortcut.board.selectUp.label", {"Board: select up", "Доска: выделить вверх"}},
+      {"shortcut.board.selectUp.desc", {"Add the next card up to the selection.", "Добавить в выделение карточку выше."}},
+      {"shortcut.board.selectColumnLeft.label", {"Board: select column, go left", "Доска: выделить колонку, влево"}},
+      {"shortcut.board.selectColumnLeft.desc",
+       {"Select every card in the cursor's column, then step to the previous column.",
+        "Выделить все карточки колонки с курсором и перейти в колонку левее."}},
+      {"shortcut.board.selectColumnRight.label", {"Board: select column, go right", "Доска: выделить колонку, вправо"}},
+      {"shortcut.board.selectColumnRight.desc",
+       {"Select every card in the cursor's column, then step to the next column.",
+        "Выделить все карточки колонки с курсором и перейти в колонку правее."}},
       {"shortcut.board.cardMenu.label", {"Board: card menu", "Доска: меню карточки"}},
       {"shortcut.board.cardMenu.desc",
        {"Open the menu of the card under the cursor: status, priority, archive…",
@@ -826,7 +843,10 @@ AppController::AppController(QObject* parent) :
   m_secretStore = new heap::integrations::SecretStore(this);
   m_syncTimer = new QTimer(this);
   m_syncTimer->setSingleShot(false);
-  connect(m_syncTimer, &QTimer::timeout, this, &AppController::syncNow);
+  connect(m_syncTimer, &QTimer::timeout, this, [this]() {
+    autoSyncTickAt(QDateTime::currentDateTime());
+  });
+  loadLastTrackerSync();
   // Move any legacy plaintext tokens out of state.json, then load the keychain.
   migrateLegacySecrets();
   QVector<QPair<QString, QString>> secretKeys;
@@ -5279,6 +5299,57 @@ void AppController::setStatusWipLimit(const QString& id, int limit) {
   scheduleSave();
 }
 
+namespace {
+
+// Each column's auto-archive days for a set of statuses (APP-122). Done
+// takes `doneDays` (Settings → Tasks); another column its own archiveDays,
+// absent meaning never.
+QHash<QString, int> archiveDaysByStatus(const QVariantList& statuses, int doneDays) {
+  QHash<QString, int> out;
+  out.insert(QStringLiteral("done"), doneDays);
+  for(const QVariant& v : statuses) {
+    const QVariantMap m = v.toMap();
+    const QString id = m.value("id").toString();
+    if(id != QStringLiteral("done") && m.contains(QStringLiteral("archiveDays"))) {
+      out.insert(id, qMax(0, m.value("archiveDays").toInt()));
+    }
+  }
+  return out;
+}
+
+}  // namespace
+
+int AppController::statusArchiveDays(const QString& id) const {
+  const int doneDays = qMax(0, settingsMap().value("tasks").toMap().value("archiveDoneAfterDays", 7).toInt());
+  return archiveDaysByStatus(m_statuses, doneDays).value(id, 0);
+}
+
+void AppController::setStatusArchiveDays(const QString& id, int days) {
+  const int clamped = qBound(0, days, 3650);
+  if(id == QStringLiteral("done")) {
+    QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+    QJsonObject tasks = settings.value(QStringLiteral("tasks")).toObject();
+    tasks.insert(QStringLiteral("archiveDoneAfterDays"), clamped);
+    settings.insert(QStringLiteral("tasks"), tasks);
+    setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+    emit statusesChanged();  // the column menu reads the number through statuses
+    return;
+  }
+  const int i = statusIndexOf(id);
+  if(i < 0) {
+    return;
+  }
+  QVariantMap m = m_statuses[i].toMap();
+  if(m.contains(QStringLiteral("archiveDays")) && m.value("archiveDays").toInt() == clamped) {
+    return;
+  }
+  const UndoScope scope(this, tr_("undo.column").arg(m.value("name").toString()));
+  m["archiveDays"] = clamped;
+  m_statuses[i] = m;
+  emit statusesChanged();
+  scheduleSave();
+}
+
 void AppController::setStatusColor(const QString& id, const QString& color) {
   const int i = statusIndexOf(id);
   if(i < 0) {
@@ -6613,6 +6684,9 @@ void AppController::syncNow() {
     return;
   }
   emit toast(tr_("sync.running"));
+  // A pull by hand counts too: the next periodic one is a full period away.
+  m_lastTrackerSync = QDateTime::currentDateTime();
+  saveLastTrackerSync();
   // Collect the ids first: refreshing a token rebuilds m_syncProviders.
   QStringList ids;
   ids.reserve(static_cast<qsizetype>(m_syncProviders.size()));
@@ -7347,11 +7421,15 @@ void AppController::applyIntegrationSettings() {
     }
   }
 
-  // Optional periodic auto-sync (integrations.autoSyncMinutes: 0 = off).
-  const int mins = integrations.value(QStringLiteral("autoSyncMinutes")).toInt();
+  // Optional periodic auto-sync (integrations.autoSyncMinutes: 0 = off, up
+  // to a month). The timer only checks; autoSyncTickAt decides.
+  const int mins = qBound(0, integrations.value(QStringLiteral("autoSyncMinutes")).toInt(), heap::integrations::kMaxAutoSyncMinutes);
   if(m_syncTimer) {
     if(mins > 0 && !m_syncProviders.empty()) {
-      m_syncTimer->start(mins * 60 * 1000);
+      const int check = heap::integrations::autoSyncCheckMinutes(mins) * 60 * 1000;
+      if(!m_syncTimer->isActive() || m_syncTimer->interval() != check) {
+        m_syncTimer->start(check);
+      }
     } else {
       m_syncTimer->stop();
     }
@@ -10656,6 +10734,13 @@ void AppController::seedShortcutCatalog() {
   add("board.cardMenu", "M");
   add("board.archive", "E");
   add("board.collapseColumn", "Z");
+  // Selecting from the keyboard (APP-128): Shift+Up/Down grows the selection
+  // a card at a time, Shift+Left/Right takes the whole column and steps on.
+  // Moving cards went from Shift+arrows to Ctrl+arrows (Main.qml) to make room.
+  add("board.selectDown", "Shift+Down");
+  add("board.selectUp", "Shift+Up");
+  add("board.selectColumnLeft", "Shift+Left");
+  add("board.selectColumnRight", "Shift+Right");
   // Calendar date navigation. Only live on a calendar view, where the board's
   // own bare letters are not, so the two sets cannot collide.
   add("cal.today", "T");
@@ -11402,22 +11487,20 @@ void AppController::runAutomationAt(const QDateTime& now) {
     }
   }
 
-  // 2. Auto-archive done tasks past retention.
-  const int archDays = qMax(0, tasksCfg.value("archiveDoneAfterDays", 7).toInt());
+  // 2. Auto-archive: a card that has sat in its column past that column's
+  // limit (APP-122). Done's limit is the Settings → Tasks slider; any other
+  // column's is set from its menu, and is never by default.
+  const int doneDays = qMax(0, tasksCfg.value("archiveDoneAfterDays", 7).toInt());
+  const auto archiveDue = [&now](const Task& t, const QHash<QString, int>& days) {
+    const int limit = days.value(t.status, 0);
+    return !t.archived && limit > 0 && t.statusChangedAt.isValid() && t.statusChangedAt.daysTo(now) >= limit;
+  };
   bool persistedAny = false;
-  if(archDays > 0) {
+  {
+    const QHash<QString, int> days = archiveDaysByStatus(m_statuses, doneDays);
     QStringList toArchive;
     for(const Task& t : m_tasks.items()) {
-      if(t.archived) {
-        continue;
-      }
-      if(t.status != QStringLiteral("done")) {
-        continue;
-      }
-      if(!t.statusChangedAt.isValid()) {
-        continue;
-      }
-      if(t.statusChangedAt.daysTo(now) >= archDays) {
+      if(archiveDue(t, days)) {
         toArchive << t.id;
       }
     }
@@ -11430,8 +11513,9 @@ void AppController::runAutomationAt(const QDateTime& now) {
       if(p.id == m_activeProfileId) {
         continue;
       }
+      const QHash<QString, int> theirs = archiveDaysByStatus(p.statuses, doneDays);
       for(Task& t : p.tasks) {
-        if(!t.archived && t.status == QStringLiteral("done") && t.statusChangedAt.isValid() && t.statusChangedAt.daysTo(now) >= archDays) {
+        if(archiveDue(t, theirs)) {
           t.archived = true;
           persistedAny = true;
         }
@@ -11547,6 +11631,43 @@ bool AppController::isWorkDay(const QDate& day) const {
     }
   }
   return false;
+}
+
+// ── Periodic tracker sync (APP-123) ──
+
+QString AppController::autoSyncFilePath() const {
+  return heap::paths::dataDir() + QStringLiteral("/autosync.json");
+}
+
+void AppController::loadLastTrackerSync() {
+  QFile f(autoSyncFilePath());
+  if(!f.open(QIODevice::ReadOnly)) {
+    return;
+  }
+  const QJsonObject o = QJsonDocument::fromJson(f.readAll()).object();
+  m_lastTrackerSync = QDateTime::fromString(o.value(QStringLiteral("lastSync")).toString(), Qt::ISODate);
+}
+
+void AppController::saveLastTrackerSync() const {
+  QDir().mkpath(heap::paths::dataDir());
+  QSaveFile f(autoSyncFilePath());
+  if(f.open(QIODevice::WriteOnly)) {
+    f.write(
+        QJsonDocument(QJsonObject{{QStringLiteral("lastSync"), m_lastTrackerSync.toString(Qt::ISODate)}}).toJson(QJsonDocument::Compact));
+    f.commit();
+  }
+}
+
+void AppController::autoSyncTickAt(const QDateTime& now) {
+  const int mins = qBound(0,
+                          settingsMap().value(QStringLiteral("integrations")).toMap().value(QStringLiteral("autoSyncMinutes")).toInt(),
+                          heap::integrations::kMaxAutoSyncMinutes);
+  if(m_syncProviders.empty() || !heap::integrations::autoSyncDue(m_lastTrackerSync, now, mins)) {
+    return;
+  }
+  syncNow();
+  m_lastTrackerSync = now;  // the clock the check ran on, so a test's `now` holds
+  saveLastTrackerSync();
 }
 
 // ── Reminders already sent ──

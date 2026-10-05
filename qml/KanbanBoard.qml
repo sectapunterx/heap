@@ -103,7 +103,7 @@ Item {
     // One of the board's own dialogs or menus is up (new column, WIP limit,
     // delete confirmation, a card menu). Main.qml keeps Ctrl+Z from acting
     // on the board behind it.
-    readonly property bool dialogOpen: cardMenuOpen || addColumnPopup.opened || wipPopup.opened
+    readonly property bool dialogOpen: cardMenuOpen || addColumnPopup.opened || wipPopup.opened || archivePopup.opened
                                        || confirmDelete.opened || colorPopup.opened
 
     // One source of truth for the column width. focusColumn() scrolls by
@@ -201,6 +201,79 @@ Item {
         for (let c = 0; c < cols.length; c++)
             if (cols[c].ids.length > 0) return cols[c].ids[0];
         return "";
+    }
+
+    // ── Selecting from the keyboard (APP-128) ─────────────────────────
+    // Shift+Up/Down grows a range from an anchor, the card the run started
+    // on, over whatever was selected before it; walking back shrinks the
+    // range again. Any other cursor move (plain arrows, a click, a column
+    // change) ends the run.
+    property string _selAnchor: ""
+    property var _selBase: []
+    property bool _extending: false
+    onCursorTaskIdChanged: if (!root._extending) root._selAnchor = ""
+    function _placeCursor(id) {
+        root._extending = true;
+        root.cursorTaskId = id;
+        root._extending = false;
+    }
+    function _union(a, b) {
+        const out = a.slice();
+        for (const id of b) if (out.indexOf(id) < 0) out.push(id);
+        return out;
+    }
+
+    function extendSelection(dy) {
+        root.cursorVisible = true;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
+        const ids = cols[pos.col].ids;
+        if (root._selAnchor === "" || ids.indexOf(root._selAnchor) < 0) {
+            root._selAnchor = root.cursorTaskId;
+            root._selBase = AppController.selectedTaskIds.filter((id) => id !== root.cursorTaskId);
+        }
+        const r = Math.max(0, Math.min(ids.length - 1, pos.row + dy));
+        root._placeCursor(ids[r]);
+        const a = ids.indexOf(root._selAnchor);
+        const range = ids.slice(Math.min(a, r), Math.max(a, r) + 1);
+        AppController.setSelectedTaskIds(root._union(root._selBase, range));
+    }
+
+    // Shift+Left/Right: the whole column the cursor is in joins the
+    // selection, and the cursor steps to the next column with cards, so a
+    // second press takes that one too.
+    function selectColumnAndStep(dx) {
+        root.cursorVisible = true;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) { root.cursorTaskId = _firstVisible(cols); return; }
+        AppController.setSelectedTaskIds(root._union(AppController.selectedTaskIds, cols[pos.col].ids));
+        for (let c = pos.col + dx; c >= 0 && c < cols.length; c += dx) {
+            if (cols[c].ids.length > 0) {
+                root.cursorTaskId = cols[c].ids[Math.min(pos.row, cols[c].ids.length - 1)];
+                return;
+            }
+        }
+    }
+
+    // Ctrl+Left/Right: the selection, when there is one, goes to the column
+    // beside the cursor's (or beside the first selected card's); otherwise
+    // the cursor's card moves, as Shift+H/L always did.
+    function moveSelectionOrCard(dx) {
+        if (AppController.selectionCount === 0) { root.moveCursorCard(dx, 0); return; }
+        const cols = _visibleByColumn();
+        let from = _cursorPos(cols);
+        if (!from || !AppController.isTaskSelected(root.cursorTaskId)) {
+            const first = AppController.selectedTaskIds[0];
+            from = null;
+            for (let c = 0; c < cols.length && !from; c++)
+                if (cols[c].ids.indexOf(first) >= 0) from = { col: c, row: 0 };
+        }
+        if (!from) return;
+        const c = from.col + dx;
+        if (c < 0 || c >= cols.length || !cols[c].statusId) return;
+        AppController.moveSelectedTasksToStatus(cols[c].statusId);
     }
 
     function moveCursor(dx, dy) {
@@ -775,6 +848,7 @@ Item {
                                 AppMenuItem { text: I18n.t("kanban.rename"); onTriggered: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() } }
                                 AppMenuItem { text: I18n.t("kanban.changeColorMenu"); onTriggered: colorPopup.openFor(col.statusId, col.statusColor, col) }
                                 AppMenuItem { text: I18n.t("kanban.wip.set"); onTriggered: wipPopup.openFor(col.statusId, col.statusName, col.wipLimit, col) }
+                                AppMenuItem { objectName: "col-archive-menu"; text: I18n.t("kanban.archive.set"); onTriggered: archivePopup.openFor(col.statusId, col.statusName) }
                                 AppMenuItem { text: I18n.t("kanban.collapse"); onTriggered: root.toggleCollapsed(col.statusId) }
                                 // A "doing" column books a focus block for a card
                                 // that enters it, like In Progress (always on).
@@ -1524,6 +1598,76 @@ Item {
             Item { Layout.fillWidth: true }
             PillButton { text: I18n.t("common.cancel"); onClicked: wipPopup.close() }
             PillButton { text: I18n.t("common.save"); onClicked: wipPopup.commit() }
+            Item { Layout.preferredWidth: 10 }
+        }
+    }
+
+    // ── Auto-archive (APP-122) ────────────────────────────────────────
+    // Cards that sit in the column this many days go to the archive. For
+    // Done it is the same number as Settings → Tasks.
+    QQC.Dialog {
+        id: archivePopup
+        objectName: "archive-popup"
+        property string statusId: ""
+        property string statusName: ""
+
+        function openFor(id, name) {
+            archivePopup.statusId = id;
+            archivePopup.statusName = name;
+            const days = AppController.statusArchiveDays(id);
+            archiveField.text = days > 0 ? String(days) : "";
+            archivePopup.open();
+            archiveField.forceActiveFocus();
+            archiveField.selectAll();
+        }
+
+        modal: true
+        anchors.centerIn: Overlay.overlay
+        parent: Overlay.overlay
+        padding: Theme.inset
+        title: I18n.t("kanban.archive.title").arg(archivePopup.statusName)
+
+        background: Rectangle {
+            radius: Theme.radiusXl
+            color: Theme.panel
+            border.color: Theme.borderStrong
+            border.width: 1
+        }
+
+        function commit() {
+            AppController.setStatusArchiveDays(archivePopup.statusId, parseInt(archiveField.text || "0") || 0);
+            archivePopup.close();
+        }
+
+        contentItem: ColumnLayout {
+            spacing: Theme.spMd
+            TextField {
+                id: archiveField
+                objectName: "archive-field"
+                Layout.fillWidth: true
+                Layout.preferredWidth: 220
+                inputMethodHints: Qt.ImhDigitsOnly
+                validator: IntValidator { bottom: 0; top: 3650 }
+                placeholderText: "0"
+                color: Theme.text
+                font.family: Theme.fontMono
+                background: FieldFrame {}
+                onAccepted: archivePopup.commit()
+            }
+            Text {
+                Layout.preferredWidth: 220
+                text: I18n.t("kanban.archive.hint")
+                color: Theme.textDim
+                font.pixelSize: Theme.fsSm
+                wrapMode: Text.Wrap
+            }
+        }
+
+        footer: RowLayout {
+            spacing: Theme.spMd
+            Item { Layout.fillWidth: true }
+            PillButton { text: I18n.t("common.cancel"); onClicked: archivePopup.close() }
+            PillButton { objectName: "archive-save"; text: I18n.t("common.save"); onClicked: archivePopup.commit() }
             Item { Layout.preferredWidth: 10 }
         }
     }

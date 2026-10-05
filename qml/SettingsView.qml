@@ -1973,51 +1973,7 @@ Item {
             // Outlook / Google / iCloud meetings by link (APP-118).
             CalendarSubscriptionsCard {}
 
-            // Periodic auto-sync cadence (integrations.autoSyncMinutes, 0 = off).
-            SectionCard {
-                RowLayout {
-                    Layout.fillWidth: true
-                    spacing: Theme.spXl
-                    ColumnLayout {
-                        Layout.fillWidth: true
-                        spacing: 1
-                        Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
-                        Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; wrapMode: Text.WordWrap }
-                    }
-                    Repeater {
-                        model: [
-                            { label: I18n.t("settings.integrations.off"), v: 0 },
-                            { label: "15m", v: 15 },
-                            { label: "30m", v: 30 },
-                            { label: "60m", v: 60 }
-                        ]
-                        delegate: Rectangle {
-                            id: asOpt
-                            required property var modelData
-                            readonly property int cur: (root.settings.integrations && root.settings.integrations.autoSyncMinutes) || 0
-                            radius: Theme.radiusMd
-                            implicitWidth: asTxt.implicitWidth + 20; implicitHeight: 26
-                            Layout.minimumWidth: implicitWidth
-                            color: cur === modelData.v ? Theme.accent : (asMA.hovered ? Theme.panel3 : Theme.panel2)
-                            border.color: cur === modelData.v ? Theme.accent : Theme.border; border.width: 1
-                            Text {
-                                id: asTxt; anchors.centerIn: parent; text: modelData.label
-                                color: parent.cur === modelData.v ? Theme.textOnAccent : Theme.text; font.pixelSize: Theme.fsSm
-                            }
-                            ClickArea {
-                                id: asMA
-                                objectName: "settings-autosync-" + asOpt.modelData.v
-                                label: I18n.t("settings.integrations.autoSync") + ": " + asOpt.modelData.label
-                                showTip: false
-                                role: Accessible.RadioButton
-                                checkable: true
-                                checked: asOpt.cur === asOpt.modelData.v
-                                onActivated: root.set("integrations", "autoSyncMinutes", asOpt.modelData.v)
-                            }
-                        }
-                    }
-                }
-            }
+            AutoSyncCard {}
 
             // One card per registered provider — the catalogue is the single
             // source of truth (AppController.integrationCatalog), so adding a

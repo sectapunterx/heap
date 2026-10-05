@@ -557,7 +557,7 @@ TestCase {
     // A built-in that was retired resolves to its replacement, so a user who
     // had picked it keeps a theme of the same kind instead of the slot default.
     function test_retired_presets_resolve_to_their_replacement() {
-        const cases = { "minimal-light": "heap-light", "minimal-dark": "crimson", "ash": "graphite",
+        const cases = { "minimal-light": "heap-light", "ash": "graphite",
                         "stone": "ochre", "slate": "graphite", "sage": "fjord", "muted-mauve": "dusk",
                         "moss-mono": "fjord", "nocturne": "dusk" };
         for (const old in cases) {
@@ -565,6 +565,75 @@ TestCase {
             compare(Presets.resolve(old, [], "dark").id, cases[old], old);
         }
         compare(Presets.resolve("no-such-theme", [], "dark").id, Presets.DEFAULT_DARK);
+    }
+
+    // ── APP-127: an update never takes a theme away ─────────────────────
+
+    // A retired built-in in a slot comes back as the user's own theme, with
+    // the palette it shipped with, under the same id, so the slot still
+    // shows it and not its replacement.
+    function test_a_retired_theme_in_a_slot_is_kept() {
+        const next = Presets.adoptRetired({ darkPreset: "ash", lightPreset: "minimal-light", contrast: "soft" });
+        verify(next !== null);
+        compare(next.darkPreset, "ash");
+        compare(next.contrast, "soft");
+        const ash = next.customThemes.find((t) => t.id === "ash");
+        verify(ash !== undefined, "Ash was not kept");
+        compare(ash.name, "Ash");
+        compare(ash.colors.bg, Presets.RETIRED_PALETTES["ash"].colors.bg);
+        const light = next.customThemes.find((t) => t.id === "minimal-light");
+        compare(light.base, "light");
+        compare(Presets.resolve("ash", next.customThemes, "dark").colors.bg, ash.colors.bg);
+        compare(Presets.resolve("minimal-light", next.customThemes, "light").name, "Minimal light");
+    }
+
+    // A theme the user made from a retired one keeps its source too.
+    function test_the_source_of_a_custom_theme_is_kept() {
+        const mine = { id: "custom-1", name: "Mine", base: "dark", from: "slate", colors: { bg: "#000000" } };
+        const next = Presets.adoptRetired({ darkPreset: "custom-1", customThemes: [mine] });
+        verify(next !== null);
+        compare(next.customThemes.length, 2);
+        compare(next.customThemes[0].id, "custom-1");
+        compare(next.customThemes[1].id, "slate");
+    }
+
+    // Runs once: what it kept is a custom theme now, and nothing else is
+    // retired, so a second launch changes nothing.
+    function test_keeping_runs_once() {
+        const first = Presets.adoptRetired({ darkPreset: "nocturne" });
+        compare(Presets.adoptRetired(first), null);
+        compare(Presets.adoptRetired({ darkPreset: "heap-ink" }), null);
+        compare(Presets.adoptRetired({}), null);
+        compare(Presets.adoptRetired(null), null);
+    }
+
+    // The kept theme's name is free: a user theme already called "Sage"
+    // makes it "Sage (2)".
+    function test_a_kept_theme_never_shares_a_name() {
+        const mine = { id: "custom-1", name: "Sage", base: "dark", colors: {} };
+        const next = Presets.adoptRetired({ darkPreset: "sage", customThemes: [mine] });
+        compare(next.customThemes[1].name, "Sage (2)");
+    }
+
+    function test_unique_name() {
+        const customs = [{ id: "custom-1", name: "Mine", colors: {} },
+                         { id: "custom-2", name: "Mine (2)", colors: {} }];
+        compare(Presets.uniqueName("Other", customs), "Other");
+        compare(Presets.uniqueName("Mine", customs), "Mine (3)");
+        compare(Presets.uniqueName("mine", customs), "mine (3)", "names compare without case");
+        compare(Presets.uniqueName("Crimson", []), "Crimson (2)", "built-in names are taken too");
+    }
+
+    // Minimal dark came back (APP-124) as a low-contrast theme, under its old
+    // id, so a profile that still names it gets it again rather than Crimson.
+    function test_minimal_dark_is_back_in_the_low_set() {
+        const t = Presets.builtin("minimal-dark");
+        verify(t !== null, "minimal-dark is not a built-in");
+        compare(t.contrast, "low");
+        compare(Presets.resolve("minimal-dark", [], "dark").id, "minimal-dark");
+        compare(Presets.category(t, []), "low");
+        // It is a built-in again, so APP-127 does not copy the old palette.
+        compare(Presets.adoptRetired({ darkPreset: "minimal-dark" }), null);
     }
 
     function test_new_id_is_unused() {

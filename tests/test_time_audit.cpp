@@ -812,6 +812,52 @@ TEST_F(TimeAudit, ReimportingOurExportDoesNotDoubleMovedOccurrences) {
   EXPECT_NEAR(occurrenceOn(*app_, mon.addDays(14)).value("start").toDouble(), 12.0, 1e-6);
 }
 
+// ── APP-122: auto-archive for any column ──
+
+TEST_F(TimeAudit, AnyColumnArchivesAfterItsOwnDays) {
+  app_->addStatus(QStringLiteral("Obsolete"));
+  const QString obsolete = app_->statuses().constLast().toMap().value("id").toString();
+  ASSERT_FALSE(obsolete.isEmpty());
+  EXPECT_EQ(app_->statusArchiveDays(obsolete), 0) << "a new column never archives by default";
+  app_->setStatusArchiveDays(obsolete, 3);
+  EXPECT_EQ(app_->statusArchiveDays(obsolete), 3);
+
+  const QDateTime moved(kMon, QTime(10, 0));
+  Task old;
+  old.id = QStringLiteral("OB-1");
+  old.status = obsolete;
+  old.statusChangedAt = moved;
+  Task fresh = old;
+  fresh.id = QStringLiteral("OB-2");
+  fresh.statusChangedAt = moved.addDays(2);
+  Task todo = old;
+  todo.id = QStringLiteral("TD-1");
+  todo.status = QStringLiteral("todo");
+  app_->tasks()->reset({old, fresh, todo});
+
+  app_->runAutomationAt(moved.addDays(3));
+  EXPECT_TRUE(app_->tasks()->items().at(0).archived) << "three days in Obsolete";
+  EXPECT_FALSE(app_->tasks()->items().at(1).archived) << "one day in Obsolete";
+  EXPECT_FALSE(app_->tasks()->items().at(2).archived) << "To Do has no limit";
+}
+
+// Done keeps one number, the Settings → Tasks slider; the column menu writes
+// the same one.
+TEST_F(TimeAudit, DoneArchiveDaysAreTheSettingsSlider) {
+  EXPECT_EQ(app_->statusArchiveDays(QStringLiteral("done")), 7) << "the slider's default";
+  app_->setStatusArchiveDays(QStringLiteral("done"), 2);
+  EXPECT_EQ(app_->settingsMapForTest().value("tasks").toMap().value("archiveDoneAfterDays").toInt(), 2);
+  EXPECT_EQ(app_->statusArchiveDays(QStringLiteral("done")), 2);
+  app_->setStatusArchiveDays(QStringLiteral("done"), 0);
+  Task done;
+  done.id = QStringLiteral("DN-1");
+  done.status = QStringLiteral("done");
+  done.statusChangedAt = QDateTime(kMon, QTime(10, 0));
+  app_->tasks()->reset({done});
+  app_->runAutomationAt(QDateTime(kMon.addDays(60), QTime(10, 0)));
+  EXPECT_FALSE(app_->tasks()->items().at(0).archived) << "0 = never";
+}
+
 int main(int argc, char** argv) {
   qputenv("QT_QPA_PLATFORM", "offscreen");
   QStandardPaths::setTestModeEnabled(true);

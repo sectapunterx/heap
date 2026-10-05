@@ -7,6 +7,7 @@ import QtQuick.Controls as QQC
 import QtQuick.Dialogs
 import TodoCpp
 import "DocsStarter.js" as DocsStarter
+import "ThemePresets.js" as Presets
 
 ApplicationWindow {
     id: win
@@ -329,7 +330,18 @@ ApplicationWindow {
         return out;
     }
 
+    // A built-in theme the update retired is kept as the user's own theme
+    // with the palette it had, instead of being swapped for another (APP-127).
+    function _keepRetiredThemes() {
+        const s = _settingsObject();
+        const next = Presets.adoptRetired(s.appearance);
+        if (!next) return;
+        s.appearance = next;
+        AppController.appSettingsJson = JSON.stringify(s);
+    }
+
     Component.onCompleted: {
+        _keepRetiredThemes();
         _restoreGeometry();
         _restoreFilters();
         _syncSelectionFilter();
@@ -1783,20 +1795,37 @@ ApplicationWindow {
         onActivated: { const b = win.activeViewItem(); if (b && b.toggleCursorSelection) b.toggleCursorSelection(); }
     }
     BoardKey {
-        sequences: [_kbd("board.moveDown"), "Shift+Down"]
+        sequences: [win._kbd("board.moveDown"), "Ctrl+Down"]
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, 1); }
     }
     BoardKey {
-        sequences: [_kbd("board.moveUp"), "Shift+Up"]
+        sequences: [win._kbd("board.moveUp"), "Ctrl+Up"]
         onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(0, -1); }
     }
     BoardKey {
-        sequences: [_kbd("board.moveLeft"), "Shift+Left"]
-        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(-1, 0); }
+        sequences: [win._kbd("board.moveLeft"), "Ctrl+Left"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveSelectionOrCard) b.moveSelectionOrCard(-1); }
     }
     BoardKey {
-        sequences: [_kbd("board.moveRight"), "Shift+Right"]
-        onActivated: { const b = win.activeViewItem(); if (b && b.moveCursorCard) b.moveCursorCard(1, 0); }
+        sequences: [win._kbd("board.moveRight"), "Ctrl+Right"]
+        onActivated: { const b = win.activeViewItem(); if (b && b.moveSelectionOrCard) b.moveSelectionOrCard(1); }
+    }
+    // Selecting from the keyboard (APP-128).
+    BoardKey {
+        sequences: [win._kbd("board.selectDown")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.extendSelection) b.extendSelection(1); }
+    }
+    BoardKey {
+        sequences: [win._kbd("board.selectUp")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.extendSelection) b.extendSelection(-1); }
+    }
+    BoardKey {
+        sequences: [win._kbd("board.selectColumnLeft")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.selectColumnAndStep) b.selectColumnAndStep(-1); }
+    }
+    BoardKey {
+        sequences: [win._kbd("board.selectColumnRight")]
+        onActivated: { const b = win.activeViewItem(); if (b && b.selectColumnAndStep) b.selectColumnAndStep(1); }
     }
     // The card menu, archive and fold, for the card/column the keyboard is on
     // (TASKS-32 / UX-26).
