@@ -10144,7 +10144,26 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
-  reissueSharedTaskIds(copy, nullptr);  // the copy's tasks are new tasks (PLAT-9)
+  // Events live in the global pool, attributed to a profile by id: the copy
+  // gets its own of each, the way an export carries them (PLAT-10).
+  QVector<CalEvent> events;
+  for(const CalEvent& e : m_events.items()) {
+    if(!id.isEmpty() && e.profileId == id) {
+      events.append(e);
+    }
+  }
+  reissueSharedTaskIds(copy, &events);  // the copy's tasks are new tasks (PLAT-9)
+  QHash<QString, QString> eventIds;
+  for(const CalEvent& e : std::as_const(events)) {
+    eventIds.insert(e.id, mintEventId());
+  }
+  for(CalEvent e : std::as_const(events)) {
+    e.id = eventIds.value(e.id);
+    // An override stands in for an occurrence of its own copy's series.
+    e.masterId = eventIds.value(e.masterId, e.masterId);
+    e.profileId = copy.id;
+    m_events.upsert(e);
+  }
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
