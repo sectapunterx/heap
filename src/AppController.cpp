@@ -2167,9 +2167,19 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
   }
 }
 
+QString AppController::taskIdPrefix() const {
+  // What a #KEY-1 reference and a branch name can carry: a letter, then
+  // letters and digits. "MY TEAM" or "../../X" made ids nothing could link to
+  // and put slashes into branch names (SHELL-10); such a stored prefix, from
+  // before the field checked, falls back to the default.
+  static const QRegularExpression kPrefix(QStringLiteral("^[A-Z][A-Z0-9]{0,15}$"));
+  const QString prefix = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
+  return kPrefix.match(prefix).hasMatch() ? prefix : QStringLiteral("TASK");
+}
+
 QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
-  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("TASK")).toString().trimmed();
+  const QString prefix = taskIdPrefix();
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
@@ -5599,8 +5609,11 @@ QString AppController::eventHourLabel(double hour) const {
   const QString fmt = settingsMap().value("calendar").toMap().value("timeFormat", QStringLiteral("24h")).toString();
   const QString mmS = QString("%1").arg(mm, 2, 10, QLatin1Char('0'));
   if(fmt == QLatin1String("12h")) {
-    const int h12 = ((hh + 11) % 12) + 1;
-    const QString ampm = hh < 12 ? QStringLiteral("am") : QStringLiteral("pm");
+    // 24:00, an end at midnight, is 12:00am — not 12:00pm, which reads (and
+    // parses back) as noon (TIME-22).
+    const int h24 = hh % 24;
+    const int h12 = ((h24 + 11) % 12) + 1;
+    const QString ampm = h24 < 12 ? QStringLiteral("am") : QStringLiteral("pm");
     return QString("%1:%2%3").arg(h12).arg(mmS).arg(ampm);
   }
   return QString("%1:%2").arg(hh, 2, 10, QLatin1Char('0')).arg(mmS);
@@ -11963,10 +11976,7 @@ void AppController::flushHeldNotifications(const QDateTime& now) {
 
 QStringList AppController::collectPrefixes() const {
   QStringList out;
-  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
-  if(!def.isEmpty()) {
-    out << def;
-  }
+  out << taskIdPrefix();
   // A mirrored issue's branch is named after the tracker's key ("PROJ-123"),
   // never after the heap id the merge invented for it ("jira-PROJ-123"). Unless
   // the project keys in play are registered here, such a branch cannot match

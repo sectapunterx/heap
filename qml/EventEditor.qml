@@ -277,6 +277,13 @@ Popup {
         if (isNaN(h) || isNaN(m) || m > 59) return NaN;
         return Math.max(0, Math.min(24, h + m / 60.0));
     }
+    // The end field: midnight on the event's own day is its end, 24:00 —
+    // "12:00am" (how 12h shows that end) and "00:00" read as 0, which is
+    // before any start, and the event could not be saved (TIME-22).
+    function parseEndStrict(s) {
+        const e = root.parseHourStrict(s);
+        return (e === 0 && root._spanDays() === 0) ? 24 : e;
+    }
     // The lenient form the rest of the editor used to use: 0 for anything
     // that is not a time.
     function parseHour(s) {
@@ -358,7 +365,7 @@ Popup {
             title: titleField.text.trim(),
             type: root.types[typeBox.currentIndex],
             start: root.parseHour(startField.text),
-            end: root.parseHour(endField.text),
+            end: isNaN(root.parseEndStrict(endField.text)) ? 0 : root.parseEndStrict(endField.text),
             attendees: root._cleanAttendees(attField.text),
             date: root.pickedDate,
             endDate: root.pickedEndDate,
@@ -384,7 +391,7 @@ Popup {
         }
         if (!root.allDay) {
             const s = root.parseHourStrict(startField.text);
-            const e = root.parseHourStrict(endField.text);
+            const e = root.parseEndStrict(endField.text);
             if (isNaN(s)) { startField.forceActiveFocus(); return I18n.t("editor.err.time").arg(startField.text); }
             if (isNaN(e)) { endField.forceActiveFocus(); return I18n.t("editor.err.time").arg(endField.text); }
             // An end at or before the start on the same day used to save as

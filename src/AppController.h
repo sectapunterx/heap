@@ -1517,6 +1517,9 @@ class AppController : public QObject {
   void seedShortcutCatalog();
   void applyShortcutOverrides(const QVariantMap& overrides);
   QString normalizeSequence(const QString& raw) const;
+  // Settings → Tasks → ID prefix, upper-cased; "TASK" when unset or not a
+  // usable ticket stem (a letter, then letters and digits).
+  QString taskIdPrefix() const;
 
   // Global hotkeys — OS-level Quick-capture triggers (work unfocused). Re-armed
   // from the matching catalog sequences whenever they change. Each combination

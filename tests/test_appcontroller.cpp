@@ -580,6 +580,30 @@ TEST_F(AppControllerTest, EventHourLabel24h) {
   EXPECT_EQ(app_->eventHourLabel(0.25), QString("00:15"));
 }
 
+// TIME-22 (2026-09-30-1): an end at 24:00 is midnight, 12:00am — not noon.
+TEST_F(AppControllerTest, EventHourLabel12hMidnightEnd) {
+  const QString before = app_->appSettingsJson();
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"12h"}})"));
+  EXPECT_EQ(app_->eventHourLabel(24.0), QString("12:00am"));
+  EXPECT_EQ(app_->eventHourLabel(0.0), QString("12:00am"));
+  EXPECT_EQ(app_->eventHourLabel(12.0), QString("12:00pm"));
+  EXPECT_EQ(app_->eventHourLabel(23.5), QString("11:30pm"));
+  app_->setAppSettingsJson(before);
+}
+
+// SHELL-10 (2026-09-30-1): an ID prefix nothing can link to ("MY TEAM",
+// "../../X") is not used for new ids.
+TEST_F(AppControllerTest, NewTaskIdsUseAUsablePrefixOnly) {
+  const QString before = app_->appSettingsJson();
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"MY TEAM"}})"));
+  EXPECT_TRUE(app_->newTaskDraft(QStringLiteral("todo")).value("id").toString().startsWith(QStringLiteral("TASK-")));
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"../../x"}})"));
+  EXPECT_TRUE(app_->newTaskDraft(QStringLiteral("todo")).value("id").toString().startsWith(QStringLiteral("TASK-")));
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"heap2"}})"));
+  EXPECT_TRUE(app_->newTaskDraft(QStringLiteral("todo")).value("id").toString().startsWith(QStringLiteral("HEAP2-")));
+  app_->setAppSettingsJson(before);
+}
+
 // ─── humanDate / shortDate ────────────────────────────────────────────
 
 TEST_F(AppControllerTest, HumanDateEnRu) {

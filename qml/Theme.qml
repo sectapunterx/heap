@@ -306,8 +306,10 @@ QtObject {
         const mm = Math.round((h - hh) * 60);
         const mmS = String(mm).padStart(2, "0");
         if (timeFormat === "12h") {
-            const h12 = ((hh + 11) % 12) + 1;
-            const ampm = hh < 12 ? "am" : "pm";
+            // 24:00 (midnight at the end of a day) is 12:00am, not noon.
+            const h24 = hh % 24;
+            const h12 = ((h24 + 11) % 12) + 1;
+            const ampm = h24 < 12 ? "am" : "pm";
             return h12 + ":" + mmS + ampm;
         }
         return String(hh).padStart(2, "0") + ":" + mmS;
