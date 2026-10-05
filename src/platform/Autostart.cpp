@@ -1,6 +1,5 @@
 #include "platform/Autostart.h"
 
-#include <QDir>
 #include <QRegularExpression>
 #include <QStandardPaths>
 #include <QStringList>
@@ -41,7 +40,9 @@ bool hasMinimizedArg(const QString& text) {
 }  // namespace
 
 QString windowsRunCommand(const QString& exePath, bool minimized) {
-  QString cmd = QLatin1Char('"') + QDir::toNativeSeparators(exePath) + QLatin1Char('"');
+  // Backslashes on every platform: the text is for the Windows registry, and
+  // toNativeSeparators would leave slashes when the tests run on Linux/macOS.
+  QString cmd = QLatin1Char('"') + QString(exePath).replace(QLatin1Char('/'), QLatin1Char('\\')) + QLatin1Char('"');
   if(minimized) {
     cmd += QLatin1Char(' ') + QLatin1String(kMinimizedFlag);
   }
