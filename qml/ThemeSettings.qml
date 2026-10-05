@@ -42,6 +42,8 @@ ColumnLayout {
     property string filter: ""
     property string importError: ""
     property bool copied: false
+    // Whether the colour editor is unfolded. Not saved: it opens folded.
+    property bool colorsOpen: false
 
     function pick(id) { setKey(slotKey, id); }
 
@@ -118,7 +120,7 @@ ColumnLayout {
     // Where a slot showing theme `id` lands once `id` is gone: the theme it was
     // copied from, followed back past other deleted copies, as long as that
     // one belongs in the slot; otherwise the slot's default. It used to be the
-    // default every time, so deleting a copy of Minimal dark landed on heap.
+    // default every time, so deleting a copy of Crimson landed on heap. dark.
     function fallbackFor(id, slotName, remaining) {
         const seen = {};
         let cur = _custom(id);
@@ -176,74 +178,102 @@ ColumnLayout {
         Layout.fillWidth: true
     }
 
-    // ── Theme cards ──────────────────────────────────────────────────
-    Flow {
-        id: cards
-        objectName: "theme-cards"
-        Layout.fillWidth: true
-        spacing: Theme.spMd
-        Repeater {
-            model: ts.themes
-            delegate: Rectangle {
-                id: card
-                required property var modelData
-                readonly property var t: Presets.resolve(modelData.id, ts.customs, ts.slot)
-                readonly property bool selected: modelData.id === ts.currentId
-                objectName: "theme-card-" + modelData.id
-                width: 150; height: 92
-                radius: Theme.radius
-                color: t.colors.bg
-                border.color: selected ? Theme.accent : (cardMA.hovered ? Theme.borderStrong : Theme.border)
-                border.width: selected ? 2 : 1
+    // ── Theme cards, by contrast ─────────────────────────────────────
+    Repeater {
+        model: Presets.CATEGORIES
+        delegate: ColumnLayout {
+            id: catCol
+            required property string modelData
+            readonly property var members: ts.themes.filter((t) => Presets.category(t, ts.customs) === modelData)
+            objectName: "theme-category-" + modelData
+            visible: members.length > 0
+            Layout.fillWidth: true
+            spacing: Theme.spSm
 
-                // A miniature of the theme: a panel, a line of text, accent
-                // and the alert / priority colours.
-                Rectangle {
-                    x: 8; y: 8; width: parent.width - 16; height: 44
-                    radius: Theme.radiusSm
-                    color: card.t.colors.panel
-                    border.color: card.t.colors.border; border.width: 1
-                    Rectangle { x: 8; y: 8; width: 60; height: 5; radius: 2; color: card.t.colors.text }
-                    Rectangle { x: 8; y: 18; width: 40; height: 4; radius: 2; color: card.t.colors.textMuted }
-                    Rectangle { x: parent.width - 34; y: 8; width: 26; height: 12; radius: Theme.radiusXs; color: card.t.colors.accent }
-                    Row {
-                        x: 8; y: 30; spacing: Theme.spXs
-                        Repeater {
-                            model: ["danger", "warning", "success", "info", "p2", "p3", "stReview"]
-                            Rectangle {
-                                required property string modelData
-                                width: 8; height: 8; radius: 4
-                                color: card.t.colors[modelData]
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: Theme.spMd
+                Text {
+                    text: I18n.t("settings.theme.cat." + catCol.modelData).toUpperCase()
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                }
+                Text {
+                    Layout.fillWidth: true
+                    text: I18n.t("settings.theme.cat." + catCol.modelData + ".hint")
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsXs
+                    elide: Text.ElideRight
+                }
+            }
+            Flow {
+                objectName: "theme-cards-" + catCol.modelData
+                Layout.fillWidth: true
+                spacing: Theme.spMd
+                Repeater {
+                    model: catCol.members
+                    delegate: Rectangle {
+                        id: card
+                        required property var modelData
+                        readonly property var t: Presets.resolve(modelData.id, ts.customs, ts.slot)
+                        readonly property bool selected: modelData.id === ts.currentId
+                        objectName: "theme-card-" + modelData.id
+                        width: 150; height: 92
+                        radius: Theme.radius
+                        color: t.colors.bg
+                        border.color: selected ? Theme.accent : (cardMA.hovered ? Theme.borderStrong : Theme.border)
+                        border.width: selected ? 2 : 1
+
+                        // A miniature of the theme: a panel, a line of text, accent
+                        // and the alert / priority colours.
+                        Rectangle {
+                            x: 8; y: 8; width: parent.width - 16; height: 44
+                            radius: Theme.radiusSm
+                            color: card.t.colors.panel
+                            border.color: card.t.colors.border; border.width: 1
+                            Rectangle { x: 8; y: 8; width: 60; height: 5; radius: 2; color: card.t.colors.text }
+                            Rectangle { x: 8; y: 18; width: 40; height: 4; radius: 2; color: card.t.colors.textMuted }
+                            Rectangle { x: parent.width - 34; y: 8; width: 26; height: 12; radius: Theme.radiusXs; color: card.t.colors.accent }
+                            Row {
+                                x: 8; y: 30; spacing: Theme.spXs
+                                Repeater {
+                                    model: ["danger", "warning", "success", "info", "p2", "p3", "stReview"]
+                                    Rectangle {
+                                        required property string modelData
+                                        width: 8; height: 8; radius: 4
+                                        color: card.t.colors[modelData]
+                                    }
+                                }
                             }
                         }
+                        Text {
+                            x: 10; y: 58
+                            width: parent.width - 20
+                            text: card.t.name
+                            color: card.t.colors.text
+                            elide: Text.ElideRight
+                            font.pixelSize: Theme.fsSm
+                            font.weight: Font.DemiBold
+                        }
+                        Text {
+                            x: 10; y: 74
+                            text: (card.t.builtin ? I18n.t("settings.theme.builtin") : I18n.t("settings.theme.custom"))
+                                  + " · " + I18n.t(card.t.base === "light" ? "settings.appearance.theme.light"
+                                                                          : "settings.appearance.theme.dark")
+                            color: card.t.colors.textMuted
+                            font.pixelSize: Theme.fsXs
+                        }
+                        ClickArea {
+                            id: cardMA
+                            objectName: "theme-card-area-" + card.modelData.id
+                            label: card.t.name
+                            showTip: false
+                            role: Accessible.RadioButton
+                            checkable: true
+                            checked: card.selected
+                            onActivated: ts.pick(card.modelData.id)
+                        }
                     }
-                }
-                Text {
-                    x: 10; y: 58
-                    width: parent.width - 20
-                    text: card.t.name
-                    color: card.t.colors.text
-                    elide: Text.ElideRight
-                    font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
-                }
-                Text {
-                    x: 10; y: 74
-                    text: (card.t.builtin ? I18n.t("settings.theme.builtin") : I18n.t("settings.theme.custom"))
-                          + " · " + I18n.t(card.t.base === "light" ? "settings.appearance.theme.light"
-                                                                  : "settings.appearance.theme.dark")
-                    color: card.t.colors.textMuted
-                    font.pixelSize: Theme.fsXs
-                }
-                ClickArea {
-                    id: cardMA
-                    objectName: "theme-card-area-" + card.modelData.id
-                    label: card.t.name
-                    showTip: false
-                    role: Accessible.RadioButton
-                    checkable: true
-                    checked: card.selected
-                    onActivated: ts.pick(card.modelData.id)
                 }
             }
         }
@@ -347,30 +377,65 @@ ColumnLayout {
     }
 
     // ── Token editor ────────────────────────────────────────────────
-    RowLayout {
+    // Folded by default: sixty-odd colour rows buried the theme picker and
+    // the switches below it, and most people only ever pick a theme.
+    Rectangle {
+        id: colorsHeader
+        objectName: "theme-colors-header"
         Layout.fillWidth: true
         Layout.topMargin: Theme.spSm
-        spacing: Theme.spMd
-        Text {
-            text: I18n.t("settings.theme.colors").toUpperCase()
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+        implicitHeight: colorsRow.implicitHeight + Theme.spMd * 2
+        radius: Theme.radiusMd
+        color: colorsMA.hovered ? Theme.panel3 : Theme.panel2
+        border.color: Theme.border
+        RowLayout {
+            id: colorsRow
+            anchors.fill: parent
+            anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
+            spacing: Theme.spMd
+            Text {
+                text: ts.colorsOpen ? "▾" : "▸"
+                color: Theme.textDim
+                font.pixelSize: Theme.fsMd
+            }
+            Text {
+                text: I18n.t("settings.theme.colors").toUpperCase()
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+            }
+            Text {
+                Layout.fillWidth: true
+                text: I18n.t("settings.theme.colorsHint").arg(Presets.TOKENS.length)
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
+                elide: Text.ElideRight
+            }
         }
-        Item { Layout.fillWidth: true }
-        TextField {
-            objectName: "theme-token-filter"
-            Layout.preferredWidth: 180
-            placeholderText: I18n.t("settings.theme.filter")
-            placeholderTextColor: Theme.textDim
-            color: Theme.text
-            font.pixelSize: Theme.fsSm
-            selectByMouse: true
-            background: FieldFrame {}
-            onTextChanged: ts.filter = text.toLowerCase()
+        ClickArea {
+            id: colorsMA
+            objectName: "theme-colors-toggle"
+            label: I18n.t("settings.theme.colors")
+            showTip: false
+            role: Accessible.CheckBox
+            checkable: true
+            checked: ts.colorsOpen
+            onActivated: ts.colorsOpen = !ts.colorsOpen
         }
     }
+    TextField {
+        objectName: "theme-token-filter"
+        visible: ts.colorsOpen
+        Layout.preferredWidth: 220
+        placeholderText: I18n.t("settings.theme.filter")
+        placeholderTextColor: Theme.textDim
+        color: Theme.text
+        font.pixelSize: Theme.fsSm
+        selectByMouse: true
+        background: FieldFrame {}
+        onTextChanged: ts.filter = text.toLowerCase()
+    }
     Text {
-        visible: ts.currentIsBuiltin
+        visible: ts.colorsOpen && ts.currentIsBuiltin
         text: I18n.t("settings.theme.builtinHint")
         color: Theme.textDim
         font.pixelSize: Theme.fsXs
@@ -389,7 +454,7 @@ ColumnLayout {
                 return t.key.toLowerCase().indexOf(ts.filter) >= 0
                     || I18n.t("theme.token." + t.key).toLowerCase().indexOf(ts.filter) >= 0;
             })
-            visible: tokens.length > 0
+            visible: ts.colorsOpen && tokens.length > 0
             Layout.fillWidth: true
             spacing: Theme.spXs
 

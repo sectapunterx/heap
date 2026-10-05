@@ -150,6 +150,14 @@ TestCase {
         tryVerify(function () { return ts.appearance.darkPreset === "heap-light"; }, 1000);
         verify(card.checked);
 
+        // The colour editor opens folded; its header is the toggle.
+        verify(!ts.colorsOpen);
+        const toggle = find(ts, "theme-colors-toggle");
+        compare(toggle.role, Accessible.CheckBox);
+        reachable(toggle, "colours toggle");
+        tryVerify(function () { return ts.colorsOpen; }, 1000);
+        verify(toggle.checked);
+
         const sw = find(ts, "theme-swatch-area-danger");
         verify(sw.activeFocusOnTab);
         verify(String(sw.Accessible.name).indexOf(I18n.t("theme.token.danger")) >= 0);
