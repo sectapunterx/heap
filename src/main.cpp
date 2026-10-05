@@ -2,6 +2,9 @@
 #include "Logger.h"
 #include "ViewNames.h"
 
+#include "cli/CliCore.h"
+#include "cli/CliExecutor.h"
+#include "cli/CliMain.h"
 #include "diag/PerfLog.h"
 #include "platform/AltGrGuard.h"
 #include "platform/Paths.h"
@@ -11,6 +14,7 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QIcon>
@@ -27,6 +31,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <optional>
 
 #ifdef Q_OS_MACOS
 #include "platform/MacWindow.h"
@@ -49,11 +54,13 @@ struct CliOptions {
   QString dataDir;
   bool dataDirSet = false;
   bool smoke = false;
+  QString openTask;  // `heap open <id>` started this window on that task
   bool perfLog = false;
 };
 
-// Exit code for a command line heap cannot act on (the usual "usage" code).
-constexpr int kUsageExit = 2;
+// Exit code for a command line heap cannot act on — the same "usage" code the
+// command-line verbs use (heap::cli::kExitUsage).
+constexpr int kUsageExit = heap::cli::kExitUsage;
 
 // How long --smoke lets the UI settle before judging it: long enough for the
 // deferred loaders and the first frame, short enough for a CI step.
@@ -96,6 +103,9 @@ CliOptions parseCommandLine(const QStringList& args) {
                      "check a packaged build."));
   parser.addOption(smokeOption);
 
+  QCommandLineOption openTaskOption(QString::fromLatin1(heap::cli::kOpenTaskOption), QString(), QStringLiteral("id"));
+  openTaskOption.setFlags(QCommandLineOption::HiddenFromHelp);
+  parser.addOption(openTaskOption);
   const QCommandLineOption perfLogOption(QStringLiteral("perf-log"),
                                          QStringLiteral("Log startup and capture timings to the log (perf: ... lines). "
                                                         "Also settable with HEAP_PERF_LOG=1."));
@@ -124,7 +134,9 @@ CliOptions parseCommandLine(const QStringList& args) {
   // `--data-dir` used to be ignored and the GUI opened — and migrated — the
   // real profile instead of the folder meant (PLAT-1, audit 2026-09-30).
   if(!parser.positionalArguments().isEmpty()) {
-    usageError(parser, QStringLiteral("unexpected argument '%1'").arg(parser.positionalArguments().constFirst()));
+    usageError(parser,
+               QStringLiteral("unexpected argument '%1' (commands: add, now, list, today, done, open, help)")
+                   .arg(parser.positionalArguments().constFirst()));
   }
 
   CliOptions opts;
@@ -132,6 +144,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  opts.openTask = parser.value(openTaskOption).trimmed();
   opts.perfLog = parser.isSet(perfLogOption);
   if(parser.isSet(viewOption) && !heap::views::isKnown(opts.initialView)) {
     usageError(parser,
@@ -190,6 +203,12 @@ struct LogCloser {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  // `heap add …`, `heap now`, --help: answered on the console, no window and
+  // no GUI application object (APP-173).
+  if(heap::cli::isCommandLine(argc, argv)) {
+    return heap::cli::run(argc, argv);
+  }
+
   heap::perf::markProcessStart();
   QApplication app(argc, argv);
   QApplication::setOrganizationName("heap");
@@ -330,6 +349,34 @@ int main(int argc, char* argv[]) {
     }
     QMetaObject::invokeMethod(roots.constFirst(), "_summon");
   });
+
+  // `heap add|done|now|…` run while this window is open (APP-173): applied to
+  // the live models, so the change shows at once, undoes and saves as any
+  // other. Set before exec(), so no request can arrive ahead of it.
+  instance.setRequestHandler([&engine](const QByteArray& line) -> QByteArray {
+    const std::optional<heap::cli::Request> request = heap::cli::decodeRequest(line);
+    if(!request) {
+      return heap::cli::encodeResponse(
+          {heap::cli::kExitUsage, QString(), QStringLiteral("heap: the window did not understand the request\n")});
+    }
+    auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController");
+    if(controller == nullptr) {
+      return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("heap: the window is not ready\n")});
+    }
+    return heap::cli::encodeResponse(heap::cli::execute(*controller, *request, QDateTime::currentDateTime()));
+  });
+
+  // Started by `heap open <id>` with no window open: show that task.
+  if(!cli.openTask.isEmpty()) {
+    QTimer::singleShot(0, &app, [&engine, id = cli.openTask]() {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        heap::cli::Request request;
+        request.verb = heap::cli::Verb::Open;
+        request.taskId = id;
+        heap::cli::execute(*controller, request, QDateTime::currentDateTime());
+      }
+    });
+  }
 
   if(cli.smoke) {
     QTimer::singleShot(kSmokeSettleMs, &app, [&engine, &smokeWarnings]() {
