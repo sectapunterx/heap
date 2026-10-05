@@ -201,6 +201,11 @@ Item {
         AppController.selectedDate = new Date(w.getFullYear(), w.getMonth(), w.getDate() + (7 * dir));
     }
 
+    // The rebuild is one chain, each stage reading only the one before it:
+    // weekStart / eventRev -> spans -> eventDays -> days -> overlaps, strip.
+    // When a stage also read weekStart itself, a week step re-ran it twice —
+    // once with the old week's input and again when that caught up — and
+    // every extra run of eventDays rebuilt all the event delegates (TIME-18).
     function buildSpans() {
         const _e = root.eventRev;
         const start = root.weekStart;
@@ -209,7 +214,17 @@ Item {
         // reaches in from the Sunday before, and out into the Monday after.
         const from = new Date(start.getFullYear(), start.getMonth(), start.getDate() - 1);
         const to = new Date(start.getFullYear(), start.getMonth(), start.getDate() + 7);
-        return AppController.eventOccurrences(from, to);
+        // Copied out into a plain array once. What comes back is a C++ list
+        // the engine converts element by element on every index — and
+        // buildEventDays() reads each occurrence once per day column, so a
+        // week of 420 occurrences cost ~3000 full conversions, 2.4 s per
+        // step or save (TIME-18).
+        const raw = AppController.eventOccurrences(from, to);
+        const n = raw.length;
+        const out = new Array(n);
+        for (let i = 0; i < n; i++) out[i] = raw[i];
+        out.weekStart = start;
+        return out;
     }
     readonly property var spans: buildSpans()
 
@@ -218,9 +233,9 @@ Item {
     // timer ticks every second) does not rebuild the event delegates and
     // drop the block out from under the pointer.
     function buildEventDays() {
-        const start = weekStart;
+        const spans = root.spans;
+        const start = spans.weekStart || root.weekStart;
         const days = [];
-        const _e = root.eventRev;
         const showWeekends = Theme.showWeekends;
         // Column of each day of the week, by its offset from weekStart; -1
         // for a hidden weekend.
@@ -235,19 +250,33 @@ Item {
         // past midnight. Each day takes the piece that lands on it, so a
         // 22:00-02:00 call draws on both days instead of only the one its
         // `date` happens to name.
-        const spans = root.spans;
         const linked = [];   // per column: task ids a linked event stands in for
-        for (let k = 0; k < days.length; k++) {
-            linked.push({});
-            for (let i = 0; i < spans.length; i++) {
-                const e = spans[i];
-                if (Seg.covers(e, days[k].date) && e.taskId) linked[k][String(e.taskId)] = true;
-                if (Seg.isStrip(e)) continue;   // all-day events live in the strip
-                const seg = Seg.segmentOn(e, days[k].date);
-                if (!seg) continue;
+        for (let k = 0; k < days.length; k++) linked.push({});
+        // Which days of the week each occurrence covers, found once by
+        // arithmetic (as MonthView does) rather than by asking Segments.js
+        // about every occurrence on every day: that was seven rounds of Date
+        // construction per occurrence and most of a week step's time with a
+        // few hundred occurrences on screen (TIME-18). The pieces are the
+        // ones Seg.segmentOn() cuts: the first day keeps the start, the last
+        // day the end, a day in between runs 0-24.
+        const first = Date.UTC(start.getFullYear(), start.getMonth(), start.getDate());
+        const dayOf = (d) => Math.round((Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()) - first) / 86400000);
+        for (let i = 0; i < spans.length; i++) {
+            const e = spans[i];
+            if (!e.date || !e.date.getFullYear) continue;
+            const a = dayOf(e.date);
+            const b = (e.endDate && e.endDate.getFullYear) ? Math.max(a, dayOf(e.endDate)) : a;
+            const strip = Seg.isStrip(e);   // all-day events live in the strip
+            for (let off = Math.max(0, a); off <= Math.min(6, b); off++) {
+                const k = colOf[off];
+                if (k < 0) continue;
+                if (e.taskId) linked[k][String(e.taskId)] = true;
+                if (strip) continue;
+                const segFirst = off === a;
+                const segLast = off === b;
                 days[k].events.push({
                     id: e.id, title: e.title, type: e.type,
-                    start: seg.start, end: seg.end,
+                    start: segFirst ? e.start : 0, end: segLast ? e.end : 24,
                     attendees: e.attendees, date: e.date, context: e.context,
                     masterId: e.masterId || "", occurrenceDate: e.occurrenceDate,
                     occ: e,
@@ -255,18 +284,18 @@ Item {
                     // days, and the overlap map is keyed by this. Keying it by
                     // event id would let Tuesday's piece overwrite Monday's.
                     key: e.id + "@" + k,
-                    segFirst: seg.first, segLast: seg.last
+                    segFirst: segFirst, segLast: segLast
                 });
             }
         }
-        return { days: days, colOf: colOf, linked: linked };
+        return { days: days, colOf: colOf, linked: linked, spans: spans, weekStart: start };
     }
     readonly property var eventDays: buildEventDays()
 
     function buildDays() {
-        const start = weekStart;
         const _t = root.taskRev;
         const ev = root.eventDays;
+        const start = ev.weekStart;
         const colOf = ev.colOf;
         const linked = ev.linked;
         const days = [];
@@ -383,12 +412,14 @@ Item {
     // every column it crosses, or a trip would jump up and down across the
     // week.
     function buildStrip() {
+        const ev = root.eventDays;
+        const spans = ev.spans;
         const dates = [];
-        for (let i = 0; i < root.days.length; i++) dates.push(root.days[i].date);
-        const laid = Seg.stripRows(root.spans, dates);
+        for (let i = 0; i < ev.days.length; i++) dates.push(ev.days[i].date);
+        const laid = Seg.stripRows(spans, dates);
         const bars = [];
-        for (let i = 0; i < root.spans.length; i++) {
-            const e = root.spans[i];
+        for (let i = 0; i < spans.length; i++) {
+            const e = spans[i];
             if (!Seg.isStrip(e)) continue;
             const ext = Seg.barExtent(e, dates);
             if (!ext) continue;
@@ -408,6 +439,9 @@ Item {
     // 10:00 were drawn exactly on top of each other here: the second hid the
     // first, and only the top one could be clicked. The day grid had solved
     // this; this one had never been taught. Both call the same module now.
+    // The narrowest an overlapping event's lane gets before the lanes
+    // cascade instead of splitting the day further.
+    readonly property int minLaneW: 64
     function buildOverlaps() {
         const perDay = [];
         for (let i = 0; i < days.length; i++) {
@@ -1029,11 +1063,13 @@ Item {
                             readonly property var _slot: root.overlaps[modelData.key] || ({ col: 0, cols: 1 })
                             readonly property int _cols: (dragDx !== 0 || dragDy !== 0) ? 1 : Math.max(1, _slot.cols)
                             readonly property int _col:  (dragDx !== 0 || dragDy !== 0) ? 0 : _slot.col
-                            readonly property real _slotW: (gridHost.dayW - 4) / _cols
+                            // Tiled, or cascaded once lanes would get
+                            // narrower than a readable title (VISU-15).
+                            readonly property var _lane: Overlap.lane(_col, _cols, gridHost.dayW - 4, root.minLaneW)
 
-                            x: gridHost.gutterW + effDayIndex * gridHost.dayW + 2 + _col * _slotW
+                            x: gridHost.gutterW + effDayIndex * gridHost.dayW + 2 + _lane.x
                             y: (effStart - root.hoursStart) * root.hourH + dragDy
-                            width: _slotW - (_cols > 1 ? 2 : 0)
+                            width: _lane.w - (_cols > 1 ? 2 : 0)
                             height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
                             // A half-hour meeting is the most common kind and
                             // the block is too short for two lines of text:
@@ -1045,7 +1081,9 @@ Item {
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
                             border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
                             border.width: 1
-                            z: 5
+                            // A later lane is drawn over an earlier one where
+                            // they cascade; a dragged event above them all.
+                            z: (dragDx !== 0 || dragDy !== 0) ? 7 : 5 + _col / Math.max(1, _cols)
 
                             Rectangle {
                                 anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
@@ -1248,16 +1286,16 @@ Item {
                             required property var modelData
                             objectName: "week-taskblock-" + wkBlock.modelData.id
                             readonly property var _slot: root.overlaps[wkBlock.modelData.key] || ({ col: 0, cols: 1 })
-                            readonly property real _slotW: (gridHost.dayW - 4) / Math.max(1, _slot.cols)
-                            x: gridHost.gutterW + wkBlock.modelData.dayIndex * gridHost.dayW + 2 + _slot.col * _slotW
+                            readonly property var _lane: Overlap.lane(_slot.col, _slot.cols, gridHost.dayW - 4, root.minLaneW)
+                            x: gridHost.gutterW + wkBlock.modelData.dayIndex * gridHost.dayW + 2 + _lane.x
                             y: (wkBlock.modelData.start - root.hoursStart) * root.hourH
-                            width: _slotW - (_slot.cols > 1 ? 2 : 0)
+                            width: _lane.w - (_slot.cols > 1 ? 2 : 0)
                             height: Math.max(18, (wkBlock.modelData.end - wkBlock.modelData.start) * root.hourH - 2)
                             radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.eventColor("focus"), wkBlockMA.hovered ? 0.18 : 0.10)
                             border.color: Theme.withAlpha(Theme.eventColor("focus"), 0.6)
                             border.width: 1
-                            z: 5
+                            z: 5 + _slot.col / Math.max(1, _slot.cols)
                             Text {
                                 anchors.fill: parent
                                 anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spSm; anchors.topMargin: Theme.sp2xs

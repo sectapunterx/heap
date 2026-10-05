@@ -70,3 +70,21 @@ function computeByDay(days) {
     }
     return map;
 }
+
+// Where a slot from compute() goes across `avail` pixels: { x, w }.
+//
+// Tiled 1/cols each while a lane is at least `minW` wide. Past that a fourth
+// meeting in a 130px day left lanes ~30px wide, titles cut to two letters or
+// to the time alone (VISU-15). Then the lanes cascade instead: each keeps
+// `minW` (never more than the whole width) and steps right by an equal share
+// of what is left, the later column drawn over the earlier one. Clusters are
+// sorted by start, so an earlier event's top — where its title is — still
+// shows above the one that covers its right side.
+function lane(col, cols, avail, minW) {
+    const n = Math.max(1, cols);
+    const tile = avail / n;
+    if (n === 1 || tile >= minW) return { x: col * tile, w: tile };
+    const w = Math.min(avail, minW);
+    const stepX = (avail - w) / (n - 1);
+    return { x: col * stepX, w: w };
+}
