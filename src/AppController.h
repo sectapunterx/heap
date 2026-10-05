@@ -1862,6 +1862,9 @@ class AppController : public QObject {
   // Point the Docs contact `contactKey` at `personId`. No-op when the contact
   // is gone or already links there.
   void linkDocsContact(const QString& contactKey, const QString& personId);
+  // Point every Docs contact linked to `fromPersonId` at `toPersonId`: the
+  // person was renamed.
+  void relinkDocsContacts(const QString& fromPersonId, const QString& toPersonId);
   // Append a Docs contact for a Person created through the rail's picker, so
   // the next search finds them among the contacts.
   void appendDocsContact(const Person& p);

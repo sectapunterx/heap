@@ -4984,7 +4984,19 @@ bool AppController::savePerson(const QVariantMap& draft) {
     return false;
   }
   const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
-  m_people.upsert(p);
+  // An edit that changes the id renames the person: upsert() alone added a
+  // second one under the new id and left the old one in the list (SHELL-25).
+  // The renamed person keeps its place, and the Docs contacts linked to the
+  // old id follow it.
+  const int renamedRow = !isNew && !originalId.isEmpty() && originalId != p.id ? m_people.indexOfId(originalId) : -1;
+  if(renamedRow >= 0) {
+    p.extra = m_people.items().at(renamedRow).extra;
+    m_people.removeById(originalId);
+    m_people.insertAt(renamedRow, p);
+    relinkDocsContacts(originalId, p.id);
+  } else {
+    m_people.upsert(p);
+  }
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
   // Mattermost sync, reuse this Person instead of making a second one); a
@@ -5141,6 +5153,25 @@ void AppController::linkDocsContact(const QString& contactKey, const QString& pe
     setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
     scheduleSave();
     return;
+  }
+}
+
+void AppController::relinkDocsContacts(const QString& fromPersonId, const QString& toPersonId) {
+  QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  bool changed = false;
+  for(int i = 0; i < list.size(); ++i) {
+    QJsonObject c = list.at(i).toObject();
+    if(c.value(QStringLiteral("personId")).toString() != fromPersonId) {
+      continue;
+    }
+    c.insert(QStringLiteral("personId"), toPersonId);
+    list.replace(i, c);
+    changed = true;
+  }
+  if(changed) {
+    docs.insert(QStringLiteral("contacts"), list);
+    setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
   }
 }
 
