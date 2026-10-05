@@ -17,6 +17,8 @@
 #include <QVariantMap>
 #include <QVector>
 
+#include <functional>
+
 // One tag on a task (HEAP-124). `id` is the label text — it is what a tracker
 // calls the label and what the user types. `color` is a "#rrggbb" string, empty
 // when the source gave none.
@@ -517,6 +519,16 @@ class TaskModel : public QAbstractListModel {
   void setGitInfoForId(const QString& id, const QVariantMap& info);
   void clearAllGitInfo();
 
+  // Told about every single-task change made through setStatus / upsert /
+  // insertAt, with the task as it was (null for a new row) and as it is now —
+  // what the task history (APP-165) is built from. reset() is not reported:
+  // a load or a profile switch is not something that happened to a task.
+  using ChangeObserver = std::function<void(const Task* before, const Task& after)>;
+
+  void setChangeObserver(ChangeObserver observer) {
+    m_observer = std::move(observer);
+  }
+
   // Runtime half of a card's sync state (APP-163): a status write in flight
   // and the reason the tracker gave for refusing the last one. Not saved —
   // the refusal itself is (ExternalMeta::unsyncedStatus), its wording is not.
@@ -579,7 +591,8 @@ class TaskModel : public QAbstractListModel {
   QVector<Task> m_items;
   QSet<QString> m_blockedStuck;
   QHash<QString, GitInfo> m_git;  // not persisted; runtime only
-  QSet<QString> m_pushing;        // task ids with a push in flight
+  ChangeObserver m_observer;
+  QSet<QString> m_pushing;               // task ids with a push in flight
   QHash<QString, QString> m_pushErrors;  // task id → the tracker's last refusal
   // indexOfId's id→row map, rebuilt lazily whenever rows are added, removed or
   // replaced wholesale. Mutable so the lookup can stay const.

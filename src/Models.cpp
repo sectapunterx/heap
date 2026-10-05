@@ -388,7 +388,7 @@ void TaskModel::clearAllGitInfo() {
   }
   m_git.clear();
   emit dataChanged(index(0, 0),
-                   index(m_items.size() - 1, 0),
+                   index(static_cast<int>(m_items.size()) - 1, 0),
                    {PrStateRole, PrNumberRole, PrUrlRole, PrMoveRole, PrMoveReasonRole, GitAheadRole, GitBehindRole, RecentCommitsRole});
 }
 
@@ -414,10 +414,14 @@ void TaskModel::setStatus(const QString& id, const QString& status, const QDateT
   if(row < 0 || m_items[row].status == status) {
     return;
   }
+  const Task before = m_observer ? m_items[row] : Task();
   m_items[row].status = status;
   m_items[row].statusChangedAt = changedAt.isValid() ? changedAt : QDateTime::currentDateTime();
   const QModelIndex mi = index(row, 0);
   emit dataChanged(mi, mi, {StatusRole, StatusChangedAtRole});
+  if(m_observer) {
+    m_observer(&before, m_items[row]);
+  }
 }
 
 void TaskModel::stampStatusChange(const QString& id) {
@@ -514,12 +518,16 @@ void TaskModel::setBlockedStuckIds(const QSet<QString>& ids) {
 void TaskModel::upsert(const Task& t) {
   const int row = indexOfId(t.id);
   if(row >= 0) {
+    const Task before = m_observer ? m_items[row] : Task();
     m_items[row] = t;
     if(row < m_searchCache.size()) {
       m_searchCache[row] = QString();
     }
     const QModelIndex mi = index(row, 0);
     emit dataChanged(mi, mi);
+    if(m_observer) {
+      m_observer(&before, t);
+    }
   } else {
     beginInsertRows({}, m_items.size(), m_items.size());
     m_items.push_back(t);
@@ -528,6 +536,9 @@ void TaskModel::upsert(const Task& t) {
     }
     m_indexDirty = true;
     endInsertRows();
+    if(m_observer) {
+      m_observer(nullptr, t);
+    }
   }
 }
 
@@ -540,6 +551,9 @@ void TaskModel::insertAt(int row, const Task& t) {
   }
   m_indexDirty = true;  // every row at or after this one shifted
   endInsertRows();
+  if(m_observer) {
+    m_observer(nullptr, t);
+  }
 }
 
 void TaskModel::removeById(const QString& id) {

@@ -3,6 +3,7 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "history/TaskHistory.h"
 #include "integrations/SyncHealth.h"
 #include "undo/UndoStack.h"
 
@@ -569,6 +570,10 @@ class AppController : public QObject {
   // language. Read-only.
   Q_INVOKABLE QVariantList integrationHealth() const;
   QVariantList integrationHealthAt(const QDateTime& now) const;
+  // What happened to a task, newest first: [{ at, kind, from, to, sync }]
+  // (APP-165). kind: created | status | title | priority | due | scheduled
+  // | pushed. Capped per task; see history/TaskHistory.h.
+  Q_INVOKABLE QVariantList taskHistory(const QString& taskId) const;
   // Whether a link from user or tracker content may open without asking. See
   // heap::md::isSafeLink.
   Q_INVOKABLE bool isSafeLink(const QString& url) const;
@@ -1338,6 +1343,8 @@ class AppController : public QObject {
   void updateStatusChanged();
   void integrationStatesChanged();
   void integrationHealthChanged();
+  // A task's history gained an event (APP-165).
+  void taskHistoryChanged(const QString& taskId);
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
   void updateProgressChanged();
@@ -1944,6 +1951,11 @@ class AppController : public QObject {
   // When each tracker last answered and how its last failure read (APP-164).
   // This session only: a restart starts the page over.
   QHash<QString, heap::integrations::ProviderHealth> m_syncHealth;
+  // Task history (APP-165). Saved as the root key "taskHistory" of state.json.
+  heap::history::TaskHistory m_history;
+  // True while a tracker pull is the one changing tasks.
+  bool m_historySync = false;
+  void recordTaskChange(const Task* before, const Task& after);
   void recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error);
   QHash<QString, int> m_refreshRetryMs;
   // A move that could not be sent (tracker disconnected or unreachable):

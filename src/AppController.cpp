@@ -18,6 +18,7 @@
 #include "diag/IssueReport.h"
 #include "git/BranchTaskMatcher.h"
 #include "git/GitWatcher.h"
+#include "history/TaskHistory.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
@@ -73,6 +74,7 @@
 #include <QNetworkRequest>
 #include <QPair>
 #include <QSaveFile>
+#include <QScopedValueRollback>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
@@ -767,6 +769,12 @@ AppController::AppController(QObject* parent) :
   }
 
   seedShortcutCatalog();
+
+  // Task history (APP-165): every single-task change the model sees, from
+  // whichever path made it, minus loads. A tracker pull marks its own.
+  m_tasks.setChangeObserver([this](const Task* before, const Task& after) {
+    recordTaskChange(before, after);
+  });
 
   // Re-localize shortcut catalog when language flips so the Settings →
   // Shortcuts list and HotkeysPanel labels update in place.
@@ -2030,6 +2038,16 @@ void AppController::onTaskPushed(const QString& providerId,
       heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
     }
     m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(wrote) {
+    // The history says what went out, not only what came in (APP-165).
+    m_history.append(
+        activeProfileId(),
+        t.id,
+        heap::history::HistoryEvent{
+            .at = QDateTime::currentDateTime(), .kind = QStringLiteral("pushed"), .from = QString(), .to = t.status, .sync = true});
+    emit taskHistoryChanged(t.id);
     scheduleSave();
   }
   if(ok) {
@@ -6169,6 +6187,7 @@ void AppController::resetToFirstRun() {
   m_profiles.clear();
   m_activeProfileId.clear();
   m_rootExtra = {};
+  m_history.clear();
   m_settingsExtra = {};
   m_taskSeq.clear();
   m_events.reset({});
@@ -6890,6 +6909,8 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
                                                             QStringList* goneCandidates) {
   using heap::integrations::StatusMap;
   MergeStats stats;
+  // Whatever this pull changes on a card is the tracker's doing (APP-165).
+  const QScopedValueRollback<bool> fromTracker(m_historySync, true);
 
   // Resolved once for the batch: the map is the same for every issue, and
   // re-reading the settings blob per issue is how settingsMap() used to show
@@ -8459,6 +8480,29 @@ QVariantMap AppController::integrationStates() const {
   return out;
 }
 
+void AppController::recordTaskChange(const Task* before, const Task& after) {
+  if(m_loading || after.id.isEmpty()) {
+    return;
+  }
+  const QString profileId = activeProfileId();
+  // Undo putting a deleted task back is not its creation.
+  if(before == nullptr && m_history.count(profileId, after.id) > 0) {
+    return;
+  }
+  const QVector<heap::history::HistoryEvent> events = heap::history::diffTask(before, after, QDateTime::currentDateTime(), m_historySync);
+  if(events.isEmpty()) {
+    return;
+  }
+  for(const heap::history::HistoryEvent& e : events) {
+    m_history.append(profileId, after.id, e);
+  }
+  emit taskHistoryChanged(after.id);
+}
+
+QVariantList AppController::taskHistory(const QString& taskId) const {
+  return heap::history::TaskHistory::toVariant(m_history.events(activeProfileId(), taskId));
+}
+
 void AppController::recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error) {
   heap::integrations::ProviderHealth& h = m_syncHealth[providerId];
   const QDateTime now = QDateTime::currentDateTime();
@@ -9158,6 +9202,7 @@ const QStringList& knownRootKeys() {
                                    QStringLiteral("events"),
                                    QStringLiteral("settings"),
                                    QStringLiteral("taskSeq"),
+                                   QStringLiteral("taskHistory"),
                                    // v1 flat collections
                                    QStringLiteral("tasks"),
                                    QStringLiteral("people"),
@@ -9430,8 +9475,10 @@ void AppController::saveStateNow() {
   const QString path = stateFilePath();
   const QString backups = backupDirPath();
   const AppController::StateWriter writer = g_stateWriter;
+  // Serialized on the worker with the rest (implicitly shared copy).
+  const heap::history::TaskHistory history = m_history;
 
-  auto job = [head, profiles, events, path, backups, backupDue, writer]() {
+  auto job = [head, profiles, events, history, path, backups, backupDue, writer]() {
     QJsonObject root = head;
     QJsonArray profilesArr;
     for(const Profile& p : profiles) {
@@ -9440,6 +9487,9 @@ void AppController::saveStateNow() {
     root["profiles"] = profilesArr;
     // Events are global (shown across profiles in the calendar).
     root["events"] = heap::state::eventsToJson(events);
+    if(!history.isEmpty()) {
+      root["taskHistory"] = history.toJson();
+    }
 
     if(backupDue) {
       copyStateToBackupDir(path, backups, QString());
@@ -9545,6 +9595,7 @@ void AppController::reloadStateFromDisk() {
   m_profiles.clear();
   m_activeProfileId.clear();
   m_rootExtra = {};
+  m_history.clear();
   m_settingsExtra = {};
   m_taskSeq.clear();
   m_saveBlocked = false;
@@ -9720,6 +9771,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     m_rootExtra = unknownKeys(root, knownRootKeys());
     m_settingsExtra = unknownKeys(root.value("settings").toObject(), knownSettingsKeys());
   }
+  // Task history (APP-165): a root key with no schema rung — absent means
+  // none, and a build that does not know it carries it through untouched.
+  m_history = heap::history::TaskHistory::fromJson(root.value(QStringLiteral("taskHistory")).toObject());
   m_taskSeq.clear();
   const QJsonObject seq = root.value("taskSeq").toObject();
   for(auto it = seq.constBegin(); it != seq.constEnd(); ++it) {

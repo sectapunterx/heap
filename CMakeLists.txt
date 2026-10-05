@@ -225,6 +225,7 @@ qt_add_library(heap_core STATIC
     # ── audit-int: begin ──
     src/integrations/TrackerMerge.cpp
     src/integrations/SyncHealth.cpp
+    src/history/TaskHistory.cpp
     src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
@@ -407,6 +408,7 @@ qt_add_qml_module(heap_core
         src/integrations/StatusMap.h
         src/integrations/SyncState.h
         src/integrations/SyncHealth.h
+        src/history/TaskHistory.h
         src/integrations/GithubProvider.h
         src/integrations/JiraProvider.h
         src/integrations/GitlabProvider.h
