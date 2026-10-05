@@ -7420,6 +7420,7 @@ void AppController::applyIntegrationSettings() {
               m_retriedAfter401.remove(providerId);
               // The tracker answered, so it is reachable again.
               setProviderOffline(providerId, false);
+              recordSyncHealth(providerId, true, static_cast<int>(issues.size()), 0, QString());
               emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
               const bool settlePull = m_settlePulls.remove(providerId);
               // Issues missing from the pull are looked up before anything
@@ -7497,16 +7498,18 @@ void AppController::applyIntegrationSettings() {
              cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth") &&
              !cfg.value(QStringLiteral("refreshToken")).toString().isEmpty()) {
             m_retriedAfter401.insert(providerId);
-            refreshOAuthToken(providerId, [this, providerId, label, error](bool ok) {
+            refreshOAuthToken(providerId, [this, providerId, label, error, status](bool ok) {
               if(ok) {
                 syncProviderNow(providerId);
               } else {
+                recordSyncHealth(providerId, false, -1, status, error);
                 emit integrationActionFinished(
                     providerId, QStringLiteral("sync"), false, tr_("sync.failed").arg(label, providerReason(error)));
               }
             });
             return;
           }
+          recordSyncHealth(providerId, false, -1, status, error);
           const QString message = tr_("sync.failed").arg(label, providerReason(error));
           emit toast(message, QStringLiteral("error"));
           emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
@@ -7632,6 +7635,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
           this,
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
             const int changed = mergeExternalContacts(providerId, contacts);
+            recordSyncHealth(providerId, true, static_cast<int>(contacts.size()), 0, QString());
             emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
             if(changed == 0) {
               emit toast(tr_("contacts.upToDate").arg(label));
@@ -7642,6 +7646,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
     // Saying "expired" beats repeating the same failure on every auto-sync.
+    recordSyncHealth(providerId, false, -1, status, error);
     if(status == 401) {
       disconnectIntegration(providerId);
       emit toast(tr_("int.sessionExpired").arg(label), QStringLiteral("warning"));
@@ -8450,6 +8455,49 @@ QVariantMap AppController::integrationStates() const {
                    {QStringLiteral("offline"), m_offlineProviders.contains(id)},
                    {QStringLiteral("outOfScope"), outOfScope.value(id)},
                });
+  }
+  return out;
+}
+
+void AppController::recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error) {
+  heap::integrations::ProviderHealth& h = m_syncHealth[providerId];
+  const QDateTime now = QDateTime::currentDateTime();
+  if(ok) {
+    h.recordOk(now, items);
+  } else {
+    h.recordFailure(now, httpStatus, error);
+  }
+  emit integrationHealthChanged();
+}
+
+QVariantList AppController::integrationHealth() const {
+  return integrationHealthAt(QDateTime::currentDateTime());
+}
+
+QVariantList AppController::integrationHealthAt(const QDateTime& now) const {
+  using namespace heap::integrations;
+  const bool ru = m_language == QStringLiteral("ru");
+  const QVariantMap integrations = settingsMap().value(QStringLiteral("integrations")).toMap();
+  QVariantList out;
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    const QVariantMap cfg = integrations.value(d.id).toMap();
+    if(!cfg.value(QStringLiteral("connected"), false).toBool()) {
+      continue;
+    }
+    const ProviderHealth h = m_syncHealth.value(d.id);
+    const bool failing = h.failing();
+    out.append(QVariantMap{
+        {QStringLiteral("id"), d.id},
+        {QStringLiteral("name"), d.displayName},
+        {QStringLiteral("lastOk"), relativeAge(h.lastOk, now, ru)},
+        {QStringLiteral("items"), h.lastItems},
+        {QStringLiteral("failing"), failing},
+        {QStringLiteral("error"), failing ? failureText(h.lastFailure, ru) : QString()},
+        {QStringLiteral("errorDetail"), failing ? providerReason(h.lastError) : QString()},
+        {QStringLiteral("errorAge"), failing ? relativeAge(h.lastFailureAt, now, ru) : QString()},
+        {QStringLiteral("expiry"), expiryText(expiryFromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString()), now, ru)},
+        {QStringLiteral("offline"), m_offlineProviders.contains(d.id)},
+    });
   }
   return out;
 }

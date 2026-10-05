@@ -1180,6 +1180,14 @@ QtObject {
             "savedview.dialog.save": "Save view",
             "palette.cmd.savedView": "View: %1",
             "palette.cmd.saveView": "Save current view",
+            "palette.cmd.integrationsHealth": "Integrations health",
+            "health.title": "Integrations health",
+            "health.hint": "When each tracker last answered, what went wrong, and when the sign-in runs out. Read-only.",
+            "health.none": "No tracker is connected.",
+            "health.lastOk": "synced %1",
+            "health.never": "not synced yet this session",
+            "health.items": "%1 items",
+            "health.syncNow": "Sync now",
             // ── audit-tasks: end ──
             // ── audit-time: begin ──
             "repeat.scope.moveTitle": "Move a repeating event",
@@ -2467,6 +2475,14 @@ QtObject {
             "savedview.dialog.save": "Сохранить вид",
             "palette.cmd.savedView": "Вид: %1",
             "palette.cmd.saveView": "Сохранить текущий вид",
+            "palette.cmd.integrationsHealth": "Здоровье интеграций",
+            "health.title": "Здоровье интеграций",
+            "health.hint": "Когда каждый трекер отвечал в последний раз, что пошло не так и когда истекает вход. Только чтение.",
+            "health.none": "Нет подключённых трекеров.",
+            "health.lastOk": "синхронизация: %1",
+            "health.never": "в этом сеансе ещё не синхронизировался",
+            "health.items": "задач: %1",
+            "health.syncNow": "Синхронизировать сейчас",
             // ── audit-tasks: end ──
             // ── audit-time: begin ──
             "repeat.scope.moveTitle": "Перенести повторяющееся событие",

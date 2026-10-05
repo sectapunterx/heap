@@ -530,7 +530,7 @@ TEST_F(IntAudit, MoveWhileDisconnected_IsQueuedThenPushedAfterTheNextPull) {
 // APP-163: a move made in the tracker while a local one is still unsent used
 // to win silently and drop the local move. Now neither side is dropped: the
 // local column stays, nothing goes out, and the card asks.
-TEST_F(IntAudit, QueuedMove_AndAMoveMadeInTheTracker_IsAConflictNotASilentLoss) {
+TEST_F(IntAudit, QueuedMoveAndAMoveMadeInTheTrackerIsAConflictNotASilentLoss) {
   merge({issue("7")});
   edit(QStringLiteral("gh-7"), [](Task& t) {
     t.status = QStringLiteral("prog");
@@ -556,7 +556,7 @@ TEST_F(IntAudit, QueuedMove_AndAMoveMadeInTheTracker_IsAConflictNotASilentLoss) 
   EXPECT_EQ(ticket.value(QStringLiteral("remoteColumn")).toString(), QStringLiteral("done"));
 }
 
-TEST_F(IntAudit, StatusConflict_TakeTheTrackers_MovesTheCardAndDropsTheUnsentMove) {
+TEST_F(IntAudit, StatusConflictTakeTheTrackersMovesTheCardAndDropsTheUnsentMove) {
   merge({issue("8")});
   edit(QStringLiteral("gh-8"), [](Task& t) {
     t.status = QStringLiteral("prog");
@@ -574,7 +574,7 @@ TEST_F(IntAudit, StatusConflict_TakeTheTrackers_MovesTheCardAndDropsTheUnsentMov
   EXPECT_TRUE(task("gh-8")->externalMeta.conflicts.contains(QStringLiteral("status")));
 }
 
-TEST_F(IntAudit, StatusConflict_KeepMine_SendsIt) {
+TEST_F(IntAudit, StatusConflictKeepMineSendsIt) {
   merge({issue("9")});
   edit(QStringLiteral("gh-9"), [](Task& t) {
     t.status = QStringLiteral("prog");
@@ -590,7 +590,7 @@ TEST_F(IntAudit, StatusConflict_KeepMine_SendsIt) {
   EXPECT_EQ(task("gh-9")->externalMeta.unsyncedStatus, QStringLiteral("prog"));
 }
 
-TEST_F(IntAudit, TrackerMoveToWhereTheCardAlreadyIs_ClearsTheUnsentMove) {
+TEST_F(IntAudit, TrackerMoveToWhereTheCardAlreadyIsClearsTheUnsentMove) {
   merge({issue("10")});
   edit(QStringLiteral("gh-10"), [](Task& t) {
     t.status = QStringLiteral("done");
@@ -604,7 +604,7 @@ TEST_F(IntAudit, TrackerMoveToWhereTheCardAlreadyIs_ClearsTheUnsentMove) {
   EXPECT_TRUE(task("gh-10")->externalMeta.conflicts.isEmpty());
 }
 
-TEST_F(IntAudit, SyncState_FollowsTheRuntimePush) {
+TEST_F(IntAudit, SyncStateFollowsTheRuntimePush) {
   merge({issue("11")});
   const auto state = [this]() {
     const int row = app_->tasks()->indexOfId(QStringLiteral("gh-11"));
@@ -1055,6 +1055,50 @@ TEST_F(ActionFinished, SyncThatFails_CarriesTheReason) {
   EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("sync"));
   EXPECT_FALSE(spy.at(0).at(2).toBool());
   EXPECT_TRUE(spy.at(0).at(3).toString().contains(QStringLiteral("Gitea"))) << spy.at(0).at(3).toString().toStdString();
+}
+
+// APP-164: the health page reads what the sync recorded.
+TEST_F(ActionFinished, HealthRecordsAFailureInPlainWordsThenTheSuccessAfterIt) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/web/issues", {404, R"({"message":"boom"})", {}});
+  connectGitea(gitea.base());
+  const auto row = [this]() {
+    for(const QVariant& v : app_->integrationHealth()) {
+      if(v.toMap().value(QStringLiteral("id")).toString() == QStringLiteral("gitea")) {
+        return v.toMap();
+      }
+    }
+    return QVariantMap();
+  };
+  // Connected, not synced yet: a row with nothing to report.
+  ASSERT_FALSE(row().isEmpty()) << "a connected tracker is missing from the page";
+  EXPECT_FALSE(row().value(QStringLiteral("failing")).toBool());
+  EXPECT_TRUE(row().value(QStringLiteral("lastOk")).toString().isEmpty());
+
+  QSignalSpy spy(app_.get(), &AppController::integrationActionFinished);
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  }));
+  EXPECT_TRUE(row().value(QStringLiteral("failing")).toBool());
+  EXPECT_EQ(row().value(QStringLiteral("error")).toString(),
+            heap::integrations::failureText(heap::integrations::FailureKind::NotFound, false));
+
+  gitea.route("GET /api/v1/repos/acme/web/issues", {200, R"([{"number":1,"title":"a","state":"open"}])", {}});
+  spy.clear();
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  }));
+  EXPECT_FALSE(row().value(QStringLiteral("failing")).toBool());
+  EXPECT_EQ(row().value(QStringLiteral("items")).toInt(), 1);
+  EXPECT_EQ(row().value(QStringLiteral("lastOk")).toString(), QStringLiteral("just now"));
+}
+
+TEST_F(ActionFinished, HealthListsOnlyConnectedTrackers) {
+  for(const QVariant& v : app_->integrationHealth()) {
+    ADD_FAILURE() << "a row for a tracker nobody connected: " << v.toMap().value(QStringLiteral("id")).toString().toStdString();
+  }
 }
 
 TEST_F(ActionFinished, TestConnection_FinishesOnBothOutcomes) {

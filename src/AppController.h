@@ -3,6 +3,7 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "integrations/SyncHealth.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -562,6 +563,12 @@ class AppController : public QObject {
   Q_INVOKABLE void resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker);
   // Archive every card of this tracker the current filter no longer covers.
   Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
+  // Settings → Integrations → Health (APP-164): one row per connected
+  // tracker — { id, name, lastOk, items, failing, error, errorDetail,
+  // errorAge, expiry, offline }, times relative to now, text in the UI
+  // language. Read-only.
+  Q_INVOKABLE QVariantList integrationHealth() const;
+  QVariantList integrationHealthAt(const QDateTime& now) const;
   // Whether a link from user or tracker content may open without asking. See
   // heap::md::isSafeLink.
   Q_INVOKABLE bool isSafeLink(const QString& url) const;
@@ -1330,6 +1337,7 @@ class AppController : public QObject {
   void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
   void updateStatusChanged();
   void integrationStatesChanged();
+  void integrationHealthChanged();
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
   void updateProgressChanged();
@@ -1933,6 +1941,10 @@ class AppController : public QObject {
   void scheduleRefreshRetry(const QString& providerId);
   void setProviderOffline(const QString& providerId, bool offline);
   QSet<QString> m_offlineProviders;
+  // When each tracker last answered and how its last failure read (APP-164).
+  // This session only: a restart starts the page over.
+  QHash<QString, heap::integrations::ProviderHealth> m_syncHealth;
+  void recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error);
   QHash<QString, int> m_refreshRetryMs;
   // A move that could not be sent (tracker disconnected or unreachable):
   // flagged on the card and sent after the next successful pull.

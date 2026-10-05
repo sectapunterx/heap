@@ -1888,6 +1888,8 @@ Item {
 
             // What integrations do and do not do, before any of them.
             IntegrationsInfoCard {}
+            // How each connected tracker has been doing (APP-164).
+            IntegrationHealthCard {}
             // Outlook / Google / iCloud meetings by link (APP-118).
             CalendarSubscriptionsCard {}
 

@@ -190,6 +190,12 @@ target_include_directories(heap_sync_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_
 target_link_libraries(heap_sync_state_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_sync_state_tests COMMAND heap_sync_state_tests)
 
+# Integrations health: failure wording and relative times (APP-164).
+add_executable(heap_sync_health_tests test_sync_health.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SyncHealth.cpp)
+target_include_directories(heap_sync_health_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sync_health_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_sync_health_tests COMMAND heap_sync_health_tests)
+
 add_executable(heap_git_tests
     test_branch_task_matcher.cpp
     test_git_watcher_parse.cpp
