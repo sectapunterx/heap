@@ -89,8 +89,9 @@ std::wstring quoted(const fs::path& p) {
 // copy would be "upgraded" by a second install in Program Files. Inno Setup
 // keeps a per-user install's uninstall entry under HKCU.
 bool installedForCurrentUserOnly() {
-  const wchar_t* key = L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
-                       L"{6F4C9E2A-3B7D-4E1F-9A6C-0D2B1E8F5A44}_is1";
+  const wchar_t* key =
+      L"Software\\Microsoft\\Windows\\CurrentVersion\\Uninstall\\"
+      L"{6F4C9E2A-3B7D-4E1F-9A6C-0D2B1E8F5A44}_is1";
   HKEY h = nullptr;
   if(RegOpenKeyExW(HKEY_CURRENT_USER, key, 0, KEY_READ, &h) != ERROR_SUCCESS) {
     return false;
