@@ -60,13 +60,17 @@ Rectangle {
         width: Math.min(implicitWidth, root.width - 32)
         spacing: Theme.spMd
 
+        // The view's name, then its filters. "Board · Filters:" said the
+        // same thing twice (APP-197): the chips beside it are the filters.
         Text {
-            text: "<b><font color=\"" + Theme.text + "\">" + root.viewLabel + "</font></b> · "
-                  + I18n.t("filter.label")
-            textFormat: Text.RichText
-            color: Theme.textMuted
+            objectName: "filter-view-label"
+            text: root.viewLabel
+            textFormat: Text.PlainText
+            color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
+            font.weight: Font.Medium
+            rightPadding: Theme.spSm
         }
 
         Repeater {
@@ -316,10 +320,12 @@ Rectangle {
             }
         }
 
+        // One count (APP-197): how many tasks the view shows. The rest
+        // (in progress, blocked, on review) are a tooltip away and have their
+        // own filters in the sidebar.
         Text {
-            text: I18n.t("filter.counts")
-                    .arg(root.totalCount).arg(root.activeCount)
-                    .arg(root.blockedCount).arg(root.reviewCount)
+            objectName: "filter-count"
+            text: I18n.tasks(root.totalCount)
             color: Theme.textDim
             font.family: Theme.fontUi
             font.features: Theme.tabularNums
@@ -330,6 +336,12 @@ Rectangle {
             Layout.fillWidth: true
             Layout.minimumWidth: 0
             Layout.maximumWidth: implicitWidth
+            ToolTip.visible: countHover.hovered
+            ToolTip.text: I18n.t("filter.counts")
+                    .arg(root.totalCount).arg(root.activeCount)
+                    .arg(root.blockedCount).arg(root.reviewCount)
+            ToolTip.delay: 500
+            HoverHandler { id: countHover }
         }
     }
 

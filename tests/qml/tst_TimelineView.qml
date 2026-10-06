@@ -133,4 +133,41 @@ TestCase {
         for (let i = 0; i < ids.length; i++) AppController.deleteTask(ids[i]);
         AppController.clearPendingUndo();
     }
+
+    // APP-197: a row says what, when and where it stands; the key and the
+    // description open under the cursor, and nothing on it is a pill.
+    function test_a_row_is_title_due_and_status() {
+        const day = new Date();
+        day.setDate(day.getDate() + 1);
+        day.setHours(0, 0, 0, 0);
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true; d.id = "TLV-CALM"; d.title = "calm row probe"; d.priority = "P0";
+        d.desc = "calm row description"; d.branch = "feat/calm-row-branch";
+        d.dueAt = day; d.scheduledAt = day; d.hasTime = false;
+        AppController.saveTask(d);
+        const tv = make('import TodoCpp; TimelineView { anchors.fill: parent }');
+        tv.searchText = "calm row probe";
+        function row() {
+            let found = null;
+            (function walk(it) {
+                if (!it || found) return;
+                if (it.objectName === "tl-row" && it.visible && it.t && it.t.id === "TLV-CALM") { found = it; return; }
+                const kids = it.children || [];
+                for (let i = 0; i < kids.length; i++) walk(kids[i]);
+            })(tv);
+            return found;
+        }
+        tryVerify(function () { return row() !== null; }, 3000, "no row for the probe");
+        const r = row();
+        verify(findChild(r, "tl-title").visible);
+        verify(findChild(r, "tl-due").visible);
+        verify(findChild(r, "tl-status").visible);
+        compare(findChild(r, "tl-more").visible, false, "key and description show at rest");
+        compare(Qt.colorEqual(findChild(r, "tl-due").color, Theme.danger), false, "tomorrow is not red");
+        tv.cursorTaskId = "TLV-CALM";
+        tryVerify(function () { return findChild(r, "tl-more").visible; }, 2000, "the cursor did not open the row");
+        compare(findChild(r, "tl-key").text, "TLV-CALM");
+        AppController.deleteTask("TLV-CALM");
+        AppController.clearPendingUndo();
+    }
 }

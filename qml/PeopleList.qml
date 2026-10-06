@@ -31,7 +31,10 @@ Rectangle {
                 font.letterSpacing: 1
                 font.weight: Font.DemiBold
             }
+            // One count (APP-197): how many are waiting for a message from
+            // me. The list itself shows how many people there are.
             Rectangle {
+                visible: badge.pending > 0
                 radius: Theme.radiusPill
                 color: Theme.panel3
                 implicitWidth: badge.implicitWidth + 12
@@ -44,8 +47,8 @@ Rectangle {
                 Text {
                     id: badge
                     anchors.centerIn: parent
-                    text: (parent._rev >= 0 ? I18n.t("people.badge") : "")
-                              .arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount())
+                    readonly property int pending: parent._rev >= 0 ? AppController.pendingPeopleCount() : 0
+                    text: I18n.t("people.badge.pending").arg(badge.pending)
                     color: Theme.textDim
                     font.family: Theme.fontUi
                     font.features: Theme.tabularNums
@@ -230,13 +233,30 @@ Rectangle {
                         Layout.fillWidth: true
                         Layout.alignment: Qt.AlignVCenter
                         spacing: 1
-                        Text {
+                        // The name, and the role beside it in dim text
+                        // rather than chained on with a "·" (APP-197).
+                        Row {
                             width: parent.width
-                            text: prow.name + (prow.role.length ? "  · " + prow.role : "")
-                            color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
-                            font.pixelSize: Theme.fsMd
-                            font.weight: Font.Medium
-                            elide: Text.ElideRight
+                            spacing: Theme.spMd
+                            Text {
+                                id: personName
+                                width: Math.min(implicitWidth, parent.width - (roleT.visible ? Math.min(roleT.implicitWidth, parent.width / 2) + parent.spacing : 0))
+                                text: prow.name
+                                color: (prow.personState === "todo") ? Theme.text : Theme.textMuted
+                                font.pixelSize: Theme.fsMd
+                                font.weight: Font.Medium
+                                elide: Text.ElideRight
+                            }
+                            Text {
+                                id: roleT
+                                anchors.baseline: personName.baseline
+                                visible: prow.role.length > 0
+                                width: Math.max(0, parent.width - personName.width - parent.spacing)
+                                text: prow.role
+                                color: Theme.textDim
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                            }
                         }
                         Text {
                             width: parent.width

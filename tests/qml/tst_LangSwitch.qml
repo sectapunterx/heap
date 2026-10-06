@@ -67,16 +67,29 @@ TestCase {
 
     function test_people_badge_follows_language() {
         AppController.language = "en";
+        // The badge counts the people waiting for a message and hides at
+        // none (APP-197), so there has to be one.
+        let made = "";
+        if (AppController.pendingPeopleCount() === 0) {
+            const d = AppController.newPersonDraft();
+            d.name = "Lang Badge Probe";
+            d.id = AppController.suggestPersonId(d.name);
+            d.state = "todo";
+            verify(AppController.savePerson(d));
+            made = d.id;
+        }
+        verify(AppController.pendingPeopleCount() > 0);
         const pl = createTemporaryQmlObject('import TodoCpp; PeopleList { width: 400; height: 300 }', host);
         wait(0);
-        const en = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount());
+        const en = I18n.t("people.badge.pending").arg(AppController.pendingPeopleCount());
         verify(hasText(pl, en), en);
         // A model signal first: the handlers used to overwrite the binding.
         AppController.activePeople.dataChanged(AppController.activePeople.index(0, 0), AppController.activePeople.index(0, 0));
         AppController.language = "ru";
-        const ru = I18n.t("people.badge").arg(AppController.pendingPeopleCount()).arg(AppController.activePeople.rowCount());
+        const ru = I18n.t("people.badge.pending").arg(AppController.pendingPeopleCount());
         verify(en !== ru);
         tryVerify(function () { return hasText(pl, ru); }, 1000, "badge did not switch to " + ru);
+        if (made) AppController.deletePerson(made);
     }
 
     function test_sprint_crumb_is_the_iso_week_in_the_ui_language() {
