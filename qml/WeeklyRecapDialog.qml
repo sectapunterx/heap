@@ -93,8 +93,7 @@ Dialog {
         const a = new Date(root.recap.weekStart + "T00:00:00");
         const b = new Date(root.recap.weekEnd + "T00:00:00");
         b.setDate(b.getDate() - 1);
-        const loc = Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US");
-        return a.toLocaleDateString(loc, "d MMM") + " – " + b.toLocaleDateString(loc, "d MMM");
+        return I18n.fmtDate(a, "dayMonth") + " – " + I18n.fmtDate(b, "dayMonth");
     }
 
     header: DialogHeader { text: I18n.t("recap.title").arg(root._range()) }

@@ -55,6 +55,7 @@
 #include "storage/Attachments.h"
 #include "storage/Snapshots.h"
 #include "storage/StateIO.h"
+#include "text/LocaleFormat.h"
 #include "text/PersonMatch.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
@@ -633,33 +634,6 @@ const QHash<QString, I18nEntry>& i18nTable() {
   return table;
 }
 
-// Localized month/weekday names used by humanDate() / shortDate(). Kept
-// inline so we don't depend on the host system locale being available.
-const QStringList& monthNamesLong(const QString& lang) {
-  static const QStringList en = {
-      "January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"};
-  static const QStringList ru = {
-      "января", "февраля", "марта", "апреля", "мая", "июня", "июля", "августа", "сентября", "октября", "ноября", "декабря"};
-  return (lang == "ru") ? ru : en;
-}
-
-const QStringList& monthNamesShort(const QString& lang) {
-  static const QStringList en = {"Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"};
-  static const QStringList ru = {"янв", "фев", "мар", "апр", "май", "июн", "июл", "авг", "сен", "окт", "ноя", "дек"};
-  return (lang == "ru") ? ru : en;
-}
-
-const QStringList& weekdayNamesLong(const QString& lang) {
-  static const QStringList en = {"Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"};
-  static const QStringList ru = {"понедельник", "вторник", "среда", "четверг", "пятница", "суббота", "воскресенье"};
-  return (lang == "ru") ? ru : en;
-}
-
-const QStringList& weekdayNamesShort(const QString& lang) {
-  static const QStringList en = {"Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"};
-  static const QStringList ru = {"Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"};
-  return (lang == "ru") ? ru : en;
-}
 }  // namespace
 
 AppController::AppController(QObject* parent) :
@@ -4758,8 +4732,7 @@ QString AppController::openDailyNote() {
     Note n = m_notes.items().at(row);
     // In the UI language: QDate::toString is always English, so a Russian
     // profile's daily notes were headed "Tuesday, 30 September 2026".
-    const QLocale locale(m_language == QLatin1String("ru") ? QLocale::Russian : QLocale::English);
-    n.body = QStringLiteral("# %1\n\n").arg(locale.toString(today, QStringLiteral("dddd, d MMMM yyyy")));
+    n.body = QStringLiteral("# %1\n\n").arg(dateLabel(today, QStringLiteral("longWeekdayYear")));
     m_notes.upsert(n);
     m_notesState = n.body;
     emit notesStateChanged();
@@ -5997,19 +5970,25 @@ QStringList AppController::searchFields() const {
 }
 
 QString AppController::eventHourLabel(double hour) const {
-  const int hh = static_cast<int>(hour);
-  const int mm = static_cast<int>((hour - hh) * 60 + 0.5);
-  const QString fmt = settingsMap().value("calendar").toMap().value("timeFormat", QStringLiteral("24h")).toString();
-  const QString mmS = QString("%1").arg(mm, 2, 10, QLatin1Char('0'));
-  if(fmt == QLatin1String("12h")) {
-    // 24:00, an end at midnight, is 12:00am — not 12:00pm, which reads (and
-    // parses back) as noon (TIME-22).
-    const int h24 = hh % 24;
-    const int h12 = ((h24 + 11) % 12) + 1;
-    const QString ampm = h24 < 12 ? QStringLiteral("am") : QStringLiteral("pm");
-    return QString("%1:%2%3").arg(h12).arg(mmS).arg(ampm);
-  }
-  return QString("%1:%2").arg(hh, 2, 10, QLatin1Char('0')).arg(mmS);
+  // 24:00, an end at midnight, is 12:00am — not 12:00pm, which reads (and
+  // parses back) as noon (TIME-22).
+  return heap::text::formatHour(hour, twelveHourClock());
+}
+
+bool AppController::twelveHourClock() const {
+  return settingsMap().value("calendar").toMap().value("timeFormat").toString() == QLatin1String("12h");
+}
+
+QString AppController::datePattern(const QString& style, const QString& lang) const {
+  return heap::text::datePattern(style, lang.isEmpty() ? m_language : lang);
+}
+
+QString AppController::dateLabel(const QDate& d, const QString& style) const {
+  return heap::text::formatDate(d, style, m_language);
+}
+
+QString AppController::dateTimeLabel(const QDateTime& dt, const QString& style) const {
+  return heap::text::formatDateTime(dt, style, m_language, twelveHourClock());
 }
 
 QString AppController::sprintLabel() const {
@@ -6020,21 +5999,8 @@ QString AppController::sprintLabel() const {
 }
 
 QString AppController::humanDate(const QDate& date) const {
-  if(!date.isValid()) {
-    return {};
-  }
-  const int dow = date.dayOfWeek();  // 1=Mon..7=Sun
-  const int mon = date.month();      // 1..12
-  if(dow < 1 || dow > 7 || mon < 1 || mon > 12) {
-    return {};
-  }
-  const QString day = weekdayNamesLong(m_language).at(dow - 1);
-  const QString month = monthNamesLong(m_language).at(mon - 1);
-  if(m_language == "ru") {
-    return QString("%1, %2 %3").arg(day).arg(date.day()).arg(month);
-  }
-  // EN: "Friday, May 15"
-  return QString("%1, %2 %3").arg(day, month).arg(date.day());
+  // "Friday, May 15" / "пятница, 15 мая".
+  return heap::text::formatDate(date, QStringLiteral("longWeekday"), m_language);
 }
 
 QString AppController::deadlineBucket(const QDate& deadline) const {
@@ -6094,21 +6060,8 @@ QString AppController::deadlineDiffLabel(const QDate& deadline) const {
 }
 
 QString AppController::shortDate(const QDate& d) const {
-  if(!d.isValid()) {
-    return {};
-  }
-  const int dow = d.dayOfWeek();
-  const int mon = d.month();
-  if(dow < 1 || dow > 7 || mon < 1 || mon > 12) {
-    return {};
-  }
-  const QString day = weekdayNamesShort(m_language).at(dow - 1);
-  const QString month = monthNamesShort(m_language).at(mon - 1);
-  if(m_language == "ru") {
-    return QString("%1, %2 %3").arg(day).arg(d.day()).arg(month);
-  }
-  // EN: "Fri, 15 May"
-  return QString("%1, %2 %3").arg(day).arg(d.day()).arg(month);
+  // "Fri, May 15" / "пт, 15 мая".
+  return heap::text::formatDate(d, QStringLiteral("weekdayDay"), m_language);
 }
 
 int AppController::isoWeekNumber(const QDate& d) const {
@@ -11401,8 +11354,7 @@ QVariantList AppController::commandPaletteEntries() const {
     m["kind"] = "event";
     m["label"] = e.title;
     // In the UI language: QDate::toString always wrote English month names.
-    const QLocale uiLocale(m_language == QStringLiteral("ru") ? QLocale::Russian : QLocale::English);
-    const QString day = e.date.isValid() ? uiLocale.toString(e.date, QStringLiteral("d MMM yyyy")) : QString();
+    const QString day = dateLabel(e.date, QStringLiteral("dayMonthYear"));
     const QString when = day.isEmpty() ? QString() : (e.allDay ? day : QStringLiteral("%1 %2").arg(day, eventHourLabel(e.start)));
     QStringList sub;
     if(!profileName.isEmpty()) {

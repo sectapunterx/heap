@@ -2943,6 +2943,26 @@ QtObject {
     // dependency — the day header stayed English after switching to Russian.
     function relang(s) { return lang === "ru" ? s : String(s); }
 
+    // A date as the UI shows it, in a named style from the one table in
+    // src/text/LocaleFormat.h: "dayMonth" (Oct 6 / 6 окт.), "dayMonthYear",
+    // "weekdayDay" (Tue, Oct 6 / вт, 6 окт.), "longDay", "longWeekday"…
+    // Never a pattern of its own: a literal "d MMM" reads wrong in English,
+    // and .github/scripts/date_format_check.py fails the build on one.
+    function fmtDate(d, style) {
+        if (!d || !d.getTime || isNaN(d.getTime())) return "";
+        return d.toLocaleDateString(locale, AppController.datePattern(style || "dayMonth", lang));
+    }
+    // The clock part: the 12h / 24h setting decides, not the language.
+    function fmtTime(d) {
+        if (!d || !d.getTime || isNaN(d.getTime())) return "";
+        return Theme.fmtHour(d.getHours() + d.getMinutes() / 60);
+    }
+    // "Oct 6, 15:15" / "6 окт., 15:15".
+    function fmtDateTime(d, style) {
+        const day = fmtDate(d, style);
+        return day.length > 0 ? day + ", " + fmtTime(d) : "";
+    }
+
     // Month 0..11, standalone form ("сентябрь", not "сентября").
     function monthName(month) {
         return locale.standaloneMonthName(month, Locale.LongFormat);

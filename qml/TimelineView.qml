@@ -619,9 +619,7 @@ Item {
                                 readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
                                 visible: text.length > 0
                                 text: (tlRow.t.scheduledOnly ? "▸ " : "")
-                                      + (timed && at && at.getHours
-                                         ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
-                                         : "")
+                                      + (timed ? I18n.fmtTime(at) : "")
                                 color: Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums

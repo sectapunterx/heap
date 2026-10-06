@@ -46,9 +46,8 @@ Dialog {
     }
 
     function _time(at) {
-        if (!at || !at.getTime) return "";
-        const p2 = (n) => (n < 10 ? "0" : "") + n;
-        return p2(at.getHours()) + ":" + p2(at.getMinutes());
+        // The clock as the 12h / 24h setting says (APP-188).
+        return I18n.fmtTime(at);
     }
 
     function _kindColor(kind) {

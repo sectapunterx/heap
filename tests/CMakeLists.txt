@@ -1036,3 +1036,12 @@ foreach (_t IN LISTS _heap_dir_targets)
     endif ()
 endforeach ()
 add_custom_target(heap_all_tests DEPENDS ${_heap_test_exes})
+
+# APP-188: a displayed date goes through the UI-language formatter; a
+# hand-picked pattern ("dd.MM HH:mm") fails here as well as in CI's ui-tokens.
+find_package(Python3 COMPONENTS Interpreter QUIET)
+if (Python3_Interpreter_FOUND)
+    add_test(NAME heap_date_format_check
+             COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/../.github/scripts/date_format_check.py
+                     ${CMAKE_CURRENT_SOURCE_DIR}/../qml ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+endif ()

@@ -746,7 +746,7 @@ Popup {
                     spacing: Theme.spSm
                     Text {
                         Layout.fillWidth: true
-                        text: root.pickedDate && root.pickedDate.toLocaleDateString ? root.pickedDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy") : ""
+                        text: root.pickedDate && root.pickedDate.toLocaleDateString ? I18n.fmtDate(root.pickedDate, "weekdayDayYear") : ""
                         color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsMd
                     }
                     Rectangle {   // mini calendar glyph
@@ -760,7 +760,7 @@ Popup {
                     objectName: "event-date-pick"
                     label: I18n.t("editor.a11y.dateValue").arg(I18n.t("editor.label.date"))
                                                           .arg(root.pickedDate && root.pickedDate.toLocaleDateString
-                                                               ? root.pickedDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                                                               ? I18n.fmtDate(root.pickedDate, "longDayYear") : "")
                     tip: I18n.t("editor.a11y.pickDate")
                     onActivated: eventDatePicker.openAt(root.pickedDate, dateBtn)
                 }
@@ -795,7 +795,7 @@ Popup {
                     Text {
                         Layout.fillWidth: true
                         text: root.pickedEndDate && root.pickedEndDate.getFullYear
-                            ? root.pickedEndDate.toLocaleDateString(I18n.locale, "ddd, d MMM yyyy")
+                            ? I18n.fmtDate(root.pickedEndDate, "weekdayDayYear")
                             : ""
                         color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsMd
                     }
@@ -809,7 +809,7 @@ Popup {
                     id: endDateMA
                     label: I18n.t("editor.a11y.dateValue").arg(I18n.t("editor.label.endDate"))
                                                           .arg(root.pickedEndDate && root.pickedEndDate.getFullYear
-                                                               ? root.pickedEndDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                                                               ? I18n.fmtDate(root.pickedEndDate, "longDayYear") : "")
                     tip: I18n.t("editor.a11y.pickDate")
                     onActivated: endDatePicker.openAt(root.pickedEndDate, endDateBtn)
                 }
@@ -885,7 +885,7 @@ Popup {
                     border.color: Theme.border; border.width: 1
                     Text {
                         anchors.centerIn: parent
-                        text: root.untilDate && root.untilDate.getFullYear ? root.untilDate.toLocaleDateString(I18n.locale, "d MMM yyyy") : ""
+                        text: root.untilDate && root.untilDate.getFullYear ? I18n.fmtDate(root.untilDate, "dayMonthYear") : ""
                         color: Theme.text; font.family: Theme.fontUi; font.features: Theme.tabularNums; font.pixelSize: Theme.fsSm
                     }
                     ClickArea {
@@ -893,7 +893,7 @@ Popup {
                         objectName: "event-until-pick"
                         label: I18n.t("editor.a11y.dateValue").arg(I18n.t("repeat.ends"))
                                                               .arg(root.untilDate && root.untilDate.getFullYear
-                                                                   ? root.untilDate.toLocaleDateString(I18n.locale, "d MMMM yyyy") : "")
+                                                                   ? I18n.fmtDate(root.untilDate, "longDayYear") : "")
                         tip: I18n.t("editor.a11y.pickDate")
                         onActivated: untilPicker.openAt(root.untilDate, untilBtn)
                     }

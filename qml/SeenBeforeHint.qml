@@ -43,9 +43,7 @@ Item {
     }
 
     function _date(d) {
-        if (!d || !d.getTime || isNaN(d.getTime())) return "";
-        const loc = Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US");
-        return d.toLocaleDateString(loc, "d MMM");
+        return I18n.fmtDate(d, "dayMonth");
     }
 
     Text {

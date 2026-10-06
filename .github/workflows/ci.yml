@@ -125,7 +125,8 @@ jobs:
           files: ".github/workflows/*.yml"
 
   # QML paints with the design tokens in qml/Theme.qml: no literal font
-  # sizes, spacings or colours (see .github/scripts/ui_tokens_check.py).
+  # sizes, spacings or colours (see .github/scripts/ui_tokens_check.py), and
+  # no hand-picked date pattern (date_format_check.py).
   ui-tokens:
     name: ui tokens
     runs-on: ubuntu-24.04
@@ -134,6 +135,9 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - name: Check QML against the design tokens
         run: python3 .github/scripts/ui_tokens_check.py qml
+      # Displayed dates go through the UI-language formatter (APP-188).
+      - name: Check displayed dates against the locale formatter
+        run: python3 .github/scripts/date_format_check.py qml src
 
   # ──────────────────────────────────────────────────────────────────
   # 3. clang-tidy on the changed lines (PR only).

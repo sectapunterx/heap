@@ -742,10 +742,43 @@ TEST_F(AppControllerTest, HumanDateEnRu) {
 
 TEST_F(AppControllerTest, ShortDateEnRu) {
   app_->setLanguage(QStringLiteral("en"));
-  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("Fri, 15 May"));
+  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("Fri, May 15"));
   app_->setLanguage(QStringLiteral("ru"));
-  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("Пт, 15 май"));
+  EXPECT_EQ(app_->shortDate(QDate(2026, 5, 15)), QString::fromUtf8("пт, 15 мая"));
   EXPECT_EQ(app_->shortDate(QDate()), QString());
+}
+
+// APP-188: every displayed date goes through one table of named styles, in
+// the UI language; the clock follows the 12h/24h setting, not the language.
+TEST_F(AppControllerTest, DateLabelsFollowTheUiLanguage) {
+  const QDate oct6(2026, 10, 6);
+  app_->setLanguage(QStringLiteral("en"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("dayMonth")), QStringLiteral("Oct 6"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("dayMonthYear")), QStringLiteral("Oct 6, 2026"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("longWeekdayYear")), QStringLiteral("Tuesday, October 6, 2026"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("no-such-style")), QStringLiteral("Oct 6"));
+  app_->setLanguage(QStringLiteral("ru"));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("dayMonth")), QString::fromUtf8("6 окт."));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("weekdayDay")), QString::fromUtf8("вт, 6 окт."));
+  EXPECT_EQ(app_->dateLabel(oct6, QStringLiteral("longDayYear")), QString::fromUtf8("6 октября 2026"));
+  EXPECT_EQ(app_->datePattern(QStringLiteral("dayMonth"), QStringLiteral("en")), QStringLiteral("MMM d"));
+  EXPECT_EQ(app_->dateLabel(QDate(), QStringLiteral("dayMonth")), QString());
+}
+
+TEST_F(AppControllerTest, DateTimeLabelUsesTheClockSetting) {
+  const QString before = app_->appSettingsJson();
+  const QDateTime at(QDate(2026, 10, 6), QTime(15, 15));
+  app_->setLanguage(QStringLiteral("en"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"24h"}})"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QStringLiteral("Oct 6, 15:15"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"12h"}})"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QStringLiteral("Oct 6, 3:15pm"));
+  app_->setLanguage(QStringLiteral("ru"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QString::fromUtf8("6 окт., 3:15pm"));
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"24h"}})"));
+  EXPECT_EQ(app_->dateTimeLabel(at, QStringLiteral("dayMonth")), QString::fromUtf8("6 окт., 15:15"));
+  app_->setLanguage(QStringLiteral("en"));
+  app_->setAppSettingsJson(before);
 }
 
 // ─── parseDateTime wrapper key contract ───────────────────────────────

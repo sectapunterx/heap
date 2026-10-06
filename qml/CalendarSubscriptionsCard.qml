@@ -53,7 +53,7 @@ Rectangle {
         if (!s.lastSync) return I18n.t("calsub.status.never");
         const when = new Date(s.lastSync);
         return I18n.t("calsub.status.ok").arg(s.events)
-                   .arg(when.toLocaleTimeString(Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US"), "HH:mm"));
+                   .arg(I18n.fmtTime(when));
     }
 
     ColumnLayout {

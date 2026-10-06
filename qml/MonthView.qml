@@ -173,8 +173,7 @@ Item {
         if (mode === "month")
             return I18n.monthName(anchorDate.getMonth()) + " " + anchorDate.getFullYear();
         const end = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + rows * 7 - 1);
-        return gridStart.toLocaleDateString(I18n.locale, "d MMM")
-             + " – " + end.toLocaleDateString(I18n.locale, "d MMM yyyy");
+        return I18n.fmtDate(gridStart, "dayMonth") + " – " + I18n.fmtDate(end, "dayMonthYear");
     }
 
     // A day as a screen reader hears it: "Wednesday 30 September: 3 tasks,
@@ -188,7 +187,7 @@ Item {
             events = root.cells[i].events.length;
             break;
         }
-        return I18n.t("month.dayA11y").arg(d.toLocaleDateString(I18n.locale, "dddd d MMMM")).arg(tasks).arg(events);
+        return I18n.t("month.dayA11y").arg(I18n.fmtDate(d, "longWeekday")).arg(tasks).arg(events);
     }
     // Return on the grid: the first chip of the selected day takes the
     // keyboard, if the day has any.
