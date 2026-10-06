@@ -591,10 +591,13 @@ add_test(NAME heap_qml_tests
         COMMAND heap_qml_tests -input ${CMAKE_CURRENT_SOURCE_DIR}/qml
                 -o ${CMAKE_CURRENT_BINARY_DIR}/heap_qml_tests.txt,txt -o -,txt)
 # COST: the slowest suite by far; under `ctest --parallel` it starts first so
-# the rest run alongside it instead of after it.
+# the rest run alongside it instead of after it. TIMEOUT: one process runs every
+# tst_*.qml, and on the macOS runner it already took ~285 s against ctest's
+# default 300 s, so each new suite risked a timeout that is not a failure.
 set_tests_properties(heap_qml_tests PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;QT_QUICK_CONTROLS_STYLE=Basic"
-        COST 1000)
+        COST 1000
+        TIMEOUT 900)
 
 # HEAP-71: the static TodoCpp module's file-based components (SideRail,
 # ArchiveView, …) failed to resolve in the Quick Test binary on Linux under
