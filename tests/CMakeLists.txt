@@ -408,6 +408,11 @@ heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 # moves ask for the sound; playback is a no-op in QStandardPaths test mode.
 heap_add_appcontroller_test(heap_completion_sound_tests test_completion_sound.cpp)
 
+# ─── The fonts shipped inside the app (qrc :/fonts via heap_core) ───
+# Registration, one family per font, every weight the UI uses resolving to its
+# own face, Cyrillic coverage.
+heap_add_appcontroller_test(heap_bundled_fonts_tests test_bundled_fonts.cpp)
+
 # ─── Platform (global hotkey) tests ───
 # Cover heap::platform::decodeSequence — the portable QKeySequence → (key,mods)
 # parser the Windows RegisterHotKey backend feeds off. On Windows the native

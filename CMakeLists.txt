@@ -216,6 +216,8 @@ qt_add_library(heap_core STATIC
     src/platform/Autostart.cpp
     # The opt-in completion sound (APP-167); the backend is per platform below.
     src/platform/Sound.cpp
+    # The UI and mono fonts shipped inside the binary (qrc :/fonts below).
+    src/platform/BundledFonts.cpp
     src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
@@ -634,6 +636,22 @@ qt_add_resources(heap_core "sounds"
     BASE "design/sounds"
     FILES
         design/sounds/complete.wav
+)
+
+# The fonts the UI is set in (Golos Text, JetBrains Mono — SIL OFL 1.1, static
+# faces cut by tools/gen_bundled_fonts.py). Compiled into heap_core like the
+# sound, so the app, the portable zip, the installer, the AppImage, the macOS
+# bundle and the test runners all carry them with no deploy step; main()
+# registers them before the QML loads (platform/BundledFonts).
+qt_add_resources(heap_core "fonts"
+    PREFIX "/fonts"
+    BASE "resources/fonts"
+    FILES
+        resources/fonts/GolosText-Regular.ttf
+        resources/fonts/GolosText-Medium.ttf
+        resources/fonts/GolosText-SemiBold.ttf
+        resources/fonts/JetBrainsMono-Regular.ttf
+        resources/fonts/JetBrainsMono-Medium.ttf
 )
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──

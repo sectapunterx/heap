@@ -15,6 +15,30 @@ license, reproduced in full alongside the code it covers.
 md4c is the CommonMark parser behind heap's notes editor. Its sources are
 included verbatim and compiled into the application.
 
+## Golos Text
+
+- Source: https://github.com/googlefonts/golos-text (as published in
+  https://github.com/google/fonts, `ofl/golostext`), version 2.004
+- License: SIL Open Font License 1.1 — `resources/fonts/GolosText-OFL.txt`
+- Copyright 2019 The Golos Text Project Authors
+- No Reserved Font Name is declared.
+
+The interface font. heap ships static Regular, Medium and SemiBold faces cut
+from the upstream variable font by `tools/gen_bundled_fonts.py` (weight
+instancing and name-table changes only, every glyph kept); they are compiled
+into the application.
+
+## JetBrains Mono
+
+- Source: https://github.com/JetBrains/JetBrainsMono (as published in
+  https://github.com/google/fonts, `ofl/jetbrainsmono`), version 2.211
+- License: SIL Open Font License 1.1 — `resources/fonts/JetBrainsMono-OFL.txt`
+- Copyright 2020 The JetBrains Mono Project Authors
+- No Reserved Font Name is declared.
+
+The monospace font for code, ids and times. Static Regular and Medium faces,
+cut and shipped the same way as Golos Text.
+
 ## Qt
 
 heap links the Qt 6 libraries under the GNU Lesser General Public License v3.

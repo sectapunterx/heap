@@ -170,7 +170,7 @@ Item {
             // No accent / theme defaults here: an absent darkPreset /
             // lightPreset means the built-in heap. themes (Theme.qml), and
             // writing a default would pin a profile to it.
-            fontUI: "IBM Plex Sans",
+            fontUI: "Golos Text",
             fontMono: "JetBrains Mono",
             reducedMotion: false,
             highContrast: false

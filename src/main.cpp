@@ -9,6 +9,7 @@
 #include "notify/NotificationCenter.h"
 #include "notify/NotifyPayload.h"
 #include "platform/AltGrGuard.h"
+#include "platform/BundledFonts.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
 #include "platform/Sound.h"
@@ -209,6 +210,11 @@ int smokeVerdict(const QQmlApplicationEngine& engine, const QList<QQmlError>& qm
   if(QApplication::windowIcon().pixmap(32, 32).isNull()) {
     problems << QStringLiteral("window icon did not render");
   }
+  // The UI is set in the bundled fonts; without them it silently falls back
+  // to whatever the system has (Segoe UI / Consolas on Windows).
+  for(const QString& missing : heap::platform::missingBundledFonts()) {
+    problems << QStringLiteral("bundled font not available: ") + missing;
+  }
 
   for(const QString& problem : problems) {
     qCritical("smoke: %s", qUtf8Printable(problem));
@@ -354,6 +360,11 @@ int main(int argc, char* argv[]) {
   if(heap::paths::dataDirOverridden()) {
     qInfo("data directory overridden: %s", qUtf8Printable(heap::paths::dataDir()));
   }
+
+  // Before any QML asks for "Golos Text" / "JetBrains Mono" (Theme.qml); after
+  // the file logger, so a face that fails to load is in heap.log.
+  heap::platform::registerBundledFonts();
+  heap::platform::useBundledUiFontByDefault();
 
   QQuickStyle::setStyle("Basic");
 

@@ -309,12 +309,21 @@ QtObject {
     readonly property int durSlow: reducedMotion ? 0 : 240
 
     // ── Typography — Brand defaults, overrideable via settings ───────
-    readonly property string fontUi: _appearance.fontUI
-        ? (_appearance.fontUI + ", " + Brand.fontSans + ", Inter, Segoe UI, Noto Sans, sans-serif")
-        : (Brand.fontSans + ", Inter, Segoe UI, Noto Sans, sans-serif")
-    readonly property string fontMono: _appearance.fontMono
-        ? (_appearance.fontMono + ", " + Brand.fontMono + ", Fira Code, DejaVu Sans Mono, monospace")
-        : (Brand.fontMono + ", Fira Code, DejaVu Sans Mono, monospace")
+    // Golos Text and JetBrains Mono ship inside the app (platform/BundledFonts),
+    // so each is one family name. It used to be a CSS-style list ("IBM Plex
+    // Sans, Inter, Segoe UI, …"), but Qt takes font.family as a single name:
+    // the whole string matched nothing and every Text fell back to the system
+    // font. A family set in settings that this machine does not have gives
+    // way to the bundled one here, since Qt would pick an arbitrary face.
+    // "IBM Plex Sans" was the seeded default before the fonts were bundled and
+    // sits in existing profiles; nobody picked it, so it reads as "the default".
+    readonly property string legacyDefaultFontUi: "IBM Plex Sans"
+    function _installedFont(family, fallback) {
+        return family && Qt.fontFamilies().indexOf(family) >= 0 ? family : fallback;
+    }
+    readonly property string fontUi: _appearance.fontUI !== legacyDefaultFontUi
+                                     ? _installedFont(_appearance.fontUI, Brand.fontSans) : Brand.fontSans
+    readonly property string fontMono: _installedFont(_appearance.fontMono, Brand.fontMono)
 
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 

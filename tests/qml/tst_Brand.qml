@@ -31,7 +31,7 @@ TestCase {
 
     // ── Typography ────────────────────────────────────────────
     function test_font_families() {
-        compare(Brand.fontSans, "IBM Plex Sans");
+        compare(Brand.fontSans, "Golos Text");
         compare(Brand.fontMono, "JetBrains Mono");
         verify(Brand.fontSans.length > 0);
         verify(Brand.fontMono.length > 0);
