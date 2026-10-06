@@ -7,9 +7,9 @@
 #include <QHash>
 #include <QHostAddress>
 #include <QList>
+#include <QNetworkProxyFactory>
 #include <QPair>
 #include <QString>
-#include <QNetworkProxyFactory>
 #include <QTcpServer>
 #include <QTcpSocket>
 
