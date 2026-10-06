@@ -66,7 +66,7 @@ Popup {
     readonly property var groupOrder: ["general", "views", "board", "calendar", "notes", "profiles"]
     function groupOf(actionId) {
         const id = String(actionId);
-        if (id.indexOf("view.") === 0 || id.indexOf("savedView.") === 0) return "views";
+        if (id.indexOf("view.") === 0 || id.indexOf("savedView.") === 0 || id.indexOf("zoom.") === 0) return "views";
         if (id.indexOf("board.") === 0 || id.indexOf("selection.") === 0 || id === "task.openExternal") return "board";
         if (id.indexOf("cal.") === 0) return "calendar";
         if (id.indexOf("notes.") === 0) return "notes";
@@ -368,6 +368,11 @@ Popup {
                 case Qt.Key_Left:       return "Left";
                 case Qt.Key_Right:      return "Right";
                 case Qt.Key_Up:         return "Up";
+                // Ctrl+= / Ctrl+- type no character on Windows, so the zoom
+                // keys could not be recorded from ev.text.
+                case Qt.Key_Equal:      return "=";
+                case Qt.Key_Minus:      return "-";
+                case Qt.Key_Plus:       return "+";
                 case Qt.Key_Down:       return "Down";
                 case Qt.Key_F1:         return "F1";
                 case Qt.Key_F2:         return "F2";

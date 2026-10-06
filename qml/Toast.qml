@@ -12,7 +12,9 @@ import TodoCpp
 //
 // show(message, kind) / showWithAction(message, label, seconds, fn, kind) as
 // before; `kind` is "info" | "success" | "warning" | "error" and tints the dot
-// and border. Errors stay up longer.
+// and border. Errors stay up longer. show(message, kind, tag): a plain notice
+// with the same tag as one on screen takes its place instead of stacking
+// ("Scale 110%" then "Scale 125%" while Ctrl+= is pressed).
 Item {
     id: root
     // Never wider than this, whatever the message: a 1000px bar at 1100px
@@ -46,7 +48,11 @@ Item {
         // running) refreshes the one on screen instead of stacking a copy.
         for (let i = 0; i < _items.length; i++) {
             const it = _items[i];
-            if (!it.actionLabel && !entry.actionLabel && it.message === entry.message && it.kind === entry.kind) {
+            const sameTag = !!entry.tag && it.tag === entry.tag;
+            if (!it.actionLabel && !entry.actionLabel
+                    && (sameTag || (it.message === entry.message && it.kind === entry.kind))) {
+                it.message = entry.message;
+                it.kind = entry.kind;
                 it.expires = Date.now() + entry.ms;
                 _items = _items.slice();
                 _tick();
@@ -67,9 +73,9 @@ Item {
         _tick();
     }
 
-    function show(s, k) {
+    function show(s, k, tag) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: "", actionFn: null,
-                ms: _duration(k || "info", 0) });
+                ms: _duration(k || "info", 0), tag: tag || "" });
     }
     function showWithAction(s, label, seconds, fn, k) {
         _push({ id: ++_seq, message: String(s), kind: k || "info", actionLabel: label || "",

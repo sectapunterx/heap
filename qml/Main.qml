@@ -1451,6 +1451,18 @@ ApplicationWindow {
             win._summon();
             win.openSeenBefore(hit);
         }
+        // The zoom keys stand down while it has the keyboard (APP-168).
+        // Window.active cannot tell: the capture window is this one's
+        // transient child, and an active child counts as this one active.
+        // Hiding it does not always say it went inactive, hence both.
+        function onActiveChanged() {
+            const cw = captureLoader.item as CaptureWindow;
+            win._captureActive = !!cw && cw.visible && cw.active;
+        }
+        function onVisibleChanged() {
+            const cw = captureLoader.item as CaptureWindow;
+            win._captureActive = !!cw && cw.visible && cw.active;
+        }
     }
 
     // GitWatcher → TaskEditor bridge: TopBar "Open" button on the focus
@@ -1542,6 +1554,9 @@ ApplicationWindow {
         case "focus.immersion":      win.toggleImmersion(); break;
         case "standup.draft":        standupDraft.showNow(); break;
         case "timeMachine.open":     timeMachine.showNow(); break;
+        case "zoom.in":              win.zoomInterface(1); break;
+        case "zoom.out":             win.zoomInterface(-1); break;
+        case "zoom.reset":           win.zoomInterface(0); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1764,6 +1779,45 @@ ApplicationWindow {
         enabled: AppController.immersion && !win._viewKeysBlocked && AppController.selectionCount === 0
                  && !(AppController.currentView === "board" && !!boardLoader.item && boardLoader.item["cursorVisible"] === true)
         onActivated: AppController.stopImmersion()
+    }
+    // Interface scale (APP-168) from the keyboard: a step of Theme.scaleSteps
+    // up or down, or back to 100 %, stored where Settings → Appearance → Scale
+    // stores it. Live over dialogs and in text fields too (no editor binds
+    // these keys), so a modal is no reason to stand down; only the hotkey
+    // recorder, which wants the key itself, and the capture window, which is
+    // a window of its own, keep them.
+    function zoomInterface(direction) {
+        const s = AppController.stepUiScale(direction, Theme.scaleSteps);
+        toast.show(I18n.t("toast.uiScale").arg(Math.round(s * 100)), "info", "uiScale");
+    }
+    property bool _captureActive: false
+    readonly property bool _zoomKeysOn: !hotkeys.isCapturing && !win._captureActive
+    // The fixed aliases match kBuiltinKeys in AppController.cpp. Where one key
+    // matches two of them (Ctrl+Shift+= is also Ctrl++), Qt reports it as
+    // ambiguous: that is still one press.
+    Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: win._zoomKeysOn
+        objectName: "shortcut-zoom-in"
+        sequences: [win._kbd("zoom.in"), "Ctrl++", "Ctrl+Shift+=", "Ctrl+Num++"]
+        onActivated: win.zoomInterface(1)
+        onActivatedAmbiguously: win.zoomInterface(1)
+    }
+    Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: win._zoomKeysOn
+        objectName: "shortcut-zoom-out"
+        sequences: [win._kbd("zoom.out"), "Ctrl+Num+-"]
+        onActivated: win.zoomInterface(-1)
+        onActivatedAmbiguously: win.zoomInterface(-1)
+    }
+    Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: win._zoomKeysOn
+        objectName: "shortcut-zoom-reset"
+        sequences: [win._kbd("zoom.reset"), "Ctrl+Num+0"]
+        onActivated: win.zoomInterface(0)
+        onActivatedAmbiguously: win.zoomInterface(0)
     }
     Shortcut {
         sequence: _kbd("profile.weeklyReport")
