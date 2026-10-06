@@ -196,6 +196,31 @@ Rectangle {
     Keys.onReturnPressed: card.clicked()
     Keys.onEnterPressed: card.clicked()
 
+    // What the card's small chips say only under the pointer (APP-184): the
+    // tracker, why it is out of step, whose move it is, the labels past two.
+    // Read to a screen reader, and shown when Tab lands on the card.
+    readonly property string hoverDetails: {
+        if (!card.task) return "";
+        const parts = [];
+        if (card._isTicket) {
+            const tracker = (card._badge.name || card._ticket.provider || "")
+                + (card._ticket.project ? " · " + card._ticket.project : "");
+            if (tracker.length > 0) parts.push(tracker);
+            if (syncChip.visible) parts.push(syncChip.tip);
+            if (card._ticket.conflict) parts.push(I18n.t("taskcard.conflict.tip"));
+            if (card._ticket.outOfScope && !card._ticket.gone) parts.push(I18n.t("taskcard.outOfScope.tip"));
+        }
+        if (moveChip.visible && moveChip.tip.length > 0) parts.push(moveChip.tip);
+        const labels = card.task.labels || [];
+        if (labels.length > 2) parts.push(labels.slice(2).map(l => l.id).join(", "));
+        return parts.join("
+");
+    }
+    Accessible.description: card.hoverDetails
+    QQC.ToolTip.visible: card.activeFocus && card.hoverDetails.length > 0
+    QQC.ToolTip.delay: 600
+    QQC.ToolTip.text: card.hoverDetails
+
     // Drag.active is automatically driven by MouseArea.drag.active
     Drag.active: dragArea.drag.active
     Drag.dragType: Drag.Internal

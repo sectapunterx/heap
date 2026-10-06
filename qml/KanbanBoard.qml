@@ -908,6 +908,12 @@ Item {
                                         font.pixelSize: Theme.fsSm
                                         font.weight: col.overWip ? Theme.fwTitle : Theme.fwBody
                                     }
+                                    // The count and the over-limit warning for a
+                                    // screen reader, not only on hover (APP-184).
+                                    Accessible.role: Accessible.StaticText
+                                    Accessible.name: col.overWip
+                                        ? I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
+                                        : cntT.text
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
                                     QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
                                     HoverHandler { id: wipHover }

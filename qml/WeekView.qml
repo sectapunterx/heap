@@ -504,7 +504,7 @@ Item {
                     objectName: "week-prev"
                     text: "←"
                     Accessible.name: I18n.t("miniweek.prevWeek")
-                    ToolTip.visible: prevWeekBtn.hovered
+                    ToolTip.visible: prevWeekBtn.hovered || prevWeekBtn.visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("miniweek.prevWeek") + "  " + AppController.shortcutFor("cal.prev")
                     onClicked: root.step(-1)
@@ -547,7 +547,7 @@ Item {
                 PillButton {
                     id: todayBtn
                     text: I18n.t("common.today")
-                    ToolTip.visible: todayBtn.hovered
+                    ToolTip.visible: todayBtn.hovered || todayBtn.visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("common.today") + "  " + AppController.shortcutFor("cal.today")
                     onClicked: AppController.selectedDate = AppController.today
@@ -557,7 +557,7 @@ Item {
                     objectName: "week-next"
                     text: "→"
                     Accessible.name: I18n.t("miniweek.nextWeek")
-                    ToolTip.visible: nextWeekBtn.hovered
+                    ToolTip.visible: nextWeekBtn.hovered || nextWeekBtn.visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("miniweek.nextWeek") + "  " + AppController.shortcutFor("cal.next")
                     onClicked: root.step(1)
@@ -753,6 +753,7 @@ Item {
                                         // to the pointer: a click still goes
                                         // there, with its Ctrl / Shift.
                                         ClickArea {
+                                            id: dueKey
                                             objectName: "week-due-" + dueChip.modelData.id
                                             label: dueChip.modelData.title
                                             showTip: false
@@ -782,7 +783,8 @@ Item {
                                                     chipMA.open();
                                                 }
                                             }
-                                            ToolTip.visible: containsMouse
+                                            // The full title on Tab too (APP-184).
+                                            ToolTip.visible: containsMouse || dueKey.activeFocus
                                             ToolTip.delay: 400
                                             ToolTip.text: modelData.title
                                         }

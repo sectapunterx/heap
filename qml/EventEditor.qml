@@ -985,7 +985,7 @@ Popup {
                     visible: /^https?:\/\//i.test(linkField.text.trim())
                     text: "↗"
                     Accessible.name: I18n.t("event.a11y.openLink")
-                    ToolTip.visible: hovered
+                    ToolTip.visible: hovered || visualFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("event.a11y.openLink")
                     onClicked: Qt.openUrlExternally(linkField.text.trim())

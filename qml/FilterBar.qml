@@ -398,7 +398,7 @@ Rectangle {
             hoverEnabled: true
             cursorShape: Qt.PointingHandCursor
             onClicked: chip.activated()
-            ToolTip.visible: containsMouse && chip.tip.length > 0
+            ToolTip.visible: (containsMouse || chip.activeFocus) && chip.tip.length > 0
             ToolTip.text: chip.tip
             ToolTip.delay: 500
         }

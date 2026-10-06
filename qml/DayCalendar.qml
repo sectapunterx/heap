@@ -317,6 +317,8 @@ Item {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                         horizontalAlignment: Text.AlignRight
+                        // The whole sentence for a screen reader too (APP-184).
+                        Accessible.name: I18n.t("day.dragHint")
                         HoverHandler { id: hintHover }
                         ToolTip.visible: hintHover.hovered
                         ToolTip.delay: 400

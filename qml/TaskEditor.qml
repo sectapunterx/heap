@@ -954,7 +954,7 @@ Popup {
                                                            root._deadlinePreview.hasTime);
                                 }
                             }
-                            ToolTip.visible: hovered && text.length > 0 &&
+                            ToolTip.visible: (hovered || activeFocus) && text.length > 0 &&
                                 root._deadlinePreview && !root._deadlinePreview.ok
                             ToolTip.text: I18n.t("editor.tip.unrecognized")
                         }
@@ -1162,7 +1162,7 @@ Popup {
                             objectName: "te-attach"
                             text: "📎  " + I18n.t("att.button")
                             onClicked: attachDialog.open()
-                            ToolTip.visible: hovered
+                            ToolTip.visible: hovered || visualFocus
                             ToolTip.delay: 400
                             ToolTip.text: I18n.t("att.button.tip")
                         }
@@ -1411,7 +1411,7 @@ Popup {
                                 const bi = root.statusList().indexOf("backlog");
                                 if (bi >= 0) statusBox.currentIndex = bi;
                             }
-                            ToolTip.visible: hovered
+                            ToolTip.visible: hovered || visualFocus
                             ToolTip.delay: 400
                             ToolTip.text: I18n.t("editor.someday.hint")
                         }

@@ -130,7 +130,7 @@ Dialog {
             PillButton {
                 text: itemRow.actionText
                 enabled: itemRow.modelData.profileExists
-                ToolTip.visible: !itemRow.modelData.profileExists && hovered
+                ToolTip.visible: !itemRow.modelData.profileExists && (hovered || visualFocus)
                 ToolTip.text: I18n.t("tm.profileGone.tip")
                 onClicked: itemRow.restore()
             }

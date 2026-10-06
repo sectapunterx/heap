@@ -505,7 +505,8 @@ Rectangle {
         }
         Text {
             id: comboT
-            visible: btn.expanded && !countBox.visible && ma.containsMouse && btn._combo.length > 0
+            // Under the pointer or the keyboard (APP-184).
+            visible: btn.expanded && !countBox.visible && (ma.containsMouse || btn.activeFocus) && btn._combo.length > 0
             anchors.right: parent.right; anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             text: btn._combo
@@ -550,8 +551,8 @@ Rectangle {
                 btn.activated();
             }
             // Labels are on screen when expanded; the tooltip is only for
-            // the icon-only rail.
-            ToolTip.visible: containsMouse && !btn.expanded && btn.tooltipText !== ""
+            // the icon-only rail — under the pointer, or on Tab (APP-184).
+            ToolTip.visible: (containsMouse || btn.activeFocus) && !btn.expanded && btn.tooltipText !== ""
             ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }

@@ -675,7 +675,7 @@ Item {
                         cursorShape: Qt.PointingHandCursor
                         onClicked: attachDialog.open()
                     }
-                    ToolTip.visible: attachMA.containsMouse
+                    ToolTip.visible: attachMA.containsMouse || activeFocus
                     ToolTip.delay: 500
                     ToolTip.text: I18n.t("att.button.tip.note")
                 }

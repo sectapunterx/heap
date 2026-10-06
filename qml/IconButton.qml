@@ -58,7 +58,7 @@ Rectangle {
         cursorShape: Qt.PointingHandCursor
         onClicked: btn.activated()
     }
-    ToolTip.visible: ma.containsMouse && btn.label.length > 0
+    ToolTip.visible: (ma.containsMouse || btn.activeFocus) && btn.label.length > 0
     ToolTip.delay: 500
     ToolTip.text: btn.label
     FocusRing {}
