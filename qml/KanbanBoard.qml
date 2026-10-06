@@ -478,16 +478,36 @@ Item {
     // and so does a Done column that is folded or off screen. Called just
     // before the move, while the card is still where the user saw it.
     property bool stackRunning: false
+    // The columns cannot name the board, so they reach it through this: the
+    // board asks, the column the card goes to answers with where its stack
+    // is (it owns that), and the board flies the card there. A drop or a
+    // card's status menu asks the board the same way.
+    component StackBus: QtObject {
+        // The column whose top bar waits while a card is on its way.
+        property string holdStatus: ""
+        signal requested(Item card, string title, string toStatus)
+        signal launchRequested(Item card, string title, string toStatus, real colLeft, real colRight,
+                               real toX, real toY, real toW, color barColor)
+        signal dropped(var source, string toStatus, int moved)
+    }
+    StackBus { id: stackBus }
+    Connections {
+        target: stackBus
+        function onLaunchRequested(card: Item, title: string, toStatus: string, colLeft: real, colRight: real,
+                                   toX: real, toY: real, toW: real, barColor: color) {
+            root.launchStack(card, title, toStatus, colLeft, colRight, toX, toY, toW, barColor);
+        }
+        function onDropped(source: var, toStatus: string, moved: int) {
+            root.stackOnDrop(source, toStatus, moved);
+        }
+    }
     function stackOnClose(id, fromStatus, toStatus, moved) {
         if (!Motion.shouldStack(moved, fromStatus, toStatus, Theme.motion)) return false;
         let card = null;
-        let done = null;
-        for (let c = 0; c < colRepeater.count; c++) {
-            const it = colRepeater.itemAt(c);
-            card = card || root._cardIn(it, id);
-            if (root._columnIs(it, toStatus)) done = it;
-        }
-        return root._launchStack(card, done);
+        for (let c = 0; c < colRepeater.count && !card; c++) card = root._cardIn(colRepeater.itemAt(c), id);
+        if (!card || !card.task) return false;
+        stackBus.requested(card, String(card.task.title || ""), toStatus);
+        return root.stackRunning;
     }
     // A card dropped or sent from its menu: anything with the card's
     // taskId and task.
@@ -495,28 +515,22 @@ Item {
         if (!source || !source.taskId) return false;
         return root.stackOnClose(source.taskId, source.task ? source.task.status : "", toStatus, moved);
     }
-    // The columns are the Repeater's untyped delegates; these read them.
-    function _columnIs(col, statusId) {
-        return !!col && col.statusId === statusId;
-    }
     // The card for `id` if this column's list has built it; never scrolls.
     function _cardIn(col, id) {
         if (!col || !col.taskList) return null;
         const row = col.taskFilter.ids().indexOf(id);
         return row >= 0 ? col.taskList.itemAtIndex(row) : null;
     }
-    function _launchStack(card, done) {
-        if (!card || !card.task || !done || done.folded) return false;
-        const vp = hscroll.mapToItem(root, 0, 0);
-        const cp = done.mapToItem(root, 0, 0);
-        if (cp.x < vp.x || cp.x + done.width > vp.x + hscroll.width + 1) return false;
+    // From the Done column: its left and right edge and its stack's top
+    // bar, in scene coordinates. Nothing flies to a column off screen.
+    function launchStack(card: Item, title: string, toStatus: string, colLeft: real, colRight: real,
+                         toX: real, toY: real, toW: real, barColor: color): bool {
+        const vp = hscroll.mapToItem(null, 0, 0);
+        if (colLeft < vp.x || colRight > vp.x + hscroll.width + 1) return false;
         const from = card.mapToItem(root, 0, 0);
-        // Where the new top bar will be: the stack's first row, as wide as
-        // the bar that row gets once the column has one more card.
-        const bars = Motion.stackBars(done.visibleCount + 1);
-        const to = done.stackAnchor.mapToItem(root, 0, 0);
-        stackFlyer.launch(from.x, from.y, card.width, card.height, card.task.title,
-                          to.x, to.y, done.stackAnchor.width * Motion.stackBarWidth(bars - 1), done);
+        const to = root.mapFromItem(null, toX, toY);
+        stackFlyer.launch(from.x, from.y, card.width, card.height, title, to.x, to.y, toW, barColor);
+        stackBus.holdStatus = toStatus;
         return true;
     }
 
@@ -614,9 +628,9 @@ Item {
             Repeater {
                 id: colRepeater
                 model: colModel
+                onItemAdded: (index, item) => item["bus"] = stackBus
                 // A column's way to the stack: its drops and its cards' menus
                 // ask the board through this, not by the board's id.
-                onItemAdded: (index, item) => item["stackHook"] = root.stackOnDrop
 
                 Rectangle {
                     id: col
@@ -661,9 +675,23 @@ Item {
                     // Done's stack (APP-176): a bar per card, up to a few.
                     // While a closed card is on its way the top bar waits.
                     readonly property int stackBars: col.statusId === "done" ? Motion.stackBars(col.visibleCount) : 0
-                    property bool stackHold: false
-                    readonly property Item stackAnchor: stackCol
-                    property var stackHook: null
+                    // Set by the board when the column is made.
+                    property StackBus bus: null
+                    readonly property bool stackHold: !!col.bus && col.bus.holdStatus === col.statusId
+                    // The board asks for a card closed into this column.
+                    Connections {
+                        target: col.bus
+                        function onRequested(card: Item, title: string, toStatus: string) {
+                            if (toStatus !== col.statusId || col.folded) return;
+                            const left = col.mapToItem(null, 0, 0);
+                            const top = stackCol.mapToItem(null, 0, 0);
+                            // The new top bar: as wide as that row gets once
+                            // the column has one more card.
+                            const bars = Motion.stackBars(col.visibleCount + 1);
+                            col.bus.launchRequested(card, title, col.statusId, left.x, left.x + col.width, top.x, top.y,
+                                                    stackCol.width * Motion.stackBarWidth(bars - 1), col.statusColor);
+                        }
+                    }
                     // One entry per bar, top first. Widths are counted from
                     // the bottom, so a bar laid on top leaves the rest as
                     // they were.
@@ -1022,9 +1050,7 @@ Item {
                             ListView {
                                 id: bodyFlick
                                 objectName: "column-list"
-                                // For the cards' menus (APP-176), which reach
-                                // it as ListView.view.
-                                property var stackHook: col.stackHook
+                                readonly property StackBus bus: col.bus
                                 anchors.fill: parent
                                 anchors.margins: Theme.spMd
                                 clip: true
@@ -1185,8 +1211,9 @@ Item {
                                             }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
                                             onStatusPicked: (sid) => tc._stack(tc.ListView.view, sid)
+                                            // The column's bus, by way of the list.
                                             function _stack(view, sid) {
-                                                if (view && view.stackHook) view.stackHook(tc, sid, 1);
+                                                if (view && view.bus) view.bus.dropped(tc, sid, 1);
                                             }
                                             onMenuOpenChanged: root._openCardMenus += menuOpen ? 1 : -1
                                             Component.onDestruction: if (menuOpen) root._openCardMenus--
@@ -1276,11 +1303,11 @@ Item {
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
                                         // Several cards: no stack (APP-176).
-                                        if (col.stackHook) col.stackHook(src, col.statusId, AppController.selectionCount);
+                                        if (col.bus) col.bus.dropped(src, col.statusId, AppController.selectionCount);
                                         if (manual) AppController.moveSelectedTasksTo(col.statusId, target);
                                         else AppController.moveSelectedTasksToStatus(col.statusId);
                                     } else if (manual || AppController.taskById(src.taskId).status !== col.statusId) {
-                                        if (col.stackHook) col.stackHook(src, col.statusId, 1);
+                                        if (col.bus) col.bus.dropped(src, col.statusId, 1);
                                         AppController.moveTaskTo(src.taskId, col.statusId, target);
                                     }
                                     drop.accept(Qt.MoveAction);
@@ -1547,14 +1574,14 @@ Item {
         property real toW: 0
         property real foldY: 0
         property color barColor: Theme.stDone
-        property Item column: null
         color: Theme.panel2
         border.color: Theme.border
         border.width: height > 8 ? 1 : 0
         radius: Theme.radius
-        function launch(x, y, w, h, title, tx, ty, tw, col) {
+        function launch(x: real, y: real, w: real, h: real, title: string,
+                        tx: real, ty: real, tw: real, barColor: color) {
             stackAnim.stop();
-            if (stackFlyer.column) stackFlyer.column.stackHold = false;
+            stackBus.holdStatus = "";
             stackFlyer.x = x;
             stackFlyer.y = y;
             stackFlyer.width = w;
@@ -1566,19 +1593,16 @@ Item {
             stackFlyer.toX = tx;
             stackFlyer.toY = ty;
             stackFlyer.toW = tw;
-            stackFlyer.barColor = col.statusColor;
-            stackFlyer.column = col;
+            stackFlyer.barColor = barColor;
             flyerTitle.text = title;
             flyerTitle.opacity = 1;
-            col.stackHold = true;
             stackFlyer.visible = true;
             root.stackRunning = true;
             stackAnim.restart();
         }
         function land() {
             stackFlyer.visible = false;
-            if (stackFlyer.column) stackFlyer.column.stackHold = false;
-            stackFlyer.column = null;
+            stackBus.holdStatus = "";
             root.stackRunning = false;
         }
         Text {
