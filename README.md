@@ -186,3 +186,5 @@ Issues and pull requests are welcome. Building, tests, CI and the code map are i
 
 MIT — see [LICENSE](LICENSE). Brand assets under `design/brand-export/` are MIT for use within this codebase. The
 referenced fonts (IBM Plex Sans, JetBrains Mono) ship under the SIL Open Font License; see their upstream repositories.
+The fonts bundled into the app (Golos Text, JetBrains Mono — `resources/fonts/`) are SIL OFL 1.1 too; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

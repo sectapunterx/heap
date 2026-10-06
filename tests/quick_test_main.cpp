@@ -8,6 +8,7 @@
 // component tests that construct AppController (which reads/seeds state.json
 // under AppDataLocation) never touch the real user data.
 #include "platform/AltGrGuard.h"
+#include "platform/BundledFonts.h"
 
 #include <QCoreApplication>
 #include <QMutex>
@@ -60,6 +61,10 @@ class Setup : public QObject {
     g_previousHandler = qInstallMessageHandler(collectScriptErrors);
     // The same AltGr rule main() installs, so key tests see it (SHELL-2).
     QCoreApplication::instance()->installEventFilter(new heap::platform::AltGrGuard(QCoreApplication::instance()));
+    // The fonts main() registers, so the views are measured in the faces the
+    // app really draws with, on every CI runner alike.
+    heap::platform::registerBundledFonts();
+    heap::platform::useBundledUiFontByDefault();
   }
 
   void cleanupTestCase() {

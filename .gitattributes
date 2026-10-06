@@ -7,3 +7,6 @@
 # new release is a clean diff, and keep them out of language statistics.
 third_party/** text eol=lf
 third_party/** linguist-vendored
+
+# Shipped fonts (tools/gen_bundled_fonts.py): never touch line endings.
+resources/fonts/*.ttf binary

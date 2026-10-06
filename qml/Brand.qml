@@ -58,7 +58,7 @@ QtObject {
     readonly property color lightAccent:  "#178ea0"
 
     // ── Typography ────────────────────────────────────────────
-    readonly property string fontSans: "IBM Plex Sans"
+    readonly property string fontSans: "Golos Text"
     readonly property string fontMono: "JetBrains Mono"
 
     // Type scale (px)
