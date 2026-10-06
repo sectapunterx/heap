@@ -1869,7 +1869,7 @@ ApplicationWindow {
     // The event log (APP-187).
     Shortcut {
         objectName: "shortcut-log-open"
-        sequence: _kbd("log.open")
+        sequence: win._kbd("log.open")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: eventLog.showNow()
