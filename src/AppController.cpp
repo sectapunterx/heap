@@ -530,6 +530,19 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.palette.open.label", {"Open Command Palette", "Открыть палитру команд"}},
       {"shortcut.palette.open.desc",
        {"Fuzzy search across tasks, docs, notes, profiles and commands.", "Нечёткий поиск задач, доков, заметок, профилей и команд."}},
+      {"shortcut.timeMachine.open.label", {"Time machine", "Машина времени"}},
+      {"shortcut.timeMachine.open.desc", {"Bring back an earlier state from a snapshot.", "Вернуть прежнее состояние из снимка."}},
+      {"shortcut.standup.draft.label", {"Standup draft", "Черновик стендапа"}},
+      {"shortcut.standup.draft.desc",
+       {"Yesterday / Today / Blockers from what heap saw; to edit and copy.",
+        "Вчера / Сегодня / Блокеры из того, что видел heap; поправить и скопировать."}},
+      {"shortcut.recap.open.label", {"Weekly recap", "Сводка недели"}},
+      {"shortcut.recap.open.desc", {"What changed column last week.", "Что сменило колонку на прошлой неделе."}},
+      {"shortcut.endOfDay.open.label", {"End of day", "Конец дня"}},
+      {"shortcut.endOfDay.open.desc",
+       {"Today's summary: closed, carrying over, timers running.", "Итог дня: закрыто, переходит на завтра, идущие таймеры."}},
+      {"shortcut.welcome.replay.label", {"Welcome tour", "Приветственный тур"}},
+      {"shortcut.welcome.replay.desc", {"Replay the first-run tour.", "Пройти тур первого запуска заново."}},
       {"shortcut.task.new.label", {"New task", "Новая задача"}},
       {"shortcut.task.new.desc", {"Create a ticket in the active profile.", "Создать тикет в активном профиле."}},
       {"shortcut.view.board.label", {"Go to Board", "Перейти к доске"}},
@@ -11664,6 +11677,14 @@ void AppController::seedShortcutCatalog() {
   add("focus.immersion", "Ctrl+Shift+F");
   // The event log (APP-187): the toasts of this session, to read again.
   add("log.open", "Ctrl+Shift+L");
+  // The other 0.6 tools (APP-192): no key by default, so nothing is taken
+  // from anyone's muscle memory; bindable in Settings → Hotkeys, and the
+  // palette shows the key once there is one.
+  add("timeMachine.open", "");
+  add("standup.draft", "");
+  add("recap.open", "");
+  add("endOfDay.open", "");
+  add("welcome.replay", "");
   // The first nine saved views, in sidebar order. Alt+digit is free in the
   // catalog and in every text field, and Ctrl+digit already means "view".
   add("savedView.1", "Alt+1");

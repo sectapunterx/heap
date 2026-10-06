@@ -1831,6 +1831,38 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
         onActivated: win.toggleImmersion()
     }
+    // The 0.6 tools (APP-192): no key by default; live once one is bound in
+    // Settings → Hotkeys, and they run what the palette runs.
+    Shortcut {
+        sequence: win._kbd("timeMachine.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("timeMachine.open")
+    }
+    Shortcut {
+        sequence: win._kbd("standup.draft")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.standupDraft)
+        onActivated: win.runCommand("standup.draft")
+    }
+    Shortcut {
+        sequence: win._kbd("recap.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("recap.open")
+    }
+    Shortcut {
+        sequence: win._kbd("endOfDay.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("endOfDay.open")
+    }
+    Shortcut {
+        sequence: win._kbd("welcome.replay")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("welcome.replay")
+    }
     Shortcut {
         sequence: "Escape"
         context: Qt.ApplicationShortcut

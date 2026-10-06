@@ -902,6 +902,10 @@ add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 # QPA + test-mode paths); links GlobalHotkey since AppController references it.
 heap_add_appcontroller_test(heap_appcontroller_tests test_appcontroller.cpp)
 
+# ─── The palette runs every catalog action (APP-192) ───
+heap_add_appcontroller_test(heap_palette_catalog_tests test_palette_catalog.cpp)
+target_compile_definitions(heap_palette_catalog_tests PRIVATE HEAP_QML_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../qml")
+
 # ─── Command line (APP-173) ───
 # Verb detection, argument parsing, the request/response wire format, `heap now`
 # resolution, list/today, and add/done through a headless AppController under a
