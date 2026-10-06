@@ -150,8 +150,8 @@ Rectangle {
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0
-    // A dropped card settles with a little overshoot, as if it had weight
-    // (APP-167); with reduced motion it simply is where it was put.
+    // A lifted card grows a little and settles back without overshoot
+    // (APP-175); with reduced motion it simply is where it was put.
     Behavior on scale { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
 
@@ -194,7 +194,7 @@ Rectangle {
     readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
     property Item _homeParent: null
     // Where the card was let go, in window coordinates: a card dropped back
-    // where it came from springs home from there instead of jumping (APP-167).
+    // where it came from glides home from there instead of jumping (APP-167).
     property var _dropAt: null
     transform: Translate { id: settle }
     ParallelAnimation {
@@ -236,8 +236,9 @@ Rectangle {
     // ── Done (APP-167) ───────────────────────────────────────────────
     // A check mark grows over the card and fades when the task is marked
     // done — on this card, or just before it was built: the board makes a new
-    // card in the Done column for a moved task. Each step is under 150 ms;
-    // nothing plays with reduced motion.
+    // card in the Done column for a moved task. It pops in, holds for a
+    // move's length and leaves in half a pop; nothing plays with reduced
+    // motion.
     function playDone() {
         if (Theme.motion > 0) doneAnim.restart();
     }
