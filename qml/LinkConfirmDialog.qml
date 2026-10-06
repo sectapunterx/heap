@@ -27,18 +27,14 @@ QQC.Dialog {
     }
 
     modal: true
+    QQC.Overlay.modal: ModalScrim {}
     parent: QQC.Overlay.overlay
     anchors.centerIn: parent
     width: Math.min(460, (parent ? parent.width : 460) - 32)
     padding: Theme.inset
     title: I18n.t("md.link.confirm.title")
     header: DialogHeader { text: root.title }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
     contentItem: ColumnLayout {
         spacing: Theme.spMd
         Text {

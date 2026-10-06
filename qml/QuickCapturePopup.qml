@@ -20,9 +20,7 @@ Popup {
     x: root.standalone ? Math.round((root.parent.width - root.width) / 2) : 0
     y: root.standalone ? Theme.sp2xl : 0
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
 
     // What was just created, for the confirmation the owner shows: a toast in
     // the app, an OS notification when captured from outside it. `taskId` is
@@ -375,12 +373,7 @@ Popup {
         inputField.forceActiveFocus();
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg

@@ -15,6 +15,7 @@ Dialog {
     id: root
     objectName: "event-log"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -57,12 +58,7 @@ Dialog {
     }
 
     header: DialogHeader { text: I18n.t("eventLog.title") }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg

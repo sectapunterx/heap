@@ -602,12 +602,7 @@ Rectangle {
                 focus: false
                 closePolicy: QQC.Popup.NoAutoClose
                 visible: seenHint.shown && searchField.text.length > 0
-                background: Rectangle {
-                    radius: Theme.radiusMd
-                    color: Theme.panel
-                    border.color: Theme.border
-                    border.width: 1
-                }
+                background: PopupSurface {}
                 contentItem: SeenBeforeHint {
                     id: seenHint
                     text: searchField.text

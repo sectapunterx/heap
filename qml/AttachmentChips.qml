@@ -184,17 +184,13 @@ Flow {
             confirm.open();
         }
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         parent: QQC.Overlay.overlay
         anchors.centerIn: parent
         width: Math.min(460, (parent ? parent.width : 460) - 2 * Theme.sp3xl)
         padding: Theme.inset
         title: I18n.t("att.confirm.title")
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
         contentItem: ColumnLayout {
             spacing: Theme.spMd
             Text {

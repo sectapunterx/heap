@@ -61,12 +61,7 @@ Popup {
     property string _focusedThemeName: ""
     onClosed: _focusedThemeName = ""
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0

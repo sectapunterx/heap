@@ -109,22 +109,7 @@ ComboBox {
             boundsBehavior: Flickable.StopAtBounds
             ScrollBar.vertical: ThinScrollBar {}
         }
-        background: Rectangle {
-            radius: Theme.radiusLg
-            color: Theme.panel2
-            border.color: Theme.fieldBorder
-            border.width: 1
-            Rectangle {
-                z: -1
-                anchors.fill: parent
-                anchors.topMargin: Theme.spXs
-                anchors.bottomMargin: -Theme.spXs
-                anchors.leftMargin: -1
-                anchors.rightMargin: -1
-                radius: parent.radius
-                color: Theme.withAlpha(Theme.scrim, Theme.dark ? 0.6 : 0.18)
-            }
-        }
+        background: PopupSurface {}
         enter: Transition {
             NumberAnimation { property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
         }

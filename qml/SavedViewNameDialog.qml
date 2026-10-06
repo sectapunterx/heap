@@ -14,7 +14,7 @@ Popup {
     padding: 0
     width: 420
     anchors.centerIn: Overlay.overlay
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     // "save" | "rename"
     property string mode: "save"
@@ -44,12 +44,7 @@ Popup {
         root.accepted(name);
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg

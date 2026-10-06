@@ -30,9 +30,7 @@ Popup {
     x: root.standalone ? Math.round((root.parent.width - root.width) / 2) : 0
     y: root.standalone ? Theme.sp2xl : 0
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the popup acts like Esc (APP-126): close when empty,
     // otherwise ask before dropping the text. See PopupStack.js.
     Overlay.onPressed: if (!root.standalone && PopupStack.isTopmost(root, Overlay.overlay)) root._maybeDiscard()
@@ -78,12 +76,7 @@ Popup {
         editor.forceActiveFocus();
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg
@@ -238,16 +231,9 @@ Popup {
         width: 360
         anchors.centerIn: Overlay.overlay
 
-        Overlay.modal: Rectangle {
-            color: Theme.scrim
-        }
+        Overlay.modal: ModalScrim {}
 
-        background: Rectangle {
-            radius: Theme.radiusLg
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         function _commitDiscard() {
             editor.text = "";

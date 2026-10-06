@@ -13,7 +13,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     property var draft: ({})
     property bool isNew: false
@@ -118,12 +118,7 @@ Popup {
         onActivated: root._save()
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spXl

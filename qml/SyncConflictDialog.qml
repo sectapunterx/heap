@@ -18,6 +18,7 @@ Dialog {
     id: root
     objectName: "sync-conflict"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -80,12 +81,7 @@ Dialog {
 
     title: I18n.t("sync.conflict.title").arg(root._ticket.key || (root.task ? root.task.id || "" : ""))
     header: DialogHeader { text: root.title }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spLg

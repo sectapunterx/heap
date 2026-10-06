@@ -880,12 +880,7 @@ Item {
                 model: sc.popup.visible ? sc.delegateModel : null
                 currentIndex: sc.highlightedIndex
             }
-            background: Rectangle {
-                radius: Theme.radius
-                color: Theme.panel
-                border.width: 1
-                border.color: Theme.borderStrong
-            }
+            background: PopupSurface {}
         }
     }
 
@@ -3157,7 +3152,7 @@ Item {
                             width: Math.min(460, (parent ? parent.width : 460) - 2 * Theme.sp2xl)
                             padding: Theme.inset
                             closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutside
-                            Overlay.modal: Rectangle { color: Theme.scrim }
+                            Overlay.modal: ModalScrim {}
                             readonly property var profileNames: {
                                 const out = [];
                                 const ps = AppController.profiles || [];
@@ -3165,12 +3160,7 @@ Item {
                                 return out;
                             }
                             onOpened: wipeCancel.forceActiveFocus()
-                            background: Rectangle {
-                                radius: Theme.radiusXl
-                                color: Theme.panel
-                                border.color: Theme.borderStrong
-                                border.width: 1
-                            }
+                            background: ModalSurface {}
                             contentItem: ColumnLayout {
                                 spacing: Theme.spXl
                                 Text {

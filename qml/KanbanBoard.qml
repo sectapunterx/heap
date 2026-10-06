@@ -1419,10 +1419,10 @@ Item {
         padding: 0
         width: 360
         anchors.centerIn: Overlay.overlay
-        background: Rectangle { radius: Theme.radiusXl; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        background: ModalSurface {}
 
         // Dimmed backdrop so the board stays visible behind the dialog.
-        Overlay.modal: Rectangle { color: Theme.scrim }
+        Overlay.modal: ModalScrim {}
 
         // Not `palette`: that is QQuickPopup's own property, which every
         // Control inside the popup resolves its colours through. Shadowing it
@@ -1513,7 +1513,7 @@ Item {
         // which toggles.
         closePolicy: Popup.CloseOnEscape | Popup.CloseOnPressOutsideParent
         padding: Theme.spMd
-        background: Rectangle { radius: Theme.radiusLg; color: Theme.panel; border.color: Theme.borderStrong; border.width: 1 }
+        background: PopupSurface {}
         property string forStatusId: ""
 
         readonly property var swatches: addColumnPopup.swatches
@@ -1816,6 +1816,7 @@ Item {
         property int cardCount: 0
 
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
@@ -1826,12 +1827,7 @@ Item {
         width: 420
         title: I18n.t("kanban.confirmDelete.title").arg(confirmDelete.statusName)
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: Text {
             text: I18n.t("kanban.confirmDelete.body").arg(confirmDelete.cardCount)
@@ -1877,17 +1873,13 @@ Item {
         }
 
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.wip.title").arg(wipPopup.statusName)
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         function commit() {
             AppController.setStatusWipLimit(wipPopup.statusId, parseInt(wipField.text || "0") || 0);
@@ -1949,17 +1941,13 @@ Item {
         }
 
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
         title: I18n.t("kanban.archive.title").arg(archivePopup.statusName)
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         function commit() {
             AppController.setStatusArchiveDays(archivePopup.statusId, parseInt(archiveField.text || "0") || 0);

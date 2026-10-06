@@ -349,6 +349,28 @@ ApplicationWindow {
         AppController.appSettingsJson = JSON.stringify(s);
     }
 
+    // Every attached ToolTip in the app is one shared instance. Dressed here
+    // as the popup level of elevation (APP-182) — the control style drew a
+    // square grey box in the system palette, unlike any menu or drop-down.
+    property Item _tipSurface: PopupSurface {}
+    property Item _tipText: Text {
+        text: ToolTip.toolTip ? ToolTip.toolTip.text : ""
+        color: Theme.text
+        font.family: Theme.fontUi
+        font.pixelSize: Theme.fsSm
+        wrapMode: Text.Wrap
+    }
+    // An Item, since the window cannot take the ToolTip attached property.
+    property Item _tipStyler: Item {
+        Component.onCompleted: {
+            const tt = ToolTip.toolTip;
+            if (!tt) return;
+            tt.background = win._tipSurface;
+            tt.contentItem = win._tipText;
+            tt.padding = Theme.spMd;
+        }
+    }
+
     Component.onCompleted: {
         _keepRetiredThemes();
         _restoreGeometry();
@@ -408,18 +430,14 @@ ApplicationWindow {
         id: closeAsk
         objectName: "close-to-tray-ask"
         modal: true
+        Overlay.modal: ModalScrim {}
         parent: Overlay.overlay
         anchors.centerIn: parent
         width: 440
         padding: Theme.inset
         topPadding: Theme.spMd
         title: I18n.t("close.ask.title")
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
         // Drawn in the theme like every other dialog title; Basic's own
         // header was an unstyled bar in the palette's window colour.
         header: Text {

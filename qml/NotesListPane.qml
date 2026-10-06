@@ -537,6 +537,7 @@ Rectangle {
         objectName: "note-folder-rename"
         property string folder: ""
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
         padding: Theme.inset
@@ -555,12 +556,7 @@ Rectangle {
             folderPopup.close();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
         contentItem: QQC.TextField {
             id: folderName
             objectName: "note-folder-name"
@@ -586,6 +582,7 @@ Rectangle {
         objectName: "note-rename"
         property string noteId: ""
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
         padding: Theme.inset
@@ -607,12 +604,7 @@ Rectangle {
             renamePopup.close();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: ColumnLayout {
             spacing: Theme.spMd

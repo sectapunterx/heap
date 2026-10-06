@@ -16,7 +16,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     signal navigateToDoc(string sectionId)
     signal navigateToSnippets()
@@ -326,10 +326,7 @@ Popup {
         Qt.callLater(searchField.forceActiveFocus);
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl; color: Theme.panel
-        border.color: Theme.borderStrong; border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0

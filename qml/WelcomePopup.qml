@@ -43,18 +43,11 @@ Popup {
     property var captured: []
     property string lastCapturedId: ""
 
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the tour ends it like ✕ and Esc do (APP-126).
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._finish()
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     // A hint with the shortcuts as bound now, not as they shipped (DES-15).
     function withKeys(key, ids) {

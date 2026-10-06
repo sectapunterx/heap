@@ -53,12 +53,7 @@ Popup {
     }
     Timer { id: resetAllDisarm; interval: 4000; onTriggered: root.resetAllArmed = false }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: PopupSurface {}
 
     // The cheat-sheet reads by area (APP-166): what works everywhere, then
     // views, the board, the calendar, notes and profiles. The catalogue keeps

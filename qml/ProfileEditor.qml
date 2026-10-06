@@ -14,7 +14,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     // Not `palette`: that is QQuickPopup's own property, which every
     // Control inside this dialog resolves its colours through. Shadowing
@@ -59,10 +59,7 @@ Popup {
         Qt.callLater(function () { nameField.forceActiveFocus(); nameField.selectAll() });
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl; color: Theme.panel
-        border.color: Theme.borderStrong; border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spXl

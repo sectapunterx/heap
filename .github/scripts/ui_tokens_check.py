@@ -19,7 +19,9 @@ Fails when a QML file paints with a literal instead of a token:
   - a label in capitals: `font.capitalization: Font.AllUppercase`,
     `I18n.t(...).toUpperCase()` or a positive `font.letterSpacing`.
     Labels are sentence case and untracked: Cyrillic in caps with
-    tracking was the loudest thing on every screen.
+    tracking was the loudest thing on every screen;
+  - a modal with its own backdrop (`Overlay.modal: Rectangle {...}`)
+    instead of ModalScrim: every modal dims the page the same way.
 
 A literal is what made the app grow 15 font sizes and 22 margins, and what
 kept Tweaks -> Density from moving anything but the hour height.
@@ -50,6 +52,7 @@ WEIGHT = re.compile(r"\bFont\.(?:Thin|ExtraLight|Light|Normal|Medium|DemiBold|Bo
 CAPS = re.compile(r"\bfont\.capitalization:\s*Font\.AllUppercase\s*(?:;|\}|$|//)"
                   r"|\bI18n\.\w+\((?:[^()]|\([^()]*\))*\)\.toUpperCase\(\)"
                   r"|\bfont\.letterSpacing:\s*(?:0?\.0*[1-9]|[1-9])")
+SCRIM = re.compile(r"\bOverlay\.modal:\s*(?!ModalScrim\b)\w")
 HEX = re.compile(r"[\"']#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})[\"']")
 
 
@@ -81,6 +84,8 @@ def check(root: pathlib.Path):
                     m = WEIGHT.search(code)
                     if m:
                         problems.append(f"{f}:{n}: font weight {m.group(0)} - use Theme.fwBody / fwTitle / fwHeading")
+                    if SCRIM.search(code):
+                        problems.append(f"{f}:{n}: own modal backdrop - use Overlay.modal: ModalScrim {{}}")
                     m = CAPS.search(code)
                     if m:
                         problems.append(f"{f}:{n}: caps label {m.group(0)} - labels are sentence case, untracked")

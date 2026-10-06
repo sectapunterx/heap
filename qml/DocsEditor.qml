@@ -12,7 +12,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     property string kind: "doc"          // doc | snippet | contact | section
     property bool   isNew: false
@@ -39,12 +39,7 @@ Popup {
 
     width: kind === "snippet" ? 700 : 500
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spXl

@@ -436,6 +436,7 @@ Item {
         objectName: "docpage-rename"
         property string pageId: ""
         modal: true
+        QQC.Overlay.modal: ModalScrim {}
         anchors.centerIn: QQC.Overlay.overlay
         parent: QQC.Overlay.overlay
         padding: Theme.inset
@@ -455,12 +456,7 @@ Item {
             renamePagePopup.close();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: QQC.TextField {
             id: pageTitleField

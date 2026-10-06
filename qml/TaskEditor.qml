@@ -23,9 +23,7 @@ Popup {
     readonly property real _maxH: (Overlay.overlay ? Overlay.overlay.height : 900) - 48
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the editor (APP-126); see PopupStack.js.
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root.requestClose()
 
@@ -698,10 +696,8 @@ Popup {
         onActivated: attachDialog.open()
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: fileDrop.containsDrag ? Theme.accent : Theme.borderStrong
+    background: ModalSurface {
+        border.color: fileDrop.containsDrag ? Theme.accent : Theme.modalBorder
         border.width: fileDrop.containsDrag ? 2 : 1
         // Files dropped anywhere on the editor are attached to the task.
         DropArea {
@@ -1696,13 +1692,8 @@ Popup {
         closePolicy: Popup.NoAutoClose
         padding: Theme.inset
         width: Math.min(380, root.width - 2 * Theme.inset)
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
-        Overlay.modal: Rectangle { color: Theme.scrim }
+        background: ModalSurface {}
+        Overlay.modal: ModalScrim {}
         onOpened: promptBody.forceActiveFocus()
         function keep() { root._afterPrompt = null; discardPrompt.close(); titleField.forceActiveFocus(); }
         function discard() { discardPrompt.close(); root.close(); root._runAfterPrompt(); }

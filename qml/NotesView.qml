@@ -1278,12 +1278,7 @@ Item {
         width: 320
         height: Math.min(8, Math.max(1, acMatches.length)) * 38 + 8
 
-        background: Rectangle {
-            radius: Theme.radius
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: PopupSurface {}
 
         contentItem: ListView {
             id: acList
@@ -1584,6 +1579,7 @@ Item {
         objectName: "missing-link"
         property string wanted: ""
         modal: true
+        Overlay.modal: ModalScrim {}
         anchors.centerIn: Overlay.overlay
         parent: Overlay.overlay
         padding: Theme.inset
@@ -1595,12 +1591,7 @@ Item {
             missingLinkPopup.open();
         }
 
-        background: Rectangle {
-            radius: Theme.radiusXl
-            color: Theme.panel
-            border.color: Theme.borderStrong
-            border.width: 1
-        }
+        background: ModalSurface {}
 
         contentItem: Text {
             text: I18n.t("notes.link.missingBody").arg(missingLinkPopup.wanted)

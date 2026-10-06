@@ -94,16 +94,10 @@ Popup {
     }
 
     modal: true
-    dim: true
+    dim: false
     focus: true
     padding: Theme.spLg
-    Overlay.modal: Rectangle { color: Theme.withAlpha(Theme.scrim, 0.35) }
-    background: Rectangle {
-        color: Theme.panel
-        border.color: Theme.border
-        border.width: 1
-        radius: Theme.radiusLg
-    }
+    background: PopupSurface {}
 
     contentItem: ColumnLayout {
         spacing: Theme.spSm

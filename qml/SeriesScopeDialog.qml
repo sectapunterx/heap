@@ -19,6 +19,7 @@ Dialog {
     id: root
     objectName: "series-scope"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -67,12 +68,7 @@ Dialog {
     }
 
     header: DialogHeader { text: root.title }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: Text {
         text: I18n.t("repeat.scope.body")

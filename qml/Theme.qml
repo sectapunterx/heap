@@ -299,6 +299,29 @@ QtObject {
     readonly property int radiusXl: 12  // dialogs, large panels
     readonly property int radiusPill: 999
 
+    // ── Elevation (APP-182) ──────────────────────────────────────────
+    // Three levels, each with its own edge, shadow and radius, so how far
+    // something floats says what it is:
+    //  - surface: what lies on the page (cards, columns, settings cards) —
+    //    no shadow, Theme.radius, see surfaceCard below;
+    //  - popup: menus, drop-downs, suggestion lists, tooltips, floating
+    //    panels — PopupSurface.qml, radius 10, a field-strength outline
+    //    (3:1 on every surface, VISP-8) and a soft drop shadow;
+    //  - modal: dialogs and editors — ModalSurface.qml, radius 12, a deeper
+    //    shadow, always over ModalScrim.qml.
+    readonly property int   popupRadius: radiusLg
+    readonly property color popupFill: panel2
+    readonly property color popupBorder: fieldBorder
+    readonly property color popupShadow: withAlpha(scrim, dark ? 0.6 : 0.18)
+    readonly property int   popupShadowOffset: 2
+    readonly property int   popupShadowDepth: 6
+    readonly property int   modalRadius: radiusXl
+    readonly property color modalFill: panel
+    readonly property color modalBorder: borderStrong
+    readonly property color modalShadow: withAlpha(scrim, dark ? 0.7 : 0.28)
+    readonly property int   modalShadowOffset: 6
+    readonly property int   modalShadowDepth: 16
+
     // ── Type scale (px) ──────────────────────────────────────────────
     // A modular scale (APP-181): 13px body, each step 1.125 times the one
     // below, times the interface scale. The ad-hoc 20 and 28 jumped a step

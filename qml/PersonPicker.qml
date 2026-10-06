@@ -20,7 +20,7 @@ Popup {
     width: 460
     anchors.centerIn: Overlay.overlay
 
-    Overlay.modal: Rectangle { color: Theme.scrim }
+    Overlay.modal: ModalScrim {}
 
     // Emitted with a PersonEditor draft — Main hands it straight to the editor.
     signal draftRequested(var draft)
@@ -119,12 +119,7 @@ Popup {
     // A shorter query can leave `current` past the end of the list.
     onMatchesChanged: if (current >= rowCount) current = Math.max(0, rowCount - 1)
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: ColumnLayout {
         spacing: 0

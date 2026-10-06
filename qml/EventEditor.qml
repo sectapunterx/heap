@@ -17,9 +17,7 @@ Popup {
     anchors.centerIn: Overlay.overlay
 
     // Dimmed backdrop so the underlying app stays visible behind the popup.
-    Overlay.modal: Rectangle {
-        color: Theme.scrim
-    }
+    Overlay.modal: ModalScrim {}
     // A press beside the editor (APP-126); see PopupStack.js.
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._requestClose()
 
@@ -454,12 +452,7 @@ Popup {
         onActivated: attSuggest.isOpen ? attSuggest.dismiss() : root._requestClose()
     }
 
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     // "This event, this and following, or all events?" — asked whenever an
     // occurrence of a series is saved or deleted, because every wrong answer
@@ -600,10 +593,7 @@ Popup {
                         dismiss();
                     }
 
-                    background: Rectangle {
-                        radius: Theme.radiusMd; color: Theme.panel2
-                        border.color: Theme.borderStrong; border.width: 1
-                    }
+                    background: PopupSurface {}
                     contentItem: ListView {
                         clip: true
                         interactive: false

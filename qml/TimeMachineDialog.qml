@@ -22,6 +22,7 @@ Dialog {
     id: root
     objectName: "time-machine"
     modal: true
+    Overlay.modal: ModalScrim {}
     focus: true
     anchors.centerIn: Overlay.overlay
     parent: Overlay.overlay
@@ -144,12 +145,7 @@ Dialog {
     }
 
     header: DialogHeader { text: I18n.t("tm.title") }
-    background: Rectangle {
-        radius: Theme.radiusXl
-        color: Theme.panel
-        border.color: Theme.borderStrong
-        border.width: 1
-    }
+    background: ModalSurface {}
 
     contentItem: RowLayout {
         spacing: Theme.inset
