@@ -9,6 +9,7 @@
 #include <QList>
 #include <QPair>
 #include <QString>
+#include <QNetworkProxyFactory>
 #include <QTcpServer>
 #include <QTcpSocket>
 
@@ -51,6 +52,11 @@ class FakeHttpServer {
   };
 
   FakeHttpServer() {
+    // Requests go to loopback: never ask the OS for a proxy. On the macOS
+    // runners that lookup (CFNetwork) intermittently crashed the first request
+    // of a suite (heap_jira_tests, heap_int_audit_tests: SegFault in ~0.05 s).
+    // An application proxy a test sets explicitly is still honoured.
+    QNetworkProxyFactory::setUseSystemConfiguration(false);
     m_server.listen(QHostAddress::LocalHost, 0);
     QObject::connect(&m_server, &QTcpServer::newConnection, &m_server, [this]() {
       while(m_server.hasPendingConnections()) {
