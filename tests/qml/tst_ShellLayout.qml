@@ -140,9 +140,9 @@ TestCase {
         AppController.currentView = "timeline";
         tryVerify(function () { return tc.win.activeViewItem() !== null; });
         const v = tc.win.activeViewItem();
-        tryVerify(function () { return find(v, function (it) { return it.objectName === "timeline-empty-title" && it.visible; }) !== null; });
-        const t = find(v, function (it) { return it.objectName === "timeline-empty-title"; });
-        compare(t.text, I18n.t("timeline.empty.title"), "with a search, the filters are the reason");
+        tryVerify(function () { return find(v, function (it) { return it.objectName === "timeline-empty" && it.visible; }) !== null; });
+        const t = find(v, function (it) { return it.objectName === "timeline-empty"; });
+        compare(t.title, I18n.t("timeline.empty.title"), "with a search, the filters are the reason");
         compare(v._filtering, true);
         tc.win.searchText = "";
         compare(v._filtering, false);

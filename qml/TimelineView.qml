@@ -484,23 +484,15 @@ Item {
                 anchors.left: parent.left; anchors.right: parent.right
                 anchors.top: parent.top; anchors.topMargin: Theme.sp2xl
                 height: 200
-                Column {
+                // "No tasks match the filters" only when something is
+                // filtering; an empty timeline is not a filter's fault.
+                EmptyState {
+                    objectName: "timeline-empty"
                     anchors.centerIn: parent
-                    spacing: Theme.spSm
-                    Text { anchors.horizontalCenter: parent.horizontalCenter; text: "✓"; color: Theme.stDone; font.pixelSize: Theme.fs2xl }
-                    // "No tasks match the filters" only when something is
-                    // filtering; an empty timeline is not a filter's fault.
-                    Text {
-                        objectName: "timeline-empty-title"
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t(root._filtering ? "timeline.empty.title" : "timeline.empty.none.title")
-                        color: Theme.text; font.pixelSize: Theme.fsMd
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: root._filtering ? I18n.t("timeline.empty.hint") : I18n.t("timeline.empty.none.hint").arg(AppController.shortcutFor("task.new"))
-                        color: Theme.textDim; font.pixelSize: Theme.fsMd
-                    }
+                    width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
+                    icon: root._filtering ? "" : "heap-02-timeline"
+                    title: I18n.t(root._filtering ? "timeline.empty.title" : "timeline.empty.none.title")
+                    line: root._filtering ? I18n.t("timeline.empty.hint") : I18n.t("timeline.empty.none.hint").arg(AppController.shortcutFor("task.new"))
                 }
             }
         }

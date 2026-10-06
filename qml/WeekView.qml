@@ -1342,15 +1342,17 @@ Item {
     }
 
     // Empty-week hint — shown only when the week has no tasks and no events, so
-    // the grid does not read as blank. Non-interactive.
-    Text {
+    // the grid does not read as blank. Non-interactive: a click goes through
+    // to the slot under it, which is what the hint says to do.
+    EmptyState {
+        objectName: "week-empty"
         anchors.centerIn: parent
-        width: parent.width - 64
+        width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
         visible: root.weekEmpty
-        horizontalAlignment: Text.AlignHCenter
-        wrapMode: Text.WordWrap
-        text: I18n.t("week.noEvents")
-        color: Theme.textDim
-        font.pixelSize: Theme.fsMd
+        readonly property bool searching: root.searchText.trim().length > 0
+        icon: searching ? "" : "heap-03-week"
+        title: I18n.t(searching ? "view.empty.noMatch.title" : "week.empty.title")
+        line: searching ? I18n.t("view.empty.noMatch.hint")
+                        : I18n.t("week.empty.hint").arg(AppController.shortcutFor("task.new"))
     }
 }

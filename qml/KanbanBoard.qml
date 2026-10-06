@@ -1759,30 +1759,18 @@ Item {
         border.width: 1
         visible: root._boardTotal === 0
     }
-    Column {
+    EmptyState {
         id: boardEmptyCol
+        objectName: "board-empty-state"
         anchors.centerIn: parent
         width: Math.min(parent.width - 96, 360)
-        spacing: Theme.spMd
         visible: root._boardTotal === 0
-        Text {
-            anchors.horizontalCenter: parent.horizontalCenter
-            text: root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
-            color: Theme.text
-            font.pixelSize: Theme.fsLg
-            font.weight: Theme.fwTitle
-        }
-        Text {
-            width: parent.width
-            horizontalAlignment: Text.AlignHCenter
-            wrapMode: Text.WordWrap
-            // The keys as bound now, not as they shipped (design audit DES-15).
-            text: root._allRows > 0
-                  ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
-                  : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsMd
-        }
+        icon: root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
+        title: root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
+        // The keys as bound now, not as they shipped (design audit DES-15).
+        line: root._allRows > 0
+              ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
+              : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
     }
     // ── Column delete: confirm when it is not empty ───────────────────
     // Deleting a column re-homes every card in it. That is undoable, but a
