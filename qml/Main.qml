@@ -11,7 +11,9 @@ import "ThemePresets.js" as Presets
 
 ApplicationWindow {
     id: win
-    visible: true
+    // A login start (--minimized, APP-154) stays hidden in the tray; where
+    // there is no tray it starts minimized instead (Component.onCompleted).
+    visible: !(win._startHidden && win._minimizeToTray)
     width: 1440
     height: 900
     minimumWidth: 1100
@@ -26,6 +28,10 @@ ApplicationWindow {
     // SettingsView rewrites that blob wholesale but carries unknown top-level
     // keys across, so this survives a trip through the settings screen.
     property bool _geometryRestored: false
+    readonly property bool _startHidden: typeof START_MINIMIZED !== "undefined" && START_MINIMIZED === true
+    // A maximised window started hidden is maximised when first shown:
+    // setting the visibility earlier would show it.
+    property bool _maximizeOnShow: false
 
     // Builds the current view's loader on its first visit. Board, Notes and
     // Docs are never unloaded again.
@@ -122,7 +128,10 @@ ApplicationWindow {
         }
         win.width = w;
         win.height = h;
-        if (g.maximized === true) win.visibility = Window.Maximized;
+        if (g.maximized === true) {
+            if (win.visible) win.visibility = Window.Maximized;
+            else win._maximizeOnShow = true;
+        }
         win._geometryRestored = true;
     }
 
@@ -343,6 +352,7 @@ ApplicationWindow {
     Component.onCompleted: {
         _keepRetiredThemes();
         _restoreGeometry();
+        if (win._startHidden && !win._minimizeToTray) win.showMinimized();
         _restoreFilters();
         _syncSelectionFilter();
         win.seedStarterDocs();
@@ -654,6 +664,10 @@ ApplicationWindow {
     // tray, or merely unfocused). Shared by the two global-capture hotkeys and
     // the tray "Show" affordance.
     function _summon() {
+        if (win._maximizeOnShow) {
+            win._maximizeOnShow = false;
+            win.showMaximized();
+        }
         if (win.visibility === Window.Minimized || win.visibility === Window.Hidden || !win.visible)
             win.show();
         win.raise();
@@ -1318,6 +1332,14 @@ ApplicationWindow {
             win._summon();
             // Edits to the task already open are not swapped out unasked (TASKS-18).
             taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
+        }
+        // "Open" on a meeting / standup reminder (APP-155): that day in the
+        // week view, and the meeting itself when it is a stored event.
+        function onOpenEventRequested(eventId, date) {
+            win._summon();
+            AppController.selectedDate = date;
+            AppController.currentView = "week";
+            if (eventId) eventEditor.showForId(eventId);
         }
     }
 
