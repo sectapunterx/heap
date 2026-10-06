@@ -19,6 +19,7 @@
 #include <QSignalSpy>
 #include <QStandardPaths>
 #include <QTemporaryDir>
+#include <QUuid>
 
 #include <gtest/gtest.h>
 
@@ -224,6 +225,136 @@ TEST(ReminderButtons, OpenOnATaskOpensIt) {
   ASSERT_TRUE(c.handleNotificationUri(heap::notify::notifyUri(QStringLiteral("deadline:OPN-1"), QString())));
   ASSERT_EQ(spy.count(), 1);
   EXPECT_EQ(spy.at(0).at(0).toString(), QStringLiteral("OPN-1"));
+}
+
+// ── A reminder acts on its own task, in its own profile (PRES-1, PRES-2) ──
+
+namespace {
+
+// Two profiles, A active, each holding a task with the same id, and one task
+// only one of them has. Removed again at the end: the test profile persists.
+struct TwoProfiles {
+  AppController& c;
+  QString a;
+  QString b;
+
+  explicit TwoProfiles(AppController& controller) : c(controller) {
+    const QString tag = QUuid::createUuid().toString(QUuid::Id128).left(8);
+    b = c.createProfile(QStringLiteral("pres b ") + tag, QString());
+    c.tasks()->upsert(task(QStringLiteral("DUP-777"), QStringLiteral("B's task")));
+    c.tasks()->upsert(task(QStringLiteral("ONLYB-1"), QStringLiteral("only in B")));
+    a = c.createProfile(QStringLiteral("pres a ") + tag, QString());
+    c.tasks()->upsert(task(QStringLiteral("DUP-777"), QStringLiteral("A's task")));
+    c.tasks()->upsert(task(QStringLiteral("ONLYA-1"), QStringLiteral("only in A")));
+  }
+
+  ~TwoProfiles() {
+    c.setActiveProfileId(a);
+    c.deleteProfile(b);
+    c.deleteProfile(a);
+  }
+
+  TwoProfiles(const TwoProfiles&) = delete;
+  TwoProfiles& operator=(const TwoProfiles&) = delete;
+
+  static Task task(const QString& id, const QString& title) {
+    Task t;
+    t.id = id;
+    t.title = title;
+    t.status = QStringLiteral("todo");
+    return t;
+  }
+
+  // The task as profile `profileId` holds it; the active profile is put back.
+  QVariantMap in(const QString& profileId, const QString& id) const {
+    const QString keep = c.activeProfileId();
+    c.setActiveProfileId(profileId);
+    const QVariantMap t = c.taskById(id);
+    c.setActiveProfileId(keep);
+    return t;
+  }
+
+  static QString uri(const QString& ref, const QString& action) {
+    return heap::notify::notifyUri(heap::notify::routingId(QStringLiteral("deadline"), ref), action);
+  }
+};
+
+QString status(const QVariantMap& task) {
+  return task.value(QStringLiteral("status")).toString();
+}
+
+}  // namespace
+
+// The id of a task reminder names the profile; Done closes that profile's
+// task, not the active profile's namesake (PRES-2).
+TEST(ReminderProfiles, DoneClosesTheTaskOfTheProfileItNames) {
+  dropSavedSnoozes();
+  AppController c;
+  const TwoProfiles p(c);
+  ASSERT_EQ(c.activeProfileId(), p.a);
+  ASSERT_TRUE(c.handleNotificationUri(TwoProfiles::uri(heap::notify::taskRef(p.b, QStringLiteral("DUP-777")), QStringLiteral("done"))));
+  EXPECT_EQ(status(p.in(p.b, QStringLiteral("DUP-777"))), QStringLiteral("done"));
+  EXPECT_EQ(status(p.in(p.a, QStringLiteral("DUP-777"))), QStringLiteral("todo"))
+      << "the active profile's task of the same id was closed instead";
+}
+
+// Done does not move the window to the task's profile: that switch pulled the
+// workspace out from under an open editor (PRES-1). Also for a toast from
+// before profiles were named.
+TEST(ReminderProfiles, DoneLeavesTheActiveProfileAlone) {
+  dropSavedSnoozes();
+  AppController c;
+  const TwoProfiles p(c);
+  ASSERT_TRUE(c.handleNotificationUri(TwoProfiles::uri(QStringLiteral("ONLYB-1"), QStringLiteral("done"))));
+  EXPECT_EQ(c.activeProfileId(), p.a);
+  EXPECT_EQ(status(p.in(p.b, QStringLiteral("ONLYB-1"))), QStringLiteral("done"));
+  EXPECT_EQ(status(p.in(p.a, QStringLiteral("ONLYA-1"))), QStringLiteral("todo"));
+}
+
+// Open asks the window to go to the task's profile; the window does that once
+// the editor is settled, so the controller itself does not switch (PRES-1).
+TEST(ReminderProfiles, OpenNamesTheProfileAndDoesNotSwitchItself) {
+  dropSavedSnoozes();
+  AppController c;
+  const TwoProfiles p(c);
+  QSignalSpy opened(&c, &AppController::openTaskRequested);
+  ASSERT_TRUE(c.handleNotificationUri(TwoProfiles::uri(heap::notify::taskRef(p.b, QStringLiteral("DUP-777")), QStringLiteral("open"))));
+  ASSERT_EQ(opened.count(), 1);
+  EXPECT_EQ(opened.at(0).at(0).toString(), QStringLiteral("DUP-777"));
+  EXPECT_EQ(opened.at(0).at(1).toString(), p.b);
+  EXPECT_EQ(c.activeProfileId(), p.a) << "switched under whatever editor is open";
+}
+
+// A snooze brings back the words of the task it was about.
+TEST(ReminderProfiles, SnoozeTakesTheTitleFromTheProfileItNames) {
+  dropSavedSnoozes();
+  AppController c;
+  const TwoProfiles p(c);
+  c.snoozeReminderAt(heap::notify::routingId(QStringLiteral("deadline"), heap::notify::taskRef(p.b, QStringLiteral("DUP-777"))), 10, kNoon);
+  ASSERT_EQ(c.pendingSnoozes().size(), 1);
+  EXPECT_EQ(c.pendingSnoozes().at(0).body, QStringLiteral("B's task"));
+  dropSavedSnoozes();
+}
+
+// An editor's save lands in the profile it was opened in or nowhere: with
+// another profile active it became a same-id copy there (PRES-1).
+TEST(ReminderProfiles, AnEditFromAnotherProfileIsNotSavedThere) {
+  dropSavedSnoozes();
+  AppController c;
+  const TwoProfiles p(c);
+  QVariantMap draft = c.taskById(QStringLiteral("ONLYA-1"));
+  draft.insert(QStringLiteral("_originalId"), QStringLiteral("ONLYA-1"));
+  draft.insert(QStringLiteral("_profileId"), p.a);
+  draft.insert(QStringLiteral("title"), QStringLiteral("edited"));
+  c.setActiveProfileId(p.b);
+  EXPECT_FALSE(c.saveTask(draft));
+  EXPECT_TRUE(c.taskById(QStringLiteral("ONLYA-1")).isEmpty()) << "copied into the other profile";
+  EXPECT_EQ(p.in(p.a, QStringLiteral("ONLYA-1")).value(QStringLiteral("title")).toString(), QStringLiteral("only in A"));
+
+  // In its own profile the same draft saves.
+  c.setActiveProfileId(p.a);
+  EXPECT_TRUE(c.saveTask(draft));
+  EXPECT_EQ(c.taskById(QStringLiteral("ONLYA-1")).value(QStringLiteral("title")).toString(), QStringLiteral("edited"));
 }
 
 int main(int argc, char** argv) {

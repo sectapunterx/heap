@@ -152,6 +152,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
   static const QHash<QString, I18nEntry> table = {
       {"task.created", {"Created: %1", "Создано: %1"}},
       {"task.idTaken", {"%1 already exists — pick another id", "%1 уже занят — выберите другой id"}},
+      {"task.otherProfile", {"%1 was not saved: it belongs to another profile", "%1 не сохранена: она из другого профиля"}},
       {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
       {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
       {"task.moved", {"%1 → %2", "%1 → %2"}},
@@ -2547,7 +2548,7 @@ void AppController::createTaskFromTemplate(const QString& name) {
   focusBlockOnStatusChange(t.id, QString(), t.status);
   scheduleSave();
   emit toast(tr_("task.fromTemplate").arg(it->name));
-  emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
+  emit openTaskRequested(t.id, m_activeProfileId);  // open the editor so the user fills in the blank
 }
 
 bool AppController::saveTask(const QVariantMap& draft) {
@@ -2555,6 +2556,15 @@ bool AppController::saveTask(const QVariantMap& draft) {
   const bool isNew = draft.value("_isNew").toBool();
   const QString originalId = draft.value("_originalId").toString().trimmed();
   t.id = draft.value("id").toString().trimmed();
+  // An editor says which profile it was opened in. Written into any other one,
+  // an edit became a same-id copy there and the task itself kept the old text
+  // (PRES-1); the editor goes back to its profile before saving, so this is
+  // the line nothing is allowed past.
+  const QString draftProfile = draft.value("_profileId").toString();
+  if(!draftProfile.isEmpty() && draftProfile != m_activeProfileId) {
+    emit toast(tr_("task.otherProfile").arg(t.id.isEmpty() ? originalId : t.id), QStringLiteral("warning"));
+    return false;
+  }
   // A cleared id field on an existing task means "leave the id alone", not
   // "rename it to nothing" — a task with an empty id cannot be opened, moved or
   // deleted again.
@@ -12281,13 +12291,19 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // more when it has passed.
   if(notif.value("deadlineReminders", true).toBool() && !quiet) {
     const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
-    QVector<Task> candidates = m_tasks.items();
+    // Each with the profile it is in: the reminder's buttons act there (PRES-2).
+    QVector<std::pair<QString, Task>> candidates;
+    for(const Task& t : m_tasks.items()) {
+      candidates.append({m_activeProfileId, t});
+    }
     for(const Profile& p : m_profiles) {
       if(p.id != m_activeProfileId) {
-        candidates += p.tasks;
+        for(const Task& t : p.tasks) {
+          candidates.append({p.id, t});
+        }
       }
     }
-    for(const Task& t : candidates) {
+    for(const auto& [profileId, t] : candidates) {
       if(t.archived) {
         continue;
       }
@@ -12309,7 +12325,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTaskAt(t.id,
+      notifyTaskAt(heap::notify::taskRef(profileId, t.id),
                    call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
                    QStringLiteral("%1 (%2)").arg(t.title, t.priority),
                    QStringLiteral("deadline"),
@@ -12641,7 +12657,7 @@ void AppController::dismissGitBanner() {
 
 void AppController::openFocusedTask() {
   if(!m_focusedTaskId.isEmpty()) {
-    emit openTaskRequested(m_focusedTaskId);
+    emit openTaskRequested(m_focusedTaskId, m_activeProfileId);
   }
 }
 
@@ -12818,7 +12834,8 @@ void AppController::notifyCapture(const QString& taskId, const QString& title, c
     return;
   }
   heap::notify::Notification n;
-  n.id = heap::notify::routingId(QStringLiteral("capture"), taskId.isEmpty() ? QStringLiteral("-") : taskId);
+  n.id = heap::notify::routingId(QStringLiteral("capture"),
+                                 taskId.isEmpty() ? QStringLiteral("-") : heap::notify::taskRef(m_activeProfileId, taskId));
   n.title = title;
   n.body = body;
   n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
@@ -12871,30 +12888,22 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
     openReminder(notificationId);
     return;
   }
-  // Reminders cover every profile; acting on one opens the workspace it is in.
-  activateProfileOfTask(taskId);
-  if(actionId == QLatin1String(heap::notify::kDone)) {
-    if(m_tasks.indexOfId(taskId) >= 0) {
-      moveTask(taskId, QStringLiteral("done"));
-    }
-  }
-}
-
-void AppController::activateProfileOfTask(const QString& taskId) {
-  if(taskId.isEmpty() || m_tasks.indexOfId(taskId) >= 0) {
+  if(actionId != QLatin1String(heap::notify::kDone)) {
     return;
   }
-  for(const Profile& p : m_profiles) {
-    if(p.id == m_activeProfileId) {
-      continue;
-    }
-    for(const Task& t : p.tasks) {
-      if(t.id == taskId) {
-        setActiveProfileId(p.id);
-        return;
-      }
-    }
+  // Done is done to the task the reminder was about, in its own profile, and
+  // the window stays where it is: switching to that profile for good pulled
+  // the workspace out from under an open editor, whose Save then wrote the
+  // edited task into the other profile (PRES-1). The switch there and back is
+  // what `heap done` does for a task of another profile.
+  const ReminderTask target = reminderTask(taskId);
+  if(target.profileId.isEmpty()) {
+    return;
   }
+  const QString current = m_activeProfileId;
+  setActiveProfileId(target.profileId);
+  moveTask(target.task.id, QStringLiteral("done"));
+  setActiveProfileId(current);
 }
 
 void AppController::onNotifierActivated(const QString& notificationId) {

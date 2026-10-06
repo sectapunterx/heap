@@ -165,7 +165,7 @@ Response open(AppController& c, const Request& req) {
   const QString id = p.tasks.at(ref.task).id;
   // Opening a task of another profile is going there.
   const ProfileScope scope(c, p.id, /*restore=*/false);
-  emit c.openTaskRequested(id);
+  emit c.openTaskRequested(id, p.id);
   Response r;
   r.out = req.json ? QString::fromUtf8(QJsonDocument(QJsonObject{{QStringLiteral("id"), id}}).toJson(QJsonDocument::Compact)) + QChar('\n')
                    : QStringLiteral("Opened %1\n").arg(id);

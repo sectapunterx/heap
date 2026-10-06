@@ -28,6 +28,29 @@ inline std::pair<QString, QString> parseRoutingId(const QString& id) {
   return {id.left(sep), id.mid(sep + 1)};
 }
 
+// The task half of a task reminder's id names the profile too (PRES-2): a task
+// id is unique only inside its profile, and "deadline:TASK-3" alone made Done
+// act on whichever profile had a TASK-3 first, the active one.
+//   taskRef("work", "TASK-3")    → "work/TASK-3"  (so "deadline:work/TASK-3")
+//   parseTaskRef("work/TASK-3")  → {"work", "TASK-3"}
+//   parseTaskRef("TASK-3")       → {"", "TASK-3"}  (a toast or snooze from before)
+// A slash cannot be in a new task id; a profile id that has one is left out
+// rather than misread.
+inline QString taskRef(const QString& profileId, const QString& taskId) {
+  if(profileId.isEmpty() || profileId.contains(QChar('/'))) {
+    return taskId;
+  }
+  return profileId + QChar('/') + taskId;
+}
+
+inline std::pair<QString, QString> parseTaskRef(const QString& ref) {
+  const int sep = ref.indexOf(QChar('/'));
+  if(sep <= 0 || sep == ref.size() - 1) {
+    return {{}, ref};
+  }
+  return {ref.left(sep), ref.mid(sep + 1)};
+}
+
 struct NotificationAction {
   QString id;     // stable identifier — "snooze1h" / "done" / "open"
   QString label;  // user-visible button text
