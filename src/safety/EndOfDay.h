@@ -8,6 +8,7 @@
 #include <QTime>
 #include <QVector>
 
+#include <algorithm>
 #include <initializer_list>
 
 // The end-of-day safety net (APP-157): at a time the user picks, once a day,
@@ -103,6 +104,64 @@ inline EndOfDayFindings endOfDayFindings(const EndOfDayFacts& facts, const QDate
     }
   }
   return f;
+}
+
+// The day's summary (APP-190): what was closed today, what is still open
+// with a date of today or earlier — it carries over to tomorrow as it is —
+// and the timers still running. It only reads: nothing is moved, rescheduled
+// or stopped.
+struct DayTask {
+  QString id;
+  bool done = false;
+  bool archived = false;
+  QDateTime closedAt;  // when it went to done (statusChangedAt)
+  QDateTime scheduledAt;
+  QDateTime dueAt;
+  QDateTime timerStartedAt;
+};
+
+struct DaySummary {
+  QStringList closedTaskIds;
+  QStringList carryOverTaskIds;
+  QStringList timerTaskIds;
+
+  bool empty() const {
+    return closedTaskIds.isEmpty() && carryOverTaskIds.isEmpty() && timerTaskIds.isEmpty();
+  }
+
+  bool operator==(const DaySummary&) const = default;
+};
+
+// Each list in the order the tasks were given, except timers: the longest
+// running first.
+inline DaySummary daySummary(const QVector<DayTask>& tasks, const QDateTime& now) {
+  DaySummary s;
+  const QDate today = now.date();
+  const auto onOrBefore = [&today](const QDateTime& t) {
+    return t.isValid() && t.date() <= today;
+  };
+  QVector<const DayTask*> timers;
+  for(const DayTask& t : tasks) {
+    if(t.timerStartedAt.isValid()) {
+      timers << &t;
+    }
+    if(t.done) {
+      if(t.closedAt.isValid() && t.closedAt.date() == today) {
+        s.closedTaskIds << t.id;
+      }
+      continue;
+    }
+    if(!t.archived && (onOrBefore(t.scheduledAt) || onOrBefore(t.dueAt))) {
+      s.carryOverTaskIds << t.id;
+    }
+  }
+  std::stable_sort(timers.begin(), timers.end(), [](const DayTask* a, const DayTask* b) {
+    return a->timerStartedAt < b->timerStartedAt;
+  });
+  for(const DayTask* t : timers) {
+    s.timerTaskIds << t->id;
+  }
+  return s;
 }
 
 // Whether the check is due at `now`: the set time has come today and it has

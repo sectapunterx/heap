@@ -2343,9 +2343,18 @@ class AppController : public QObject {
   // and the blocked cards. Text for the user to edit; nothing is sent.
   Q_INVOKABLE QString standupDraft();
   QString standupDraftFor(const QDate& today);
+  // The day's summary (APP-190) for the end-of-day dialog: { date,
+  // closed: [{id, title}], carryOver: [{id, title}], timers: [{id, title,
+  // since}] }. Closed today and still-open work dated today or earlier come
+  // from the active workspace; running timers from every workspace. It only
+  // reads. The *At form takes `now`, for tests.
+  Q_INVOKABLE QVariantMap endOfDaySummary() const;
+  Q_INVOKABLE QVariantMap endOfDaySummaryAt(const QDateTime& now) const;
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;
+  // The tasks the day's summary reads (APP-190).
+  QVector<heap::safety::DayTask> dayTasks() const;
 
  signals:
   // A safety-net notice for the in-app toast. `taskIds` are the tasks its

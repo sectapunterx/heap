@@ -17,6 +17,9 @@ const QHash<QString, Entry>& table() {
       // ── APP-157: end of day ──
       {QStringLiteral("safety.eod.title"), {"Before you wrap up", "Перед концом дня"}},
       {QStringLiteral("safety.eod.timer"), {"Timer still running", "Таймер всё ещё идёт"}},
+      // ── APP-190: the day's summary ──
+      {QStringLiteral("safety.eod.closed"), {"%1 closed today", "Закрыто сегодня: %1"}},
+      {QStringLiteral("safety.eod.carryOver"), {"%1 carry over to tomorrow", "Переходит на завтра: %1"}},
       {QStringLiteral("safety.eod.timers"), {"%1 timers still running", "Таймеров всё ещё идёт: %1"}},
       {QStringLiteral("safety.eod.files"), {"%1 %2 in %3", "%1 %2 в %3"}},
       {QStringLiteral("safety.eod.filesNoRepo"), {"%1 %2", "%1 %2"}},
@@ -102,6 +105,17 @@ QString endOfDaySummary(const EndOfDayFindings& f, int staleDays, bool ru) {
                  .arg(plural(n, text(QStringLiteral("safety.eod.taskForms"), ru)))
                  .arg(staleDays)
                  .arg(plural(staleDays, text(QStringLiteral("safety.dayForms"), ru)));
+  }
+  return parts.join(QStringLiteral(" · "));
+}
+
+QString daySummaryLine(const DaySummary& s, bool ru) {
+  QStringList parts;
+  if(!s.closedTaskIds.isEmpty()) {
+    parts << text(QStringLiteral("safety.eod.closed"), ru).arg(s.closedTaskIds.size());
+  }
+  if(!s.carryOverTaskIds.isEmpty()) {
+    parts << text(QStringLiteral("safety.eod.carryOver"), ru).arg(s.carryOverTaskIds.size());
   }
   return parts.join(QStringLiteral(" · "));
 }

@@ -80,6 +80,8 @@ Popup {
         if (AppController.safety && AppController.safety.standupDraft)
             out.push({ kind: "command", commandId: "standup.draft", label: I18n.t("palette.cmd.standupDraft"), sub: "" });
         out.push({ kind: "command", commandId: "timeMachine.open", label: I18n.t("palette.cmd.timeMachine"), sub: "" });
+        // The day's summary (APP-190): read-only, so always on offer.
+        out.push({ kind: "command", commandId: "endOfDay.open", label: I18n.t("palette.cmd.endOfDay"), sub: "" });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
         const views = AppController.savedViews;
