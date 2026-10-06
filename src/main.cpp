@@ -56,6 +56,7 @@ struct CliOptions {
   QString dataDir;
   bool dataDirSet = false;
   bool smoke = false;
+  bool capture = false;
   // Started by the login entry (APP-154): come up hidden in the tray.
   bool minimized = false;
   // A notification click (APP-155): the shell starts heap with the toast's
@@ -110,6 +111,12 @@ CliOptions parseCommandLine(const QStringList& args) {
                      "check a packaged build."));
   parser.addOption(smokeOption);
 
+  // Bindable from the desktop's own keyboard settings where heap cannot grab
+  // a global key itself (Wayland without the shortcuts portal, APP-171).
+  const QCommandLineOption captureOption(QStringLiteral("capture"),
+                                         QStringLiteral("Open quick capture - in the heap already running for this data "
+                                                        "directory, or in a new one."));
+  parser.addOption(captureOption);
   const QCommandLineOption minimizedOption(
       QStringLiteral("minimized"),
       QStringLiteral("Start hidden in the tray (minimized where there is no tray), and leave an already "
@@ -160,6 +167,7 @@ CliOptions parseCommandLine(const QStringList& args) {
   opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  opts.capture = parser.isSet(captureOption);
   opts.minimized = parser.isSet(minimizedOption);
   opts.openTask = parser.value(openTaskOption).trimmed();
   opts.perfLog = parser.isSet(perfLogOption);
@@ -288,7 +296,7 @@ int main(int argc, char* argv[]) {
   if(!cli.smoke) {
     // A login start that finds heap already running leaves its window alone;
     // a notification click is the running heap's to act on.
-    QByteArray hello = cli.minimized ? QByteArray("ping") : QByteArray("activate");
+    QByteArray hello = cli.capture ? QByteArrayLiteral("capture") : cli.minimized ? QByteArray("ping") : QByteArray("activate");
     if(clicked.ok) {
       hello = "notify " + cli.notifyUri.toUtf8();
     } else if(!cli.minimized && !cli.initialView.isEmpty()) {
@@ -389,6 +397,14 @@ int main(int argc, char* argv[]) {
     if(message.startsWith("notify ")) {
       if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
         controller->handleNotificationUri(QString::fromUtf8(message.mid(7)));
+      }
+      return;
+    }
+    // `heap --capture` from a desktop shortcut: the capture popup, the way
+    // the global hotkey opens it, without raising the whole window.
+    if(message.startsWith("capture")) {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        emit controller->quickCaptureRequested();
       }
       return;
     }

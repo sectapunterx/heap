@@ -139,6 +139,12 @@ target_include_directories(heap_rank_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_link_libraries(heap_rank_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
 add_test(NAME heap_rank_tests COMMAND heap_rank_tests)
 
+# "There is a key for that" counter (APP-166) — header-only.
+add_executable(heap_shortcut_hints_tests test_shortcut_hints.cpp)
+target_include_directories(heap_shortcut_hints_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_shortcut_hints_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_shortcut_hints_tests COMMAND heap_shortcut_hints_tests)
+
 # Calendar hour clamping and multi-day spans — header-only, so only the test
 # TUs compile.
 add_executable(heap_cal_tests test_event_clamp.cpp test_event_span.cpp)
@@ -393,6 +399,8 @@ set(HEAP_PLATFORM_SOURCES
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.h
 )
 if (WIN32)
     list(APPEND HEAP_PLATFORM_SOURCES
@@ -426,6 +434,17 @@ target_link_libraries(heap_platform_tests PRIVATE
 )
 if (WIN32)
     target_link_libraries(heap_platform_tests PRIVATE user32)
+endif ()
+# GlobalHotkey::create() reaches the X11 / portal backend on Linux (APP-171).
+if (UNIX AND NOT APPLE)
+    target_sources(heap_platform_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_linux.cpp)
+    find_package(Qt6 REQUIRED COMPONENTS DBus)
+    target_link_libraries(heap_platform_tests PRIVATE Qt6::DBus)
+    if (HEAP_XCB_FOUND)
+        target_link_libraries(heap_platform_tests PRIVATE PkgConfig::HEAP_XCB)
+        target_compile_definitions(heap_platform_tests PRIVATE HEAP_HAVE_XCB=1)
+    endif ()
 endif ()
 
 add_test(NAME heap_platform_tests COMMAND heap_platform_tests)

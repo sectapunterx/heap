@@ -84,6 +84,8 @@ TestCase {
             for (let i = 0; i < kids.length; i++) { const r = find(kids[i]); if (r) return r; }
             return null;
         };
+        // The list builds the rows on screen only; scroll the one asked for in.
+        panel.revealRow(id);
         return find(panel.contentItem);
     }
 
@@ -149,5 +151,30 @@ TestCase {
         verify(AppController.shortcutFor("view.archive") !== "Ctrl+Shift+Y");
         verify(!panel.resetAllArmed);
         panel.close();
+    }
+
+    // APP-166: the cheat-sheet is complete — every catalogue entry exactly
+    // once — and grouped, each group's heading on its first row.
+    function test_rows_cover_the_catalogue_grouped() {
+        const panel = make();
+        const rows = panel.rows;
+        compare(rows.length, AppController.shortcuts.length);
+        const seen = {};
+        let lastGroup = -1;
+        for (let i = 0; i < rows.length; i++) {
+            verify(!seen[rows[i].id], rows[i].id + " listed twice");
+            seen[rows[i].id] = true;
+            const g = panel.groupOrder.indexOf(rows[i].group);
+            verify(g >= 0, "unknown group " + rows[i].group);
+            verify(g >= lastGroup, "groups come in order");
+            compare(rows[i].first, g !== lastGroup, "heading on the first row of " + rows[i].group);
+            lastGroup = g;
+            verify(I18n.t("hotkeys.group." + rows[i].group) !== "hotkeys.group." + rows[i].group);
+        }
+        compare(panel.groupOf("view.week"), "views");
+        compare(panel.groupOf("board.cursorDown"), "board");
+        compare(panel.groupOf("cal.today"), "calendar");
+        compare(panel.groupOf("notes.new"), "notes");
+        compare(panel.groupOf("palette.open"), "general");
     }
 }

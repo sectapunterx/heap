@@ -89,6 +89,8 @@ Rectangle {
 
         ListView {
             id: peopleView
+            // Named for a screen reader: it is a Tab stop (APP-168).
+            Accessible.name: I18n.t("people.title")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
