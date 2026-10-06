@@ -119,6 +119,24 @@ TestCase {
         panel.close();
     }
 
+    // The zoom keys (APP-168) sit with the views and record like any other:
+    // = and - are named by key code, since Ctrl+= types no text on Windows.
+    function test_zoom_keys_record() {
+        const panel = openPanel();
+        compare(panel.groupOf("zoom.in"), "views");
+        compare(panel.groupOf("zoom.reset"), "views");
+        tryVerify(function () { return field(panel, "zoom.in") !== null; }, 2000, "no chip for zoom.in");
+        const f = field(panel, "zoom.in");
+        f.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(panel.capturingId, "zoom.in");
+        keyClick(Qt.Key_Equal, Qt.ControlModifier | Qt.AltModifier);
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("zoom.in"), "Ctrl+Alt+=");
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
     // UX-4: Enter on a focused chip starts recording — it used to commit an
     // empty sequence and unbind the action — and a stray letter while not
     // recording binds nothing.

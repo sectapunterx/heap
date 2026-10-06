@@ -1302,6 +1302,10 @@ class AppController : public QObject {
   // The third time for an action, shortcutHintRequested fires — once, never
   // again for that action. Off with Settings → Shortcuts "Suggest shortcuts".
   Q_INVOKABLE void noteMouseAction(const QString& shortcutId);
+  // Interface scale one step up (> 0), down (< 0) or back to 100 % (0) along
+  // `steps` (Theme.scaleSteps), written to settings.appearance.uiScale like
+  // Settings → Appearance → Scale does. Returns the new scale.
+  Q_INVOKABLE double stepUiScale(int direction, const QVariantList& steps);
   // How the capture hotkey reaches heap from other apps (APP-171): "native"
   // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
   // says to bind `heap --capture` in the desktop's own keyboard settings.

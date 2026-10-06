@@ -13,6 +13,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationTypes.h"
+#include "views/UiScale.h"
 
 #include <QApplication>
 #include <QDate>
@@ -318,6 +319,96 @@ TEST_F(AppControllerTest, BuiltinKeysAreConflicts) {
   ASSERT_EQ(toasts.count(), 1);
   EXPECT_EQ(toasts.last().at(1).toString(), QStringLiteral("warning"));
   EXPECT_TRUE(app_->setShortcut(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")));
+}
+
+// Interface scale from the keyboard (APP-168): Ctrl+= / Ctrl+- / Ctrl+0 are
+// catalog actions, and the fixed aliases next to them count as taken.
+TEST_F(AppControllerTest, ZoomShortcutsAreInTheCatalog) {
+  EXPECT_EQ(app_->defaultShortcutFor(QStringLiteral("zoom.in")), QString("Ctrl+="));
+  EXPECT_EQ(app_->defaultShortcutFor(QStringLiteral("zoom.out")), QString("Ctrl+-"));
+  EXPECT_EQ(app_->defaultShortcutFor(QStringLiteral("zoom.reset")), QString("Ctrl+0"));
+  for(const char* id : {"zoom.in", "zoom.out", "zoom.reset"}) {
+    EXPECT_FALSE(app_->shortcutLabel(QString::fromLatin1(id)).isEmpty()) << id;
+    EXPECT_FALSE(app_->shortcutDescription(QString::fromLatin1(id)).isEmpty()) << id;
+  }
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+=")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl++")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Shift+=")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Num++")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Num+-")), QString("zoom.out"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("cal.today"), QStringLiteral("Ctrl+Num+0")), QString("zoom.reset"));
+  // An alias is the action's own key, and cannot be handed to another one.
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("zoom.in"), QStringLiteral("Ctrl++")), QString());
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl++")));
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("zoom.in"), QStringLiteral("Ctrl+Alt+=")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("zoom.in")), QString("Ctrl+Alt+="));
+  app_->resetShortcut(QStringLiteral("zoom.in"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("zoom.in")), QString("Ctrl+="));
+}
+
+TEST(UiScale, StepsThroughTheScale) {
+  const QList<double> steps{0.9, 1, 1.1, 1.25, 1.5};
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0, 1, steps), 1.1);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.1, 1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.25, -1, steps), 1.1);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0, -1, steps), 0.9);
+  // The ends stay put.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.5, 1, steps), 1.5);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(0.9, -1, steps), 0.9);
+  // Between two steps: the next one that way.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.2, 1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.2, -1, steps), 1.1);
+  // A value read back from JSON a hair off a step is that step.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.1000000001, 1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0999999999, -1, steps), 1.0);
+  // Reset, unsorted steps, nothing to step through.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.5, 0, steps), 1.0);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0, 1, {1.5, 0.9, 1.1, 1}), 1.1);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.25, 1, {}), 1.0);
+}
+
+TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
+  const QVariantList steps{0.9, 1, 1.1, 1.25, 1.5};
+  const auto stored = [this] {
+    return QJsonDocument::fromJson(app_->appSettingsJson().toUtf8())
+        .object()
+        .value(QStringLiteral("appearance"))
+        .toObject()
+        .value(QStringLiteral("uiScale"));
+  };
+  QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
+  QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  appearance.insert(QStringLiteral("theme"), QStringLiteral("keep-me"));
+  appearance.remove(QStringLiteral("uiScale"));
+  settings.insert(QStringLiteral("appearance"), appearance);
+  app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.1);
+  EXPECT_DOUBLE_EQ(stored().toDouble(), 1.1);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.5);
+  QSignalSpy changed(app_.get(), &AppController::appSettingsJsonChanged);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.5);
+  EXPECT_EQ(changed.count(), 0);  // at the top nothing changes
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(0, steps), 1.0);
+  EXPECT_DOUBLE_EQ(stored().toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(-1, steps), 0.9);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(-1, steps), 0.9);
+  // The rest of the appearance group is left alone.
+  EXPECT_EQ(QJsonDocument::fromJson(app_->appSettingsJson().toUtf8())
+                .object()
+                .value(QStringLiteral("appearance"))
+                .toObject()
+                .value(QStringLiteral("theme"))
+                .toString(),
+            QStringLiteral("keep-me"));
+
+  // A stored value Theme.scale would not use (out of range) reads as 100 %.
+  appearance.insert(QStringLiteral("uiScale"), 3.0);
+  settings.insert(QStringLiteral("appearance"), appearance);
+  app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.1);
+  app_->stepUiScale(0, steps);
 }
 
 TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {
