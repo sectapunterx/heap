@@ -617,7 +617,9 @@ Rectangle {
         PillButton {
             objectName: "topbar-new-task"
             text: I18n.t("topbar.newTask")
-            primary: true
+            // A quiet button (APP-198): the accent fill was the brightest
+            // spot on every screen. A filled button is only the one that
+            // confirms a dialog.
             shortcutId: "task.new"
             onClicked: root.newTaskRequested()
         }

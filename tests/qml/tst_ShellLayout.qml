@@ -82,6 +82,14 @@ TestCase {
         verify(r2 <= tc.win.width, "panel toggle ends at " + r2);
     }
 
+    // APP-198: "+ Task" is a quiet button; a filled one is only a dialog's
+    // confirm, so the brightest spot on the screen is not a shortcut.
+    function test_new_task_is_a_quiet_button() {
+        const btn = byName("topbar-new-task");
+        compare(btn.primary, false);
+        verify(!Qt.colorEqual(btn.background.color, Theme.accent), "no accent fill");
+    }
+
     // UX-17: the Tweaks panel fits a 720px window on its first open.
     function test_tweaks_fits_a_small_window() {
         tc.win.width = 1100;

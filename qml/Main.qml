@@ -1008,7 +1008,8 @@ ApplicationWindow {
                             objectName: "demo-start-fresh"
                             property bool armed: false
                             text: armed ? I18n.t("demo.banner.startFresh.confirm") : I18n.t("demo.banner.startFresh")
-                            primary: !armed
+                            // Quiet until armed (APP-198): a banner is no
+                            // dialog, and its offer was the brightest spot.
                             danger: armed
                             onClicked: {
                                 if (!armed) {

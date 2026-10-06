@@ -396,10 +396,15 @@ Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     radius: Theme.radius
-                    color: _inMonth ? Theme.panel : Theme.panel2
+                    // Today: its number in the accent and a hairline of it,
+                    // not a 2px white frame, the brightest thing on the month
+                    // (APP-198). The selected day is told by a soft accent
+                    // fill, so today-and-selected is not a frame either.
+                    color: _sel ? Qt.tint(_inMonth ? Theme.panel : Theme.panel2, Theme.accentSoft)
+                         : _inMonth ? Theme.panel : Theme.panel2
                     opacity: _inMonth ? 1.0 : 0.55
-                    border.color: _sel ? Theme.accent : (_today ? Theme.accentStrong : Theme.border)
-                    border.width: _sel || _today ? 2 : 1
+                    border.color: _sel || _today ? Theme.accent : Theme.border
+                    border.width: 1
                     Accessible.role: Accessible.Cell
                     Accessible.name: root.dayLabel(modelData.date)
                     Accessible.selected: _sel
