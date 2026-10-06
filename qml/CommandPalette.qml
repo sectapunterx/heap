@@ -50,8 +50,8 @@ Popup {
             || id.indexOf("cal.") === 0 || id.indexOf("selection.") === 0;
     }
 
-    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "calendar",
-                                              "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
+    readonly property var _settingsSections: ["profile", "appearance", "language", "notifications", "safety",
+                                              "calendar", "tasks", "shortcuts", "integrations", "git", "data", "help", "about"]
 
     // Commands: every app-wide action in the shortcut catalog (so the palette
     // and the keys never disagree on what exists or what it is called), each
@@ -62,12 +62,24 @@ Popup {
         for (let i = 0; i < list.length; i++) {
             const c = list[i];
             if (_isContextual(c.id)) continue;
+            // Focus mode (APP-160) is offered once Settings → Safety net
+            // turns it on, and says which way it goes.
+            if (c.id === "focus.immersion") {
+                if (!(AppController.safety && AppController.safety.immersion)) continue;
+                out.push({ kind: "command", commandId: c.id, sub: c.sequence || "", body: c.description || "",
+                           label: AppController.immersion ? I18n.t("palette.cmd.immersionOff") : c.label });
+                continue;
+            }
             out.push({ kind: "command", commandId: c.id, label: c.label, sub: c.sequence || "",
                        body: c.description || "" });
         }
         out.push({ kind: "command", commandId: "event.new", label: I18n.t("palette.cmd.newEvent"), sub: "" });
         out.push({ kind: "command", commandId: "welcome.replay", label: I18n.t("palette.cmd.replayTour"), sub: "" });
         out.push({ kind: "command", commandId: "recap.open", label: I18n.t("palette.cmd.weeklyRecap"), sub: "" });
+        // The standup draft (APP-170), once Settings → Safety net turns it on.
+        if (AppController.safety && AppController.safety.standupDraft)
+            out.push({ kind: "command", commandId: "standup.draft", label: I18n.t("palette.cmd.standupDraft"), sub: "" });
+        out.push({ kind: "command", commandId: "timeMachine.open", label: I18n.t("palette.cmd.timeMachine"), sub: "" });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
         const views = AppController.savedViews;
@@ -78,6 +90,9 @@ Popup {
                        body: views[v].query });
         }
         out.push({ kind: "command", commandId: "savedview.save", label: I18n.t("palette.cmd.saveView"), sub: "" });
+        // Integrations health (APP-164) lives at the top of that section.
+        out.push({ kind: "setting", commandId: "settings:integrations", label: I18n.t("palette.cmd.integrationsHealth"),
+                   sub: I18n.t("health.hint") });
         for (let j = 0; j < _settingsSections.length; j++) {
             const id = _settingsSections[j];
             out.push({ kind: "setting", commandId: "settings:" + id,
@@ -457,13 +472,16 @@ Popup {
                 }
             }
 
-            // Empty state
-            Text {
+            // Empty state: nothing typed yet, or nothing found — with a line
+            // on what the palette does search (APP-167).
+            EmptyState {
+                objectName: "palette-empty"
                 visible: root._matches.length === 0
                 anchors.centerIn: parent
-                text: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
-                color: Theme.textDim
-                font.pixelSize: Theme.fsMd
+                width: Math.min(parent.width - 2 * Theme.sp3xl, 380)
+                compact: searchField.text.length === 0
+                title: searchField.text.length === 0 ? I18n.t("palette.empty.start") : I18n.t("palette.empty.miss")
+                line: searchField.text.length === 0 ? "" : I18n.t("palette.empty.missHint")
             }
         }
 

@@ -15,6 +15,9 @@ namespace heap::platform {
 // Backends:
 //   Windows → RegisterHotKey + a QAbstractNativeEventFilter that watches for
 //             WM_HOTKEY on the GUI thread.
+//   macOS   → Carbon RegisterEventHotKey.
+//   Linux   → xcb_grab_key on X11, the GlobalShortcuts desktop portal on
+//             Wayland (APP-171).
 //   Others  → create() returns a no-op instance whose registerHotkey() always
 //             returns false, so callers transparently fall back to the in-app
 //             QML Shortcut (which only works while the window is focused).
@@ -33,6 +36,13 @@ class GlobalHotkey : public QObject {
   virtual void unregister(int id) = 0;
   // Release every registered combination.
   virtual void unregisterAll() = 0;
+
+  // Which backend this is: "native" (Windows, macOS), "x11", "portal", or
+  // "none" when there is no way to listen system-wide — Settings then says
+  // how to bind `heap --capture` in the desktop's own keyboard settings.
+  virtual QString backend() const {
+    return QStringLiteral("native");
+  }
 
  signals:
   // Emitted with the `id` the fired combination was registered under.

@@ -139,6 +139,12 @@ target_include_directories(heap_rank_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/.
 target_link_libraries(heap_rank_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
 add_test(NAME heap_rank_tests COMMAND heap_rank_tests)
 
+# "There is a key for that" counter (APP-166) — header-only.
+add_executable(heap_shortcut_hints_tests test_shortcut_hints.cpp)
+target_include_directories(heap_shortcut_hints_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_shortcut_hints_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_shortcut_hints_tests COMMAND heap_shortcut_hints_tests)
+
 # Calendar hour clamping and multi-day spans — header-only, so only the test
 # TUs compile.
 add_executable(heap_cal_tests test_event_clamp.cpp test_event_span.cpp)
@@ -184,10 +190,31 @@ target_include_directories(heap_recur_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/
 target_link_libraries(heap_recur_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
 add_test(NAME heap_recur_tests COMMAND heap_recur_tests)
 
+# Sync state of a mirrored card and the status rule of a pull (APP-163). Header-only.
+add_executable(heap_sync_state_tests test_sync_state.cpp)
+target_include_directories(heap_sync_state_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sync_state_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_sync_state_tests COMMAND heap_sync_state_tests)
+
+# Integrations health: failure wording and relative times (APP-164).
+add_executable(heap_sync_health_tests test_sync_health.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/integrations/SyncHealth.cpp)
+target_include_directories(heap_sync_health_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_sync_health_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_sync_health_tests COMMAND heap_sync_health_tests)
+
+# Task history: diff, cap, coalescing, JSON round-trip (APP-165). Gui and Qml
+# because TaskHistory.h reaches Models.h.
+add_executable(heap_task_history_tests test_task_history.cpp ${CMAKE_CURRENT_SOURCE_DIR}/../src/history/TaskHistory.cpp)
+target_include_directories(heap_task_history_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_task_history_tests PRIVATE Qt6::Core Qt6::Gui Qt6::Qml GTest::gtest GTest::gtest_main)
+add_test(NAME heap_task_history_tests COMMAND heap_task_history_tests)
+
 add_executable(heap_git_tests
     test_branch_task_matcher.cpp
     test_git_watcher_parse.cpp
+    test_whose_move.cpp
     ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/BranchTaskMatcher.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/git/PrFacts.cpp
 )
 
 target_include_directories(heap_git_tests PRIVATE
@@ -221,12 +248,26 @@ target_link_libraries(heap_text_tests PRIVATE
 
 add_test(NAME heap_text_tests COMMAND heap_text_tests)
 
+# The safety net's pure rules (APP-157…): end of day, waiting on someone, the
+# error signature, focus mode, the standup draft.
+add_executable(heap_safety_tests
+    test_safety_net.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/safety/SafetyText.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/safety/ErrorSignature.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/safety/Standup.cpp
+)
+target_include_directories(heap_safety_tests PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/../src)
+target_link_libraries(heap_safety_tests PRIVATE Qt6::Core GTest::gtest GTest::gtest_main)
+add_test(NAME heap_safety_tests COMMAND heap_safety_tests)
+
 # ─── Notification module tests ───
 # Cover the routing-id helpers, the data structs, and the abstract
 # NotificationCenter signal contract via an in-test mock backend. No real
 # OS backend is linked, so the tests run headless on any CI runner.
 add_executable(heap_notify_tests
     test_notification.cpp
+    test_notify_payload.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotifyPayload.cpp
     # AUTOMOC needs the header explicitly listed so the moc artifacts for
     # NotificationCenter (Q_OBJECT in the abstract base) are emitted into
     # this exe. Otherwise the linker complains about the missing vtable.
@@ -288,8 +329,14 @@ endfunction()
 # mode so it runs headless and never touches the user's real state file.
 heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
 
+# ─── Safety net (APP-157…) as AppController runs it ───
+heap_add_appcontroller_test(heap_safety_net_tests test_safety_appcontroller.cpp)
+
 # ─── Meeting reminders ───
 heap_add_appcontroller_test(heap_meeting_reminders_tests test_meeting_reminders.cpp)
+
+# ─── Staying around: start at login (APP-154), reminder actions (APP-155) ───
+heap_add_appcontroller_test(heap_presence_tests test_presence.cpp)
 
 # ─── Editing and deleting a repeating event ───
 heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
@@ -301,6 +348,8 @@ heap_add_appcontroller_test(heap_doc_pages_tests test_doc_pages.cpp)
 # Storage safety (locked/damaged/newer state.json, failed saves, restore),
 # profile-scoped undo and task ids, automation across profiles, worktrees.
 heap_add_appcontroller_test(heap_storage_safety_tests test_storage_safety.cpp)
+# Time machine (APP-162): history/ retention, snapshot format, restores.
+heap_add_appcontroller_test(heap_time_machine_tests test_time_machine.cpp)
 # ── audit-plat: end ──
 # ── audit-tasks: begin ──
 # Regressions from the 2026-09-30 audit, tasks area (undo, ranks, recurrence,
@@ -338,6 +387,9 @@ heap_add_appcontroller_test(heap_filter_bench_tests test_filter_bench.cpp)
 set_tests_properties(heap_filter_bench_tests PROPERTIES RUN_SERIAL TRUE)
 # ── audit-perf: end ──
 
+# ─── Task history through the controller: recording, sync marks, save (APP-165) ───
+heap_add_appcontroller_test(heap_task_history_app_tests test_task_history_app.cpp)
+
 # ─── Regressions from the 0.5.0 end-to-end audit ───
 heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
 
@@ -349,6 +401,11 @@ heap_add_appcontroller_test(heap_regression_tests test_regressions.cpp)
 # suite so it runs headless and never touches the real state.json.
 heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 
+# ─── Completion sound (APP-167) ───
+# The done-transition decision, the bundled WAV (qrc via heap_core) and which
+# moves ask for the sound; playback is a no-op in QStandardPaths test mode.
+heap_add_appcontroller_test(heap_completion_sound_tests test_completion_sound.cpp)
+
 # ─── Platform (global hotkey) tests ───
 # Cover heap::platform::decodeSequence — the portable QKeySequence → (key,mods)
 # parser the Windows RegisterHotKey backend feeds off. On Windows the native
@@ -357,18 +414,27 @@ heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 set(HEAP_PLATFORM_SOURCES
         test_global_hotkey.cpp
         test_accessibility.cpp
+        test_autostart.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Accessibility.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.h
 )
 if (WIN32)
     list(APPEND HEAP_PLATFORM_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart_win.cpp
     )
-endif ()
-if (APPLE)
+elseif (APPLE)
     list(APPEND HEAP_PLATFORM_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart_mac.cpp
+    )
+else ()
+    list(APPEND HEAP_PLATFORM_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart_linux.cpp
     )
 endif ()
 
@@ -388,6 +454,17 @@ target_link_libraries(heap_platform_tests PRIVATE
 )
 if (WIN32)
     target_link_libraries(heap_platform_tests PRIVATE user32)
+endif ()
+# GlobalHotkey::create() reaches the X11 / portal backend on Linux (APP-171).
+if (UNIX AND NOT APPLE)
+    target_sources(heap_platform_tests PRIVATE
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_linux.cpp)
+    find_package(Qt6 REQUIRED COMPONENTS DBus)
+    target_link_libraries(heap_platform_tests PRIVATE Qt6::DBus)
+    if (HEAP_XCB_FOUND)
+        target_link_libraries(heap_platform_tests PRIVATE PkgConfig::HEAP_XCB)
+        target_compile_definitions(heap_platform_tests PRIVATE HEAP_HAVE_XCB=1)
+    endif ()
 endif ()
 
 add_test(NAME heap_platform_tests COMMAND heap_platform_tests)
@@ -815,6 +892,12 @@ add_test(NAME heap_mattermost_tests COMMAND heap_mattermost_tests)
 # QPA + test-mode paths); links GlobalHotkey since AppController references it.
 heap_add_appcontroller_test(heap_appcontroller_tests test_appcontroller.cpp)
 
+# ─── Command line (APP-173) ───
+# Verb detection, argument parsing, the request/response wire format, `heap now`
+# resolution, list/today, and add/done through a headless AppController under a
+# plain QCoreApplication, read back from the saved state.json.
+heap_add_appcontroller_test(heap_cli_tests test_cli.cpp)
+
 # ─── Lossless serialization round-trip + field-count guard (HEAP-131) ───
 # Pure: exercises heap::state (the live save path) and heap::sync::SyncSerializer
 # side by side. No AppController, no QApplication.
@@ -864,6 +947,18 @@ target_compile_definitions(heap_state_fixture_tests PRIVATE
 # budget for reasons that have nothing to do with the code (seen under ASan).
 # RUN_SERIAL runs each one alone; everything else stays parallel.
 set_tests_properties(heap_md_bench_tests heap_save_bench_tests PROPERTIES RUN_SERIAL TRUE)
+
+# ─── Performance budget gate (APP-161) ───
+# Median timings of the heavy-profile operations against tests/PerfBudgets.h;
+# prints a measured-vs-budget table every run. The gate is armed only in an
+# optimised build without sanitizers or coverage — elsewhere the numbers are
+# meaningless as a pass/fail signal, so the table is printed and nothing fails.
+heap_add_appcontroller_test(heap_perf_tests test_perf_budget.cpp)
+if (NOT HEAP_ENABLE_SANITIZERS AND NOT HEAP_ENABLE_COVERAGE
+        AND CMAKE_BUILD_TYPE MATCHES "^(Release|RelWithDebInfo|MinSizeRel)$")
+    target_compile_definitions(heap_perf_tests PRIVATE HEAP_PERF_GATE=1)
+endif ()
+set_tests_properties(heap_perf_tests PROPERTIES RUN_SERIAL TRUE TIMEOUT 120)
 
 # ─── CI's qmllint, locally ───
 # CI judges QML with Qt 6.9.1's qmllint (the qmllint ratchet). A newer local

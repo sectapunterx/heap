@@ -24,6 +24,8 @@ MenuItem {
     property string shortcutId: ""
     readonly property string hint: item.shortcutId.length > 0
         ? (AppController.shortcuts, AppController.shortcutFor(item.shortcutId)) : ""
+    // A third pick of the row with the mouse suggests its key once (APP-166).
+    onTriggered: if (item.hint.length > 0 && item.hovered) AppController.noteMouseAction(item.shortcutId)
     readonly property bool _check: item.marked || (item.checkable && item.checked)
     readonly property bool _arrow: item.subMenu !== null || item.opensList
     // The width the row wants for its whole label, hint and arrow. AppMenu

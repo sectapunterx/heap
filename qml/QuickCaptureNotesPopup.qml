@@ -68,6 +68,9 @@ Popup {
     }
 
     property string _target: ""
+    // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
+    // first frame that shows the popup. Logs only; a no-op otherwise.
+    onAboutToShow: AppController.perfMarkShown("capture-notes", contentItem)
     onOpened: {
         root._target = AppController.quickNoteTarget();
         editor.text = "";

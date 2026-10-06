@@ -241,29 +241,39 @@ QtObject {
         return info;
     }
 
+    // ── Interface scale (APP-168) ────────────────────────────────────
+    // Settings → Appearance → Scale: 90–150 %. Type, spacing and row
+    // heights follow it live; hairlines, radii and icon cells stay put.
+    readonly property var scaleSteps: [0.9, 1, 1.1, 1.25, 1.5]
+    readonly property real scale: {
+        const v = Number(_appearance.uiScale);
+        return isFinite(v) && v >= 0.9 && v <= 1.5 ? v : 1;
+    }
+    function px(n) { return Math.round(n * scale); }
+
     // ── Geometry — pulled from Brand spacing/radius scale ────────────
-    readonly property int rowH:   compact ? 32 : 44
-    readonly property int pad:    compact ? Brand.spacing2 : Brand.spacing4
-    readonly property int gap:    compact ? Brand.spacing2 : Brand.spacing3
+    readonly property int rowH:   px(compact ? 32 : 44)
+    readonly property int pad:    px(compact ? Brand.spacing2 : Brand.spacing4)
+    readonly property int gap:    px(compact ? Brand.spacing2 : Brand.spacing3)
     // Soft contrast rounds a little further; hairline borders read as
     // harsh on tight corners.
     readonly property int radius: softContrast ? Brand.radiusMd + 2 : Brand.radiusMd
-    readonly property int hourH:  compact ? 44 : 56
+    readonly property int hourH:  px(compact ? 44 : 56)
 
     // ── Spacing scale ────────────────────────────────────────────────
     // Every `spacing`, margin and padding in the app picks one of these, so
     // Tweaks → Density moves the whole layout, not just the hour height.
     // Compact steps each one down a notch. 0 and 1px hairlines stay literal.
-    readonly property int sp2xs: compact ? 1 : 2
-    readonly property int spXs:  compact ? 3 : 4
-    readonly property int spSm:  compact ? 4 : 6
-    readonly property int spMd:  compact ? 6 : 8
-    readonly property int spLg:  compact ? 8 : 10
-    readonly property int spXl:  compact ? 10 : 12
-    readonly property int sp2xl: compact ? 12 : 16
+    readonly property int sp2xs: px(compact ? 1 : 2)
+    readonly property int spXs:  px(compact ? 3 : 4)
+    readonly property int spSm:  px(compact ? 4 : 6)
+    readonly property int spMd:  px(compact ? 6 : 8)
+    readonly property int spLg:  px(compact ? 8 : 10)
+    readonly property int spXl:  px(compact ? 10 : 12)
+    readonly property int sp2xl: px(compact ? 12 : 16)
     // The inset dialogs, popups and settings cards keep from their edge.
-    readonly property int inset: compact ? 14 : 18
-    readonly property int sp3xl: compact ? 18 : 24
+    readonly property int inset: px(compact ? 14 : 18)
+    readonly property int sp3xl: px(compact ? 18 : 24)
 
     // ── Radius scale ─────────────────────────────────────────────────
     readonly property int radiusXs: 2   // bars, hairline tracks
@@ -274,19 +284,29 @@ QtObject {
     readonly property int radiusPill: 999
 
     // ── Type scale (px) ──────────────────────────────────────────────
-    // Six steps. The floor is 11px: nothing the user has to read is smaller.
-    readonly property int fsXs:  11  // chips, badges, uppercase section labels
-    readonly property int fsSm:  12  // meta, descriptions, secondary text
-    readonly property int fsMd:  13  // body, card titles, inputs
-    readonly property int fsLg:  15  // dialog and section titles
-    readonly property int fsXl:  20  // page headings
-    readonly property int fs2xl: 28  // display (welcome, empty hero)
+    // Six steps, times the interface scale. The floor is 11px at any scale:
+    // nothing the user has to read is smaller.
+    readonly property int fsXs:  Math.max(11, px(11))  // chips, badges, uppercase section labels
+    readonly property int fsSm:  px(12)  // meta, descriptions, secondary text
+    readonly property int fsMd:  px(13)  // body, card titles, inputs
+    readonly property int fsLg:  px(15)  // dialog and section titles
+    readonly property int fsXl:  px(20)  // page headings
+    readonly property int fs2xl: px(28)  // display (welcome, empty hero)
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
     readonly property bool highContrast:  contrast === "high"
     readonly property int animMs: reducedMotion ? 0 : 160
     function scaledMs(n) { return reducedMotion ? 0 : n; }
+    // 1, or 0 with "Reduce motion" on: a factor for anything that moves by a
+    // distance (a springy drop, a check mark that grows), not only by time.
+    readonly property real motion: reducedMotion ? 0 : 1
+    // Duration steps (APP-167). Feedback that answers a click is fast, a
+    // change of place is base, a panel that slides is slow; all 0 with
+    // "Reduce motion" on.
+    readonly property int durFast: reducedMotion ? 0 : 120
+    readonly property int durBase: reducedMotion ? 0 : 160
+    readonly property int durSlow: reducedMotion ? 0 : 240
 
     // ── Typography — Brand defaults, overrideable via settings ───────
     readonly property string fontUi: _appearance.fontUI

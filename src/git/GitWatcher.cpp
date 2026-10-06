@@ -1,4 +1,7 @@
 #include "GitWatcher.h"
+#include "PrFacts.h"
+
+#include "safety/EndOfDay.h"
 
 #include <QDir>
 #include <QFile>
@@ -11,51 +14,6 @@
 #include <QtGlobal>
 
 namespace heap::git {
-
-namespace {
-
-// Collapse GitHub's statusCheckRollup array into one CI verdict. Handles both
-// CheckRun nodes (status QUEUED/IN_PROGRESS/COMPLETED + conclusion) and legacy
-// StatusContext nodes (state SUCCESS/PENDING/FAILURE/ERROR). Any failure wins,
-// then any pending, else passing; empty when there are no checks.
-QString rollupChecks(const QJsonArray& arr) {
-  if(arr.isEmpty()) {
-    return QString();
-  }
-  bool anyFail = false;
-  bool anyPending = false;
-  bool anySuccess = false;
-  for(const auto& v : arr) {
-    const auto o = v.toObject();
-    const QString status = o.value(QStringLiteral("status")).toString().toUpper();
-    const QString state = o.value(QStringLiteral("state")).toString().toUpper();
-    QString concl = o.value(QStringLiteral("conclusion")).toString().toUpper();
-    if(!state.isEmpty()) {
-      concl = state;  // StatusContext carries no conclusion
-    }
-    if(status == QLatin1String("QUEUED") || status == QLatin1String("IN_PROGRESS") || status == QLatin1String("PENDING") ||
-       state == QLatin1String("PENDING") || state == QLatin1String("EXPECTED")) {
-      anyPending = true;
-    } else if(concl == QLatin1String("FAILURE") || concl == QLatin1String("ERROR") || concl == QLatin1String("CANCELLED") ||
-              concl == QLatin1String("TIMED_OUT") || concl == QLatin1String("ACTION_REQUIRED")) {
-      anyFail = true;
-    } else if(concl == QLatin1String("SUCCESS") || concl == QLatin1String("NEUTRAL") || concl == QLatin1String("SKIPPED")) {
-      anySuccess = true;
-    }
-  }
-  if(anyFail) {
-    return QStringLiteral("failing");
-  }
-  if(anyPending) {
-    return QStringLiteral("pending");
-  }
-  if(anySuccess) {
-    return QStringLiteral("passing");
-  }
-  return QString();
-}
-
-}  // namespace
 
 GitWatcher::GitWatcher(QObject* parent) : QObject(parent), m_fsw(new QFileSystemWatcher(this)), m_debounce(new QTimer(this)) {
   m_debounce->setSingleShot(true);
@@ -351,7 +309,9 @@ void GitWatcher::fetchCommitsAsync(const QString& repoPath) {
                    QStringLiteral("--all"),
                    QStringLiteral("--no-color"),
                    QStringLiteral("--max-count=200"),
-                   QStringLiteral("--pretty=format:%H%x1f%s")});
+                   // The commit time rides along as a third field, for the
+                   // safety net's "no sign of life" (APP-157).
+                   QStringLiteral("--pretty=format:%H%x1f%s%x1f%cI")});
   connect(p, &QProcess::finished, this, [this, p, key, repoPath](int code, QProcess::ExitStatus) {
     m_inflight.remove(key);
     if(code == 0) {
@@ -430,6 +390,61 @@ bool GitWatcher::createBranch(const QString& repoPath, const QString& branchName
   return true;
 }
 
+void GitWatcher::runGitAsync(const QString& repoPath, const QStringList& args, const std::function<void(int, const QByteArray&)>& done) {
+  auto* p = new QProcess(this);
+  p->setWorkingDirectory(repoPath);
+  p->setProgram(m_gitPath);
+  p->setArguments(args);
+  auto* timeout = new QTimer(p);
+  timeout->setSingleShot(true);
+  timeout->setInterval(15000);
+  connect(timeout, &QTimer::timeout, p, [p]() {
+    if(p->state() != QProcess::NotRunning) {
+      p->kill();
+    }
+  });
+  connect(p, &QProcess::finished, this, [p, done](int code, QProcess::ExitStatus status) {
+    p->deleteLater();
+    done(status == QProcess::NormalExit ? code : -1, p->readAllStandardOutput());
+  });
+  connect(p, &QProcess::errorOccurred, this, [p, done](QProcess::ProcessError error) {
+    // A process that never started emits no finished(); every other error
+    // is followed by one.
+    if(error == QProcess::FailedToStart) {
+      p->deleteLater();
+      done(-1, {});
+    }
+  });
+  p->start();
+  timeout->start();
+}
+
+void GitWatcher::checkWorkingTree(const QString& repoPath) {
+  if(m_gitPath.isEmpty() || repoPath.isEmpty()) {
+    emit workingTreeChecked(repoPath, 0, 0, false);
+    return;
+  }
+  const QString key = QStringLiteral("wt:") + repoPath;
+  if(m_workingTreeChecks.contains(key)) {
+    return;  // the answer to the first request answers this one too
+  }
+  m_workingTreeChecks.insert(key);
+  runGitAsync(repoPath, {QStringLiteral("status"), QStringLiteral("--porcelain")}, [this, repoPath, key](int code, const QByteArray& out) {
+    if(code != 0) {
+      m_workingTreeChecks.remove(key);
+      emit workingTreeChecked(repoPath, 0, 0, false);
+      return;
+    }
+    const int changed = heap::safety::countPorcelainEntries(out);
+    runGitAsync(repoPath,
+                {QStringLiteral("stash"), QStringLiteral("list")},
+                [this, repoPath, key, changed](int stashCode, const QByteArray& stashOut) {
+                  m_workingTreeChecks.remove(key);
+                  emit workingTreeChecked(repoPath, changed, stashCode == 0 ? heap::safety::countStashEntries(stashOut) : 0, true);
+                });
+  });
+}
+
 void GitWatcher::fetchAheadBehindAsync(const QString& repoPath, const QString& branch) {
   if(branch.isEmpty() || branch == QStringLiteral("(detached HEAD)")) {
     return;
@@ -485,42 +500,33 @@ void GitWatcher::fetchPrAsync(const QString& repoPath, const QString& branch, bo
 
   QString tool = m_ghPath;
   QStringList args;
+  bool glab = false;
   if(!tool.isEmpty()) {
-    args = {QStringLiteral("pr"),
-            QStringLiteral("view"),
-            QStringLiteral("--json"),
-            QStringLiteral("state,number,url,title,isDraft,statusCheckRollup"),
-            branch};
+    args = {QStringLiteral("pr"), QStringLiteral("view"), QStringLiteral("--json"), ghPrJsonFields(), branch};
   } else if(!m_glabPath.isEmpty()) {
     tool = m_glabPath;
+    glab = true;
     args = {QStringLiteral("mr"), QStringLiteral("view"), QStringLiteral("--output"), QStringLiteral("json"), branch};
   } else {
     return;
   }
+  // Whose move it is needs to know who "me" is: asked once, the first time a
+  // PR is looked at, so a setup with no watched repo never runs the tool.
+  fetchLoginAsync(repoPath, glab ? m_glabPath : m_ghPath, glab);
 
   auto* p = new QProcess(this);
   m_inflight.insert(key, p);
   p->setWorkingDirectory(repoPath);
   p->setProgram(tool);
   p->setArguments(args);
-  connect(p, &QProcess::finished, this, [this, p, key, repoPath, branch, emitOneShot](int code, QProcess::ExitStatus) {
+  connect(p, &QProcess::finished, this, [this, p, key, repoPath, branch, emitOneShot, glab](int code, QProcess::ExitStatus) {
     m_inflight.remove(key);
     PrInfo info;
-    info.fetchedAt = QDateTime::currentDateTime();
     if(code == 0) {
-      const QByteArray raw = p->readAllStandardOutput();
-      QJsonParseError err{};
-      const auto doc = QJsonDocument::fromJson(raw, &err);
-      if(err.error == QJsonParseError::NoError && doc.isObject()) {
-        const auto o = doc.object();
-        info.state = o.value(QStringLiteral("state")).toString().toLower();
-        info.number = o.value(QStringLiteral("number")).toInt();
-        info.url = o.value(QStringLiteral("url")).toString();
-        info.title = o.value(QStringLiteral("title")).toString();
-        info.draft = o.value(QStringLiteral("isDraft")).toBool();
-        info.checks = rollupChecks(o.value(QStringLiteral("statusCheckRollup")).toArray());
-      }
+      info = parsePrJson(p->readAllStandardOutput(), glab);
     }
+    info.fetchedAt = QDateTime::currentDateTime();
+    applyMove(info);
     CacheEntry& ce = m_prCache[cacheKey(repoPath, branch)];
     ce.info = info;
     ce.age.start();
@@ -536,6 +542,51 @@ void GitWatcher::fetchPrAsync(const QString& repoPath, const QString& branch, bo
     p->deleteLater();
   });
   p->start();
+}
+
+void GitWatcher::applyMove(PrInfo& info) const {
+  const MoveVerdict v = whoseMove(info, m_myLogin);
+  info.move = moveName(v.move);
+  info.moveReason = v.reason;
+}
+
+void GitWatcher::fetchLoginAsync(const QString& workDir, const QString& tool, bool glab) {
+  if(m_loginAsked || tool.isEmpty()) {
+    return;
+  }
+  m_loginAsked = true;
+  auto* p = new QProcess(this);
+  p->setWorkingDirectory(workDir);
+  p->setProgram(tool);
+  p->setArguments(glab ? QStringList{QStringLiteral("api"), QStringLiteral("user")}
+                       : QStringList{QStringLiteral("api"), QStringLiteral("user"), QStringLiteral("--jq"), QStringLiteral(".login")});
+  connect(p, &QProcess::finished, this, [this, p, glab](int code, QProcess::ExitStatus) {
+    p->deleteLater();
+    if(code == 0) {
+      setMyLogin(parseLogin(p->readAllStandardOutput(), glab));
+    }
+  });
+  p->start();
+}
+
+void GitWatcher::setMyLogin(const QString& login) {
+  if(login == m_myLogin) {
+    return;
+  }
+  m_myLogin = login;
+  // PRs read before the answer came back said nothing about whose move it
+  // is: read them again against the login, without asking the tool again.
+  for(auto it = m_prCache.begin(); it != m_prCache.end(); ++it) {
+    applyMove(it->info);
+    emit prInfoUpdated(it.key().section(QChar('\n'), 0, 0), it.key().section(QChar('\n'), 1), it->info.toVariant());
+  }
+  for(auto it = m_state.begin(); it != m_state.end(); ++it) {
+    if(it->pr.state.isEmpty()) {
+      continue;
+    }
+    applyMove(it->pr);
+    emit repoStateUpdated(it.key(), it->toVariant());
+  }
 }
 
 void GitWatcher::requestPrFetch(const QString& repoPath, const QString& branch) {

@@ -18,7 +18,8 @@ import TodoCpp
 // - Tab reaches it, Return / Enter / Space run it, the focus ring is drawn
 //   around the parent's shape.
 // - `label` is its accessible name and, unless `tip` says otherwise, its
-//   tooltip; `shortcutId` adds the shortcut as bound now to the tooltip.
+//   tooltip; `shortcutId` adds the shortcut as bound now to the tooltip, and
+//   a third click on it suggests the key once (APP-166).
 // - The hit area grows to `minTarget` (24px, WCAG 2.5.8) around a smaller
 //   parent without moving anything.
 // - `enabled: false` takes it off the Tab path and ignores the pointer; the
@@ -70,8 +71,13 @@ Item {
         acceptedButtons: ca.acceptedButtons
         cursorShape: ca.cursorShape
         onClicked: (mouse) => {
-            if (mouse.button === Qt.RightButton) ca.contextRequested(mouse.x, mouse.y);
-            else ca.activated();
+            if (mouse.button === Qt.RightButton) {
+                ca.contextRequested(mouse.x, mouse.y);
+                return;
+            }
+            // Reached with the mouse although it has a key (APP-166).
+            if (ca.shortcutId.length > 0) AppController.noteMouseAction(ca.shortcutId);
+            ca.activated();
         }
     }
 

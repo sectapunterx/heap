@@ -1,13 +1,14 @@
-// Interactive welcome guide (stepped carousel) — QML behavior.
+// The first-run tour (APP-169) — QML behaviour.
 //
-// Drives the real WelcomePopup from the TodoCpp module against a live
-// AppController: step navigation, localized copy for every step, that finishing
-// marks the guide seen, and that per-step actions route through the decoupled
-// openAction / openHelp signals. Headless under offscreen QPA + Basic style.
+// The pure state machine (Tour.js), then the real WelcomePopup against a live
+// AppController: four steps, all localized; Enter with text on the capture
+// step saves a real task and stays, Enter on an empty line moves on, Esc
+// skips; finishing or skipping marks the tour seen; step actions pause it.
 import QtQuick
 import QtQuick.Controls
 import QtTest
 import TodoCpp
+import "../../qml/Tour.js" as Tour
 
 TestCase {
     id: tc
@@ -15,7 +16,7 @@ TestCase {
     when: windowShown
     visible: true
     width: 640
-    height: 520
+    height: 560
 
     Item { id: host; anchors.fill: parent }
 
@@ -25,13 +26,43 @@ TestCase {
         return o;
     }
 
-    // It is a multi-step carousel now, not the old single-panel popup.
-    function test_has_multiple_steps() {
-        const w = mk();
-        verify(w.steps.length >= 5, "guide should have several steps");
+    // ── Tour.js ──────────────────────────────────────────────────────
+    function test_machine_has_four_steps() {
+        compare(Tour.STEPS.length, 4);
+        compare(Tour.STEPS[0], "capture");
+        compare(Tour.STEPS[3], "bring");
     }
 
-    // Next advances, Back returns and is clamped, lastStep tracks the end.
+    function test_machine_enter_saves_then_moves_on() {
+        compare(Tour.onKey(0, "enter", "buy milk").action, "save");
+        compare(Tour.onKey(0, "enter", "buy milk").step, 0, "saving stays on the capture step");
+        compare(Tour.onKey(0, "enter", "   ").action, "next", "blank text is not a task");
+        compare(Tour.onKey(0, "enter", "").step, 1);
+        compare(Tour.onKey(1, "enter", "ignored off the capture step").action, "next");
+        compare(Tour.onKey(3, "enter", "").action, "finish");
+    }
+
+    function test_machine_esc_and_arrows() {
+        for (let s = 0; s < 4; s++) compare(Tour.onKey(s, "esc", "x").action, "skip");
+        compare(Tour.onKey(0, "left", "").action, "none");
+        compare(Tour.onKey(2, "left", "").step, 1);
+        compare(Tour.onKey(3, "right", "").action, "none");
+        compare(Tour.onKey(1, "right", "").step, 2);
+        compare(Tour.onKey(1, "tab", "").action, "none");
+    }
+
+    // ── WelcomePopup ─────────────────────────────────────────────────
+    function test_four_localized_steps() {
+        const w = mk();
+        compare(w.steps.length, Tour.STEPS.length);
+        for (let i = 0; i < w.steps.length; ++i) {
+            w.step = i;
+            compare(w.cur.id, Tour.STEPS[i]);
+            verify(I18n.t(w.cur.title) !== w.cur.title, "title translated at step " + i);
+            verify(I18n.t(w.cur.desc) !== w.cur.desc, "desc translated at step " + i);
+        }
+    }
+
     function test_step_navigation() {
         const w = mk();
         w.step = 0;
@@ -40,72 +71,95 @@ TestCase {
         compare(w.step, 1);
         w._back();
         compare(w.step, 0);
-        w._back();               // clamped at the first step
+        w._back();
         compare(w.step, 0);
         w.step = w.steps.length - 1;
-        verify(w.lastStep);      // Next now finishes instead of advancing
+        verify(w.lastStep);
     }
 
-    // Every step resolves a non-empty, actually-translated title + description.
-    function test_steps_localized() {
+    // The capture step saves exactly what was typed, as a real task.
+    function test_capture_step_saves_a_real_task() {
         const w = mk();
-        for (let i = 0; i < w.steps.length; ++i) {
-            w.step = i;
-            verify(I18n.t(w.cur.title).length > 0, "title key for step " + i);
-            verify(I18n.t(w.cur.desc).length > 0, "desc key for step " + i);
-            verify(I18n.t(w.cur.title) !== w.cur.title,
-                   "title should be translated, not the raw key, at step " + i);
-        }
+        w.open();
+        tryCompare(w, "opened", true);
+        const field = findChild(w.contentItem, "welcome-capture-field");
+        verify(field !== null);
+        tryVerify(function () { return field.activeFocus; }, 1000, "the capture field has the keyboard");
+        const title = "tour probe " + Date.now();
+        field.text = title;
+        keyClick(Qt.Key_Return);
+        compare(w.step, 0, "saving stays on the step");
+        compare(field.text, "", "the field clears for another");
+        compare(w.captured[w.captured.length - 1], title);
+        verify(w.lastCapturedId.length > 0);
+        const saved = AppController.taskById(w.lastCapturedId);
+        compare(saved.title, title, "the task was saved, exactly as typed");
+        compare(saved.status, "todo");
+        AppController.deleteTask(w.lastCapturedId);
+        keyClick(Qt.Key_Return);   // empty line → next step
+        compare(w.step, 1);
+        w._finish();
     }
 
-    // Finishing / skipping the guide marks it seen so it never auto-shows again.
+    function test_esc_skips_and_marks_seen() {
+        const w = mk();
+        w.open();
+        tryCompare(w, "opened", true);
+        keyClick(Qt.Key_Escape);
+        tryCompare(w, "opened", false);
+        compare(AppController.welcomeSeen, true);
+        verify(!w.paused);
+    }
+
     function test_finish_marks_seen() {
         const w = mk();
         w._finish();
         compare(AppController.welcomeSeen, true);
     }
 
-    // A step's "open →" routes through openAction, "Learn more →" through
-    // openHelp — the popup stays decoupled from the objects Main owns.
+    // "Bring your stuff" asks Main for each picker; nothing is imported here.
+    function test_bring_step_routes_each_import() {
+        const w = mk();
+        const asked = [];
+        w.openAction.connect(function (id) { asked.push(id); });
+        w.step = 3;
+        w.open();
+        tryCompare(w, "opened", true);
+        const names = ["welcome-bring-vault", "welcome-bring-profile", "welcome-bring-integrations"];
+        for (let i = 0; i < names.length; i++) {
+            if (!w.opened) { w.open(); tryCompare(w, "opened", true); }
+            const b = findChild(w.contentItem, names[i]);
+            verify(b !== null && b.visible, names[i]);
+            b.clicked();
+            verify(w.paused, "an action pauses the tour, it does not end it");
+        }
+        compare(asked.join(","), "vault-import,profile-import,integrations");
+        w._finish();
+    }
+
     function test_action_signals() {
         const w = mk();
         let action = "";
         let helpAnchor = "";
-        w.openAction.connect(function(id) { action = id; });
-        w.openHelp.connect(function(a) { helpAnchor = a; });
+        w.openAction.connect(function (id) { action = id; });
+        w.openHelp.connect(function (a) { helpAnchor = a; });
         w._doAction({ kind: "action", arg: "palette" });
         compare(action, "palette");
         w._learnMore("help-views");
         compare(helpAnchor, "help-views");
     }
 
-    // Regression: an action must PAUSE the tour (resumable), not finish it.
-    // Only Skip / Get started (via _finish) may mark the guide seen.
     function test_action_pauses_not_finishes() {
         const w = mk();
         w.step = 2;
         w._doAction({ kind: "view", arg: "board" });
-        verify(w.paused, "action should pause the tour");
-        compare(w.step, 2, "the step is preserved so the tour can resume where it was");
-        // Learn-more pauses too.
+        verify(w.paused);
+        compare(w.step, 2, "the step is kept so the tour resumes there");
         const w2 = mk();
         w2._learnMore("help-tasks");
-        verify(w2.paused, "learn-more should pause the tour");
-        // _finish is the only path that clears paused (and marks seen).
+        verify(w2.paused);
         w2._finish();
-        verify(!w2.paused, "finishing clears the paused flag");
-    }
-
-    // The first page shows what heap is made of, not one line over a blank
-    // frame (audit C1).
-    function test_first_step_lists_the_parts_of_the_app() {
-        const w = mk();
-        w.step = 0;
-        verify(w.cur.highlights && w.cur.highlights.length >= 4, "the first step carries highlights");
-        for (let i = 0; i < w.cur.highlights.length; i++) {
-            const h = w.cur.highlights[i];
-            verify(I18n.t(h.title) !== h.title, h.title + " is translated");
-            verify(I18n.t(h.desc) !== h.desc, h.desc + " is translated");
-        }
+        verify(!w2.paused);
+        AppController.currentView = "board";
     }
 }

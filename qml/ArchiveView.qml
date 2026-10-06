@@ -227,27 +227,13 @@ Item {
                 visible: archFilter.count === 0
                 width: archList.width
                 height: 220
-                Column {
+                EmptyState {
+                    objectName: "archive-empty"
                     anchors.centerIn: parent
-                    spacing: Theme.spMd
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "▤"
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fs2xl
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t("archive.empty.title")
-                        color: Theme.text
-                        font.pixelSize: Theme.fsMd
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t("archive.empty.hint")
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsMd
-                    }
+                    width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
+                    icon: "heap-05-archive"
+                    title: I18n.t("archive.empty.title")
+                    line: I18n.t("archive.empty.hint")
                 }
             }
 
@@ -268,6 +254,8 @@ Item {
                 required property string branch
                 required property bool blockedStuck
                 required property string prState
+                required property string prMove
+                required property string prMoveReason
                 required property int prNumber
                 required property string prUrl
                 required property int gitAhead
@@ -330,6 +318,7 @@ Item {
                         deadline: row.deadline, branch: row.branch,
                         archived: true, blockedStuck: row.blockedStuck,
                         prState: row.prState, prNumber: row.prNumber, prUrl: row.prUrl,
+                        prMove: row.prMove, prMoveReason: row.prMoveReason,
                         gitAhead: row.gitAhead, gitBehind: row.gitBehind,
                         recentCommits: row.recentCommits,
                         trackedSeconds: row.trackedSeconds, isTiming: row.isTiming,

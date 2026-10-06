@@ -981,6 +981,7 @@ Item {
 
                                 delegate: TaskCard {
                                             id: tc
+                                            boardKeys: true
                                             required property string id
                                             required property string title
                                             required property string desc
@@ -992,6 +993,8 @@ Item {
                                             required property bool archived
                                             required property bool blockedStuck
                                             required property string prState
+                                            required property string prMove
+                                            required property string prMoveReason
                                             required property int    prNumber
                                             required property string prUrl
                                             required property int    gitAhead
@@ -1008,6 +1011,7 @@ Item {
                                             required property var    ticket
                                             required property string searchText
                                             required property int    attachmentCount
+                                            required property var    statusChangedAt
                                             width: bodyFlick.width
                                             // A pooled card waits, culled but still
                                             // a child of the list, until a row needs
@@ -1034,6 +1038,7 @@ Item {
                                                 deadline: tc.deadline, branch: tc.branch,
                                                 archived: tc.archived, blockedStuck: tc.blockedStuck,
                                                 prState: tc.prState, prNumber: tc.prNumber, prUrl: tc.prUrl,
+                                                prMove: tc.prMove, prMoveReason: tc.prMoveReason,
                                                 gitAhead: tc.gitAhead, gitBehind: tc.gitBehind,
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
@@ -1041,7 +1046,8 @@ Item {
                                                 labels: tc.labels, dueAt: tc.dueAt, dueHasTime: tc.dueHasTime,
                                                 scheduledAt: tc.scheduledAt, scheduledHasTime: tc.scheduledHasTime,
                                                 ticket: tc.ticket, searchText: tc.searchText,
-                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount
+                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount,
+                                                statusChangedAt: tc.statusChangedAt
                                             })
                                             // Which card a bare "O" acts on when
                                             // nothing is selected.
@@ -1067,15 +1073,23 @@ Item {
                                             Component.onDestruction: if (menuOpen) root._openCardMenus--
                                         }
 
-                                Text {
+                                // An empty column says how a card gets here
+                                // (APP-167); one whose cards the search or a
+                                // filter hides, that nothing in it matches.
+                                Item {
                                     visible: col.visibleCount === 0
                                     width: bodyFlick.width
-                                    topPadding: Theme.spXl
-                                    text: I18n.t("kanban.empty")
-                                    color: Theme.textDim
-                                    font.italic: true
-                                    font.pixelSize: Theme.fsSm
-                                    horizontalAlignment: Text.AlignHCenter
+                                    height: colEmpty.implicitHeight + Theme.spXl
+                                    EmptyState {
+                                        id: colEmpty
+                                        objectName: "column-empty"
+                                        y: Theme.spXl
+                                        width: parent.width
+                                        compact: true
+                                        icon: "heap-01-board"
+                                        title: I18n.t("kanban.empty")
+                                        line: (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
+                                    }
                                 }
                             }
 

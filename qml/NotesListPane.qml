@@ -252,18 +252,20 @@ Rectangle {
             onTextChanged: root.filter = text
         }
 
-        Text {
+        EmptyState {
+            objectName: "notes-empty"
             visible: root.rows.length === 0
             Layout.fillWidth: true
-            text: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
-            color: Theme.textDim
-            font.pixelSize: Theme.fsSm
-            wrapMode: Text.Wrap
+            Layout.topMargin: Theme.sp2xl
+            icon: root.filter.length > 0 ? "" : "heap-09-notes"
+            title: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
+            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : ""
         }
 
         ListView {
             id: list
             objectName: "note-list"
+            Accessible.name: I18n.t("siderail.notes")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
