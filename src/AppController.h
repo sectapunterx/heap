@@ -3,8 +3,8 @@
 #include "Models.h"
 
 #include "board/Rank.h"
-#include "safety/EndOfDay.h"
 #include "notify/NotifyPayload.h"
+#include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
