@@ -39,10 +39,11 @@ TestCase {
     }
 
     function test_theme_duration_tokens() {
-        verify(Theme.durFast <= Theme.durBase && Theme.durBase <= Theme.durSlow);
-        verify(Theme.durFast <= 150, "feedback stays under 150 ms");
+        verify(Theme.durTap <= Theme.durPop && Theme.durPop <= Theme.durMove);
+        verify(Theme.durTap <= 150, "feedback stays under 150 ms");
+        compare(Theme.durPopOut, Math.floor(Theme.durPop / 2), "leaving takes half the time");
         compare(Theme.motion, Theme.reducedMotion ? 0 : 1);
-        if (Theme.reducedMotion) compare(Theme.durBase, 0);
+        if (Theme.reducedMotion) compare(Theme.durMove, 0);
     }
 
     function test_card_plays_check_mark_when_done() {

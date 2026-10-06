@@ -19,7 +19,7 @@ Column {
     // Fades in rather than popping when the last card leaves.
     opacity: 0
     Component.onCompleted: opacity = 1
-    Behavior on opacity { NumberAnimation { duration: Theme.durSlow } }
+    Behavior on opacity { NumberAnimation { duration: Theme.durMove; easing.type: Theme.easeEnter } }
 
     IconImage {
         objectName: "empty-state-icon"

@@ -438,7 +438,7 @@ Rectangle {
             color: Theme.panel2
             border.color: searchField.activeFocus ? Theme.accent : Theme.border
             border.width: searchField.activeFocus ? 2 : 1
-            Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
+            Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             RowLayout {
                 anchors.fill: parent
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spSm
@@ -450,7 +450,7 @@ Rectangle {
                     text: "⌕"
                     color: root.searchIsQuery ? Theme.accentStrong : Theme.textDim
                     font.pixelSize: Theme.fsSm
-                    Behavior on color { ColorAnimation { duration: Theme.scaledMs(120) } }
+                    Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                 }
                 TextField {
                     id: searchField

@@ -75,11 +75,11 @@ Rectangle {
         }
         // A slow pulse says "working" without a spinner asset.
         SequentialAnimation on opacity {
-            running: btn.busy && Theme.scaledMs(1) > 0
+            running: btn.busy && !Theme.reducedMotion
             loops: Animation.Infinite
             onRunningChanged: if (!running) label.opacity = 1
-            NumberAnimation { to: 0.45; duration: 600; easing.type: Easing.InOutQuad }
-            NumberAnimation { to: 1; duration: 600; easing.type: Easing.InOutQuad }
+            NumberAnimation { to: 0.45; duration: Theme.durPulse; easing.type: Theme.easePulse }
+            NumberAnimation { to: 1; duration: Theme.durPulse; easing.type: Theme.easePulse }
         }
     }
     MouseArea {

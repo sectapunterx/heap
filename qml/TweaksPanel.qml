@@ -324,22 +324,29 @@ Popup {
             font.pixelSize: Theme.fsMd
         }
         Rectangle {
+            id: toggleTrack
             width: 32; height: 18; radius: 9
             color: toggleRow.checked ? Theme.accent : Theme.panel3
             // An edge for the OFF track and the knob: both vanished on the
             // light themes' panel3 and accent (DES-20).
             border.color: toggleRow.checked ? "transparent" : Theme.fieldBorder
             border.width: 1
-            Behavior on color { ColorAnimation { duration: Theme.animMs } }
+            Behavior on color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             FocusRing { target: toggleRow; radius: 12 }
             Rectangle {
                 width: 14; height: 14; radius: 7
+                id: toggleKnob
                 y: 2
-                x: toggleRow.checked ? parent.width - width - 2 : 2
+                x: 2
                 color: Theme.knob
                 border.color: Theme.fieldBorder
                 border.width: 1
-                Behavior on x { NumberAnimation { duration: Theme.animMs; easing.type: Easing.OutCubic } }
+                // Slides by transform, not by x: only transform and opacity
+                // animate (APP-175).
+                transform: Translate {
+                    x: toggleRow.checked ? toggleTrack.width - toggleKnob.width - 4 : 0
+                    Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                }
             }
         }
     }

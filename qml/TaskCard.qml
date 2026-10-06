@@ -152,8 +152,8 @@ Rectangle {
     z: dragArea.drag.active ? 1000 : 0
     // A dropped card settles with a little overshoot, as if it had weight
     // (APP-167); with reduced motion it simply is where it was put.
-    Behavior on scale { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
-    Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
+    Behavior on scale { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+    Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
 
     FocusRing {
         objectName: "tc-cursor-ring"
@@ -199,8 +199,8 @@ Rectangle {
     transform: Translate { id: settle }
     ParallelAnimation {
         id: settleAnim
-        NumberAnimation { target: settle; property: "x"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
-        NumberAnimation { target: settle; property: "y"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
+        NumberAnimation { target: settle; property: "x"; to: 0; duration: Theme.durMove; easing.type: Theme.easeEnter }
+        NumberAnimation { target: settle; property: "y"; to: 0; duration: Theme.durMove; easing.type: Theme.easeEnter }
     }
     function _settleHome() {
         settleAnim.stop();
@@ -274,11 +274,11 @@ Rectangle {
     SequentialAnimation {
         id: doneAnim
         ParallelAnimation {
-            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durFast }
-            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durFast; easing.type: Easing.OutBack }
+            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
+            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
         }
-        PauseAnimation { duration: Theme.durBase }
-        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durFast }
+        PauseAnimation { duration: Theme.durMove }
+        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
     }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any

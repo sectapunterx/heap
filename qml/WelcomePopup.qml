@@ -220,7 +220,7 @@ Popup {
                         height: 6
                         radius: 3
                         color: index <= root.step ? Theme.accent : Theme.border
-                        Behavior on width { NumberAnimation { duration: Theme.durFast } }
+                        Behavior on width { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
                     }
                 }
             }

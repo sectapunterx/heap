@@ -17,7 +17,7 @@ Rectangle {
     // implicitWidth, not width: a Layout writes width itself, which would
     // break a binding on it.
     implicitWidth: expanded ? expandedWidth : collapsedWidth
-    Behavior on implicitWidth { NumberAnimation { duration: Theme.scaledMs(120); easing.type: Easing.OutCubic } }
+    Behavior on implicitWidth { NumberAnimation { duration: Theme.durMove; easing.type: Theme.easeEnter } }
     clip: true
 
     signal openTweaks(Item anchor)
@@ -468,7 +468,7 @@ Rectangle {
             objectName: "rail-label"
             visible: btn.expanded
             opacity: btn.width > 96 ? 1 : 0
-            Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+            Behavior on opacity { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             anchors.left: iconCell.right
             anchors.right: countBox.visible && btn.expanded ? countBox.left
                          : comboT.visible ? comboT.left : parent.right
