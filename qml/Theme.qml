@@ -300,14 +300,20 @@ QtObject {
     readonly property int radiusPill: 999
 
     // ── Type scale (px) ──────────────────────────────────────────────
-    // Six steps, times the interface scale. The floor is 11px at any scale:
-    // nothing the user has to read is smaller.
-    readonly property int fsXs:  Math.max(11, px(11))  // chips, badges, uppercase section labels
-    readonly property int fsSm:  px(12)  // meta, descriptions, secondary text
-    readonly property int fsMd:  px(13)  // body, card titles, inputs
-    readonly property int fsLg:  px(15)  // dialog and section titles
-    readonly property int fsXl:  px(20)  // page headings
-    readonly property int fs2xl: px(28)  // display (welcome, empty hero)
+    // A modular scale (APP-181): 13px body, each step 1.125 times the one
+    // below, times the interface scale. The ad-hoc 20 and 28 jumped a step
+    // and a half; on the scale the headings sit two and four steps above
+    // the dialog title. The floor is 11px at any scale: nothing the user
+    // has to read is smaller. A screen uses at most four of these.
+    readonly property int typeBase: 13
+    readonly property real typeRatio: 1.125
+    function typeStep(n) { return Math.round(typeBase * Math.pow(typeRatio, n) * scale); }
+    readonly property int fsXs:  Math.max(11, typeStep(-2))  // chips, badges, counts
+    readonly property int fsSm:  typeStep(-1)  // meta, descriptions, section labels
+    readonly property int fsMd:  typeStep(0)   // body, card titles, inputs
+    readonly property int fsLg:  typeStep(1)   // dialog and section titles
+    readonly property int fsXl:  typeStep(3)   // page headings
+    readonly property int fs2xl: typeStep(5)   // display (welcome, empty hero)
 
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion

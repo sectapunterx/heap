@@ -115,7 +115,7 @@ Flow {
                 Text {
                     text: chip.broken ? I18n.t("att.chip.missingShort") : String(chip.modelData.sizeText || "")
                     color: chip.broken ? Theme.danger : Theme.textDim
-                    font.family: Theme.fontMono
+                    font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsXs
                 }
                 ChipButton {
