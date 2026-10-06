@@ -63,6 +63,19 @@ expect_refused("unexpected argument 'extra'" --view board extra)
 expect_refused("unexpected argument 'C:/tmp/dd'" --data-dir "${WORK_DIR}" C:/tmp/dd)
 # APP-171: --capture is an option heap knows (bound to a desktop shortcut).
 expect_refused("unexpected argument 'extra'" --capture extra)
+# --minimized (APP-154, the login entry) is a known flag: the refusal is about
+# the stray argument, not "Unknown option 'minimized'".
+expect_refused("unexpected argument 'extra'" --minimized extra)
+# APP-155: a notification click's heap://notify URI is the one positional
+# argument heap takes; any other heap:// is still refused...
+expect_refused("unexpected argument 'heap://other'" heap://other)
+expect_refused("unexpected argument 'heap://notify?id=a%3Ab'" "heap://notify?id=a%3Ab" extra)
+# ...and a click naming a folder with no heap running there exits quietly,
+# without starting one or writing anything into it.
+expect_ok("heap://notify?id=deadline%3AT-1&action=open&dir=${WORK_DIR}/clicked")
+if (EXISTS "${WORK_DIR}/clicked")
+    message(FATAL_ERROR "a notification click created the folder its URI named")
+endif ()
 # REL-2: unknown options were already refused.
 expect_refused("Unknown option 'no-such-flag'" --no-such-flag)
 # A verb's own mistakes are usage errors too, and touch nothing.

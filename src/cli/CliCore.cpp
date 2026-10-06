@@ -119,7 +119,8 @@ ParsedArgs parseArgs(const QStringList& args) {
   // here so they are not refused, and otherwise ignored.
   const QCommandLineOption perfLog(QStringLiteral("perf-log"), QString());
   const QCommandLineOption capture(QStringLiteral("capture"), QString());
-  parser.addOptions({help, version, dataDir, profile, status, format, json, perfLog, capture});
+  const QCommandLineOption minimized(QStringLiteral("minimized"), QString());
+  parser.addOptions({help, version, dataDir, profile, status, format, json, perfLog, capture, minimized});
 
   QStringList withProgram = args;
   withProgram.prepend(QStringLiteral("heap"));

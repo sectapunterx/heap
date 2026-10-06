@@ -233,6 +233,8 @@ add_test(NAME heap_text_tests COMMAND heap_text_tests)
 # OS backend is linked, so the tests run headless on any CI runner.
 add_executable(heap_notify_tests
     test_notification.cpp
+    test_notify_payload.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/../src/notify/NotifyPayload.cpp
     # AUTOMOC needs the header explicitly listed so the moc artifacts for
     # NotificationCenter (Q_OBJECT in the abstract base) are emitted into
     # this exe. Otherwise the linker complains about the missing vtable.
@@ -296,6 +298,9 @@ heap_add_appcontroller_test(heap_selection_tests test_selection.cpp)
 
 # ─── Meeting reminders ───
 heap_add_appcontroller_test(heap_meeting_reminders_tests test_meeting_reminders.cpp)
+
+# ─── Staying around: start at login (APP-154), reminder actions (APP-155) ───
+heap_add_appcontroller_test(heap_presence_tests test_presence.cpp)
 
 # ─── Editing and deleting a repeating event ───
 heap_add_appcontroller_test(heap_series_edits_tests test_series_edits.cpp)
@@ -365,7 +370,9 @@ heap_add_appcontroller_test(heap_notes_tests test_notes.cpp)
 set(HEAP_PLATFORM_SOURCES
         test_global_hotkey.cpp
         test_accessibility.cpp
+        test_autostart.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Accessibility.cpp
+        ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.cpp
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey.h
         ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/X11Keys.cpp
@@ -374,11 +381,16 @@ set(HEAP_PLATFORM_SOURCES
 if (WIN32)
     list(APPEND HEAP_PLATFORM_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_win.cpp
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart_win.cpp
     )
-endif ()
-if (APPLE)
+elseif (APPLE)
     list(APPEND HEAP_PLATFORM_SOURCES
             ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/GlobalHotkey_mac.mm
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart_mac.cpp
+    )
+else ()
+    list(APPEND HEAP_PLATFORM_SOURCES
+            ${CMAKE_CURRENT_SOURCE_DIR}/../src/platform/Autostart_linux.cpp
     )
 endif ()
 
