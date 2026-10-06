@@ -13,8 +13,6 @@
 #include <QJsonObject>
 #include <QSaveFile>
 
-#include <algorithm>
-
 QVariantMap AppController::autostartState() const {
   namespace as = heap::platform::autostart;
   const as::Entry entry = as::read();
@@ -106,7 +104,7 @@ void AppController::snoozeReminderAt(const QString& notificationId, int minutes,
   // Shown before a restart: the words are gone, the task's title is not.
   if(shown.title.isEmpty()) {
     shown.title = tr_(QStringLiteral("notify.reminderTitle"));
-    shown.body = taskById(ref).value(QStringLiteral("title")).toString();
+    shown.body = reminderTask(ref).task.title;
   }
   heap::notify::SnoozedReminder s;
   s.id = notificationId;
@@ -130,18 +128,9 @@ void AppController::fireDueSnoozes(const QDateTime& now) {
   saveSnoozes();
   // A task finished or deleted since the snooze has nothing left to say. Any
   // profile: reminders cover them all.
-  const auto stillOpen = [this](const QString& taskId) {
-    const auto open = [&taskId](const QVector<Task>& tasks) {
-      return std::any_of(tasks.cbegin(), tasks.cend(), [&taskId](const Task& t) {
-        return t.id == taskId && !t.archived && t.status != QStringLiteral("done");
-      });
-    };
-    if(open(m_tasks.items())) {
-      return true;
-    }
-    return std::any_of(m_profiles.cbegin(), m_profiles.cend(), [this, &open](const Profile& p) {
-      return p.id != m_activeProfileId && open(p.tasks);
-    });
+  const auto stillOpen = [this](const QString& ref) {
+    const ReminderTask r = reminderTask(ref);
+    return !r.profileId.isEmpty() && !r.task.archived && r.task.status != QStringLiteral("done");
   };
   for(const heap::notify::SnoozedReminder& s : due) {
     const auto [kind, ref] = heap::notify::parseRoutingId(s.id);
@@ -160,13 +149,56 @@ void AppController::openReminder(const QString& notificationId) {
     emit openEventRequested(kind == QStringLiteral("meeting") ? ref : QString(), date.isValid() ? date : today());
     return;
   }
-  // Reminders cover every profile; opening one switches to the workspace it is in.
-  activateProfileOfTask(ref);
-  if(!ref.isEmpty() && m_tasks.indexOfId(ref) >= 0) {
-    emit openTaskRequested(ref);
+  // Reminders cover every profile; opening one goes to the workspace it is in.
+  // The window switches there itself, once an open editor's edits are settled
+  // (PRES-1): switching here came first and left that editor saving into the
+  // other profile.
+  const ReminderTask target = reminderTask(ref);
+  if(!target.profileId.isEmpty()) {
+    emit openTaskRequested(target.task.id, target.profileId);
   } else {
     emit showWindowRequested();
   }
+}
+
+AppController::ReminderTask AppController::reminderTask(const QString& ref) const {
+  const auto inProfile = [this](const QString& profileId, const QString& taskId) -> ReminderTask {
+    if(profileId == m_activeProfileId) {
+      const int row = m_tasks.indexOfId(taskId);
+      return row >= 0 ? ReminderTask{profileId, m_tasks.items().at(row)} : ReminderTask{};
+    }
+    const int p = profileIndexOf(profileId);
+    if(p < 0) {
+      return {};
+    }
+    for(const Task& t : m_profiles.at(p).tasks) {
+      if(t.id == taskId) {
+        return {profileId, t};
+      }
+    }
+    return {};
+  };
+  if(ref.isEmpty()) {
+    return {};
+  }
+  // The profile it names, and no other: a namesake elsewhere is another task
+  // (PRES-2).
+  const auto [profileId, taskId] = heap::notify::parseTaskRef(ref);
+  if(!profileId.isEmpty() && profileIndexOf(profileId) >= 0) {
+    return inProfile(profileId, taskId);
+  }
+  // A ref from before profiles were named: the active profile first.
+  if(ReminderTask r = inProfile(m_activeProfileId, ref); !r.profileId.isEmpty()) {
+    return r;
+  }
+  for(const Profile& p : m_profiles) {
+    if(p.id != m_activeProfileId) {
+      if(ReminderTask r = inProfile(p.id, ref); !r.profileId.isEmpty()) {
+        return r;
+      }
+    }
+  }
+  return {};
 }
 
 QString AppController::snoozesFilePath() const {

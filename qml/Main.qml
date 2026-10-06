@@ -698,6 +698,17 @@ ApplicationWindow {
     // task that already mentions the error, in its own profile.
     function openSeenBefore(hit) {
         if (!hit || !hit.id) return;
+        if (hit.kind === "task") {
+            // Edits to the task already open are not swapped out unasked, and
+            // its profile is left only after that (PRES-1).
+            taskEditor.settleThen(() => {
+                if (hit.profileId && hit.profileId !== AppController.activeProfileId)
+                    AppController.activeProfileId = hit.profileId;
+                const t = AppController.taskById(hit.id);
+                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            });
+            return;
+        }
         if (hit.profileId && hit.profileId !== AppController.activeProfileId)
             AppController.activeProfileId = hit.profileId;
         if (hit.kind === "note") {
@@ -707,12 +718,6 @@ ApplicationWindow {
             AppController.activeDocPageId = hit.id;
             AppController.currentView = "docs";
             docsBridge.requestedAnchor = "page:" + hit.id;
-        } else if (hit.kind === "task") {
-            // Edits to the task already open are not swapped out unasked.
-            taskEditor.settleThen(() => {
-                const t = AppController.taskById(hit.id);
-                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
-            });
         }
     }
 
@@ -1294,6 +1299,7 @@ ApplicationWindow {
 
     TaskEditor    {
         id: taskEditor
+        objectName: "task-editor"
         onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
     }
     EventEditor   { id: eventEditor }
@@ -1452,11 +1458,18 @@ ApplicationWindow {
     // path used by Kanban / Timeline / palette.
     Connections {
         target: AppController
-        function onOpenTaskRequested(taskId) {
+        function onOpenTaskRequested(taskId, profileId) {
             // Also reached from a notification click while heap is in the tray.
             win._summon();
-            // Edits to the task already open are not swapped out unasked (TASKS-18).
-            taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
+            // Edits to the task already open are not swapped out unasked
+            // (TASKS-18), and the task's profile becomes the active one only
+            // after that: switched first, the open editor saved into the
+            // other profile (PRES-1).
+            taskEditor.settleThen(() => {
+                if (profileId && profileId !== AppController.activeProfileId)
+                    AppController.activeProfileId = profileId;
+                taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+            });
         }
         // "Open" on a meeting / standup reminder (APP-155): that day in the
         // week view, and the meeting itself when it is a stored event.

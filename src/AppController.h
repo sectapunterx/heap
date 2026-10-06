@@ -1471,7 +1471,9 @@ class AppController : public QObject {
   void trackerConflictResolved(const QString& taskId);
   void focusedGitChanged();
   void showWhoseMoveChanged();
-  void openTaskRequested(const QString& id);
+  // `profileId` is the profile the task lives in; the window switches there
+  // only once the editor's unsaved edits are settled (PRES-1).
+  void openTaskRequested(const QString& id, const QString& profileId);
   // "Open" on a meeting / standup reminder: the calendar at `date`, and the
   // event's editor when `eventId` names a stored event (APP-155).
   void openEventRequested(const QString& eventId, const QDate& date);
@@ -1681,8 +1683,15 @@ class AppController : public QObject {
   std::unique_ptr<heap::notify::NotificationCenter> m_notifier;
   void onNotifierAction(const QString& notificationId, const QString& actionId);
   void onNotifierActivated(const QString& notificationId);
-  // A reminder can be for a task in another profile; opening it switches there.
-  void activateProfileOfTask(const QString& taskId);
+
+  // The task a reminder is about, and the profile it lives in. Reminders cover
+  // every profile; the ref names the profile (PRES-2), an older one does not.
+  struct ReminderTask {
+    QString profileId;  // empty: no such task any more
+    Task task;
+  };
+
+  ReminderTask reminderTask(const QString& ref) const;
   QSet<QString> m_blockedStuckIds;
   // Reminders already delivered, by key (see src/cal/Reminders.h), with when.
   // Persisted to reminders.json so a restart does not announce them again.
