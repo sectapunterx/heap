@@ -45,6 +45,9 @@ class GitWatcher : public QObject {
   }
 
   void requestPrFetch(const QString& repoPath, const QString& branch);
+  // Recomputes every known PR's whose-move against `login`. Public so a test
+  // can stand in for `gh api user`.
+  void setMyLogin(const QString& login);
 
   // Create and switch to a new branch (`git checkout -b`).
   //
@@ -117,6 +120,12 @@ class GitWatcher : public QObject {
   // One git command in `repoPath`, killed after 15 s; `done` gets the exit
   // code (-1 when it did not start or did not finish) and stdout.
   void runGitAsync(const QString& repoPath, const QStringList& args, const std::function<void(int, const QByteArray&)>& done);
+  // Who the user is on the forge, for whose-move (APP-156). Asked once.
+  void fetchLoginAsync(const QString& workDir, const QString& tool, bool glab);
+  void applyMove(PrInfo& info) const;
+
+  QString m_myLogin;
+  bool m_loginAsked = false;
 
   static QString cacheKey(const QString& repo, const QString& branch);
   static QString readHeadText(const QString& gitDir);

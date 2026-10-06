@@ -3,6 +3,8 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "history/TaskHistory.h"
+#include "integrations/SyncHealth.h"
 #include "notify/NotifyPayload.h"
 #include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
@@ -178,6 +180,9 @@ class AppController : public QObject {
   Q_PROPERTY(QString focusedRepo READ focusedRepo NOTIFY focusedGitChanged)
   Q_PROPERTY(QVariantMap focusedRepoState READ focusedRepoState NOTIFY focusedGitChanged)
   Q_PROPERTY(bool focusedBannerDismissed READ focusedBannerDismissed NOTIFY focusedGitChanged)
+  // Settings → Git → "Show whose move" (APP-156). On by default: it is a fact
+  // read off the PR, not a nudge.
+  Q_PROPERTY(bool showWhoseMove READ showWhoseMove NOTIFY showWhoseMoveChanged)
 
   // ---- Storage health (PLAT-1/4/5) ----
   // "ok", "unreadable" (state.json exists but could not be opened: read-only
@@ -573,8 +578,21 @@ class AppController : public QObject {
   // version of every conflicting field (true), or keep the local one and stop
   // flagging it (false). Undoable.
   Q_INVOKABLE void resolveTrackerConflict(const QString& taskId, bool useTracker);
+  // One field of it ("title" | "body" | "priority" | "status"). Keeping my
+  // status sends it to the tracker; taking the tracker's drops the unsent move.
+  Q_INVOKABLE void resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker);
   // Archive every card of this tracker the current filter no longer covers.
   Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
+  // Settings → Integrations → Health (APP-164): one row per connected
+  // tracker — { id, name, lastOk, items, failing, error, errorDetail,
+  // errorAge, expiry, offline }, times relative to now, text in the UI
+  // language. Read-only.
+  Q_INVOKABLE QVariantList integrationHealth() const;
+  QVariantList integrationHealthAt(const QDateTime& now) const;
+  // What happened to a task, newest first: [{ at, kind, from, to, sync }]
+  // (APP-165). kind: created | status | title | priority | due | scheduled
+  // | pushed. Capped per task; see history/TaskHistory.h.
+  Q_INVOKABLE QVariantList taskHistory(const QString& taskId) const;
   // Whether a link from user or tracker content may open without asking. See
   // heap::md::isSafeLink.
   Q_INVOKABLE bool isSafeLink(const QString& url) const;
@@ -1308,6 +1326,10 @@ class AppController : public QObject {
     return m_focusedRepoState;
   }
 
+  bool showWhoseMove() const {
+    return m_showWhoseMove;
+  }
+
   bool focusedBannerDismissed() const {
     return m_dismissedBranches.contains(m_focusedBranch);
   }
@@ -1408,6 +1430,9 @@ class AppController : public QObject {
   void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
   void updateStatusChanged();
   void integrationStatesChanged();
+  void integrationHealthChanged();
+  // A task's history gained an event (APP-165).
+  void taskHistoryChanged(const QString& taskId);
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
   void updateProgressChanged();
@@ -1417,7 +1442,10 @@ class AppController : public QObject {
   void undoableToast(const QString& message, int seconds);
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
+  // A conflict on this task was settled, one field or all (APP-163).
+  void trackerConflictResolved(const QString& taskId);
   void focusedGitChanged();
+  void showWhoseMoveChanged();
   void openTaskRequested(const QString& id);
   // "Open" on a meeting / standup reminder: the calendar at `date`, and the
   // event's editor when `eventId` names a stored event (APP-155).
@@ -2038,10 +2066,20 @@ class AppController : public QObject {
   void scheduleRefreshRetry(const QString& providerId);
   void setProviderOffline(const QString& providerId, bool offline);
   QSet<QString> m_offlineProviders;
+  // When each tracker last answered and how its last failure read (APP-164).
+  // This session only: a restart starts the page over.
+  QHash<QString, heap::integrations::ProviderHealth> m_syncHealth;
+  // Task history (APP-165). Saved as the root key "taskHistory" of state.json.
+  heap::history::TaskHistory m_history;
+  // True while a tracker pull is the one changing tasks.
+  bool m_historySync = false;
+  void recordTaskChange(const Task* before, const Task& after);
+  void recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error);
   QHash<QString, int> m_refreshRetryMs;
   // A move that could not be sent (tracker disconnected or unreachable):
   // flagged on the card and sent after the next successful pull.
   void queueTrackerPush(const QString& taskId, const QString& status);
+  void resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker);
   void flushQueuedPushes(const QString& providerId);
   // What a pull under the card's current settings is scoped to. See
   // heap::integrations::scopeFingerprint.
@@ -2053,6 +2091,7 @@ class AppController : public QObject {
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
+  bool m_showWhoseMove = true;        // settings.git.showWhoseMove, cached for the cards
   void applyGitSettingsFromMap(const QVariantMap& git);
   // Re-derive the focused branch's task id under the current id-prefix and
   // refresh the banner. Needed because a prefix change (settings/profile) does

@@ -527,16 +527,98 @@ TEST_F(IntAudit, MoveWhileDisconnected_IsQueuedThenPushedAfterTheNextPull) {
   EXPECT_EQ(task("gitea-5")->status, QStringLiteral("done")) << "the pull put the card back before the push";
 }
 
-TEST_F(IntAudit, QueuedMove_LosesToAMoveMadeInTheTracker) {
+// APP-163: a move made in the tracker while a local one is still unsent used
+// to win silently and drop the local move. Now neither side is dropped: the
+// local column stays, nothing goes out, and the card asks.
+TEST_F(IntAudit, QueuedMoveAndAMoveMadeInTheTrackerIsAConflictNotASilentLoss) {
   merge({issue("7")});
   edit(QStringLiteral("gh-7"), [](Task& t) {
     t.status = QStringLiteral("prog");
     t.externalMeta.unsyncedStatus = QStringLiteral("prog");
     t.externalMeta.pushQueued = true;
   });
-  merge({issue("7", QStringLiteral("closed"))});
-  EXPECT_EQ(task("gh-7")->status, QStringLiteral("done"));
-  EXPECT_FALSE(task("gh-7")->externalMeta.pushQueued);
+  const auto stats = merge({issue("7", QStringLiteral("closed"))});
+  EXPECT_EQ(task("gh-7")->status, QStringLiteral("prog")) << "the local move was dropped";
+  EXPECT_TRUE(task("gh-7")->externalMeta.conflicts.contains(QStringLiteral("status")));
+  EXPECT_FALSE(task("gh-7")->externalMeta.pushQueued) << "a held move would be sent over theirs unasked";
+  EXPECT_EQ(task("gh-7")->externalMeta.column, QStringLiteral("done"));
+  EXPECT_EQ(stats.conflicts, 1);
+  EXPECT_FALSE(stats.conflictKeys.isEmpty());
+  // A quiet pull later neither resolves nor re-counts it.
+  const auto again = merge({issue("7", QStringLiteral("closed"))});
+  EXPECT_EQ(task("gh-7")->status, QStringLiteral("prog"));
+  EXPECT_TRUE(task("gh-7")->externalMeta.conflicts.contains(QStringLiteral("status")));
+  EXPECT_EQ(again.conflicts, 0);
+  // The card's state says so.
+  const int row = app_->tasks()->indexOfId(QStringLiteral("gh-7"));
+  const QVariantMap ticket = app_->tasks()->data(app_->tasks()->index(row, 0), TaskModel::TicketRole).toMap();
+  EXPECT_EQ(ticket.value(QStringLiteral("syncState")).toString(), QStringLiteral("conflict"));
+  EXPECT_EQ(ticket.value(QStringLiteral("remoteColumn")).toString(), QStringLiteral("done"));
+}
+
+TEST_F(IntAudit, StatusConflictTakeTheTrackersMovesTheCardAndDropsTheUnsentMove) {
+  merge({issue("8")});
+  edit(QStringLiteral("gh-8"), [](Task& t) {
+    t.status = QStringLiteral("prog");
+    t.externalMeta.unsyncedStatus = QStringLiteral("prog");
+  });
+  merge({issue("8", QStringLiteral("closed"))});
+  ASSERT_TRUE(task("gh-8")->externalMeta.conflicts.contains(QStringLiteral("status")));
+  app_->resolveTrackerConflictField(QStringLiteral("gh-8"), QStringLiteral("status"), true);
+  EXPECT_EQ(task("gh-8")->status, QStringLiteral("done"));
+  EXPECT_TRUE(task("gh-8")->externalMeta.unsyncedStatus.isEmpty());
+  EXPECT_TRUE(task("gh-8")->externalMeta.conflicts.isEmpty());
+  // One undo step puts it back as it was.
+  app_->undo();
+  EXPECT_EQ(task("gh-8")->status, QStringLiteral("prog"));
+  EXPECT_TRUE(task("gh-8")->externalMeta.conflicts.contains(QStringLiteral("status")));
+}
+
+TEST_F(IntAudit, StatusConflictKeepMineSendsIt) {
+  merge({issue("9")});
+  edit(QStringLiteral("gh-9"), [](Task& t) {
+    t.status = QStringLiteral("prog");
+    t.externalMeta.unsyncedStatus = QStringLiteral("prog");
+  });
+  merge({issue("9", QStringLiteral("closed"))});
+  // No tracker is connected in this suite, so "send" lands in the queue —
+  // which is still a send the user asked for, not one heap decided on.
+  app_->resolveTrackerConflictField(QStringLiteral("gh-9"), QStringLiteral("status"), false);
+  EXPECT_EQ(task("gh-9")->status, QStringLiteral("prog"));
+  EXPECT_TRUE(task("gh-9")->externalMeta.conflicts.isEmpty());
+  EXPECT_TRUE(task("gh-9")->externalMeta.pushQueued);
+  EXPECT_EQ(task("gh-9")->externalMeta.unsyncedStatus, QStringLiteral("prog"));
+}
+
+TEST_F(IntAudit, TrackerMoveToWhereTheCardAlreadyIsClearsTheUnsentMove) {
+  merge({issue("10")});
+  edit(QStringLiteral("gh-10"), [](Task& t) {
+    t.status = QStringLiteral("done");
+    t.externalMeta.unsyncedStatus = QStringLiteral("done");
+    t.externalMeta.pushQueued = true;
+  });
+  merge({issue("10", QStringLiteral("closed"))});
+  EXPECT_EQ(task("gh-10")->status, QStringLiteral("done"));
+  EXPECT_TRUE(task("gh-10")->externalMeta.unsyncedStatus.isEmpty());
+  EXPECT_FALSE(task("gh-10")->externalMeta.pushQueued);
+  EXPECT_TRUE(task("gh-10")->externalMeta.conflicts.isEmpty());
+}
+
+TEST_F(IntAudit, SyncStateFollowsTheRuntimePush) {
+  merge({issue("11")});
+  const auto state = [this]() {
+    const int row = app_->tasks()->indexOfId(QStringLiteral("gh-11"));
+    return app_->tasks()->data(app_->tasks()->index(row, 0), TaskModel::TicketRole).toMap();
+  };
+  EXPECT_EQ(state().value(QStringLiteral("syncState")).toString(), QStringLiteral("synced"));
+  app_->tasks()->setPushRuntime(QStringLiteral("gh-11"), true, QString());
+  EXPECT_EQ(state().value(QStringLiteral("syncState")).toString(), QStringLiteral("pushing"));
+  app_->tasks()->setPushRuntime(QStringLiteral("gh-11"), false, QStringLiteral("HTTP 403"));
+  edit(QStringLiteral("gh-11"), [](Task& t) {
+    t.externalMeta.unsyncedStatus = QStringLiteral("done");
+  });
+  EXPECT_EQ(state().value(QStringLiteral("syncState")).toString(), QStringLiteral("error"));
+  EXPECT_EQ(state().value(QStringLiteral("syncError")).toString(), QStringLiteral("HTTP 403"));
 }
 
 // ── INT-7: provider reasons in the UI language ──
@@ -973,6 +1055,50 @@ TEST_F(ActionFinished, SyncThatFails_CarriesTheReason) {
   EXPECT_EQ(spy.at(0).at(1).toString(), QStringLiteral("sync"));
   EXPECT_FALSE(spy.at(0).at(2).toBool());
   EXPECT_TRUE(spy.at(0).at(3).toString().contains(QStringLiteral("Gitea"))) << spy.at(0).at(3).toString().toStdString();
+}
+
+// APP-164: the health page reads what the sync recorded.
+TEST_F(ActionFinished, HealthRecordsAFailureInPlainWordsThenTheSuccessAfterIt) {
+  heap::testing::FakeHttpServer gitea;
+  gitea.route("GET /api/v1/repos/acme/web/issues", {404, R"({"message":"boom"})", {}});
+  connectGitea(gitea.base());
+  const auto row = [this]() {
+    for(const QVariant& v : app_->integrationHealth()) {
+      if(v.toMap().value(QStringLiteral("id")).toString() == QStringLiteral("gitea")) {
+        return v.toMap();
+      }
+    }
+    return QVariantMap();
+  };
+  // Connected, not synced yet: a row with nothing to report.
+  ASSERT_FALSE(row().isEmpty()) << "a connected tracker is missing from the page";
+  EXPECT_FALSE(row().value(QStringLiteral("failing")).toBool());
+  EXPECT_TRUE(row().value(QStringLiteral("lastOk")).toString().isEmpty());
+
+  QSignalSpy spy(app_.get(), &AppController::integrationActionFinished);
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  }));
+  EXPECT_TRUE(row().value(QStringLiteral("failing")).toBool());
+  EXPECT_EQ(row().value(QStringLiteral("error")).toString(),
+            heap::integrations::failureText(heap::integrations::FailureKind::NotFound, false));
+
+  gitea.route("GET /api/v1/repos/acme/web/issues", {200, R"([{"number":1,"title":"a","state":"open"}])", {}});
+  spy.clear();
+  app_->syncProvider(QStringLiteral("gitea"));
+  ASSERT_TRUE(heap::testing::waitUntil([&spy]() {
+    return spy.count() > 0;
+  }));
+  EXPECT_FALSE(row().value(QStringLiteral("failing")).toBool());
+  EXPECT_EQ(row().value(QStringLiteral("items")).toInt(), 1);
+  EXPECT_EQ(row().value(QStringLiteral("lastOk")).toString(), QStringLiteral("just now"));
+}
+
+TEST_F(ActionFinished, HealthListsOnlyConnectedTrackers) {
+  for(const QVariant& v : app_->integrationHealth()) {
+    ADD_FAILURE() << "a row for a tracker nobody connected: " << v.toMap().value(QStringLiteral("id")).toString().toStdString();
+  }
 }
 
 TEST_F(ActionFinished, TestConnection_FinishesOnBothOutcomes) {
