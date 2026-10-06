@@ -2,6 +2,12 @@
 #include "Logger.h"
 #include "ViewNames.h"
 
+#include "cli/CliCore.h"
+#include "cli/CliExecutor.h"
+#include "cli/CliMain.h"
+#include "diag/PerfLog.h"
+#include "notify/NotificationCenter.h"
+#include "notify/NotifyPayload.h"
 #include "platform/AltGrGuard.h"
 #include "platform/Paths.h"
 #include "platform/SingleInstance.h"
@@ -10,6 +16,7 @@
 #include <QApplication>
 #include <QCommandLineOption>
 #include <QCommandLineParser>
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QIcon>
@@ -26,6 +33,7 @@
 
 #include <csignal>
 #include <cstdlib>
+#include <optional>
 
 #ifdef Q_OS_MACOS
 #include "platform/MacWindow.h"
@@ -48,10 +56,18 @@ struct CliOptions {
   QString dataDir;
   bool dataDirSet = false;
   bool smoke = false;
+  // Started by the login entry (APP-154): come up hidden in the tray.
+  bool minimized = false;
+  // A notification click (APP-155): the shell starts heap with the toast's
+  // heap://notify URI as the only argument.
+  QString notifyUri;
+  QString openTask;  // `heap open <id>` started this window on that task
+  bool perfLog = false;
 };
 
-// Exit code for a command line heap cannot act on (the usual "usage" code).
-constexpr int kUsageExit = 2;
+// Exit code for a command line heap cannot act on — the same "usage" code the
+// command-line verbs use (heap::cli::kExitUsage).
+constexpr int kUsageExit = heap::cli::kExitUsage;
 
 // How long --smoke lets the UI settle before judging it: long enough for the
 // deferred loaders and the first frame, short enough for a CI step.
@@ -94,6 +110,19 @@ CliOptions parseCommandLine(const QStringList& args) {
                      "check a packaged build."));
   parser.addOption(smokeOption);
 
+  const QCommandLineOption minimizedOption(
+      QStringLiteral("minimized"),
+      QStringLiteral("Start hidden in the tray (minimized where there is no tray), and leave an already "
+                     "running heap where it is. The start-at-login entry passes it."));
+  parser.addOption(minimizedOption);
+  QCommandLineOption openTaskOption(QString::fromLatin1(heap::cli::kOpenTaskOption), QString(), QStringLiteral("id"));
+  openTaskOption.setFlags(QCommandLineOption::HiddenFromHelp);
+  parser.addOption(openTaskOption);
+  const QCommandLineOption perfLogOption(QStringLiteral("perf-log"),
+                                         QStringLiteral("Log startup and capture timings to the log (perf: ... lines). "
+                                                        "Also settable with HEAP_PERF_LOG=1."));
+  parser.addOption(perfLogOption);
+
   // A macOS Finder launch may still append -psn_<n>_<m>; it is not the user's.
   QStringList filtered;
   for(const QString& a : args) {
@@ -113,18 +142,27 @@ CliOptions parseCommandLine(const QStringList& args) {
   if(!parsed) {
     usageError(parser, parser.errorText());
   }
-  // heap takes no positional arguments. A path left over from a forgotten
-  // `--data-dir` used to be ignored and the GUI opened — and migrated — the
-  // real profile instead of the folder meant (PLAT-1, audit 2026-09-30).
-  if(!parser.positionalArguments().isEmpty()) {
-    usageError(parser, QStringLiteral("unexpected argument '%1'").arg(parser.positionalArguments().constFirst()));
+  // heap takes no positional arguments but a notification click's URI (the
+  // verbs are answered before this parser runs). A path left over from a
+  // forgotten `--data-dir` used to be ignored and the GUI opened — and
+  // migrated — the real profile instead of the folder meant (PLAT-1).
+  QStringList positional = parser.positionalArguments();
+  CliOptions opts;
+  if(positional.size() == 1 && heap::notify::isNotifyUri(positional.constFirst())) {
+    opts.notifyUri = positional.takeFirst().trimmed();
+  }
+  if(!positional.isEmpty()) {
+    usageError(parser,
+               QStringLiteral("unexpected argument '%1' (commands: add, now, list, today, done, open, help)").arg(positional.constFirst()));
   }
 
-  CliOptions opts;
   opts.initialView = parser.value(viewOption);
   opts.dataDirSet = parser.isSet(dataDirOption);
   opts.dataDir = parser.value(dataDirOption);
   opts.smoke = parser.isSet(smokeOption);
+  opts.minimized = parser.isSet(minimizedOption);
+  opts.openTask = parser.value(openTaskOption).trimmed();
+  opts.perfLog = parser.isSet(perfLogOption);
   if(parser.isSet(viewOption) && !heap::views::isKnown(opts.initialView)) {
     usageError(parser,
                QStringLiteral("unknown view '%1' (valid: %2)").arg(opts.initialView, heap::views::all().join(QStringLiteral(", "))));
@@ -182,6 +220,13 @@ struct LogCloser {
 }  // namespace
 
 int main(int argc, char* argv[]) {
+  // `heap add …`, `heap now`, --help: answered on the console, no window and
+  // no GUI application object (APP-173).
+  if(heap::cli::isCommandLine(argc, argv)) {
+    return heap::cli::run(argc, argv);
+  }
+
+  heap::perf::markProcessStart();
   QApplication app(argc, argv);
   QApplication::setOrganizationName("heap");
   QApplication::setOrganizationDomain("heap.local");
@@ -191,6 +236,9 @@ int main(int argc, char* argv[]) {
   QApplication::setWindowIcon(QIcon(QStringLiteral(":/brand/icon/heap-icon.svg")));
 
   const CliOptions cli = parseCommandLine(QApplication::arguments());
+  if(cli.perfLog) {
+    heap::perf::setEnabled(true);
+  }
 
   // AltGr+E in a text field types €, not "new event" (SHELL-2).
   heap::platform::AltGrGuard altGrGuard;
@@ -204,6 +252,18 @@ int main(int argc, char* argv[]) {
   // test loads real data without migrating or rewriting it (PLAT-16).
   const QTemporaryDir smokeDataDir;
   QString dataDir = cli.dataDirSet ? cli.dataDir : qEnvironmentVariable("HEAP_DATA_DIR");
+
+  // A notification click from a throwaway profile names its folder. Only a
+  // heap already running there is told; nothing is started or written in a
+  // folder that came from a URI (APP-155).
+  const heap::notify::NotifyUri clicked = heap::notify::parseNotifyUri(cli.notifyUri);
+  if(!cli.notifyUri.isEmpty() && !clicked.ok) {
+    return kUsageExit;
+  }
+  if(clicked.ok && !clicked.dataDir.isEmpty() && !cli.dataDirSet) {
+    heap::platform::SingleInstance::forwardOnly(clicked.dataDir, "notify " + cli.notifyUri.toUtf8());
+    return 0;
+  }
   if(cli.smoke) {
     const QString source = dataDir;
     dataDir = smokeDataDir.path();
@@ -226,8 +286,12 @@ int main(int argc, char* argv[]) {
   // window forward (switching view if --view was given) and exits.
   heap::platform::SingleInstance instance(heap::paths::dataDir());
   if(!cli.smoke) {
-    QByteArray hello = "activate";
-    if(!cli.initialView.isEmpty()) {
+    // A login start that finds heap already running leaves its window alone;
+    // a notification click is the running heap's to act on.
+    QByteArray hello = cli.minimized ? QByteArray("ping") : QByteArray("activate");
+    if(clicked.ok) {
+      hello = "notify " + cli.notifyUri.toUtf8();
+    } else if(!cli.minimized && !cli.initialView.isEmpty()) {
       hello += " view=" + cli.initialView.toUtf8();
     }
     switch(instance.acquire(hello)) {
@@ -257,11 +321,21 @@ int main(int argc, char* argv[]) {
 
   QQuickStyle::setStyle("Basic");
 
+  // A health check leaves the OS alone: no AppUserModelID, no heap:// handler.
+  if(cli.smoke) {
+    heap::notify::NotificationCenter::setNativeAllowed(false);
+  }
+
   std::signal(SIGINT, quitOnSignal);
   std::signal(SIGTERM, quitOnSignal);
 
   QQmlApplicationEngine engine;
   engine.rootContext()->setContextProperty("INITIAL_VIEW", cli.initialView);
+  // A snooze clicked while heap was closed starts it in the tray: the click
+  // asked for the reminder later, not for the window.
+  const bool clickWantsWindow = !clicked.ok || clicked.actionId == QLatin1String(heap::notify::kDefaultAction) ||
+                                clicked.actionId == QLatin1String(heap::notify::kOpen);
+  engine.rootContext()->setContextProperty("START_MINIMIZED", (cli.minimized || !clickWantsWindow) && !cli.smoke);
   QList<QQmlError> smokeWarnings;
   if(cli.smoke) {
     QObject::connect(&engine, &QQmlEngine::warnings, &app, [&smokeWarnings](const QList<QQmlError>& warnings) {
@@ -277,6 +351,22 @@ int main(int argc, char* argv[]) {
       },
       Qt::QueuedConnection);
   engine.load(QUrl(QStringLiteral("qrc:/qt/qml/TodoCpp/qml/Main.qml")));
+  heap::perf::log(QStringLiteral("startup qml-loaded"), heap::perf::sinceProcessStart());
+
+  // The first frame the main window presents, measured from main() (APP-161).
+  // frameSwapped may come from the render thread; logging there is safe.
+  if(heap::perf::enabled() && !engine.rootObjects().isEmpty()) {
+    if(auto* win = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst())) {
+      QObject::connect(
+          win,
+          &QQuickWindow::frameSwapped,
+          win,
+          []() {
+            heap::perf::log(QStringLiteral("startup first-frame"), heap::perf::sinceProcessStart());
+          },
+          static_cast<Qt::ConnectionType>(Qt::DirectConnection | Qt::SingleShotConnection));
+    }
+  }
 
 #ifdef Q_OS_MACOS
   // Unify the title bar with the app's top strip (traffic lights inlaid).
@@ -291,7 +381,15 @@ int main(int argc, char* argv[]) {
   // the tray's "Show" does (it also restores a window hidden to the tray).
   QObject::connect(&instance, &heap::platform::SingleInstance::messageReceived, &app, [&engine](const QByteArray& message) {
     const QList<QObject*> roots = engine.rootObjects();
-    if(roots.isEmpty()) {
+    if(roots.isEmpty() || message == "ping") {
+      return;
+    }
+    // A notification click: the controller decides whether the window comes
+    // forward (Open does, a snooze does not).
+    if(message.startsWith("notify ")) {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        controller->handleNotificationUri(QString::fromUtf8(message.mid(7)));
+      }
       return;
     }
     const qsizetype at = message.indexOf("view=");
@@ -302,6 +400,43 @@ int main(int argc, char* argv[]) {
     }
     QMetaObject::invokeMethod(roots.constFirst(), "_summon");
   });
+
+  // Started by a notification click: act on it once the UI is up.
+  if(clicked.ok && !cli.smoke) {
+    QTimer::singleShot(0, &app, [&engine, uri = cli.notifyUri]() {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        controller->handleNotificationUri(uri);
+      }
+    });
+  }
+
+  // `heap add|done|now|…` run while this window is open (APP-173): applied to
+  // the live models, so the change shows at once, undoes and saves as any
+  // other. Set before exec(), so no request can arrive ahead of it.
+  instance.setRequestHandler([&engine](const QByteArray& line) -> QByteArray {
+    const std::optional<heap::cli::Request> request = heap::cli::decodeRequest(line);
+    if(!request) {
+      return heap::cli::encodeResponse(
+          {heap::cli::kExitUsage, QString(), QStringLiteral("heap: the window did not understand the request\n")});
+    }
+    auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController");
+    if(controller == nullptr) {
+      return heap::cli::encodeResponse({heap::cli::kExitData, QString(), QStringLiteral("heap: the window is not ready\n")});
+    }
+    return heap::cli::encodeResponse(heap::cli::execute(*controller, *request, QDateTime::currentDateTime()));
+  });
+
+  // Started by `heap open <id>` with no window open: show that task.
+  if(!cli.openTask.isEmpty()) {
+    QTimer::singleShot(0, &app, [&engine, id = cli.openTask]() {
+      if(auto* controller = engine.singletonInstance<AppController*>("TodoCpp", "AppController")) {
+        heap::cli::Request request;
+        request.verb = heap::cli::Verb::Open;
+        request.taskId = id;
+        heap::cli::execute(*controller, request, QDateTime::currentDateTime());
+      }
+    });
+  }
 
   if(cli.smoke) {
     QTimer::singleShot(kSmokeSettleMs, &app, [&engine, &smokeWarnings]() {

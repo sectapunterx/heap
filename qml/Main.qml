@@ -11,7 +11,9 @@ import "ThemePresets.js" as Presets
 
 ApplicationWindow {
     id: win
-    visible: true
+    // A login start (--minimized, APP-154) stays hidden in the tray; where
+    // there is no tray it starts minimized instead (Component.onCompleted).
+    visible: !(win._startHidden && win._minimizeToTray)
     width: 1440
     height: 900
     minimumWidth: 1100
@@ -26,6 +28,10 @@ ApplicationWindow {
     // SettingsView rewrites that blob wholesale but carries unknown top-level
     // keys across, so this survives a trip through the settings screen.
     property bool _geometryRestored: false
+    readonly property bool _startHidden: typeof START_MINIMIZED !== "undefined" && START_MINIMIZED === true
+    // A maximised window started hidden is maximised when first shown:
+    // setting the visibility earlier would show it.
+    property bool _maximizeOnShow: false
 
     // Builds the current view's loader on its first visit. Board, Notes and
     // Docs are never unloaded again.
@@ -122,7 +128,10 @@ ApplicationWindow {
         }
         win.width = w;
         win.height = h;
-        if (g.maximized === true) win.visibility = Window.Maximized;
+        if (g.maximized === true) {
+            if (win.visible) win.visibility = Window.Maximized;
+            else win._maximizeOnShow = true;
+        }
         win._geometryRestored = true;
     }
 
@@ -343,6 +352,7 @@ ApplicationWindow {
     Component.onCompleted: {
         _keepRetiredThemes();
         _restoreGeometry();
+        if (win._startHidden && !win._minimizeToTray) win.showMinimized();
         _restoreFilters();
         _syncSelectionFilter();
         win.seedStarterDocs();
@@ -485,7 +495,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened || standupDraft.opened
+        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -697,6 +707,10 @@ ApplicationWindow {
     }
 
     function _summon() {
+        if (win._maximizeOnShow) {
+            win._maximizeOnShow = false;
+            win.showMaximized();
+        }
         if (win.visibility === Window.Minimized || win.visibility === Window.Hidden || !win.visible)
             win.show();
         win.raise();
@@ -1127,6 +1141,7 @@ ApplicationWindow {
                             function openHotkeys() { rail.openHotkeys(rail.hotkeysAnchor) }
                             function exportJson()  { exportJsonDialog.open() }
                             function importJson()  { importJsonDialog.open() }
+                            function openTimeMachine() { timeMachine.showNow() }
                         }
                     }
                 }
@@ -1377,10 +1392,15 @@ ApplicationWindow {
             // Nothing of heap is on screen to show it, so the confirmation is
             // an OS notification; clicking it opens the task.
             onCaptured: (title, body, taskId) => AppController.notifyCapture(taskId, title, body)
-            onSeenBeforeActivated: (hit) => {
-                win._summon();
-                win.openSeenBefore(hit);
-            }
+        }
+    }
+    // Outside the component, so `win` is in scope for qmllint (APP-159).
+    Connections {
+        target: captureLoader.item
+        ignoreUnknownSignals: true
+        function onSeenBeforeActivated(hit) {
+            win._summon();
+            win.openSeenBefore(hit);
         }
     }
 
@@ -1394,6 +1414,14 @@ ApplicationWindow {
             win._summon();
             // Edits to the task already open are not swapped out unasked (TASKS-18).
             taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
+        }
+        // "Open" on a meeting / standup reminder (APP-155): that day in the
+        // week view, and the meeting itself when it is a stored event.
+        function onOpenEventRequested(eventId, date) {
+            win._summon();
+            AppController.selectedDate = date;
+            AppController.currentView = "week";
+            if (eventId) eventEditor.showForId(eventId);
         }
     }
 
@@ -1448,6 +1476,7 @@ ApplicationWindow {
         case "recap.open":           weeklyRecap.showNow(); break;
         case "focus.immersion":      win.toggleImmersion(); break;
         case "standup.draft":        standupDraft.showNow(); break;
+        case "timeMachine.open":     timeMachine.showNow(); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1659,7 +1688,7 @@ ApplicationWindow {
     // field, a dialog) — those stand the shortcut down, so the two never
     // compete for the same key.
     Shortcut {
-        sequence: _kbd("focus.immersion")
+        sequence: win._kbd("focus.immersion")
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
         onActivated: win.toggleImmersion()
@@ -1668,7 +1697,7 @@ ApplicationWindow {
         sequence: "Escape"
         context: Qt.ApplicationShortcut
         enabled: AppController.immersion && !win._viewKeysBlocked && AppController.selectionCount === 0
-                 && !(AppController.currentView === "board" && !!boardLoader.item && boardLoader.item.cursorVisible === true)
+                 && !(AppController.currentView === "board" && !!boardLoader.item && boardLoader.item["cursorVisible"] === true)
         onActivated: AppController.stopImmersion()
     }
     Shortcut {
@@ -1737,7 +1766,7 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
                 || (AppController.currentView === "board"
-                    && !!boardLoader.item && boardLoader.item.cursorVisible === true))
+                    && !!boardLoader.item && boardLoader.item["cursorVisible"] === true))
         onActivated: {
             AppController.clearSelection();
             if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
@@ -1837,6 +1866,11 @@ ApplicationWindow {
     // The Monday recap: last week's column moves (WEAK PECAP). Opens itself
     // on the first launch of a week, and when the app is left running into
     // Monday; the palette opens it any time.
+    // The time machine (APP-162): Settings → Data and the palette open it.
+    TimeMachineDialog {
+        id: timeMachine
+    }
+
     WeeklyRecapDialog {
         id: weeklyRecap
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))

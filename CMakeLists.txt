@@ -192,20 +192,31 @@ qt_add_library(heap_core STATIC
     src/chrono/ChronoLocale_ru.cpp
     src/chrono/ChronoParser.cpp
     src/git/BranchTaskMatcher.cpp
+    src/git/BranchTaskResolve.cpp
     src/git/GitWatcher.cpp
+    # Command line (APP-173): heap add|now|list|today|done|open.
+    src/cli/CliConsole.cpp
+    src/cli/CliCore.cpp
+    src/cli/CliExecutor.cpp
+    src/cli/CliMain.cpp
+    src/cli/CliQuery.cpp
     src/text/TaskTextUtils.cpp
     src/query/QueryParser.cpp
     src/query/TaskQuery.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
+    src/notify/NotifyPayload.cpp
     src/platform/GlobalHotkey.cpp
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
+    src/platform/Autostart.cpp
     src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
+    src/storage/Snapshots.cpp
+    src/AppControllerHistory.cpp
     src/platform/SingleInstance.cpp
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
@@ -222,6 +233,7 @@ qt_add_library(heap_core STATIC
     # ── audit-know: begin ──
     src/storage/Attachments.cpp
     src/AppControllerAttachments.cpp
+    src/AppControllerPresence.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
@@ -230,6 +242,7 @@ qt_add_library(heap_core STATIC
     src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
+    src/diag/PerfLog.cpp
     # ── audit-int: end ──
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
@@ -251,11 +264,18 @@ qt_add_library(heap_core STATIC
     src/update/Updater.cpp
     src/update/UpdateInstall.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
+        # Notifications with buttons (APP-155): WinRT toasts, UNUserNotificationCenter.
+        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_mac.mm>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
         # Meetings from the desktop Outlook over COM (APP-118); a stub elsewhere.
         $<IF:$<PLATFORM_ID:Windows>,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_win.cpp,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_stub.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/MacWindow.mm>
+        # Start at login (APP-154): the Run key, a launch agent, an XDG entry.
+        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_mac.cpp>
+        $<$<NOT:$<OR:$<PLATFORM_ID:Windows>,$<PLATFORM_ID:Darwin>>>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_linux.cpp>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -298,6 +318,7 @@ qt_add_qml_module(heap_core
         qml/CalendarSubscriptionsCard.qml
         qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
+        qml/TimeMachineDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml
@@ -448,6 +469,9 @@ if (WIN32)
     target_link_libraries(heap_core PUBLIC crypt32)
     # COM late binding for the desktop Outlook calendar (OutlookDesktop_win.cpp).
     target_link_libraries(heap_core PUBLIC ole32 oleaut32 uuid)
+    # WinRT activation (RoGetActivationFactory, HSTRING) for the toasts, and
+    # SetCurrentProcessExplicitAppUserModelID (NotificationCenter_win.cpp).
+    target_link_libraries(heap_core PUBLIC runtimeobject shell32)
 endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
@@ -455,7 +479,7 @@ endif()
 # Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm;
 # AppKit backs the unified title bar (NSWindow restyle) in MacWindow.mm.
 if(APPLE)
-    target_link_libraries(heap_core PUBLIC "-framework Carbon" "-framework AppKit")
+    target_link_libraries(heap_core PUBLIC "-framework Carbon" "-framework AppKit" "-framework UserNotifications")
 endif()
 
 # Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
@@ -531,6 +555,34 @@ if(WIN32)
         target_link_options(heap-updater PRIVATE -municode -static)
     endif()
     add_dependencies(heap heap-updater)
+
+    # ── heap-cli (APP-173) — the console front door to heap.exe ──
+    # heap.exe is a GUI-subsystem binary, so cmd and PowerShell neither wait
+    # for it nor see its exit code. This console binary runs it with the
+    # shell waits for it. It answers the questions (now, list, today) itself
+    # with only QtCore/Gui/Network loaded — `now` runs in a shell prompt, and
+    # heap.exe with all of Qt Quick takes ~200 ms just to start — and runs
+    # heap.exe with its own console handles for add/done/open, passing the exit
+    # code through. Same sources as heap_core, compiled lean (no AppController).
+    add_executable(heap-cli
+        src/cli/heapcli_win.cpp
+        src/cli/CliConsole.cpp
+        src/cli/CliCore.cpp
+        src/cli/CliQuery.cpp
+        src/git/BranchTaskMatcher.cpp
+        src/git/BranchTaskResolve.cpp
+        src/platform/Paths.cpp
+        src/platform/SingleInstance.cpp
+        src/storage/StateIO.cpp
+        src/StateSerializer.cpp
+        src/Models.cpp
+    )
+    set_target_properties(heap-cli PROPERTIES AUTOMOC ON)
+    target_include_directories(heap-cli PRIVATE src src/markdown)
+    target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}")
+    target_link_libraries(heap-cli PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network heap_markdown shell32)
+    target_compile_options(heap-cli PRIVATE "${HEAP_WARNING_OPTIONS}")
+    add_dependencies(heap heap-cli)
 endif()
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
@@ -702,11 +754,12 @@ if(WIN32)
         endif()
 
         add_custom_target(portable
-                DEPENDS heap heap-updater
+                DEPENDS heap heap-updater heap-cli
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-updater>" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-cli>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
                         ${WINDEPLOYQT_EXECUTABLE}
                         --no-translations

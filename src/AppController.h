@@ -4,6 +4,7 @@
 
 #include "board/Rank.h"
 #include "safety/EndOfDay.h"
+#include "notify/NotifyPayload.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -189,6 +190,18 @@ class AppController : public QObject {
  public:
   explicit AppController(QObject* parent = nullptr);
   ~AppController() override;
+
+  // A command-line run (`heap add`, `heap done` with no window open, see
+  // src/cli): the same models and save path, but no tray icon, global
+  // hotkeys, git watcher, tracker sync, calendar fetches or update checks.
+  // Set before the controller is constructed.
+  static void setHeadless(bool headless) {
+    s_headless = headless;
+  }
+
+  static bool isHeadless() {
+    return s_headless;
+  }
 
   Q_INVOKABLE void flushSave();
 
@@ -541,6 +554,11 @@ class AppController : public QObject {
   // a tracker ticket ("LTE-2398 fix login") and no task has that id yet, is
   // the id instead.
   Q_INVOKABLE QVariantMap newQuickTaskDraft(const QString& ticketKey = QString()) const;
+  // The whole task QuickCapture makes of `raw`: newQuickTaskDraft with the
+  // title, "// description", priority, #labels and the date the text names
+  // (cut out of the title, read against `reference`, now when invalid). The
+  // popup and `heap add` both save this, so they cannot read text apart.
+  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw, const QDateTime& reference = QDateTime()) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.
@@ -854,6 +872,34 @@ class AppController : public QObject {
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
 
+  // ---- Start at login (APP-154) ----
+  // { supported, enabled, minimized }, read from the OS entry on every call so
+  // Settings shows what the next login will really do. While the entry is off,
+  // `minimized` is the remembered choice (settings.system.startMinimized).
+  Q_INVOKABLE QVariantMap autostartState() const;
+  // Writes or removes the OS entry and remembers the choice under
+  // settings.system. Starting at login implies staying in the tray: an
+  // unanswered close-to-tray question is answered "hide to tray". False (and
+  // an error toast) when the OS refused the change.
+  Q_INVOKABLE bool setAutostart(bool enabled, bool minimized);
+
+  // ---- Reminder buttons (APP-155) ----
+  // A heap://notify URI from a toast click, forwarded by the launch the shell
+  // started (main.cpp). Routes to the same handlers as a native button.
+  Q_INVOKABLE bool handleNotificationUri(const QString& uri);
+  // A sample reminder with the real buttons, from Settings → Notifications,
+  // shown even while heap has focus: it is how the user checks that the OS
+  // lets heap's notifications through.
+  Q_INVOKABLE void sendTestNotification();
+  // Puts a shown reminder off: it comes back `minutes` after `now`, with the
+  // same text, through the usual quiet-hours rules. Kept in snoozes.json.
+  void snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now);
+
+  // Snoozed reminders waiting (tests).
+  QVector<heap::notify::SnoozedReminder> pendingSnoozes() const {
+    return m_snoozed;
+  }
+
   // ---- Event ops ----
   // A fresh event id. Shared by the draft and the series edits, which both
   // need one and must not invent different shapes.
@@ -1084,6 +1130,12 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap parseDateTime(const QString& input, const QDateTime& reference = QDateTime()) const;
   Q_INVOKABLE QVariantList parseAllDateTimes(const QString& input, const QDateTime& reference = QDateTime()) const;
 
+  // ---- Opt-in timing (APP-161, diag/PerfLog.h) ----
+  // A popup calls this as it starts to show: span `name` (begun earlier by the
+  // global hotkey, or now) ends on the next frame `item`'s window presents, and
+  // is logged. A no-op unless HEAP_PERF_LOG=1 or --perf-log.
+  Q_INVOKABLE void perfMarkShown(const QString& name, QObject* item) const;
+
   Q_INVOKABLE void copyToClipboard(const QString& text);
 
   // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
@@ -1165,6 +1217,34 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantList listBackups() const;
   Q_INVOKABLE bool restoreFromBackup(const QString& fileName);
 
+  // ---- Time machine (APP-162, src/storage/Snapshots.h) ----
+  // Hourly snapshots in <dataDir>/history, newest first: { name, at (ISO),
+  // day ("yyyy-MM-dd"), time ("HH:mm"), sizeKb, tag, profiles, tasks, notes,
+  // docs }. The counts come from each file's summary line, nothing is inflated.
+  Q_INVOKABLE QVariantList listSnapshots() const;
+  // One snapshot, read-only, next to the state as it is now: { ok, error,
+  // name, at, profiles: [{ id, name, color, tasks, notes, docs, existsNow,
+  // tasksAdded, tasksRemoved, tasksChanged, notesAdded, notesRemoved,
+  // notesChanged }], totals: { the same six }, missing: [{ kind ("task" |
+  // "note" | "doc"), id, title, profileId, profileName, profileExists }],
+  // changed: [same shape] }. "Removed" = in the snapshot, gone now.
+  Q_INVOKABLE QVariantMap previewSnapshot(const QString& name);
+  // The whole state goes back to the snapshot. The state it replaces is
+  // snapshotted first (tag "pre"), so a restore is itself restorable.
+  Q_INVOKABLE bool restoreSnapshot(const QString& name);
+  // The snapshot's profile `profileId` comes back as a new profile, "<name>
+  // (restored HH:MM)", beside the current one. Returns the new id, "" on failure.
+  Q_INVOKABLE QString restoreSnapshotProfile(const QString& name, const QString& profileId);
+  // One task, note or doc page (`kind` "task" | "note" | "doc") from the
+  // snapshot's profile `profileId` goes back into that profile: re-inserted
+  // when it is gone, overwritten when it is there. Switches to the profile
+  // first; undoable.
+  Q_INVOKABLE bool restoreSnapshotItem(const QString& name, const QString& kind, const QString& profileId, const QString& itemId);
+  // Writes the current state into history right now under `tag`. Returns the
+  // file name, "" on failure.
+  QString takeSnapshotNow(const QString& tag);
+  QString historyDirPath() const;
+
   // ---- Shortcuts (rebindable keyboard catalog) ----
   QVariantList shortcuts() const {
     return m_shortcuts;
@@ -1237,6 +1317,11 @@ class AppController : public QObject {
   // Task-id prefixes the branch matcher should recognise: the configured local
   // one, plus the project key of every mirrored issue in the profile.
   Q_INVOKABLE QStringList collectPrefixes() const;
+  // The configured local task-id prefix ("TASK" unless set), uppercased.
+  QString taskIdPrefix() const;
+  // Every profile as it stands now: the stored copies, with the active one's
+  // tasks and columns taken from the live models (the stored copy lags them).
+  QVector<Profile> profilesSnapshot() const;
   // Turn what the matcher found in a branch name into a task id. For a local
   // task the key IS the id; a mirrored issue's id carries the provider, so it
   // is resolved through the tracker key instead.
@@ -1292,7 +1377,9 @@ class AppController : public QObject {
   void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
-  void notification(const QString& title, const QString& body, const QString& kind);
+  // `routeId` ("meeting:<event id>") makes it a reminder with buttons
+  // (APP-155); empty for a plain heads-up.
+  void notification(const QString& title, const QString& body, const QString& kind, const QString& routeId = QString());
   // `kind` tints the toast: "info" (default when empty), "success", "warning"
   // or "error". Every C++ toast used to arrive as info, failures included.
   void toast(const QString& message, const QString& kind = QString());
@@ -1332,6 +1419,9 @@ class AppController : public QObject {
   void trackerPushFailed(const QString& taskId, const QString& message);
   void focusedGitChanged();
   void openTaskRequested(const QString& id);
+  // "Open" on a meeting / standup reminder: the calendar at `date`, and the
+  // event's editor when `eventId` names a stored event (APP-155).
+  void openEventRequested(const QString& eventId, const QDate& date);
   void selectedTaskIdsChanged();
   // Raised by the OS-level global hotkeys (Quick-capture from anywhere). QML
   // brings the window forward and opens the matching capture popup.
@@ -1551,6 +1641,24 @@ class AppController : public QObject {
   QVector<HeldNotification> m_heldNotifications;
   QString remindersFilePath() const;
   void loadSentReminders();
+  // Reminder buttons (APP-155): what each kind offers, what was last shown
+  // under an id (so a snooze can bring the same text back), and the snoozes.
+  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind) const;
+
+  struct ShownReminder {
+    QString title;
+    QString body;
+    QString kind;
+    QDate date;  // meetings: the occurrence's day, for "Open"
+  };
+
+  QHash<QString, ShownReminder> m_shownReminders;
+  QVector<heap::notify::SnoozedReminder> m_snoozed;
+  QString snoozesFilePath() const;
+  void loadSnoozes();
+  void saveSnoozes() const;
+  void fireDueSnoozes(const QDateTime& now);
+  void openReminder(const QString& notificationId);
   void saveSentReminders() const;
   bool reminderSent(const QString& key) const;
   QSet<QString> sentReminderKeys() const;
@@ -1590,6 +1698,14 @@ class AppController : public QObject {
   void loadStateDocument(QJsonObject root, bool viewOnly);
   QString stateFilePath() const;
   QString backupDirPath() const;
+  // Writes `bytes` over state.json and reloads from it (a restore's last step).
+  bool replaceStateFile(const QByteArray& bytes);
+  // The time machine's parsed snapshot: one at a time, kept while the dialog
+  // looks at it so a restore does not inflate it again.
+  bool loadSnapshot(const QString& name, QString* error);
+  QString m_snapName;
+  QVector<Profile> m_snapProfiles;
+  QVector<CalEvent> m_snapEvents;
   // When the newest rotational backup on disk was taken; invalid when none.
   QDateTime newestBackupTime() const;
   // Crash/corruption recovery for loadStateOnStart(): find the newest backup
@@ -1638,6 +1754,7 @@ class AppController : public QObject {
   QJsonObject m_settingsExtra;
   // Next number to mint per task id prefix, across every profile (TASKS-1/31).
   QHash<QString, int> m_taskSeq;
+  static inline bool s_headless = false;
   // What resetSettingsToDefaults() replaced, for its Undo.
   QString m_settingsBeforeReset;
   // The id newTaskDraft & co. hand out for `stem`: past the persisted counter

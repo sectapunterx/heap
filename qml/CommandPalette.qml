@@ -79,6 +79,7 @@ Popup {
         // The standup draft (APP-170), once Settings → Safety net turns it on.
         if (AppController.safety && AppController.safety.standupDraft)
             out.push({ kind: "command", commandId: "standup.draft", label: I18n.t("palette.cmd.standupDraft"), sub: "" });
+        out.push({ kind: "command", commandId: "timeMachine.open", label: I18n.t("palette.cmd.timeMachine"), sub: "" });
         // Saved views: one command per view, by name, plus saving the current
         // filters as one.
         const views = AppController.savedViews;

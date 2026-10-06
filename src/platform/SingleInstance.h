@@ -4,7 +4,9 @@
 #include <QObject>
 #include <QString>
 
+#include <functional>
 #include <memory>
+#include <optional>
 
 class QLocalServer;
 class QLockFile;
@@ -37,8 +39,29 @@ class SingleInstance : public QObject {
   // Takes the lock, or forwards `message` to the process holding it.
   Result acquire(const QByteArray& message);
 
+  // Takes the lock without listening: a command-line run that changes the
+  // data while no window is open (APP-173). True when this process now owns
+  // the data dir (or nothing can be coordinated: a read-only dir).
+  bool tryLock();
+
+  // Answers a request line (one line of JSON, see cli/CliCore.h) that a `heap`
+  // command sent; the reply goes back on the same connection. A line that is
+  // not JSON keeps the plain "ok" + messageReceived protocol.
+  using RequestHandler = std::function<QByteArray(const QByteArray& line)>;
+  void setRequestHandler(RequestHandler handler);
+
+  // Sends `line` to the heap that owns `dataDir` and returns its reply line.
+  // Empty when no heap is listening there, or it did not answer in time.
+  static std::optional<QByteArray> request(const QString& dataDir, const QByteArray& line, int timeoutMs);
+
   // The local-socket name for a data dir (exposed for tests).
   static QString serverName(const QString& dataDir);
+
+  // Hands `message` to a heap already running on `dataDir`, without taking
+  // the lock or creating anything there. False when none answers. For a
+  // notification click naming a throwaway profile (APP-155): it may reach a
+  // heap that is running, never start one in a folder a URI chose.
+  static bool forwardOnly(const QString& dataDir, const QByteArray& message);
 
  signals:
   // Another launch asked this one to come forward; `message` is what it sent.
@@ -51,6 +74,7 @@ class SingleInstance : public QObject {
   QString m_dataDir;
   std::unique_ptr<QLockFile> m_lock;
   QLocalServer* m_server = nullptr;
+  RequestHandler m_requestHandler;
 };
 
 }  // namespace heap::platform
