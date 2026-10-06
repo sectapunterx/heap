@@ -116,12 +116,24 @@ QStringList pickToDelete(const QVector<SnapshotFile>& files, const QDateTime& no
   QStringList out;
   QSet<QString> hoursSeen;
   QSet<QDate> daysSeen;
+  // The newest copy taken before a restore is the way back from that restore
+  // (TM-3): neither its age nor the size cap takes it, so no prune that runs
+  // after a restore can remove what the restore replaced.
+  QString wayBack;
+  for(const SnapshotFile& f : std::as_const(sorted)) {
+    if(f.tag == QLatin1String("pre")) {
+      wayBack = f.name;
+      break;
+    }
+  }
   for(int i = 0; i < sorted.size(); ++i) {
     const SnapshotFile& f = sorted.at(i);
     const qint64 age = f.at.secsTo(now);
     bool keep = false;
     if(i == 0) {
       keep = true;  // whatever its age: the one copy there is
+    } else if(f.name == wayBack) {
+      keep = true;
     } else if(age < hourlySecs) {
       // Newest first, so the first one seen in an hour is that hour's last.
       const QString hour = f.at.toString(QStringLiteral("yyyyMMddHH"));
@@ -140,9 +152,18 @@ QStringList pickToDelete(const QVector<SnapshotFile>& files, const QDateTime& no
     }
   }
 
-  // The size cap takes the oldest of what is left; the newest always stays.
+  // The size cap takes the oldest of what is left; the newest and the way
+  // back from the last restore always stay, and count first.
   qint64 total = 0;
+  for(const SnapshotFile& f : std::as_const(kept)) {
+    if(f.name == wayBack) {
+      total += f.bytes;
+    }
+  }
   for(int i = 0; i < kept.size(); ++i) {
+    if(kept.at(i).name == wayBack) {
+      continue;
+    }
     total += kept.at(i).bytes;
     if(i > 0 && total > policy.maxBytes) {
       out.append(kept.at(i).name);

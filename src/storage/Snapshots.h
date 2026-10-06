@@ -66,6 +66,7 @@ bool isDue(const QVector<SnapshotFile>& existing, const QDateTime& now, qint64 m
 
 // Which files retention removes, given `files` (any order). Keeps:
 //   - the newest snapshot, always;
+//   - the newest "pre" one (taken before a restore), always, past the cap too;
 //   - within `hourlyHours`: every snapshot (one per clock hour for the
 //     automatic ones, every tagged one);
 //   - within `dailyDays`: the newest of each calendar day;
