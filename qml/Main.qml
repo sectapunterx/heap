@@ -426,7 +426,7 @@ ApplicationWindow {
             text: closeAsk.title
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
             leftPadding: Theme.inset; rightPadding: Theme.inset; topPadding: Theme.inset
             wrapMode: Text.Wrap
         }
@@ -1421,7 +1421,7 @@ ApplicationWindow {
                 text: I18n.t("welcome.resume")
                 color: Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
             Rectangle { width: 1; height: 18; color: Theme.border }
             // Give up on the tour. Nested (declared last) so it wins the click

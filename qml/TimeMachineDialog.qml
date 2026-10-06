@@ -197,7 +197,7 @@ Dialog {
                     text: root.dayLabel(section)
                     color: Theme.textDim
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                     font.capitalization: Font.AllUppercase
                 }
 
@@ -328,7 +328,7 @@ Dialog {
                               : ""
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         wrapMode: Text.Wrap
                     }
                     Text {
@@ -354,7 +354,7 @@ Dialog {
                         text: I18n.t("tm.profiles")
                         color: Theme.textDim
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.capitalization: Font.AllUppercase
                     }
                     Repeater {
@@ -400,7 +400,7 @@ Dialog {
                         text: I18n.t("tm.missing")
                         color: Theme.textDim
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.capitalization: Font.AllUppercase
                     }
                     Text {
@@ -424,7 +424,7 @@ Dialog {
                         text: I18n.t("tm.changed")
                         color: Theme.textDim
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.capitalization: Font.AllUppercase
                     }
                     Repeater {

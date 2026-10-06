@@ -101,7 +101,7 @@ Popup {
             Layout.fillWidth: true
             color: Theme.textMuted
             font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
             font.letterSpacing: 1
         }
 
@@ -278,7 +278,7 @@ Popup {
                     text: I18n.t("quickNote.discard.title")
                     color: Theme.text
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                     wrapMode: Text.WordWrap
                     Layout.fillWidth: true
                 }

@@ -59,7 +59,7 @@ Item {
     component H2: Text {
         color: Theme.text
         font.pixelSize: Theme.fsLg
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
         font.family: Theme.fontMono
         Layout.fillWidth: true
     }
@@ -68,7 +68,7 @@ Item {
         color: Theme.accentStrong
         font.pixelSize: Theme.fsMd
         font.family: Theme.fontMono
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
         font.letterSpacing: 0.5
         Layout.fillWidth: true
         Layout.topMargin: Theme.spSm
@@ -96,7 +96,7 @@ Item {
         color: Theme.accentStrong
         font.family: Theme.fontMono
         font.pixelSize: Theme.fsSm
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
     }
 
     ColumnLayout {
@@ -118,7 +118,7 @@ Item {
                         text: "?"
                         color: Theme.textOnAccent
                         font.pixelSize: Theme.fsXl
-                        font.weight: Font.Bold
+                        font.weight: Theme.fwTitle
                     }
                 }
                 ColumnLayout {

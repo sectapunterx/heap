@@ -75,14 +75,14 @@ Popup {
                     : I18n.t("editor.profile.dup")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("common.title").toUpperCase()
             color: Theme.textMuted; font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold; font.letterSpacing: 1
+            font.weight: Theme.fwTitle; font.letterSpacing: 1
         }
         TextField {
             id: nameField
@@ -100,7 +100,7 @@ Popup {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
             text: I18n.t("common.color").toUpperCase()
             color: Theme.textMuted; font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold; font.letterSpacing: 1
+            font.weight: Theme.fwTitle; font.letterSpacing: 1
         }
         Row {
             id: colorSwatch

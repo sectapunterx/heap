@@ -10,6 +10,6 @@ Text {
     rightPadding: Theme.inset
     color: Theme.text
     font.pixelSize: Theme.fsLg
-    font.weight: Font.DemiBold
+    font.weight: Theme.fwHeading
     wrapMode: Text.Wrap
 }

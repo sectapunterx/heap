@@ -393,7 +393,7 @@ Popup {
             text: I18n.t("quick.title")
             color: Theme.textMuted
             font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
             font.letterSpacing: 1
         }
 

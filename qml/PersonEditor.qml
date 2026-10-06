@@ -134,12 +134,12 @@ Popup {
             text: root.isNew ? I18n.t("editor.person.new") : I18n.t("editor.person.edit")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.name").toUpperCase()
-               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1 }
         TextField {
             id: nameField
             ContextMenu.menu: TextEditMenu { editor: nameField }
@@ -160,7 +160,7 @@ Popup {
         }
 
         Text { Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.id")
-               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1 }
         TextField {
             id: idField
             ContextMenu.menu: TextEditMenu { editor: idField }
@@ -188,7 +188,7 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.role").toUpperCase()
-               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1 }
         TextField {
             id: roleField
             ContextMenu.menu: TextEditMenu { editor: roleField }
@@ -201,7 +201,7 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("editor.label.question").toUpperCase()
-               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+               color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1 }
         ScrollView {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             Layout.preferredHeight: 64
@@ -223,7 +223,7 @@ Popup {
                 Layout.fillWidth: true
                 spacing: Theme.spXs
                 Text {
-                    text: I18n.t("editor.label.status").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                    text: I18n.t("editor.label.status").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
                 }
                 AppComboBox {
                     id: stateBox
@@ -241,7 +241,7 @@ Popup {
                 Layout.fillWidth: true
                 spacing: Theme.spXs
                 Text {
-                    text: I18n.t("editor.label.avatar").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                    text: I18n.t("editor.label.avatar").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
                 }
                 Row {
                     id: colorSwatch

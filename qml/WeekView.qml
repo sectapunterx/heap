@@ -526,7 +526,7 @@ Item {
                             text: I18n.relang(AppController.shortDate(weekStart)) + " — " + AppController.shortDate(new Date(weekStart.getFullYear(), weekStart.getMonth(), weekStart.getDate() + 6))
                             color: Theme.text
                             font.pixelSize: Theme.fsLg
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwHeading
                         }
                     }
                 }
@@ -653,7 +653,7 @@ Item {
                                     text: root.dowLabelsByJsDow[headCol.modelData.date.getDay()]
                                     color: headCol.isToday ? Theme.accentStrong : Theme.textMuted
                                     font.pixelSize: Theme.fsMd
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwTitle
                                     font.letterSpacing: 1
                                 }
                                 Rectangle {
@@ -661,7 +661,7 @@ Item {
                                     radius: Theme.radiusSm
                                     color: Theme.accent
                                     implicitWidth: tBadge.implicitWidth + 8; implicitHeight: 16
-                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1 }
+                                    Text { id: tBadge; anchors.centerIn: parent; text: I18n.t("week.todayBadge"); color: Theme.textOnAccent; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1 }
                                 }
                             }
                             Text {
@@ -672,7 +672,7 @@ Item {
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXl
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                             }
                         }
 
@@ -1147,7 +1147,7 @@ Item {
                                         text: weEv.modelData.title
                                         color: Theme.text
                                         font.pixelSize: weEv.compact ? Theme.fsXs : Theme.fsSm
-                                        font.weight: weEv.compact ? Font.Normal : Font.Medium
+                                        font.weight: weEv.compact ? Theme.fwBody : Theme.fwTitle
                                         elide: Text.ElideRight
                                     }
                                 }
@@ -1316,7 +1316,7 @@ Item {
                                 text: "▸ " + (wkBlock.modelData.title || "")
                                 color: Theme.text
                                 font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 elide: Text.ElideRight
                             }
                             ClickArea {

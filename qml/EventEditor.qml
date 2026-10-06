@@ -469,7 +469,7 @@ Popup {
     component FieldLabel: Text {
         color: Theme.textMuted
         font.pixelSize: Theme.fsXs
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
         font.letterSpacing: 1
     }
     component Field: TextField {
@@ -490,7 +490,7 @@ Popup {
             text: I18n.t("editor.label.eventTitle")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         Rectangle {

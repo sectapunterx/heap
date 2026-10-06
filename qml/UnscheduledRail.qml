@@ -112,7 +112,7 @@ Rectangle {
                 text: I18n.t("rail.unscheduled").toUpperCase()
                 color: Theme.textMuted
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
                 font.letterSpacing: 1
                 Layout.fillWidth: true
             }

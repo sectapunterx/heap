@@ -247,7 +247,7 @@ Item {
 
             Text {
                 text: root.rangeTitle()
-                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
                 Layout.preferredWidth: 240
             }
 
@@ -269,7 +269,7 @@ Item {
                         // accent is the screen's one action ("+ Task").
                         color: sel ? Theme.accentSoft : (modeMA.hovered ? Theme.panel3 : Theme.panel2)
                         border.color: sel ? Theme.withAlpha(Theme.accent, 0.5) : Theme.border; border.width: 1
-                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Font.DemiBold : Font.Normal }
+                        Text { anchors.centerIn: parent; text: parent.modelData.label; color: parent.sel ? Theme.accentStrong : Theme.text; font.pixelSize: Theme.fsSm; font.weight: parent.sel ? Theme.fwTitle : Theme.fwBody }
                         ClickArea {
                             id: modeMA
                             label: modeBtn.modelData.label
@@ -335,7 +335,7 @@ Item {
                     text: I18n.dayName(new Date(root.gridStart.getFullYear(),
                                                 root.gridStart.getMonth(),
                                                 root.gridStart.getDate() + index).getDay())
-                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold
+                    color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle
                 }
             }
         }
@@ -447,7 +447,7 @@ Item {
                             text: cell.date.getDate()
                             color: _today ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsSm
-                            font.weight: _today ? Font.DemiBold : Font.Normal
+                            font.weight: _today ? Theme.fwTitle : Theme.fwBody
                         }
 
                         // Chips — first few tasks, then events, then overflow.

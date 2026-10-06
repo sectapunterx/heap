@@ -134,7 +134,7 @@ Popup {
                     text: I18n.t("hotkeys.title").toUpperCase()
                     color: Theme.textMuted
                     font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                     font.letterSpacing: 1
                 }
                 // `?` opens this list from anywhere outside a text field.
@@ -269,7 +269,7 @@ Popup {
                 text: row.group.length > 0 ? I18n.t("hotkeys.group." + row.group).toUpperCase() : ""
                 color: Theme.textMuted
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
                 font.letterSpacing: 0.8
             }
             Rectangle {
@@ -306,7 +306,7 @@ Popup {
                     text: row.actionLabel
                     color: Theme.text
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.Medium
+                    font.weight: Theme.fwTitle
                     elide: Text.ElideRight
                     Layout.fillWidth: true
                 }

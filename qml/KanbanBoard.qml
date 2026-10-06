@@ -755,7 +755,7 @@ Item {
                                     text: col.statusName
                                     color: Theme.text
                                     font.pixelSize: Theme.fsMd
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwTitle
                                 }
                             }
                         }
@@ -846,7 +846,7 @@ Item {
                                         color: Theme.text
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.fwTitle
                                         elide: Text.ElideRight
                                         width: parent.width
                                     }
@@ -879,7 +879,7 @@ Item {
                                         background: Rectangle { radius: Theme.radiusSm; color: Theme.panel; border.color: Theme.accent; border.width: 1 }
                                         font.family: Theme.fontUi
                                         font.pixelSize: Theme.fsMd
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.fwTitle
                                         selectByMouse: true
                                         onAccepted: { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
                                         onActiveFocusChanged: if (!activeFocus && col.renaming) { AppController.renameStatus(col.statusId, text.trim()); col.renaming = false }
@@ -906,7 +906,7 @@ Item {
                                         font.family: Theme.fontUi
                                         font.features: Theme.tabularNums
                                         font.pixelSize: Theme.fsSm
-                                        font.weight: col.overWip ? Font.DemiBold : Font.Normal
+                                        font.weight: col.overWip ? Theme.fwTitle : Theme.fwBody
                                     }
                                     QQC.ToolTip.visible: col.overWip && wipHover.hovered
                                     QQC.ToolTip.text: I18n.t("kanban.wip.over").arg(col.statusName).arg(col.wipLimit)
@@ -1438,10 +1438,10 @@ Item {
             spacing: Theme.spLg
             Item { Layout.preferredHeight: 4 }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.newColumn"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
             }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("kanban.colName").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
             }
             TextField {
                 id: nameField
@@ -1455,7 +1455,7 @@ Item {
                 onAccepted: saveBtn.activate()
             }
             Text {
-                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; text: I18n.t("common.color").toUpperCase(); color: Theme.textMuted; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
             }
             Row {
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
@@ -1623,7 +1623,7 @@ Item {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Font.Medium
+            font.weight: Theme.fwTitle
             elide: Text.ElideRight
         }
         SequentialAnimation {
@@ -1720,7 +1720,7 @@ Item {
             text: hoverIcon.glyph
             color: hoverIcon.hot ? (hoverIcon.danger ? Theme.danger : Theme.text) : Theme.textMuted
             font.pixelSize: Theme.fsMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
         ClickArea {
             id: hoverIconMA
@@ -1770,7 +1770,7 @@ Item {
             text: root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
         Text {
             width: parent.width

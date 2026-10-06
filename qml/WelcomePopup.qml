@@ -164,7 +164,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsSm
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
             Text {
                 text: chip.fixedLabel.length > 0 ? chip.fixedLabel : AppController.shortcutLabel(chip.sid)
@@ -205,7 +205,7 @@ Popup {
                 text: I18n.t(root.cur.title)
                 color: Theme.text
                 font.pixelSize: Theme.fsXl
-                font.weight: Font.Bold
+                font.weight: Theme.fwHeading
                 elide: Text.ElideRight
             }
 
@@ -370,7 +370,7 @@ Popup {
                         color: Theme.accentStrong
                         font.underline: learnMa.hovered
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         ClickArea {
                             id: learnMa
                             label: I18n.t("welcome.learnMore")

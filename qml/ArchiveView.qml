@@ -165,7 +165,7 @@ Item {
                         text: I18n.t("archive.title")
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwHeading
                     }
                     Text {
                         text: archFilter.count + " " + I18n.t("archive.count")
@@ -304,7 +304,7 @@ Item {
                         text: row.st.name
                         color: Theme.readable(row.st.color)
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                 }
 

@@ -134,7 +134,7 @@ Popup {
             text: root.title
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
         }
 
         TextField {
@@ -215,7 +215,7 @@ Popup {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
 
@@ -227,7 +227,7 @@ Popup {
                             text: crow.modelData.name || ""
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.Medium
+                            font.weight: Theme.fwTitle
                             elide: Text.ElideRight
                         }
                         Text {

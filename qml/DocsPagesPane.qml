@@ -206,7 +206,7 @@ Item {
                         text: I18n.t("docs.pages").toUpperCase()
                         color: Theme.textMuted
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.letterSpacing: 1
                         Layout.fillWidth: true
                     }
@@ -349,7 +349,7 @@ Item {
                                 text: pageRow.modelData.title || ""
                                 color: Theme.text
                                 font.pixelSize: Theme.fsSm
-                                font.weight: pageRow.current ? Font.DemiBold : Font.Normal
+                                font.weight: pageRow.current ? Theme.fwTitle : Theme.fwBody
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }

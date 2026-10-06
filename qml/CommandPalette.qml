@@ -426,7 +426,7 @@ Popup {
                             color: modelData.color || Theme.accentStrong
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
 

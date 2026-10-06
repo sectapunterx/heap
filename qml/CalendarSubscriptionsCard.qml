@@ -66,7 +66,7 @@ Rectangle {
             text: I18n.t("calsub.title")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
         Text {
             Layout.fillWidth: true
@@ -122,7 +122,7 @@ Rectangle {
                             text: subRow.modelData.name + " · " + I18n.t("calsub.minutes").arg(subRow.modelData.minutes)
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                             elide: Text.ElideRight
                             Layout.fillWidth: true
                         }

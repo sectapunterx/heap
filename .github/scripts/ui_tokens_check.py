@@ -12,7 +12,10 @@ Fails when a QML file paints with a literal instead of a token:
     `Theme.scaledMs(220)`) instead of Theme.durTap / durPop / durMove (or
     their *Out halves), or an `Easing.*` curve instead of Theme.easeEnter /
     Theme.easeExit. Only Theme.qml names a duration or a curve, so the
-    whole app moves on one rule and "Reduce motion" zeroes every animation.
+    whole app moves on one rule and "Reduce motion" zeroes every animation;
+  - a font weight (`font.weight: Font.DemiBold`, `font.weight: 600`)
+    instead of Theme.fwBody / fwTitle / fwHeading. Three weights, one job
+    each: a free choice is what put DemiBold on 117 labels.
 
 A literal is what made the app grow 15 font sizes and 22 margins, and what
 kept Tweaks -> Density from moving anything but the hour height.
@@ -38,6 +41,8 @@ SPACE = re.compile(r"(?<![\w.])(?:\w+\.)*(?:" + SPACE_PROPS + r"):\s*(\d+)" + EN
 DURATION = re.compile(r"\bduration:\s*([^;}]*)")
 NUMBER = re.compile(r"(?<![\w.])\d")
 EASING = re.compile(r"\bEasing\.\w+")
+WEIGHT = re.compile(r"\bFont\.(?:Thin|ExtraLight|Light|Normal|Medium|DemiBold|Bold|ExtraBold|Black)\b"
+                    r"|\b(?:font\.)?weight:\s*\d")
 HEX = re.compile(r"[\"']#(?:[0-9a-fA-F]{3}|[0-9a-fA-F]{6}|[0-9a-fA-F]{8})[\"']")
 
 
@@ -66,6 +71,9 @@ def check(root: pathlib.Path):
                     m = EASING.search(code)
                     if m:
                         problems.append(f"{f}:{n}: easing {m.group(0)} - use Theme.easeEnter / Theme.easeExit")
+                    m = WEIGHT.search(code)
+                    if m:
+                        problems.append(f"{f}:{n}: font weight {m.group(0)} - use Theme.fwBody / fwTitle / fwHeading")
             if f.name not in EXEMPT_HEX and HEX.search(code):
                 problems.append(f"{f}:{n}: colour literal - use a Theme token or Theme.swatches")
     return problems

@@ -312,7 +312,7 @@ Rectangle {
             color: Theme.bg
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
     }
 
@@ -361,7 +361,7 @@ Rectangle {
                     textFormat: Text.PlainText
                     color: syncChip.quiet ? Theme.textDim : Theme.warning
                     font.pixelSize: Theme.fsXs
-                    font.weight: syncChip.quiet ? Font.Normal : Font.Medium
+                    font.weight: syncChip.quiet ? Theme.fwBody : Theme.fwTitle
                 }
                 readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
                     : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
@@ -402,7 +402,7 @@ Rectangle {
                     textFormat: Text.PlainText
                     color: Theme.warning
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.Medium
+                    font.weight: Theme.fwTitle
                 }
                 QQC.ToolTip.visible: conflictHover.hovered
                 QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
@@ -442,7 +442,7 @@ Rectangle {
                     color: Theme.danger
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.Medium
+                    font.weight: Theme.fwTitle
                 }
             }
             Text {
@@ -466,7 +466,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Font.Medium
+            font.weight: Theme.fwTitle
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap
@@ -584,7 +584,7 @@ Rectangle {
                 color: loud ? Theme.priorityColor(pri) : Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
-                font.weight: loud ? Font.Medium : Font.Normal
+                font.weight: loud ? Theme.fwTitle : Theme.fwBody
             }
         }
 
@@ -753,7 +753,7 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.weight: moveChip.mine ? Font.Medium : Font.Normal
+                            font.weight: moveChip.mine ? Theme.fwTitle : Theme.fwBody
                         }
                         readonly property string tip: moveChip.reason.length > 0 ? I18n.t("taskcard.move." + moveChip.reason) : ""
                         QQC.ToolTip.visible: moveHover.hovered && moveChip.tip.length > 0
@@ -860,7 +860,7 @@ Rectangle {
             font.family: Theme.fontUi
             font.features: Theme.tabularNums
             font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
     }
 
@@ -1019,7 +1019,7 @@ Rectangle {
                 color: Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
                 font.letterSpacing: 1
                 leftPadding: Theme.spXl
                 rightPadding: Theme.spXl

@@ -572,7 +572,7 @@ Item {
                 ColumnLayout {
                     spacing: 1
                     Layout.alignment: Qt.AlignVCenter
-                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                    Text { text: I18n.t("docs.header"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading }
                     Text {
                         text: I18n.t("docs.counts").arg(root.totalDocs()).arg(root.snippets.length).arg(root.contacts.length)
                         color: Theme.textDim
@@ -600,7 +600,7 @@ Item {
                                 text: I18n.t("docs.tab." + modelData)
                                 color: root.tab === modelData ? Theme.text : Theme.textDim
                                 font.pixelSize: Theme.fsSm
-                                font.weight: root.tab === modelData ? Font.DemiBold : Font.Normal
+                                font.weight: root.tab === modelData ? Theme.fwTitle : Theme.fwBody
                             }
                             ClickArea {
                                 id: tabMA
@@ -900,7 +900,7 @@ Item {
                                                 text: secCol.section.title
                                                 color: Theme.text
                                                 font.pixelSize: Theme.fsLg
-                                                font.weight: Font.DemiBold
+                                                font.weight: Theme.fwTitle
                                             }
                                             IconButton {
                                                 objectName: "docs-section-edit"
@@ -1015,7 +1015,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.accent }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.snippets"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle }
                                     Text {
                                         text: I18n.t("docs.cat.snippets.sub"); color: Theme.textMuted; font.pixelSize: Theme.fsMd
                                     }
@@ -1071,7 +1071,7 @@ Item {
                                 Rectangle { width: 4; height: 32; radius: 2; color: Theme.textMuted }
                                 ColumnLayout {
                                     spacing: 0
-                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold }
+                                    Text { text: I18n.t("docs.contacts"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle }
                                     Text {
                                         text: I18n.t("docs.cat.contacts.sub"); color: Theme.textMuted; font.pixelSize: Theme.fsMd
                                     }
@@ -1421,7 +1421,7 @@ Item {
                            color: card.accent
                            font.family: Theme.fontMono
                            font.pixelSize: Theme.fsSm
-                           font.weight: Font.DemiBold }
+                           font.weight: Theme.fwTitle }
                 }
                 Item { Layout.fillWidth: true }
                 Text {
@@ -1443,7 +1443,7 @@ Item {
                 text: card.item.title || ""
                 color: Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
                 wrapMode: Text.WordWrap
             }
             Text {
@@ -1658,7 +1658,7 @@ Item {
             RowLayout {
                 Layout.fillWidth: true
                 spacing: Theme.spSm
-                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium; Layout.fillWidth: true; elide: Text.ElideRight }
+                Text { text: sCard.snip.title || ""; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle; Layout.fillWidth: true; elide: Text.ElideRight }
                 Rectangle {
                     radius: Theme.radiusSm
                     color: Theme.panel2
@@ -1772,7 +1772,7 @@ Item {
                     font.family: Theme.fontUi
                     font.features: Theme.tabularNums
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
             }
             ColumnLayout {
@@ -1784,7 +1784,7 @@ Item {
                     // PlainText, not the AutoText default: these strings come
                     // from the Mattermost server, and a first_name of
                     // "<img src=…>" would otherwise be fetched on render.
-                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.Medium; elide: Text.ElideRight; Layout.fillWidth: true }
+                    Text { text: cc.c.name || ""; textFormat: Text.PlainText; color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle; elide: Text.ElideRight; Layout.fillWidth: true }
                     // Says where the card came from, so an edit that a later
                     // sync may overwrite is not a surprise.
                     Rectangle {

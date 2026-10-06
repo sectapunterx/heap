@@ -30,7 +30,7 @@ Rectangle {
             color: Theme.text
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
         Rectangle {
             Layout.preferredWidth: 1; Layout.preferredHeight: 18; color: Theme.border

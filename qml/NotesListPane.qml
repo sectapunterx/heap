@@ -210,7 +210,7 @@ Rectangle {
                 text: I18n.t("notes.all").toUpperCase()
                 color: Theme.textMuted
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
                 font.letterSpacing: 1
                 Layout.fillWidth: true
             }
@@ -308,7 +308,7 @@ Rectangle {
                         text: (rowData.label || "").toUpperCase()
                         color: Theme.textDim
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.letterSpacing: 1
                         elide: Text.ElideRight
                     }
@@ -382,7 +382,7 @@ Rectangle {
                                 text: row.note.title || ""
                                 color: Theme.text
                                 font.pixelSize: Theme.fsSm
-                                font.weight: row.current ? Font.DemiBold : Font.Normal
+                                font.weight: row.current ? Theme.fwTitle : Theme.fwBody
                                 elide: Text.ElideRight
                                 Layout.fillWidth: true
                             }
@@ -530,7 +530,7 @@ Rectangle {
             text: dragGhost.overTitle.length > 0 ? I18n.t("notes.dropToMerge").arg(dragGhost.overTitle) : dragGhost.title
             color: Theme.text
             font.pixelSize: Theme.fsSm
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
         }
     }
 

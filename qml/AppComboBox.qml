@@ -12,7 +12,7 @@ ComboBox {
     id: box
     // The field's text colour (a priority field colours its value).
     property color textColor: Theme.text
-    property int textWeight: Font.Normal
+    property int textWeight: Theme.fwBody
 
     implicitHeight: 30
     font.family: Theme.fontUi

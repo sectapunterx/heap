@@ -367,6 +367,14 @@ QtObject {
     // digits, so columns of numbers still line up without the mono texture.
     readonly property var tabularNums: ({ "tnum": 1 })
 
+    // ── Weight (APP-193) ─────────────────────────────────────────────
+    // Three weights, one job each. Golos at 600 and 13px reads as bold, so a
+    // screen where everything was DemiBold had no hierarchy left. QML outside
+    // this file never names a Font.* weight (ui_tokens_check.py).
+    readonly property int fwBody:    Font.Normal    // descriptions, meta, inputs
+    readonly property int fwTitle:   Font.Medium    // card titles, the active item, labels
+    readonly property int fwHeading: Font.DemiBold  // only the title of a screen or a dialog
+
     function withAlpha(c, a) { return Qt.rgba(c.r, c.g, c.b, a); }
 
     // Reactive hour formatter — picks 12h/24h based on settings.calendar.timeFormat.

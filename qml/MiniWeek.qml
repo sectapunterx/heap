@@ -73,7 +73,7 @@ Rectangle {
                 text: I18n.monthName(root.refDate.getMonth())
                 color: Theme.text
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
                 font.capitalization: Font.MixedCase
             }
             Text {
@@ -160,7 +160,7 @@ Rectangle {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsLg
-                            font.weight: Font.Medium
+                            font.weight: Theme.fwTitle
                             horizontalAlignment: Text.AlignHCenter
                             width: parent.parent.width
                         }

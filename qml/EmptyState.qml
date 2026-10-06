@@ -40,7 +40,7 @@ Column {
         text: root.title
         color: root.compact ? Theme.textDim : Theme.text
         font.pixelSize: root.compact ? Theme.fsSm : Theme.fsMd
-        font.weight: root.compact ? Font.Normal : Font.DemiBold
+        font.weight: root.compact ? Theme.fwBody : Theme.fwTitle
         wrapMode: Text.WordWrap
     }
     Text {

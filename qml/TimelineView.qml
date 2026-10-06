@@ -313,7 +313,7 @@ Item {
                 Column {
                     spacing: 1
                     Text {
-                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                        text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwHeading
                     }
                     // One count (APP-197). Today's date was here too; the
                     // "Today" bucket below already says it.
@@ -433,7 +433,7 @@ Item {
                                     anchors.centerIn: parent
                                     text: rowItem.meta ? rowItem.meta.icon : ""
                                     color: Theme.textOnAccent
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwTitle
                                     font.pixelSize: Theme.fsMd
                                 }
                             }
@@ -443,7 +443,7 @@ Item {
                                      : rowItem.rd.bucketId === "today" ? Theme.accentStrong
                                      : Theme.text
                                 font.pixelSize: Theme.fsLg
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 Layout.fillWidth: true
                                 wrapMode: Text.Wrap
                             }
@@ -525,7 +525,7 @@ Item {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsSm
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                         font.capitalization: Font.MixedCase
                     }
                     Rectangle {

@@ -736,7 +736,7 @@ Popup {
                 text: root.isNew ? I18n.t("editor.new.task") : I18n.t("editor.edit.task")
                 color: Theme.text
                 font.pixelSize: Theme.fsLg
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwHeading
             }
             Text {
                 visible: !root.isNew
@@ -747,7 +747,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
             PillButton {
@@ -797,7 +797,7 @@ Popup {
                                 textFormat: Text.PlainText
                                 color: root._badge.color || Theme.textMuted
                                 font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                             }
                             Text {
                                 text: (root._badge.name || root._ticket.provider || "")
@@ -831,7 +831,7 @@ Popup {
                                 textFormat: Text.PlainText
                                 color: Theme.warning
                                 font.pixelSize: Theme.fsSm
-                                font.weight: Font.DemiBold
+                                font.weight: Theme.fwTitle
                                 wrapMode: Text.WordWrap
                             }
                             Repeater {
@@ -877,7 +877,7 @@ Popup {
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     placeholderText: I18n.t("editor.ph.titleShort")
                     font.pixelSize: Theme.fsLg
-                    font.weight: Font.Medium
+                    font.weight: Theme.fwTitle
                     background: FieldBg {}
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
@@ -924,7 +924,7 @@ Popup {
                         Layout.preferredWidth: 88
                         model: ["P0", "P1", "P2", "P3"]
                         textColor: Theme.priorityColor(priBox.displayText)
-                        textWeight: Font.DemiBold
+                        textWeight: Theme.fwTitle
                     }
                     RowLayout {
                         Layout.fillWidth: true
@@ -1257,7 +1257,7 @@ Popup {
                             text: (root.detailsOpen ? "▾  " : "▸  ") + I18n.t("editor.details")
                             color: detailsMA.containsMouse ? Theme.text : Theme.textMuted
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         // What is filled in behind the fold, so a closed Details
                         // still says whether there is anything to look at.
@@ -1565,7 +1565,7 @@ Popup {
                         text: (root.historyOpen ? "▾  " : "▸  ") + I18n.t("editor.history").arg(root._history.length)
                         color: historyMA.containsMouse ? Theme.text : Theme.textMuted
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                     MouseArea {
                         id: historyMA
@@ -1722,7 +1722,7 @@ Popup {
                 text: I18n.t("editor.dirty.title")
                 color: Theme.text
                 font.pixelSize: Theme.fsLg
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwHeading
                 wrapMode: Text.Wrap
             }
             Text {
@@ -1793,7 +1793,7 @@ Popup {
     component FieldLabel: Text {
         color: Theme.textMuted
         font.pixelSize: Theme.fsXs
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
         font.letterSpacing: 1
         topPadding: Theme.sp2xs
     }

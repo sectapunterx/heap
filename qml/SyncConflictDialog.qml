@@ -110,7 +110,7 @@ Dialog {
                     textFormat: Text.PlainText
                     color: Theme.text
                     font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 GridLayout {
                     Layout.fillWidth: true

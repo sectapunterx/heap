@@ -63,7 +63,7 @@ Button {
         text: root.text
         font.family: Theme.fontUi
         font.pixelSize: Theme.fsMd
-        font.weight: primary ? Font.DemiBold : Font.Medium
+        font.weight: Theme.fwTitle
         color: primary ? Theme.textOnAccent : danger ? Theme.danger : selected ? Theme.accentStrong : Theme.text
         horizontalAlignment: Text.AlignHCenter
         verticalAlignment: Text.AlignVCenter

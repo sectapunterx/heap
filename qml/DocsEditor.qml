@@ -58,7 +58,7 @@ Popup {
                     : root.kind === "snippet" ? I18n.t(root.isNew ? "docs.editor.title.new.snip" : "docs.editor.title.edit.snip")
                         : root.kind === "section" ? I18n.t(root.isNew ? "docs.editor.title.new.section" : "docs.editor.title.edit.section")
                             : I18n.t(root.isNew ? "docs.editor.title.new.contact" : "docs.editor.title.edit.contact")
-                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Theme.fwTitle
             }
             Text {
                 visible: !root.isNew && root.kind === "doc" && (root.draft.ref || "").length > 0
@@ -66,7 +66,7 @@ Popup {
                 color: Theme.accentStrong
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsMd
-                font.weight: Font.Medium
+                font.weight: Theme.fwTitle
             }
             Item { Layout.fillWidth: true }
         }
@@ -512,7 +512,7 @@ Popup {
     component FieldLabel: Text {
         color: Theme.textMuted
         font.pixelSize: Theme.fsXs
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
         font.letterSpacing: 1
         topPadding: Theme.sp2xs
     }

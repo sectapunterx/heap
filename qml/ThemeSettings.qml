@@ -199,7 +199,7 @@ ColumnLayout {
                 Text {
                     text: I18n.t("settings.theme.cat." + catCol.modelData).toUpperCase()
                     color: Theme.textMuted
-                    font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                    font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
                 }
                 Text {
                     Layout.fillWidth: true
@@ -256,7 +256,7 @@ ColumnLayout {
                             color: card.t.colors.text
                             elide: Text.ElideRight
                             font.pixelSize: Theme.fsSm
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         Text {
                             x: 10; y: 74
@@ -406,7 +406,7 @@ ColumnLayout {
             Text {
                 text: I18n.t("settings.theme.colors").toUpperCase()
                 color: Theme.textMuted
-                font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
             }
             Text {
                 Layout.fillWidth: true
@@ -468,7 +468,7 @@ ColumnLayout {
             Text {
                 text: I18n.t("theme.group." + grp.modelData)
                 color: Theme.textDim
-                font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold; font.letterSpacing: 1
+                font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle; font.letterSpacing: 1
                 font.capitalization: Font.AllUppercase
                 Layout.topMargin: Theme.spSm
             }

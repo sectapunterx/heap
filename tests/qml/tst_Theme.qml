@@ -89,6 +89,13 @@ TestCase {
         compare(plainProbe.fontInfo.family, "heap Golos Text");
     }
 
+    // ── Weights (APP-193): three, one job each, and only the heading at 600 ──
+    function test_three_weights() {
+        compare(Theme.fwBody, Font.Normal);
+        compare(Theme.fwTitle, Font.Medium);
+        compare(Theme.fwHeading, Font.DemiBold);
+    }
+
     // ── withAlpha: keeps r/g/b, replaces alpha ──
     function test_withalpha_preserves_rgb_sets_alpha() {
         const c = Qt.rgba(0.2, 0.4, 0.6, 1.0);

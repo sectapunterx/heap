@@ -382,7 +382,7 @@ Rectangle {
             color: Theme.textDim
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsXs
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
             font.letterSpacing: 0.8
         }
         Rectangle {
@@ -473,7 +473,7 @@ Rectangle {
             id: labelFull
             font.family: Theme.fontUi
             font.pixelSize: Theme.fsMd
-            font.weight: btn.active ? Font.DemiBold : Font.Normal
+            font.weight: btn.active ? Theme.fwTitle : Theme.fwBody
             font.italic: btn.modified
             text: railLabel.text
         }
@@ -498,7 +498,7 @@ Rectangle {
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
             font.family: Theme.fontUi
             font.pixelSize: railLabel.tight ? Theme.fsSm : Theme.fsMd
-            font.weight: btn.active ? Font.DemiBold : Font.Normal
+            font.weight: btn.active ? Theme.fwTitle : Theme.fwBody
         }
         Text {
             id: comboT
@@ -529,7 +529,7 @@ Rectangle {
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
+                font.weight: Theme.fwTitle
             }
         }
         MouseArea {

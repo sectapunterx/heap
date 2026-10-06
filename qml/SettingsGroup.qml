@@ -41,7 +41,7 @@ ColumnLayout {
             text: group.title
             color: group.danger ? Theme.danger : Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwTitle
             wrapMode: Text.WordWrap
         }
         Text {

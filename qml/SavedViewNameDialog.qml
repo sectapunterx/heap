@@ -61,7 +61,7 @@ Popup {
             text: root.mode === "rename" ? I18n.t("savedview.dialog.renameTitle") : I18n.t("savedview.dialog.saveTitle")
             color: Theme.text
             font.pixelSize: Theme.fsLg
-            font.weight: Font.DemiBold
+            font.weight: Theme.fwHeading
             elide: Text.ElideRight
         }
         TextField {

@@ -84,7 +84,7 @@ Rectangle {
             ColumnLayout {
                 Layout.fillWidth: true
                 spacing: 1
-                Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold }
+                Text { text: I18n.t("settings.integrations.autoSync"); color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle }
                 Text { text: I18n.t("settings.integrations.autoSyncHint"); color: Theme.textMuted; font.pixelSize: Theme.fsMd; Layout.fillWidth: true; wrapMode: Text.WordWrap }
             }
             Repeater {

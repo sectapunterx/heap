@@ -178,7 +178,7 @@ Popup {
                 // language the same way MonthView's title does, rather than
                 // whatever the host is set to.
                 text: I18n.monthName(pop._month) + " " + pop._year
-                color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Font.DemiBold
+                color: Theme.text; font.pixelSize: Theme.fsMd; font.weight: Theme.fwTitle
             }
             Rectangle {
                 width: 24; height: 24; radius: Theme.radiusMd
@@ -205,7 +205,7 @@ Popup {
                 // — the version CI builds with — segfault while AOT-compiling
                 // every file that instantiates this popup.
                 text: I18n.dayName(model.day)
-                color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Font.DemiBold
+                color: Theme.textDim; font.pixelSize: Theme.fsXs; font.weight: Theme.fwTitle
             }
         }
 
@@ -231,7 +231,7 @@ Popup {
                     text: model.day
                     color: parent._isSel ? Theme.textOnAccent : Theme.text
                     font.pixelSize: Theme.fsSm
-                    font.weight: parent._isSel ? Font.DemiBold : Font.Normal
+                    font.weight: parent._isSel ? Theme.fwTitle : Theme.fwBody
                 }
                 MouseArea {
                     id: dayMA; anchors.fill: parent; hoverEnabled: true

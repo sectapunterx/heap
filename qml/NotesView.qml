@@ -616,7 +616,7 @@ Item {
                         text: root._activeTitle.length > 0 ? root._activeTitle : I18n.t("notes.header")
                         color: Theme.text
                         font.pixelSize: Theme.fsLg
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwHeading
                         elide: Text.ElideRight
                         Layout.maximumWidth: root.width * 0.4
                     }
@@ -720,7 +720,7 @@ Item {
                         text: I18n.t("notes.links")
                         color: root.showBacklinks ? Theme.textOnAccent : Theme.textMuted
                         font.pixelSize: Theme.fsSm
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         id: blToggleMA
@@ -768,7 +768,7 @@ Item {
                                     text: modelData.label
                                     color: parent.active ? Theme.accentStrong : Theme.text
                                     font.pixelSize: Theme.fsSm
-                                    font.weight: parent.active ? Font.DemiBold : Font.Medium
+                                    font.weight: Theme.fwTitle
                                 }
                                 ClickArea {
                                     id: segMA
@@ -1056,7 +1056,7 @@ Item {
                             text: I18n.t("notes.backlinks")
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         Text {
                             visible: root._incoming.length === 0
@@ -1079,7 +1079,7 @@ Item {
                                     text: "← " + modelData.title
                                     color: Theme.mdTicket
                                     font.pixelSize: Theme.fsSm
-                                    font.weight: Font.DemiBold
+                                    font.weight: Theme.fwTitle
                                     font.underline: incomingMA.hovered
                                     elide: Text.ElideRight
                                     ClickArea {
@@ -1111,7 +1111,7 @@ Item {
                             text: I18n.t("notes.outgoing")
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                         Text {
                             visible: root._outgoing.length === 0
@@ -1136,7 +1136,7 @@ Item {
                                         text: (modelData.resolved ? "→ " : "△ ") + modelData.target
                                         color: modelData.resolved ? Theme.mdTicket : Theme.warning
                                         font.pixelSize: Theme.fsSm
-                                        font.weight: Font.DemiBold
+                                        font.weight: Theme.fwTitle
                                         font.underline: outgoingMA.hovered
                                         elide: Text.ElideRight
                                         Layout.fillWidth: true
@@ -1333,7 +1333,7 @@ Item {
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
                     Rectangle {
@@ -1347,7 +1347,7 @@ Item {
                             color: Theme.accentStrong
                             font.family: Theme.fontMono
                             font.pixelSize: Theme.fsXs
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
                     Rectangle {
@@ -1360,7 +1360,7 @@ Item {
                             text: "⌗"
                             color: Theme.heading
                             font.pixelSize: Theme.fsSm
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                         }
                     }
 

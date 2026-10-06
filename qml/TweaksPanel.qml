@@ -82,7 +82,7 @@ Popup {
                     text: I18n.t("tweaks.title").toUpperCase()
                     color: Theme.textMuted
                     font.pixelSize: Theme.fsSm
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                     font.letterSpacing: 1
                 }
                 Item { Layout.fillWidth: true }
@@ -255,7 +255,7 @@ Popup {
         color: Theme.textDim
         font.pixelSize: Theme.fsXs
         font.letterSpacing: 1
-        font.weight: Font.DemiBold
+        font.weight: Theme.fwTitle
     }
 
     component FieldLabel: Text {
@@ -287,7 +287,7 @@ Popup {
             text: parent.text
             color: parent.active ? Theme.accentStrong : Theme.text
             font.pixelSize: Theme.fsMd
-            font.weight: parent.active ? Font.DemiBold : Font.Medium
+            font.weight: Theme.fwTitle
         }
         MouseArea {
             id: segMA

@@ -285,7 +285,7 @@ Item {
                             text: I18n.relang(AppController.humanDate(AppController.selectedDate))
                             color: Theme.text
                             font.pixelSize: Theme.fsMd
-                            font.weight: Font.DemiBold
+                            font.weight: Theme.fwTitle
                             font.capitalization: Font.MixedCase
                         }
                         Text {
@@ -747,7 +747,7 @@ Item {
                                             text: evRect.context
                                             color: Theme.textMuted
                                             font.pixelSize: Theme.fsMd
-                                            font.weight: Font.DemiBold
+                                            font.weight: Theme.fwTitle
                                             elide: Text.ElideRight
                                             Layout.maximumWidth: parent.width * 0.45
                                         }
@@ -766,7 +766,7 @@ Item {
                                                   + (evRect.compactRow ? "  " + Theme.fmtHour(evRect.effStart) : "")
                                             color: Theme.text
                                             font.pixelSize: Theme.fsMd
-                                            font.weight: Font.DemiBold
+                                            font.weight: Theme.fwTitle
                                             elide: Text.ElideRight
                                         }
                                     }

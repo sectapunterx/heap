@@ -153,7 +153,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsMd
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                         // A long profile name pushed "+ Task" and the panel
                         // toggle off the window.
                         elide: Text.ElideRight
@@ -270,7 +270,7 @@ Rectangle {
                     color: Theme.accentStrong
                     font.family: Theme.fontMono
                     font.pixelSize: Theme.fsMd
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 // ── Live PR state on the focused repo (HEAP-76) ──
                 Rectangle {
@@ -312,7 +312,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         objectName: "topbar-pr-badge"
@@ -355,7 +355,7 @@ Rectangle {
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.DemiBold
+                        font.weight: Theme.fwTitle
                     }
                 }
                 Rectangle {
@@ -371,7 +371,7 @@ Rectangle {
                         text: I18n.t("topbar.git.open")
                         color: openMA.hovered ? Theme.bg : Theme.accentStrong
                         font.pixelSize: Theme.fsXs
-                        font.weight: Font.Medium
+                        font.weight: Theme.fwTitle
                     }
                     ClickArea {
                         id: openMA
@@ -442,7 +442,7 @@ Rectangle {
                     text: I18n.t("immersion.on")
                     color: Theme.accentStrong
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: Theme.fwTitle
                 }
                 Text {
                     objectName: "topbar-immersion-time"
