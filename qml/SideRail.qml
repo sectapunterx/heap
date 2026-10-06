@@ -550,9 +550,11 @@ Rectangle {
                 if (btn.shortcutId.length > 0) AppController.noteMouseAction(btn.shortcutId);
                 btn.activated();
             }
-            // Labels are on screen when expanded; the tooltip is only for
-            // the icon-only rail — under the pointer, or on Tab (APP-184).
-            ToolTip.visible: (containsMouse || btn.activeFocus) && !btn.expanded && btn.tooltipText !== ""
+            // Labels are on screen when expanded; the tooltip is for the
+            // icon-only rail, or a label a longer language cut short
+            // (APP-189) — under the pointer, or on Tab (APP-184).
+            ToolTip.visible: (containsMouse || btn.activeFocus) && (!btn.expanded || railLabel.truncated)
+                             && btn.tooltipText !== ""
             ToolTip.text: btn._combo.length ? btn.tooltipText + "   " + btn._combo : btn.tooltipText
             ToolTip.delay: 400
         }

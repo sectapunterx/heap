@@ -318,6 +318,7 @@ qt_add_qml_module(heap_core
         qml/Main.qml
         qml/Theme.qml
         qml/ThemePresets.js
+        qml/Pseudo.js
         # ── audit-plat: begin ──
         qml/StorageBanner.qml
         # ── audit-plat: end ──

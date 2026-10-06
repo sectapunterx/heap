@@ -1155,6 +1155,10 @@ Popup {
                             text: I18n.t("att.hint.task")
                             color: Theme.textDim
                             font.pixelSize: Theme.fsXs
+                            // Two lines before it gives up: a longer language
+                            // lost the end of the hint (APP-189).
+                            wrapMode: Text.WordWrap
+                            maximumLineCount: 2
                             elide: Text.ElideRight
                         }
                         Item { Layout.fillWidth: root._attachments.length > 0 }

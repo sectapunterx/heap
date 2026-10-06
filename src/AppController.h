@@ -108,6 +108,7 @@ class AppController : public QObject {
   Q_PROPERTY(QString theme READ theme WRITE setTheme NOTIFY themeChanged)
   Q_PROPERTY(QString density READ density WRITE setDensity NOTIFY densityChanged)
   Q_PROPERTY(QString language READ language WRITE setLanguage NOTIFY languageChanged)
+  Q_PROPERTY(bool pseudoLocale READ pseudoLocale CONSTANT)
   Q_PROPERTY(QString currentView READ currentView WRITE setCurrentView NOTIFY currentViewChanged)
   Q_PROPERTY(QString focusedStatus READ focusedStatus NOTIFY focusedStatusChanged)
 
@@ -293,6 +294,12 @@ class AppController : public QObject {
 
   QString language() const {
     return m_language;
+  }
+
+  // HEAP_LANG=pseudo: the UI in a stretched, accented English (APP-189), to
+  // find text cut short by a fixed width. For development; no setting.
+  bool pseudoLocale() const {
+    return qEnvironmentVariable("HEAP_LANG") == QLatin1String("pseudo");
   }
 
   void setLanguage(const QString& v);
@@ -1702,6 +1709,8 @@ class AppController : public QObject {
   // The palette rows for one profile's notes and doc pages (see searchFullText).
   QVariantList fullTextEntries(const Profile& p) const;
   QString m_appSettingsJson;
+  // The profile's language while HEAP_LANG=pseudo shows English (APP-189).
+  QString m_languageUnderPseudo;
   // heap::platform::systemTextScale(), read on first use (APP-183).
   mutable double m_systemTextScale = 0;
   // settingsMap()'s parse cache, keyed on the string above so that no writer

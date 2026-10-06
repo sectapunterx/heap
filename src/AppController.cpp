@@ -859,6 +859,12 @@ AppController::AppController(QObject* parent) :
   if(!QStandardPaths::isTestModeEnabled()) {
     m_language = heap::text::uiLanguageFor(QLocale::system().uiLanguages());
   }
+  // The pseudo-locale (APP-189) is stretched English: C++-made dates and
+  // labels speak English with it, and the profile keeps its own language.
+  if(pseudoLocale()) {
+    m_languageUnderPseudo = m_language;
+    m_language = QStringLiteral("en");
+  }
 
   seedShortcutCatalog();
 
@@ -10001,7 +10007,7 @@ void AppController::saveStateNow() {
   QJsonObject s = m_settingsExtra;
   s["theme"] = m_theme;
   s["density"] = m_density;
-  s["language"] = m_language;
+  s["language"] = pseudoLocale() ? m_languageUnderPseudo : m_language;
   s["currentView"] = m_currentView;
   s["workdayStart"] = m_workdayStart;
   s["workdayEnd"] = m_workdayEnd;
@@ -10390,6 +10396,10 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     if(s.contains("language")) {
       const QString v = s["language"].toString();
       m_language = (v == "ru") ? QStringLiteral("ru") : QStringLiteral("en");
+      if(pseudoLocale()) {
+        m_languageUnderPseudo = m_language;
+        m_language = QStringLiteral("en");
+      }
       emit languageChanged();
     }
     if(s.contains("currentView")) {

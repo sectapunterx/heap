@@ -318,10 +318,25 @@ Item {
         anchors.fill: parent
         spacing: 0
 
-        // Left nav. Grows with the interface scale (APP-183), or large text
-        // cuts the section names short.
+        // Left nav. Grows with the interface scale (APP-183) and with the
+        // longest section name (APP-189), up to a third more, or large text
+        // and longer languages cut the names short.
+        FontMetrics {
+            id: navFont
+            font.pixelSize: Theme.fsMd
+            font.weight: Theme.fwTitle
+        }
         Rectangle {
-            Layout.preferredWidth: Theme.px(240)
+            readonly property real _widestTitle: {
+                let w = 0;
+                for (let i = 0; i < root.sections.length; i++)
+                    w = Math.max(w, navFont.advanceWidth(String(root.sections[i].title)));
+                return w;
+            }
+            // Outer margins, the row's margins, the icon and its gap, and a
+            // little slack for rounding and glyphs from a fallback font.
+            Layout.preferredWidth: Math.min(Theme.px(320), Math.max(Theme.px(240),
+                Math.ceil(_widestTitle) + 2 * Theme.sp2xl + 3 * Theme.spXl + 16 + Theme.spLg))
             Layout.fillHeight: true
             color: Theme.panel
             Rectangle {
@@ -1055,7 +1070,7 @@ Item {
         Rectangle {
             Layout.preferredWidth: segInner.implicitWidth + 2 * Theme.sp2xs
             Layout.fillWidth: segRow.stacked
-            Layout.preferredHeight: 30
+            Layout.preferredHeight: Theme.px(30)
             radius: Theme.radiusMd
             color: Theme.panel2
             border.color: Theme.border; border.width: 1
@@ -1081,7 +1096,7 @@ Item {
                         readonly property bool sel: segOpt.v === segRow.value
                         Layout.fillWidth: true
                         Layout.fillHeight: true
-                        Layout.preferredWidth: Math.max(64, segTxt.implicitWidth + 2 * Theme.spXl)
+                        Layout.preferredWidth: Math.max(Theme.px(64), segTxt.implicitWidth + 2 * Theme.spXl)
                         implicitWidth: Layout.preferredWidth
                         radius: Theme.radiusSm
                         color: segOpt.sel ? Theme.accent
