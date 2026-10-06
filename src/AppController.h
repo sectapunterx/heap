@@ -5,6 +5,7 @@
 #include "board/Rank.h"
 #include "history/TaskHistory.h"
 #include "integrations/SyncHealth.h"
+#include "notify/EventLog.h"
 #include "notify/NotifyPayload.h"
 #include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
@@ -173,6 +174,17 @@ class AppController : public QObject {
   // — the card stays connected. `outOfScope` counts cards left behind by a
   // filter change (repo, JQL…), which the card offers to archive.
   Q_PROPERTY(QVariantMap integrationStates READ integrationStates NOTIFY integrationStatesChanged)
+  // A tracker or directory pull is out and has not answered yet (APP-186).
+  // The header shows it only once it has taken long enough to notice.
+  Q_PROPERTY(bool syncing READ syncing NOTIFY syncingChanged)
+  // Cards a sync brought in that the user has not looked at yet (APP-180):
+  // read isTaskUnseen(id) with this in the binding, so a card follows.
+  Q_PROPERTY(int unseenRevision READ unseenRevision NOTIFY unseenTasksChanged)
+  // The cards the latest sync brought in, which `is:new` filters to.
+  Q_PROPERTY(QStringList syncNewTaskIds READ syncNewTaskIds NOTIFY syncNewTaskIdsChanged)
+  // The event log (APP-187), newest first: { id, at, kind, message, taskIds,
+  // route, count }. This session only, at most 100 entries.
+  Q_PROPERTY(QVariantList eventLog READ eventLog NOTIFY eventLogChanged)
 
   // ---- Git focus banner ----
   Q_PROPERTY(QString focusedTaskId READ focusedTaskId NOTIFY focusedGitChanged)
@@ -600,6 +612,39 @@ class AppController : public QObject {
   // language. Read-only.
   Q_INVOKABLE QVariantList integrationHealth() const;
   QVariantList integrationHealthAt(const QDateTime& now) const;
+
+  // ---- Sync visibility (APP-180/186/187) ----
+  bool syncing() const {
+    return !m_syncInFlight.isEmpty();
+  }
+
+  int unseenRevision() const {
+    return m_unseenRevision;
+  }
+
+  QStringList syncNewTaskIds() const {
+    return m_syncNewIds;
+  }
+
+  // A card a sync brought in, not yet opened or reached by the cursor.
+  Q_INVOKABLE bool isTaskUnseen(const QString& taskId) const {
+    return m_unseenTaskIds.contains(taskId);
+  }
+
+  // Opened, or the keyboard cursor landed on it: the dot goes.
+  Q_INVOKABLE void markTaskSeen(const QString& taskId);
+  // What a pull does for the cards it adds; public so the QML tests can set
+  // the state up the way a sync does.
+  Q_INVOKABLE void markTasksUnseen(const QStringList& taskIds);
+
+  QVariantList eventLog() const {
+    return m_eventLog.toVariantList();
+  }
+
+  // Adds an entry to the event log. QML uses it for the failures it reports
+  // itself (an import that did not read); everything C++ reports is logged
+  // where it is said.
+  Q_INVOKABLE void logEvent(const QString& kind, const QString& message, const QStringList& taskIds = {}, const QString& route = QString());
   // What happened to a task, newest first: [{ at, kind, from, to, sync }]
   // (APP-165). kind: created | status | title | priority | due | scheduled
   // | pushed. Capped per task; see history/TaskHistory.h.
@@ -738,6 +783,9 @@ class AppController : public QObject {
     int outOfScope = 0;
     // The keys of the cards behind `conflicts`, so the toast can name them.
     QStringList conflictKeys;
+    // The heap ids of the cards behind `added`, in pull order, so the toast
+    // can name them and "Show" can filter to them (APP-180).
+    QStringList addedIds;
   };
 
   // Fold a batch of pulled external tasks into the model. providerId tags the
@@ -769,6 +817,12 @@ class AppController : public QObject {
   // re-sync does not churn docsState. Public for the same reason as
   // mergeExternalTasks: the rules are worth testing without a live server.
   int mergeExternalContacts(const QString& providerId, const QVector<heap::integrations::ExternalContact>& contacts);
+
+  // The one message for one pull's stats: a toast, an event-log entry and,
+  // when it brought cards, syncNews naming them (APP-180). Quiet when a
+  // follow-up pull found nothing. Public so the wording can be tested
+  // without a live tracker.
+  void reportSync(const QString& label, const MergeStats& stats, bool settlePull);
 
   // ---- Durability audit (HEAP-156) ----
   // Every quarantine / backup recovery / failed write, oldest first. Local file,
@@ -1461,6 +1515,13 @@ class AppController : public QObject {
   // shows its buttons as busy until this arrives and keeps the last error on
   // screen, since the toast is gone in a few seconds (design audit DES-5).
   void integrationActionFinished(const QString& providerId, const QString& action, bool ok, const QString& message);
+  // A sync brought new cards (APP-180): the toast names them and offers to
+  // show them. One per pull, instead of the plain toast.
+  void syncNews(const QString& message, const QStringList& taskIds);
+  void syncingChanged();
+  void unseenTasksChanged();
+  void syncNewTaskIdsChanged();
+  void eventLogChanged();
   // Raised whenever the keychain contents change — on the async load at startup
   // and after every write. integrationSecret() is a plain Q_INVOKABLE (secrets
   // are not properties), so QML re-reads it by binding to this signal.
@@ -1592,9 +1653,6 @@ class AppController : public QObject {
   };
 
   QHash<QString, PendingSyncReport> m_pendingLookups;
-  // The sync toast for one pull's stats; quiet when a follow-up pull found
-  // nothing.
-  void reportSync(const QString& label, const MergeStats& stats, bool settlePull);
 
   // `notesState` must always belong to a note. Text that arrives with no note
   // open — typed into an empty editor, or captured with Ctrl+Shift+N — becomes
@@ -2138,6 +2196,26 @@ class AppController : public QObject {
   // When each tracker last answered and how its last failure read (APP-164).
   // This session only: a restart starts the page over.
   QHash<QString, heap::integrations::ProviderHealth> m_syncHealth;
+  // ---- Sync visibility (APP-180/186/187) ----
+  // Pulls out right now, by provider id, each with the serial of its start:
+  // a pull that never answers is let go after kSyncWatchdogMs.
+  QHash<QString, int> m_syncInFlight;
+  int m_syncStartSerial = 0;
+  void setSyncInFlight(const QString& providerId, bool inFlight);
+  QSet<QString> m_unseenTaskIds;
+  int m_unseenRevision = 0;
+  // `is:new`: the cards of the latest sync that brought any. A sync run
+  // (Sync now, one card's sync, an auto-sync tick) starts a new set; the
+  // pulls inside it, a Jira follow-up included, add to it.
+  QStringList m_syncNewIds;
+  int m_syncRunSerial = 0;
+  int m_syncNewSerial = -1;
+  void noteSyncAdded(const QStringList& ids, bool markUnseen);
+  heap::notify::EventLog m_eventLog;
+  // Set while a toast that was already logged with more to it (the tasks or
+  // the place it is about) goes out, so the plain toast hook skips it.
+  bool m_eventLogMuted = false;
+  void toastAndLog(const QString& message, const QString& kind, const QStringList& taskIds = {}, const QString& route = QString());
   // Task history (APP-165). Saved as the root key "taskHistory" of state.json.
   heap::history::TaskHistory m_history;
   // True while a tracker pull is the one changing tasks.

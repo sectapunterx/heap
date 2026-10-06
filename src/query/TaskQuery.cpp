@@ -173,9 +173,10 @@ QStringList queryFields() {
   return out;
 }
 
-TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses) {
+TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVariantList& statuses, const QStringList& newIds) {
   TaskQuery q;
   q.m_today = today;
+  q.m_newIds = QSet<QString>(newIds.cbegin(), newIds.cend());
   q.m_groups.append(QVector<Clause>());
   // The search words of each OR group, parallel to m_groups. Without an OR
   // they are the one free text the caller substring-matches; with one, each
@@ -292,7 +293,8 @@ TaskQuery TaskQuery::compile(const QString& text, const QDate& today, const QVar
                                         QStringLiteral("closed"),
                                         QStringLiteral("archived"),
                                         QStringLiteral("overdue"),
-                                        QStringLiteral("recurring")};
+                                        QStringLiteral("recurring"),
+                                        QStringLiteral("new")};
       for(const QString& v : cl.values) {
         ok = ok && kIs.contains(v);
       }
@@ -379,6 +381,8 @@ bool TaskQuery::clauseMatches(const Clause& c, const Task& t, const QString& hay
         hit = !done && t.dueAt.isValid() && t.dueAt.date() < m_today;
       } else if(v == QLatin1String("recurring")) {
         hit = !t.recurrence.isEmpty();
+      } else if(v == QLatin1String("new")) {
+        hit = m_newIds.contains(t.id);
       }
       if(hit) {
         return true;

@@ -52,6 +52,7 @@ Item {
         // here while a saved view counts it (TASKS-5).
         statuses: AppController.statuses
         today: AppController.today
+        newIds: AppController.syncNewTaskIds
         searchText: root.searchText
         priorities: root.activePriorities
         sortMode: "priority"

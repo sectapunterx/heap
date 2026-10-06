@@ -173,6 +173,7 @@ labels, assignee, project and milestone. Typing `field:value` filters instead:
 | `tag:infra` / `#infra` | any of the task's labels |
 | `mention:@ada` | the assignee, or an `@name` in the title or description |
 | `is:open`, `is:done`, `is:archived`, `is:overdue`, `is:recurring` | the task's state |
+| `is:new` | the cards the latest tracker sync brought in |
 | `-status:done`, `-#infra`, `-draft` | anything, negated |
 | `priority:P0 OR status:blocked` | either side (`\|` works too) |
 

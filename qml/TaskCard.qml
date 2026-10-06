@@ -163,6 +163,23 @@ Rectangle {
         visible: (card.cursored || card.activeFocus) && !dragArea.drag.active
     }
 
+    // A card the last sync brought in that has not been opened or reached
+    // by the cursor yet (APP-180): a quiet dot in the cursor's colour, in
+    // the corner, clear of everything the card says.
+    readonly property bool isNew: AppController.unseenRevision >= 0 && AppController.isTaskUnseen(card.taskId)
+    Rectangle {
+        objectName: "tc-new-dot"
+        visible: card.isNew
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: Theme.spXs
+        width: 6
+        height: 6
+        radius: 3
+        color: Theme.focusRing
+        z: 2
+    }
+
     implicitWidth: parent ? parent.width : 260
     implicitHeight: contentCol.implicitHeight + 2 * Theme.spLg
 

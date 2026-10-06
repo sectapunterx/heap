@@ -274,6 +274,8 @@ Popup {
         draft = initialDraft || {};
         isNew = !!draft._isNew;
         _originalId = isNew ? "" : (draft.id || "");
+        // Opening a card a sync brought in is seeing it (APP-180).
+        if (_originalId.length > 0) AppController.markTaskSeen(_originalId);
         _profileId = AppController.activeProfileId;
         // New tasks: leave idField empty with a TODO hint — real id is
         // assigned on save. Edit: pre-fill with existing id (editable).

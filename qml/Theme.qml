@@ -141,6 +141,10 @@ QtObject {
     // The soft glow just outside the ring, so the cursor reads at a glance
     // and not only on a close look. FocusRing draws both.
     readonly property color focusHalo: withAlpha(focusRing, 0.22)
+    // Live things — a sync in flight (APP-186). The brand's signal cyan in
+    // heap. ink, which the sync-meeting colour carries in every theme, so it
+    // is a tone each theme already has rather than a new token to fill in.
+    readonly property color live: _c.mSync
     readonly property int focusHaloWidth: 3
     // Fill of the highlighted menu / palette row; focusRing marks it.
     readonly property color rowHighlight: panel3

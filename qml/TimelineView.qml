@@ -24,6 +24,8 @@ Item {
     // J/K or the arrows walk the rows, Enter opens, Space selects; "O" (the
     // app-wide open-in-tracker key) acts on the row the cursor is on.
     property string cursorTaskId: ""
+    // A new card the keyboard cursor reaches has been seen (APP-180).
+    onCursorTaskIdChanged: if (root.cursorTaskId) AppController.markTaskSeen(root.cursorTaskId)
     property string _hoverId: ""
     readonly property string hoveredTaskId: cursorTaskId.length > 0 ? cursorTaskId : _hoverId
     function _taskRowIndexes() {

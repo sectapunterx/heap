@@ -139,6 +139,9 @@ bool isLegacyShortcutDefault(const QString& id, const QString& sequence) {
 
 namespace {
 constexpr int kBackupIntervalSeconds = 5 * 60;
+// How long a pull may stay unanswered before the header stops saying a sync
+// is running (APP-186). Longer than any page-by-page pull takes.
+constexpr int kSyncWatchdogMs = 120 * 1000;
 // How long after a Jira pull the follow-up pull runs (see the tasksFetched
 // handler): long enough for Jira Cloud's search index to catch up.
 constexpr int kSettlePullDelayMs = 20 * 1000;
@@ -162,6 +165,13 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"task.moved", {"%1 → %2", "%1 → %2"}},
       {"sync.summary", {"%1: %2 new · %3 updated", "%1: %2 новых · %3 обновлено"}},
       {"sync.upToDate", {"%1 is up to date", "%1 — без изменений"}},
+      // APP-180: the new tickets by name, three at most, then how many more.
+      {"sync.summaryNamed", {"%1: %2 new — %3 · %4 updated", "%1: %2 новых — %3 · %4 обновлено"}},
+      {"sync.newMore", {"%1 more", "ещё %1"}},
+      {"shortcut.log.open.label", {"Event log", "Журнал событий"}},
+      {"shortcut.log.open.desc",
+       {"What the notices said lately: syncs, new tickets, refusals, errors.",
+        "Что говорили уведомления: синхронизации, новые тикеты, отказы, ошибки."}},
       {"ticket.noLink", {"No issue link on this task", "У задачи нет ссылки на тикет"}},
       {"ticket.notConnected", {"Connect this tracker to read its comments", "Подключите трекер, чтобы читать комментарии"}},
       {"notes.untitled", {"Untitled note", "Без названия"}},
@@ -198,7 +208,6 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"update.installFailed", {"Could not install the update: %1", "Не удалось установить обновление: %1"}},
       {"update.installed", {"Updated to %1", "Обновлено до %1"}},
       {"sync.noTracker", {"Connect a tracker in Settings → Integrations first", "Сначала подключите трекер: Настройки → Интеграции"}},
-      {"sync.running", {"Syncing…", "Синхронизация…"}},
       {"sync.failed", {"%1 sync failed: %2", "%1: синхронизация не удалась — %2"}},
       {"int.connected", {"%1 connected", "%1 подключён"}},
       {"int.connectFailed", {"%1 connection failed: %2", "%1: не удалось подключиться — %2"}},
@@ -690,6 +699,19 @@ AppController::AppController(QObject* parent) :
 
   m_activePeople.setSourceModel(&m_people);
   trackAttachmentRefsInText();
+
+  // The event log keeps what went wrong or was refused (APP-187), and what
+  // can still be undone. Places that know more (which tasks, where to look)
+  // log it themselves and mute this.
+  connect(this, &AppController::toast, this, [this](const QString& message, const QString& kind) {
+    if(m_eventLogMuted || (kind != QLatin1String("error") && kind != QLatin1String("warning"))) {
+      return;
+    }
+    logEvent(kind, message);
+  });
+  connect(this, &AppController::undoableToast, this, [this](const QString& message, int) {
+    logEvent(QStringLiteral("undo"), message);
+  });
 
   m_automationTimer->setInterval(60 * 1000);
   connect(m_automationTimer, &QTimer::timeout, this, &AppController::runAutomation);
@@ -2271,7 +2293,9 @@ void AppController::onTaskPushed(const QString& providerId,
   }
   if(!ok) {
     qWarning() << providerId << "push failed for" << externalId << ":" << error;
-    emit trackerPushFailed(t.id, tr_("sync.pushFailed").arg(externalKeyOf(t), providerReason(error)));
+    const QString message = tr_("sync.pushFailed").arg(externalKeyOf(t), providerReason(error));
+    logEvent(QStringLiteral("error"), message, {t.id});
+    emit trackerPushFailed(t.id, message);
   }
 }
 
@@ -5939,7 +5963,7 @@ QVariantMap AppController::taskById(const QString& id) const {
 }
 
 QVariantMap AppController::compileSearch(const QString& text) const {
-  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses);
+  const heap::query::TaskQuery q = heap::query::TaskQuery::compile(text, m_today, m_statuses, m_syncNewIds);
   QVariantMap out;
   out["isQuery"] = q.isQuery();
   out["freeText"] = q.freeText();
@@ -7265,7 +7289,9 @@ void AppController::syncNow() {
   if(m_syncProviders.empty()) {
     return;
   }
-  emit toast(tr_("sync.running"));
+  // No "Syncing…" toast: the header says so if it takes a while (APP-186),
+  // and the result is the one message a sync gets (APP-180).
+  ++m_syncRunSerial;
   // A pull by hand counts too: the next periodic one is a full period away.
   m_lastTrackerSync = QDateTime::currentDateTime();
   saveLastTrackerSync();
@@ -7281,6 +7307,7 @@ void AppController::syncNow() {
 }
 
 void AppController::syncProviderNow(const QString& providerId) {
+  setSyncInFlight(providerId, true);
   ensureFreshToken(
       providerId,
       [this, providerId]() {
@@ -7294,9 +7321,11 @@ void AppController::syncProviderNow(const QString& providerId) {
             return;
           }
         }
+        setSyncInFlight(providerId, false);
         emit integrationActionFinished(providerId, QStringLiteral("sync"), false, tr_("sync.noTracker"));
       },
       [this, providerId]() {
+        setSyncInFlight(providerId, false);
         // The refresh already said why (offline, or signed out).
         emit integrationActionFinished(
             providerId,
@@ -7364,6 +7393,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   // to the task that "#5 of repo B" is about to claim. Collected up front
   // because the decision for one issue depends on the whole batch.
   QSet<QString> claimedByUrl;
+  const bool hadCardsBefore = std::any_of(m_tasks.items().cbegin(), m_tasks.items().cend(), [&providerId](const Task& cur) {
+    return cur.externalProvider == providerId;
+  });
   for(const heap::integrations::ExternalTask& ext : issues) {
     if(ext.url.isEmpty()) {
       continue;
@@ -7581,6 +7613,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     }
     m_tasks.upsert(t);
     (row >= 0 ? stats.updated : stats.added)++;
+    if(row < 0) {
+      stats.addedIds.append(t.id);
+    }
   }
   // A complete pull that no longer carries an issue, under the same filter the
   // card was last pulled under, means the issue was deleted or moved out of
@@ -7626,6 +7661,9 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
   if(stats.outOfScope > 0 || stats.added > 0 || stats.updated > 0) {
     emit integrationStatesChanged();
   }
+  // The first pull of a tracker brings in everything it has: that is the
+  // board being filled, not news, so its cards carry no dot.
+  noteSyncAdded(stats.addedIds, /*markUnseen=*/hadCardsBefore);
   return stats;
 }
 
@@ -7685,7 +7723,32 @@ void AppController::reportSync(const QString& label, const MergeStats& stats, bo
     return;
   }
   QStringList parts;
-  if(changed) {
+  // The new cards by name (APP-180): key and title, three at most, then how
+  // many more. Only cards still on the board count.
+  QStringList newIds;
+  QStringList names;
+  for(const QString& id : stats.addedIds) {
+    const int row = m_tasks.indexOfId(id);
+    if(row < 0) {
+      continue;
+    }
+    newIds.append(id);
+    if(names.size() < 3) {
+      const Task& t = m_tasks.items().at(row);
+      QString title = t.title.simplified();
+      if(title.size() > 40) {
+        title = title.left(39).trimmed() + QChar(0x2026);
+      }
+      const QString key = externalKeyOf(t);
+      names.append(title.isEmpty() ? key : key + QChar(' ') + title);
+    }
+  }
+  if(!names.isEmpty()) {
+    if(newIds.size() > names.size()) {
+      names.append(tr_("sync.newMore").arg(newIds.size() - names.size()));
+    }
+    parts.append(tr_("sync.summaryNamed").arg(label).arg(stats.added).arg(names.join(QStringLiteral(", "))).arg(stats.updated));
+  } else if(changed) {
     parts.append(tr_("sync.summary").arg(label).arg(stats.added).arg(stats.updated));
   }
   if(stats.conflicts > 0) {
@@ -7706,7 +7769,89 @@ void AppController::reportSync(const QString& label, const MergeStats& stats, bo
   if(!changed) {
     message = tr_("sync.headline").arg(label, message);
   }
+  // One message per sync: with new cards it carries "Show" (syncNews),
+  // otherwise it is a plain toast. Either way the log keeps it.
+  logEvent(QStringLiteral("sync"), message, newIds);
+  if(!newIds.isEmpty()) {
+    emit syncNews(message, newIds);
+    return;
+  }
   emit toast(message);
+}
+
+void AppController::noteSyncAdded(const QStringList& ids, bool markUnseen) {
+  if(ids.isEmpty()) {
+    return;
+  }
+  if(m_syncNewSerial != m_syncRunSerial) {
+    m_syncNewIds = ids;
+    m_syncNewSerial = m_syncRunSerial;
+  } else {
+    for(const QString& id : ids) {
+      if(!m_syncNewIds.contains(id)) {
+        m_syncNewIds.append(id);
+      }
+    }
+  }
+  emit syncNewTaskIdsChanged();
+  if(markUnseen) {
+    markTasksUnseen(ids);
+  }
+}
+
+void AppController::markTasksUnseen(const QStringList& taskIds) {
+  bool changed = false;
+  for(const QString& id : taskIds) {
+    if(!id.isEmpty() && !m_unseenTaskIds.contains(id)) {
+      m_unseenTaskIds.insert(id);
+      changed = true;
+    }
+  }
+  if(changed) {
+    ++m_unseenRevision;
+    emit unseenTasksChanged();
+  }
+}
+
+void AppController::markTaskSeen(const QString& taskId) {
+  if(m_unseenTaskIds.remove(taskId)) {
+    ++m_unseenRevision;
+    emit unseenTasksChanged();
+  }
+}
+
+void AppController::logEvent(const QString& kind, const QString& message, const QStringList& taskIds, const QString& route) {
+  if(message.trimmed().isEmpty()) {
+    return;
+  }
+  m_eventLog.add(QDateTime::currentDateTime(), kind.isEmpty() ? QStringLiteral("info") : kind, message, taskIds, route);
+  emit eventLogChanged();
+}
+
+void AppController::toastAndLog(const QString& message, const QString& kind, const QStringList& taskIds, const QString& route) {
+  logEvent(kind, message, taskIds, route);
+  const QScopedValueRollback<bool> muted(m_eventLogMuted, true);
+  emit toast(message, kind);
+}
+
+void AppController::setSyncInFlight(const QString& providerId, bool inFlight) {
+  const bool was = !m_syncInFlight.isEmpty();
+  if(inFlight) {
+    const int serial = ++m_syncStartSerial;
+    m_syncInFlight.insert(providerId, serial);
+    // A pull that never answers (a provider rebuilt under it, a server that
+    // holds the socket open) must not keep the header dot on for good.
+    QTimer::singleShot(kSyncWatchdogMs, this, [this, providerId, serial]() {
+      if(m_syncInFlight.value(providerId) == serial) {
+        setSyncInFlight(providerId, false);
+      }
+    });
+  } else {
+    m_syncInFlight.remove(providerId);
+  }
+  if(was != !m_syncInFlight.isEmpty()) {
+    emit syncingChanged();
+  }
 }
 
 QHash<QString, QString> AppController::statusOverridesFor(const QString& providerId) const {
@@ -7848,6 +7993,13 @@ void AppController::setStatusMapping(const QString& providerId, const QString& s
 }
 
 void AppController::applyIntegrationSettings() {
+  // The rebuild drops every tracker's pull in flight with its provider: none
+  // of them will answer now.
+  for(const auto& provider : m_syncProviders) {
+    if(m_syncInFlight.contains(provider->id())) {
+      setSyncInFlight(provider->id(), false);
+    }
+  }
   m_syncProviders.clear();
   const QVariantMap integrations = settingsMap().value("integrations").toMap();
 
@@ -7859,6 +8011,7 @@ void AppController::applyIntegrationSettings() {
             this,
             [this, provider, providerId, idPrefix, label](const QVector<heap::integrations::ExternalTask>& issues) {
               m_retriedAfter401.remove(providerId);
+              setSyncInFlight(providerId, false);
               // The tracker answered, so it is reachable again.
               setProviderOffline(providerId, false);
               recordSyncHealth(providerId, true, static_cast<int>(issues.size()), 0, QString());
@@ -7925,6 +8078,7 @@ void AppController::applyIntegrationSettings() {
     // as "Synced 0 issue(s)" — say what the tracker actually answered.
     connect(
         provider, &heap::integrations::IntegrationProvider::pullFailed, this, [this, providerId, label](int status, const QString& error) {
+          setSyncInFlight(providerId, false);
           // A failed follow-up pull is not news: the pull before it answered.
           if(m_settlePulls.remove(providerId)) {
             return;
@@ -7952,7 +8106,7 @@ void AppController::applyIntegrationSettings() {
           }
           recordSyncHealth(providerId, false, -1, status, error);
           const QString message = tr_("sync.failed").arg(label, providerReason(error));
-          emit toast(message, QStringLiteral("error"));
+          toastAndLog(message, QStringLiteral("error"), {}, QStringLiteral("settings:integrations"));
           emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
         });
     connect(
@@ -8075,6 +8229,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
           &heap::integrations::MattermostClient::contactsFetched,
           this,
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
+            setSyncInFlight(providerId, false);
             const int changed = mergeExternalContacts(providerId, contacts);
             recordSyncHealth(providerId, true, static_cast<int>(contacts.size()), 0, QString());
             emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
@@ -8087,6 +8242,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
     // Saying "expired" beats repeating the same failure on every auto-sync.
+    setSyncInFlight(providerId, false);
     recordSyncHealth(providerId, false, -1, status, error);
     if(status == 401) {
       disconnectIntegration(providerId);
@@ -8095,7 +8251,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
       return;
     }
     const QString message = tr_("sync.failed").arg(label, providerReason(error));
-    emit toast(message, QStringLiteral("error"));
+    toastAndLog(message, QStringLiteral("error"), {}, QStringLiteral("settings:integrations"));
     emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
   });
 
@@ -8374,6 +8530,7 @@ void AppController::fetchDirectory(const QString& providerId, bool rebindProfile
     setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
   }
   if(heap::integrations::MattermostClient* client = directoryClient(providerId)) {
+    setSyncInFlight(providerId, true);
     client->fetchContacts();
   }
 }
@@ -8529,14 +8686,15 @@ void AppController::migrateLegacySecrets() {
 }
 
 void AppController::syncProvider(const QString& providerId) {
+  // One card's "Sync now" is a run of its own: its new cards are what
+  // `is:new` shows next (APP-180).
+  ++m_syncRunSerial;
   if(m_directoryClients.contains(providerId)) {
-    emit toast(tr_("sync.running"));
     fetchDirectory(providerId, /*rebindProfile=*/true);
     return;
   }
   for(const auto& provider : m_syncProviders) {
     if(provider->id() == providerId) {
-      emit toast(tr_("sync.running"));
       // "Sync now" means "sync this, here" — the same rebind the directory
       // path does, so the tracker follows a deliberate click to this profile.
       setIntegrationField(providerId, QStringLiteral("profileId"), activeProfileId());
@@ -9973,6 +10131,11 @@ void AppController::onSaveFinished(const heap::storage::SaveOutcome& outcome) {
 void AppController::setStorageState(const QString& state, const QString& message) {
   if(state == m_storageState && message == m_storageMessage) {
     return;
+  }
+  // A save that did not reach disk, or a file that would not open, is in
+  // the event log too (APP-187): the banner goes once it is fixed.
+  if(state == QLatin1String("writeFailed") || state == QLatin1String("unreadable")) {
+    logEvent(QStringLiteral("error"), message);
   }
   m_storageState = state;
   m_storageMessage = message;
@@ -11547,6 +11710,8 @@ void AppController::seedShortcutCatalog() {
   add("cal.newEvent", "Ctrl+Alt+E");
   // Focus mode (APP-160); live only once Settings → Safety net turns it on.
   add("focus.immersion", "Ctrl+Shift+F");
+  // The event log (APP-187): the toasts of this session, to read again.
+  add("log.open", "Ctrl+Shift+L");
   // The first nine saved views, in sidebar order. Alt+digit is free in the
   // catalog and in every text field, and Ctrl+digit already means "view".
   add("savedView.1", "Alt+1");
