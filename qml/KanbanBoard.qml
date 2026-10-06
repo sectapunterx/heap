@@ -211,7 +211,36 @@ Item {
     property string _selAnchor: ""
     property var _selBase: []
     property bool _extending: false
-    onCursorTaskIdChanged: if (!root._extending) root._selAnchor = ""
+    onCursorTaskIdChanged: {
+        if (!root._extending) root._selAnchor = "";
+        if (root.cursorVisible) Qt.callLater(root.revealCursor);
+    }
+    onCursorVisibleChanged: if (root.cursorVisible) Qt.callLater(root.revealCursor)
+
+    // The board scrolls to the card the keyboard moved to (VISU-19, PERA-7):
+    // the cursor walked into a column past the right edge and the board
+    // stayed put, leaving 60px of the card on screen. Sideways, the whole
+    // column comes into view; down the column, the card does.
+    function revealCursor() {
+        if (!root.cursorVisible || !root.cursorTaskId) return;
+        const cols = _visibleByColumn();
+        const pos = _cursorPos(cols);
+        if (!pos) return;
+        const col = colRepeater.itemAt(pos.col);
+        if (!col) return;
+        // Down the column: _cardItem() scrolls the card's list to it.
+        root._cardItem(root.cursorTaskId);
+        const maxX = Math.max(0, hscroll.contentWidth - hscroll.width);
+        let x = hscroll.contentX;
+        if (col.x < x) x = col.x;
+        else if (col.x + col.width > x + hscroll.width) x = col.x + col.width - hscroll.width;
+        x = Math.max(0, Math.min(maxX, x));
+        if (x !== hscroll.contentX) {
+            outerAnim.stop();
+            colScrollAnim.stop();
+            hscroll.contentX = x;
+        }
+    }
     function _placeCursor(id) {
         root._extending = true;
         root.cursorTaskId = id;
@@ -707,12 +736,17 @@ Item {
                                         onDoubleClicked: { col.renaming = true; renameField.forceActiveFocus(); renameField.selectAll() }
                                         cursorShape: Qt.IBeamCursor
                                         ToolTip.visible: containsMouse
-                                        ToolTip.text: I18n.t("kanban.tip.rename")
+                                        // A name cut short is given whole here
+                                        // (VISU-6), ahead of the rename hint.
+                                        ToolTip.text: colName.truncated
+                                            ? col.statusName + " · " + I18n.t("kanban.tip.rename")
+                                            : I18n.t("kanban.tip.rename")
                                         ToolTip.delay: 500
                                         hoverEnabled: true
                                     }
                                     TextField {
                                         id: renameField
+                                        ContextMenu.menu: TextEditMenu { editor: renameField }
                                         visible: col.renaming
                                         anchors.fill: parent
                                         text: col.statusName
@@ -947,6 +981,7 @@ Item {
 
                                 delegate: TaskCard {
                                             id: tc
+                                            boardKeys: true
                                             required property string id
                                             required property string title
                                             required property string desc
@@ -958,6 +993,8 @@ Item {
                                             required property bool archived
                                             required property bool blockedStuck
                                             required property string prState
+                                            required property string prMove
+                                            required property string prMoveReason
                                             required property int    prNumber
                                             required property string prUrl
                                             required property int    gitAhead
@@ -974,6 +1011,7 @@ Item {
                                             required property var    ticket
                                             required property string searchText
                                             required property int    attachmentCount
+                                            required property var    statusChangedAt
                                             width: bodyFlick.width
                                             // A pooled card waits, culled but still
                                             // a child of the list, until a row needs
@@ -1000,6 +1038,7 @@ Item {
                                                 deadline: tc.deadline, branch: tc.branch,
                                                 archived: tc.archived, blockedStuck: tc.blockedStuck,
                                                 prState: tc.prState, prNumber: tc.prNumber, prUrl: tc.prUrl,
+                                                prMove: tc.prMove, prMoveReason: tc.prMoveReason,
                                                 gitAhead: tc.gitAhead, gitBehind: tc.gitBehind,
                                                 recentCommits: tc.recentCommits,
                                                 trackedSeconds: tc.trackedSeconds, isTiming: tc.isTiming,
@@ -1007,7 +1046,8 @@ Item {
                                                 labels: tc.labels, dueAt: tc.dueAt, dueHasTime: tc.dueHasTime,
                                                 scheduledAt: tc.scheduledAt, scheduledHasTime: tc.scheduledHasTime,
                                                 ticket: tc.ticket, searchText: tc.searchText,
-                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount
+                                                checklist: tc.checklist, attachmentCount: tc.attachmentCount,
+                                                statusChangedAt: tc.statusChangedAt
                                             })
                                             // Which card a bare "O" acts on when
                                             // nothing is selected.
@@ -1033,15 +1073,23 @@ Item {
                                             Component.onDestruction: if (menuOpen) root._openCardMenus--
                                         }
 
-                                Text {
+                                // An empty column says how a card gets here
+                                // (APP-167); one whose cards the search or a
+                                // filter hides, that nothing in it matches.
+                                Item {
                                     visible: col.visibleCount === 0
                                     width: bodyFlick.width
-                                    topPadding: Theme.spXl
-                                    text: I18n.t("kanban.empty")
-                                    color: Theme.textDim
-                                    font.italic: true
-                                    font.pixelSize: Theme.fsSm
-                                    horizontalAlignment: Text.AlignHCenter
+                                    height: colEmpty.implicitHeight + Theme.spXl
+                                    EmptyState {
+                                        id: colEmpty
+                                        objectName: "column-empty"
+                                        y: Theme.spXl
+                                        width: parent.width
+                                        compact: true
+                                        icon: "heap-01-board"
+                                        title: I18n.t("kanban.empty")
+                                        line: (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
+                                    }
                                 }
                             }
 
@@ -1239,6 +1287,7 @@ Item {
             }
             TextField {
                 id: nameField
+                ContextMenu.menu: TextEditMenu { editor: nameField }
                 objectName: "add-column-name"
                 Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
                 placeholderText: I18n.t("kanban.colName.ph")
@@ -1573,6 +1622,7 @@ Item {
             spacing: Theme.spMd
             TextField {
                 id: wipField
+                ContextMenu.menu: TextEditMenu { editor: wipField }
                 objectName: "wip-field"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 220
@@ -1643,6 +1693,7 @@ Item {
             spacing: Theme.spMd
             TextField {
                 id: archiveField
+                ContextMenu.menu: TextEditMenu { editor: archiveField }
                 objectName: "archive-field"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 220

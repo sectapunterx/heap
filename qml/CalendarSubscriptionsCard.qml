@@ -170,6 +170,7 @@ Rectangle {
 
             QQC.TextField {
                 id: nameField
+                QQC.ContextMenu.menu: TextEditMenu { editor: nameField }
                 objectName: "calsub-name"
                 Layout.preferredWidth: 160
                 placeholderText: I18n.t("calsub.defaultName")
@@ -181,6 +182,7 @@ Rectangle {
             }
             QQC.TextField {
                 id: linkField
+                QQC.ContextMenu.menu: TextEditMenu { editor: linkField }
                 objectName: "calsub-link"
                 Layout.fillWidth: true
                 placeholderText: I18n.t("calsub.linkPh")

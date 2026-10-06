@@ -440,3 +440,95 @@ TEST(MdVaultPlan, ALegacyNoteWithoutABaselineIsNeverOverwritten) {
   EXPECT_EQ(plan.at(0).action, VaultAction::Conflict);
   EXPECT_EQ(plan.at(0).note.body, QStringLiteral("mine"));
 }
+
+// ── Audit 2026-09-30, B tier ──
+
+// KNOW-8: bytes that are not UTF-8 and read as Russian are Windows-1251, not
+// Latin-1 mojibake ("Ïðèâåò").
+TEST(MdVault, Know8_Cp1251BytesReadAsCyrillic) {
+  const QString ru = QString::fromUtf8("# Привет из Windows-1251\n\nТекст заметки. Ёлка, ёж, №5 — «тест».");
+  // Encoded by hand: А..я are 0xC0..0xFF, Ё/ё 0xA8/0xB8, № 0xB9, — 0x97, « » 0xAB 0xBB.
+  QByteArray bytes;
+  for(const QChar c : ru) {
+    const char16_t u = c.unicode();
+    if(u < 0x80) {
+      bytes += static_cast<char>(u);
+    } else if(u >= 0x0410 && u <= 0x044F) {
+      bytes += static_cast<char>(0xC0 + (u - 0x0410));
+    } else if(u == 0x0401) {
+      bytes += '\xA8';
+    } else if(u == 0x0451) {
+      bytes += '\xB8';
+    } else if(u == 0x2116) {
+      bytes += '\xB9';
+    } else if(u == 0x2014) {
+      bytes += '\x97';
+    } else if(u == 0x00AB) {
+      bytes += '\xAB';
+    } else if(u == 0x00BB) {
+      bytes += '\xBB';
+    } else {
+      FAIL() << "no cp1251 byte for U+" << std::hex << static_cast<int>(u);
+    }
+  }
+  EXPECT_EQ(heap::notes::decodeVaultBytes(bytes), ru);
+}
+
+TEST(MdVault, Know8_MostlyEnglishRussianIsStillCp1251) {
+  // Technical Russian: half the letters are Latin.
+  const QByteArray bytes("PR \xE2 heap: \xF1\xE4\xE5\xEB\xE0\xF2\xFC review");
+  EXPECT_EQ(heap::notes::decodeVaultBytes(bytes), QString::fromUtf8("PR в heap: сделать review"));
+}
+
+TEST(MdVault, Know8_WesternAccentsStayLatin1) {
+  // A few accented letters among plain ones: French and German Latin-1.
+  EXPECT_EQ(heap::notes::decodeVaultBytes(QByteArray("R\xE9union \xE0 l'\xE9"
+                                                     "cole")),
+            QString::fromUtf8("Réunion à l'école"));
+  EXPECT_EQ(heap::notes::decodeVaultBytes(QByteArray("Gr\xF6\xDF"
+                                                     "e und Ma\xDF")),
+            QString::fromUtf8("Größe und Maß"));
+}
+
+// KNOW-9: Notepad's "Unicode" is UTF-16 with a BOM; its NUL bytes are not a
+// binary file.
+TEST(MdVault, Know9_Utf16WithABomIsText) {
+  const QString text = QString::fromUtf8("# Заметка\nUTF-16 text");
+  QByteArray le("\xFF\xFE", 2);
+  QByteArray be("\xFE\xFF", 2);
+  for(const QChar c : text) {
+    le += static_cast<char>(c.unicode() & 0xFF);
+    le += static_cast<char>(c.unicode() >> 8);
+    be += static_cast<char>(c.unicode() >> 8);
+    be += static_cast<char>(c.unicode() & 0xFF);
+  }
+  bool binary = true;
+  EXPECT_EQ(heap::notes::decodeVaultBytes(le, &binary), text);
+  EXPECT_FALSE(binary);
+  binary = true;
+  EXPECT_EQ(heap::notes::decodeVaultBytes(be, &binary), text);
+  EXPECT_FALSE(binary);
+  // Without a BOM, NULs still mean binary.
+  heap::notes::decodeVaultBytes(le.mid(2), &binary);
+  EXPECT_TRUE(binary);
+}
+
+// KNOW-13: a CRLF file with no frontmatter is stored with "\n" line ends, the
+// way the editor hands it back.
+TEST(MdVault, Know13_CrlfWithoutFrontmatterIsNormalised) {
+  const Note n = importFile(QStringLiteral("CrlfNoFm.md"), QStringLiteral("Line A\r\nLine B\r\n"));
+  EXPECT_EQ(n.body, QStringLiteral("Line A\nLine B\n"));
+}
+
+TEST(MdVaultPlan, Know13_AnUntouchedCrlfNoteTakesTheNextDiskEdit) {
+  const auto first = planImport({}, {{QStringLiteral("C.md"), QStringLiteral("Line A\r\nLine B\r\n")}}, counterIds(), {});
+  ASSERT_EQ(first.size(), 1);
+  Note local = first.at(0).note;
+  // What the editor writes back after "x" + Backspace: the same text.
+  local.body = QStringLiteral("Line A\nLine B\n");
+  const auto same = planImport({local}, {{QStringLiteral("C.md"), QStringLiteral("Line A\r\nLine B\r\n")}}, counterIds(), {});
+  EXPECT_EQ(same.at(0).action, VaultAction::Unchanged);
+  const auto edited = planImport({local}, {{QStringLiteral("C.md"), QStringLiteral("Line A\r\nLine C\r\n")}}, counterIds(), {});
+  EXPECT_EQ(edited.at(0).action, VaultAction::Update);
+  EXPECT_EQ(edited.at(0).note.body, QStringLiteral("Line A\nLine C\n"));
+}

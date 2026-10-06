@@ -28,6 +28,8 @@ Popup {
     // the app, an OS notification when captured from outside it. `taskId` is
     // the task behind it, if any, so clicking the notification can open it.
     signal captured(string title, string body, string taskId)
+    // The "seen this before" hint under the field was clicked (APP-159).
+    signal seenBeforeActivated(var hit)
 
     property var _preview: ({ok: false})
     property var _meta: ({title: "", desc: "", handles: [], ticketKey: "", priority: "", labels: []})
@@ -73,7 +75,10 @@ Popup {
                     break;
                 }
             }
-            if (!matched) out.push("@" + h);
+            // "@r.losev" for Роман Лосев: a login made of one person's name.
+            const byLogin = matched ? "" : AppController.personIdForHandle(h);
+            if (byLogin) out.push(AppController.personById(byLogin).name || byLogin);
+            else if (!matched) out.push("@" + h);
         }
         return out;
     }
@@ -113,6 +118,7 @@ Popup {
             const h = handles[i];
             const p = AppController.personById(h);
             if (p && p.id) { out.push(p.id); continue; }
+            let matched = false;
             for (let j = 0; j < known.rowCount(); ++j) {
                 const idx = known.index(j, 0);
                 const id  = String(known.data(idx, Qt.UserRole + 1) || "");
@@ -121,9 +127,13 @@ Popup {
                 if (id.toLowerCase() === h.toLowerCase()
                     || firstWord.toLowerCase() === h.toLowerCase()) {
                     out.push(id);
+                    matched = true;
                     break;
                 }
             }
+            // "@r.losev" for Роман Лосев: a login made of one person's name.
+            const byLogin = matched ? "" : AppController.personIdForHandle(h);
+            if (byLogin) out.push(byLogin);
         }
         return out;
     }
@@ -278,27 +288,10 @@ Popup {
 
         // QuickCapture tasks: the "To Do" column, with the id of the ticket the
         // text names ("LTE-2398 …") or the profile prefix.
-        const draft = AppController.newQuickTaskDraft(_meta.ticketKey || "");
-        draft._isNew = true;
-        draft.title = _title;
-        if (_meta.priority) draft.priority = _meta.priority;
-        if (_meta.labels && _meta.labels.length > 0) draft.labels = _meta.labels;
-        if (_meta && _meta.desc && _meta.desc.length > 0) {
-            draft.desc = _meta.desc;
-        }
-        // The parsed datetime lands on the task itself — including the clock
-        // time, which used to survive only as a side calendar block (HEAP-115).
-        if (_preview && _preview.ok && _preview.start) {
-            draft.scheduledAt = _preview.start;
-            draft.dueAt = _preview.start;
-            draft.scheduledHasTime = !!_preview.hasTime;
-            draft.dueHasTime = !!_preview.hasTime;
-        }
-        // Persist a parsed recurrence ("every weekday…") so completing the task
-        // regenerates it (HEAP-77).
-        if (_preview && _preview.recurrence && _preview.recurrence.length > 0) {
-            draft.recurrence = _preview.recurrence;
-        }
+        // Title, "// description", priority, #labels, the parsed date (clock
+        // time included, HEAP-115) and recurrence (HEAP-77): built in C++, the
+        // same draft `heap add` saves from the command line (APP-173).
+        const draft = AppController.quickTaskDraft(inputField.text, new Date());
         // A meeting is a task and its calendar event: one undo step for both.
         AppController.beginUndoGroup(I18n.t("quick.undo").arg(draft.id));
         try {
@@ -368,6 +361,9 @@ Popup {
         root._finish(root._summary("task", draft, null));
     }
 
+    // Opt-in timing (HEAP_PERF_LOG=1 / --perf-log): hotkey or open() to the
+    // first frame that shows the popup. Logs only; a no-op otherwise.
+    onAboutToShow: AppController.perfMarkShown("capture", contentItem)
     onOpened: {
         inputField.text = "";
         _preview = {ok: false};
@@ -403,6 +399,7 @@ Popup {
 
         TextField {
             id: inputField
+            ContextMenu.menu: TextEditMenu { editor: inputField }
             objectName: "qc-input"
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
             placeholderText: I18n.t("quick.fieldPh")
@@ -459,6 +456,13 @@ Popup {
                 at.dismiss();
                 root._submitFromKey((e.modifiers & Qt.ControlModifier) !== 0);
             }
+        }
+
+        // A pasted error this workspace has met before (APP-159).
+        SeenBeforeHint {
+            Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.fillWidth: true
+            text: inputField.text
+            onActivated: (hit) => root.seenBeforeActivated(hit)
         }
 
         Timer {

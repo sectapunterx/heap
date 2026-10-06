@@ -11,7 +11,9 @@ import "ThemePresets.js" as Presets
 
 ApplicationWindow {
     id: win
-    visible: true
+    // A login start (--minimized, APP-154) stays hidden in the tray; where
+    // there is no tray it starts minimized instead (Component.onCompleted).
+    visible: !(win._startHidden && win._minimizeToTray)
     width: 1440
     height: 900
     minimumWidth: 1100
@@ -26,6 +28,10 @@ ApplicationWindow {
     // SettingsView rewrites that blob wholesale but carries unknown top-level
     // keys across, so this survives a trip through the settings screen.
     property bool _geometryRestored: false
+    readonly property bool _startHidden: typeof START_MINIMIZED !== "undefined" && START_MINIMIZED === true
+    // A maximised window started hidden is maximised when first shown:
+    // setting the visibility earlier would show it.
+    property bool _maximizeOnShow: false
 
     // Builds the current view's loader on its first visit. Board, Notes and
     // Docs are never unloaded again.
@@ -122,7 +128,10 @@ ApplicationWindow {
         }
         win.width = w;
         win.height = h;
-        if (g.maximized === true) win.visibility = Window.Maximized;
+        if (g.maximized === true) {
+            if (win.visible) win.visibility = Window.Maximized;
+            else win._maximizeOnShow = true;
+        }
         win._geometryRestored = true;
     }
 
@@ -343,6 +352,7 @@ ApplicationWindow {
     Component.onCompleted: {
         _keepRetiredThemes();
         _restoreGeometry();
+        if (win._startHidden && !win._minimizeToTray) win.showMinimized();
         _restoreFilters();
         _syncSelectionFilter();
         win.seedStarterDocs();
@@ -485,7 +495,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened
+        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -541,8 +551,34 @@ ApplicationWindow {
     }
     function returnFocusHome() {
         const h = win._focusHome;
-        if (h && h.visible && h.enabled && h.Window.window === win) h.forceActiveFocus();
+        // An empty header search is not where anyone was working: it only
+        // held focus because the button that opened the dialog takes none.
+        // Sending focus back there put the caret and the query-syntax hint
+        // over the view after every dialog, and the next click only cleared
+        // it (PERO-1). The view gets it instead.
+        const idleSearch = h && h.objectName === "topbar-search" && (h.text || "").length === 0;
+        if (h && !idleSearch && h.visible && h.enabled && h.Window.window === win) h.forceActiveFocus();
         else win.focusActiveView();
+    }
+    // A view switch takes the keyboard into the new view: it used to stay on
+    // the hidden board, so after Ctrl+7 nothing typed reached the note and Tab
+    // walked the top bar (PERA-5). A popup that still holds focus hands it on
+    // when it closes (above), and the header search keeps a query being typed.
+    function _focusSwitchedView() {
+        if (win._focusInPopup) return;
+        const f = win.activeFocusItem;
+        if (f && f.visible && win._typing && !win._insideView(f)) return;
+        // Already in the new view (something put it there first).
+        const v = win.activeViewItem();
+        for (let p = f; p && v; p = p.parent)
+            if (p === v) return;
+        win.focusActiveView();
+    }
+    // Whether `it` sits in one of the four view loaders (any view, shown or not).
+    function _insideView(it) {
+        for (let p = it; p; p = p.parent)
+            if (p === boardLoader || p === notesLoader || p === docsLoader || p === viewLoader) return true;
+        return false;
     }
     // A modal (or dimming) popup is up somewhere — even one that did not take
     // focus, as most of the views' own confirm dialogs do not. Each puts its
@@ -575,7 +611,9 @@ ApplicationWindow {
         const v = win.activeViewItem();
         for (let p = f; p; p = p.parent) {
             if (p === v) return false;
-            if (p.activeFocusOnTab === true) return true;
+            // A view's own keyboard surface (the month grid) is the view:
+            // it claims the keys it uses itself and leaves the rest.
+            if (p.activeFocusOnTab === true) return p.viewSurface !== true;
         }
         return false;
     }
@@ -596,9 +634,12 @@ ApplicationWindow {
 
     // Esc in the header search with nothing left to clear hands the keyboard
     // back to the view, so J/K and Return work again without the mouse.
+    // A view that knows better where typing should go (the note editor, a
+    // list's current row) says so with takeFocus().
     function focusActiveView() {
         const v = win.activeViewItem();
-        if (v) v.forceActiveFocus();
+        if (v && typeof v.takeFocus === "function") v.takeFocus();
+        else if (v) v.forceActiveFocus();
         else win.contentItem.forceActiveFocus();
     }
 
@@ -653,7 +694,59 @@ ApplicationWindow {
     // Bring the window to the foreground from any state (minimized, hidden to
     // tray, or merely unfocused). Shared by the two global-capture hotkeys and
     // the tray "Show" affordance.
+    // Where a "seen this before" hint points (APP-159): the note, doc page or
+    // task that already mentions the error, in its own profile.
+    function openSeenBefore(hit) {
+        if (!hit || !hit.id) return;
+        if (hit.kind === "task") {
+            // Edits to the task already open are not swapped out unasked, and
+            // its profile is left only after that (PRES-1).
+            taskEditor.settleThen(() => {
+                if (hit.profileId && hit.profileId !== AppController.activeProfileId)
+                    AppController.activeProfileId = hit.profileId;
+                const t = AppController.taskById(hit.id);
+                if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            });
+            return;
+        }
+        if (hit.profileId && hit.profileId !== AppController.activeProfileId)
+            AppController.activeProfileId = hit.profileId;
+        if (hit.kind === "note") {
+            AppController.activeNoteId = hit.id;
+            AppController.currentView = "notes";
+        } else if (hit.kind === "docPage") {
+            AppController.activeDocPageId = hit.id;
+            AppController.currentView = "docs";
+            docsBridge.requestedAnchor = "page:" + hit.id;
+        }
+    }
+
+    // Focus mode (APP-160) on the task in front of the user: the one open in
+    // the editor, else whatever AppController picks (selection, branch).
+    function toggleImmersion() {
+        AppController.toggleImmersion(taskEditor.opened ? taskEditor._originalId : "");
+    }
+
+    // The tasks a safety-net notice is about: one opens in the editor, several
+    // narrow the board to them. Only what is shown changes.
+    function showSafetyTasks(ids) {
+        const list = (ids || []).filter(id => id && id.length > 0);
+        if (list.length === 0) return;
+        AppController.currentView = "board";
+        if (list.length === 1) {
+            const t = AppController.taskById(list[0]);
+            if (t && t.id) taskEditor.showFor(Object.assign({}, t));
+            return;
+        }
+        topBar.searchText = list.join(" OR ");
+        win.searchText = topBar.searchText;
+    }
+
     function _summon() {
+        if (win._maximizeOnShow) {
+            win._maximizeOnShow = false;
+            win.showMaximized();
+        }
         if (win.visibility === Window.Minimized || win.visibility === Window.Hidden || !win.visible)
             win.show();
         win.raise();
@@ -677,6 +770,33 @@ ApplicationWindow {
         // Tray click / "Show heap." menu entry — just restore the window.
         function onShowWindowRequested() { win._summon(); }
         function onToast(msg, kind) { toast.show(msg, kind || "info") }
+        // A safety-net notice (APP-157…): one toast, and "Show" takes the
+        // board to the tasks it is about.
+        function onSafetyNotice(kind, title, body, taskIds) {
+            const msg = title.length > 0 ? title + " · " + body : body;
+            if (taskIds && taskIds.length > 0)
+                toast.showWithAction(msg, I18n.t("safety.show"), 10, function () { win.showSafetyTasks(taskIds) });
+            else
+                toast.show(msg, "info");
+        }
+        // Focus mode ended: one toast with how much was held back, and a way
+        // to see it. Nothing arrives unless asked for.
+        function onImmersionEnded(held, minutes) {
+            const msg = I18n.t("immersion.ended").arg(held);
+            if (held > 0)
+                toast.showWithAction(msg, I18n.t("immersion.showHeld"), 15, function () { AppController.releaseImmersionHeld() });
+            else
+                toast.show(msg, "info");
+        }
+        function onSafetyOpenTasksRequested(taskIds) {
+            win._summon();
+            win.showSafetyTasks(taskIds);
+        }
+        // The third mouse use of an action that has a key: one quiet line,
+        // never repeated for it (APP-166).
+        function onShortcutHintRequested(shortcutId, sequence, label) {
+            toast.show(I18n.t("hint.shortcut").arg(sequence).arg(label), "info")
+        }
         function onTrackerPushFailed(taskId, msg) {
             toast.showWithAction(msg, I18n.t("sync.retry"), 10, function () {
                 AppController.retryTrackerPush(taskId)
@@ -744,6 +864,7 @@ ApplicationWindow {
                 onTriggered: win.searchText = topBar.searchText
             }
             onLeaveRequested: win.focusActiveView()
+            onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
             onNewTaskRequested: taskEditor.showFor(AppController.newTaskDraft("todo"))
             rightPanelShown: win.rightPanelShown
             onRightPanelToggleRequested: win.toggleRightPanel()
@@ -953,7 +1074,10 @@ ApplicationWindow {
                     // ReferenceError, and the two views would never activate.
                     Connections {
                         target: AppController
-                        function onCurrentViewChanged() { win.activateCurrentView(); }
+                        function onCurrentViewChanged() {
+                            win.activateCurrentView();
+                            Qt.callLater(win._focusSwitchedView);
+                        }
                     }
                     Component.onCompleted: win.activateCurrentView()
                     SelectionBar {
@@ -1061,6 +1185,7 @@ ApplicationWindow {
                             function openHotkeys() { rail.openHotkeys(rail.hotkeysAnchor) }
                             function exportJson()  { exportJsonDialog.open() }
                             function importJson()  { importJsonDialog.open() }
+                            function openTimeMachine() { timeMachine.showNow() }
                         }
                     }
                 }
@@ -1172,7 +1297,11 @@ ApplicationWindow {
         }
     }
 
-    TaskEditor    { id: taskEditor }
+    TaskEditor    {
+        id: taskEditor
+        objectName: "task-editor"
+        onSeenBeforeActivated: (hit) => win.openSeenBefore(hit)
+    }
     EventEditor   { id: eventEditor }
     PersonEditor  { id: personEditor }
     PersonPicker  {
@@ -1182,14 +1311,18 @@ ApplicationWindow {
     ProfileEditor { id: profileEditor }
     WelcomePopup {
         id: welcome
-        // Per-step "open →" actions route here so the guide stays decoupled from
-        // the popups/editors Main owns. Each _doAction() already finished the
-        // guide, so the target surface is visible when we open it.
+        // Per-step "open →" actions route here so the tour stays decoupled from
+        // the popups/editors Main owns. Each _doAction() has paused the tour,
+        // so the target surface is visible when we open it.
         onOpenAction: (id) => {
-            if (id === "task-new")           taskEditor.showFor(AppController.newTaskDraft("todo"));
-            else if (id === "quick-capture") quickCapture.open();
-            else if (id === "palette")       cmdPalette.open();
-            else if (id === "hotkeys")       rail.openHotkeys(rail.hotkeysAnchor);
+            if (id === "task-new")            taskEditor.showFor(AppController.newTaskDraft("todo"));
+            else if (id === "quick-capture")  quickCapture.open();
+            else if (id === "palette")        cmdPalette.open();
+            else if (id === "hotkeys")        rail.openHotkeys(rail.hotkeysAnchor);
+            // "Bring your stuff" (APP-169): the same pickers as the palette's.
+            else if (id === "vault-import")   importVaultDialog.open();
+            else if (id === "profile-import") importJsonDialog.open();
+            else if (id === "integrations")   win.runCommand("settings:integrations");
         }
         // "Learn more →" — jump to Settings and scroll the Help doc to the anchor.
         onOpenHelp: (anchor) => {
@@ -1283,6 +1416,10 @@ ApplicationWindow {
     QuickCapturePopup {
         id: quickCapture
         onCaptured: (title, body, taskId) => toast.show(title + " — " + body.replace(/\n/g, " · "))
+        onSeenBeforeActivated: (hit) => {
+            quickCapture.close();
+            win.openSeenBefore(hit);
+        }
     }
     QuickCaptureNotesPopup {
         id: quickCaptureNotes
@@ -1306,17 +1443,53 @@ ApplicationWindow {
             onCaptured: (title, body, taskId) => AppController.notifyCapture(taskId, title, body)
         }
     }
+    // Outside the component, so `win` is in scope for qmllint (APP-159).
+    Connections {
+        target: captureLoader.item
+        ignoreUnknownSignals: true
+        function onSeenBeforeActivated(hit) {
+            win._summon();
+            win.openSeenBefore(hit);
+        }
+        // The zoom keys stand down while it has the keyboard (APP-168).
+        // Window.active cannot tell: the capture window is this one's
+        // transient child, and an active child counts as this one active.
+        // Hiding it does not always say it went inactive, hence both.
+        function onActiveChanged() {
+            const cw = captureLoader.item as CaptureWindow;
+            win._captureActive = !!cw && cw.visible && cw.active;
+        }
+        function onVisibleChanged() {
+            const cw = captureLoader.item as CaptureWindow;
+            win._captureActive = !!cw && cw.visible && cw.active;
+        }
+    }
 
     // GitWatcher → TaskEditor bridge: TopBar "Open" button on the focus
     // banner emits openTaskRequested; route it through the same showFor()
     // path used by Kanban / Timeline / palette.
     Connections {
         target: AppController
-        function onOpenTaskRequested(taskId) {
+        function onOpenTaskRequested(taskId, profileId) {
             // Also reached from a notification click while heap is in the tray.
             win._summon();
-            // Edits to the task already open are not swapped out unasked (TASKS-18).
-            taskEditor.settleThen(() => taskEditor.showFor(Object.assign({}, AppController.taskById(taskId))));
+            // Edits to the task already open are not swapped out unasked
+            // (TASKS-18), and the task's profile becomes the active one only
+            // after that: switched first, the open editor saved into the
+            // other profile (PRES-1).
+            taskEditor.settleThen(() => {
+                if (profileId && profileId !== AppController.activeProfileId)
+                    AppController.activeProfileId = profileId;
+                taskEditor.showFor(Object.assign({}, AppController.taskById(taskId)));
+            });
+        }
+        // "Open" on a meeting / standup reminder (APP-155): that day in the
+        // week view, and the meeting itself when it is a stored event.
+        function onOpenEventRequested(eventId, date) {
+            win._summon();
+            AppController.selectedDate = date;
+            AppController.currentView = "week";
+            if (eventId) eventEditor.showForId(eventId);
         }
     }
 
@@ -1345,6 +1518,15 @@ ApplicationWindow {
             savedViewsHost.applyAt(Number(id.slice(10)));
             return;
         }
+        // Notes actions run in the Notes view, so go there first (SHELL-1).
+        if (id.indexOf("notes.") === 0) {
+            AppController.currentView = "notes";
+            Qt.callLater(function () {
+                const v = win.activeViewItem();
+                if (v && v.runNotesCommand) v.runNotesCommand(id.slice(6));
+            });
+            return;
+        }
         if (id === "savedview.save") {
             // After the palette has closed, so the dialog gets the keyboard.
             Qt.callLater(savedViewsHost.openSave);
@@ -1369,6 +1551,12 @@ ApplicationWindow {
         case "event.new":            eventEditor.showForDraft(AppController.newEventDraft(9, AppController.selectedDate)); break;
         case "welcome.replay":       AppController.replayWelcome(); break;
         case "recap.open":           weeklyRecap.showNow(); break;
+        case "focus.immersion":      win.toggleImmersion(); break;
+        case "standup.draft":        standupDraft.showNow(); break;
+        case "timeMachine.open":     timeMachine.showNow(); break;
+        case "zoom.in":              win.zoomInterface(1); break;
+        case "zoom.out":             win.zoomInterface(-1); break;
+        case "zoom.reset":           win.zoomInterface(0); break;
         default:                     console.warn("palette: no command", id);
         }
     }
@@ -1575,6 +1763,62 @@ ApplicationWindow {
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: AppController.copyActiveProfileMarkdownToClipboard()
     }
+    // Focus mode (APP-160): on, and again to leave. Esc leaves it too when
+    // nothing nearer would take the Esc (a selection, the board cursor, a
+    // field, a dialog) — those stand the shortcut down, so the two never
+    // compete for the same key.
+    Shortcut {
+        sequence: win._kbd("focus.immersion")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
+        onActivated: win.toggleImmersion()
+    }
+    Shortcut {
+        sequence: "Escape"
+        context: Qt.ApplicationShortcut
+        enabled: AppController.immersion && !win._viewKeysBlocked && AppController.selectionCount === 0
+                 && !(AppController.currentView === "board" && !!boardLoader.item && boardLoader.item["cursorVisible"] === true)
+        onActivated: AppController.stopImmersion()
+    }
+    // Interface scale (APP-168) from the keyboard: a step of Theme.scaleSteps
+    // up or down, or back to 100 %, stored where Settings → Appearance → Scale
+    // stores it. Live over dialogs and in text fields too (no editor binds
+    // these keys), so a modal is no reason to stand down; only the hotkey
+    // recorder, which wants the key itself, and the capture window, which is
+    // a window of its own, keep them.
+    function zoomInterface(direction) {
+        const s = AppController.stepUiScale(direction, Theme.scaleSteps);
+        toast.show(I18n.t("toast.uiScale").arg(Math.round(s * 100)), "info", "uiScale");
+    }
+    property bool _captureActive: false
+    readonly property bool _zoomKeysOn: !hotkeys.isCapturing && !win._captureActive
+    // The fixed aliases match kBuiltinKeys in AppController.cpp. Where one key
+    // matches two of them (Ctrl+Shift+= is also Ctrl++), Qt reports it as
+    // ambiguous: that is still one press.
+    Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: win._zoomKeysOn
+        objectName: "shortcut-zoom-in"
+        sequences: [win._kbd("zoom.in"), "Ctrl++", "Ctrl+Shift+=", "Ctrl+Num++"]
+        onActivated: win.zoomInterface(1)
+        onActivatedAmbiguously: win.zoomInterface(1)
+    }
+    Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: win._zoomKeysOn
+        objectName: "shortcut-zoom-out"
+        sequences: [win._kbd("zoom.out"), "Ctrl+Num+-"]
+        onActivated: win.zoomInterface(-1)
+        onActivatedAmbiguously: win.zoomInterface(-1)
+    }
+    Shortcut {
+        context: Qt.ApplicationShortcut
+        enabled: win._zoomKeysOn
+        objectName: "shortcut-zoom-reset"
+        sequences: [win._kbd("zoom.reset"), "Ctrl+Num+0"]
+        onActivated: win.zoomInterface(0)
+        onActivatedAmbiguously: win.zoomInterface(0)
+    }
     Shortcut {
         sequence: _kbd("profile.weeklyReport")
         context: Qt.ApplicationShortcut
@@ -1592,6 +1836,20 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn
         onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+    }
+    // `?` opens the same cheat-sheet (APP-166), as in most keyboard-first
+    // apps. A view key: it stands down while anything takes typed text, so a
+    // question mark in a title is still a question mark. Shift+/ is what the
+    // key reports on layouts where Qt does not fold it into Key_Question, and
+    // Shift+? where the event keeps the Shift it took to type it.
+    Shortcut {
+        objectName: "shortcut-question-cheatsheet"
+        sequences: ["?", "Shift+?", "Shift+/"]
+        context: Qt.ApplicationShortcut
+        enabled: !win._viewKeysBlocked && !hotkeys.opened
+        onActivated: rail.openHotkeys(rail.hotkeysAnchor)
+        // Where a layout reports the key both ways, both sequences match.
+        onActivatedAmbiguously: rail.openHotkeys(rail.hotkeysAnchor)
     }
     Shortcut {
         sequence: _kbd("undo")
@@ -1641,7 +1899,7 @@ ApplicationWindow {
         enabled: sequence.length > 0 && !win._viewKeysBlocked
             && (AppController.selectionCount > 0
                 || (AppController.currentView === "board"
-                    && !!boardLoader.item && boardLoader.item.cursorVisible === true))
+                    && !!boardLoader.item && boardLoader.item["cursorVisible"] === true))
         onActivated: {
             AppController.clearSelection();
             if (boardLoader.item && boardLoader.item.clearCursor) boardLoader.item.clearCursor();
@@ -1685,10 +1943,12 @@ ApplicationWindow {
 
     // The day panel follows the selected date in every view it sits beside,
     // so today, go-to-date and a day at a time work from those too — they
-    // used to be week/month only.
+    // used to be week/month only. They stand down like every other view key:
+    // G opened go-to-date over the profile menu and a "Delete column?"
+    // confirm, Alt+← moved the day from the header search (SHELL-3).
     component DayKey: Shortcut {
         context: Qt.ApplicationShortcut
-        enabled: sequences.length > 0 && !hotkeys.isCapturing && !win._overlayOpen
+        enabled: sequences.length > 0 && !win._viewKeysBlocked
             && ["board", "timeline", "week", "month", "archive"].indexOf(AppController.currentView) >= 0
     }
     DayKey {
@@ -1741,10 +2001,18 @@ ApplicationWindow {
     // The Monday recap: last week's column moves (WEAK PECAP). Opens itself
     // on the first launch of a week, and when the app is left running into
     // Monday; the palette opens it any time.
+    // The time machine (APP-162): Settings → Data and the palette open it.
+    TimeMachineDialog {
+        id: timeMachine
+    }
+
     WeeklyRecapDialog {
         id: weeklyRecap
         onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+        onStandupDraftRequested: standupDraft.showNow()
     }
+    // The standup draft (APP-170): text to edit and copy, sent nowhere.
+    StandupDraftDialog { id: standupDraft }
     Connections {
         target: AppController
         function onTodayChanged() {

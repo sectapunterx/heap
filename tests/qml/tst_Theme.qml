@@ -35,6 +35,54 @@ TestCase {
         compare(typeof Theme.highContrast, "boolean");
     }
 
+    // ── Fonts: the bundled Golos Text / JetBrains Mono lead every chain ──
+    // A fresh profile (no appearance, or the seeded one) and a profile that
+    // still carries the old seeded "IBM Plex Sans" both get Golos Text; a font
+    // the user picked stays in front.
+    function test_fontui_defaults_to_bundled_golos() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({});
+        const fresh = Theme.fontUi;
+        const freshMono = Theme.fontMono;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "Golos Text", fontMono: "JetBrains Mono" } });
+        const seeded = Theme.fontUi;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "IBM Plex Sans", fontMono: "JetBrains Mono" } });
+        const legacy = Theme.fontUi;
+        // A pick the machine has (the bundled mono, always there) stays; one
+        // it lacks gives way to the bundled face instead of an arbitrary one.
+        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "JetBrains Mono" } });
+        const custom = Theme.fontUi;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { fontUI: "No Such Font heap", fontMono: "No Such Mono heap" } });
+        const missing = Theme.fontUi;
+        const missingMono = Theme.fontMono;
+        AppController.appSettingsJson = saved;
+
+        // One family each: Qt reads font.family as a single name, so a
+        // "A, B, sans-serif" list matched nothing and drew in the system font.
+        compare(fresh, "Golos Text");
+        compare(freshMono, "JetBrains Mono");
+        compare(seeded, "Golos Text");
+        compare(legacy, "Golos Text");
+        compare(custom, "JetBrains Mono");
+        compare(missing, "Golos Text");
+        compare(missingMono, "JetBrains Mono");
+    }
+
+    // quick_test_main registers the bundled fonts as main() does, so a Text
+    // set in Theme's fonts really draws in them, at the weights the UI uses;
+    // a Text with no family of its own gets Golos Text too (the application
+    // font), not the system UI font.
+    Text { id: uiProbe; text: "Ж"; font.family: Theme.fontUi; font.weight: Font.DemiBold }
+    Text { id: monoProbe; text: "0"; font.family: Theme.fontMono; font.weight: Font.Medium }
+    Text { id: plainProbe; text: "a" }
+    function test_bundled_fonts_resolve() {
+        compare(uiProbe.fontInfo.family, "Golos Text");
+        compare(uiProbe.fontInfo.weight, Font.DemiBold);
+        compare(monoProbe.fontInfo.family, "JetBrains Mono");
+        compare(monoProbe.fontInfo.weight, Font.Medium);
+        compare(plainProbe.fontInfo.family, "Golos Text");
+    }
+
     // ── withAlpha: keeps r/g/b, replaces alpha ──
     function test_withalpha_preserves_rgb_sets_alpha() {
         const c = Qt.rgba(0.2, 0.4, 0.6, 1.0);
@@ -782,5 +830,34 @@ TestCase {
         verify(Presets.contrast(fixed, "#000000") >= 4.5, fixed);
         const onLight = Presets.ensureContrast("#dddddd", ["#ffffff"], 3);
         verify(Presets.contrast(onLight, "#ffffff") >= 3, onLight);
+    }
+
+    // APP-168: Appearance → Scale moves type and spacing live; the 11px
+    // floor holds at 90 %, and a value out of range is ignored.
+    function test_ui_scale_moves_type_and_spacing() {
+        const saved = AppController.appSettingsJson;
+        function withScale(s) {
+            const o = JSON.parse(saved || "{}");
+            o.appearance = Object.assign({}, o.appearance || {}, { uiScale: s });
+            AppController.appSettingsJson = JSON.stringify(o);
+        }
+        try {
+            withScale(1);
+            const md = Theme.fsMd, xl = Theme.sp2xl, row = Theme.rowH;
+            withScale(1.25);
+            compare(Theme.scale, 1.25);
+            compare(Theme.fsMd, Math.round(md * 1.25));
+            compare(Theme.sp2xl, Math.round(xl * 1.25));
+            compare(Theme.rowH, Math.round(row * 1.25));
+            withScale(1.5);
+            compare(Theme.fsMd, Math.round(md * 1.5));
+            withScale(0.9);
+            verify(Theme.fsXs >= 11, "the floor holds");
+            verify(Theme.fsMd < md);
+            withScale(7);
+            compare(Theme.scale, 1, "out of range means 100 %");
+        } finally {
+            AppController.appSettingsJson = saved;
+        }
     }
 }

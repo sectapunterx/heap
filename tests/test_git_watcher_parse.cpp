@@ -1,5 +1,6 @@
 #include "git/BranchTaskMatcher.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -127,4 +128,24 @@ TEST(Commits, GroupsBySubjectTaskId) {
 TEST(Commits, EmptyLogYieldsEmptyMap) {
   BranchTaskMatcher m({"HEAP"});
   EXPECT_TRUE(m.groupCommitsByTask(QByteArray()).isEmpty());
+}
+
+// The log carries the commit time as an optional third field (APP-157): the
+// subject stops before it, and the time is kept as `at`.
+TEST(Commits, CommitTimeIsAThirdOptionalField) {
+  BranchTaskMatcher m({"HEAP"});
+  QByteArray log;
+  log +=
+      "aaaaaaa1111111111111111111111111111bbbb\x1f"
+      "HEAP-7 with a time\x1f"
+      "2026-10-05T17:30:00+03:00\n";
+  log +=
+      "bbbbbbb2222222222222222222222222222cccc\x1f"
+      "HEAP-7 without one\n";
+  const QVariantList h7 = m.groupCommitsByTask(log).value("HEAP-7").toList();
+  ASSERT_EQ(h7.size(), 2);
+  EXPECT_EQ(h7.at(0).toMap().value("subject").toString(), QString("HEAP-7 with a time"));
+  EXPECT_TRUE(h7.at(0).toMap().value("at").toDateTime().isValid());
+  EXPECT_EQ(h7.at(1).toMap().value("subject").toString(), QString("HEAP-7 without one"));
+  EXPECT_FALSE(h7.at(1).toMap().contains("at"));
 }

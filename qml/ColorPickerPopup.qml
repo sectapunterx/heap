@@ -205,6 +205,7 @@ Popup {
             }
             TextField {
                 id: hexField
+                ContextMenu.menu: TextEditMenu { editor: hexField }
                 objectName: "cp-hex"
                 Layout.fillWidth: true
                 font.family: Theme.fontMono

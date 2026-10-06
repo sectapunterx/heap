@@ -47,6 +47,11 @@ Item {
         objectName: "archive-filter"
         sourceModel: AppController.tasks
         archivedOnly: true
+        // As on the board: status: by column name and relative dates need
+        // the columns and today, or "status:\"Code Review\"" finds nothing
+        // here while a saved view counts it (TASKS-5).
+        statuses: AppController.statuses
+        today: AppController.today
         searchText: root.searchText
         priorities: root.activePriorities
         sortMode: "priority"
@@ -97,6 +102,40 @@ Item {
         }
         AppController.setSelectedTaskIds(merged);
     }
+
+    // Keyboard (SHELL-17): every archived card is a Tab stop with its name;
+    // ↑/↓ also walk the list from card to card, Return opens one (TaskCard),
+    // the Menu key (or Shift+F10) opens its menu — restore and delete are
+    // there. ↓ on the view itself, where a view switch leaves focus, enters
+    // the list. The keys a card does not take reach the list, which handles
+    // them for whichever card holds focus.
+    function _cardAt(i) {
+        const it = archList.itemAtIndex(i);
+        if (!it) return null;
+        const kids = it.children;
+        for (let k = 0; k < kids.length; k++)
+            if (typeof kids[k].openMenu === "function") return kids[k];
+        return null;
+    }
+    function _focusedRow() {
+        const f = root.Window.activeFocusItem;
+        if (!f) return -1;
+        const p = f.mapToItem(archList.contentItem, f.width / 2, f.height / 2);
+        return archList.indexAt(p.x, p.y);
+    }
+    function focusRow(i) {
+        if (archList.count === 0) return false;
+        const at = Math.max(0, Math.min(archList.count - 1, i));
+        archList.currentIndex = at;
+        archList.positionViewAtIndex(at, ListView.Contain);
+        const card = root._cardAt(at);
+        if (!card) return false;
+        card.forceActiveFocus(Qt.TabFocusReason);
+        return true;
+    }
+    Keys.onDownPressed: root.focusRow(Math.max(0, archList.currentIndex))
+    Accessible.role: Accessible.Pane
+    Accessible.name: I18n.t("archive.title")
 
     Rectangle {
         anchors.fill: parent; color: Theme.bg
@@ -156,6 +195,22 @@ Item {
         ListView {
             id: archList
             objectName: "archive-list"
+            Accessible.role: Accessible.List
+            Accessible.name: I18n.t("archive.title")
+            // The cards are the stops, not the list.
+            keyNavigationEnabled: false
+            Keys.onUpPressed: root.focusRow(root._focusedRow() - 1)
+            Keys.onDownPressed: {
+                const at = root._focusedRow();
+                root.focusRow(at < 0 ? 0 : at + 1);
+            }
+            Keys.onPressed: (event) => {
+                if (event.key === Qt.Key_F10 && (event.modifiers & Qt.ShiftModifier)) {
+                    const card = root._cardAt(root._focusedRow());
+                    if (card) card.openMenu();
+                    event.accepted = true;
+                }
+            }
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -172,27 +227,13 @@ Item {
                 visible: archFilter.count === 0
                 width: archList.width
                 height: 220
-                Column {
+                EmptyState {
+                    objectName: "archive-empty"
                     anchors.centerIn: parent
-                    spacing: Theme.spMd
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: "▤"
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fs2xl
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t("archive.empty.title")
-                        color: Theme.text
-                        font.pixelSize: Theme.fsMd
-                    }
-                    Text {
-                        anchors.horizontalCenter: parent.horizontalCenter
-                        text: I18n.t("archive.empty.hint")
-                        color: Theme.textDim
-                        font.pixelSize: Theme.fsMd
-                    }
+                    width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
+                    icon: "heap-05-archive"
+                    title: I18n.t("archive.empty.title")
+                    line: I18n.t("archive.empty.hint")
                 }
             }
 
@@ -213,6 +254,8 @@ Item {
                 required property string branch
                 required property bool blockedStuck
                 required property string prState
+                required property string prMove
+                required property string prMoveReason
                 required property int prNumber
                 required property string prUrl
                 required property int gitAhead
@@ -275,6 +318,7 @@ Item {
                         deadline: row.deadline, branch: row.branch,
                         archived: true, blockedStuck: row.blockedStuck,
                         prState: row.prState, prNumber: row.prNumber, prUrl: row.prUrl,
+                        prMove: row.prMove, prMoveReason: row.prMoveReason,
                         gitAhead: row.gitAhead, gitBehind: row.gitBehind,
                         recentCommits: row.recentCommits,
                         trackedSeconds: row.trackedSeconds, isTiming: row.isTiming,

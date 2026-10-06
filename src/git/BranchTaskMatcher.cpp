@@ -1,5 +1,6 @@
 #include "BranchTaskMatcher.h"
 
+#include <QDateTime>
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -124,7 +125,11 @@ QVariantMap BranchTaskMatcher::groupCommitsByTask(const QByteArray& gitLogOutput
       continue;
     }
     const QString sha = line.left(sep).trimmed();
-    const QString subject = line.mid(sep + 1).trimmed();
+    // `%H %s` or `%H %s %cI`: the commit time is optional, so an older
+    // format (and the tests' fixtures) still parse.
+    const qsizetype timeSep = line.indexOf(QChar(0x1f), sep + 1);
+    const QString subject = (timeSep < 0 ? line.mid(sep + 1) : line.mid(sep + 1, timeSep - sep - 1)).trimmed();
+    const QDateTime at = timeSep < 0 ? QDateTime() : QDateTime::fromString(line.mid(timeSep + 1).trimmed(), Qt::ISODate);
     if(sha.isEmpty()) {
       continue;
     }
@@ -147,6 +152,9 @@ QVariantMap BranchTaskMatcher::groupCommitsByTask(const QByteArray& gitLogOutput
     QVariantMap commit;
     commit.insert(QStringLiteral("sha"), sha.left(7));
     commit.insert(QStringLiteral("subject"), subject);
+    if(at.isValid()) {
+      commit.insert(QStringLiteral("at"), at);
+    }
     list.append(commit);
     out.insert(taskId, list);
   }

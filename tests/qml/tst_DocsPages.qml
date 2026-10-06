@@ -257,4 +257,86 @@ TestCase {
         compare(AppController.docPageBody(b), "body B");
         compare(area.text, "body B");
     }
+
+    // ── Moving pages (KNOW-20) ──
+    // moveDocPage existed with no way to reach it: a page made in the wrong
+    // place stayed there. The row menu and Ctrl+arrows on the tree move it.
+
+    function childIds(parentId) {
+        const kids = AppController.docPageChildren(parentId);
+        const out = [];
+        for (let i = 0; i < kids.length; i++) out.push(kids[i].id);
+        return out;
+    }
+
+    function test_a_page_moves_up_and_down_among_its_siblings() {
+        const top = page("move top");
+        const a = page("A", top);
+        const b = page("B", top);
+        const c = page("C", top);
+        const pane = makePane();
+
+        verify(!pane.canMove(a, "up"));
+        verify(!pane.canMove(c, "down"));
+        pane.movePage(c, "up");
+        compare(childIds(top), [a, c, b]);
+        pane.movePage(a, "down");
+        compare(childIds(top), [c, a, b]);
+        pane.movePage(a, "down");
+        compare(childIds(top), [c, b, a]);
+    }
+
+    function test_a_page_nests_under_the_one_above_and_back_out() {
+        const top = page("nest top");
+        const a = page("A", top);
+        const b = page("B", top);
+        const pane = makePane();
+
+        verify(!pane.canMove(top, "out"), "a root page has nowhere further out");
+        verify(!pane.canMove(a, "in"), "the first sibling has nothing above it");
+        pane.movePage(b, "in");
+        compare(childIds(a), [b]);
+        compare(childIds(top), [a]);
+        pane.movePage(b, "out");
+        compare(childIds(top), [a, b], "out lands just below its old parent");
+        pane.movePage(a, "out");
+        const roots = childIds("");
+        compare(roots.indexOf(a), roots.indexOf(top) + 1);
+    }
+
+    function test_ctrl_arrows_move_the_current_page() {
+        const top = page("aaa kb move top");
+        const a = page("A", top);
+        const b = page("B", top);
+        const pane = makePane();
+        pane.filter = "";
+        pane.toggle(top);
+        const tree = findChild(pane, "docpage-tree");
+        tree.forceActiveFocus(Qt.TabFocusReason);
+        tree.currentIndex = idsOf(pane).indexOf(b);
+
+        keyClick(Qt.Key_Up, Qt.ControlModifier);
+        compare(childIds(top), [b, a]);
+        compare(pane.rows[tree.currentIndex].id, b, "the cursor stays on the page that moved");
+        keyClick(Qt.Key_Down, Qt.ControlModifier);
+        compare(childIds(top), [a, b]);
+        keyClick(Qt.Key_Right, Qt.ControlModifier);
+        compare(childIds(a), [b]);
+        keyClick(Qt.Key_Left, Qt.ControlModifier);
+        compare(childIds(top), [a, b]);
+    }
+
+    // KNOW-18: "Load images" was a switch on the editor's one document, so it
+    // stayed on for every page opened after the one it was pressed on.
+    function test_remote_images_are_allowed_for_one_page_only() {
+        const a = page("Trusted");
+        const b = page("Imported");
+        const ed = makeEditor(a);
+        const doc = findChild(ed, "docpage-preview").document;
+        doc.allowRemoteImages = true;
+
+        ed.pageId = b;
+
+        verify(!doc.allowRemoteImages);
+    }
 }

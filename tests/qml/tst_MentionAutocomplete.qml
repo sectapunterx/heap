@@ -299,6 +299,121 @@ TestCase {
         AppController.deletePerson(pid);
     }
 
+    // ── logins made of the name, and "@first last" with a space ─────
+
+    function savePeople(list) {
+        for (let i = 0; i < list.length; ++i) {
+            AppController.deletePerson(list[i].id);
+            AppController.savePerson({ _isNew: true, id: list[i].id, name: list[i].name, state: "todo" });
+        }
+    }
+    function deletePeople(list) {
+        for (let i = 0; i < list.length; ++i) AppController.deletePerson(list[i].id);
+    }
+
+    // "@r.losev" finds Роман Лосев though his id is something else; the
+    // login another Losev shares lists both, "@roman" only him.
+    function test_login_handle_suggests_the_person() {
+        const roman = { id: "eml-roman", name: "Роман Лосев" };
+        const ruslan = { id: "eml-ruslan", name: "Руслан Лосев" };
+        savePeople([roman, ruslan]);
+
+        const ac = makeAc();
+        const f = makeField();
+        ac.target = f;
+        f.text = "ping @r.losev";
+        f.cursorPosition = f.text.length;
+        ac.refresh();
+        verify(findById(ac._suggestions, roman.id) !== null, "@r.losev must suggest Роман Лосев");
+        verify(findById(ac._suggestions, ruslan.id) !== null, "@r.losev fits Руслан Лосев too");
+
+        f.text = "ping @roman";
+        f.cursorPosition = f.text.length;
+        ac.refresh();
+        verify(findById(ac._suggestions, roman.id) !== null);
+        verify(findById(ac._suggestions, ruslan.id) === null, "@roman must leave Руслан out");
+
+        f.text = "ping @r.lo";
+        f.cursorPosition = f.text.length;
+        ac.refresh();
+        verify(findById(ac._suggestions, roman.id) !== null, "a login being typed must suggest");
+
+        ac.dismiss();
+        deletePeople([roman, ruslan]);
+    }
+
+    // "@roman losev" keeps suggesting across the space, and accept() replaces
+    // the whole typed range — both words — with the canonical "@<id> ".
+    function test_two_words_suggest_and_accept_replaces_the_range() {
+        const roman = { id: "eml-roman2", name: "Роман Лосев" };
+        savePeople([roman]);
+
+        const ac = makeAc();
+        const f = makeField();
+        ac.target = f;
+        f.text = "hi @roman losev end";   // '@' at 3, query ends at 15
+        f.cursorPosition = 15;
+
+        const r = ac._currentTriggerRange();
+        verify(r !== null, "@roman losev must stay one mention");
+        compare(r.start, 3);
+        compare(r.end, 15);
+        compare(r.prefix, "roman losev");
+
+        ac.refresh();
+        tryVerify(function() { return ac.isOpen; }, 3000, "dropdown did not open");
+        compare(ac._suggestions[0].id, roman.id, "the exact name must rank first");
+        verify(ac.accept());
+        compare(f.text, "hi @eml-roman2  end");
+        compare(f.cursorPosition, 4 + roman.id.length + 1);
+
+        // Cyrillic words find him as well.
+        f.text = "@роман лос";
+        f.cursorPosition = f.text.length;
+        ac.refresh();
+        verify(findById(ac._suggestions, roman.id) !== null, "@роман лос must suggest him");
+
+        ac.dismiss();
+        deletePeople([roman]);
+    }
+
+    // A space only extends the query while it still matches someone: after a
+    // word nobody has, or a bare trailing space, the list is closed.
+    function test_space_after_non_matching_word_closes() {
+        const roman = { id: "eml-roman3", name: "Роман Лосев" };
+        savePeople([roman]);
+
+        const ac = makeAc();
+        const f = makeField();
+        ac.target = f;
+
+        f.text = "@roman zavtra";
+        f.cursorPosition = f.text.length;
+        ac.refresh();
+        verify(findById(ac._suggestions, roman.id) === null);
+        compare(ac.isOpen, false, "a second word nobody has must close the list");
+
+        f.text = "@zzqxnobody l";
+        f.cursorPosition = f.text.length;
+        ac.refresh();
+        compare(ac._suggestions.length, 0);
+        compare(ac.isOpen, false);
+
+        // "@eml-roman3 " as accept() leaves it: the space ends the mention.
+        f.text = "@eml-roman3 ";
+        f.cursorPosition = f.text.length;
+        verify(ac._currentTriggerRange() === null, "a bare trailing space must end the mention");
+
+        // Two spaces are never one mention.
+        f.text = "@roman losev x";
+        f.cursorPosition = f.text.length;
+        const r = ac._currentTriggerRange();
+        verify(r === null || r.prefix.indexOf(" ") < 0, "a query holds one space at most");
+
+        ac.dismiss();
+        deletePeople([roman]);
+    }
+
     // When closed, accept() is a no-op returning false, moveSelection does not
     // touch the selection, and dismiss() resets the transient state.
     function test_accept_and_move_noop_when_closed() {

@@ -3,6 +3,10 @@
 #include "Models.h"
 
 #include "board/Rank.h"
+#include "history/TaskHistory.h"
+#include "integrations/SyncHealth.h"
+#include "notify/NotifyPayload.h"
+#include "safety/EndOfDay.h"
 #include "undo/UndoStack.h"
 
 #include <QDate>
@@ -176,6 +180,9 @@ class AppController : public QObject {
   Q_PROPERTY(QString focusedRepo READ focusedRepo NOTIFY focusedGitChanged)
   Q_PROPERTY(QVariantMap focusedRepoState READ focusedRepoState NOTIFY focusedGitChanged)
   Q_PROPERTY(bool focusedBannerDismissed READ focusedBannerDismissed NOTIFY focusedGitChanged)
+  // Settings → Git → "Show whose move" (APP-156). On by default: it is a fact
+  // read off the PR, not a nudge.
+  Q_PROPERTY(bool showWhoseMove READ showWhoseMove NOTIFY showWhoseMoveChanged)
 
   // ---- Storage health (PLAT-1/4/5) ----
   // "ok", "unreadable" (state.json exists but could not be opened: read-only
@@ -188,6 +195,25 @@ class AppController : public QObject {
  public:
   explicit AppController(QObject* parent = nullptr);
   ~AppController() override;
+
+  // A command-line run (`heap add`, `heap done` with no window open, see
+  // src/cli): the same models and save path, but no tray icon, global
+  // hotkeys, git watcher, tracker sync, calendar fetches or update checks.
+  // Set before the controller is constructed.
+  static void setHeadless(bool headless) {
+    s_headless = headless;
+  }
+
+  static bool isHeadless() {
+    return s_headless;
+  }
+
+  // `heap done` sent to the open window goes through moveTask() like a drag
+  // does. The CLI executor mutes the completion sound (APP-167) around it:
+  // only the user's own action in this window ticks.
+  void setCompletionSoundMuted(bool muted) {
+    m_completionSoundMuted = muted;
+  }
 
   Q_INVOKABLE void flushSave();
 
@@ -540,6 +566,11 @@ class AppController : public QObject {
   // a tracker ticket ("LTE-2398 fix login") and no task has that id yet, is
   // the id instead.
   Q_INVOKABLE QVariantMap newQuickTaskDraft(const QString& ticketKey = QString()) const;
+  // The whole task QuickCapture makes of `raw`: newQuickTaskDraft with the
+  // title, "// description", priority, #labels and the date the text names
+  // (cut out of the title, read against `reference`, now when invalid). The
+  // popup and `heap add` both save this, so they cannot read text apart.
+  Q_INVOKABLE QVariantMap quickTaskDraft(const QString& raw, const QDateTime& reference = QDateTime()) const;
   // Reusable task/checklist templates (HEAP-77). taskTemplates lists the
   // built-ins ({name, title, desc}); createTaskFromTemplate drops a pre-filled
   // task (checklist in the description) onto the board.
@@ -554,8 +585,21 @@ class AppController : public QObject {
   // version of every conflicting field (true), or keep the local one and stop
   // flagging it (false). Undoable.
   Q_INVOKABLE void resolveTrackerConflict(const QString& taskId, bool useTracker);
+  // One field of it ("title" | "body" | "priority" | "status"). Keeping my
+  // status sends it to the tracker; taking the tracker's drops the unsent move.
+  Q_INVOKABLE void resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker);
   // Archive every card of this tracker the current filter no longer covers.
   Q_INVOKABLE void archiveOutOfScope(const QString& providerId);
+  // Settings → Integrations → Health (APP-164): one row per connected
+  // tracker — { id, name, lastOk, items, failing, error, errorDetail,
+  // errorAge, expiry, offline }, times relative to now, text in the UI
+  // language. Read-only.
+  Q_INVOKABLE QVariantList integrationHealth() const;
+  QVariantList integrationHealthAt(const QDateTime& now) const;
+  // What happened to a task, newest first: [{ at, kind, from, to, sync }]
+  // (APP-165). kind: created | status | title | priority | due | scheduled
+  // | pushed. Capped per task; see history/TaskHistory.h.
+  Q_INVOKABLE QVariantList taskHistory(const QString& taskId) const;
   // Whether a link from user or tracker content may open without asking. See
   // heap::md::isSafeLink.
   Q_INVOKABLE bool isSafeLink(const QString& url) const;
@@ -853,6 +897,34 @@ class AppController : public QObject {
   // task currently has no deadline). Invoked by the "Snooze 1h" action.
   Q_INVOKABLE void snoozeDeadline(const QString& taskId, int seconds);
 
+  // ---- Start at login (APP-154) ----
+  // { supported, enabled, minimized }, read from the OS entry on every call so
+  // Settings shows what the next login will really do. While the entry is off,
+  // `minimized` is the remembered choice (settings.system.startMinimized).
+  Q_INVOKABLE QVariantMap autostartState() const;
+  // Writes or removes the OS entry and remembers the choice under
+  // settings.system. Starting at login implies staying in the tray: an
+  // unanswered close-to-tray question is answered "hide to tray". False (and
+  // an error toast) when the OS refused the change.
+  Q_INVOKABLE bool setAutostart(bool enabled, bool minimized);
+
+  // ---- Reminder buttons (APP-155) ----
+  // A heap://notify URI from a toast click, forwarded by the launch the shell
+  // started (main.cpp). Routes to the same handlers as a native button.
+  Q_INVOKABLE bool handleNotificationUri(const QString& uri);
+  // A sample reminder with the real buttons, from Settings → Notifications,
+  // shown even while heap has focus: it is how the user checks that the OS
+  // lets heap's notifications through.
+  Q_INVOKABLE void sendTestNotification();
+  // Puts a shown reminder off: it comes back `minutes` after `now`, with the
+  // same text, through the usual quiet-hours rules. Kept in snoozes.json.
+  void snoozeReminderAt(const QString& notificationId, int minutes, const QDateTime& now);
+
+  // Snoozed reminders waiting (tests).
+  QVector<heap::notify::SnoozedReminder> pendingSnoozes() const {
+    return m_snoozed;
+  }
+
   // ---- Event ops ----
   // A fresh event id. Shared by the draft and the series edits, which both
   // need one and must not invent different shapes.
@@ -964,6 +1036,14 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap personById(const QString& id) const;
   // The person an "@handle" in a note names, or empty.
   Q_INVOKABLE QString personIdForHandle(const QString& handle) const;
+  // Finding someone by what was typed (heap::text::personMatchRank): the id,
+  // a login derived from the name ("r.losev", "roman.losev"), or the name's
+  // words in either script ("roman lo", "роман"). personMatchRank is the
+  // rank for one candidate (0 = no match); matchPeople is the active
+  // profile's people, best first, at most `limit` of them, as
+  // {id, name, role, color, rank}.
+  Q_INVOKABLE int personMatchRank(const QString& query, const QString& name, const QString& id) const;
+  Q_INVOKABLE QVariantList matchPeople(const QString& query, int limit) const;
   Q_INVOKABLE bool savePerson(const QVariantMap& draft);
   Q_INVOKABLE void deletePerson(const QString& id);
 
@@ -1083,6 +1163,12 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantMap parseDateTime(const QString& input, const QDateTime& reference = QDateTime()) const;
   Q_INVOKABLE QVariantList parseAllDateTimes(const QString& input, const QDateTime& reference = QDateTime()) const;
 
+  // ---- Opt-in timing (APP-161, diag/PerfLog.h) ----
+  // A popup calls this as it starts to show: span `name` (begun earlier by the
+  // global hotkey, or now) ends on the next frame `item`'s window presents, and
+  // is logged. A no-op unless HEAP_PERF_LOG=1 or --perf-log.
+  Q_INVOKABLE void perfMarkShown(const QString& name, QObject* item) const;
+
   Q_INVOKABLE void copyToClipboard(const QString& text);
 
   // ---- Free-form text classification (used by QuickCapture / TaskEditor) ----
@@ -1164,6 +1250,34 @@ class AppController : public QObject {
   Q_INVOKABLE QVariantList listBackups() const;
   Q_INVOKABLE bool restoreFromBackup(const QString& fileName);
 
+  // ---- Time machine (APP-162, src/storage/Snapshots.h) ----
+  // Hourly snapshots in <dataDir>/history, newest first: { name, at (ISO),
+  // day ("yyyy-MM-dd"), time ("HH:mm"), sizeKb, tag, profiles, tasks, notes,
+  // docs }. The counts come from each file's summary line, nothing is inflated.
+  Q_INVOKABLE QVariantList listSnapshots() const;
+  // One snapshot, read-only, next to the state as it is now: { ok, error,
+  // name, at, profiles: [{ id, name, color, tasks, notes, docs, existsNow,
+  // tasksAdded, tasksRemoved, tasksChanged, notesAdded, notesRemoved,
+  // notesChanged }], totals: { the same six }, missing: [{ kind ("task" |
+  // "note" | "doc"), id, title, profileId, profileName, profileExists }],
+  // changed: [same shape] }. "Removed" = in the snapshot, gone now.
+  Q_INVOKABLE QVariantMap previewSnapshot(const QString& name);
+  // The whole state goes back to the snapshot. The state it replaces is
+  // snapshotted first (tag "pre"), so a restore is itself restorable.
+  Q_INVOKABLE bool restoreSnapshot(const QString& name);
+  // The snapshot's profile `profileId` comes back as a new profile, "<name>
+  // (restored HH:MM)", beside the current one. Returns the new id, "" on failure.
+  Q_INVOKABLE QString restoreSnapshotProfile(const QString& name, const QString& profileId);
+  // One task, note or doc page (`kind` "task" | "note" | "doc") from the
+  // snapshot's profile `profileId` goes back into that profile: re-inserted
+  // when it is gone, overwritten when it is there. Switches to the profile
+  // first; undoable.
+  Q_INVOKABLE bool restoreSnapshotItem(const QString& name, const QString& kind, const QString& profileId, const QString& itemId);
+  // Writes the current state into history right now under `tag`. Returns the
+  // file name, "" on failure.
+  QString takeSnapshotNow(const QString& tag);
+  QString historyDirPath() const;
+
   // ---- Shortcuts (rebindable keyboard catalog) ----
   QVariantList shortcuts() const {
     return m_shortcuts;
@@ -1173,10 +1287,29 @@ class AppController : public QObject {
   Q_INVOKABLE QString defaultShortcutFor(const QString& id) const;
   Q_INVOKABLE QString shortcutDescription(const QString& id) const;
   Q_INVOKABLE QString shortcutLabel(const QString& id) const;
+  // The catalog action holding `sequence` (or the built-in key that does, as a
+  // catalog id or a builtin.* id shortcutLabel() names); empty when free.
   Q_INVOKABLE QString findShortcutConflict(const QString& id, const QString& sequence) const;
+
+  // Only the built-in half of that: a key no rebinding can free.
+  Q_INVOKABLE QString builtinShortcutConflict(const QString& id, const QString& sequence) const {
+    return builtinShortcutOwner(id, normalizeSequence(sequence));
+  }
   Q_INVOKABLE bool setShortcut(const QString& id, const QString& sequence);
   Q_INVOKABLE void resetShortcut(const QString& id);
   Q_INVOKABLE void resetAllShortcuts();
+  // A control that has a catalogue shortcut was used with the mouse (APP-166).
+  // The third time for an action, shortcutHintRequested fires — once, never
+  // again for that action. Off with Settings → Shortcuts "Suggest shortcuts".
+  Q_INVOKABLE void noteMouseAction(const QString& shortcutId);
+  // Interface scale one step up (> 0), down (< 0) or back to 100 % (0) along
+  // `steps` (Theme.scaleSteps), written to settings.appearance.uiScale like
+  // Settings → Appearance → Scale does. Returns the new scale.
+  Q_INVOKABLE double stepUiScale(int direction, const QVariantList& steps);
+  // How the capture hotkey reaches heap from other apps (APP-171): "native"
+  // (Windows, macOS), "x11", "portal" (Wayland), or "none" — then Settings
+  // says to bind `heap --capture` in the desktop's own keyboard settings.
+  Q_INVOKABLE QString globalHotkeyBackend() const;
 
   // ---- Undo ----
   // Undo/redo the last recorded operation. undoLastDeletion() is the old name,
@@ -1227,6 +1360,10 @@ class AppController : public QObject {
     return m_focusedRepoState;
   }
 
+  bool showWhoseMove() const {
+    return m_showWhoseMove;
+  }
+
   bool focusedBannerDismissed() const {
     return m_dismissedBranches.contains(m_focusedBranch);
   }
@@ -1236,6 +1373,12 @@ class AppController : public QObject {
   // Task-id prefixes the branch matcher should recognise: the configured local
   // one, plus the project key of every mirrored issue in the profile.
   Q_INVOKABLE QStringList collectPrefixes() const;
+  // The configured local task-id prefix, upper-cased; "TASK" when unset or
+  // not a usable ticket stem (a letter, then letters and digits).
+  QString taskIdPrefix() const;
+  // Every profile as it stands now: the stored copies, with the active one's
+  // tasks and columns taken from the live models (the stored copy lags them).
+  QVector<Profile> profilesSnapshot() const;
   // Turn what the matcher found in a branch name into a task id. For a local
   // task the key IS the id; a mirrored issue's id carries the provider, so it
   // is resolved through the tracker key instead.
@@ -1283,6 +1426,8 @@ class AppController : public QObject {
   // Emitted by replayWelcome() — Main.qml re-opens the Welcome guide from step 0
   // without changing any persisted onboarding flags.
   void welcomeReplayRequested();
+  // noteMouseAction() decided it is time to mention `sequence` for `label`.
+  void shortcutHintRequested(const QString& shortcutId, const QString& sequence, const QString& label);
   void profilesChanged();
   void activeProfileChanged();
   void shortcutsChanged();
@@ -1291,7 +1436,9 @@ class AppController : public QObject {
   void taskTitlesChanged();
   void savedViewsChanged();
   void savedViewCountsChanged();
-  void notification(const QString& title, const QString& body, const QString& kind);
+  // `routeId` ("meeting:<event id>") makes it a reminder with buttons
+  // (APP-155); empty for a plain heads-up.
+  void notification(const QString& title, const QString& body, const QString& kind, const QString& routeId = QString());
   // `kind` tints the toast: "info" (default when empty), "success", "warning"
   // or "error". Every C++ toast used to arrive as info, failures included.
   void toast(const QString& message, const QString& kind = QString());
@@ -1320,6 +1467,9 @@ class AppController : public QObject {
   void ticketCommentsLoaded(const QString& taskId, const QVariantList& comments, const QString& error);
   void updateStatusChanged();
   void integrationStatesChanged();
+  void integrationHealthChanged();
+  // A task's history gained an event (APP-165).
+  void taskHistoryChanged(const QString& taskId);
   // Emitted when a newer release is found — Main.qml shows an actionable toast.
   void updateAvailable(const QString& version, const QString& url);
   void updateProgressChanged();
@@ -1329,8 +1479,16 @@ class AppController : public QObject {
   void undoableToast(const QString& message, int seconds);
   // A status change did not reach the tracker. The UI offers a retry.
   void trackerPushFailed(const QString& taskId, const QString& message);
+  // A conflict on this task was settled, one field or all (APP-163).
+  void trackerConflictResolved(const QString& taskId);
   void focusedGitChanged();
-  void openTaskRequested(const QString& id);
+  void showWhoseMoveChanged();
+  // `profileId` is the profile the task lives in; the window switches there
+  // only once the editor's unsaved edits are settled (PRES-1).
+  void openTaskRequested(const QString& id, const QString& profileId);
+  // "Open" on a meeting / standup reminder: the calendar at `date`, and the
+  // event's editor when `eventId` names a stored event (APP-155).
+  void openEventRequested(const QString& eventId, const QDate& date);
   void selectedTaskIdsChanged();
   // Raised by the OS-level global hotkeys (Quick-capture from anywhere). QML
   // brings the window forward and opens the matching capture popup.
@@ -1405,6 +1563,11 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
+  // Completion sound (APP-167): muted for CLI requests; a bulk move to Done
+  // ticks once when the loop ends, not once per card.
+  bool m_completionSoundMuted = false;
+  bool m_completionSoundPending = false;
+  void completionSoundOnMove_(const QString& fromStatus, const QString& toStatus);
   // Providers already asked for their full status list this session.
   QSet<QString> m_statusesAsked;
   // Providers whose next tasksFetched answers a quiet follow-up pull.
@@ -1532,8 +1695,15 @@ class AppController : public QObject {
   std::unique_ptr<heap::notify::NotificationCenter> m_notifier;
   void onNotifierAction(const QString& notificationId, const QString& actionId);
   void onNotifierActivated(const QString& notificationId);
-  // A reminder can be for a task in another profile; opening it switches there.
-  void activateProfileOfTask(const QString& taskId);
+
+  // The task a reminder is about, and the profile it lives in. Reminders cover
+  // every profile; the ref names the profile (PRES-2), an older one does not.
+  struct ReminderTask {
+    QString profileId;  // empty: no such task any more
+    Task task;
+  };
+
+  ReminderTask reminderTask(const QString& ref) const;
   QSet<QString> m_blockedStuckIds;
   // Reminders already delivered, by key (see src/cal/Reminders.h), with when.
   // Persisted to reminders.json so a restart does not announce them again.
@@ -1550,6 +1720,24 @@ class AppController : public QObject {
   QVector<HeldNotification> m_heldNotifications;
   QString remindersFilePath() const;
   void loadSentReminders();
+  // Reminder buttons (APP-155): what each kind offers, what was last shown
+  // under an id (so a snooze can bring the same text back), and the snoozes.
+  QVector<heap::notify::NotificationAction> reminderActions(const QString& kind) const;
+
+  struct ShownReminder {
+    QString title;
+    QString body;
+    QString kind;
+    QDate date;  // meetings: the occurrence's day, for "Open"
+  };
+
+  QHash<QString, ShownReminder> m_shownReminders;
+  QVector<heap::notify::SnoozedReminder> m_snoozed;
+  QString snoozesFilePath() const;
+  void loadSnoozes();
+  void saveSnoozes() const;
+  void fireDueSnoozes(const QDateTime& now);
+  void openReminder(const QString& notificationId);
   void saveSentReminders() const;
   bool reminderSent(const QString& key) const;
   QSet<QString> sentReminderKeys() const;
@@ -1589,6 +1777,14 @@ class AppController : public QObject {
   void loadStateDocument(QJsonObject root, bool viewOnly);
   QString stateFilePath() const;
   QString backupDirPath() const;
+  // Writes `bytes` over state.json and reloads from it (a restore's last step).
+  bool replaceStateFile(const QByteArray& bytes);
+  // The time machine's parsed snapshot: one at a time, kept while the dialog
+  // looks at it so a restore does not inflate it again.
+  bool loadSnapshot(const QString& name, QString* error);
+  QString m_snapName;
+  QVector<Profile> m_snapProfiles;
+  QVector<CalEvent> m_snapEvents;
   // When the newest rotational backup on disk was taken; invalid when none.
   QDateTime newestBackupTime() const;
   // Crash/corruption recovery for loadStateOnStart(): find the newest backup
@@ -1637,6 +1833,7 @@ class AppController : public QObject {
   QJsonObject m_settingsExtra;
   // Next number to mint per task id prefix, across every profile (TASKS-1/31).
   QHash<QString, int> m_taskSeq;
+  static inline bool s_headless = false;
   // What resetSettingsToDefaults() replaced, for its Undo.
   QString m_settingsBeforeReset;
   // The id newTaskDraft & co. hand out for `stem`: past the persisted counter
@@ -1649,6 +1846,10 @@ class AppController : public QObject {
   // — links, #KEY-1 mentions — and `events`' task links at it. Returns
   // old id -> new id (PLAT-9).
   QHash<QString, QString> reissueSharedTaskIds(Profile& p, QVector<CalEvent>* events);
+  // Adds `events` (another profile's, or a snapshot's) to the pool as
+  // `profileId`'s own: each gets a fresh id, and an override follows its
+  // series to the copy's (PLAT-10, TM-1).
+  void addEventsAsCopies(const QVector<CalEvent>& events, const QString& profileId);
   int statusIndexOf(const QString& id) const;
   // Whether another column (not `exceptId`) already carries `name`, ignoring case.
   bool statusNameTaken(const QString& name, const QString& exceptId) const;
@@ -1862,6 +2063,9 @@ class AppController : public QObject {
   // Point the Docs contact `contactKey` at `personId`. No-op when the contact
   // is gone or already links there.
   void linkDocsContact(const QString& contactKey, const QString& personId);
+  // Point every Docs contact linked to `fromPersonId` at `toPersonId`: the
+  // person was renamed.
+  void relinkDocsContacts(const QString& fromPersonId, const QString& toPersonId);
   // Append a Docs contact for a Person created through the rail's picker, so
   // the next search finds them among the contacts.
   void appendDocsContact(const Person& p);
@@ -1920,10 +2124,20 @@ class AppController : public QObject {
   void scheduleRefreshRetry(const QString& providerId);
   void setProviderOffline(const QString& providerId, bool offline);
   QSet<QString> m_offlineProviders;
+  // When each tracker last answered and how its last failure read (APP-164).
+  // This session only: a restart starts the page over.
+  QHash<QString, heap::integrations::ProviderHealth> m_syncHealth;
+  // Task history (APP-165). Saved as the root key "taskHistory" of state.json.
+  heap::history::TaskHistory m_history;
+  // True while a tracker pull is the one changing tasks.
+  bool m_historySync = false;
+  void recordTaskChange(const Task* before, const Task& after);
+  void recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error);
   QHash<QString, int> m_refreshRetryMs;
   // A move that could not be sent (tracker disconnected or unreachable):
   // flagged on the card and sent after the next successful pull.
   void queueTrackerPush(const QString& taskId, const QString& status);
+  void resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker);
   void flushQueuedPushes(const QString& providerId);
   // What a pull under the card's current settings is scoped to. See
   // heap::integrations::scopeFingerprint.
@@ -1932,9 +2146,19 @@ class AppController : public QObject {
   // to, as of the last pull. Only trackers that report transitions (Jira)
   // fill it; an issue without an entry is not second-guessed.
   QHash<QString, QStringList> m_trackerTransitions;
+  // The same answers keyed by where in the workflow they were seen (provider,
+  // project, issue type, status): after a push moves an issue, the moves out of
+  // its new status are known from any other issue the last pull saw there,
+  // instead of the guard dropping until the next pull (INT-4).
+  QHash<QString, QStringList> m_workflowTransitions;
+  static QString workflowTransitionsKey(const QString& providerId, const QString& project, const QString& issueType, const QString& status);
+  // The built-in key `normalized` would collide with if action `id` took it;
+  // empty when none. See kBuiltinKeys.
+  static QString builtinShortcutOwner(const QString& id, const QString& normalized);
   QString m_focusedTaskId, m_focusedBranch, m_focusedRepo;
   QVariantMap m_focusedRepoState;
   QSet<QString> m_dismissedBranches;  // in-memory only; per branch name
+  bool m_showWhoseMove = true;        // settings.git.showWhoseMove, cached for the cards
   void applyGitSettingsFromMap(const QVariantMap& git);
   // Re-derive the focused branch's task id under the current id-prefix and
   // refresh the banner. Needed because a prefix change (settings/profile) does
@@ -1943,4 +2167,122 @@ class AppController : public QObject {
   void onGitBranchChanged(const QString& repo, const QString& branch, const QString& matchedId);
   void onGitRepoState(const QString& repo, const QVariantMap& state);
   void onGitCommits(const QString& repo, const QVariantMap& commitsByTask);
+
+  // ── Safety net (APP-157…) ──────────────────────────────────────────
+  // Quiet, opt-in heads-ups, each off until switched on under
+  // settings.safety. They say what they noticed, once; none of them changes
+  // a task, a timer or a status. See AppControllerSafety.cpp.
+ public:
+  // The end-of-day check (APP-157) at `now`. runAutomationAt() calls it on
+  // every tick; it fires at most once a day, at settings.safety.endOfDayTime.
+  void checkEndOfDayAt(const QDateTime& now);
+  // The "waiting on a reply" reminder (APP-158) at `now`, from the same tick.
+  void checkWaitingAt(const QDateTime& now);
+
+  // settings.safety, for QML: which heads-ups are on.
+  Q_PROPERTY(QVariantMap safety READ safetySettings NOTIFY appSettingsJsonChanged)
+  // Writes settings.safety.<key>; Settings → Safety net's rows use it.
+  Q_INVOKABLE void setSafetySetting(const QString& key, const QVariant& value);
+  // Waiting on a reply (APP-158), active profile: task id →
+  // { personId, name, color, since, days }.
+  Q_PROPERTY(QVariantMap waitingOn READ waitingOnMap NOTIFY waitingOnChanged)
+  QVariantMap waitingOnMap() const;
+
+  QVector<WaitingOn> waitingOnLinks() const {
+    return m_waitingOn;
+  }
+
+  // Link a task to the person whose answer it waits on, from now. Picking
+  // someone again (or the same person) starts the wait over and re-arms its
+  // one reminder.
+  Q_INVOKABLE void setWaitingOn(const QString& taskId, const QString& personId);
+  Q_INVOKABLE void clearWaitingOn(const QString& taskId);
+
+  // "You've seen this before" (APP-159): when `text` looks like an error or a
+  // stack trace, the note, doc page or task (any profile) that already
+  // mentions its gist — { kind, id, title, profileId, date } — or an empty
+  // map. Empty too while settings.safety.seenBefore is off. `excludeTaskId`
+  // is the task being edited, which would otherwise find itself.
+  Q_INVOKABLE QVariantMap seenBefore(const QString& text, const QString& excludeTaskId = QString());
+
+  // Focus mode (APP-160). On: notifications are held back (meetings pass
+  // unless settings.safety.immersionPassMeetings is false) and the timer runs
+  // on the current task — `preferredTaskId` if it names one, else the single
+  // selected task, else the current branch's. Off: the timer it started stops
+  // and immersionEnded() says how many notifications wait; nothing is
+  // delivered until releaseImmersionHeld(). Not persisted: a restart ends it.
+  Q_PROPERTY(bool immersion READ immersion NOTIFY immersionChanged)
+  Q_PROPERTY(QDateTime immersionStartedAt READ immersionStartedAt NOTIFY immersionChanged)
+  Q_PROPERTY(QString immersionTaskId READ immersionTaskId NOTIFY immersionChanged)
+
+  bool immersion() const {
+    return m_immersionStartedAt.isValid();
+  }
+
+  QDateTime immersionStartedAt() const {
+    return m_immersionStartedAt;
+  }
+
+  QString immersionTaskId() const {
+    return m_immersionTaskId;
+  }
+
+  qsizetype immersionHeldCount() const {
+    return m_immersionHeld.size();
+  }
+
+  Q_INVOKABLE void startImmersion(const QString& preferredTaskId = QString());
+  Q_INVOKABLE void stopImmersion();
+  Q_INVOKABLE void toggleImmersion(const QString& preferredTaskId = QString());
+  // Hands over what focus mode held back, through the usual paths. Returns
+  // how many there were.
+  Q_INVOKABLE int releaseImmersionHeld();
+
+  // The standup draft (APP-170): "Yesterday / Today / Blockers" from the last
+  // working day's column moves, commits and timer, today's work and meetings,
+  // and the blocked cards. Text for the user to edit; nothing is sent.
+  Q_INVOKABLE QString standupDraft();
+  QString standupDraftFor(const QDate& today);
+  // What the end-of-day check reads from the workspace at `now`; the
+  // repository part is filled in by git, asynchronously.
+  heap::safety::EndOfDayFacts endOfDayFacts() const;
+
+ signals:
+  // A safety-net notice for the in-app toast. `taskIds` are the tasks its
+  // "Show" opens the board on (may be empty).
+  void safetyNotice(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds);
+  // Bring the board up narrowed to these tasks (a notice was clicked).
+  void safetyOpenTasksRequested(const QStringList& taskIds);
+  void waitingOnChanged();
+  void immersionChanged();
+  // Focus mode ended after `minutes`, holding back `held` notifications.
+  void immersionEnded(int held, int minutes);
+
+ private:
+  QVariantMap safetySettings() const;
+  // Delivers a safety-net notice: held during quiet hours like any other,
+  // an OS notification when the window is in the background, the in-app
+  // toast (safetyNotice) always.
+  void safetyNotify(const QString& kind, const QString& title, const QString& body, const QStringList& taskIds, const QDateTime& now);
+  void finishEndOfDay(const QDateTime& now, const heap::safety::RepoDirt& dirt);
+  void onWorkingTreeChecked(const QString& repo, int changedFiles, int stashes, bool ok);
+  // An end-of-day check waiting for git's answer about m_eodPendingRepo.
+  QDateTime m_eodPendingAt;
+  QString m_eodPendingRepo;
+  // Task id → the newest commit naming it, from the watcher's log.
+  QHash<QString, QDateTime> m_lastCommitAt;
+  // The active profile's waiting-on links (the others' are in m_profiles).
+  QVector<WaitingOn> m_waitingOn;
+  // A person's state went from `before` to their current one: a reply ends
+  // every wait on them; a deleted person's waits go with them.
+  void personStateMoved(const QString& personId, const QString& before);
+  // Focus mode (APP-160).
+  QDateTime m_immersionStartedAt;
+  QString m_immersionTaskId;
+  bool m_immersionStartedTimer = false;
+  QVector<HeldNotification> m_immersionHeld;
+  // Task id → its recent commits ({sha, subject, at}) from the watcher.
+  QHash<QString, QVariantList> m_taskCommits;
+  // Holds `n` when focus mode says so; true when it did.
+  bool holdForImmersion(const HeldNotification& n);
 };

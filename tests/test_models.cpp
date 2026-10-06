@@ -528,6 +528,22 @@ TEST(TaskModelSearchRole, CoversKeyLabelsAssigneeAndProject) {
   EXPECT_EQ(hay, hay.toLower());
 }
 
+// PERA-9: the top bar says "Search tasks, IDs, branches…" and the branch was
+// not in the haystack. Its words separated by spaces match too.
+TEST(TaskModelSearchRole, CoversTheBranch) {
+  Task t;
+  t.id = QStringLiteral("APP-101");
+  t.title = QStringLiteral("Login throttling");
+  t.branch = QStringLiteral("fix/login-rate-limit");
+
+  TaskModel m;
+  m.reset({t});
+  const QString hay = m.data(m.index(0, 0), TaskModel::SearchTextRole).toString();
+  for(const char* needle : {"fix/login-rate-limit", "rate", "rate limit"}) {
+    EXPECT_TRUE(hay.contains(QLatin1String(needle))) << needle << " missing from: " << hay.toStdString();
+  }
+}
+
 // ─── Defer state (HEAP-124) ───
 
 TEST(DeferState, SomedayIsExcludedFromScheduledForTodayAndOnlyItsOwnPredicate) {

@@ -60,10 +60,49 @@ Popup {
         border.width: 1
     }
 
+    // The cheat-sheet reads by area (APP-166): what works everywhere, then
+    // views, the board, the calendar, notes and profiles. The catalogue keeps
+    // its own order inside each group.
+    readonly property var groupOrder: ["general", "views", "board", "calendar", "notes", "profiles"]
+    function groupOf(actionId) {
+        const id = String(actionId);
+        if (id.indexOf("view.") === 0 || id.indexOf("savedView.") === 0 || id.indexOf("zoom.") === 0) return "views";
+        if (id.indexOf("board.") === 0 || id.indexOf("selection.") === 0 || id === "task.openExternal") return "board";
+        if (id.indexOf("cal.") === 0) return "calendar";
+        if (id.indexOf("notes.") === 0) return "notes";
+        if (id.indexOf("profile.") === 0 || id === "person.new") return "profiles";
+        return "general";
+    }
+    // The catalogue, grouped; the first row of a group carries its heading.
+    readonly property var rows: {
+        const list = AppController.shortcuts;
+        const out = [];
+        for (let g = 0; g < groupOrder.length; g++) {
+            let first = true;
+            for (let i = 0; i < list.length; i++) {
+                if (groupOf(list[i].id) !== groupOrder[g]) continue;
+                out.push(Object.assign({ group: groupOrder[g], first: first }, list[i]));
+                first = false;
+            }
+        }
+        return out;
+    }
+
     // After a commit the list is rebuilt; put the keyboard back on the row
     // that was just bound so the next Tab continues from there.
+    // Scrolls the list to the row of `actionId`; its index, or -1.
+    function revealRow(actionId) {
+        const list = root.rows;
+        for (let i = 0; i < list.length; i++) {
+            if (list[i].id !== actionId) continue;
+            listArea.positionViewAtIndex(i, ListView.Contain);
+            return i;
+        }
+        return -1;
+    }
+
     function _refocusRow(actionId) {
-        const list = AppController.shortcuts;
+        const list = root.rows;
         for (let i = 0; i < list.length; i++) {
             if (list[i].id !== actionId) continue;
             listArea.currentIndex = i;
@@ -97,6 +136,14 @@ Popup {
                     font.pixelSize: Theme.fsSm
                     font.weight: Font.DemiBold
                     font.letterSpacing: 1
+                }
+                // `?` opens this list from anywhere outside a text field.
+                Text {
+                    objectName: "hotkeys-question-hint"
+                    text: I18n.t("hotkeys.questionHint")
+                    color: Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsXs
                 }
                 Item { Layout.fillWidth: true }
                 Rectangle {
@@ -147,10 +194,12 @@ Popup {
         // ── List of bindings ─────────────────────────────────
         ListView {
             id: listArea
+            Accessible.role: Accessible.List
+            Accessible.name: I18n.t("hotkeys.title")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
-            model: AppController.shortcuts
+            model: root.rows
             spacing: 0
             boundsBehavior: Flickable.StopAtBounds
             // Tab into the list lands on the current row's chip; Up/Down move
@@ -161,6 +210,7 @@ Popup {
                 required property var modelData
                 width: ListView.view.width
                 actionId:        modelData.id
+                group:           modelData.first ? modelData.group : ""
                 actionLabel:     modelData.label
                 actionDescription: modelData.description
                 sequence:        modelData.sequence
@@ -194,9 +244,42 @@ Popup {
         property string actionDescription: ""
         property string sequence: ""
         property string defaultSequence: ""
+        // Set on the first row of a group: its heading is drawn above it.
+        property string group: ""
+        readonly property int _headH: row.group.length > 0 ? 30 : 0
 
-        height: 60
-        color: rowHover.containsMouse ? Theme.panel2 : "transparent"
+        height: 60 + row._headH
+        color: "transparent"
+        Rectangle {
+            anchors.fill: rowBody
+            color: rowHover.containsMouse ? Theme.panel2 : "transparent"
+        }
+        Rectangle {
+            id: groupHead
+            visible: row.group.length > 0
+            anchors.left: parent.left; anchors.right: parent.right; anchors.top: parent.top
+            height: row._headH
+            color: Theme.panel2
+            Text {
+                objectName: "hotkeys-group-" + row.group
+                anchors.left: parent.left; anchors.leftMargin: Theme.sp2xl
+                anchors.verticalCenter: parent.verticalCenter
+                text: row.group.length > 0 ? I18n.t("hotkeys.group." + row.group).toUpperCase() : ""
+                color: Theme.textMuted
+                font.pixelSize: Theme.fsXs
+                font.weight: Font.DemiBold
+                font.letterSpacing: 0.8
+            }
+            Rectangle {
+                anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+                height: 1; color: Theme.border
+            }
+        }
+        Item {
+            id: rowBody
+            anchors.left: parent.left; anchors.right: parent.right; anchors.bottom: parent.bottom
+            height: 60
+        }
         // The ListView hands focus to its current row; the row passes it to
         // its chip, so arrows + Enter work without the mouse.
         function focusChip() { rowChip.focusField(); }
@@ -207,10 +290,10 @@ Popup {
             height: 1; color: Theme.border
         }
 
-        MouseArea { id: rowHover; anchors.fill: parent; hoverEnabled: true; acceptedButtons: Qt.NoButton }
+        MouseArea { id: rowHover; anchors.fill: rowBody; hoverEnabled: true; acceptedButtons: Qt.NoButton }
 
         RowLayout {
-            anchors.fill: parent
+            anchors.fill: rowBody
             anchors.leftMargin: Theme.sp2xl; anchors.rightMargin: Theme.spXl
             spacing: Theme.spLg
 
@@ -252,7 +335,10 @@ Popup {
         readonly property bool capturing: root.capturingId === chip.actionId && chip.actionId.length > 0
         property string candidate: ""
         property string conflictName: ""
-        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; }
+        // The conflict is a built-in key (Ctrl+P, the board's arrows…): Enter
+        // cannot take it, so the hint must not offer to (SHELL-4).
+        property bool conflictBuiltin: false
+        onCapturingChanged: if (!capturing) { candidate = ""; conflictName = ""; conflictBuiltin = false; }
 
         implicitWidth: 188
         implicitHeight: 46
@@ -282,6 +368,11 @@ Popup {
                 case Qt.Key_Left:       return "Left";
                 case Qt.Key_Right:      return "Right";
                 case Qt.Key_Up:         return "Up";
+                // Ctrl+= / Ctrl+- type no character on Windows, so the zoom
+                // keys could not be recorded from ev.text.
+                case Qt.Key_Equal:      return "=";
+                case Qt.Key_Minus:      return "-";
+                case Qt.Key_Plus:       return "+";
                 case Qt.Key_Down:       return "Down";
                 case Qt.Key_F1:         return "F1";
                 case Qt.Key_F2:         return "F2";
@@ -314,12 +405,14 @@ Popup {
                 key = String.fromCharCode(ev.key);
             } else if (ev.key >= Qt.Key_0 && ev.key <= Qt.Key_9) {
                 key = String.fromCharCode(ev.key);
-            } else if (ev.text && ev.text.length > 0 && ev.text.charCodeAt(0) >= 32) {
+            } else if (_namedKey(ev.key).length > 0) {
+                // Before ev.text: Space types " ", which made "Ctrl+Shift+ "
+                // and stored nothing (SHELL-5).
+                key = _namedKey(ev.key);
+            } else if (ev.text && ev.text.length > 0 && ev.text.charCodeAt(0) > 32) {
                 key = ev.text;
                 if (key.length === 1 && key.toLowerCase() !== key.toUpperCase())
                     key = key.toUpperCase();
-            } else {
-                key = _namedKey(ev.key);
             }
             if (!key || key.length === 0) return "";
             return mods.concat([key]).join("+");
@@ -424,6 +517,8 @@ Popup {
                             chip.conflictName = conflictId.length > 0
                                 ? AppController.shortcutLabel(conflictId)
                                 : "";
+                            chip.conflictBuiltin = conflictId.length > 0
+                                && AppController.builtinShortcutConflict(chip.actionId, seq).length > 0;
                             // Auto-commit if no modifier-free single-letter; otherwise wait for Enter.
                         }
                         event.accepted = true;
@@ -486,7 +581,7 @@ Popup {
             anchors.bottom: parent.bottom
             anchors.bottomMargin: -2
             visible: chip.capturing && chip.conflictName.length > 0
-            text: I18n.t("hotkeys.conflict.body").arg(chip.conflictName)
+            text: I18n.t(chip.conflictBuiltin ? "hotkeys.conflict.builtin" : "hotkeys.conflict.body").arg(chip.conflictName)
             color: Theme.danger
             font.pixelSize: Theme.fsXs
             elide: Text.ElideRight

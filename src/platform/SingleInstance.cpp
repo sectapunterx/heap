@@ -8,6 +8,8 @@
 #include <QLockFile>
 #include <QThread>
 
+#include <algorithm>
+
 #ifdef Q_OS_WIN
 #ifndef NOMINMAX
 #define NOMINMAX
@@ -71,6 +73,69 @@ SingleInstance::Result SingleInstance::acquire(const QByteArray& message) {
   return Result::Busy;
 }
 
+bool SingleInstance::forwardOnly(const QString& dataDir, const QByteArray& message) {
+#ifdef Q_OS_WIN
+  AllowSetForegroundWindow(ASFW_ANY);
+#endif
+  const QString name = serverName(QDir(dataDir).absolutePath());
+  const QDeadlineTimer deadline(kForwardWindowMs / 2);
+  while(!deadline.hasExpired()) {
+    if(forward(name, message)) {
+      return true;
+    }
+    QThread::msleep(100);
+  }
+  return false;
+}
+
+bool SingleInstance::tryLock() {
+  QDir().mkpath(m_dataDir);
+  m_lock = std::make_unique<QLockFile>(m_dataDir + QStringLiteral("/heap.lock"));
+  m_lock->setStaleLockTime(0);
+  if(m_lock->tryLock(0)) {
+    return true;
+  }
+  const bool held = m_lock->error() == QLockFile::LockFailedError;
+  m_lock.reset();
+  return !held;
+}
+
+void SingleInstance::setRequestHandler(RequestHandler handler) {
+  m_requestHandler = std::move(handler);
+}
+
+std::optional<QByteArray> SingleInstance::request(const QString& dataDir, const QByteArray& line, int timeoutMs) {
+  QLocalSocket socket;
+  socket.connectToServer(serverName(dataDir));
+  if(!socket.waitForConnected(std::min(timeoutMs, 500))) {
+    return std::nullopt;
+  }
+  QByteArray out = line;
+  out.replace('\n', ' ');
+  socket.write(out + '\n');
+  if(!socket.waitForBytesWritten(timeoutMs)) {
+    return std::nullopt;
+  }
+  const QDeadlineTimer deadline(timeoutMs);
+  QByteArray reply;
+  while(!reply.contains('\n') && !deadline.hasExpired()) {
+    if(socket.bytesAvailable() == 0) {
+      const int wait = static_cast<int>(std::max<qint64>(1, deadline.remainingTime()));
+      if(!socket.waitForReadyRead(wait)) {
+        // The window disconnects right after writing; what arrived first counts.
+        reply += socket.readAll();
+        break;
+      }
+    }
+    reply += socket.readAll();
+  }
+  const qsizetype end = reply.indexOf('\n');
+  if(end < 0) {
+    return std::nullopt;
+  }
+  return reply.left(end);
+}
+
 bool SingleInstance::listen() {
   const QString name = serverName(m_dataDir);
   // A crashed owner can leave its socket file behind on Unix. We hold the
@@ -90,6 +155,15 @@ bool SingleInstance::listen() {
           return;
         }
         const QByteArray line = socket->readLine().trimmed();
+        if(line.startsWith('{') && m_requestHandler) {
+          // A `heap <verb>` run: answer it on the same connection.
+          QByteArray reply = m_requestHandler(line);
+          reply.replace('\n', ' ');
+          socket->write(reply + '\n');
+          socket->flush();
+          socket->disconnectFromServer();
+          return;
+        }
         socket->write("ok\n");
         socket->flush();
         socket->disconnectFromServer();

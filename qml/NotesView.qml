@@ -126,6 +126,13 @@ Item {
         root.insertAttachmentRefs(AppController.importClipboardAttachments());
         return true;
     }
+    // Whether the character at `i` is backslash-escaped: an odd run of
+    // backslashes before it.
+    function _isEscapedAt(text, i) {
+        let n = 0;
+        while (i - n - 1 >= 0 && text.charAt(i - n - 1) === "\\") n++;
+        return n % 2 === 1;
+    }
     // Takes every link to the file out of the note. The file stays in the
     // attachments folder (Settings → Data cleans up what nothing uses).
     function removeAttachmentRefs(attachmentId) {
@@ -136,7 +143,12 @@ Item {
         while (at >= 0) {
             const lineStart = text.lastIndexOf("\n", at - 1) + 1;
             const open = text.lastIndexOf("](", at);
+            // The label's own "[" — not one escaped inside it: a file called
+            // a[1].png is labelled "a\[1\].png", and stopping at "\[" left
+            // "![a\" behind in the note.
             let first = open >= lineStart ? text.lastIndexOf("[", open) : -1;
+            while (first > lineStart && root._isEscapedAt(text, first))
+                first = text.lastIndexOf("[", first - 1);
             const close = text.indexOf(")", at);
             if (first < lineStart || close < 0) { at = text.indexOf(needle, at + needle.length); continue; }
             if (first > lineStart && text.charAt(first - 1) === "!") first--;
@@ -212,6 +224,41 @@ Item {
         return "";
     }
 
+    // The notes.* catalog actions, for the command palette: the same thing the
+    // keys bound below do (SHELL-1). `cmd` is the id without "notes.".
+    function runNotesCommand(cmd) {
+        switch (cmd) {
+        case "new":        root.newNoteAndEdit(); break;
+        case "next":       notesList.step(1); break;
+        case "prev":       notesList.step(-1); break;
+        case "rename":     if (AppController.activeNoteId.length > 0) notesList.renameActive(); break;
+        case "toggleList": root.toggleList(); break;
+        default:           console.warn("notes: no command", cmd);
+        }
+    }
+
+    // The keys that take focus out of the editor (SHELL-18). True when the
+    // key was one of them and focus has moved.
+    function _leaveEditorKey(field: Item, key: int, modifiers: int): bool {
+        const mods = modifiers & ~Qt.KeypadModifier;
+        if (key === Qt.Key_Escape && mods === Qt.NoModifier) {
+            if (root._listShown) {
+                notesList.focusList();
+            } else {
+                const prev = field.nextItemInFocusChain(false);
+                if (prev) prev.forceActiveFocus(Qt.BacktabFocusReason);
+            }
+            return true;
+        }
+        const ctrlTab = (key === Qt.Key_Tab || key === Qt.Key_Backtab) && (mods & Qt.ControlModifier) !== 0;
+        const f6 = key === Qt.Key_F6 && (mods & ~Qt.ShiftModifier) === Qt.NoModifier;
+        if (!ctrlTab && !f6) return false;
+        const back = key === Qt.Key_Backtab || (mods & Qt.ShiftModifier) !== 0;
+        const next = field.nextItemInFocusChain(!back);
+        if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
+        return true;
+    }
+
     function newNoteAndEdit() {
         root._flushPending();
         AppController.newNote();
@@ -223,6 +270,14 @@ Item {
             editor.forceActiveFocus();
             editor.cursorPosition = editor.length;
         });
+    }
+    // Where the keyboard goes when the view is switched to (PERA-5): the
+    // editor, caret where it was left; in preview there is nothing to type
+    // into, so the notes list.
+    function takeFocus() {
+        if (root.viewMode !== "preview") editor.forceActiveFocus();
+        else if (root._listShown) notesList.takeFocus();
+        else root.forceActiveFocus();
     }
     // Ctrl+F in Notes filters the notes, not the task search in the top bar.
     function focusSearch() {
@@ -288,18 +343,14 @@ Item {
         return Math.max(0, score);
     }
 
-    function _peopleEntries() {
+    // Ranked already, the way every @-mention box finds people: the id, a
+    // login made of the name ("r.losev"), the name's words in either script.
+    function _peopleEntries(filter) {
+        const hits = AppController.matchPeople(filter, 8);
         const out = [];
-        const m = AppController.people;
-        for (let i = 0; i < m.rowCount(); i++) {
-            const idx = m.index(i, 0);
-            out.push({
-                kind: "person",
-                id:    m.data(idx, Qt.UserRole + 1),
-                label: m.data(idx, Qt.UserRole + 2),
-                sub:   m.data(idx, Qt.UserRole + 3) || "",
-                color: m.data(idx, Qt.UserRole + 6)
-            });
+        for (let i = 0; i < hits.length; i++) {
+            out.push({ kind: "person", id: hits[i].id, label: hits[i].name,
+                       sub: hits[i].role || "", color: hits[i].color });
         }
         return out;
     }
@@ -358,8 +409,12 @@ Item {
     }
 
     function _rebuildMatches() {
-        const source = acTrigger === "@"  ? _peopleEntries()
-                     : acTrigger === "#"  ? _taskEntries()
+        if (acTrigger === "@") {
+            acMatches = _peopleEntries(acFilter);
+            acSelected = 0;
+            return;
+        }
+        const source = acTrigger === "#"  ? _taskEntries()
                      : acTrigger === "[[" ? _headingEntries()
                      : [];
         const scored = [];
@@ -424,6 +479,14 @@ Item {
 
         let i = end - 1;
         while (i >= 0 && end - i < 64 && root._isNameChar(txt[i])) i--;
+        // "@roman losev": one space inside a person's query, once a word
+        // follows it ("@Roman_Losev " as inserted still ends the mention).
+        // The list closes again when the two words stop matching anyone.
+        if (i > 0 && i < end - 1 && txt[i] === " ") {
+            let j = i - 1;
+            while (j >= 0 && end - j < 64 && root._isNameChar(txt[j])) j--;
+            if (j >= 0 && j < i - 1 && txt[j] === "@") i = j;
+        }
         if (i < 0) { _hideAutocomplete(); return; }
         const ch = txt[i];
         if (ch !== "@" && ch !== "#") { _hideAutocomplete(); return; }
@@ -443,6 +506,13 @@ Item {
     }
 
     function _slugifyName(s) { return (s || "").replace(/\s+/g, "_"); }
+    // A note title or heading as it goes between [[ ]]: "#" and "|" would
+    // start a heading and a label, so they are escaped, as is a backslash
+    // that would escape what follows it. NoteGraph.h escapeLinkName is the
+    // same rule; resolveLink reads it back.
+    function _escapeLinkName(s) {
+        return (s || "").replace(/\\(?=[!-\/:-@\[-`{-~]|$)/g, "\\\\").replace(/[#|]/g, "\\$&");
+    }
 
     function _commitAutocomplete() {
         if (acMatches.length === 0 || acSelected < 0 || acSelected >= acMatches.length) {
@@ -451,7 +521,7 @@ Item {
         }
         const e = acMatches[acSelected];
         const insert = (acTrigger === "@")  ? "@" + _slugifyName(e.label) + " "
-                     : (acTrigger === "[[") ? "[[" + e.label + "]] "
+                     : (acTrigger === "[[") ? "[[" + root._escapeLinkName(e.label) + "]] "
                      : "#" + e.id + " ";
         const pos = editor.cursorPosition;
         // Replace the "@filter" / "#filter" span in place (remove + insert) so
@@ -798,6 +868,7 @@ Item {
 
                 TextArea {
                     id: editor
+                    ContextMenu.menu: TextEditMenu { editor: editor }
                     objectName: "notesEditor"
                     x: 24; y: 16
                     width: notesScroll.width - 48
@@ -852,6 +923,16 @@ Item {
                                 root._hideAutocomplete();
                                 event.accepted = true; return;
                             }
+                        }
+
+                        // Tab indents here, so it cannot also be the way out
+                        // (SHELL-18). Esc steps out to the list of notes;
+                        // Ctrl+Tab / Ctrl+Shift+Tab and F6 / Shift+F6 move on
+                        // along the focus chain, as in any editor that keeps
+                        // Tab for itself.
+                        if (root._leaveEditorKey(editor, event.key, event.modifiers)) {
+                            event.accepted = true;
+                            return;
                         }
 
                         // A file or a bare image on the clipboard is attached
@@ -1422,6 +1503,10 @@ Item {
         } else {
             editor.text = next;
         }
+        // "Load images" is consent for the note it was given in, not for the
+        // next one: an imported note must not ping its tracker pixel on open
+        // just because another note's images were allowed (KNOW-18).
+        if (root._loadedNoteId !== AppController.activeNoteId) mdDocument.allowRemoteImages = false;
         root._loadedNoteId = AppController.activeNoteId;
         _reloading = false;
         root._refreshTitle();

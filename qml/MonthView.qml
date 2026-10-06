@@ -177,6 +177,42 @@ Item {
              + " – " + end.toLocaleDateString(I18n.locale, "d MMM yyyy");
     }
 
+    // A day as a screen reader hears it: "Wednesday 30 September: 3 tasks,
+    // 7 events".
+    function dayLabel(d) {
+        if (!d || !d.getFullYear) return "";
+        let tasks = 0, events = 0;
+        for (let i = 0; i < root.cells.length; i++) {
+            if (!root.isSameDay(root.cells[i].date, d)) continue;
+            tasks = root.cells[i].tasks.length;
+            events = root.cells[i].events.length;
+            break;
+        }
+        return I18n.t("month.dayA11y").arg(d.toLocaleDateString(I18n.locale, "dddd d MMMM")).arg(tasks).arg(events);
+    }
+    // Return on the grid: the first chip of the selected day takes the
+    // keyboard, if the day has any.
+    function enterSelectedDay() {
+        for (let i = 0; i < cellRep.count; i++) {
+            const cell = cellRep.itemAt(i);
+            if (!cell || !root.isSameDay(cell.cell.date, AppController.selectedDate)) continue;
+            const stop = root._firstTabStop(cell);
+            if (stop) stop.forceActiveFocus(Qt.TabFocusReason);
+            return;
+        }
+    }
+    function _firstTabStop(it) {
+        const kids = it.children || [];
+        for (let i = 0; i < kids.length; i++) {
+            const k = kids[i];
+            if (!k.visible) continue;
+            if (k.activeFocusOnTab === true) return k;
+            const r = root._firstTabStop(k);
+            if (r) return r;
+        }
+        return null;
+    }
+
     Rectangle { anchors.fill: parent; color: Theme.bg }
 
     ColumnLayout {
@@ -305,13 +341,48 @@ Item {
         }
 
         // ── Day grid ──────────────────────────────────────────────
+        // One Tab stop for the whole grid (SHELL-17): the arrows move the
+        // selected day (a day / a week), Return takes the keyboard to that
+        // day's first chip, from where Tab walks its chips and "+N". The
+        // arrows are claimed before the window's Left/Right month paging sees
+        // them; T, G and Alt+arrows still work here (viewSurface).
         GridLayout {
+            id: grid
+            objectName: "month-grid"
             Layout.fillWidth: true
             Layout.fillHeight: true
             columns: 7
+            activeFocusOnTab: true
+            readonly property bool viewSurface: true
+            Accessible.role: Accessible.Table
+            Accessible.name: root.rangeTitle()
+            Accessible.description: root.dayLabel(AppController.selectedDate)
+            Keys.onShortcutOverride: (event) => {
+                if (event.modifiers === Qt.NoModifier || event.modifiers === Qt.KeypadModifier) {
+                    const k = event.key;
+                    if (k === Qt.Key_Left || k === Qt.Key_Right || k === Qt.Key_Up || k === Qt.Key_Down
+                        || k === Qt.Key_Return || k === Qt.Key_Enter)
+                        event.accepted = true;
+                }
+            }
+            Keys.onPressed: (event) => {
+                if (event.modifiers !== Qt.NoModifier && event.modifiers !== Qt.KeypadModifier) return;
+                const k = event.key;
+                const by = k === Qt.Key_Left ? -1 : k === Qt.Key_Right ? 1
+                         : k === Qt.Key_Up ? -7 : k === Qt.Key_Down ? 7 : 0;
+                if (by !== 0) {
+                    const d = AppController.selectedDate;
+                    AppController.selectedDate = new Date(d.getFullYear(), d.getMonth(), d.getDate() + by);
+                    event.accepted = true;
+                } else if (k === Qt.Key_Return || k === Qt.Key_Enter) {
+                    root.enterSelectedDay();
+                    event.accepted = true;
+                }
+            }
             rowSpacing: Theme.spSm
             columnSpacing: Theme.spSm
             Repeater {
+                id: cellRep
                 model: root.cells
                 delegate: Rectangle {
                     id: dayCell
@@ -327,11 +398,32 @@ Item {
                     radius: Theme.radius
                     color: _inMonth ? Theme.panel : Theme.panel2
                     opacity: _inMonth ? 1.0 : 0.55
-                    border.color: _sel ? Theme.accent : (_today ? Theme.accentStrong : Theme.border)
+                    border.color: _sel ? (grid.activeFocus ? Theme.focusRing : Theme.accent)
+                                       : (_today ? Theme.accentStrong : Theme.border)
                     border.width: _sel || _today ? 2 : 1
+                    Accessible.role: Accessible.Cell
+                    Accessible.name: root.dayLabel(modelData.date)
+                    Accessible.selected: _sel
                     // A busy day is clipped to its cell instead of drawing
                     // over the row below.
                     clip: true
+
+                    // How many chips fit, worked out from the cell's own
+                    // height. A fixed 3 tasks + 2 events overflowed a 112px
+                    // cell, and the clip took the "+N" - the busiest day was
+                    // the one that said nothing about what it hid (VISU-12).
+                    // When not everything fits, a line is kept for "+N".
+                    readonly property int _rowH: 20 + Theme.sp2xs
+                    readonly property int _avail: height - 2 * Theme.spXs - dayNum.implicitHeight - Theme.sp2xs
+                    readonly property int _total: cell.tasks.length + cell.events.length
+                    readonly property int _slots: _total * _rowH <= _avail
+                        ? _total
+                        : Math.max(0, Math.floor((_avail - moreText.implicitHeight - Theme.sp2xs) / _rowH))
+                    // Events keep up to half the slots, the tasks take the rest
+                    // (3 + 2 on a cell with room for five, as before).
+                    readonly property int _eventsShown: Math.min(cell.events.length,
+                                                                 Math.max(_slots - cell.tasks.length, Math.floor(_slots / 2)))
+                    readonly property int _tasksShown: Math.min(cell.tasks.length, _slots - _eventsShown)
 
                     MouseArea {
                         anchors.fill: parent
@@ -346,6 +438,7 @@ Item {
 
                         // Day number.
                         Text {
+                            id: dayNum
                             text: cell.date.getDate()
                             color: _today ? Theme.accentStrong : Theme.text
                             font.pixelSize: Theme.fsSm
@@ -357,7 +450,7 @@ Item {
                         // was the hardest target in the app to hit (design
                         // audit DES-17).
                         Repeater {
-                            model: Math.min(3, cell.tasks.length)
+                            model: dayCell._tasksShown
                             delegate: Rectangle {
                                 id: taskChip
                                 required property int index
@@ -378,7 +471,7 @@ Item {
                             }
                         }
                         Repeater {
-                            model: Math.min(2, cell.events.length)
+                            model: dayCell._eventsShown
                             delegate: Rectangle {
                                 id: eventChip
                                 required property int index
@@ -408,7 +501,8 @@ Item {
                         // day, same as WeekView's.
                         Text {
                             id: moreText
-                            readonly property int _extra: Math.max(0, cell.tasks.length - 3) + Math.max(0, cell.events.length - 2)
+                            objectName: "month-more"
+                            readonly property int _extra: dayCell._total - dayCell._tasksShown - dayCell._eventsShown
                             visible: _extra > 0
                             text: "+" + _extra
                             color: moreMA.hovered ? Theme.accentStrong : Theme.textDim

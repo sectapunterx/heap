@@ -13,6 +13,7 @@
 #include <QVector>
 
 #include <functional>
+#include <optional>
 
 // Notes as a folder of .md files.
 //
@@ -158,13 +159,76 @@ inline QString contentHash(const Note& n) {
   return contentHash(n.title, n.body);
 }
 
+namespace detail {
+
+// Windows-1251, 0x80..0xFF. Spelled out rather than asked of the platform:
+// Qt only knows the code page through ICU, which the Windows build has not
+// got, and the answer must not depend on which machine imports the folder.
+inline QString decodeCp1251(const QByteArray& data) {
+  static const char16_t kHigh[128] = {
+      0x0402, 0x0403, 0x201A, 0x0453, 0x201E, 0x2026, 0x2020, 0x2021, 0x20AC, 0x2030, 0x0409, 0x2039, 0x040A, 0x040C, 0x040B, 0x040F,
+      0x0452, 0x2018, 0x2019, 0x201C, 0x201D, 0x2022, 0x2013, 0x2014, 0xFFFD, 0x2122, 0x0459, 0x203A, 0x045A, 0x045C, 0x045B, 0x045F,
+      0x00A0, 0x040E, 0x045E, 0x0408, 0x00A4, 0x0490, 0x00A6, 0x00A7, 0x0401, 0x00A9, 0x0404, 0x00AB, 0x00AC, 0x00AD, 0x00AE, 0x0407,
+      0x00B0, 0x00B1, 0x0406, 0x0456, 0x0491, 0x00B5, 0x00B6, 0x00B7, 0x0451, 0x2116, 0x0454, 0x00BB, 0x0458, 0x0405, 0x0455, 0x0457,
+  };
+  QString out;
+  out.reserve(data.size());
+  for(const char c : data) {
+    const auto b = static_cast<unsigned char>(c);
+    if(b < 0x80) {
+      out += QChar(b);
+    } else if(b < 0xC0) {
+      out += QChar(kHigh[b - 0x80]);
+    } else {
+      // А..я are contiguous: 0xC0 is U+0410.
+      out += QChar(static_cast<char16_t>(0x0410 + (b - 0xC0)));
+    }
+  }
+  return out;
+}
+
+// Whether bytes that are not UTF-8 read as Russian in Windows-1251 rather than
+// as accented Latin. In 1251 every byte from 0xC0 up is a Cyrillic letter, and
+// Cyrillic text is made of little else — words are runs of them. A Latin-1 or
+// Windows-1252 file uses the same bytes for the odd é or ß among plain ASCII
+// letters. So: what share of the letters are high bytes.
+inline bool looksLikeCp1251(const QByteArray& data) {
+  int ascii = 0;
+  int cyrillic = 0;
+  for(const char c : data) {
+    const auto b = static_cast<unsigned char>(c);
+    if((b >= 'a' && b <= 'z') || (b >= 'A' && b <= 'Z')) {
+      ++ascii;
+    } else if(b >= 0xC0 || b == 0xA8 || b == 0xB8) {  // А..я, Ё, ё
+      ++cyrillic;
+    }
+  }
+  // Even an English-heavy Russian note ("сделать PR в heap") passes; even a
+  // French one ("Réunion à l'école") does not come close.
+  return cyrillic > 0 && cyrillic * 10 >= (ascii + cyrillic) * 3;
+}
+
+}  // namespace detail
+
 // Bytes from disk as text. UTF-8 (with or without a BOM) is what every
-// markdown tool writes; a file that is not valid UTF-8 is an old Windows or
-// Latin-1 file, read as such rather than turned into replacement characters.
-// A NUL byte means it is not text at all: `binary` is set and nothing returned.
+// markdown tool writes, and a UTF-16 or UTF-32 file with its BOM — Notepad's
+// "Unicode" — says what it is. A file that is not valid UTF-8 is an old
+// Windows file: Windows-1251 when it reads as Russian, Latin-1 otherwise —
+// either way not turned into replacement characters. A NUL byte in a file
+// without a wide BOM means it is not text at all: `binary` is set and nothing
+// returned.
 inline QString decodeVaultBytes(const QByteArray& bytes, bool* binary = nullptr) {
   if(binary != nullptr) {
     *binary = false;
+  }
+  // Before the NUL check: half the bytes of a UTF-16 file are NULs.
+  const std::optional<QStringConverter::Encoding> bom = QStringConverter::encodingForData(bytes);
+  if(bom.has_value() && *bom != QStringConverter::Utf8) {
+    QStringDecoder wide(*bom);
+    QString text = wide.decode(bytes);
+    if(!wide.hasError() && !text.contains(QChar(0))) {
+      return text;
+    }
   }
   QByteArray data = bytes;
   if(data.startsWith("\xEF\xBB\xBF")) {
@@ -180,6 +244,9 @@ inline QString decodeVaultBytes(const QByteArray& bytes, bool* binary = nullptr)
   QString text = utf8.decode(data);
   if(!utf8.hasError()) {
     return text;
+  }
+  if(detail::looksLikeCp1251(data)) {
+    return detail::decodeCp1251(data);
   }
   QStringDecoder latin1(QStringDecoder::Latin1);
   return latin1.decode(data);
@@ -277,12 +344,16 @@ inline Note importFile(const QString& relativePath, const QString& contents) {
     stem.chop(9);
   }
   n.title = stem;
-  n.body = contents;
+
+  // Line ends as the editor has them. A body kept with "\r\n" read back as
+  // something else the moment it was edited, and the next import of the same
+  // file then took the note for one changed in heap and kept it over the file.
+  QString body = contents;
+  body.replace(QLatin1String("\r\n"), QLatin1String("\n"));
+  n.body = body;
 
   // Frontmatter is a --- fence at the very start and the next --- on its own
   // line. A --- further down is a horizontal rule, not a fence.
-  QString body = contents;
-  body.replace(QLatin1String("\r\n"), QLatin1String("\n"));
   if(body.startsWith(QStringLiteral("---\n"))) {
     const int end = static_cast<int>(body.indexOf(QStringLiteral("\n---"), 3));
     if(end > 0) {

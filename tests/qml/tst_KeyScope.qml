@@ -198,6 +198,25 @@ TestCase {
         verify(!search.activeFocus, "a second Esc leaves the search");
     }
 
+    // APP-166: `?` opens the cheat-sheet from the view, and types a question
+    // mark in a text field.
+    function test_question_mark_opens_cheat_sheet() {
+        const hk = popup("HotkeysPanel");
+        verify(hk !== null);
+        const search = byName(tc.win.contentItem, "topbar-search");
+        search.forceActiveFocus();
+        keyClick(Qt.Key_Question, Qt.ShiftModifier);
+        wait(50);
+        compare(hk.opened, false, "? in the search opened the cheat-sheet");
+        search.text = "";
+        tc.win.focusActiveView();
+        wait(20);
+        keyClick(Qt.Key_Question, Qt.ShiftModifier);
+        tryCompare(hk, "opened", true);
+        hk.close();
+        tryCompare(hk, "opened", false);
+    }
+
     // UX-3: a card's context menu keeps Down and Esc.
     function test_card_menu_owns_its_keys() {
         const b = board();
@@ -246,8 +265,14 @@ TestCase {
         tryVerify(function () { return card._priorityMenu.activeFocus; }, 2000, "the list opened without the keyboard");
         compare(tc.win.activeFocusItem.text, "P3");
 
+        // G is a view key: it waits while a menu holds the keyboard (SHELL-3).
         keyClick(Qt.Key_G);
         const go = popup("go-to-date");
+        wait(50);
+        compare(go.opened, false, "G opened go-to-date over a menu");
+        verify(card._priorityMenu.opened);
+        // Something else opening over the list still takes it down with it.
+        go.openAt(AppController.selectedDate, tc.win.contentItem);
         tryCompare(go, "opened", true);
         tryCompare(card._priorityMenu, "visible", false, 2000, "a menu the keyboard left stays open");
         keyClick(Qt.Key_Escape);

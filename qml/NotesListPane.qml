@@ -140,9 +140,16 @@ Rectangle {
         renamePopup.openFor(AppController.activeNoteId, String(m.data(idx, m.roleOf("title")) || ""),
                             String(m.data(idx, m.roleOf("folder")) || ""));
     }
+    function takeFocus() { list.forceActiveFocus(); }
     function focusFilter() {
         filterField.forceActiveFocus();
         filterField.selectAll();
+    }
+    // Esc in the editor lands here, on the open note's row, so ↑/↓ walk the
+    // notes from where the reader was.
+    function focusList() {
+        list.forceActiveFocus(Qt.OtherFocusReason);
+        root._activeRowItem();
     }
 
     // The ids on screen, in order, so a caller can step through them.
@@ -234,6 +241,7 @@ Rectangle {
 
         QQC.TextField {
             id: filterField
+            QQC.ContextMenu.menu: TextEditMenu { editor: filterField }
             objectName: "note-filter"
             Layout.fillWidth: true
             placeholderText: I18n.t("notes.filter")
@@ -244,18 +252,20 @@ Rectangle {
             onTextChanged: root.filter = text
         }
 
-        Text {
+        EmptyState {
+            objectName: "notes-empty"
             visible: root.rows.length === 0
             Layout.fillWidth: true
-            text: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
-            color: Theme.textDim
-            font.pixelSize: Theme.fsSm
-            wrapMode: Text.Wrap
+            Layout.topMargin: Theme.sp2xl
+            icon: root.filter.length > 0 ? "" : "heap-09-notes"
+            title: root.filter.length > 0 ? I18n.t("notes.noMatches") : I18n.t("notes.empty")
+            line: root.filter.length > 0 ? I18n.t("notes.noMatches.hint") : ""
         }
 
         ListView {
             id: list
             objectName: "note-list"
+            Accessible.name: I18n.t("siderail.notes")
             Layout.fillWidth: true
             Layout.fillHeight: true
             clip: true
@@ -613,6 +623,7 @@ Rectangle {
             spacing: Theme.spMd
             QQC.TextField {
                 id: titleField
+                QQC.ContextMenu.menu: TextEditMenu { editor: titleField }
                 objectName: "note-rename-title"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320
@@ -622,6 +633,7 @@ Rectangle {
             }
             QQC.TextField {
                 id: folderField
+                QQC.ContextMenu.menu: TextEditMenu { editor: folderField }
                 objectName: "note-rename-folder"
                 Layout.fillWidth: true
                 Layout.preferredWidth: 320

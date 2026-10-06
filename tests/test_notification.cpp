@@ -52,6 +52,26 @@ TEST(Routing, ParseRejectsTrailingColon) {
   EXPECT_TRUE(t.isEmpty());
 }
 
+// A task reminder names the task's profile (PRES-2); an older one does not.
+TEST(Routing, TaskRefNamesTheProfile) {
+  using heap::notify::parseTaskRef;
+  using heap::notify::taskRef;
+  EXPECT_EQ(taskRef(QStringLiteral("work"), QStringLiteral("TASK-3")), QString("work/TASK-3"));
+  const auto [profile, task] = parseTaskRef(QStringLiteral("work/TASK-3"));
+  EXPECT_EQ(profile, QString("work"));
+  EXPECT_EQ(task, QString("TASK-3"));
+  const auto [noProfile, legacy] = parseTaskRef(QStringLiteral("TASK-3"));
+  EXPECT_TRUE(noProfile.isEmpty());
+  EXPECT_EQ(legacy, QString("TASK-3"));
+  // Through the whole notification id and back.
+  const auto [kind, ref] = parseRoutingId(routingId(QStringLiteral("deadline"), taskRef(QStringLiteral("work"), QStringLiteral("T-1"))));
+  EXPECT_EQ(kind, QString("deadline"));
+  EXPECT_EQ(ref, QString("work/T-1"));
+  // A profile id with a slash would be misread: left out.
+  EXPECT_EQ(taskRef(QStringLiteral("a/b"), QStringLiteral("T-1")), QString("T-1"));
+  EXPECT_EQ(taskRef(QString(), QStringLiteral("T-1")), QString("T-1"));
+}
+
 TEST(Routing, RoundTripPreservesData) {
   const auto id = routingId(QStringLiteral("git"), QStringLiteral("HEAP-7"));
   const auto [k, t] = parseRoutingId(id);

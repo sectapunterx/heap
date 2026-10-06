@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 #include <QString>
+#include <QStringList>
 #include <QVariantMap>
 
 namespace heap::git {
@@ -21,6 +22,14 @@ struct PrInfo {
   QString title;
   bool draft = false;
   QString checks;  // CI rollup: "passing" | "failing" | "pending" | ""
+  // Facts for "whose move" (APP-156). All optional: an older gh, or glab,
+  // may not say. GitHub's vocabulary; glab answers are mapped onto it.
+  QString author;              // login of whoever opened the PR
+  QString reviewDecision;      // "APPROVED" | "CHANGES_REQUESTED" | "REVIEW_REQUIRED" | ""
+  QStringList reviewRequests;  // logins (or team slugs) a review is waiting on
+  QString mergeable;           // "MERGEABLE" | "CONFLICTING" | "UNKNOWN" | ""
+  QString move;                // "mine" | "theirs" | "" — see PrFacts.h
+  QString moveReason;          // I18n key suffix, empty with no move
   QDateTime fetchedAt;
 
   QVariantMap toVariant() const {
@@ -31,6 +40,12 @@ struct PrInfo {
     m["title"] = title;
     m["draft"] = draft;
     m["checks"] = checks;
+    m["author"] = author;
+    m["reviewDecision"] = reviewDecision;
+    m["reviewRequests"] = reviewRequests;
+    m["mergeable"] = mergeable;
+    m["move"] = move;
+    m["moveReason"] = moveReason;
     m["fetchedAt"] = fetchedAt;
     return m;
   }

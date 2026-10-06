@@ -42,6 +42,26 @@ TestCase {
         AppController.notesState = "";
     }
 
+    // 2026-09-30 audit, KNOW-6: [[ autocomplete writes a title with "#" or "|"
+    // escaped (NoteGraph.h escapeLinkName), or the link names something else.
+    function test_link_autocomplete_escapes_hash_and_bar() {
+        const nv = make();
+        const ed = editorOf(nv);
+        compare(nv._escapeLinkName("C# basics"), "C\\# basics");
+        compare(nv._escapeLinkName("A|B options"), "A\\|B options");
+        compare(nv._escapeLinkName("dir\\"), "dir\\\\");
+        compare(nv._escapeLinkName("a\\b"), "a\\b");
+        ed.text = "see [[C#";
+        ed.cursorPosition = ed.text.length;
+        nv.acTrigger = "[[";
+        nv.acTriggerPos = 4;
+        nv.acMatches = [{ kind: "note", id: "", label: "C# basics", sub: "" }];
+        nv.acSelected = 0;
+        nv._commitAutocomplete();
+        compare(ed.text, "see [[C\\# basics]] ");
+        nv.destroy();
+    }
+
     // A keystroke inside the debounce window survives the view switch that
     // destroys the item. Without the flush this is the data-loss bug: the
     // 250 ms timer is destroyed with its view and never fires.

@@ -393,4 +393,38 @@ TestCase {
         b.press();
         compare(activatedSpy.count, 3, "a disabled button still ran");
     }
+
+    // SHELL-11: the section list is one Tab stop. Tab from it goes into the
+    // open section's body instead of opening the next section; Down still
+    // moves through the list and opens what it lands on.
+    function test_tab_from_the_nav_enters_the_section_body() {
+        const sv = make();
+        sv.activeSection = "profile";
+        const profileRow = findChild(sv, "settings-nav-profile");
+        const appearanceRow = findChild(sv, "settings-nav-appearance");
+        verify(profileRow !== null && appearanceRow !== null);
+        verify(profileRow.activeFocusOnTab);
+        verify(!appearanceRow.activeFocusOnTab, "every nav row is a Tab stop");
+        profileRow.forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Tab);
+        compare(sv.activeSection, "profile", "Tab opened another section");
+        const f = profileRow.Window.window.activeFocusItem;
+        verify(f !== null);
+        verify(String(f.objectName).indexOf("settings-nav-") !== 0, "Tab stayed in the nav: " + f.objectName);
+
+        profileRow.forceActiveFocus(Qt.TabFocusReason);
+        keyClick(Qt.Key_Down);
+        verify(appearanceRow.activeFocus);
+        compare(sv.activeSection, "appearance");
+        verify(appearanceRow.activeFocusOnTab);
+        verify(!profileRow.activeFocusOnTab);
+
+        // A search that hides the open section leaves its first hit the stop.
+        const target = sv.sections[sv.sections.length - 1];
+        sv.searchText = target.title;
+        verify(sv._navTabIndex >= 0, "no nav row is a Tab stop under a search");
+        verify(sv._sectionMatches(sv.sections[sv._navTabIndex]));
+        verify(sv.sections[sv._navTabIndex].id !== "appearance");
+        sv.searchText = "";
+    }
 }

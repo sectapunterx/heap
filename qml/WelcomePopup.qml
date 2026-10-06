@@ -1,14 +1,20 @@
-// First-run welcome. An interactive, multi-step guide (carousel) that tours
-// heap's views, hotkeys and headline features. It can be skipped at any point
-// (both the ✕ and the Skip button call AppController.markWelcomeSeen() so it is
-// never shown again), and replayed on demand from Settings → Help. Per-step
-// "open →" actions jump to the real surface; "Learn more →" deep-links into the
-// full Settings → Help document.
+// First-run tour (APP-169): four short steps, all from the keyboard — Enter
+// moves on, Esc skips, ←/→ step back and forth.
+//   1. Your first task: a real capture field; what is typed is saved as a
+//      task on Enter. Nothing is ever filled in for the user.
+//   2. Views and the command palette.
+//   3. Keys: ? for the cheat-sheet, H/J/K/L on the board.
+//   4. Bring your stuff: import a markdown folder or a profile, connect a
+//      tracker — each only when the user picks it.
+// Skipping or finishing marks it seen (AppController.markWelcomeSeen), so it
+// never shows again by itself; Settings → Help replays it. A step's action
+// pauses the tour instead, and Main's "Continue tour" pill brings it back.
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 import TodoCpp
 import "PopupStack.js" as PopupStack
+import "Tour.js" as Tour
 
 Popup {
     id: root
@@ -19,28 +25,28 @@ Popup {
     width: 600
     anchors.centerIn: Overlay.overlay
 
-    // A step wants Main.qml to open a popup / editor it owns (palette, quick
-    // capture, hotkeys panel, new-task editor). Kept as a signal so this popup
-    // stays decoupled from those objects.
+    // A step wants Main.qml to open something it owns: "palette", "hotkeys",
+    // "vault-import", "profile-import", "integrations".
     signal openAction(string id)
     // A step's "Learn more" wants Main.qml to jump to Settings → Help at `anchor`.
     signal openHelp(string anchor)
 
     property int step: 0
-    // While true the tour is merely paused: the user tapped a step's "open →" /
-    // "Learn more →" and jumped to a surface, so the guide hid itself instead of
-    // finishing. Main shows a "Continue tour" pill bound to this and reopens the
-    // popup at the same step. Distinct from finishing, which marks it seen.
-    // Cleared every time the popup is shown (fresh open or resume). Callers that
-    // start a fresh run set `step = 0` before open(); a resume leaves step as-is.
+    // Paused, not finished: the user took a step's action and left for that
+    // surface. Main shows a "Continue tour" pill bound to this.
     property bool paused: false
     onAboutToShow: paused = false
+    onOpened: root._focusStep()
+    onStepChanged: if (root.opened) Qt.callLater(root._focusStep)
+
+    // Titles of the tasks saved from the capture step in this run.
+    property var captured: []
+    property string lastCapturedId: ""
 
     Overlay.modal: Rectangle {
         color: Theme.scrim
     }
-    // A press beside the tour ends it like ✕ and Esc do (APP-126); it can be
-    // replayed from Settings → Help. See PopupStack.js.
+    // A press beside the tour ends it like ✕ and Esc do (APP-126).
     Overlay.onPressed: if (PopupStack.isTopmost(root, Overlay.overlay)) root._finish()
 
     background: Rectangle {
@@ -50,77 +56,77 @@ Popup {
         border.width: 1
     }
 
-    // ── Step model ───────────────────────────────────────────────────────
-    // Each step: glyph badge, title/desc i18n keys, live hotkey chips (ids from
-    // AppController's rebindable catalog), an optional primary action, and an
-    // optional Help anchor for "Learn more".
-    //   action.kind: "view"   → set AppController.currentView = arg
-    //                "action" → emit openAction(arg), handled in Main.qml
-    // A hint with the shortcuts as bound now, not as they shipped (design
-    // audit DES-15): the keys are rebindable, the text was not.
+    // A hint with the shortcuts as bound now, not as they shipped (DES-15).
     function withKeys(key, ids) {
         let text = I18n.t(key);
         const list = ids || [];
         for (let i = 0; i < list.length; i++) text = text.arg(AppController.shortcutFor(list[i]));
         return text;
     }
+
     readonly property var steps: [
-        { glyph: "✦", title: "welcome.title", desc: "welcome.subtitle",
-          keys: [], action: null, help: "",
-          // The first page was one line over a blank frame; it now says what
-          // the app is made of before the tour walks through each part.
-          highlights: [
-              { glyph: "▦", title: "welcome.board.title", desc: "welcome.board.desc", descText: I18n.t("welcome.board.desc") },
-              { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.desc", descText: I18n.t("welcome.calendar.desc") },
-              { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.desc", descText: root.withKeys("welcome.capture.desc", ["quick-capture"]) },
-              { glyph: "⌘", title: "welcome.palette.title", desc: "welcome.palette.desc", descText: root.withKeys("welcome.palette.desc", ["palette.open"]) }
-          ],
-          note: "welcome.demoNote" },
-        { glyph: "▦", title: "welcome.views.title", desc: "welcome.views.desc",
-          keys: ["view.board", "view.timeline", "view.week", "view.docs", "view.notes", "view.settings"],
-          action: { label: "welcome.act.board", kind: "view", arg: "board" }, help: "help-views" },
-        { glyph: "✎", title: "welcome.tasks.title", desc: "welcome.tasks.desc",
-          keys: ["task.new"],
-          action: { label: "welcome.act.task", kind: "action", arg: "task-new" }, help: "help-tasks" },
-        { glyph: "↯", title: "welcome.capture.title", desc: "welcome.capture.body",
-          keys: ["quick-capture", "quick-capture-notes"],
-          action: { label: "welcome.act.capture", kind: "action", arg: "quick-capture" }, help: "help-capture" },
-        { glyph: "◷", title: "welcome.calendar.title", desc: "welcome.calendar.body",
-          keys: [], action: null, help: "help-calendar" },
-        { glyph: "⌘", title: "welcome.search.title", desc: "welcome.search.desc",
-          keys: ["palette.open", "search.focus"],
-          action: { label: "welcome.act.palette", kind: "action", arg: "palette" }, help: "help-search" },
-        { glyph: "⌨", title: "welcome.keys.title", desc: "welcome.keys.desc",
-          keys: ["tweaks.open", "hotkeys.open", "undo", "theme.toggle"],
+        { id: "capture", glyph: "↯", title: "welcome.tour.capture.title", desc: "welcome.tour.capture.desc",
+          keys: [], action: null, help: "help-capture" },
+        { id: "views", glyph: "▦", title: "welcome.tour.views.title", desc: "welcome.tour.views.desc",
+          keys: ["view.board", "view.timeline", "view.week", "view.notes", "palette.open"],
+          action: { label: "welcome.act.palette", kind: "action", arg: "palette" }, help: "help-views" },
+        { id: "keys", glyph: "⌨", title: "welcome.tour.keys.title", desc: "welcome.tour.keys.desc",
+          keys: ["board.cursorLeft", "board.cursorDown", "board.cursorUp", "board.cursorRight", "board.open"],
           action: { label: "welcome.act.hotkeys", kind: "action", arg: "hotkeys" }, help: "help-hotkeys" },
-        { glyph: "◐", title: "welcome.data.title", desc: "welcome.data.desc",
-          keys: ["profile.next", "profile.prev"], action: null, help: "help-data" }
+        { id: "bring", glyph: "⇣", title: "welcome.tour.bring.title", desc: "welcome.tour.bring.desc",
+          keys: [], action: null, help: "help-data" }
     ]
 
-    readonly property var cur: steps[step]
+    readonly property var cur: steps[Math.max(0, Math.min(steps.length - 1, step))]
     readonly property bool lastStep: step === steps.length - 1
 
+    function _focusStep() {
+        if (root.cur.id === "capture") captureField.forceActiveFocus();
+        else body.forceActiveFocus();
+    }
+
+    // One key through the tour's state machine (Tour.js).
+    function handleKey(key) {
+        const r = Tour.onKey(root.step, key, captureField.text);
+        switch (r.action) {
+        case "save":   root._saveCapture(); break;
+        case "next":
+        case "back":   root.step = r.step; break;
+        case "finish":
+        case "skip":   root._finish(); break;
+        }
+        return r.action !== "none";
+    }
+
+    // The capture step's text, saved as a real task in To Do — exactly what
+    // was typed, nothing added.
+    function _saveCapture() {
+        const title = captureField.text.trim();
+        if (title.length === 0) return false;
+        const draft = AppController.newQuickTaskDraft("");
+        draft._isNew = true;
+        draft.title = title;
+        if (!AppController.saveTask(draft)) return false;
+        root.captured = root.captured.concat([title]);
+        root.lastCapturedId = draft.id;
+        captureField.text = "";
+        return true;
+    }
+
     function _finish() {
-        // Real dismissal (Skip / Get started / giving up from the pill): mark it
-        // seen so it never auto-shows again.
         root.paused = false;
         AppController.markWelcomeSeen();
         root.close();
     }
+    // Next with something typed on the capture step keeps it: the button
+    // must not throw away what Enter would have saved.
     function _next() {
-        if (lastStep)
-            _finish();
-        else
-            step++;
+        if (root.cur.id === "capture" && captureField.text.trim().length > 0) root._saveCapture();
+        root.handleKey(root.lastStep ? "enter" : "right");
     }
-    function _back() {
-        if (step > 0)
-            step--;
-    }
+    function _back() { root.handleKey("left"); }
     function _doAction(a) {
-        // Pause (do NOT finish) so the tour survives the detour: hide it, jump to
-        // the surface, and let Main's "Continue tour" pill bring it back at the
-        // same step. Never marks welcomeSeen here.
+        // Pause (do NOT finish) so the tour survives the detour.
         root.paused = true;
         root.close();
         if (a.kind === "view")
@@ -129,26 +135,26 @@ Popup {
             root.openAction(a.arg);
     }
     function _learnMore(anchor) {
-        // Same pause-and-resume contract as _doAction — jumping into Help must
-        // not throw the tour away.
         root.paused = true;
         root.close();
         root.openHelp(anchor);
     }
 
-    // One rebindable-hotkey chip: live combo + its label. Hidden when the combo
-    // is unset so a cleared binding does not leave an empty pill.
+    // One rebindable-hotkey chip: live combo + its label. Hidden when unset.
     component KeyChip: Rectangle {
         id: chip
         property string sid: ""
-        readonly property string combo: AppController.shortcutFor(sid)
+        // A key that is not in the catalogue (the `?` of the cheat-sheet).
+        property string fixedKey: ""
+        property string fixedLabel: ""
+        readonly property string combo: chip.fixedKey.length > 0 ? chip.fixedKey : AppController.shortcutFor(sid)
         visible: combo !== ""
         radius: Theme.radiusMd
         color: Theme.panel2
         border.color: Theme.border
         border.width: 1
-        implicitHeight: 24
-        implicitWidth: chipRow.implicitWidth + 16
+        implicitHeight: chipRow.implicitHeight + 2 * Theme.spXs
+        implicitWidth: chipRow.implicitWidth + 2 * Theme.spMd
         RowLayout {
             id: chipRow
             anchors.centerIn: parent
@@ -161,7 +167,7 @@ Popup {
                 font.weight: Font.DemiBold
             }
             Text {
-                text: AppController.shortcutLabel(chip.sid)
+                text: chip.fixedLabel.length > 0 ? chip.fixedLabel : AppController.shortcutLabel(chip.sid)
                 color: Theme.textMuted
                 font.pixelSize: Theme.fsSm
             }
@@ -170,16 +176,12 @@ Popup {
 
     contentItem: ColumnLayout {
         spacing: 0
-
-        // The guide is a keyboard-first app's first screen, so it has to be
-        // drivable from the keyboard: ←/→ walk the steps, Enter advances (and
-        // finishes on the last one), Esc opts out exactly like the ✕.
         focus: true
-        Keys.onEscapePressed: root._finish()
-        Keys.onLeftPressed:   root._back()
-        Keys.onRightPressed:  root._next()
-        Keys.onReturnPressed: root._next()
-        Keys.onEnterPressed:  root._next()
+        Keys.onEscapePressed: root.handleKey("esc")
+        Keys.onLeftPressed: root.handleKey("left")
+        Keys.onRightPressed: root.handleKey("right")
+        Keys.onReturnPressed: root.handleKey("enter")
+        Keys.onEnterPressed: root.handleKey("enter")
 
         // ── Header: glyph + title + progress dots + close ──
         RowLayout {
@@ -198,6 +200,7 @@ Popup {
             }
 
             Text {
+                objectName: "welcome-title"
                 Layout.fillWidth: true
                 text: I18n.t(root.cur.title)
                 color: Theme.text
@@ -206,7 +209,6 @@ Popup {
                 elide: Text.ElideRight
             }
 
-            // Progress dots.
             Row {
                 Layout.alignment: Qt.AlignVCenter
                 spacing: Theme.spXs
@@ -218,13 +220,12 @@ Popup {
                         height: 6
                         radius: 3
                         color: index <= root.step ? Theme.accent : Theme.border
-                        Behavior on width { NumberAnimation { duration: Theme.scaledMs(120) } }
+                        Behavior on width { NumberAnimation { duration: Theme.durFast } }
                     }
                 }
             }
 
-            // Close = opt out (marks welcome seen). The same ✕ as the
-            // Hotkeys and Tweaks panels, 22px (design audit DES-24).
+            // Close = opt out (marks the tour seen).
             Rectangle {
                 objectName: "welcome-close"
                 Layout.alignment: Qt.AlignVCenter
@@ -241,10 +242,12 @@ Popup {
 
         // ── Body (fixed height so the frame doesn't jump between steps) ──
         Item {
+            id: body
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
-            Layout.preferredHeight: 232
+            Layout.preferredHeight: 212
             clip: true
+            activeFocusOnTab: false
 
             ColumnLayout {
                 anchors.left: parent.left
@@ -252,9 +255,10 @@ Popup {
                 anchors.top: parent.top
                 anchors.leftMargin: Theme.sp3xl
                 anchors.rightMargin: Theme.sp3xl
-                spacing: Theme.sp2xl
+                spacing: Theme.spXl
 
                 Text {
+                    objectName: "welcome-desc"
                     Layout.fillWidth: true
                     text: I18n.t(root.cur.desc)
                     color: Theme.textMuted
@@ -263,53 +267,45 @@ Popup {
                     wrapMode: Text.WordWrap
                 }
 
-                // What heap is made of — the first page only.
-                GridLayout {
-                    objectName: "welcome-highlights"
+                // 1 · the capture field: a real task on Enter.
+                TextField {
+                    id: captureField
+                    objectName: "welcome-capture-field"
+                    visible: root.cur.id === "capture"
                     Layout.fillWidth: true
-                    visible: !!root.cur.highlights
-                    columns: 2
-                    columnSpacing: Theme.sp2xl
-                    rowSpacing: Theme.spLg
-                    Repeater {
-                        model: root.cur.highlights || []
-                        delegate: RowLayout {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 1
-                            Layout.alignment: Qt.AlignTop
-                            spacing: Theme.spMd
-                            Text {
-                                Layout.alignment: Qt.AlignTop
-                                text: modelData.glyph
-                                color: Theme.accentStrong
-                                font.pixelSize: Theme.fsLg
-                            }
-                            ColumnLayout {
-                                Layout.fillWidth: true
-                                spacing: Theme.sp2xs
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: I18n.t(modelData.title)
-                                    color: Theme.text
-                                    font.pixelSize: Theme.fsMd
-                                    font.weight: Font.DemiBold
-                                }
-                                Text {
-                                    Layout.fillWidth: true
-                                    text: modelData.descText
-                                    color: Theme.textMuted
-                                    font.pixelSize: Theme.fsSm
-                                    wrapMode: Text.WordWrap
-                                }
-                            }
-                        }
-                    }
+                    placeholderText: I18n.t("welcome.tour.capture.ph")
+                    placeholderTextColor: Theme.textDim
+                    color: Theme.text
+                    font.pixelSize: Theme.fsMd
+                    selectByMouse: true
+                    Accessible.name: I18n.t("welcome.tour.capture.title")
+                    background: FieldFrame { border.color: captureField.activeFocus ? Theme.focusRing : Theme.fieldBorder }
+                    Keys.onReturnPressed: (event) => { root.handleKey("enter"); event.accepted = true; }
+                    Keys.onEnterPressed: (event) => { root.handleKey("enter"); event.accepted = true; }
                 }
                 Text {
+                    objectName: "welcome-capture-saved"
+                    visible: root.cur.id === "capture" && root.captured.length > 0
                     Layout.fillWidth: true
-                    visible: !!root.cur.note
-                    text: root.cur.note ? I18n.t(root.cur.note) : ""
+                    text: root.captured.length > 0
+                          ? I18n.t("welcome.tour.capture.saved").arg(root.captured[root.captured.length - 1]) : ""
+                    textFormat: Text.PlainText
+                    color: Theme.success
+                    font.pixelSize: Theme.fsSm
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    visible: root.cur.id === "capture"
+                    Layout.fillWidth: true
+                    text: root.withKeys("welcome.capture.desc", ["quick-capture"])
+                    color: Theme.textDim
+                    font.pixelSize: Theme.fsSm
+                    wrapMode: Text.WordWrap
+                }
+                Text {
+                    visible: root.cur.id === "views"
+                    Layout.fillWidth: true
+                    text: root.withKeys("welcome.palette.desc", ["palette.open"])
                     color: Theme.textDim
                     font.pixelSize: Theme.fsSm
                     wrapMode: Text.WordWrap
@@ -320,6 +316,11 @@ Popup {
                     Layout.fillWidth: true
                     spacing: Theme.spMd
                     visible: root.cur.keys.length > 0
+                    KeyChip {
+                        visible: root.cur.id === "keys"
+                        fixedKey: "?"
+                        fixedLabel: I18n.t("hotkeys.title")
+                    }
                     Repeater {
                         model: root.cur.keys
                         delegate: KeyChip {
@@ -329,10 +330,32 @@ Popup {
                     }
                 }
 
-                // Actions row: optional "open →" and "Learn more →".
+                // 4 · bring your stuff — each one only when picked.
+                Flow {
+                    objectName: "welcome-bring"
+                    visible: root.cur.id === "bring"
+                    Layout.fillWidth: true
+                    spacing: Theme.spMd
+                    PillButton {
+                        objectName: "welcome-bring-vault"
+                        text: I18n.t("welcome.tour.bring.vault")
+                        onClicked: root._doAction({ kind: "action", arg: "vault-import" })
+                    }
+                    PillButton {
+                        objectName: "welcome-bring-profile"
+                        text: I18n.t("welcome.tour.bring.profile")
+                        onClicked: root._doAction({ kind: "action", arg: "profile-import" })
+                    }
+                    PillButton {
+                        objectName: "welcome-bring-integrations"
+                        text: I18n.t("welcome.tour.bring.integrations")
+                        onClicked: root._doAction({ kind: "action", arg: "integrations" })
+                    }
+                }
+
+                // Optional "open →" and "Learn more →".
                 RowLayout {
                     Layout.fillWidth: true
-                    Layout.topMargin: Theme.sp2xs
                     spacing: Theme.sp2xl
 
                     PillButton {
@@ -344,8 +367,6 @@ Popup {
                     Text {
                         visible: root.cur.help !== ""
                         text: I18n.t("welcome.learnMore")
-                        // Hover underlines rather than lightening to accent,
-                        // which is 3.7:1 in heap. light (design audit DES-25).
                         color: Theme.accentStrong
                         font.underline: learnMa.hovered
                         font.pixelSize: Theme.fsMd
@@ -378,6 +399,12 @@ Popup {
                 text: I18n.t("welcome.skip")
                 onClicked: root._finish()
             }
+            Text {
+                text: I18n.t("welcome.tour.footer")
+                color: Theme.textDim
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+            }
             Item { Layout.fillWidth: true }
             PillButton {
                 visible: root.step > 0
@@ -385,6 +412,7 @@ Popup {
                 onClicked: root._back()
             }
             PillButton {
+                objectName: "welcome-next"
                 text: root.lastStep ? I18n.t("welcome.getStarted") : I18n.t("welcome.next")
                 primary: true
                 onClicked: root._next()

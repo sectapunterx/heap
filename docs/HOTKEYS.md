@@ -81,6 +81,19 @@ task keeps the week, month, timeline or archive view you are on.
 
 The numbers follow the side rail, top to bottom.
 
+## Interface scale
+
+The same steps as **Settings → Appearance → Scale** (90, 100, 110, 125,
+150 %); a toast says where you are. They work from anywhere in the window,
+in a text field or over a dialog too, but not in the quick-capture window or
+while the Hotkeys panel records a key.
+
+| Action | Default |
+|--------|---------|
+| Zoom in | `Ctrl+=` (also the fixed aliases `Ctrl++`, `Ctrl+Shift+=`, numpad `Ctrl++`) |
+| Zoom out | `Ctrl+-` (also numpad `Ctrl+-`) |
+| Back to 100 % | `Ctrl+0` (also numpad `Ctrl+0`) |
+
 ## Saved views
 
 A saved view is a named set of filters — the search query, the priority chips,
@@ -172,6 +185,7 @@ a repeating event, `Enter` answers "This event".
 | Open Hotkeys panel | `Ctrl+/` |
 | Show / hide the calendar column | `Ctrl+\` |
 | Expand / collapse the sidebar | `Ctrl+Shift+B` |
+| Focus mode on / off (once turned on in Settings → Safety net; `Esc` also leaves it) | `Ctrl+Shift+F` |
 
 ## Selection (Board / Timeline / Week / Archive)
 

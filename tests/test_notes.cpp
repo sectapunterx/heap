@@ -493,6 +493,17 @@ TEST_F(NotesTest, TheExcerptSkipsTheHeading) {
   EXPECT_FALSE(excerpt.startsWith(QLatin1Char('#')));
 }
 
+// A link to a note whose name has an escaped | reads as the whole name, and a
+// labelled one as its label, not as the half after the escaped bar (KNOW-6).
+TEST_F(NotesTest, TheExcerptReadsEscapedLinkNamesWhole) {
+  const QString id = app_->newNote(QStringLiteral("Links"));
+  app_->setNoteBody(id, QStringLiteral("# Links\n\nsee [[A\\|B options]] and [[C\\# basics|intro]]\n"));
+
+  const int role = app_->notes()->roleOf(QStringLiteral("excerpt"));
+  const int row = app_->notes()->indexOfId(id);
+  EXPECT_EQ(app_->notes()->data(app_->notes()->index(row, 0), role).toString(), QStringLiteral("see A|B options and intro"));
+}
+
 // ─── Notes as a folder of .md files ──────────────────────────────────
 //
 // MdVault.h covers the naming and the frontmatter without a filesystem; these

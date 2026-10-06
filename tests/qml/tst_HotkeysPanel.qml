@@ -84,6 +84,8 @@ TestCase {
             for (let i = 0; i < kids.length; i++) { const r = find(kids[i]); if (r) return r; }
             return null;
         };
+        // The list builds the rows on screen only; scroll the one asked for in.
+        panel.revealRow(id);
         return find(panel.contentItem);
     }
 
@@ -117,6 +119,24 @@ TestCase {
         panel.close();
     }
 
+    // The zoom keys (APP-168) sit with the views and record like any other:
+    // = and - are named by key code, since Ctrl+= types no text on Windows.
+    function test_zoom_keys_record() {
+        const panel = openPanel();
+        compare(panel.groupOf("zoom.in"), "views");
+        compare(panel.groupOf("zoom.reset"), "views");
+        tryVerify(function () { return field(panel, "zoom.in") !== null; }, 2000, "no chip for zoom.in");
+        const f = field(panel, "zoom.in");
+        f.forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        compare(panel.capturingId, "zoom.in");
+        keyClick(Qt.Key_Equal, Qt.ControlModifier | Qt.AltModifier);
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("zoom.in"), "Ctrl+Alt+=");
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
     // UX-4: Enter on a focused chip starts recording — it used to commit an
     // empty sequence and unbind the action — and a stray letter while not
     // recording binds nothing.
@@ -138,6 +158,35 @@ TestCase {
         panel.close();
     }
 
+    // SHELL-5: Space is recorded as "Space". It used to come out of ev.text as
+    // "Ctrl+Alt+ ", which stored nothing and left the action unbound.
+    function test_capture_space_records_space() {
+        const panel = openPanel();
+        tryVerify(function () { return field(panel, "view.archive") !== null; }, 2000, "no chip for view.archive");
+        field(panel, "view.archive").forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_Space, Qt.ControlModifier | Qt.AltModifier);
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("view.archive"), "Ctrl+Alt+Space");
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
+    // SHELL-4: Ctrl+P stays the palette's whatever the catalog says; taking it
+    // made both dead. The rebind is refused and the old key kept.
+    function test_builtin_key_is_not_taken() {
+        const panel = openPanel();
+        const before = AppController.shortcutFor("task.new");
+        tryVerify(function () { return field(panel, "task.new") !== null; }, 2000, "no chip for task.new");
+        field(panel, "task.new").forceActiveFocus();
+        keyClick(Qt.Key_Return);
+        keyClick(Qt.Key_P, Qt.ControlModifier);
+        keyClick(Qt.Key_Return);
+        compare(AppController.shortcutFor("task.new"), before);
+        AppController.resetAllShortcuts();
+        panel.close();
+    }
+
     // UX-4: "↺ all" asks first — one press arms, the second resets.
     function test_reset_all_needs_a_second_press() {
         const panel = openPanel();
@@ -149,5 +198,30 @@ TestCase {
         verify(AppController.shortcutFor("view.archive") !== "Ctrl+Shift+Y");
         verify(!panel.resetAllArmed);
         panel.close();
+    }
+
+    // APP-166: the cheat-sheet is complete — every catalogue entry exactly
+    // once — and grouped, each group's heading on its first row.
+    function test_rows_cover_the_catalogue_grouped() {
+        const panel = make();
+        const rows = panel.rows;
+        compare(rows.length, AppController.shortcuts.length);
+        const seen = {};
+        let lastGroup = -1;
+        for (let i = 0; i < rows.length; i++) {
+            verify(!seen[rows[i].id], rows[i].id + " listed twice");
+            seen[rows[i].id] = true;
+            const g = panel.groupOrder.indexOf(rows[i].group);
+            verify(g >= 0, "unknown group " + rows[i].group);
+            verify(g >= lastGroup, "groups come in order");
+            compare(rows[i].first, g !== lastGroup, "heading on the first row of " + rows[i].group);
+            lastGroup = g;
+            verify(I18n.t("hotkeys.group." + rows[i].group) !== "hotkeys.group." + rows[i].group);
+        }
+        compare(panel.groupOf("view.week"), "views");
+        compare(panel.groupOf("board.cursorDown"), "board");
+        compare(panel.groupOf("cal.today"), "calendar");
+        compare(panel.groupOf("notes.new"), "notes");
+        compare(panel.groupOf("palette.open"), "general");
     }
 }

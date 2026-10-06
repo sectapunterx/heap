@@ -127,6 +127,47 @@ Prefer to build it yourself? See [docs/BUILDING.md](docs/BUILDING.md).
 | `J` / `K` / `H` / `L` | Move around the board |
 | `Ctrl+/` | Every shortcut, rebindable |
 
+## Command line
+
+Note a task or check the current one without leaving the terminal. With heap open on the same data
+directory, commands go to the window — a change shows up there at once and can be undone there; with it
+closed, heap reads and saves `state.json` itself. Nothing here talks to the network.
+
+```sh
+heap add "fix login tomorrow 14:00 p1 #backend // check the refresh token"   # read like quick capture
+heap now                      # the task with a running timer, else the one your git branch names
+heap list --status prog       # also --profile <name>, --json
+heap today                    # in progress, or scheduled or due today
+heap done APP-12
+heap open APP-12              # show it in the window (starts heap if it is closed)
+heap help
+```
+
+`heap now` prints nothing and exits 0 when there is no current task, so it fits a shell prompt.
+`--format` takes `{id} {title} {status} {priority} {profile} {source} {elapsed}`:
+
+```toml
+# starship.toml
+[custom.heap]
+command = "heap now --format '{id} {title}'"
+when = true
+format = "[$output]($style) "
+```
+
+```sh
+# bash / zsh
+PS1='$(heap now --format "[{id}] ")'"$PS1"
+```
+
+Exit codes: `0` ok, `1` usage, `2` no such task, profile or column, `3` data error. `--data-dir` and
+`HEAP_DATA_DIR` work as for the app.
+
+**Windows:** in cmd and PowerShell use `heap-cli` (it sits next to `heap.exe`): heap.exe is a windowed
+program, so those shells neither wait for it nor see its output. `heap-cli` answers `now`, `list` and
+`today` itself, fast enough for a prompt, and passes the rest to heap.exe. Add the install folder to
+`PATH`, and `Set-Alias heap heap-cli` in your PowerShell profile if you like the short name. In git-bash
+plain `heap` works too.
+
 ## Documentation
 
 - [**First day in heap.**](docs/TUTORIAL.md) — a ten-minute walkthrough
@@ -145,3 +186,5 @@ Issues and pull requests are welcome. Building, tests, CI and the code map are i
 
 MIT — see [LICENSE](LICENSE). Brand assets under `design/brand-export/` are MIT for use within this codebase. The
 referenced fonts (IBM Plex Sans, JetBrains Mono) ship under the SIL Open Font License; see their upstream repositories.
+The fonts bundled into the app (Golos Text, JetBrains Mono — `resources/fonts/`) are SIL OFL 1.1 too; see
+[THIRD_PARTY_NOTICES.md](THIRD_PARTY_NOTICES.md).

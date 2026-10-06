@@ -112,6 +112,7 @@ Rectangle {
             Text { text: I18n.t("settings.integrations.every"); color: Theme.textMuted; font.pixelSize: Theme.fsMd }
             TextField {
                 id: field
+                ContextMenu.menu: TextEditMenu { editor: field }
                 objectName: "settings-autosync-custom"
                 Layout.preferredWidth: 72
                 inputMethodHints: Qt.ImhDigitsOnly

@@ -16,8 +16,12 @@
 #include "cal/Reminders.h"
 #include "chrono/ChronoParser.h"
 #include "diag/IssueReport.h"
+#include "diag/PerfLog.h"
 #include "git/BranchTaskMatcher.h"
+#include "git/BranchTaskResolve.h"
 #include "git/GitWatcher.h"
+#include "hints/ShortcutHints.h"
+#include "history/TaskHistory.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationI18n.h"
 #include "integrations/JiraProvider.h"
@@ -29,6 +33,7 @@
 #include "integrations/RestIssueProvider.h"
 #include "integrations/SecretStore.h"
 #include "integrations/StatusMap.h"
+#include "integrations/SyncState.h"
 #include "integrations/TrackerMerge.h"
 #include "markdown/MdHtml.h"
 #include "markdown/MdOutline.h"
@@ -39,16 +44,21 @@
 #include "platform/Accessibility.h"
 #include "platform/GlobalHotkey.h"
 #include "platform/Paths.h"
+#include "platform/Sound.h"
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
+#include "safety/SafetyText.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
+#include "storage/Snapshots.h"
 #include "storage/StateIO.h"
+#include "text/PersonMatch.h"
 #include "text/TaskTextUtils.h"
 #include "text/UiLanguage.h"
 #include "update/UpdateInstall.h"
 #include "update/Updater.h"
+#include "views/UiScale.h"
 
 #include <QApplication>
 #include <QClipboard>
@@ -71,7 +81,10 @@
 #include <QNetworkReply>
 #include <QNetworkRequest>
 #include <QPair>
+#include <QQuickItem>
+#include <QQuickWindow>
 #include <QSaveFile>
+#include <QScopedValueRollback>
 #include <QStandardPaths>
 #include <QSysInfo>
 #include <QSystemTrayIcon>
@@ -141,6 +154,7 @@ const QHash<QString, I18nEntry>& i18nTable() {
   static const QHash<QString, I18nEntry> table = {
       {"task.created", {"Created: %1", "Создано: %1"}},
       {"task.idTaken", {"%1 already exists — pick another id", "%1 уже занят — выберите другой id"}},
+      {"task.otherProfile", {"%1 was not saved: it belongs to another profile", "%1 не сохранена: она из другого профиля"}},
       {"task.deleted", {"Deleted: %1", "Удалена: %1"}},
       {"task.restored", {"Restored: %1", "Восстановлена: %1"}},
       {"task.moved", {"%1 → %2", "%1 → %2"}},
@@ -401,6 +415,19 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"notify.meetingSoon", {"In %1 min", "Через %1 мин"}},
       {"notify.meetingNow", {"Starting now", "Начинается"}},
       {"backup.restored", {"Restored from %1", "Восстановлено из %1"}},
+      {"history.notFound", {"That snapshot is gone", "Этого снимка больше нет"}},
+      {"history.damaged", {"That snapshot cannot be read", "Этот снимок не читается"}},
+      {"history.newer", {"That snapshot was made by a newer heap", "Этот снимок сделан более новой версией heap"}},
+      {"history.restored",
+       {"Restored to %1. The state before it is in the time machine too.",
+        "Состояние на %1 восстановлено. То, что было до него, тоже есть в машине времени."}},
+      {"history.restoredName", {"%1 (restored %2)", "%1 (восстановлен %2)"}},
+      {"history.profileRestored", {"Restored as profile %1", "Восстановлено как профиль «%1»"}},
+      {"history.profileGone",
+       {"Profile %1 no longer exists. Restore it as a copy first.", "Профиля «%1» больше нет. Сначала восстановите его копией."}},
+      {"history.taskElsewhere", {"%1 lives in profile %2 now", "%1 сейчас в профиле «%2»"}},
+      {"history.undo.item", {"Restore %1", "Восстановление «%1»"}},
+      {"history.itemRestored", {"Restored: %1", "Восстановлено: %1"}},
       {"data.recovered",
        {"Your data file was damaged, so heap opened backup %1 — changes made after that backup are not in it. "
         "The damaged file is kept in the data folder as %2.",
@@ -449,6 +476,14 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"onboarding.startedFresh", {"Demo cleared — your workspace is empty", "Демо очищено — рабочее пространство пустое"}},
       {"branch.required", {"Set a branch — required by Settings", "Укажите ветку — этого требуют настройки"}},
       {"deadline.snoozed", {"%1: deadline snoozed", "%1: дедлайн отложен"}},
+      {"notify.action.open", {"Open", "Открыть"}},
+      {"notify.action.done", {"Mark done", "Готово"}},
+      {"notify.snoozedUntil", {"Reminder snoozed until %1", "Напоминание отложено до %1"}},
+      {"notify.reminderTitle", {"Reminder", "Напоминание"}},
+      {"notify.test.title", {"heap. test reminder", "heap. — проверка напоминания"}},
+      {"notify.test.body", {"Buttons work like on a real reminder.", "Кнопки работают как у настоящего напоминания."}},
+      {"settings.system.startAtLogin.failed",
+       {"Could not change the login start: the system refused", "Не удалось изменить автозапуск: система не дала"}},
       // Timeline row badge — the only date arithmetic rendered from C++.
       {"deadline.overdue", {"%1d overdue", "просрочено на %1 д"}},
       {"deadline.overdueLong", {"%1 overdue", "просрочено на %1"}},
@@ -466,6 +501,9 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"deadline.inDays", {"+%1d", "+%1 д"}},
       {"deadline.inDaysShort", {"+%1d", "+%1 д"}},
       {"slot.freed", {"Freed: %1", "Освобождено: %1"}},
+      {"hotkeys.builtinTaken", {"%1 is built in for “%2” and can't be reassigned", "%1 встроено в «%2» и не переназначается"}},
+      {"hotkeys.builtin.notesMode", {"Notes: cycle editor / split / preview", "Заметки: редактор / разделённый / просмотр"}},
+      {"hotkeys.builtin.attach", {"Attach files", "Прикрепить файлы"}},
       {"import.emptyJson", {"Empty JSON", "Пустой JSON"}},
       {"import.invalidJson", {"Invalid JSON", "Невалидный JSON"}},
       {"import.missingProfile", {"JSON has no 'profile' block or expected fields", "В JSON нет блока 'profile' или ожидаемых полей"}},
@@ -497,6 +535,16 @@ const QHash<QString, I18nEntry>& i18nTable() {
       {"shortcut.view.settings.label", {"Go to Settings", "Перейти к настройкам"}},
       {"shortcut.view.settings.desc",
        {"Full settings panel: profile, appearance, integrations.", "Полная панель настроек: профиль, внешний вид, интеграции."}},
+      {"shortcut.zoom.in.label", {"Zoom in", "Увеличить интерфейс"}},
+      {"shortcut.zoom.in.desc",
+       {"Larger text and spacing, one step of Settings → Appearance → Scale.",
+        "Крупнее текст и отступы — на шаг шкалы «Внешний вид → Масштаб»."}},
+      {"shortcut.zoom.out.label", {"Zoom out", "Уменьшить интерфейс"}},
+      {"shortcut.zoom.out.desc",
+       {"Smaller text and spacing, one step of Settings → Appearance → Scale.",
+        "Мельче текст и отступы — на шаг шкалы «Внешний вид → Масштаб»."}},
+      {"shortcut.zoom.reset.label", {"Reset zoom", "Сбросить масштаб"}},
+      {"shortcut.zoom.reset.desc", {"Back to 100 %.", "Вернуть 100 %."}},
       {"shortcut.profile.next.label", {"Next profile", "Следующий профиль"}},
       {"shortcut.profile.next.desc", {"Cycle forward through profiles.", "Циклит по списку профилей вперёд."}},
       {"shortcut.profile.prev.label", {"Previous profile", "Предыдущий профиль"}},
@@ -670,52 +718,75 @@ AppController::AppController(QObject* parent) :
   // Native notification backend — Linux uses org.freedesktop.Notifications
   // (with real action buttons); Windows/macOS fall back to the legacy tray
   // balloon path. See src/notify/NotificationCenter.h for the contract.
-  m_notifier = heap::notify::NotificationCenter::create(this);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked, this, &AppController::onNotifierAction);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::activated, this, &AppController::onNotifierActivated);
-  // The tray backend (Windows/macOS) doubles as the app's presence when the
-  // window is hidden: clicking the icon or its "Show" entry restores the
-  // window, and "Quit" exits for real. Forwarded to QML / the event loop.
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this, &AppController::showWindowRequested);
-  connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
-    QCoreApplication::quit();
-  });
+  // A command-line run (`heap add`, no window) has no tray to put an icon in.
+  if(!s_headless) {
+    m_notifier = heap::notify::NotificationCenter::create(this);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::actionInvoked, this, &AppController::onNotifierAction);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::activated, this, &AppController::onNotifierActivated);
+    // The tray backend (Windows/macOS) doubles as the app's presence when the
+    // window is hidden: clicking the icon or its "Show" entry restores the
+    // window, and "Quit" exits for real. Forwarded to QML / the event loop.
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::showWindowRequested, this, &AppController::showWindowRequested);
+    connect(m_notifier.get(), &heap::notify::NotificationCenter::quitRequested, this, []() {
+      QCoreApplication::quit();
+    });
+  }
 
   // Route notification(...) → native toast + in-app toast bar, respecting
   // quiet hours and the user's `notifications.desktopNotif` / `soundOnPing`
   // opt-outs. Kept as a signal so existing call-sites (`emit
   // notification(...)`) keep working — the lambda just forwards to the
   // NotificationCenter without action buttons (it carries no task id).
-  connect(this, &AppController::notification, this, [this](const QString& title, const QString& body, const QString& kind) {
-    // Quiet hours hold a notification until they end rather than dropping
-    // it. A meeting or the standup is an appointment and goes through.
-    const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
-    if(!appointment && inQuietHours(QDateTime::currentDateTime())) {
-      holdNotification({title, body, kind, QString()});
-      return;
-    }
-    const QVariantMap notif = settingsMap().value("notifications").toMap();
-    // Only raise an OS toast when the window is NOT focused. When the app is
-    // active the in-app Toast bar (emitted below) already surfaces the message;
-    // showing both is the "notification appears twice on Windows" bug (HEAP-47)
-    // — one styled in-app toast plus one plain system balloon.
-    const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
-    if(notif.value("desktopNotif", true).toBool() && m_notifier && !appActive) {
-      heap::notify::Notification n;
-      n.id = QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch());
-      n.title = title;
-      n.body = body;
-      n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
-      n.category = kind;
-      m_notifier->post(n);
-    }
-    if(notif.value("soundOnPing", false).toBool()) {
-      QApplication::beep();
-    }
-    // The title is what says why ("Starting now", "Deadline in 1 hour"); the
-    // in-app toast used to show only the body, a bare task title.
-    emit toast(title.isEmpty() ? body : title + QStringLiteral(" · ") + body);
-  });
+  connect(this,
+          &AppController::notification,
+          this,
+          [this](const QString& title, const QString& body, const QString& kind, const QString& routeId) {
+            if(s_headless) {
+              return;  // nobody to show it to; a held one would be saved as pending
+            }
+            // Focus mode holds it until the user asks (APP-160).
+            if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = QString()})) {
+              return;
+            }
+            // Quiet hours hold a notification until they end rather than dropping
+            // it. A meeting or the standup is an appointment and goes through.
+            const bool appointment = kind == QStringLiteral("meeting") || kind == QStringLiteral("standup");
+            if(!appointment && inQuietHours(QDateTime::currentDateTime())) {
+              holdNotification({title, body, kind, QString()});
+              return;
+            }
+            const QVariantMap notif = settingsMap().value("notifications").toMap();
+            // Only raise an OS toast when the window is NOT focused. When the app is
+            // active the in-app Toast bar (emitted below) already surfaces the message;
+            // showing both is the "notification appears twice on Windows" bug (HEAP-47)
+            // — one styled in-app toast plus one plain system balloon.
+            const bool appActive = QGuiApplication::applicationState() == Qt::ApplicationActive;
+            if(!routeId.isEmpty()) {
+              // Remembered so a snooze brings the same words back (APP-155).
+              ShownReminder& shown = m_shownReminders[routeId];
+              shown.title = title;
+              shown.body = body;
+              shown.kind = kind;
+            }
+            if(notif.value("desktopNotif", true).toBool() && m_notifier && !appActive) {
+              heap::notify::Notification n;
+              n.id = routeId.isEmpty() ? QStringLiteral("info:") + QString::number(QDateTime::currentMSecsSinceEpoch()) : routeId;
+              n.title = title;
+              n.body = body;
+              n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
+              n.category = kind;
+              if(!routeId.isEmpty() && m_notifier->supportsActions()) {
+                n.actions = reminderActions(kind);
+              }
+              m_notifier->post(n);
+            }
+            if(notif.value("soundOnPing", false).toBool()) {
+              QApplication::beep();
+            }
+            // The title is what says why ("Starting now", "Deadline in 1 hour"); the
+            // in-app toast used to show only the body, a bare task title.
+            emit toast(title.isEmpty() ? body : title + QStringLiteral(" · ") + body);
+          });
 
   // Invalidate the status-count cache from the model's own signals, so every
   // mutation path is covered without each one having to remember.
@@ -767,6 +838,12 @@ AppController::AppController(QObject* parent) :
 
   seedShortcutCatalog();
 
+  // Task history (APP-165): every single-task change the model sees, from
+  // whichever path made it, minus loads. A tracker pull marks its own.
+  m_tasks.setChangeObserver([this](const Task* before, const Task& after) {
+    recordTaskChange(before, after);
+  });
+
   // Re-localize shortcut catalog when language flips so the Settings →
   // Shortcuts list and HotkeysPanel labels update in place.
   connect(this, &AppController::languageChanged, this, [this]() {
@@ -776,6 +853,7 @@ AppController::AppController(QObject* parent) :
 
   loadStateOnStart();
   loadSentReminders();
+  loadSnoozes();
   m_automationTimer->start();
 
   // An unwritable data folder (a --data-dir under Program Files, a read-only
@@ -792,32 +870,41 @@ AppController::AppController(QObject* parent) :
   // Registered after loadStateOnStart() so any user rebind of the capture
   // sequences is already applied. On non-Windows platforms this is a no-op and
   // the app relies on the in-app QML shortcuts instead.
-  m_globalHotkey = heap::platform::GlobalHotkey::create(this);
-  connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
-  registerGlobalHotkeys();
+  // A command-line run neither grabs the capture hotkeys nor watches repos:
+  // the window that owns both may start a moment later.
+  if(!s_headless) {
+    m_globalHotkey = heap::platform::GlobalHotkey::create(this);
+    connect(m_globalHotkey.get(), &heap::platform::GlobalHotkey::activated, this, &AppController::onGlobalHotkey);
+    registerGlobalHotkeys();
 
-  // ---- Git watcher ----
-  m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
-  connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
-  connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
-  connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
-  connect(
-      m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
-        const heap::git::BranchTaskMatcher m(collectPrefixes());
-        const auto mr = m.extract(br);
-        if(!mr.matched) {
-          return;
-        }
-        QVariantMap entry;
-        entry["prState"] = pr.value("state");
-        entry["prNumber"] = pr.value("number");
-        entry["prUrl"] = pr.value("url");
-        m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
-      });
-  applyGitSettingsFromMap(settingsMap().value("git").toMap());
-  connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+    // ---- Git watcher ----
+    m_gitWatcher = std::make_unique<heap::git::GitWatcher>(this);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::branchChanged, this, &AppController::onGitBranchChanged);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::repoStateUpdated, this, &AppController::onGitRepoState);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::commitsUpdated, this, &AppController::onGitCommits);
+    connect(m_gitWatcher.get(), &heap::git::GitWatcher::workingTreeChecked, this, &AppController::onWorkingTreeChecked);
+    // "Waiting 2d" counts calendar days, so it moves on at midnight (APP-158).
+    connect(this, &AppController::todayChanged, this, &AppController::waitingOnChanged);
+    connect(
+        m_gitWatcher.get(), &heap::git::GitWatcher::prInfoUpdated, this, [this](const QString&, const QString& br, const QVariantMap& pr) {
+          const heap::git::BranchTaskMatcher m(collectPrefixes());
+          const auto mr = m.extract(br);
+          if(!mr.matched) {
+            return;
+          }
+          QVariantMap entry;
+          entry["prState"] = pr.value("state");
+          entry["prNumber"] = pr.value("number");
+          entry["prUrl"] = pr.value("url");
+          entry["prMove"] = pr.value("move");
+          entry["prMoveReason"] = pr.value("moveReason");
+          m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
+        });
     applyGitSettingsFromMap(settingsMap().value("git").toMap());
-  });
+    connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+      applyGitSettingsFromMap(settingsMap().value("git").toMap());
+    });
+  }  // !s_headless
 
   // ---- Auto-update (HEAP-63) ----
   m_updater = std::make_unique<heap::update::Updater>(appVersion(), this);
@@ -881,26 +968,29 @@ AppController::AppController(QObject* parent) :
     }
     emit toast(updateStatus(), QStringLiteral("warning"));
   });
-  // What the update an earlier run started came to.
-  QTimer::singleShot(1500, this, [this]() {
-    const heap::update::InstallOutcome outcome = heap::update::takeInstallOutcome();
-    if(!outcome.present) {
-      return;
-    }
-    if(outcome.ok) {
-      emit toast(tr_("update.installed").arg(appVersion()));
-    } else {
-      emit toast(tr_("update.installFailed").arg(outcome.error), QStringLiteral("warning"));
-    }
-  });
+  // What the update an earlier run started came to. Left for the window to
+  // report when this is a command-line run.
+  if(!s_headless) {
+    QTimer::singleShot(1500, this, [this]() {
+      const heap::update::InstallOutcome outcome = heap::update::takeInstallOutcome();
+      if(!outcome.present) {
+        return;
+      }
+      if(outcome.ok) {
+        emit toast(tr_("update.installed").arg(appVersion()));
+      } else {
+        emit toast(tr_("update.installFailed").arg(outcome.error), QStringLiteral("warning"));
+      }
+    });
 
-  // Opt-out background check shortly after startup (never auto-downloads). The
-  // delay lets settings load and the QML toast bar come up first.
-  QTimer::singleShot(3000, this, [this]() {
-    if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
-      checkForUpdates();
-    }
-  });
+    // Opt-out background check shortly after startup (never auto-downloads). The
+    // delay lets settings load and the QML toast bar come up first.
+    QTimer::singleShot(3000, this, [this]() {
+      if(settingsMap().value("updates").toMap().value("autoCheck", true).toBool()) {
+        checkForUpdates();
+      }
+    });
+  }  // !s_headless
 
   // ---- Tracker sync (HEAP-74/75) ----
   m_secretStore = new heap::integrations::SecretStore(this);
@@ -910,36 +1000,41 @@ AppController::AppController(QObject* parent) :
     autoSyncTickAt(QDateTime::currentDateTime());
   });
   loadLastTrackerSync();
-  // Move any legacy plaintext tokens out of state.json, then load the keychain.
-  migrateLegacySecrets();
-  QVector<QPair<QString, QString>> secretKeys;
-  for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
-    for(const QString& f : d.secretKeys) {
-      secretKeys.append({d.id, f});
+  // A command-line run connects no tracker and fetches no calendar: a status
+  // it changes is queued for the window's next sync (queueTrackerPush), the
+  // same as a move made while disconnected.
+  if(!s_headless) {
+    // Move any legacy plaintext tokens out of state.json, then load the keychain.
+    migrateLegacySecrets();
+    QVector<QPair<QString, QString>> secretKeys;
+    for(const heap::integrations::ProviderDescriptor& d : heap::integrations::providerCatalog()) {
+      for(const QString& f : d.secretKeys) {
+        secretKeys.append({d.id, f});
+      }
+      // The refresh token is written by the OAuth flow rather than by a card
+      // field, so it is not in secretKeys — but it still has to come back from
+      // the keychain, or the session ends at the first token expiry.
+      if(d.oauth.supported) {
+        secretKeys.append({d.id, QStringLiteral("refreshToken")});
+      }
     }
-    // The refresh token is written by the OAuth flow rather than by a card
-    // field, so it is not in secretKeys — but it still has to come back from
-    // the keychain, or the session ends at the first token expiry.
-    if(d.oauth.supported) {
-      secretKeys.append({d.id, QStringLiteral("refreshToken")});
-    }
-  }
-  // Providers that need a secret build after the async keychain read completes.
-  m_secretStore->load(secretKeys, [this]() {
+    // Providers that need a secret build after the async keychain read completes.
+    m_secretStore->load(secretKeys, [this]() {
+      applyIntegrationSettings();
+      emit integrationSecretsChanged();  // the Settings fields were rendered empty
+    });
     applyIntegrationSettings();
-    emit integrationSecretsChanged();  // the Settings fields were rendered empty
-  });
-  applyIntegrationSettings();
-  connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
-    applyIntegrationSettings();
+    connect(this, &AppController::appSettingsJsonChanged, this, [this]() {
+      applyIntegrationSettings();
+      applyCalendarSubscriptions();
+    });
+    // Calendar subscriptions (APP-118): a minute tick fetches whichever is due.
+    m_calTimer = new QTimer(this);
+    m_calTimer->setInterval(60 * 1000);
+    connect(m_calTimer, &QTimer::timeout, this, &AppController::applyCalendarSubscriptions);
+    m_calTimer->start();
     applyCalendarSubscriptions();
-  });
-  // Calendar subscriptions (APP-118): a minute tick fetches whichever is due.
-  m_calTimer = new QTimer(this);
-  m_calTimer->setInterval(60 * 1000);
-  connect(m_calTimer, &QTimer::timeout, this, &AppController::applyCalendarSubscriptions);
-  m_calTimer->start();
-  applyCalendarSubscriptions();
+  }  // !s_headless
   connect(this, &AppController::activeProfileChanged, this, [this]() {
     if(m_gitWatcher) {
       m_gitWatcher->setPrefixes(collectPrefixes());
@@ -949,7 +1044,15 @@ AppController::AppController(QObject* parent) :
 
   // Fresh install or unreadable state — seed a single "Example" profile
   // from SampleData so the app boots with something sensible.
-  if(m_profiles.isEmpty()) {
+  if(m_profiles.isEmpty() && s_headless) {
+    // `heap add` before heap was ever opened: the task goes into an empty
+    // workspace, not into the demo, which is the window's first-run offer.
+    Profile p = makeStartingProfile(QStringLiteral("heap"), QString());
+    p.id = QStringLiteral("default");
+    m_profiles.push_back(p);
+    m_activeProfileId = p.id;
+    applyProfileToModels(p);
+  } else if(m_profiles.isEmpty()) {
     seedExampleProfile();
   }
 
@@ -1103,6 +1206,9 @@ QString AppController::tr_(const QString& key) const {
     if(own.isNull()) {
       own = heap::savedviews::text(key, m_language == QStringLiteral("ru"));
     }
+    if(own.isNull()) {
+      own = heap::safety::text(key, m_language == QStringLiteral("ru"));
+    }
     return own.isNull() ? key : own;
   }
   return QString::fromUtf8((m_language == "ru") ? it->ru : it->en);
@@ -1213,7 +1319,10 @@ QString titleFromBody(const QString& body) {
   if(!h1.isEmpty()) {
     return h1.left(60).trimmed();
   }
-  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}\s+|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
+  // A heading marker with nothing after it yet ("# " trimmed to "#") is not
+  // the note's name either: half-way through retyping a heading the title
+  // used to become "#" (PERA-6).
+  static const QRegularExpression kMarkers(QStringLiteral(R"(^(?:#{1,6}(?:\s+|$)|[-*+]\s+(?:\[[ xX]\]\s+)?|\d+[.)]\s+|>\s*)+)"));
   for(const QString& raw : body.split(QLatin1Char('\n'))) {
     QString line = raw.trimmed();
     line.remove(kMarkers);
@@ -1349,7 +1458,12 @@ void AppController::syncActiveNoteBody() {
   // the user named that note, and its first line is just text.
   const QString was = titleFromBody(n.body);
   const QString now = titleFromBody(m_notesState);
-  const bool followed = was == n.title && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
+  // A body with no text at all suggests nothing, so it cannot have been
+  // disagreeing with the title: retyping a heading from scratch ("# Old" →
+  // "# " → "# New") is still the heading naming the note. Without this the
+  // title stuck at whatever was left before the heading was emptied (PERA-6).
+  const bool wasFollowing = was == n.title || (was.isEmpty() && !firstH1(m_notesState).isEmpty());
+  const bool followed = wasFollowing && (firstH1(n.body).isEmpty() || !firstH1(m_notesState).isEmpty());
   if(!now.isEmpty() && now != n.title && (followed || isPlaceholderNoteTitle(n.title)) &&
      heap::notes::backlinksTo(n.id, m_notes.items()).isEmpty()) {
     n.title = now;
@@ -1810,6 +1924,7 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   const QString recurrence = t.recurrence;
   const QDate recurBase = t.dueAt.isValid() ? t.dueAt.date() : t.scheduledAt.date();
   m_tasks.setStatus(id, newStatus);
+  completionSoundOnMove_(prevStatus, newStatus);
 
   // Mirror the change back to the linked tracker issue (e.g. moving to Done
   // closes the GitHub issue / transitions the Jira issue). Routed to whichever
@@ -1918,6 +2033,23 @@ void AppController::moveTask(const QString& id, const QString& newStatus) {
   scheduleSave();
 }
 
+void AppController::completionSoundOnMove_(const QString& fromStatus, const QString& toStatus) {
+  // Tracker pulls and undo/redo restore rows without passing through
+  // moveTask(), so what reaches here is a move the user made — in this window,
+  // or through `heap` on the command line (muted, or headless).
+  using heap::platform::StatusChangeSource;
+  const StatusChangeSource source = s_headless || m_completionSoundMuted ? StatusChangeSource::Cli : StatusChangeSource::User;
+  const bool enabled = settingsMap().value(QStringLiteral("appearance")).toMap().value(QStringLiteral("completionSound")).toBool();
+  if(!heap::platform::shouldPlayCompletionSound(fromStatus, toStatus, source, enabled)) {
+    return;
+  }
+  if(m_bulkMoveDepth > 0) {
+    m_completionSoundPending = true;
+    return;
+  }
+  heap::platform::playCompletionSound();
+}
+
 void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
   const int row = m_tasks.indexOfId(taskId);
   if(row < 0) {
@@ -1954,6 +2086,8 @@ void AppController::pushStatusToTracker(const QString& taskId, const QString& st
   // offer to send the same status again.
   const QString key = pushKey(providerId, project, externalId);
   m_pendingPushes.insert(key, taskId);
+  // The card says "sending" until the tracker answers (APP-163).
+  m_tasks.setPushRuntime(taskId, true, QString());
   ensureFreshToken(
       providerId,
       [this, providerId, externalId, status, project, key, taskId]() {
@@ -2010,20 +2144,47 @@ void AppController::onTaskPushed(const QString& providerId,
   // wrote nothing, so the base still holds.
   const bool wrote = ok && error != QStringLiteral("pull-only");
   const bool baseMoves = wrote && t.externalMeta.status != remoteStatus;
-  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves) {
+  // A status the tracker took settles a status conflict: the user's side is
+  // now the tracker's too (APP-163).
+  const bool settlesConflict = ok && t.externalMeta.conflicts.contains(QStringLiteral("status"));
+  m_tasks.setPushRuntime(t.id, false, ok ? QString() : providerReason(error));
+  if(t.externalMeta.unsyncedStatus != wanted || t.externalMeta.pushQueued || baseMoves || settlesConflict) {
     t.externalMeta.unsyncedStatus = wanted;
     // The tracker answered: the move is no longer waiting to be sent.
     t.externalMeta.pushQueued = false;
     if(wrote) {
       t.externalMeta.status = remoteStatus;
     }
+    if(settlesConflict) {
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+    }
     m_tasks.upsert(t);
     scheduleSave();
   }
+  if(wrote) {
+    // The history says what went out, not only what came in (APP-165).
+    m_history.append(
+        activeProfileId(),
+        t.id,
+        heap::history::HistoryEvent{
+            .at = QDateTime::currentDateTime(), .kind = QStringLiteral("pushed"), .from = QString(), .to = t.status, .sync = true});
+    emit taskHistoryChanged(t.id);
+    scheduleSave();
+  }
   if(ok) {
-    // The issue sits somewhere else in its workflow now; what it can move to
-    // is unknown until the next pull says.
-    m_trackerTransitions.remove(providerId + QChar('\n') + externalId);
+    // The issue sits somewhere else in its workflow now. What it can move to
+    // from there is what the last pull saw for an issue of the same kind in
+    // that status; with no such issue it is unknown until the next pull says
+    // (INT-4: dropping the guard outright let the next bad move go out).
+    const QString issueKey = providerId + QChar('\n') + externalId;
+    const auto seen = remoteStatus.isEmpty() ? m_workflowTransitions.constEnd()
+                                             : m_workflowTransitions.constFind(workflowTransitionsKey(
+                                                   providerId, t.externalMeta.project, t.externalMeta.issueType, remoteStatus));
+    if(seen != m_workflowTransitions.constEnd()) {
+      m_trackerTransitions.insert(issueKey, *seen);
+    } else {
+      m_trackerTransitions.remove(issueKey);
+    }
   }
   if(!ok) {
     qWarning() << providerId << "push failed for" << externalId << ":" << error;
@@ -2157,9 +2318,19 @@ void AppController::moveSelectedTasksTo(const QString& statusId, const QString& 
   }
 }
 
+QString AppController::taskIdPrefix() const {
+  // What a #KEY-1 reference and a branch name can carry: a letter, then
+  // letters and digits. "MY TEAM" or "../../X" made ids nothing could link to
+  // and put slashes into branch names (SHELL-10); such a stored prefix, from
+  // before the field checked, falls back to the default.
+  static const QRegularExpression kPrefix(QStringLiteral("^[A-Z][A-Z0-9]{0,15}$"));
+  const QString prefix = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
+  return kPrefix.match(prefix).hasMatch() ? prefix : QStringLiteral("TASK");
+}
+
 QVariantMap AppController::newTaskDraft(const QString& statusId) const {
   const QVariantMap tasksCfg = settingsMap().value("tasks").toMap();
-  const QString prefix = tasksCfg.value("idPrefix", QStringLiteral("TASK")).toString().trimmed();
+  const QString prefix = taskIdPrefix();
   const QString priorityDefault = tasksCfg.value("defaultPriority", QStringLiteral("P2")).toString();
   const QString statusDefault = tasksCfg.value("defaultStatus", QStringLiteral("todo")).toString();
 
@@ -2254,6 +2425,67 @@ QVariantMap AppController::newQuickTaskDraft(const QString& ticketKey) const {
   return m;
 }
 
+QVariantMap AppController::quickTaskDraft(const QString& raw, const QDateTime& reference) const {
+  // A ticket key another task already holds cannot be the new task's id
+  // (newQuickTaskDraft falls back to the prefix), so it stays in the title:
+  // "APP-101 follow up with QA" used to lose its only link to the ticket
+  // (TASKS-22, audit 2026-09-30).
+  heap::text::TaskMeta meta = heap::text::extractMeta(raw);
+  if(!meta.ticketKey.isEmpty() && m_tasks.indexOfId(meta.ticketKey) >= 0) {
+    meta = heap::text::extractMeta(raw, /*keepTicketKey=*/true);
+  }
+  QVariantMap draft = newQuickTaskDraft(meta.ticketKey);
+  draft["_isNew"] = true;
+
+  // The date words the parser read are cut out of the title.
+  heap::chrono::ParseResult when;
+  if(m_chrono) {
+    when = m_chrono->parse(meta.title, reference.isValid() ? reference : QDateTime::currentDateTime());
+  }
+  QString title = meta.title.trimmed();
+  if(when.ok && !when.consumed.isEmpty() && when.startOffset >= 0 && when.endOffset >= when.startOffset) {
+    const QString left = meta.title.left(when.startOffset).trimmed();
+    const QString right = meta.title.mid(when.endOffset).trimmed();
+    title = (left + QChar(' ') + right).simplified();
+  }
+  draft["title"] = title;
+  if(!meta.priority.isEmpty()) {
+    draft["priority"] = meta.priority;
+  }
+  if(!meta.labels.isEmpty()) {
+    draft["labels"] = meta.labels;
+  }
+  if(!meta.desc.isEmpty()) {
+    draft["desc"] = meta.desc;
+  }
+  // The parsed datetime lands on the task itself — including the clock time,
+  // which used to survive only as a side calendar block (HEAP-115).
+  if(when.ok && when.start.isValid()) {
+    draft["scheduledAt"] = when.start;
+    draft["dueAt"] = when.start;
+    draft["scheduledHasTime"] = when.hasTime;
+    draft["dueHasTime"] = when.hasTime;
+  }
+  // A parsed recurrence ("every weekday…") makes completing the task
+  // regenerate it (HEAP-77).
+  if(when.ok && !when.recurrence.isEmpty()) {
+    draft["recurrence"] = when.recurrence;
+  }
+  return draft;
+}
+
+QVector<Profile> AppController::profilesSnapshot() const {
+  QVector<Profile> out = m_profiles;
+  for(Profile& p : out) {
+    if(p.id == m_activeProfileId) {
+      // The stored copy of the active profile lags its live models.
+      p.tasks = m_tasks.items();
+      p.statuses = m_statuses;
+    }
+  }
+  return out;
+}
+
 namespace {
 // Built-in task/checklist templates (HEAP-77). Checklists are markdown
 // `- [ ]` lines in the description — they render as checkboxes in the notes
@@ -2328,7 +2560,7 @@ void AppController::createTaskFromTemplate(const QString& name) {
   focusBlockOnStatusChange(t.id, QString(), t.status);
   scheduleSave();
   emit toast(tr_("task.fromTemplate").arg(it->name));
-  emit openTaskRequested(t.id);  // open the editor so the user fills in the blank
+  emit openTaskRequested(t.id, m_activeProfileId);  // open the editor so the user fills in the blank
 }
 
 bool AppController::saveTask(const QVariantMap& draft) {
@@ -2336,6 +2568,15 @@ bool AppController::saveTask(const QVariantMap& draft) {
   const bool isNew = draft.value("_isNew").toBool();
   const QString originalId = draft.value("_originalId").toString().trimmed();
   t.id = draft.value("id").toString().trimmed();
+  // An editor says which profile it was opened in. Written into any other one,
+  // an edit became a same-id copy there and the task itself kept the old text
+  // (PRES-1); the editor goes back to its profile before saving, so this is
+  // the line nothing is allowed past.
+  const QString draftProfile = draft.value("_profileId").toString();
+  if(!draftProfile.isEmpty() && draftProfile != m_activeProfileId) {
+    emit toast(tr_("task.otherProfile").arg(t.id.isEmpty() ? originalId : t.id), QStringLiteral("warning"));
+    return false;
+  }
   // A cleared id field on an existing task means "leave the id alone", not
   // "rename it to nothing" — a task with an empty id cannot be opened, moved or
   // deleted again.
@@ -4257,7 +4498,11 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
       skipped++;
       continue;
     }
-    f.write(file.contents.toUtf8());
+    // attachments/ sits at the root of the export, so a note in team/ links
+    // its files as ../attachments/<id>: relative to the file, which is how
+    // every other editor resolves it. Import reads it back.
+    const QString up = QStringLiteral("../").repeated(static_cast<int>(file.path.count(QLatin1Char('/'))));
+    f.write(heap::attachments::prefixRefLinks(file.contents, up).toUtf8());
     if(f.commit()) {
       written++;
       pathOf.insert(file.noteId, file.path);
@@ -4285,9 +4530,10 @@ QVariantMap AppController::exportNotesFolder(const QUrl& folderUrl, const QStrin
     scheduleSave();
   }
 
-  // The files the exported notes link, into attachments/ next to them. The
-  // links already say "attachments/<id>", so the folder reads the same in
-  // heap, in another editor and when it is imported back.
+  // The files the exported notes link, into attachments/ at the root. The
+  // links say "attachments/<id>" relative to each file (see above), so the
+  // folder reads the same in heap, in another editor and when it is imported
+  // back.
   int files = 0;
   {
     const heap::attachments::Store store(attachmentsDir());
@@ -4362,7 +4608,8 @@ QStringList AppController::unresolvedNoteLinks() const {
 }
 
 QString AppController::createNoteForLink(const QString& target) {
-  const QString title = target.trimmed();
+  // "[[C\# basics]]" asks for a note called "C# basics".
+  const QString title = heap::notes::detail::unescapeLink(target).trimmed();
   if(title.isEmpty()) {
     return {};
   }
@@ -4837,12 +5084,18 @@ double AppController::nextFreeSlot(const QDate& date, double durationHours) cons
 }
 
 void AppController::cyclePerson(const QString& id) {
+  const int row = m_people.indexOfId(id);
+  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
   m_people.cycleState(id);
+  personStateMoved(id, before);
   scheduleSave();
 }
 
 void AppController::setPersonState(const QString& id, const QString& state) {
+  const int row = m_people.indexOfId(id);
+  const QString before = row >= 0 ? m_people.items().at(row).state : QString();
   m_people.setState(id, state);
+  personStateMoved(id, before);
   scheduleSave();
 }
 
@@ -4905,7 +5158,54 @@ QString AppController::personIdForHandle(const QString& handle) const {
       found = p.id;
     }
   }
+  if(!found.isEmpty()) {
+    return found;
+  }
+  // "@r.losev" for "Роман Лосев", hand-written: a login derived from the
+  // name names them when it names nobody else. Two people it fits ("Руслан
+  // Лосев" too) and it names neither.
+  for(const Person& p : m_people.items()) {
+    if(heap::text::personMatchRank(want, p.name, p.id) >= heap::text::PersonRank::ExactHandle) {
+      if(!found.isEmpty()) {
+        return {};
+      }
+      found = p.id;
+    }
+  }
   return found;
+}
+
+int AppController::personMatchRank(const QString& query, const QString& name, const QString& id) const {
+  return heap::text::personMatchRank(query, name, id);
+}
+
+QVariantList AppController::matchPeople(const QString& query, int limit) const {
+  struct Hit {
+    int rank;
+    qsizetype row;
+  };
+
+  const QVector<Person>& people = m_people.items();
+  QVector<Hit> hits;
+  for(qsizetype i = 0; i < people.size(); ++i) {
+    const int rank = heap::text::personMatchRank(query, people[i].name, people[i].id);
+    if(rank > heap::text::PersonRank::NoMatch) {
+      hits.push_back({rank, i});
+    }
+  }
+  // Best rank first; the model's own order among equals.
+  std::stable_sort(hits.begin(), hits.end(), [](const Hit& a, const Hit& b) {
+    return a.rank > b.rank;
+  });
+  QVariantList out;
+  for(const Hit& h : hits) {
+    if(limit > 0 && out.size() >= limit) {
+      break;
+    }
+    const Person& p = people[h.row];
+    out.append(QVariantMap{{"id", p.id}, {"name", p.name}, {"role", p.role}, {"color", p.color}, {"rank", h.rank}});
+  }
+  return out;
 }
 
 QVariantMap AppController::personById(const QString& id) const {
@@ -4974,7 +5274,22 @@ bool AppController::savePerson(const QVariantMap& draft) {
     return false;
   }
   const UndoScope scope(this, tr_(isNew ? "person.createUndone" : "person.editUndone").arg(p.name));
-  m_people.upsert(p);
+  const int beforeRow = m_people.indexOfId(!isNew && !originalId.isEmpty() ? originalId : p.id);
+  const QString stateBefore = beforeRow >= 0 ? m_people.items().at(beforeRow).state : QString();
+  // An edit that changes the id renames the person: upsert() alone added a
+  // second one under the new id and left the old one in the list (SHELL-25).
+  // The renamed person keeps its place, and the Docs contacts linked to the
+  // old id follow it.
+  const int renamedRow = !isNew && !originalId.isEmpty() && originalId != p.id ? m_people.indexOfId(originalId) : -1;
+  if(renamedRow >= 0) {
+    p.extra = m_people.items().at(renamedRow).extra;
+    m_people.removeById(originalId);
+    m_people.insertAt(renamedRow, p);
+    relinkDocsContacts(originalId, p.id);
+  } else {
+    m_people.upsert(p);
+  }
+  personStateMoved(p.id, stateBefore);
   // Keep Docs and the rail pointing at each other. A Person picked out of a
   // contact gets that contact's `personId` (so the next pick, and the next
   // Mattermost sync, reuse this Person instead of making a second one); a
@@ -5134,6 +5449,25 @@ void AppController::linkDocsContact(const QString& contactKey, const QString& pe
   }
 }
 
+void AppController::relinkDocsContacts(const QString& fromPersonId, const QString& toPersonId) {
+  QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
+  QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
+  bool changed = false;
+  for(int i = 0; i < list.size(); ++i) {
+    QJsonObject c = list.at(i).toObject();
+    if(c.value(QStringLiteral("personId")).toString() != fromPersonId) {
+      continue;
+    }
+    c.insert(QStringLiteral("personId"), toPersonId);
+    list.replace(i, c);
+    changed = true;
+  }
+  if(changed) {
+    docs.insert(QStringLiteral("contacts"), list);
+    setDocsState(QString::fromUtf8(QJsonDocument(docs).toJson(QJsonDocument::Compact)));
+  }
+}
+
 void AppController::appendDocsContact(const Person& p) {
   QJsonObject docs = QJsonDocument::fromJson(m_docsState.toUtf8()).object();
   QJsonArray list = docs.value(QStringLiteral("contacts")).toArray();
@@ -5205,6 +5539,7 @@ void AppController::deletePerson(const QString& id) {
   const Person removedPerson = m_people.items().at(row);
   const UndoScope scope(this, tr_("person.restored").arg(removedPerson.name));
   m_people.removeById(id);
+  personStateMoved(id, removedPerson.state);
   emit undoableToast(tr_("person.deleted").arg(removedPerson.name), 5);
   scheduleSave();
 }
@@ -5529,9 +5864,10 @@ QVariantMap AppController::compileSearch(const QString& text) const {
   // largest thing this call could return.
   QStringList ids;
   if(q.isQuery()) {
-    for(const Task& t : m_tasks.items()) {
-      if(q.matches(t)) {
-        ids << t.id;
+    const QVector<Task>& items = m_tasks.items();
+    for(int row = 0; row < items.size(); ++row) {
+      if(q.matches(items.at(row), m_tasks.searchTextAt(row))) {
+        ids << items.at(row).id;
       }
     }
   }
@@ -5557,8 +5893,11 @@ QString AppController::eventHourLabel(double hour) const {
   const QString fmt = settingsMap().value("calendar").toMap().value("timeFormat", QStringLiteral("24h")).toString();
   const QString mmS = QString("%1").arg(mm, 2, 10, QLatin1Char('0'));
   if(fmt == QLatin1String("12h")) {
-    const int h12 = ((hh + 11) % 12) + 1;
-    const QString ampm = hh < 12 ? QStringLiteral("am") : QStringLiteral("pm");
+    // 24:00, an end at midnight, is 12:00am — not 12:00pm, which reads (and
+    // parses back) as noon (TIME-22).
+    const int h24 = hh % 24;
+    const int h12 = ((h24 + 11) % 12) + 1;
+    const QString ampm = h24 < 12 ? QStringLiteral("am") : QStringLiteral("pm");
     return QString("%1:%2%3").arg(h12).arg(mmS).arg(ampm);
   }
   return QString("%1:%2").arg(hh, 2, 10, QLatin1Char('0')).arg(mmS);
@@ -5686,6 +6025,29 @@ QVariantMap AppController::parseDateTime(const QString& input, const QDateTime& 
   m.insert("startOffset", r.startOffset);
   m.insert("endOffset", r.endOffset);
   return m;
+}
+
+void AppController::perfMarkShown(const QString& name, QObject* item) const {
+  if(!heap::perf::enabled()) {
+    return;
+  }
+  heap::perf::beginIfIdle(name);
+  const auto* quickItem = qobject_cast<QQuickItem*>(item);
+  const QQuickWindow* window = quickItem != nullptr ? quickItem->window() : nullptr;
+  if(window == nullptr) {
+    heap::perf::end(name);
+    return;
+  }
+  // frameSwapped comes from the render thread under the threaded loop; the
+  // perf log is thread-safe, so the end is stamped right there.
+  QObject::connect(
+      window,
+      &QQuickWindow::frameSwapped,
+      window,
+      [name]() {
+        heap::perf::end(name);
+      },
+      static_cast<Qt::ConnectionType>(Qt::DirectConnection | Qt::SingleShotConnection));
 }
 
 QVariantList AppController::parseAllDateTimes(const QString& input, const QDateTime& reference) const {
@@ -6157,6 +6519,7 @@ void AppController::resetToFirstRun() {
   m_profiles.clear();
   m_activeProfileId.clear();
   m_rootExtra = {};
+  m_history.clear();
   m_settingsExtra = {};
   m_taskSeq.clear();
   m_events.reset({});
@@ -6192,7 +6555,8 @@ void AppController::resetSettingsToDefaults() {
                                      QStringLiteral("data"),
                                      QStringLiteral("updates"),
                                      QStringLiteral("git"),
-                                     QStringLiteral("developer")};
+                                     QStringLiteral("developer"),
+                                     QStringLiteral("shortcuts")};
   QJsonObject next;
   for(auto it = current.constBegin(); it != current.constEnd(); ++it) {
     if(!kReset.contains(it.key())) {
@@ -6878,6 +7242,8 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
                                                             QStringList* goneCandidates) {
   using heap::integrations::StatusMap;
   MergeStats stats;
+  // Whatever this pull changes on a card is the tracker's doing (APP-165).
+  const QScopedValueRollback<bool> fromTracker(m_historySync, true);
 
   // Resolved once for the batch: the map is the same for every issue, and
   // re-reading the settings blob per issue is how settingsMap() used to show
@@ -7023,10 +7389,6 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
         t.priority = QStringLiteral("P2");
       }
     }
-    if(conflicted) {
-      ++stats.conflicts;
-    }
-
     if(!ext.status.isEmpty() && !seenStatuses.contains(ext.status)) {
       seenStatuses.append(ext.status);
     }
@@ -7034,32 +7396,37 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     // A status that has not changed since the last pull says nothing new, so
     // the column the user picked here stands; that is what lets a card sit in
     // In Progress or Blocked against a tracker that only knows open/closed.
+    // The tracker moving the issue while a local move is still unsent (refused
+    // or queued) is a conflict: the local column stays, nothing is pushed, and
+    // the user picks a side (APP-163) — it used to drop the local move.
     const QString mapped = StatusMap::column(ext.status, statusOverrides, QStringLiteral("todo"));
-    const QString prevRemote = t.externalMeta.status;
-    const bool remoteMoved = !prevRemote.isEmpty() && prevRemote != ext.status;
     const auto isDone = [](const QString& column) {
       return column == QStringLiteral("done");
     };
-    if(isNewRow) {
+    using heap::integrations::StatusPull;
+    const StatusPull statusPull =
+        isNewRow ? StatusPull::TakeRemote
+                 : heap::integrations::mergeStatusOnPull(
+                       t.status, t.externalMeta.unsyncedStatus, t.externalMeta.status, ext.status, mapped, t.externalMeta.column);
+    if(statusPull == StatusPull::TakeRemote) {
       t.status = mapped;
-    } else if(remoteMoved) {
-      // Someone moved the issue in the tracker: that is news, and it wins —
-      // over a queued move too, which would now undo theirs.
-      t.status = mapped;
-      t.externalMeta.unsyncedStatus.clear();
-      t.externalMeta.pushQueued = false;
-    } else if(!t.externalMeta.unsyncedStatus.isEmpty()) {
-      // A move the tracker refused: keep it here until a push goes through.
-    } else if(prevRemote.isEmpty()) {
-      // Stored before the last-seen status was kept. Only a change of kind
-      // (open ↔ closed) is evidence; the rest is the user's arrangement.
-      if(isDone(mapped) != isDone(t.status)) {
-        t.status = mapped;
+      if(!t.externalMeta.unsyncedStatus.isEmpty() && t.externalMeta.status != ext.status) {
+        // The tracker moved it (to where the card already is, or with
+        // nothing of ours waiting): there is nothing left to send.
+        t.externalMeta.unsyncedStatus.clear();
+        t.externalMeta.pushQueued = false;
       }
-    } else if(t.status == t.externalMeta.column) {
-      // Still where the last pull put it, so the user has not placed it:
-      // follow the mapping, which may have changed since.
-      t.status = mapped;
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), false);
+    } else if(statusPull == StatusPull::Conflict) {
+      // Held, not sent: a queued move would now undo theirs unasked.
+      t.externalMeta.pushQueued = false;
+      if(!t.externalMeta.conflicts.contains(QStringLiteral("status"))) {
+        conflicted = true;
+      }
+      heap::integrations::setConflict(t.externalMeta.conflicts, QStringLiteral("status"), true);
+    }
+    if(conflicted) {
+      ++stats.conflicts;
     }
     t.externalMeta.column = mapped;
     t.externalMeta.status = ext.status;
@@ -7069,6 +7436,7 @@ AppController::MergeStats AppController::mergeExternalTasks(const QString& provi
     const QString transitionsKey = providerId + QChar('\n') + ext.externalId;
     if(ext.transitionsKnown) {
       m_trackerTransitions.insert(transitionsKey, ext.transitions);
+      m_workflowTransitions.insert(workflowTransitionsKey(providerId, ext.project, ext.issueType, ext.status), ext.transitions);
     } else {
       m_trackerTransitions.remove(transitionsKey);
     }
@@ -7407,6 +7775,7 @@ void AppController::applyIntegrationSettings() {
               m_retriedAfter401.remove(providerId);
               // The tracker answered, so it is reachable again.
               setProviderOffline(providerId, false);
+              recordSyncHealth(providerId, true, static_cast<int>(issues.size()), 0, QString());
               emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
               const bool settlePull = m_settlePulls.remove(providerId);
               // Issues missing from the pull are looked up before anything
@@ -7484,16 +7853,18 @@ void AppController::applyIntegrationSettings() {
              cfg.value(QStringLiteral("authMode")).toString() == QStringLiteral("oauth") &&
              !cfg.value(QStringLiteral("refreshToken")).toString().isEmpty()) {
             m_retriedAfter401.insert(providerId);
-            refreshOAuthToken(providerId, [this, providerId, label, error](bool ok) {
+            refreshOAuthToken(providerId, [this, providerId, label, error, status](bool ok) {
               if(ok) {
                 syncProviderNow(providerId);
               } else {
+                recordSyncHealth(providerId, false, -1, status, error);
                 emit integrationActionFinished(
                     providerId, QStringLiteral("sync"), false, tr_("sync.failed").arg(label, providerReason(error)));
               }
             });
             return;
           }
+          recordSyncHealth(providerId, false, -1, status, error);
           const QString message = tr_("sync.failed").arg(label, providerReason(error));
           emit toast(message, QStringLiteral("error"));
           emit integrationActionFinished(providerId, QStringLiteral("sync"), false, message);
@@ -7619,6 +7990,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
           this,
           [this, providerId, label](const QVector<heap::integrations::ExternalContact>& contacts) {
             const int changed = mergeExternalContacts(providerId, contacts);
+            recordSyncHealth(providerId, true, static_cast<int>(contacts.size()), 0, QString());
             emit integrationActionFinished(providerId, QStringLiteral("sync"), true, QString());
             if(changed == 0) {
               emit toast(tr_("contacts.upToDate").arg(label));
@@ -7629,6 +8001,7 @@ heap::integrations::MattermostClient* AppController::directoryClient(const QStri
   connect(client, &heap::integrations::MattermostClient::failed, this, [this, providerId, label](int status, const QString& error) {
     // A session token dies after ~30 days, and a revoked one is a 401 too.
     // Saying "expired" beats repeating the same failure on every auto-sync.
+    recordSyncHealth(providerId, false, -1, status, error);
     if(status == 401) {
       disconnectIntegration(providerId);
       emit toast(tr_("int.sessionExpired").arg(label), QStringLiteral("warning"));
@@ -8441,6 +8814,72 @@ QVariantMap AppController::integrationStates() const {
   return out;
 }
 
+void AppController::recordTaskChange(const Task* before, const Task& after) {
+  if(m_loading || after.id.isEmpty()) {
+    return;
+  }
+  const QString profileId = activeProfileId();
+  // Undo putting a deleted task back is not its creation.
+  if(before == nullptr && m_history.count(profileId, after.id) > 0) {
+    return;
+  }
+  const QVector<heap::history::HistoryEvent> events = heap::history::diffTask(before, after, QDateTime::currentDateTime(), m_historySync);
+  if(events.isEmpty()) {
+    return;
+  }
+  for(const heap::history::HistoryEvent& e : events) {
+    m_history.append(profileId, after.id, e);
+  }
+  emit taskHistoryChanged(after.id);
+}
+
+QVariantList AppController::taskHistory(const QString& taskId) const {
+  return heap::history::TaskHistory::toVariant(m_history.events(activeProfileId(), taskId));
+}
+
+void AppController::recordSyncHealth(const QString& providerId, bool ok, int items, int httpStatus, const QString& error) {
+  heap::integrations::ProviderHealth& h = m_syncHealth[providerId];
+  const QDateTime now = QDateTime::currentDateTime();
+  if(ok) {
+    h.recordOk(now, items);
+  } else {
+    h.recordFailure(now, httpStatus, error);
+  }
+  emit integrationHealthChanged();
+}
+
+QVariantList AppController::integrationHealth() const {
+  return integrationHealthAt(QDateTime::currentDateTime());
+}
+
+QVariantList AppController::integrationHealthAt(const QDateTime& now) const {
+  using namespace heap::integrations;
+  const bool ru = m_language == QStringLiteral("ru");
+  const QVariantMap integrations = settingsMap().value(QStringLiteral("integrations")).toMap();
+  QVariantList out;
+  for(const ProviderDescriptor& d : providerCatalog()) {
+    const QVariantMap cfg = integrations.value(d.id).toMap();
+    if(!cfg.value(QStringLiteral("connected"), false).toBool()) {
+      continue;
+    }
+    const ProviderHealth h = m_syncHealth.value(d.id);
+    const bool failing = h.failing();
+    out.append(QVariantMap{
+        {QStringLiteral("id"), d.id},
+        {QStringLiteral("name"), d.displayName},
+        {QStringLiteral("lastOk"), relativeAge(h.lastOk, now, ru)},
+        {QStringLiteral("items"), h.lastItems},
+        {QStringLiteral("failing"), failing},
+        {QStringLiteral("error"), failing ? failureText(h.lastFailure, ru) : QString()},
+        {QStringLiteral("errorDetail"), failing ? providerReason(h.lastError) : QString()},
+        {QStringLiteral("errorAge"), failing ? relativeAge(h.lastFailureAt, now, ru) : QString()},
+        {QStringLiteral("expiry"), expiryText(expiryFromString(cfg.value(QStringLiteral("tokenExpiresAt")).toString()), now, ru)},
+        {QStringLiteral("offline"), m_offlineProviders.contains(d.id)},
+    });
+  }
+  return out;
+}
+
 void AppController::setProviderOffline(const QString& providerId, bool offline) {
   if(offline == m_offlineProviders.contains(providerId)) {
     return;
@@ -8495,6 +8934,7 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
   if(row < 0) {
     return;
   }
+  m_tasks.setPushRuntime(taskId, false, QString());
   Task t = m_tasks.items().at(row);
   if(t.externalMeta.pushQueued && t.externalMeta.unsyncedStatus == status) {
     return;
@@ -8514,7 +8954,8 @@ void AppController::queueTrackerPush(const QString& taskId, const QString& statu
 void AppController::flushQueuedPushes(const QString& providerId) {
   QStringList ids;
   for(const Task& t : m_tasks.items()) {
-    if(t.externalProvider == providerId && t.externalMeta.pushQueued) {
+    // A move held by a status conflict waits for the user, not for a sync.
+    if(t.externalProvider == providerId && t.externalMeta.pushQueued && !t.externalMeta.conflicts.contains(QStringLiteral("status"))) {
       ids.append(t.id);
     }
   }
@@ -8540,27 +8981,73 @@ void AppController::resolveTrackerConflict(const QString& taskId, bool useTracke
   if(row < 0) {
     return;
   }
-  Task t = m_tasks.items().at(row);
-  if(t.externalMeta.conflicts.isEmpty()) {
-    return;
-  }
-  const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+  const QStringList fields = m_tasks.items().at(row).externalMeta.conflicts;
+  resolveTrackerConflictFields(taskId, fields, useTracker);
+}
+
+void AppController::resolveTrackerConflictField(const QString& taskId, const QString& field, bool useTracker) {
+  resolveTrackerConflictFields(taskId, {field}, useTracker);
+}
+
+namespace {
+
+// One side of one conflicting field (APP-163). Returns true when the choice
+// means the card's status has to go to the tracker now: keeping my status is
+// keeping it *and sending it*, since the tracker still says otherwise.
+bool applyConflictChoice(Task& t, const QString& field, bool useTracker) {
   if(useTracker) {
-    for(const QString& field : t.externalMeta.conflicts) {
-      if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
-        t.title = t.externalMeta.title;
-      } else if(field == QStringLiteral("body")) {
-        t.desc = t.externalMeta.body;
-      } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
-        t.priority = t.externalMeta.priority;
+    if(field == QStringLiteral("title") && !t.externalMeta.title.isEmpty()) {
+      t.title = t.externalMeta.title;
+    } else if(field == QStringLiteral("body")) {
+      t.desc = t.externalMeta.body;
+    } else if(field == QStringLiteral("priority") && !t.externalMeta.priority.isEmpty()) {
+      t.priority = t.externalMeta.priority;
+    } else if(field == QStringLiteral("status")) {
+      if(!t.externalMeta.column.isEmpty() && t.status != t.externalMeta.column) {
+        t.status = t.externalMeta.column;
+        t.statusChangedAt = QDateTime::currentDateTime();
       }
+      // The local move is dropped by the user's own choice: nothing to send.
+      t.externalMeta.unsyncedStatus.clear();
+      t.externalMeta.pushQueued = false;
     }
   }
-  // Keeping mine only stops the flag: the base stays what the tracker sent,
-  // so the next upstream change to the same field is flagged again.
-  t.externalMeta.conflicts.clear();
-  m_tasks.upsert(t);
-  scheduleSave();
+  // Keeping mine for a text field only stops the flag: the base stays what
+  // the tracker sent, so the next upstream change to it is flagged again.
+  heap::integrations::setConflict(t.externalMeta.conflicts, field, false);
+  return !useTracker && field == QStringLiteral("status");
+}
+
+}  // namespace
+
+void AppController::resolveTrackerConflictFields(const QString& taskId, const QStringList& fields, bool useTracker) {
+  const int row = m_tasks.indexOfId(taskId);
+  if(row < 0) {
+    return;
+  }
+  Task t = m_tasks.items().at(row);
+  QStringList pending;
+  for(const QString& f : fields) {
+    if(t.externalMeta.conflicts.contains(f)) {
+      pending.append(f);
+    }
+  }
+  if(pending.isEmpty()) {
+    return;
+  }
+  bool send = false;
+  {
+    const UndoScope scope(this, tr_("task.editUndone").arg(taskId));
+    for(const QString& f : pending) {
+      send = applyConflictChoice(t, f, useTracker) || send;
+    }
+    m_tasks.upsert(t);
+    scheduleSave();
+  }
+  if(send) {
+    pushStatusToTracker(taskId, t.status);
+  }
+  emit trackerConflictResolved(taskId);
   emit toast(tr_(useTracker ? "task.conflictTookTracker" : "task.conflictKeptMine").arg(externalKeyOf(t)));
 }
 
@@ -8942,11 +9429,14 @@ void AppController::snapshotActiveProfile() {
   p.activeDocPageId = m_activeDocPageId;
   p.savedViews = m_savedViews;
   p.statusLog = m_statusLog;
+  p.waitingOn = m_waitingOn;
   // Events are global — not snapshotted into the profile.
 }
 
 void AppController::applyProfileToModels(const Profile& p) {
   m_statusLog = p.statusLog;
+  m_waitingOn = p.waitingOn;
+  emit waitingOnChanged();
   // Imports and hand-edited files may still carry rank ties (see Rank.h).
   QVector<Task> tasks = p.tasks;
   heap::board::spreadTiedRanks(tasks);
@@ -9049,6 +9539,7 @@ const QStringList& knownRootKeys() {
                                    QStringLiteral("events"),
                                    QStringLiteral("settings"),
                                    QStringLiteral("taskSeq"),
+                                   QStringLiteral("taskHistory"),
                                    // v1 flat collections
                                    QStringLiteral("tasks"),
                                    QStringLiteral("people"),
@@ -9321,8 +9812,14 @@ void AppController::saveStateNow() {
   const QString path = stateFilePath();
   const QString backups = backupDirPath();
   const AppController::StateWriter writer = g_stateWriter;
+  // Serialized on the worker with the rest (implicitly shared copy).
+  const heap::history::TaskHistory history = m_history;
+  // The time machine (APP-162): an hourly compressed copy, taken on the worker
+  // after the file landed, so neither the copy nor its retention costs the UI.
+  const QString historyDir = heap::history::dirFor(heap::paths::dataDir());
+  const heap::history::Policy historyPolicy = heap::history::policyFrom(settingsMap().value("data").toMap());
 
-  auto job = [head, profiles, events, path, backups, backupDue, writer]() {
+  auto job = [head, profiles, events, history, path, backups, backupDue, writer, historyDir, historyPolicy]() {
     QJsonObject root = head;
     QJsonArray profilesArr;
     for(const Profile& p : profiles) {
@@ -9331,6 +9828,9 @@ void AppController::saveStateNow() {
     root["profiles"] = profilesArr;
     // Events are global (shown across profiles in the calendar).
     root["events"] = heap::state::eventsToJson(events);
+    if(!history.isEmpty()) {
+      root["taskHistory"] = history.toJson();
+    }
 
     if(backupDue) {
       copyStateToBackupDir(path, backups, QString());
@@ -9349,6 +9849,8 @@ void AppController::saveStateNow() {
       heap::recovery::append(
           QString::fromLatin1(heap::recovery::kWriteFailed),
           {{QStringLiteral("path"), path}, {QStringLiteral("bytes"), bytes.size()}, {QStringLiteral("error"), outcome.error}});
+    } else {
+      heap::history::maybeSnapshot(historyDir, bytes, heap::history::summarize(root), QDateTime::currentDateTime(), historyPolicy);
     }
     return outcome;
   };
@@ -9436,6 +9938,7 @@ void AppController::reloadStateFromDisk() {
   m_profiles.clear();
   m_activeProfileId.clear();
   m_rootExtra = {};
+  m_history.clear();
   m_settingsExtra = {};
   m_taskSeq.clear();
   m_saveBlocked = false;
@@ -9611,6 +10114,9 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
     m_rootExtra = unknownKeys(root, knownRootKeys());
     m_settingsExtra = unknownKeys(root.value("settings").toObject(), knownSettingsKeys());
   }
+  // Task history (APP-165): a root key with no schema rung — absent means
+  // none, and a build that does not know it carries it through untouched.
+  m_history = heap::history::TaskHistory::fromJson(root.value(QStringLiteral("taskHistory")).toObject());
   m_taskSeq.clear();
   const QJsonObject seq = root.value("taskSeq").toObject();
   for(auto it = seq.constBegin(); it != seq.constEnd(); ++it) {
@@ -10121,6 +10627,21 @@ QHash<QString, QString> AppController::reissueSharedTaskIds(Profile& p, QVector<
   return remap;
 }
 
+void AppController::addEventsAsCopies(const QVector<CalEvent>& events, const QString& profileId) {
+  QHash<QString, QString> eventIds;
+  for(const CalEvent& e : events) {
+    eventIds.insert(e.id, mintEventId());
+  }
+  for(CalEvent e : events) {
+    e.id = eventIds.value(e.id);
+    // An override stands in for an occurrence of its own copy's series. Left
+    // on the original's, it hid the original's own override for that day.
+    e.masterId = eventIds.value(e.masterId, e.masterId);
+    e.profileId = profileId;
+    m_events.upsert(e);
+  }
+}
+
 QString AppController::duplicateProfile(const QString& id, const QString& newName) {
   const int i = profileIndexOf(id);
   if(i < 0) {
@@ -10133,7 +10654,16 @@ QString AppController::duplicateProfile(const QString& id, const QString& newNam
   copy.name = uniqueProfileName(newName.trimmed().isEmpty() ? (m_profiles[i].name + " copy") : newName.trimmed());
   copy.id = makeProfileId(copy.name);
   copy.createdAt = QDateTime::currentDateTime();
-  reissueSharedTaskIds(copy, nullptr);  // the copy's tasks are new tasks (PLAT-9)
+  // Events live in the global pool, attributed to a profile by id: the copy
+  // gets its own of each, the way an export carries them (PLAT-10).
+  QVector<CalEvent> events;
+  for(const CalEvent& e : m_events.items()) {
+    if(!id.isEmpty() && e.profileId == id) {
+      events.append(e);
+    }
+  }
+  reissueSharedTaskIds(copy, &events);  // the copy's tasks are new tasks (PLAT-9)
+  addEventsAsCopies(events, copy.id);
   clearPendingUndo();  // undo is scoped to the active workspace
   m_profiles.push_back(copy);
   m_activeProfileId = copy.id;
@@ -10251,16 +10781,46 @@ bool AppController::restoreFromBackup(const QString& fileName) {
     emit toast(tr_("backup.snapshotFailed"));
     return false;
   }
+  if(!replaceStateFile(bytes)) {
+    return false;
+  }
+  emit toast(tr_("backup.restored").arg(fileName));
+  return true;
+}
+
+bool AppController::replaceStateFile(const QByteArray& bytes) {
+  // Every task id handed out so far, in any profile, before the state that
+  // holds them goes (TM-2).
+  const QHash<QString, int> seqBefore = m_taskSeq;
+  QStringList idsBefore;
+  for(const Profile& p : m_profiles) {
+    for(const Task& t : p.id == m_activeProfileId ? m_tasks.items() : p.tasks) {
+      idsBefore.append(t.id);
+    }
+  }
   QString error;
   if(!heap::storage::writeAtomically(stateFilePath(), bytes, &error)) {
     setStorageState(QStringLiteral("writeFailed"), tr_("storage.writeFailed").arg(QDir::toNativeSeparators(stateFilePath()), error));
     return false;
   }
-
   // Reload from disk. The undo history described the state that was just
   // replaced, so it goes with it (reloadStateFromDisk clears it).
   reloadStateFromDisk();
-  emit toast(tr_("backup.restored").arg(fileName));
+  // The id counter never goes back, whether the state came from the time
+  // machine or from backups/. Restored to the older file's, it handed the next
+  // new task the id of one the restore had just removed — and that one is
+  // still in the "before restore" copy, where it then read as an edit of the
+  // new task, and "Use this version" overwrote the new task with it.
+  const QHash<QString, int> restored = m_taskSeq;
+  for(auto it = seqBefore.constBegin(); it != seqBefore.constEnd(); ++it) {
+    m_taskSeq.insert(it.key(), qMax(it.value(), m_taskSeq.value(it.key(), 1)));
+  }
+  for(const QString& id : std::as_const(idsBefore)) {
+    noteTaskIdUsed(id);
+  }
+  if(m_taskSeq != restored) {
+    scheduleSave();
+  }
   return true;
 }
 
@@ -10825,6 +11385,11 @@ void AppController::seedShortcutCatalog() {
   add("view.docs", "Ctrl+6");
   add("view.notes", "Ctrl+7");
   add("view.settings", "Ctrl+8");
+  // Interface scale (APP-168) from the keyboard, as in a browser. Ctrl++,
+  // Ctrl+Shift+= and the numpad keys are fixed aliases (kBuiltinKeys).
+  add("zoom.in", "Ctrl+=");
+  add("zoom.out", "Ctrl+-");
+  add("zoom.reset", "Ctrl+0");
   add("profile.next", "Ctrl+]");
   add("profile.prev", "Ctrl+[");
   add("profile.exportMd", "Ctrl+Shift+E");
@@ -10891,6 +11456,8 @@ void AppController::seedShortcutCatalog() {
   add("cal.prevDay", "Alt+Left");
   add("cal.nextDay", "Alt+Right");
   add("cal.newEvent", "Ctrl+Alt+E");
+  // Focus mode (APP-160); live only once Settings → Safety net turns it on.
+  add("focus.immersion", "Ctrl+Shift+F");
   // The first nine saved views, in sidebar order. Alt+digit is free in the
   // catalog and in every text field, and Ctrl+digit already means "view".
   add("savedView.1", "Alt+1");
@@ -10934,9 +11501,11 @@ void AppController::registerGlobalHotkeys() {
 void AppController::onGlobalHotkey(int id) {
   switch(id) {
     case HotkeyQuickCapture:
+      heap::perf::begin(QStringLiteral("capture"));
       emit quickCaptureRequested();
       break;
     case HotkeyQuickCaptureNotes:
+      heap::perf::begin(QStringLiteral("capture-notes"));
       emit quickCaptureNotesRequested();
       break;
     default:
@@ -10954,7 +11523,15 @@ int AppController::shortcutIndexOf(const QString& id) const {
 }
 
 QString AppController::normalizeSequence(const QString& raw) const {
-  const QString trimmed = raw.trimmed();
+  // A space typed as the key itself (" ", "Ctrl+Shift+ ") is the Space key;
+  // trimming it away left nothing, or a dangling "+", and unbound the action
+  // (SHELL-5).
+  QString spelled = raw;
+  if(spelled == QStringLiteral(" ") || spelled.endsWith(QStringLiteral("+ "))) {
+    spelled.chop(1);
+    spelled += QStringLiteral("Space");
+  }
+  const QString trimmed = spelled.trimmed();
   if(trimmed.isEmpty()) {
     return QString();
   }
@@ -10991,6 +11568,55 @@ QString AppController::shortcutFor(const QString& id) const {
   return i < 0 ? QString() : m_shortcuts[i].toMap().value("sequence").toString();
 }
 
+double AppController::stepUiScale(int direction, const QVariantList& steps) {
+  QList<double> values;
+  for(const QVariant& v : steps) {
+    bool ok = false;
+    const double d = v.toDouble(&ok);
+    if(ok && std::isfinite(d) && d > 0) {
+      values.append(d);
+    }
+  }
+  if(values.isEmpty()) {
+    return 1.0;
+  }
+  const auto [lo, hi] = std::minmax_element(values.cbegin(), values.cend());
+  QJsonObject settings = QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object();
+  QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  // Read the way Theme.scale does: anything outside the steps' range is 1.
+  const QJsonValue stored = appearance.value(QStringLiteral("uiScale"));
+  double current = stored.isDouble() ? stored.toDouble() : 1.0;
+  if(!std::isfinite(current) || current < *lo - 1e-6 || current > *hi + 1e-6) {
+    current = 1.0;
+  }
+  const double next = heap::ui::nextUiScale(current, direction, values);
+  if(!stored.isDouble() || std::abs(stored.toDouble() - next) > 1e-9) {
+    appearance.insert(QStringLiteral("uiScale"), next);
+    settings.insert(QStringLiteral("appearance"), appearance);
+    setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  }
+  return next;
+}
+
+QString AppController::globalHotkeyBackend() const {
+  return m_globalHotkey ? m_globalHotkey->backend() : QStringLiteral("none");
+}
+
+void AppController::noteMouseAction(const QString& shortcutId) {
+  const bool enabled = heap::hints::hintsEnabled(QJsonDocument::fromJson(m_appSettingsJson.toUtf8()).object());
+  const QString sequence = shortcutFor(shortcutId);
+  QJsonObject uses = m_settingsExtra.value(QStringLiteral("shortcutHints")).toObject();
+  const heap::hints::MouseUseResult r = heap::hints::recordMouseUse(uses, shortcutId, !sequence.isEmpty(), enabled);
+  if(!r.changed) {
+    return;
+  }
+  m_settingsExtra.insert(QStringLiteral("shortcutHints"), uses);
+  scheduleSave();
+  if(r.showHint) {
+    emit shortcutHintRequested(shortcutId, sequence, shortcutLabel(shortcutId));
+  }
+}
+
 QString AppController::defaultShortcutFor(const QString& id) const {
   const int i = shortcutIndexOf(id);
   return i < 0 ? QString() : m_shortcuts[i].toMap().value("defaultSequence").toString();
@@ -11003,7 +11629,75 @@ QString AppController::shortcutDescription(const QString& id) const {
 
 QString AppController::shortcutLabel(const QString& id) const {
   const int i = shortcutIndexOf(id);
-  return i < 0 ? QString() : m_shortcuts[i].toMap().value("label").toString();
+  if(i < 0) {
+    // The built-in keys that have no catalog entry of their own.
+    return id.startsWith(QStringLiteral("builtin.")) ? tr_(QStringLiteral("hotkeys.") + id) : QString();
+  }
+  return m_shortcuts[i].toMap().value("label").toString();
+}
+
+namespace {
+
+// Keys wired in QML next to the catalog's own binding, which no rebinding
+// moves: Main.qml's Ctrl+P and the board's arrows, Enter, Menu and Ctrl+arrows,
+// and the editors' fixed Ctrl+Shift+M / Ctrl+Shift+A. Two live shortcuts on
+// one sequence are ambiguous to Qt and neither fires, so a catalog action
+// that would share one with them in the same place is refused (SHELL-4).
+struct BuiltinKey {
+  const char* sequence;
+  const char* owner;  // the catalog action it aliases, or a builtin.* label
+  const char* scope;  // where it is live
+};
+
+constexpr BuiltinKey kBuiltinKeys[] = {
+    {"Ctrl+P", "palette.open", "app"},
+    {"Down", "board.cursorDown", "board"},
+    {"Up", "board.cursorUp", "board"},
+    {"Left", "board.cursorLeft", "board"},
+    {"Right", "board.cursorRight", "board"},
+    {"Enter", "board.open", "board"},
+    {"Menu", "board.cardMenu", "board"},
+    {"Ctrl+Down", "board.moveDown", "board"},
+    {"Ctrl+Up", "board.moveUp", "board"},
+    {"Ctrl+Left", "board.moveLeft", "board"},
+    {"Ctrl+Right", "board.moveRight", "board"},
+    {"Ctrl+Shift+M", "builtin.notesMode", "notes"},
+    {"Ctrl+Shift+A", "builtin.attach", "editor"},
+    // Zoom: "+" is Shift+= on most layouts, and the numpad has its own keys.
+    {"Ctrl++", "zoom.in", "app"},
+    {"Ctrl+Shift+=", "zoom.in", "app"},
+    {"Ctrl+Num++", "zoom.in", "app"},
+    {"Ctrl+Num+-", "zoom.out", "app"},
+    {"Ctrl+Num+0", "zoom.reset", "app"},
+};
+
+// Where a catalog action is live: the board's, calendar's and notes' keys only
+// in their view, everything else everywhere.
+QString shortcutScope(const QString& id) {
+  for(const char* scope : {"board", "cal", "notes"}) {
+    if(id.startsWith(QLatin1String(scope) + QLatin1Char('.'))) {
+      return QString::fromLatin1(scope);
+    }
+  }
+  return QStringLiteral("app");
+}
+
+}  // namespace
+
+QString AppController::builtinShortcutOwner(const QString& id, const QString& normalized) {
+  const QString scope = shortcutScope(id);
+  for(const BuiltinKey& k : kBuiltinKeys) {
+    if(normalized != QLatin1String(k.sequence) || id == QLatin1String(k.owner)) {
+      continue;
+    }
+    // An editor's keys are live over every view, an app-wide action's over
+    // every scope; otherwise only the same view's keys meet.
+    const QLatin1String keyScope(k.scope);
+    if(scope == QLatin1String("app") || keyScope == QLatin1String("app") || keyScope == QLatin1String("editor") || scope == keyScope) {
+      return QString::fromLatin1(k.owner);
+    }
+  }
+  return QString();
 }
 
 QString AppController::findShortcutConflict(const QString& id, const QString& sequence) const {
@@ -11020,7 +11714,7 @@ QString AppController::findShortcutConflict(const QString& id, const QString& se
       return m.value("id").toString();
     }
   }
-  return QString();
+  return builtinShortcutOwner(id, want);
 }
 
 bool AppController::setShortcut(const QString& id, const QString& sequence) {
@@ -11029,9 +11723,23 @@ bool AppController::setShortcut(const QString& id, const QString& sequence) {
     return false;
   }
   const QString seq = normalizeSequence(sequence);
+  // Something typed that is no key sequence must not read as "unbind".
+  if(seq.isEmpty() && !sequence.trimmed().isEmpty()) {
+    return false;
+  }
   QVariantMap m = m_shortcuts[i].toMap();
   if(m.value("sequence").toString() == seq) {
     return true;
+  }
+
+  // A built-in key stays where it is whatever the catalog says, so there is
+  // nothing to swap: taking it would only make both dead (SHELL-4).
+  if(!seq.isEmpty()) {
+    const QString builtin = builtinShortcutOwner(id, seq);
+    if(!builtin.isEmpty()) {
+      emit toast(tr_("hotkeys.builtinTaken").arg(seq, shortcutLabel(builtin)), QStringLiteral("warning"));
+      return false;
+    }
   }
 
   // VS-Code-style swap: clear the conflicting owner so the new binding wins.
@@ -11133,6 +11841,13 @@ QVariantMap AppController::settingsMap() const {
   }
   m_settingsCache = doc.object().toVariantMap();
   return m_settingsCache;
+}
+
+QString AppController::workflowTransitionsKey(const QString& providerId,
+                                              const QString& project,
+                                              const QString& issueType,
+                                              const QString& status) {
+  return QStringList{providerId, project, issueType, status.toCaseFolded()}.join(QChar('\n'));
 }
 
 bool AppController::canTransitionStatus(const QString& taskId, const QString& newStatus) {
@@ -11378,6 +12093,10 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
     }
   }
   --m_bulkMoveDepth;
+  if(m_completionSoundPending) {
+    m_completionSoundPending = false;
+    heap::platform::playCompletionSound();
+  }
   if(moved > 0) {
     scope.setLabel(tr_("selection.toast.moved").arg(moved));
     emit undoableToast(tr_("selection.toast.moved").arg(moved), 5);
@@ -11664,17 +12383,27 @@ void AppController::runAutomationAt(const QDateTime& now) {
   // delivers it. A meeting or the standup is an appointment and is not held.
   const bool quiet = inQuietHours(now);
 
+  // 2b. Reminders put off by a snooze button come back (APP-155); each goes
+  // through the same quiet-hours rule as a fresh one.
+  fireDueSnoozes(now);
+
   // 3. Deadline reminders — once when the deadline comes inside the lead, once
   // more when it has passed.
   if(notif.value("deadlineReminders", true).toBool() && !quiet) {
     const int leadHours = qMax(1, notif.value("deadlineLeadHours", 24).toInt());
-    QVector<Task> candidates = m_tasks.items();
+    // Each with the profile it is in: the reminder's buttons act there (PRES-2).
+    QVector<std::pair<QString, Task>> candidates;
+    for(const Task& t : m_tasks.items()) {
+      candidates.append({m_activeProfileId, t});
+    }
     for(const Profile& p : m_profiles) {
       if(p.id != m_activeProfileId) {
-        candidates += p.tasks;
+        for(const Task& t : p.tasks) {
+          candidates.append({p.id, t});
+        }
       }
     }
-    for(const Task& t : candidates) {
+    for(const auto& [profileId, t] : candidates) {
       if(t.archived) {
         continue;
       }
@@ -11696,7 +12425,7 @@ void AppController::runAutomationAt(const QDateTime& now) {
                                ? (call.hours < 1 ? tr_("notify.deadlineWhen.overdue") : tr_("notify.deadlineWhen.overdueH").arg(call.hours))
                            : (call.hours <= 1) ? tr_("notify.deadlineWhen.h1")
                                                : tr_("notify.deadlineWhen.hN").arg(call.hours);
-      notifyTaskAt(t.id,
+      notifyTaskAt(heap::notify::taskRef(profileId, t.id),
                    call.overdue ? tr_("notify.overdueTitle").arg(when) : tr_("notify.deadlineTitle").arg(when),
                    QStringLiteral("%1 (%2)").arg(t.title, t.priority),
                    QStringLiteral("deadline"),
@@ -11718,7 +12447,10 @@ void AppController::runAutomationAt(const QDateTime& now) {
     for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders(occurrences, now, lead, sentReminderKeys())) {
       markReminderSent(due.key, now);
       const QString title = due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.meetingSoon").arg(due.minutesLeft);
-      notify(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"));
+      // The key ends in the occurrence's start: "Open" goes to that day.
+      const QString routeId = heap::notify::routingId(QStringLiteral("meeting"), due.eventId);
+      m_shownReminders[routeId].date = QDateTime::fromString(due.key.section(QChar('@'), -1), Qt::ISODate).date();
+      emit notification(title, due.title.isEmpty() ? tr_("event.newDefault") : due.title, QStringLiteral("meeting"), routeId);
     }
   }
 
@@ -11737,12 +12469,19 @@ void AppController::runAutomationAt(const QDateTime& now) {
       st.end = st.start + 0.25;
       for(const heap::cal::DueReminder& due : heap::cal::dueMeetingReminders({st}, now, lead, sentReminderKeys())) {
         markReminderSent(due.key, now);
-        notify(tr_("notify.standupTitle"),
-               due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.standupBody").arg(due.minutesLeft),
-               QStringLiteral("standup"));
+        const QString routeId = heap::notify::routingId(QStringLiteral("standup"), QStringLiteral("standup"));
+        m_shownReminders[routeId].date = today;
+        emit notification(tr_("notify.standupTitle"),
+                          due.minutesLeft <= 0 ? tr_("notify.meetingNow") : tr_("notify.standupBody").arg(due.minutesLeft),
+                          QStringLiteral("standup"),
+                          routeId);
       }
     }
   }
+
+  // 6. The safety net (APP-157…): each off unless switched on.
+  checkEndOfDayAt(now);
+  checkWaitingAt(now);
 
   // Anything else that arrived during quiet hours goes out now.
   if(!quiet) {
@@ -11893,52 +12632,19 @@ void AppController::flushHeldNotifications(const QDateTime& now) {
 // ---- Git watcher integration ----
 
 QStringList AppController::collectPrefixes() const {
-  QStringList out;
-  const QString def = settingsMap().value("tasks").toMap().value("idPrefix", QStringLiteral("TASK")).toString().trimmed().toUpper();
-  if(!def.isEmpty()) {
-    out << def;
-  }
-  // A mirrored issue's branch is named after the tracker's key ("PROJ-123"),
-  // never after the heap id the merge invented for it ("jira-PROJ-123"). Unless
-  // the project keys in play are registered here, such a branch cannot match
-  // its own ticket — and, with a single local prefix, the digits-only fallback
-  // used to answer with a different task entirely.
-  static const QRegularExpression keyStem(QStringLiteral("^([A-Za-z][A-Za-z0-9]*)-\\d+$"));
-  for(const Task& t : m_tasks.items()) {
-    if(t.externalId.isEmpty()) {
-      continue;
-    }
-    const QRegularExpressionMatch m = keyStem.match(externalKeyOf(t));
-    if(!m.hasMatch()) {
-      continue;  // a bare issue number has no key to register
-    }
-    const QString stem = m.captured(1).toUpper();
-    if(!out.contains(stem)) {
-      out << stem;
-    }
-  }
-  return out;
+  return heap::git::branchPrefixes(taskIdPrefix(), m_tasks.items());
 }
 
 QString AppController::taskIdForBranchMatch(const QString& matchedId) const {
-  if(matchedId.isEmpty()) {
-    return {};
-  }
-  // Rule 1 answers with the key it found in the branch. For a local task that
-  // is already the task id; for a mirrored issue the id is prefixed with the
-  // provider, so resolve through the tracker key instead.
-  if(m_tasks.indexOfId(matchedId) >= 0) {
-    return matchedId;
-  }
-  for(const Task& t : m_tasks.items()) {
-    if(!t.externalId.isEmpty() && externalKeyOf(t).compare(matchedId, Qt::CaseInsensitive) == 0) {
-      return t.id;
-    }
-  }
-  return matchedId;
+  return heap::git::taskIdForBranchMatch(matchedId, m_tasks.items());
 }
 
 void AppController::applyGitSettingsFromMap(const QVariantMap& g) {
+  const bool showMove = g.value("showWhoseMove", true).toBool();
+  if(showMove != m_showWhoseMove) {
+    m_showWhoseMove = showMove;
+    emit showWhoseMoveChanged();
+  }
   if(!m_gitWatcher) {
     return;
   }
@@ -12036,6 +12742,8 @@ void AppController::onGitRepoState(const QString& repo, const QVariantMap& state
   entry["prState"] = pr.value("state");
   entry["prNumber"] = pr.value("number");
   entry["prUrl"] = pr.value("url");
+  entry["prMove"] = pr.value("move");
+  entry["prMoveReason"] = pr.value("moveReason");
   m_tasks.setGitInfoForId(taskIdForBranchMatch(mr.taskId), entry);
 }
 
@@ -12049,7 +12757,7 @@ void AppController::dismissGitBanner() {
 
 void AppController::openFocusedTask() {
   if(!m_focusedTaskId.isEmpty()) {
-    emit openTaskRequested(m_focusedTaskId);
+    emit openTaskRequested(m_focusedTaskId, m_activeProfileId);
   }
 }
 
@@ -12145,6 +12853,19 @@ void AppController::createBranchForTask(const QString& taskId) {
 void AppController::onGitCommits(const QString& repo, const QVariantMap& commitsByTask) {
   Q_UNUSED(repo);
   for(auto it = commitsByTask.constBegin(); it != commitsByTask.constEnd(); ++it) {
+    // The newest commit naming a task is a sign of life (APP-157), and its
+    // commits are part of the standup draft (APP-170).
+    m_taskCommits.insert(taskIdForBranchMatch(it.key()), it.value().toList());
+    for(const QVariant& c : it.value().toList()) {
+      const QDateTime at = c.toMap().value(QStringLiteral("at")).toDateTime();
+      if(!at.isValid()) {
+        continue;
+      }
+      QDateTime& last = m_lastCommitAt[taskIdForBranchMatch(it.key())];
+      if(!last.isValid() || at > last) {
+        last = at;
+      }
+    }
     if(m_tasks.indexOfId(it.key()) < 0) {
       continue;
     }
@@ -12162,6 +12883,9 @@ void AppController::notifyTask(const QString& taskId, const QString& title, cons
 
 void AppController::notifyTaskAt(
     const QString& taskId, const QString& title, const QString& body, const QString& kind, const QDateTime& now) {
+  if(holdForImmersion({.title = title, .body = body, .kind = kind, .taskId = taskId})) {
+    return;
+  }
   if(inQuietHours(now)) {
     holdNotification({title, body, kind, taskId});
     return;
@@ -12187,11 +12911,13 @@ void AppController::notifyTaskAt(
   n.body = body;
   n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
   n.category = kind;
+  ShownReminder& shown = m_shownReminders[n.id];
+  shown.title = title;
+  shown.body = body;
+  shown.kind = kind;
 
   if(m_notifier->supportsActions()) {
-    n.actions = {{QStringLiteral("snooze1h"), QStringLiteral("Snooze 1h")},
-                 {QStringLiteral("done"), QStringLiteral("Mark done")},
-                 {QStringLiteral("open"), QStringLiteral("Open")}};
+    n.actions = reminderActions(kind);
   }
   m_notifier->post(n);
 
@@ -12208,7 +12934,8 @@ void AppController::notifyCapture(const QString& taskId, const QString& title, c
     return;
   }
   heap::notify::Notification n;
-  n.id = heap::notify::routingId(QStringLiteral("capture"), taskId.isEmpty() ? QStringLiteral("-") : taskId);
+  n.id = heap::notify::routingId(QStringLiteral("capture"),
+                                 taskId.isEmpty() ? QStringLiteral("-") : heap::notify::taskRef(m_activeProfileId, taskId));
   n.title = title;
   n.body = body;
   n.iconPath = QStringLiteral(":/brand/icon/heap-icon.svg");
@@ -12246,44 +12973,45 @@ void AppController::onNotifierAction(const QString& notificationId, const QStrin
   if(taskId.isEmpty()) {
     return;
   }
-  // Reminders cover every profile; acting on one opens the workspace it is in.
-  activateProfileOfTask(taskId);
-
-  if(actionId == QStringLiteral("snooze1h")) {
-    snoozeDeadline(taskId, 3600);
-  } else if(actionId == QStringLiteral("done")) {
-    if(m_tasks.indexOfId(taskId) >= 0) {
-      moveTask(taskId, QStringLiteral("done"));
-    }
-  } else if(actionId == QStringLiteral("open")) {
-    if(m_tasks.indexOfId(taskId) >= 0) {
-      emit openTaskRequested(taskId);
-    }
-  }
-}
-
-void AppController::activateProfileOfTask(const QString& taskId) {
-  if(taskId.isEmpty() || m_tasks.indexOfId(taskId) >= 0) {
+  // A snooze puts the reminder off and leaves the task as it is (APP-155):
+  // the deadline is the user's, a button on a toast does not move it.
+  const QVariantMap notif = settingsMap().value(QStringLiteral("notifications")).toMap();
+  const int snoozeMinutes =
+      heap::notify::snoozeMinutesFor(actionId,
+                                     notif.value(QStringLiteral("snoozeShortMin"), heap::notify::kDefaultSnoozeShortMin).toInt(),
+                                     notif.value(QStringLiteral("snoozeLongMin"), heap::notify::kDefaultSnoozeLongMin).toInt());
+  if(snoozeMinutes > 0) {
+    snoozeReminderAt(notificationId, snoozeMinutes, QDateTime::currentDateTime());
     return;
   }
-  for(const Profile& p : m_profiles) {
-    if(p.id == m_activeProfileId) {
-      continue;
-    }
-    for(const Task& t : p.tasks) {
-      if(t.id == taskId) {
-        setActiveProfileId(p.id);
-        return;
-      }
-    }
+  if(actionId == QLatin1String(heap::notify::kOpen)) {
+    openReminder(notificationId);
+    return;
   }
+  if(actionId != QLatin1String(heap::notify::kDone)) {
+    return;
+  }
+  // Done is done to the task the reminder was about, in its own profile, and
+  // the window stays where it is: switching to that profile for good pulled
+  // the workspace out from under an open editor, whose Save then wrote the
+  // edited task into the other profile (PRES-1). The switch there and back is
+  // what `heap done` does for a task of another profile.
+  const ReminderTask target = reminderTask(taskId);
+  if(target.profileId.isEmpty()) {
+    return;
+  }
+  const QString current = m_activeProfileId;
+  setActiveProfileId(target.profileId);
+  moveTask(target.task.id, QStringLiteral("done"));
+  setActiveProfileId(current);
 }
 
 void AppController::onNotifierActivated(const QString& notificationId) {
+  // The end-of-day notice is about several tasks at once (APP-157).
   const auto [kind, taskId] = heap::notify::parseRoutingId(notificationId);
-  Q_UNUSED(kind);
-  activateProfileOfTask(taskId);
-  if(!taskId.isEmpty() && m_tasks.indexOfId(taskId) >= 0) {
-    emit openTaskRequested(taskId);
+  if(kind == QLatin1String("endOfDay")) {
+    emit safetyOpenTasksRequested(taskId == QLatin1String("-") ? QStringList() : taskId.split(QLatin1Char(',')));
+    return;
   }
+  openReminder(notificationId);
 }

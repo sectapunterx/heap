@@ -24,6 +24,8 @@ Window {
 
     // Forwarded from either popup: what was just created.
     signal captured(string title, string body, string taskId)
+    // A "seen this before" hint was clicked (APP-159): heap opens the place.
+    signal seenBeforeActivated(var hit)
 
     readonly property bool busy: task.opened || note.opened
     property bool _wasActive: false
@@ -76,6 +78,10 @@ Window {
         standalone: true
         onClosed: Qt.callLater(cap._maybeHide)
         onCaptured: (title, body, taskId) => cap.captured(title, body, taskId)
+        onSeenBeforeActivated: (hit) => {
+            task.close();
+            cap.seenBeforeActivated(hit);
+        }
     }
     QuickCaptureNotesPopup {
         id: note

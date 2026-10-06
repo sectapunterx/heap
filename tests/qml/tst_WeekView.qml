@@ -160,4 +160,85 @@ TestCase {
         verify(wv.overlaps !== undefined, "the week computes an overlap map");
     }
 
+    function _probeDay(offset) {
+        const d = new Date();
+        d.setDate(d.getDate() + offset);
+        d.setHours(0, 0, 0, 0);
+        return d;
+    }
+    // Events this file seeded and a run that died left behind (the QML test
+    // profile is never wiped).
+    function _purge(prefix) {
+        const evs = AppController.events;
+        for (let i = evs.rowCount() - 1; i >= 0; i--) {
+            const idx = evs.index(i, 0);
+            if (String(evs.data(idx, Qt.UserRole + 2)).indexOf(prefix) === 0)
+                AppController.deleteEvent(String(evs.data(idx, Qt.UserRole + 1)));
+        }
+    }
+
+    // TIME-18: a week of a few hundred occurrences. Cutting them into day
+    // pieces asked Segments.js about every occurrence on every day — ~2 s for
+    // 420 occurrences — and a week step evaluated it twice. The bound is
+    // generous (the fix measures ~10 ms for this; the old code ~700 ms).
+    // Also checks the pieces of an overnight event are the same as before.
+    function test_week_build_is_fast_and_cuts_overnight_pieces() {
+        const prefix = "wv perf probe";
+        _purge(prefix);
+        const prev = AppController.selectedDate;
+        const base = _probeDay(1500);
+        const ids = [];
+        for (let i = 0; i < 30; i++) {
+            const ev = AppController.newEventDraft(8 + (i % 10), base);
+            ev.title = prefix + " " + i;
+            ev.end = ev.start + 1;
+            ev.date = base;
+            ev.rrule = "FREQ=DAILY";
+            AppController.saveEvent(ev);
+            ids.push(ev.id);
+        }
+        // 22:00 to 02:00 the next day, mid-week.
+        const night = AppController.newEventDraft(22, _probeDay(1510));
+        night.title = prefix + " night";
+        night.date = _probeDay(1510);
+        night.endDate = _probeDay(1511);
+        night.start = 22;
+        night.end = 2;
+        AppController.saveEvent(night);
+        ids.push(night.id);
+
+        AppController.selectedDate = _probeDay(1510);
+        const wv = make('import TodoCpp; WeekView { anchors.fill: parent }');
+        verify(wv.flatEvents.length >= 30 * 5, "the series did not reach the week: " + wv.flatEvents.length);
+
+        const t0 = Date.now();
+        for (let k = 0; k < 5; k++) wv.buildEventDays();
+        const perBuild = (Date.now() - t0) / 5;
+        verify(perBuild < 250, "cutting a week of occurrences took " + perBuild + " ms");
+
+        const pieces = [];
+        const days = wv.eventDays.days;
+        for (let k = 0; k < days.length; k++)
+            for (let j = 0; j < days[k].events.length; j++)
+                if (days[k].events[j].id === night.id) pieces.push({ day: days[k].date, e: days[k].events[j] });
+        if (pieces.length === 2) {
+            verify(wv.isSameDay(pieces[0].day, _probeDay(1510)));
+            compare(pieces[0].e.start, 22); compare(pieces[0].e.end, 24);
+            verify(pieces[0].e.segFirst); verify(!pieces[0].e.segLast);
+            compare(pieces[1].e.start, 0); compare(pieces[1].e.end, 2);
+            verify(!pieces[1].e.segFirst); verify(pieces[1].e.segLast);
+        } else {
+            // The night ends past the week's last column: one piece, its start.
+            compare(pieces.length, 1, "overnight event pieces: " + pieces.length);
+            compare(pieces[0].e.start, 22);
+            verify(pieces[0].e.segFirst);
+        }
+
+        wv.destroy();
+        wait(0);
+        for (let i = 0; i < ids.length; i++) AppController.deleteEvent(ids[i]);
+        AppController.clearPendingUndo();
+        AppController.selectedDate = prev;
+    }
+
 }

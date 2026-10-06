@@ -13,6 +13,7 @@
 #include "git/BranchTaskMatcher.h"
 #include "integrations/AutoSync.h"
 #include "integrations/IntegrationTypes.h"
+#include "views/UiScale.h"
 
 #include <QApplication>
 #include <QDate>
@@ -284,6 +285,130 @@ TEST_F(AppControllerTest, FindShortcutConflict) {
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QStringLiteral("Ctrl+Alt+Shift+F12")), QString());
   // empty
   EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QString()), QString());
+}
+
+// SHELL-5 (2026-09-30-1): a space typed as the key is the Space key, and
+// something that is no key sequence never reads as "unbind".
+TEST_F(AppControllerTest, SpaceTypedAsTheKeyIsSpace) {
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QStringLiteral("Ctrl+Shift+ ")), QString("quick-capture"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("task.new"), QStringLiteral(" ")), QString("board.toggleSelect"));
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+Alt+ ")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString("Ctrl+Alt+Space"));
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("task.new"), QStringLiteral("Ctrl+Shift+")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("task.new")), QString("Ctrl+Alt+Space"));
+}
+
+// SHELL-4 (2026-09-30-1): the keys QML wires next to the catalog (Ctrl+P, the
+// board's arrows, Enter, Menu, Ctrl+arrows, the notes' Ctrl+Shift+M) count as
+// taken, and a rebind onto one is refused instead of killing both.
+TEST_F(AppControllerTest, BuiltinKeysAreConflicts) {
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")), QString("palette.open"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Up")), QString("board.cursorUp"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("board.archive"), QStringLiteral("Menu")), QString("board.cardMenu"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Shift+M")), QString("builtin.notesMode"));
+  EXPECT_FALSE(app_->shortcutLabel(QStringLiteral("builtin.notesMode")).isEmpty());
+  // The action the key belongs to, and a view where the key is not live.
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")), QString());
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("cal.prev"), QStringLiteral("Up")), QString());
+
+  const QString before = app_->shortcutFor(QStringLiteral("theme.toggle"));
+  QSignalSpy toasts(app_.get(), &AppController::toast);
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+P")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("theme.toggle")), before);
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("palette.open")), QString("Ctrl+K"));
+  ASSERT_EQ(toasts.count(), 1);
+  EXPECT_EQ(toasts.last().at(1).toString(), QStringLiteral("warning"));
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("palette.open"), QStringLiteral("Ctrl+P")));
+}
+
+// Interface scale from the keyboard (APP-168): Ctrl+= / Ctrl+- / Ctrl+0 are
+// catalog actions, and the fixed aliases next to them count as taken.
+TEST_F(AppControllerTest, ZoomShortcutsAreInTheCatalog) {
+  EXPECT_EQ(app_->defaultShortcutFor(QStringLiteral("zoom.in")), QString("Ctrl+="));
+  EXPECT_EQ(app_->defaultShortcutFor(QStringLiteral("zoom.out")), QString("Ctrl+-"));
+  EXPECT_EQ(app_->defaultShortcutFor(QStringLiteral("zoom.reset")), QString("Ctrl+0"));
+  for(const char* id : {"zoom.in", "zoom.out", "zoom.reset"}) {
+    EXPECT_FALSE(app_->shortcutLabel(QString::fromLatin1(id)).isEmpty()) << id;
+    EXPECT_FALSE(app_->shortcutDescription(QString::fromLatin1(id)).isEmpty()) << id;
+  }
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+=")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl++")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Shift+=")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Num++")), QString("zoom.in"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl+Num+-")), QString("zoom.out"));
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("cal.today"), QStringLiteral("Ctrl+Num+0")), QString("zoom.reset"));
+  // An alias is the action's own key, and cannot be handed to another one.
+  EXPECT_EQ(app_->findShortcutConflict(QStringLiteral("zoom.in"), QStringLiteral("Ctrl++")), QString());
+  EXPECT_FALSE(app_->setShortcut(QStringLiteral("theme.toggle"), QStringLiteral("Ctrl++")));
+  EXPECT_TRUE(app_->setShortcut(QStringLiteral("zoom.in"), QStringLiteral("Ctrl+Alt+=")));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("zoom.in")), QString("Ctrl+Alt+="));
+  app_->resetShortcut(QStringLiteral("zoom.in"));
+  EXPECT_EQ(app_->shortcutFor(QStringLiteral("zoom.in")), QString("Ctrl+="));
+}
+
+TEST(UiScale, StepsThroughTheScale) {
+  const QList<double> steps{0.9, 1, 1.1, 1.25, 1.5};
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0, 1, steps), 1.1);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.1, 1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.25, -1, steps), 1.1);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0, -1, steps), 0.9);
+  // The ends stay put.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.5, 1, steps), 1.5);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(0.9, -1, steps), 0.9);
+  // Between two steps: the next one that way.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.2, 1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.2, -1, steps), 1.1);
+  // A value read back from JSON a hair off a step is that step.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.1000000001, 1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0999999999, -1, steps), 1.0);
+  // Reset, unsorted steps, nothing to step through.
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.5, 0, steps), 1.0);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.0, 1, {1.5, 0.9, 1.1, 1}), 1.1);
+  EXPECT_DOUBLE_EQ(heap::ui::nextUiScale(1.25, 1, {}), 1.0);
+}
+
+TEST_F(AppControllerTest, StepUiScaleWritesTheAppearanceSetting) {
+  const QVariantList steps{0.9, 1, 1.1, 1.25, 1.5};
+  const auto stored = [this] {
+    return QJsonDocument::fromJson(app_->appSettingsJson().toUtf8())
+        .object()
+        .value(QStringLiteral("appearance"))
+        .toObject()
+        .value(QStringLiteral("uiScale"));
+  };
+  QJsonObject settings = QJsonDocument::fromJson(app_->appSettingsJson().toUtf8()).object();
+  QJsonObject appearance = settings.value(QStringLiteral("appearance")).toObject();
+  appearance.insert(QStringLiteral("theme"), QStringLiteral("keep-me"));
+  appearance.remove(QStringLiteral("uiScale"));
+  settings.insert(QStringLiteral("appearance"), appearance);
+  app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.1);
+  EXPECT_DOUBLE_EQ(stored().toDouble(), 1.1);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.25);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.5);
+  QSignalSpy changed(app_.get(), &AppController::appSettingsJsonChanged);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.5);
+  EXPECT_EQ(changed.count(), 0);  // at the top nothing changes
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(0, steps), 1.0);
+  EXPECT_DOUBLE_EQ(stored().toDouble(), 1.0);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(-1, steps), 0.9);
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(-1, steps), 0.9);
+  // The rest of the appearance group is left alone.
+  EXPECT_EQ(QJsonDocument::fromJson(app_->appSettingsJson().toUtf8())
+                .object()
+                .value(QStringLiteral("appearance"))
+                .toObject()
+                .value(QStringLiteral("theme"))
+                .toString(),
+            QStringLiteral("keep-me"));
+
+  // A stored value Theme.scale would not use (out of range) reads as 100 %.
+  appearance.insert(QStringLiteral("uiScale"), 3.0);
+  settings.insert(QStringLiteral("appearance"), appearance);
+  app_->setAppSettingsJson(QString::fromUtf8(QJsonDocument(settings).toJson(QJsonDocument::Compact)));
+  EXPECT_DOUBLE_EQ(app_->stepUiScale(1, steps), 1.1);
+  app_->stepUiScale(0, steps);
 }
 
 TEST_F(AppControllerTest, ResetShortcutRestoresAndSwaps) {
@@ -578,6 +703,30 @@ TEST_F(AppControllerTest, EventHourLabel24h) {
   EXPECT_EQ(app_->eventHourLabel(9.0), QString("09:00"));
   EXPECT_EQ(app_->eventHourLabel(14.5), QString("14:30"));
   EXPECT_EQ(app_->eventHourLabel(0.25), QString("00:15"));
+}
+
+// TIME-22 (2026-09-30-1): an end at 24:00 is midnight, 12:00am — not noon.
+TEST_F(AppControllerTest, EventHourLabel12hMidnightEnd) {
+  const QString before = app_->appSettingsJson();
+  app_->setAppSettingsJson(QStringLiteral(R"({"calendar":{"timeFormat":"12h"}})"));
+  EXPECT_EQ(app_->eventHourLabel(24.0), QString("12:00am"));
+  EXPECT_EQ(app_->eventHourLabel(0.0), QString("12:00am"));
+  EXPECT_EQ(app_->eventHourLabel(12.0), QString("12:00pm"));
+  EXPECT_EQ(app_->eventHourLabel(23.5), QString("11:30pm"));
+  app_->setAppSettingsJson(before);
+}
+
+// SHELL-10 (2026-09-30-1): an ID prefix nothing can link to ("MY TEAM",
+// "../../X") is not used for new ids.
+TEST_F(AppControllerTest, NewTaskIdsUseAUsablePrefixOnly) {
+  const QString before = app_->appSettingsJson();
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"MY TEAM"}})"));
+  EXPECT_TRUE(app_->newTaskDraft(QStringLiteral("todo")).value("id").toString().startsWith(QStringLiteral("TASK-")));
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"../../x"}})"));
+  EXPECT_TRUE(app_->newTaskDraft(QStringLiteral("todo")).value("id").toString().startsWith(QStringLiteral("TASK-")));
+  app_->setAppSettingsJson(QStringLiteral(R"({"tasks":{"idPrefix":"heap2"}})"));
+  EXPECT_TRUE(app_->newTaskDraft(QStringLiteral("todo")).value("id").toString().startsWith(QStringLiteral("HEAP2-")));
+  app_->setAppSettingsJson(before);
 }
 
 // ─── humanDate / shortDate ────────────────────────────────────────────

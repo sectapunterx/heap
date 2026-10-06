@@ -112,6 +112,7 @@ Rectangle {
             spacing: Theme.spSm
             TextField {
                 id: labelField
+                ContextMenu.menu: TextEditMenu { editor: labelField }
                 objectName: "sel-label-field"
                 Layout.preferredWidth: 220
                 placeholderText: I18n.t("selection.bar.labelPh")

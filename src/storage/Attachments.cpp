@@ -243,6 +243,31 @@ QString remapRefs(const QString& markdown, const QHash<QString, QString>& idMap)
   return out;
 }
 
+QString prefixRefLinks(const QString& markdown, const QString& prefix) {
+  if(prefix.isEmpty() || !markdown.contains(QLatin1String(kRefPrefix))) {
+    return markdown;
+  }
+  QString out;
+  out.reserve(markdown.size());
+  qsizetype last = 0;
+  auto it = linkPattern().globalMatch(markdown);
+  while(it.hasNext()) {
+    const QRegularExpressionMatch m = it.next();
+    const QString target = m.captured(3);
+    const bool angled = target.startsWith(QLatin1Char('<'));
+    const QString bare = angled ? target.mid(1, target.size() - 2) : target;
+    if(!bare.startsWith(QLatin1String(kRefPrefix)) || !isValidId(bare.mid(static_cast<int>(qstrlen(kRefPrefix))))) {
+      continue;
+    }
+    const qsizetype at = m.capturedStart(3) + (angled ? 1 : 0);
+    out += QStringView(markdown).mid(last, at - last);
+    out += prefix;
+    last = at;
+  }
+  out += QStringView(markdown).mid(last);
+  return out;
+}
+
 QVariantList toVariantList(const QVector<Attachment>& xs) {
   QVariantList out;
   out.reserve(xs.size());

@@ -4,6 +4,7 @@ import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
 import "PlainText.js" as MdPlain
+import "Motion.js" as Motion
 
 Rectangle {
     id: card
@@ -19,6 +20,9 @@ Rectangle {
     // is where the next key acts, a selection is what a bulk action acts on,
     // and a card can be either, both or neither.
     property bool cursored: false
+    // On the board, where Return / E act on the card under the cursor: its
+    // menu shows those keys (APP-166).
+    property bool boardKeys: false
     readonly property bool _selected: AppController.selectionCount >= 0
         && AppController.isTaskSelected(card.taskId)
     // Ticket identity (HEAP-117). `ticket` is empty for a locally-created task,
@@ -49,6 +53,25 @@ Rectangle {
         menu.currentIndex = 1;
     }
     Keys.onMenuPressed: card.openMenu()
+
+    // Here vs tracker, field by field (APP-163). Made on first use: a board of
+    // cards must not each carry a dialog.
+    Loader {
+        id: conflictLoader
+        active: false
+        sourceComponent: SyncConflictDialog {
+            // Not from inside its own signal: that would destroy the sender.
+            onClosed: Qt.callLater(() => { conflictLoader.active = false; })
+        }
+    }
+    readonly property var conflictDialog: conflictLoader.item
+    function openConflictDialog() {
+        if (!card.task) return;
+        conflictLoader.active = true;
+        const fresh = AppController.taskById(card.task.id);
+        const dlg = conflictLoader.item as SyncConflictDialog;
+        if (dlg) dlg.showFor(fresh && fresh.id ? fresh : card.task);
+    }
 
     // When the work is planned, for a task that has a scheduledAt of its own
     // worth showing: no deadline, a different day, or a clock time. Before,
@@ -108,24 +131,42 @@ Rectangle {
         return r ? String(r).replace("every:", "") : "";
     }
 
+    // Selection and the keyboard cursor look different in shape, not only
+    // in colour (VISU-4): on a monochrome theme accent and accentStrong are
+    // both near-white, and the two were the same 2px white border. Selected:
+    // a solid accent border, an opaque accent tint and a check mark in the
+    // top row. Cursor (and Tab focus): the card's own border with a focus
+    // ring drawn inside it, a double line.
     radius: Theme.radius
     color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
-        : _selected ? Theme.withAlpha(Theme.accent, 0.10)
+        : _selected ? Qt.tint(Theme.panel2, Theme.withAlpha(Theme.accent, 0.16))
             : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
-        : activeFocus ? Theme.accentStrong
         : _selected ? Theme.accent
-                : cursored ? Theme.accentStrong
                 : _isStuck ? Theme.danger
-                : hoverArea.containsMouse ? Theme.borderStrong
+                : (hoverArea.containsMouse || cursored || activeFocus) ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active ? 2 : (_selected || cursored || activeFocus ? 2 : (_isStuck ? 2 : 1))
+    border.width: dragArea.drag.active || _selected || _isStuck ? 2 : 1
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0
-    Behavior on scale { NumberAnimation { duration: Theme.scaledMs(120); easing.type: Easing.OutCubic } }
+    // A dropped card settles with a little overshoot, as if it had weight
+    // (APP-167); with reduced motion it simply is where it was put.
+    Behavior on scale { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
     Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
+
+    Rectangle {
+        objectName: "tc-cursor-ring"
+        visible: card.cursored || card.activeFocus
+        anchors.fill: parent
+        anchors.margins: card.border.width + Theme.sp2xs
+        radius: Math.max(0, card.radius - card.border.width - Theme.sp2xs)
+        color: "transparent"
+        border.color: Theme.focusRing
+        border.width: 2
+        z: 4
+    }
 
     implicitWidth: parent ? parent.width : 260
     implicitHeight: contentCol.implicitHeight + 2 * Theme.spLg
@@ -157,6 +198,28 @@ Rectangle {
     // drop into another column.
     readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
     property Item _homeParent: null
+    // Where the card was let go, in window coordinates: a card dropped back
+    // where it came from springs home from there instead of jumping (APP-167).
+    property var _dropAt: null
+    transform: Translate { id: settle }
+    ParallelAnimation {
+        id: settleAnim
+        NumberAnimation { target: settle; property: "x"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
+        NumberAnimation { target: settle; property: "y"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
+    }
+    function _settleHome() {
+        settleAnim.stop();
+        settle.x = 0;
+        settle.y = 0;
+        if (!card._dropAt || Theme.motion === 0) return;
+        const home = card.mapToItem(null, 0, 0);
+        const off = Motion.settleFrom(card._dropAt.x, card._dropAt.y, home.x, home.y, Theme.motion);
+        card._dropAt = null;
+        if (off.x === 0 && off.y === 0) return;
+        settle.x = off.x;
+        settle.y = off.y;
+        settleAnim.start();
+    }
     on_LiftedChanged: {
         if (card._lifted) {
             const p = card.mapToItem(card.dragLayer, 0, 0);
@@ -171,7 +234,56 @@ Rectangle {
             // was pressed rather than where the drag left it.
             card.x = card.homeX;
             card.y = card.homeY;
+            card._settleHome();
         }
+    }
+
+    // ── Done (APP-167) ───────────────────────────────────────────────
+    // A check mark grows over the card and fades when the task is marked
+    // done — on this card, or just before it was built: the board makes a new
+    // card in the Done column for a moved task. Each step is under 150 ms;
+    // nothing plays with reduced motion.
+    function playDone() {
+        if (Theme.motion > 0) doneAnim.restart();
+    }
+    readonly property var _changedAt: card.task ? card.task.statusChangedAt : undefined
+    on_DoneChanged: {
+        if (!card._done) return;
+        // A view that does not pass the change time animates any change it
+        // sees; the board, which recycles cards, only a recent one.
+        if (card._changedAt === undefined || Motion.justCompleted("done", card._changedAt, Date.now())) card.playDone();
+    }
+    Component.onCompleted: {
+        if (card.task && Motion.justCompleted(card.task.status, card._changedAt, Date.now())) card.playDone();
+    }
+    Rectangle {
+        id: doneMark
+        objectName: "tc-done-mark"
+        anchors.centerIn: parent
+        width: 28
+        height: 28
+        radius: width / 2
+        color: Theme.success
+        opacity: 0
+        scale: 0.6
+        visible: opacity > 0
+        z: 50
+        Text {
+            anchors.centerIn: parent
+            text: "✓"
+            color: Theme.textOn(Theme.success)
+            font.pixelSize: Theme.fsLg
+            font.weight: Font.Bold
+        }
+    }
+    SequentialAnimation {
+        id: doneAnim
+        ParallelAnimation {
+            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durFast }
+            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durFast; easing.type: Easing.OutBack }
+        }
+        PauseAnimation { duration: Theme.durBase }
+        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durFast }
     }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any
@@ -195,7 +307,10 @@ Rectangle {
                 visible: card._isTicket
                 text: card._badge.icon || "◍"
                 textFormat: Text.PlainText
-                color: card._badge.color || Theme.textMuted
+                // Muted like the key beside it (VISU-2): the provider's own
+                // colour was one more accent on a card that already had five,
+                // and the glyph and its tooltip already say which tracker.
+                color: Theme.textMuted
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.DemiBold
                 QQC.ToolTip.visible: badgeHover.hovered
@@ -209,7 +324,9 @@ Rectangle {
                 // synthetic heap id ("github-68") the merge invented for it.
                 text: card._isTicket ? (card._ticket.key || "") : (card.task ? card.task.id : "")
                 textFormat: Text.PlainText
-                color: Theme.accentStrong
+                // Metadata, so muted: accentStrong is white on a monochrome
+                // theme and the key was as loud as the title (VISU-3).
+                color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.Medium
@@ -238,25 +355,44 @@ Rectangle {
             }
             // The tracker refused the last status change, or the issue is no
             // longer in the tracker. Either way the card is out of step with it.
+            // Shown only when the card is not in step (APP-163): a status write
+            // on its way ("sending", quiet), one waiting for the tracker to be
+            // reachable, one the tracker refused (with its reason), or an issue
+            // that is gone. A conflict has its own chip below.
             Rectangle {
+                id: syncChip
                 objectName: "tc-sync-state"
-                visible: card._isTicket && (!!card._ticket.unsynced || !!card._ticket.gone)
+                // syncState comes from the model; a hand-built task map (the
+                // archive, tests) may only carry the older flags.
+                readonly property string state: card._ticket.syncState
+                    || (card._ticket.gone ? "gone"
+                        : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced")
+                readonly property bool quiet: state === "pushing"
+                visible: card._isTicket && (state === "pushing" || state === "queued" || state === "error" || state === "gone")
                 radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.warning, 0.14)
+                color: syncChip.quiet ? "transparent" : Theme.withAlpha(Theme.warning, 0.14)
                 implicitWidth: syncStateT.implicitWidth + 10
                 implicitHeight: syncStateT.implicitHeight + 2
                 Text {
                     id: syncStateT
+                    objectName: "tc-sync-state-text"
                     anchors.centerIn: parent
-                    text: card._ticket.gone ? I18n.t("taskcard.gone") : I18n.t("taskcard.unsynced")
+                    text: syncChip.state === "gone" ? I18n.t("taskcard.gone")
+                        : syncChip.state === "pushing" ? I18n.t("taskcard.pushing")
+                        : syncChip.state === "queued" ? I18n.t("taskcard.queued")
+                        : I18n.t("taskcard.unsynced")
                     textFormat: Text.PlainText
-                    color: Theme.warning
+                    color: syncChip.quiet ? Theme.textDim : Theme.warning
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: syncChip.quiet ? Font.Normal : Font.DemiBold
                 }
+                readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
+                    : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
+                    : syncChip.state === "queued" ? I18n.t("taskcard.queued.tip")
+                    : I18n.t("taskcard.unsynced.tip")
+                        + (card._ticket.syncError ? "\n" + I18n.t("taskcard.syncError").arg(card._ticket.syncError) : "")
                 QQC.ToolTip.visible: syncStateHover.hovered
-                QQC.ToolTip.text: card._ticket.gone ? I18n.t("taskcard.gone.tip")
-                                  : (card._ticket.queued ? I18n.t("taskcard.queued.tip") : I18n.t("taskcard.unsynced.tip"))
+                QQC.ToolTip.text: syncChip.tip
                 HoverHandler { id: syncStateHover }
                 // The retry had no keyboard path: the card menu does not
                 // offer it (design audit DES-19). The HoverHandler above keeps
@@ -275,13 +411,17 @@ Rectangle {
                 objectName: "tc-conflict"
                 visible: card._isTicket && !!card._ticket.conflict
                 radius: Theme.radiusSm
-                color: Theme.withAlpha(Theme.warning, 0.14)
+                // Outlined, not filled: a different kind of out-of-step from
+                // the sync chip, which it often sits next to (VISU-2).
+                color: "transparent"
+                border.color: Theme.withAlpha(Theme.warning, 0.6)
+                border.width: 1
                 implicitWidth: conflictT.implicitWidth + 10
                 implicitHeight: conflictT.implicitHeight + 2
                 Text {
                     id: conflictT
                     anchors.centerIn: parent
-                    text: I18n.t("taskcard.conflict")
+                    text: "⇄ " + I18n.t("taskcard.conflict")
                     textFormat: Text.PlainText
                     color: Theme.warning
                     font.pixelSize: Theme.fsXs
@@ -290,6 +430,13 @@ Rectangle {
                 QQC.ToolTip.visible: conflictHover.hovered
                 QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
                 HoverHandler { id: conflictHover }
+                // Opens the side-by-side choice (APP-163). heap never picks.
+                ClickArea {
+                    objectName: "tc-conflict-open"
+                    label: I18n.t("sync.conflict.open")
+                    showTip: false
+                    onActivated: card.openConflictDialog()
+                }
             }
             // Left behind by a filter change: still a live issue, just not one
             // this connection pulls any more. Quiet on purpose.
@@ -338,9 +485,19 @@ Rectangle {
                 font.weight: Font.DemiBold
             }
             Item { Layout.fillWidth: true }
+            Text {
+                objectName: "tc-selected-mark"
+                visible: card._selected
+                text: "✓"
+                color: Theme.accentStrong
+                font.family: Theme.fontUi
+                font.pixelSize: Theme.fsSm
+                font.weight: Font.DemiBold
+            }
         }
 
         Text {
+            objectName: "tc-title"
             Layout.fillWidth: true
             text: card.task ? card.task.title : ""
             // A mirrored title is written by whoever filed the issue. Text
@@ -389,7 +546,9 @@ Rectangle {
                     width: parent.width * (checklistRow._total > 0 ? checklistRow._done / checklistRow._total : 0)
                     height: parent.height
                     radius: parent.radius
-                    color: checklistRow._done === checklistRow._total ? Theme.success : Theme.accent
+                    // textDim, not accent: a white bar was as loud as the
+                    // title on a monochrome theme (VISU-3).
+                    color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textDim
                 }
             }
         }
@@ -418,8 +577,22 @@ Rectangle {
                      || !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
                      || !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
                      || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
-                     || card._attachmentCount > 0
+                     || card._attachmentCount > 0 || waitT.link !== undefined
             spacing: Theme.spLg
+
+            // Waiting on someone's reply (APP-158): "waiting: Oleg · 2d".
+            Text {
+                id: waitT
+                objectName: "tc-waiting"
+                readonly property var link: (AppController.safety && AppController.safety.waitingOn)
+                                            ? AppController.waitingOn[card.taskId] : undefined
+                visible: link !== undefined
+                text: link ? I18n.t("waiting.chip").arg(link.name).arg(link.days) : ""
+                textFormat: Text.PlainText
+                color: Theme.warning
+                font.family: Theme.fontMono
+                font.pixelSize: Theme.fsXs
+            }
 
             // How many files are attached. Opening them is the editor's job.
             Text {
@@ -476,7 +649,9 @@ Rectangle {
                 readonly property string label: (AppController.today, I18n.lang, card._schedLabel())
                 visible: label.length > 0
                 text: "▸ " + label
-                color: Theme.accentStrong
+                // A plan, not an alarm: muted, so the overdue date is the one
+                // that stands out (VISU-3).
+                color: Theme.textMuted
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
             }
@@ -498,6 +673,38 @@ Rectangle {
                 font.pixelSize: Theme.fsXs
                 font.weight: Font.Medium
             }
+            // Whose move it is on that PR (APP-156): read off the PR — a review
+            // asked of me, red CI, an approval — and only ever shown, never
+            // acted on. "Mine" gets the chip; "waiting" stays dim text.
+            Rectangle {
+                id: moveChip
+                objectName: "tc-move"
+                readonly property string move: card.task ? String(card.task.prMove || "") : ""
+                readonly property string reason: card.task ? String(card.task.prMoveReason || "") : ""
+                readonly property bool mine: move === "mine"
+                visible: AppController.showWhoseMove && move.length > 0 && prT.state.length > 0
+                radius: Theme.radiusSm
+                color: mine ? Theme.withAlpha(Theme.accent, 0.14) : "transparent"
+                implicitWidth: moveT.implicitWidth + (mine ? 10 : 0)
+                implicitHeight: moveT.implicitHeight + 2
+                Text {
+                    id: moveT
+                    objectName: "tc-move-text"
+                    anchors.centerIn: parent
+                    text: moveChip.mine ? I18n.t("taskcard.move.mine") : I18n.t("taskcard.move.theirs")
+                    textFormat: Text.PlainText
+                    color: moveChip.mine ? Theme.accentStrong : Theme.textDim
+                    font.family: Theme.fontMono
+                    font.pixelSize: Theme.fsXs
+                    font.weight: moveChip.mine ? Font.DemiBold : Font.Normal
+                }
+                readonly property string tip: moveChip.reason.length > 0 ? I18n.t("taskcard.move." + moveChip.reason) : ""
+                QQC.ToolTip.visible: moveHover.hovered && moveChip.tip.length > 0
+                QQC.ToolTip.text: moveChip.tip
+                HoverHandler { id: moveHover }
+                Accessible.role: Accessible.StaticText
+                Accessible.name: moveT.text + (moveChip.tip.length > 0 ? " — " + moveChip.tip : "")
+            }
             // Time tracking — click to start/stop; live while running.
             Text {
                 id: timerT
@@ -510,7 +717,9 @@ Rectangle {
                                                  : (card.task.trackedSeconds || 0);
                     return (card.task.isTiming ? "● " : "⧗ ") + card._fmtElapsed(s);
                 }
-                color: card.task && card.task.isTiming ? Theme.accentStrong : Theme.textDim
+                // Running: the dot and the weight say so; the colour stays
+                // with the rest of the metadata (VISU-3).
+                color: card.task && card.task.isTiming ? Theme.textMuted : Theme.textDim
                 font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
                 font.weight: card.task && card.task.isTiming ? Font.DemiBold : Font.Normal
@@ -657,7 +866,11 @@ Rectangle {
             card.homeX = card.x; card.homeY = card.y; didDrag = false;
             if (mouse.button === Qt.RightButton) card.contextMenu().popup();
         }
-        onPositionChanged: if (drag.active) didDrag = true
+        onPositionChanged: {
+            if (!drag.active) return;
+            didDrag = true;
+            card._dropAt = card.mapToItem(null, 0, 0);
+        }
         onReleased: (mouse) => {
             const wasDrag = didDrag;
             card.Drag.drop();
@@ -689,17 +902,26 @@ Rectangle {
             card._menu = taskMenuComponent.createObject(card);
             card._menu.subMenuRequested.connect(card.openSubMenu);
         }
+        // The keys its rows show (APP-166), as they stand when it opens.
+        card._menu.editKey = card.boardKeys ? "board.open" : "";
+        card._menu.archiveKey = card.boardKeys && !card._isArchived ? "board.archive" : "";
         return card._menu;
     }
     // The status and priority lists are built the same way, on first use.
     property var _statusMenu: null
     property var _priorityMenu: null
     function statusMenu() {
-        if (!card._statusMenu) card._statusMenu = statusMenuComponent.createObject(card);
+        if (!card._statusMenu) {
+            card._statusMenu = statusMenuComponent.createObject(card);
+            card._statusMenu.back.connect(() => card.backToMenu("status"));
+        }
         return card._statusMenu;
     }
     function priorityMenu() {
-        if (!card._priorityMenu) card._priorityMenu = priorityMenuComponent.createObject(card);
+        if (!card._priorityMenu) {
+            card._priorityMenu = priorityMenuComponent.createObject(card);
+            card._priorityMenu.back.connect(() => card.backToMenu("priority"));
+        }
         return card._priorityMenu;
     }
     // The status or priority list at the card, on the task's current value,
@@ -714,6 +936,15 @@ Rectangle {
             cur = ["P0", "P1", "P2", "P3"].indexOf(card.task.priority);
         sub.currentIndex = Math.max(0, cur);
     }
+    // Left in a list: the card menu again, on the row the list came from.
+    function backToMenu(which) {
+        card.openMenu();
+        const name = which === "status" ? "tc-menu-status" : "tc-menu-priority";
+        for (let i = 0; i < card._menu.count; i++) {
+            const it = card._menu.itemAt(i);
+            if (it && it.objectName === name) { card._menu.currentIndex = i; break; }
+        }
+    }
     function releaseMenu() {
         for (const k of ["_menu", "_statusMenu", "_priorityMenu"]) {
             if (!card[k]) continue;
@@ -726,6 +957,9 @@ Rectangle {
     AppMenu {
         id: taskMenu
         objectName: "tc-menu"
+        // Set by contextMenu(): the catalogue ids of Return and E on the board.
+        property string editKey: ""
+        property string archiveKey: ""
         AppMenuItem {
             enabled: false
             contentItem: Text {
@@ -741,6 +975,7 @@ Rectangle {
         }
         AppMenuItem {
             glyph: "✎"; text: I18n.t("taskcard.edit"); onTriggered: card.clicked()
+            shortcutId: taskMenu.editKey
         }
         // Status and priority without opening the editor (UX-26). Each opens
         // its own list at the card, so the keyboard can walk it too.
@@ -758,18 +993,19 @@ Rectangle {
         }
         AppMenuItem {
             objectName: "tc-menu-status"
-            glyph: "⇥"; text: I18n.t("taskcard.setStatus") + "  ›"
+            glyph: "⇥"; text: I18n.t("taskcard.setStatus"); opensList: true
             onTriggered: taskMenu._openNext = "status"
         }
         AppMenuItem {
             objectName: "tc-menu-priority"
-            glyph: "!"; text: I18n.t("taskcard.setPriority") + "  ›"
+            glyph: "!"; text: I18n.t("taskcard.setPriority"); opensList: true
             onTriggered: taskMenu._openNext = "priority"
         }
         AppMenuItem {
             objectName: "tc-menu-archive"
             glyph: card._isArchived ? "↺" : "▣"
             text: card._isArchived ? I18n.t("taskcard.unarchive") : I18n.t("taskcard.archive")
+            shortcutId: taskMenu.archiveKey
             onTriggered: AppController.setArchived(card.taskId, !card._isArchived)
         }
         AppMenuItem {
@@ -787,6 +1023,7 @@ Rectangle {
             visible: card._isTicket && String(card._ticket.url || "").length > 0
             height: visible ? implicitHeight : 0
             glyph: "↗"
+            shortcutId: "task.openExternal"
             text: I18n.t("taskcard.openIn").arg(card._badge.name || card._ticket.provider || "")
             onTriggered: AppController.openTaskExternal(card.taskId)
         }
@@ -848,6 +1085,7 @@ Rectangle {
     AppMenu {
         id: statusMenu
         objectName: "tc-status-menu"
+        backOnLeft: true
         Instantiator {
             model: AppController.statuses
             delegate: AppMenuItem {
@@ -867,6 +1105,7 @@ Rectangle {
     AppMenu {
         id: priorityMenu
         objectName: "tc-priority-menu"
+        backOnLeft: true
         Instantiator {
             model: ["P0", "P1", "P2", "P3"]
             delegate: AppMenuItem {

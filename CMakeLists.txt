@@ -192,25 +192,47 @@ qt_add_library(heap_core STATIC
     src/chrono/ChronoLocale_ru.cpp
     src/chrono/ChronoParser.cpp
     src/git/BranchTaskMatcher.cpp
+    src/git/BranchTaskResolve.cpp
     src/git/GitWatcher.cpp
+    src/git/PrFacts.cpp
+    # Command line (APP-173): heap add|now|list|today|done|open.
+    src/cli/CliConsole.cpp
+    src/cli/CliCore.cpp
+    src/cli/CliExecutor.cpp
+    src/cli/CliMain.cpp
+    src/cli/CliQuery.cpp
     src/text/TaskTextUtils.cpp
+    src/text/PersonMatch.cpp
     src/query/QueryParser.cpp
     src/query/TaskQuery.cpp
     src/notify/NotificationCenter.cpp
     src/notify/NotificationCenter_tray.cpp
+    src/notify/NotifyPayload.cpp
     src/platform/GlobalHotkey.cpp
+    src/platform/X11Keys.cpp
     src/platform/Paths.cpp
     src/platform/Accessibility.cpp
     src/platform/AltGrGuard.cpp
+    src/platform/Autostart.cpp
+    # The opt-in completion sound (APP-167); the backend is per platform below.
+    src/platform/Sound.cpp
+    # The UI and mono fonts shipped inside the binary (qrc :/fonts below).
+    src/platform/BundledFonts.cpp
     src/TypeAhead.cpp
     # ── audit-plat: begin ──
     src/storage/StateIO.cpp
     src/storage/AsyncSaver.cpp
+    src/storage/Snapshots.cpp
+    src/AppControllerHistory.cpp
     src/platform/SingleInstance.cpp
     # ── audit-plat: end ──
     # ── audit-tasks: begin ──
     src/AppControllerTaskEdits.cpp
     src/AppControllerSavedViews.cpp
+    src/AppControllerSafety.cpp
+    src/safety/SafetyText.cpp
+    src/safety/ErrorSignature.cpp
+    src/safety/Standup.cpp
     src/views/SavedViewMatch.cpp
     # ── audit-tasks: end ──
     # ── audit-time: begin ──
@@ -218,14 +240,18 @@ qt_add_library(heap_core STATIC
     # ── audit-know: begin ──
     src/storage/Attachments.cpp
     src/AppControllerAttachments.cpp
+    src/AppControllerPresence.cpp
     # ── audit-know: end ──
     # ── audit-ux: begin ──
     # ── audit-ux: end ──
     # ── audit-int: begin ──
     src/integrations/TrackerMerge.cpp
+    src/integrations/SyncHealth.cpp
+    src/history/TaskHistory.cpp
     src/integrations/AutoSync.h
     src/integrations/IntegrationI18n.cpp
     src/diag/IssueReport.cpp
+    src/diag/PerfLog.cpp
     # ── audit-int: end ──
     # ── audit-perf: begin ──
     # ── audit-perf: end ──
@@ -247,11 +273,23 @@ qt_add_library(heap_core STATIC
     src/update/Updater.cpp
     src/update/UpdateInstall.cpp
     $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_linux.cpp>
+        # Notifications with buttons (APP-155): WinRT toasts, UNUserNotificationCenter.
+        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/notify/NotificationCenter_mac.mm>
         $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_win.cpp>
+        # X11 grab / Wayland portal (APP-171).
+        $<$<PLATFORM_ID:Linux>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_linux.cpp>
         # Meetings from the desktop Outlook over COM (APP-118); a stub elsewhere.
         $<IF:$<PLATFORM_ID:Windows>,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_win.cpp,${CMAKE_SOURCE_DIR}/src/cal/OutlookDesktop_stub.cpp>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/GlobalHotkey_mac.mm>
         $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/MacWindow.mm>
+        # Start at login (APP-154): the Run key, a launch agent, an XDG entry.
+        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_mac.cpp>
+        $<$<NOT:$<OR:$<PLATFORM_ID:Windows>,$<PLATFORM_ID:Darwin>>>:${CMAKE_SOURCE_DIR}/src/platform/Autostart_linux.cpp>
+        $<$<PLATFORM_ID:Windows>:${CMAKE_SOURCE_DIR}/src/platform/Sound_win.cpp>
+        $<$<PLATFORM_ID:Darwin>:${CMAKE_SOURCE_DIR}/src/platform/Sound_mac.mm>
+        $<$<NOT:$<OR:$<PLATFORM_ID:Windows>,$<PLATFORM_ID:Darwin>>>:${CMAKE_SOURCE_DIR}/src/platform/Sound_linux.cpp>
 )
 
 set_source_files_properties(qml/Theme.qml PROPERTIES QT_QML_SINGLETON_TYPE TRUE)
@@ -290,10 +328,13 @@ qt_add_qml_module(heap_core
         # ── audit-tasks: end ──
         # ── audit-time: begin ──
         qml/SeriesScopeDialog.qml
+        qml/SyncConflictDialog.qml
+        qml/IntegrationHealthCard.qml
         qml/IntegrationsInfoCard.qml
         qml/CalendarSubscriptionsCard.qml
         qml/AutoSyncCard.qml
         qml/WeeklyRecapDialog.qml
+        qml/TimeMachineDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml
@@ -309,6 +350,8 @@ qt_add_qml_module(heap_core
         qml/DialogHeader.qml
         qml/DialogFooter.qml
         qml/ActionButton.qml
+        qml/EmptyState.qml
+        qml/Motion.js
         qml/IntegrationActivity.qml
         # ── audit-ux: end ──
         # ── audit-int: begin ──
@@ -341,6 +384,8 @@ qt_add_qml_module(heap_core
         qml/AppMenu.qml
         qml/AppMenuItem.qml
         qml/AppMenuSeparator.qml
+        qml/AppComboBox.qml
+        qml/TextEditMenu.qml
         qml/ThemeSettings.qml
         qml/ColorPickerPopup.qml
         qml/PillButton.qml
@@ -350,6 +395,10 @@ qt_add_qml_module(heap_core
         qml/NotesView.qml
         qml/MdView.qml
         qml/SettingsView.qml
+        qml/SettingsGroup.qml
+        qml/SettingsRow.qml
+        qml/SeenBeforeHint.qml
+        qml/StandupDraftDialog.qml
         qml/HelpContent.qml
         qml/ThinScrollBar.qml
         qml/Brand.qml
@@ -360,6 +409,7 @@ qt_add_qml_module(heap_core
         qml/QuickCaptureNotesPopup.qml
         qml/MentionAutocomplete.qml
         qml/WelcomePopup.qml
+        qml/Tour.js
         qml/DocsStarter.js
         qml/Mention.js
         qml/Attendees.js
@@ -385,7 +435,9 @@ qt_add_qml_module(heap_core
         src/git/BranchTaskMatcher.h
         src/git/GitTypes.h
         src/git/GitWatcher.h
+        src/git/PrFacts.h
         src/text/TaskTextUtils.h
+        src/text/PersonMatch.h
         src/query/QueryParser.h
         src/query/TaskQuery.h
         src/notes/NoteLinks.h
@@ -394,10 +446,16 @@ qt_add_qml_module(heap_core
         src/markdown/MdHighlighter.h
         src/notify/NotificationCenter.h
         src/platform/GlobalHotkey.h
+        src/platform/X11Keys.h
         src/platform/AltGrGuard.h
+        src/platform/Sound.h
+        src/hints/ShortcutHints.h
         src/TypeAhead.h
         src/integrations/IntegrationTypes.h
         src/integrations/StatusMap.h
+        src/integrations/SyncState.h
+        src/integrations/SyncHealth.h
+        src/history/TaskHistory.h
         src/integrations/GithubProvider.h
         src/integrations/JiraProvider.h
         src/integrations/GitlabProvider.h
@@ -440,14 +498,33 @@ if (WIN32)
     target_link_libraries(heap_core PUBLIC crypt32)
     # COM late binding for the desktop Outlook calendar (OutlookDesktop_win.cpp).
     target_link_libraries(heap_core PUBLIC ole32 oleaut32 uuid)
+    # WinRT activation (RoGetActivationFactory, HSTRING) for the toasts, and
+    # SetCurrentProcessExplicitAppUserModelID (NotificationCenter_win.cpp).
+    target_link_libraries(heap_core PUBLIC runtimeobject shell32)
+    # PlaySoundW for the completion sound (Sound_win.cpp).
+    target_link_libraries(heap_core PUBLIC winmm)
 endif ()
 if(UNIX AND NOT APPLE)
     target_link_libraries(heap_core PUBLIC Qt6::DBus)
+    # The X11 global hotkey (APP-171) grabs keys through the xcb connection
+    # Qt's own xcb platform plugin opens, so it only needs libxcb's headers
+    # (libxcb1-dev). Without them the X11 backend is left out and the app
+    # still builds: Wayland's portal and the `heap --capture` hint remain.
+    find_package(PkgConfig QUIET)
+    if(PkgConfig_FOUND)
+        pkg_check_modules(HEAP_XCB QUIET IMPORTED_TARGET xcb)
+    endif()
+    if(HEAP_XCB_FOUND)
+        target_link_libraries(heap_core PUBLIC PkgConfig::HEAP_XCB)
+        target_compile_definitions(heap_core PUBLIC HEAP_HAVE_XCB=1)
+    else()
+        message(STATUS "xcb not found: the X11 global hotkey is left out (install libxcb1-dev)")
+    endif()
 endif()
 # Carbon backs the macOS global-hotkey (RegisterEventHotKey) in GlobalHotkey_mac.mm;
 # AppKit backs the unified title bar (NSWindow restyle) in MacWindow.mm.
 if(APPLE)
-    target_link_libraries(heap_core PUBLIC "-framework Carbon" "-framework AppKit")
+    target_link_libraries(heap_core PUBLIC "-framework Carbon" "-framework AppKit" "-framework UserNotifications")
 endif()
 
 # Compile-time flag that AppController exposes as a CONSTANT Q_PROPERTY so QML
@@ -523,7 +600,59 @@ if(WIN32)
         target_link_options(heap-updater PRIVATE -municode -static)
     endif()
     add_dependencies(heap heap-updater)
+
+    # ── heap-cli (APP-173) — the console front door to heap.exe ──
+    # heap.exe is a GUI-subsystem binary, so cmd and PowerShell neither wait
+    # for it nor see its exit code. This console binary runs it with the
+    # shell waits for it. It answers the questions (now, list, today) itself
+    # with only QtCore/Gui/Network loaded — `now` runs in a shell prompt, and
+    # heap.exe with all of Qt Quick takes ~200 ms just to start — and runs
+    # heap.exe with its own console handles for add/done/open, passing the exit
+    # code through. Same sources as heap_core, compiled lean (no AppController).
+    add_executable(heap-cli
+        src/cli/heapcli_win.cpp
+        src/cli/CliConsole.cpp
+        src/cli/CliCore.cpp
+        src/cli/CliQuery.cpp
+        src/git/BranchTaskMatcher.cpp
+        src/git/BranchTaskResolve.cpp
+        src/platform/Paths.cpp
+        src/platform/SingleInstance.cpp
+        src/storage/StateIO.cpp
+        src/StateSerializer.cpp
+        src/Models.cpp
+    )
+    set_target_properties(heap-cli PROPERTIES AUTOMOC ON)
+    target_include_directories(heap-cli PRIVATE src src/markdown)
+    target_compile_definitions(heap-cli PRIVATE HEAP_VERSION="${PROJECT_VERSION}")
+    target_link_libraries(heap-cli PRIVATE Qt6::Core Qt6::Gui Qt6::Qml Qt6::Network heap_markdown shell32)
+    target_compile_options(heap-cli PRIVATE "${HEAP_WARNING_OPTIONS}")
+    add_dependencies(heap heap-cli)
 endif()
+
+# The completion sound (APP-167), generated by tools/gen_completion_sound.py.
+qt_add_resources(heap_core "sounds"
+    PREFIX "/sounds"
+    BASE "design/sounds"
+    FILES
+        design/sounds/complete.wav
+)
+
+# The fonts the UI is set in (Golos Text, JetBrains Mono — SIL OFL 1.1, static
+# faces cut by tools/gen_bundled_fonts.py). Compiled into heap_core like the
+# sound, so the app, the portable zip, the installer, the AppImage, the macOS
+# bundle and the test runners all carry them with no deploy step; main()
+# registers them before the QML loads (platform/BundledFonts).
+qt_add_resources(heap_core "fonts"
+    PREFIX "/fonts"
+    BASE "resources/fonts"
+    FILES
+        resources/fonts/GolosText-Regular.ttf
+        resources/fonts/GolosText-Medium.ttf
+        resources/fonts/GolosText-SemiBold.ttf
+        resources/fonts/JetBrainsMono-Regular.ttf
+        resources/fonts/JetBrainsMono-Medium.ttf
+)
 
 # ── Brand assets (heap. logo + app icon, exported by design/brand-export) ──
 # On heap_core, not the app, so every binary that loads the QML — the test
@@ -694,11 +823,12 @@ if(WIN32)
         endif()
 
         add_custom_target(portable
-                DEPENDS heap heap-updater
+                DEPENDS heap heap-updater heap-cli
                 COMMAND ${CMAKE_COMMAND} -E rm -rf          "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E make_directory  "${PORTABLE_DIR}"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-updater>" "${PORTABLE_DIR}/"
+                COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:heap-cli>" "${PORTABLE_DIR}/"
                 COMMAND ${CMAKE_COMMAND} -E env "PATH=${_windeploy_path}"
                         ${WINDEPLOYQT_EXECUTABLE}
                         --no-translations

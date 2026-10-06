@@ -774,6 +774,18 @@ QJsonObject profileToJson(const Profile& p) {
     }
     o["statusLog"] = log;
   }
+  // Optional as well, same reasoning (APP-158).
+  if(!p.waitingOn.isEmpty()) {
+    QJsonArray waiting;
+    for(const WaitingOn& w : p.waitingOn) {
+      QJsonObject wo{{"task", w.taskId}, {"person", w.personId}, {"since", dtToStr(w.since)}};
+      if(w.remindedAt.isValid()) {
+        wo["reminded"] = dtToStr(w.remindedAt);
+      }
+      waiting.append(wo);
+    }
+    o["waitingOn"] = waiting;
+  }
   return o;
 }
 
@@ -812,6 +824,16 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
       p.statusLog.append(change);
     }
   }
+  for(const auto& v : o["waitingOn"].toArray()) {
+    const QJsonObject wo = v.toObject();
+    const WaitingOn w{.taskId = wo["task"].toString(),
+                      .personId = wo["person"].toString(),
+                      .since = dtFromStr(wo["since"].toString()),
+                      .remindedAt = dtFromStr(wo["reminded"].toString())};
+    if(!w.taskId.isEmpty() && !w.personId.isEmpty() && w.since.isValid()) {
+      p.waitingOn.append(w);
+    }
+  }
   if(outLegacyEvents && o.contains("events")) {
     outLegacyEvents->append(eventsFromJson(o["events"].toArray(), p.id));
   }
@@ -832,6 +854,7 @@ Profile profileFromJson(const QJsonObject& o, QVector<CalEvent>* outLegacyEvents
                                      QStringLiteral("activeDocPageId"),
                                      QStringLiteral("savedViews"),
                                      QStringLiteral("statusLog"),
+                                     QStringLiteral("waitingOn"),
                                      QStringLiteral("events")};
   for(auto it = o.constBegin(); it != o.constEnd(); ++it) {
     if(!kKnown.contains(it.key())) {

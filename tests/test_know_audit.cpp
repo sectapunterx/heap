@@ -354,6 +354,30 @@ TEST_F(KnowAuditTest, Know7_RenameLeavesLinksToASameTitledNoteElsewhere) {
   EXPECT_EQ(heap::notes::backlinksTo(b, app_->notes()->items()).size(), 1);
 }
 
+// KNOW-6 (audit 2026-09-30): a rename to a title with '#' leaves links that
+// still find the note, and a link to "C# basics" is a link to that note.
+TEST_F(KnowAuditTest, Know6_HashAndBarTitlesLinkAndSurviveRename) {
+  const QString target = app_->newNote(QStringLiteral("Plain target"));
+  const QString csharp = app_->newNote(QStringLiteral("C# basics"));
+  const QString other = app_->newNote(QStringLiteral("Linker"));
+  app_->setNoteBody(other, QStringLiteral("[[Plain target]] and [[C\\# basics]]"));
+
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("C\\# basics")).value("noteId").toString(), csharp);
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("C# basics")).value("noteId").toString(), csharp);
+  EXPECT_EQ(app_->backlinksToNote(csharp).size(), 1);
+
+  app_->renameNote(target, QStringLiteral("Topic #1"));
+  EXPECT_EQ(app_->noteBody(other), QStringLiteral("[[Topic \\#1]] and [[C\\# basics]]"));
+  EXPECT_EQ(app_->resolveNoteLink(QStringLiteral("Topic \\#1")).value("noteId").toString(), target);
+  EXPECT_EQ(app_->backlinksToNote(target).size(), 1);
+
+  // A missing escaped link creates the note under its real name.
+  const QString created = app_->createNoteForLink(QStringLiteral("A\\|B options"));
+  const int row = app_->notes()->indexOfId(created);
+  ASSERT_GE(row, 0);
+  EXPECT_EQ(app_->notes()->items().at(row).title, QStringLiteral("A|B options"));
+}
+
 // KNOW-17 (audit 2026-09-30): quick capture into the open note while the
 // editor still holds unflushed keystrokes keeps them.
 TEST_F(KnowAuditTest, Know17_QuickCaptureFlushesTheEditorFirst) {
@@ -446,6 +470,23 @@ TEST_F(KnowAuditTest, App1_AnUntitledNoteIsNamedAfterItsFirstLine) {
   EXPECT_EQ(title(), QStringLiteral("Retro"));
 }
 
+// PERA-6: retyping a new note's heading from scratch left the title at the
+// last fragment saved before the heading was emptied ("Без н"), because the
+// empty "# " in between broke the follow.
+TEST_F(KnowAuditTest, Pera6_RetypingTheHeadingRenamesTheNote) {
+  const QString id = app_->newNote();
+  const auto title = [&] {
+    return app_->notes()->items().at(app_->notes()->indexOfId(id)).title;
+  };
+  app_->setNotesState(QStringLiteral("# Untit\n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Untit"));
+  app_->setNotesState(QStringLiteral("# \n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Untit")) << "an empty heading is not a name";
+  app_->setNotesState(QStringLiteral("# S\n\n"));
+  app_->setNotesState(QStringLiteral("# Standup 30.09\n\n"));
+  EXPECT_EQ(title(), QStringLiteral("Standup 30.09"));
+}
+
 TEST_F(KnowAuditTest, App1_TitleIsCutToSixtyCharacters) {
   app_->setActiveNoteId(QString());
   app_->setNotesState(QStringLiteral("a"));
@@ -522,6 +563,40 @@ TEST_F(KnowAuditTest, Know12_MentionsResolveToPeopleInAnyScript) {
   app_->people()->upsert(p);
   EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@Олег_Т.")), QStringLiteral("p-oleg"));
   EXPECT_EQ(app_->personIdForHandle(QStringLiteral("олег")), QStringLiteral("p-oleg"));
+}
+
+// A login derived from the name ("@r.losev") names the one person it fits;
+// an exact id always wins, and a login two people share names neither.
+TEST_F(KnowAuditTest, MentionByLoginDerivedFromTheName) {
+  app_->people()->reset({});
+  Person roman;
+  roman.id = QStringLiteral("p-roman");
+  roman.name = QStringLiteral("Роман Лосев");
+  app_->people()->upsert(roman);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.losev")), QStringLiteral("p-roman"));
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@roman.losev")), QStringLiteral("p-roman"));
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.lo")), QString());  // a prefix names no one
+
+  Person ruslan;
+  ruslan.id = QStringLiteral("p-ruslan");
+  ruslan.name = QStringLiteral("Руслан Лосев");
+  app_->people()->upsert(ruslan);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.losev")), QString());
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@roman.losev")), QStringLiteral("p-roman"));
+
+  Person holder;
+  holder.id = QStringLiteral("r.losev");
+  holder.name = QStringLiteral("Someone Else");
+  app_->people()->upsert(holder);
+  EXPECT_EQ(app_->personIdForHandle(QStringLiteral("@r.losev")), QStringLiteral("r.losev"));
+
+  // matchPeople: both Losevs for the shared login, the id holder first.
+  const QVariantList hits = app_->matchPeople(QStringLiteral("r.losev"), 8);
+  ASSERT_EQ(hits.size(), 3);
+  EXPECT_EQ(hits.first().toMap().value("id").toString(), QStringLiteral("r.losev"));
+  const QVariantList romanOnly = app_->matchPeople(QStringLiteral("roman losev"), 8);
+  ASSERT_EQ(romanOnly.size(), 1);
+  EXPECT_EQ(romanOnly.first().toMap().value("name").toString(), QStringLiteral("Роман Лосев"));
 }
 
 // ── KNOW-20: copy as Markdown takes every note and every doc page ──

@@ -24,6 +24,12 @@ Popup {
 
     // Emitted with a PersonEditor draft — Main hands it straight to the editor.
     signal draftRequested(var draft)
+    // Pick mode (APP-158, "waiting on…"): choosing someone answers with their
+    // Person id instead of opening the editor. A contact with no Person yet,
+    // or a new name, becomes one first.
+    property bool pickOnly: false
+    property string title: I18n.t("people.pick.title")
+    signal personPicked(string personId)
 
     // Every candidate, as pingCandidates() returned it. Re-read on each open:
     // a Mattermost sync or an edit in Docs may have changed the list since.
@@ -35,19 +41,24 @@ Popup {
         const out = [];
         for (let i = 0; i < root.candidates.length; i++) {
             const c = root.candidates[i];
-            if (q.length === 0
-                || (c.name || "").toLowerCase().indexOf(q) >= 0
-                || (c.role || "").toLowerCase().indexOf(q) >= 0
-                || (c.handle || "").toLowerCase().indexOf(q) >= 0
-                || (c.channel || "").toLowerCase().indexOf(q) >= 0)
-                out.push(c);
+            // Name and handle the way @-mentions find them: a login made of
+            // the name ("r.losev"), the words in either script.
+            const handle = String(c.handle || "").replace(/^@+/, "");
+            let r = q.length === 0 ? 1 : AppController.personMatchRank(q, c.name || "", handle);
+            if (q.length > 0 && c.personId && c.personId !== handle)
+                r = Math.max(r, AppController.personMatchRank(q, c.name || "", c.personId));
+            if (r === 0 && ((c.role || "").toLowerCase().indexOf(q) >= 0
+                            || (c.channel || "").toLowerCase().indexOf(q) >= 0))
+                r = 1;
+            if (r > 0) out.push(Object.assign({}, c, { _rank: r }));
         }
         // People already on the rail sink to the bottom: the point of this box
-        // is the ones who are not. Name breaks the tie — V4's sort is not
-        // stable, so without it the list reshuffles between openings and the
-        // row under the cursor is never the same one twice.
+        // is the ones who are not. Then the better match; name breaks the tie
+        // — V4's sort is not stable, so without it the list reshuffles between
+        // openings and the row under the cursor is never the same one twice.
         out.sort((a, b) => {
             if (!!a.active !== !!b.active) return a.active ? 1 : -1;
+            if (a._rank !== b._rank) return b._rank - a._rank;
             return String(a.name || "").localeCompare(String(b.name || ""));
         });
         return out;
@@ -69,6 +80,27 @@ Popup {
     }
 
     function _accept() {
+        if (root.pickOnly) {
+            let draft = null;
+            if (root.current < root.matches.length) {
+                const c = root.matches[root.current];
+                if (c.personId && AppController.personById(c.personId).id) {
+                    root.close();
+                    root.personPicked(c.personId);
+                    return;
+                }
+                draft = AppController.pingDraftFor(c);
+            } else if (root.canCreate) {
+                draft = AppController.newContactDraft(root.query.trim());
+            }
+            // Someone you are waiting on is someone you have asked.
+            if (draft && draft._isNew) draft.state = "pinged";
+            if (draft && AppController.savePerson(draft)) {
+                root.close();
+                root.personPicked(draft.id);
+            }
+            return;
+        }
         if (root.current < root.matches.length) {
             root.draftRequested(AppController.pingDraftFor(root.matches[root.current]));
             root.close();
@@ -99,7 +131,7 @@ Popup {
 
         Text {
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.sp2xl
-            text: I18n.t("people.pick.title")
+            text: root.title
             color: Theme.text
             font.pixelSize: Theme.fsLg
             font.weight: Font.DemiBold
@@ -107,6 +139,7 @@ Popup {
 
         TextField {
             id: searchField
+            ContextMenu.menu: TextEditMenu { editor: searchField }
             Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset; Layout.topMargin: Theme.spXl
             Layout.fillWidth: true
             placeholderText: I18n.t("people.pick.ph")

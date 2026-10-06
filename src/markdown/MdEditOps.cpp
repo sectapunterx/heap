@@ -110,6 +110,120 @@ bool isInsideFence(QTextDocument* document, int position) {
   return (fences % 2) == 1;
 }
 
+namespace {
+
+// The part of a line that inline markers may wrap: past any quote, list
+// marker, checkbox or heading hashes, and without the blanks at either end.
+// "**- a**" is not a bold list item but a paragraph that starts with a dash.
+void lineContent(const QString& line, int* begin, int* end) {
+  int at = 0;
+  const QRegularExpressionMatch quote = quoteRx().match(line);
+  if(quote.hasMatch()) {
+    at = static_cast<int>(quote.capturedLength(1));
+  }
+  const QString rest = line.mid(at);
+  const QRegularExpressionMatch heading = headingRx().match(rest);
+  if(heading.hasMatch()) {
+    at += static_cast<int>(heading.capturedStart(3));
+  } else {
+    const QRegularExpressionMatch item = lineStructureRx().match(rest);
+    if(item.hasMatch()) {
+      at += static_cast<int>(item.capturedStart(4));
+    }
+  }
+  int stop = static_cast<int>(line.size());
+  while(at < stop && line.at(at).isSpace()) {
+    ++at;
+  }
+  while(stop > at && line.at(stop - 1).isSpace()) {
+    --stop;
+  }
+  *begin = at;
+  *end = stop;
+}
+
+// A selection over several lines: the markers go round the selected part of
+// each line's content, the way the Help promises — "- a\n- b" becomes
+// "- **a**\n- **b**", not "**- a\n- b**", which no renderer reads as bold.
+// When every such part is already wrapped, they are all unwrapped instead.
+Selection toggleInlineStylePerLine(QTextDocument* document, int lo, int hi, const Markers& markers) {
+  struct Segment {
+    int start;
+    int end;
+  };
+
+  QVector<Segment> segments;
+  bool allWrapped = true;
+  int firstBlock = 0;
+  int lastBlock = 0;
+  blockRange(document, Selection{lo, hi}, &firstBlock, &lastBlock);
+  // Code fences and what is inside them are code, not prose to emphasise.
+  // Counted the way isInsideFence() counts them.
+  bool inFence = isInsideFence(document, document->findBlockByNumber(firstBlock).position());
+  for(int b = firstBlock; b <= lastBlock; ++b) {
+    const QTextBlock block = document->findBlockByNumber(b);
+    const QString line = block.text();
+    const QString trimmed = line.trimmed();
+    if(trimmed.startsWith(QStringLiteral("```")) || trimmed.startsWith(QStringLiteral("~~~"))) {
+      inFence = !inFence;
+      continue;
+    }
+    if(inFence) {
+      continue;
+    }
+    int begin = 0;
+    int end = 0;
+    lineContent(line, &begin, &end);
+    int start = std::max(lo, block.position() + begin);
+    const int stop = std::min(hi, block.position() + end);
+    while(start < stop && line.at(start - block.position()).isSpace()) {
+      ++start;
+    }
+    int finish = stop;
+    while(finish > start && line.at(finish - 1 - block.position()).isSpace()) {
+      --finish;
+    }
+    if(start >= finish) {
+      continue;
+    }
+    const QString part = line.mid(start - block.position(), finish - start);
+    const bool wrapped =
+        part.size() >= markers.openSize() + markers.closeSize() && part.startsWith(markers.open) && part.endsWith(markers.close);
+    allWrapped = allWrapped && wrapped;
+    segments.append({start, finish});
+  }
+  if(segments.isEmpty()) {
+    return Selection{lo, hi};
+  }
+
+  QTextCursor cursor(document);
+  cursor.beginEditBlock();
+  int delta = 0;
+  // Bottom up, so the positions above stay where they were.
+  for(qsizetype i = segments.size() - 1; i >= 0; --i) {
+    const Segment& s = segments.at(i);
+    if(allWrapped) {
+      cursor.setPosition(s.end - markers.closeSize());
+      cursor.setPosition(s.end, QTextCursor::KeepAnchor);
+      cursor.removeSelectedText();
+      cursor.setPosition(s.start);
+      cursor.setPosition(s.start + markers.openSize(), QTextCursor::KeepAnchor);
+      cursor.removeSelectedText();
+      delta -= markers.openSize() + markers.closeSize();
+    } else {
+      cursor.setPosition(s.end);
+      cursor.insertText(markers.close);
+      cursor.setPosition(s.start);
+      cursor.insertText(markers.open);
+      delta += markers.openSize() + markers.closeSize();
+    }
+  }
+  cursor.endEditBlock();
+  return Selection{lo, hi + delta};
+}
+
+}  // namespace
+
 Selection toggleInlineStyle(QTextDocument* document, Selection selection, InlineStyle style) {
   if(document == nullptr) {
     return selection;
@@ -117,6 +231,9 @@ Selection toggleInlineStyle(QTextDocument* document, Selection selection, Inline
   const Markers markers = markersFor(style);
   const int lo = std::min(selection.start, selection.end);
   const int hi = std::max(selection.start, selection.end);
+  if(document->findBlock(lo).blockNumber() != document->findBlock(hi).blockNumber()) {
+    return toggleInlineStylePerLine(document, lo, hi, markers);
+  }
   const QString text = document->toPlainText();
 
   QTextCursor cursor(document);

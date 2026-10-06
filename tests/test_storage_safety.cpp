@@ -714,6 +714,70 @@ TEST_F(StorageSafety, ADuplicatedProfileGetsFreshTaskIdsWithItsReferences) {
   EXPECT_TRUE(hasTask(app, "TASK-2")) << "the original keeps its ids";
 }
 
+// ── PLAT-10 (2026-09-30-1): the copy has the calendar too ──
+
+TEST_F(StorageSafety, ADuplicatedProfileCopiesItsEvents) {
+  writeRaw(statePath(), stateDoc({profileJson("a", {taskJson("TASK-1", "todo")})}, "a"));
+  AppController app;
+  CalEvent series;
+  series.id = QStringLiteral("ev-series");
+  series.title = QStringLiteral("standup");
+  series.date = QDate(2026, 9, 28);
+  series.start = 10;
+  series.end = 10.25;
+  series.rrule = QStringLiteral("FREQ=DAILY");
+  series.taskId = QStringLiteral("TASK-1");
+  series.profileId = QStringLiteral("a");
+  app.events()->upsert(series);
+  CalEvent moved = series;
+  moved.id = QStringLiteral("ev-moved");
+  moved.rrule.clear();
+  moved.masterId = series.id;
+  moved.originalDate = QDate(2026, 9, 29);
+  moved.start = 11;
+  moved.end = 11.25;
+  app.events()->upsert(moved);
+  CalEvent global = series;
+  global.id = QStringLiteral("ev-global");
+  global.title = QStringLiteral("everyone");
+  global.rrule.clear();
+  global.taskId.clear();
+  global.profileId.clear();
+  app.events()->upsert(global);
+
+  const QString copyId = app.duplicateProfile(QStringLiteral("a"), QStringLiteral("A copy"));
+  ASSERT_FALSE(copyId.isEmpty());
+  QString copiedTask;
+  for(const Task& t : app.tasks()->items()) {
+    copiedTask = t.id;
+  }
+  QVector<CalEvent> copied;
+  int originals = 0;
+  int globals = 0;
+  for(const CalEvent& e : app.events()->items()) {
+    if(e.profileId == copyId) {
+      copied.append(e);
+    } else if(e.profileId == QStringLiteral("a")) {
+      ++originals;
+    } else {
+      ++globals;
+    }
+  }
+  EXPECT_EQ(originals, 2) << "the original keeps its events";
+  EXPECT_EQ(globals, 1) << "a global event is not the profile's to copy";
+  ASSERT_EQ(copied.size(), 2);
+  const CalEvent& master = copied.at(0).rrule.isEmpty() ? copied.at(1) : copied.at(0);
+  const CalEvent& instead = copied.at(0).rrule.isEmpty() ? copied.at(0) : copied.at(1);
+  EXPECT_NE(master.id, series.id);
+  EXPECT_NE(instead.id, moved.id);
+  EXPECT_EQ(instead.masterId, master.id) << "the override must stand in for the copy's series";
+  EXPECT_EQ(master.taskId, copiedTask) << "the link must follow the copied task";
+  EXPECT_NE(master.taskId, QStringLiteral("TASK-1"));
+  // And the export of the copy is as complete as the original's.
+  const QJsonObject exported = QJsonDocument::fromJson(app.exportActiveProfileJson().toUtf8()).object();
+  EXPECT_EQ(exported.value("profile").toObject().value("events").toArray().size(), 2);
+}
+
 TEST_F(StorageSafety, AnImportedProfileNeverReusesATaskIdAndItsEventsFollow) {
   writeRaw(statePath(), stateDoc({profileJson("a", {taskJson("TASK-1", "todo")})}, "a"));
   AppController app;

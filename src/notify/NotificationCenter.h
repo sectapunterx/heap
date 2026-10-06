@@ -28,6 +28,29 @@ inline std::pair<QString, QString> parseRoutingId(const QString& id) {
   return {id.left(sep), id.mid(sep + 1)};
 }
 
+// The task half of a task reminder's id names the profile too (PRES-2): a task
+// id is unique only inside its profile, and "deadline:TASK-3" alone made Done
+// act on whichever profile had a TASK-3 first, the active one.
+//   taskRef("work", "TASK-3")    → "work/TASK-3"  (so "deadline:work/TASK-3")
+//   parseTaskRef("work/TASK-3")  → {"work", "TASK-3"}
+//   parseTaskRef("TASK-3")       → {"", "TASK-3"}  (a toast or snooze from before)
+// A slash cannot be in a new task id; a profile id that has one is left out
+// rather than misread.
+inline QString taskRef(const QString& profileId, const QString& taskId) {
+  if(profileId.isEmpty() || profileId.contains(QChar('/'))) {
+    return taskId;
+  }
+  return profileId + QChar('/') + taskId;
+}
+
+inline std::pair<QString, QString> parseTaskRef(const QString& ref) {
+  const int sep = ref.indexOf(QChar('/'));
+  if(sep <= 0 || sep == ref.size() - 1) {
+    return {{}, ref};
+  }
+  return {ref.left(sep), ref.mid(sep + 1)};
+}
+
 struct NotificationAction {
   QString id;     // stable identifier — "snooze1h" / "done" / "open"
   QString label;  // user-visible button text
@@ -46,16 +69,22 @@ struct Notification {
 // OS-native notification surface. Created via `create(parent)` which picks
 // the best available backend:
 //   Linux  → org.freedesktop.Notifications (DBus). Supports action buttons.
-//   Windows → QSystemTrayIcon balloon fallback. Actions are NOT supported by
-//             the legacy Shell_NotifyIcon API; full WinRT
-//             ToastNotificationManager would require Windows SDK headers
-//             that MSYS2/MinGW doesn't ship by default.
-//   macOS  → fallback to tray-balloon for now. UNUserNotificationCenter
-//             requires an Objective-C++ implementation (post-release item).
+//   Windows → WinRT toasts with buttons through the MinGW-w64 ABI headers
+//             (NotificationCenter_win.cpp); clicks come back as heap://notify
+//             URIs (protocol activation) and reach handleActivationUri().
+//   macOS  → UNUserNotificationCenter with a category of buttons
+//             (NotificationCenter_mac.mm); needs a real .app bundle.
+// Windows and macOS keep the tray icon for presence, and fall back to its
+// balloon (no buttons) when the native path is unavailable — always so in
+// Qt's test mode, so a test run never registers anything with the OS.
 class NotificationCenter : public QObject {
   Q_OBJECT
  public:
   static std::unique_ptr<NotificationCenter> create(QObject* parent);
+  // Off: create() keeps to the tray even where a native backend exists.
+  // `heap --smoke` turns it off, so a health check registers nothing with
+  // the OS (Qt's test mode does the same for the test suites).
+  static void setNativeAllowed(bool allowed);
   ~NotificationCenter() override = default;
 
   virtual void post(const Notification& n) = 0;
@@ -63,6 +92,11 @@ class NotificationCenter : public QObject {
   // True when the backend actually renders action buttons. Callers may
   // skip producing actions when this is false to avoid misleading toasts.
   virtual bool supportsActions() const = 0;
+
+  // A heap://notify URI a click came back with (Windows protocol activation,
+  // forwarded by the launch the shell started). Emits activated() or
+  // actionInvoked() and returns true; false for anything else.
+  bool handleActivationUri(const QString& uri);
 
  signals:
   void actionInvoked(const QString& notificationId, const QString& actionId);
