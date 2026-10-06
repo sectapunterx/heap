@@ -209,11 +209,15 @@ class AppController : public QObject {
   }
 
   // `heap done` sent to the open window goes through moveTask() like a drag
-  // does. The CLI executor mutes the completion sound (APP-167) around it:
-  // only the user's own action in this window ticks.
-  void setCompletionSoundMuted(bool muted) {
-    m_completionSoundMuted = muted;
+  // does. The CLI executor mutes the sound palette (APP-177) around it: only
+  // the user's own action in this window makes a sound.
+  void setSoundMuted(bool muted) {
+    m_soundMuted = muted;
   }
+
+  // Settings → Sound: the "done" sound once at `volume` (0–100), so the user
+  // hears what the slider set. Asked for, so quiet hours do not hold it.
+  Q_INVOKABLE void previewSound(int volume);
 
   Q_INVOKABLE void flushSave();
 
@@ -1563,11 +1567,18 @@ class AppController : public QObject {
   QHash<QString, QString> m_pendingPushes;
   // Non-zero while a bulk move runs moveTask per card: one toast for the lot.
   int m_bulkMoveDepth = 0;
-  // Completion sound (APP-167): muted for CLI requests; a bulk move to Done
-  // ticks once when the loop ends, not once per card.
-  bool m_completionSoundMuted = false;
-  bool m_completionSoundPending = false;
+  // Sound palette (APP-177): muted for CLI requests; a bulk move plays one
+  // sound when the loop ends, not one per card — "done" if anything closed,
+  // else "refuse" if a card was refused. -1: nothing pending.
+  bool m_soundMuted = false;
+  int m_soundPending = -1;
   void completionSoundOnMove_(const QString& fromStatus, const QString& toStatus);
+  // Plays `cue` (a heap::platform::SoundCue) if the Sound settings, quiet
+  // hours (judged at `at`, the wall clock when invalid), focus mode and the
+  // system allow it.
+  void playSound_(int cue, const QDateTime& at = QDateTime());
+  // The meeting chimes due at `now` (APP-178): one melody per tick at most.
+  void meetingChimesAt(const QDateTime& now);
   // Providers already asked for their full status list this session.
   QSet<QString> m_statusesAsked;
   // Providers whose next tasksFetched answers a quiet follow-up pull.

@@ -11,6 +11,7 @@
 #include "cal/EventSpan.h"
 #include "cal/IcsCodec.h"
 #include "cal/IcsSubscription.h"
+#include "cal/MeetingChimes.h"
 #include "cal/Occurrences.h"
 #include "cal/OutlookDesktop.h"
 #include "cal/Reminders.h"
@@ -48,6 +49,7 @@
 #include "query/TaskQuery.h"
 #include "recap/WeeklyRecap.h"
 #include "recur/RecurrenceEngine.h"
+#include "safety/Immersion.h"
 #include "safety/SafetyText.h"
 #include "storage/AsyncSaver.h"
 #include "storage/Attachments.h"
@@ -2038,16 +2040,97 @@ void AppController::completionSoundOnMove_(const QString& fromStatus, const QStr
   // moveTask(), so what reaches here is a move the user made — in this window,
   // or through `heap` on the command line (muted, or headless).
   using heap::platform::StatusChangeSource;
-  const StatusChangeSource source = s_headless || m_completionSoundMuted ? StatusChangeSource::Cli : StatusChangeSource::User;
-  const bool enabled = settingsMap().value(QStringLiteral("appearance")).toMap().value(QStringLiteral("completionSound")).toBool();
+  const StatusChangeSource source = s_headless || m_soundMuted ? StatusChangeSource::Cli : StatusChangeSource::User;
+  const bool enabled = heap::platform::soundSettingsFrom(settingsMap()).enabled;
   if(!heap::platform::shouldPlayCompletionSound(fromStatus, toStatus, source, enabled)) {
     return;
   }
-  if(m_bulkMoveDepth > 0) {
-    m_completionSoundPending = true;
+  playSound_(static_cast<int>(heap::platform::SoundCue::Done));
+}
+
+void AppController::meetingChimesAt(const QDateTime& now) {
+  if(s_headless) {
     return;
   }
-  heap::platform::playCompletionSound();
+  const QVariantMap s = settingsMap();
+  const heap::platform::SoundSettings sound = heap::platform::soundSettingsFrom(s);
+  if(!sound.enabled || !sound.meetingChimes) {
+    return;
+  }
+  const QDate today = now.date();
+  QVector<CalEvent> occurrences = heap::cal::expandedEvents(m_events.items(), today.addDays(-1), today.addDays(1));
+  // The standup is a meeting too, at the time from the settings.
+  const QVariantMap notif = s.value(QStringLiteral("notifications")).toMap();
+  const QTime standup = heap::cal::clockTime(
+      s.value(QStringLiteral("calendar")).toMap().value(QStringLiteral("standupTime"), QStringLiteral("10:00")).toString());
+  if(notif.value(QStringLiteral("standupReminder"), true).toBool() && isWorkDay(today) && standup.isValid()) {
+    CalEvent st;
+    st.id = QStringLiteral("standup");
+    st.type = QStringLiteral("standup");
+    st.date = today;
+    st.start = standup.hour() + (standup.minute() / 60.0);
+    st.end = st.start + 0.25;
+    occurrences.append(st);
+  }
+  // What the user snoozed stays quiet until the snooze brings the
+  // notification back — and that brings no chime either.
+  QSet<QString> snoozed;
+  for(const heap::notify::SnoozedReminder& r : m_snoozed) {
+    const auto [kind, ref] = heap::notify::parseRoutingId(r.id);
+    if(heap::safety::isAppointment(kind)) {
+      snoozed.insert(ref);
+    }
+  }
+  const QVector<heap::cal::DueChime> due = heap::cal::dueMeetingChimes(occurrences, now, sound.chimeMinutes, sentReminderKeys(), snoozed);
+  if(due.isEmpty()) {
+    return;
+  }
+  // Two meetings at once ring once, with the more urgent melody. Every key is
+  // spent either way: a chime silenced by quiet hours is not played later.
+  heap::cal::ChimeStage stage = heap::cal::ChimeStage::Chords;
+  for(const heap::cal::DueChime& c : due) {
+    markReminderSent(c.key, now);
+    stage = std::max(stage, c.stage);
+  }
+  using heap::platform::SoundCue;
+  const SoundCue cue = stage == heap::cal::ChimeStage::Call   ? SoundCue::MeetCall
+                       : stage == heap::cal::ChimeStage::Rise ? SoundCue::MeetRise
+                                                              : SoundCue::MeetChords;
+  playSound_(static_cast<int>(cue), now);
+}
+
+void AppController::playSound_(int cue, const QDateTime& at) {
+  using heap::platform::SoundCue;
+  if(s_headless || m_soundMuted) {
+    return;
+  }
+  const heap::platform::SoundSettings sound = heap::platform::soundSettingsFrom(settingsMap());
+  if(!sound.enabled) {
+    return;
+  }
+  if(m_bulkMoveDepth > 0) {
+    // One sound for the whole bulk move: a closed card outweighs a refused one.
+    if(m_soundPending != static_cast<int>(SoundCue::Done)) {
+      m_soundPending = cue;
+    }
+    return;
+  }
+  // Focus mode lets a meeting's chime through when it lets the meeting's
+  // reminder through ("let meetings through", on by default).
+  const bool chime = cue >= static_cast<int>(SoundCue::MeetChords);
+  const bool passMeetings = safetySettings().value(QStringLiteral("immersionPassMeetings"), true).toBool();
+  const bool focusHolds =
+      heap::safety::immersionDelivery(chime ? QStringLiteral("meeting") : QStringLiteral("sound"), immersion(), passMeetings) ==
+      heap::safety::Delivery::Hold;
+  const QDateTime when = at.isValid() ? at : QDateTime::currentDateTime();
+  if(!heap::platform::soundAllowed(sound, inQuietHours(when), focusHolds, heap::platform::systemBusy())) {
+    return;
+  }
+  heap::platform::playCue(static_cast<SoundCue>(cue), sound.volume);
+}
+
+void AppController::previewSound(int volume) {
+  heap::platform::playCue(heap::platform::SoundCue::Done, volume);
 }
 
 void AppController::pushStatusToTracker(const QString& taskId, const QString& status) {
@@ -2677,6 +2760,7 @@ bool AppController::saveTask(const QVariantMap& draft) {
   if(prior != nullptr && prior->status != t.status && t.status == QStringLiteral("review") &&
      settingsMap().value("tasks").toMap().value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
     emit toast(tr_("branch.required"));
+    playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
     return false;
   }
 
@@ -3895,6 +3979,7 @@ bool AppController::refuseSubscriptionEdit(const QString& id, const QString& mas
   const int row = m_events.indexOfId(which);
   const QString title = row >= 0 ? m_events.items().at(row).title : QString();
   emit toast(tr_("calsub.readOnly").arg(title, subscriptionNameOf(which)));
+  playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
   return true;
 }
 
@@ -6951,6 +7036,7 @@ void AppController::undo() {
   }
   emit pendingUndoChanged();
   emit toast(copy.label);
+  playSound_(static_cast<int>(heap::platform::SoundCue::Undo));
   scheduleSave();
 }
 
@@ -10195,7 +10281,10 @@ void AppController::loadStateDocument(QJsonObject root, bool viewOnly) {
       applyShortcutOverrides(overrides);
     }
     if(s.contains("app") && s["app"].isObject()) {
-      m_appSettingsJson = QJsonDocument(s["app"].toObject()).toJson(QJsonDocument::Compact);
+      QJsonObject app = s["app"].toObject();
+      // APP-167's completion-sound switch is the Sound switch now (APP-177).
+      heap::platform::migrateLegacySoundSetting(app);
+      m_appSettingsJson = QJsonDocument(app).toJson(QJsonDocument::Compact);
       emit appSettingsJsonChanged();
     }
   } else {
@@ -11861,6 +11950,7 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
     const QVariantMap tasks = s.value("tasks").toMap();
     if(tasks.value("requireBranchOnReview", false).toBool() && t.branch.trimmed().isEmpty()) {
       emit toast(tr_("branch.required"), QStringLiteral("warning"));
+      playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
       return false;
     }
   }
@@ -11902,6 +11992,7 @@ bool AppController::canTransitionStatus(const QString& taskId, const QString& ne
           reachable.isEmpty()
               ? tr_("int.transitionNone").arg(externalKeyOf(t), label, columnName(newStatus))
               : tr_("int.transitionRefused").arg(externalKeyOf(t), label, columnName(newStatus), reachable.join(QStringLiteral(", "))));
+      playSound_(static_cast<int>(heap::platform::SoundCue::Refuse));
       return false;
     }
   }
@@ -12093,9 +12184,10 @@ void AppController::moveSelectedTasksToStatus(const QString& statusId) {
     }
   }
   --m_bulkMoveDepth;
-  if(m_completionSoundPending) {
-    m_completionSoundPending = false;
-    heap::platform::playCompletionSound();
+  if(m_soundPending >= 0) {
+    const int cue = m_soundPending;
+    m_soundPending = -1;
+    playSound_(cue);
   }
   if(moved > 0) {
     scope.setLabel(tr_("selection.toast.moved").arg(moved));
@@ -12478,6 +12570,9 @@ void AppController::runAutomationAt(const QDateTime& now) {
       }
     }
   }
+
+  // 5b. The chimes as a meeting comes closer (APP-178).
+  meetingChimesAt(now);
 
   // 6. The safety net (APP-157…): each off unless switched on.
   checkEndOfDayAt(now);
