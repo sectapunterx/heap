@@ -61,4 +61,36 @@ TestCase {
         verify(sample !== undefined);
         verify(I18n.t(sample) !== sample, "a real key must not render as its own name");
     }
+    // APP-188: displayed dates follow the UI language, the clock follows the
+    // 12h / 24h setting. Settings and language are restored before asserting.
+    function test_dates_follow_the_ui_language_and_the_clock_setting() {
+        const savedSettings = AppController.appSettingsJson;
+        const savedLang = AppController.language;
+        const at = new Date(2026, 9, 6, 15, 15);
+        const out = {};
+        AppController.appSettingsJson = JSON.stringify({ calendar: { timeFormat: "24h" } });
+        AppController.language = "en";
+        out.en = I18n.fmtDate(at, "dayMonth");
+        out.en24 = I18n.fmtDateTime(at, "dayMonth");
+        out.enLong = I18n.fmtDate(at, "longWeekday");
+        AppController.language = "ru";
+        out.ru = I18n.fmtDate(at, "dayMonth");
+        out.ru24 = I18n.fmtDateTime(at, "dayMonth");
+        AppController.appSettingsJson = JSON.stringify({ calendar: { timeFormat: "12h" } });
+        out.ru12 = I18n.fmtTime(at);
+        AppController.language = "en";
+        out.en12 = I18n.fmtDateTime(at, "weekdayDay");
+        out.bad = I18n.fmtDate(new Date(NaN), "dayMonth");
+        AppController.appSettingsJson = savedSettings;
+        AppController.language = savedLang;
+
+        compare(out.en, "Oct 6");
+        compare(out.en24, "Oct 6, 15:15");
+        compare(out.enLong, "Tuesday, October 6");
+        compare(out.ru, "6 окт.");
+        compare(out.ru24, "6 окт., 15:15");
+        compare(out.ru12, "3:15pm");
+        compare(out.en12, "Tue, Oct 6, 3:15pm");
+        compare(out.bad, "");
+    }
 }

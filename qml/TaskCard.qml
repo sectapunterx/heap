@@ -92,7 +92,7 @@ Rectangle {
                 : days === 1 ? I18n.t("task.due.tomorrow")
                 : AppController.shortDate(s);
         if (t.scheduledHasTime)
-            day += " " + String(s.getHours()).padStart(2, "0") + ":" + String(s.getMinutes()).padStart(2, "0");
+            day += " " + I18n.fmtTime(s);
         return day;
     }
 
@@ -521,8 +521,7 @@ Rectangle {
                     // old single flag keep working.
                     const timed = card.task.dueHasTime !== undefined ? card.task.dueHasTime : card.task.hasTime;
                     if (timed && card.task.dueAt && card.task.dueAt.getHours) {
-                        clock = " " + String(card.task.dueAt.getHours()).padStart(2, "0")
-                              + ":" + String(card.task.dueAt.getMinutes()).padStart(2, "0");
+                        clock = " " + I18n.fmtTime(card.task.dueAt);
                     }
                     if (days < 0) return I18n.t("task.due.overdue").arg(-days) + clock;
                     if (days === 0) return I18n.t("task.due.today") + clock;

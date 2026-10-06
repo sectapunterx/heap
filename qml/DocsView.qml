@@ -809,20 +809,32 @@ Item {
                     width: bodyScroll.width
                     spacing: Theme.sp3xl
 
+                    // Nothing kept here yet (APP-191): what the page is for
+                    // and where to start. The sections below stay, so their
+                    // "+ Add" is right there.
+                    EmptyState {
+                        objectName: "docs-empty"
+                        visible: root.searchText.trim().length === 0 && root.totalDocs() === 0
+                                 && root.snippets.length === 0 && root.contacts.length === 0
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: Math.min(bodyCol.width - 2 * Theme.sp3xl, 420)
+                        Layout.topMargin: Theme.sp3xl
+                        icon: "heap-08-docs"
+                        title: I18n.t("docs.empty")
+                        line: I18n.t("docs.empty.hint")
+                    }
+
                     ColumnLayout {
                         objectName: "docs-no-matches"
                         visible: root.searchFoundNothing
                         Layout.fillWidth: true
                         Layout.topMargin: Theme.sp3xl
                         spacing: Theme.spMd
-                        Text {
+                        EmptyState {
                             Layout.alignment: Qt.AlignHCenter
-                            Layout.maximumWidth: bodyCol.width - 2 * Theme.sp3xl
-                            text: I18n.t("docs.noMatches").arg(root.searchText.trim())
-                            color: Theme.text
-                            font.pixelSize: Theme.fsMd
-                            wrapMode: Text.Wrap
-                            horizontalAlignment: Text.AlignHCenter
+                            Layout.preferredWidth: Math.min(bodyCol.width - 2 * Theme.sp3xl, 420)
+                            title: I18n.t("docs.noMatches").arg(root.searchText.trim())
+                            line: I18n.t("docs.noMatches.hint")
                         }
                         PillButton {
                             Layout.alignment: Qt.AlignHCenter

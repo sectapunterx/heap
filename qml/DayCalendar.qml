@@ -292,10 +292,7 @@ Item {
                             text: {
                                 const d = AppController.selectedDate;
                                 if (!d || !d.getFullYear) return "";
-                                const y = d.getFullYear();
-                                const m = (d.getMonth()+1).toString().padStart(2,"0");
-                                const dd = d.getDate().toString().padStart(2,"0");
-                                return y + "-" + m + "-" + dd + " · " + I18n.events(root._eventsToday);
+                                return I18n.fmtDate(d, "dayMonthYear") + " · " + I18n.events(root._eventsToday);
                             }
                             color: Theme.textDim
                             font.family: Theme.fontUi

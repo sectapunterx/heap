@@ -205,7 +205,7 @@ Rectangle {
                         }
                         Text {
                             objectName: "unscheduled-date"
-                            text: chip.modelData.deadline.toLocaleDateString(I18n.locale, "ddd d MMM")
+                            text: I18n.fmtDate(chip.modelData.deadline, "weekdayDay")
                             color: Theme.textDim
                             font.family: Theme.fontUi
                             font.features: Theme.tabularNums

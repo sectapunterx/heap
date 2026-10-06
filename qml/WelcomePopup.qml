@@ -233,16 +233,24 @@ Popup {
             }
         }
 
-        // ── Body (fixed height so the frame doesn't jump between steps) ──
+        // ── Body: as tall as the step's content (APP-201). A fixed 212px
+        // left a blank band under "Learn more" on the short steps; the
+        // height eases between steps instead of jumping. ──
         Item {
             id: body
+            objectName: "welcome-body"
             Layout.fillWidth: true
             Layout.topMargin: Theme.sp2xl
-            Layout.preferredHeight: 212
+            Layout.bottomMargin: Theme.sp2xl
+            property real contentHeight: bodyCol.implicitHeight
+            Behavior on contentHeight { NumberAnimation { duration: Theme.durMove; easing.type: Theme.easeEnter } }
+            Layout.preferredHeight: contentHeight
             clip: true
             activeFocusOnTab: false
 
             ColumnLayout {
+                id: bodyCol
+                objectName: "welcome-body-content"
                 anchors.left: parent.left
                 anchors.right: parent.right
                 anchors.top: parent.top

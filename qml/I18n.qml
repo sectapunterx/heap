@@ -142,7 +142,7 @@ QtObject {
             "welcome.skip": "Skip",
             "welcome.back": "Back",
             "welcome.next": "Next",
-            "welcome.learnMore": "Learn more →",
+            "welcome.learnMore": "Learn more",
             "welcome.resume": "Continue tour",
             "welcome.giveUp": "End the tour",
             "welcome.replay": "Take the tour again",
@@ -268,7 +268,7 @@ QtObject {
             "archive.selectAll": "Select all",
             "archive.restoreSelected": "Restore selected",
             "archive.empty.title": "Archive is empty",
-            "archive.empty.hint": "Tickets you archive show up here. Multi-select + restore to bring them back.",
+            "archive.empty.hint": "Archived tasks show up here. On the board, %1 archives the task under the cursor.",
 
             // ── FilterBar ──
             "filter.all": "All",
@@ -300,7 +300,14 @@ QtObject {
             "board.empty.title": "No tasks yet",
             "board.empty.hint": "Press %1 to add your first task, or use quick-capture (%2).",
             "day.noEvents": "No events today — drag an empty slot to create one, or drop a task to schedule it.",
-            "week.noEvents": "No events this week — switch to Day and drag to create one.",
+            "week.empty.title": "Nothing this week",
+            "week.empty.hint": "Tasks with a date and events show up here. Click an empty slot to add an event, or press %1 for a task.",
+            "month.empty.title": "Nothing this month",
+            "month.empty.hint": "Tasks with a date and events show up on their day. Press %1 to add a task.",
+            "view.empty.noMatch.title": "Nothing matches the search",
+            "view.empty.noMatch.hint": "Clear the search or the filters to see everything again.",
+            "docs.empty.hint": "Specs, snippets and contacts you keep at hand live here. Add one with + Add in a section, or start a section with + New section.",
+            "docs.noMatches.hint": "Titles, tags and links are searched. Try fewer words.",
             "kanban.dropHere": "Drop here",
             "kanban.deleteColumn": "Delete column",
             "kanban.moveLeft": "Move left",
@@ -835,7 +842,7 @@ QtObject {
             "settings.section.safety.sub": "Gentle, opt-in heads-ups. All off by default.",
             "settings.safety.group.endOfDay": "End of day",
             "settings.safety.endOfDay": "Wrap-up check",
-            "settings.safety.endOfDay.hint": "Once a day: a running timer, uncommitted work in the current branch's repo, tasks in progress that have stopped moving.",
+            "settings.safety.endOfDay.hint": "Once a day: what was closed, what carries over to tomorrow, running timers, uncommitted work in the current branch's repo, tasks in progress that have stopped moving. It only shows; nothing is moved.",
             "settings.safety.endOfDayTime": "At",
             "settings.safety.staleDays": "In progress without a move for",
             "settings.safety.time.invalid": "Use HH:MM, e.g. 18:00",
@@ -846,6 +853,13 @@ QtObject {
             "eventLog.title": "Event log",
             "eventLog.note": "What the notices said this session, newest first. Open an entry to go to what it is about.",
             "eventLog.empty": "Nothing yet. Syncs, refusals and errors show up here, so a missed notice can be read again.",
+            "eod.open": "Day summary",
+            "eod.title": "End of day · %1",
+            "eod.closed": "Closed today",
+            "eod.carryOver": "Carries over to tomorrow",
+            "eod.timers": "Timers running",
+            "eod.since": "since %1",
+            "eod.empty": "Nothing closed today, nothing dated for today or earlier, no timer running.",
             "settings.safety.group.waiting": "Waiting on a reply",
             "settings.safety.waiting": "Remind me who I'm waiting on",
             "settings.safety.waiting.hint": "Link a task to the person whose answer it needs. One gentle reminder if they haven't replied; marking them replied ends the wait.",
@@ -878,6 +892,7 @@ QtObject {
             "settings.safety.standup": "Standup draft",
             "settings.safety.standup.hint": "A “Yesterday / Today / Blockers” draft from column moves, commits, the timer, meetings and blocked cards — in the palette and the weekly recap. You edit and copy it; nothing is sent.",
             "palette.cmd.standupDraft": "Standup draft",
+            "palette.cmd.endOfDay": "End of day: today's summary",
             "standup.open": "Standup draft",
             "standup.title": "Standup draft",
             "standup.note": "Built from what heap saw. Edit it, then copy — nothing is sent anywhere.",
@@ -1597,7 +1612,7 @@ QtObject {
             "welcome.skip": "Пропустить",
             "welcome.back": "Назад",
             "welcome.next": "Далее",
-            "welcome.learnMore": "Подробнее →",
+            "welcome.learnMore": "Подробнее",
             "welcome.resume": "Продолжить тур",
             "welcome.giveUp": "Завершить тур",
             "welcome.replay": "Пройти тур заново",
@@ -1722,7 +1737,7 @@ QtObject {
             "archive.selectAll": "Выделить все",
             "archive.restoreSelected": "Вернуть выделенные",
             "archive.empty.title": "Архив пуст",
-            "archive.empty.hint": "Тикеты, отправленные в архив, появятся здесь. Множественный выбор + «Вернуть».",
+            "archive.empty.hint": "Здесь появляются задачи из архива. На доске %1 отправляет в архив задачу под курсором.",
 
             "filter.all": "Все",
             "filter.mine": "Мои",
@@ -1752,7 +1767,14 @@ QtObject {
             "board.empty.title": "Пока нет задач",
             "board.empty.hint": "Нажмите %1, чтобы добавить первую задачу, или откройте быстрый ввод (%2).",
             "day.noEvents": "Событий сегодня нет — потяни пустой слот, чтобы создать, или брось задачу для планирования.",
-            "week.noEvents": "Событий на этой неделе нет — переключись на День и потяни, чтобы создать.",
+            "week.empty.title": "На этой неделе пусто",
+            "week.empty.hint": "Здесь появляются задачи с датой и события. Кликните по свободному месту, чтобы добавить событие, или нажмите %1 для задачи.",
+            "month.empty.title": "В этом месяце пусто",
+            "month.empty.hint": "Задачи с датой и события появляются в своём дне. Нажмите %1, чтобы добавить задачу.",
+            "view.empty.noMatch.title": "По поиску ничего не найдено",
+            "view.empty.noMatch.hint": "Сбросьте поиск или фильтры, чтобы снова видеть всё.",
+            "docs.empty.hint": "Здесь лежат спеки, сниппеты и контакты, которые нужны под рукой. Добавьте запись кнопкой «+ Добавить» в секции или начните секцию через «+ Новая секция».",
+            "docs.noMatches.hint": "Ищет по названиям, тегам и ссылкам. Попробуйте меньше слов.",
             "kanban.dropHere": "Перетащите сюда",
             "kanban.deleteColumn": "Удалить колонку",
             "kanban.wip.set": "Лимит незавершённого…",
@@ -2278,7 +2300,7 @@ QtObject {
             "settings.section.safety.sub": "Мягкие подсказки по желанию. Всё выключено по умолчанию.",
             "settings.safety.group.endOfDay": "Конец дня",
             "settings.safety.endOfDay": "Проверка перед уходом",
-            "settings.safety.endOfDay.hint": "Раз в день: идущий таймер, незакоммиченное в репозитории текущей ветки, задачи в работе без движения.",
+            "settings.safety.endOfDay.hint": "Раз в день: что закрыто, что переходит на завтра, идущие таймеры, незакоммиченное в репозитории текущей ветки, задачи в работе без движения. Только показывает, ничего не переносит.",
             "settings.safety.endOfDayTime": "Во сколько",
             "settings.safety.staleDays": "В работе без движения",
             "settings.safety.time.invalid": "Формат ЧЧ:ММ, например 18:00",
@@ -2289,6 +2311,13 @@ QtObject {
             "eventLog.title": "Журнал событий",
             "eventLog.note": "Что говорили уведомления в этом сеансе, новые сверху. Откройте запись, чтобы перейти к её объекту.",
             "eventLog.empty": "Пока пусто. Сюда попадают синхронизации, отказы и ошибки — пропущенное уведомление можно прочитать снова.",
+            "eod.open": "Итог дня",
+            "eod.title": "Конец дня · %1",
+            "eod.closed": "Закрыто сегодня",
+            "eod.carryOver": "Переходит на завтра",
+            "eod.timers": "Идут таймеры",
+            "eod.since": "с %1",
+            "eod.empty": "Сегодня ничего не закрыто, на сегодня и раньше ничего не назначено, таймеры не идут.",
             "settings.safety.group.waiting": "Жду ответа",
             "settings.safety.waiting": "Напоминать, чьего ответа жду",
             "settings.safety.waiting.hint": "Свяжите задачу с человеком, от которого ждёте ответа. Одно мягкое напоминание, если он молчит; отметка «ответил» снимает ожидание.",
@@ -2321,6 +2350,7 @@ QtObject {
             "settings.safety.standup": "Черновик стендапа",
             "settings.safety.standup.hint": "Черновик «Вчера / Сегодня / Блокеры» из перемещений по колонкам, коммитов, таймера, встреч и заблокированных задач — в палитре и в сводке недели. Вы правите и копируете; ничего не отправляется.",
             "palette.cmd.standupDraft": "Черновик стендапа",
+            "palette.cmd.endOfDay": "Конец дня: итог дня",
             "standup.open": "Черновик стендапа",
             "standup.title": "Черновик стендапа",
             "standup.note": "Собрано из того, что видел heap. Поправьте и скопируйте — никуда не отправляется.",
@@ -2942,6 +2972,26 @@ QtObject {
     // not: the compiled binding drops the unused left operand, and with it the
     // dependency — the day header stayed English after switching to Russian.
     function relang(s) { return lang === "ru" ? s : String(s); }
+
+    // A date as the UI shows it, in a named style from the one table in
+    // src/text/LocaleFormat.h: "dayMonth" (Oct 6 / 6 окт.), "dayMonthYear",
+    // "weekdayDay" (Tue, Oct 6 / вт, 6 окт.), "longDay", "longWeekday"…
+    // Never a pattern of its own: a literal "d MMM" reads wrong in English,
+    // and .github/scripts/date_format_check.py fails the build on one.
+    function fmtDate(d, style) {
+        if (!d || !d.getTime || isNaN(d.getTime())) return "";
+        return d.toLocaleDateString(locale, AppController.datePattern(style || "dayMonth", lang));
+    }
+    // The clock part: the 12h / 24h setting decides, not the language.
+    function fmtTime(d) {
+        if (!d || !d.getTime || isNaN(d.getTime())) return "";
+        return Theme.fmtHour(d.getHours() + d.getMinutes() / 60);
+    }
+    // "Oct 6, 15:15" / "6 окт., 15:15".
+    function fmtDateTime(d, style) {
+        const day = fmtDate(d, style);
+        return day.length > 0 ? day + ", " + fmtTime(d) : "";
+    }
 
     // Month 0..11, standalone form ("сентябрь", not "сентября").
     function monthName(month) {

@@ -336,6 +336,7 @@ qt_add_qml_module(heap_core
         qml/WeeklyRecapDialog.qml
         qml/EventLogDialog.qml
         qml/TimeMachineDialog.qml
+        qml/EndOfDayDialog.qml
         # ── audit-time: end ──
         # ── audit-know: begin ──
         qml/VaultImportDialog.qml

@@ -154,15 +154,88 @@ void AppController::finishEndOfDay(const QDateTime& now, const RepoDirt& dirt) {
   heap::safety::EndOfDaySettings settings;
   settings.staleDays = qMax(1, s.value(QStringLiteral("staleDays"), 3).toInt());
   const heap::safety::EndOfDayFindings f = heap::safety::endOfDayFindings(facts, now, settings);
-  if(!f.any()) {
+  // The day's summary (APP-190) is said too, so a day with work closed and
+  // nothing left behind still gets its calm wrap-up; the toast opens it.
+  const heap::safety::DaySummary day = heap::safety::daySummary(dayTasks(), now);
+  if(!f.any() && day.empty()) {
     return;
   }
   const bool ru = m_language == QStringLiteral("ru");
-  safetyNotify(QStringLiteral("endOfDay"),
-               tr_(QStringLiteral("safety.eod.title")),
-               heap::safety::endOfDaySummary(f, settings.staleDays, ru),
-               f.taskIds(),
-               now);
+  QStringList body;
+  for(const QString& part : {heap::safety::daySummaryLine(day, ru), heap::safety::endOfDaySummary(f, settings.staleDays, ru)}) {
+    if(!part.isEmpty()) {
+      body << part;
+    }
+  }
+  safetyNotify(QStringLiteral("endOfDay"), tr_(QStringLiteral("safety.eod.title")), body.join(QStringLiteral(" · ")), f.taskIds(), now);
+}
+
+QVector<heap::safety::DayTask> AppController::dayTasks() const {
+  QVector<heap::safety::DayTask> out;
+  const auto add = [&out](const Task& t, bool active) {
+    if(!active && !t.timerStartedAt.isValid()) {
+      return;  // another workspace only counts for its running timers
+    }
+    const bool done = t.status == QLatin1String("done");
+    out.append({.id = t.id,
+                .done = done && active,
+                .archived = t.archived || !active,
+                .closedAt = done ? t.statusChangedAt : QDateTime(),
+                .scheduledAt = t.scheduledAt,
+                .dueAt = t.dueAt,
+                .timerStartedAt = t.timerStartedAt});
+  };
+  for(const Task& t : m_tasks.items()) {
+    add(t, true);
+  }
+  for(const Profile& p : m_profiles) {
+    if(p.id != m_activeProfileId) {
+      for(const Task& t : p.tasks) {
+        add(t, false);
+      }
+    }
+  }
+  return out;
+}
+
+QVariantMap AppController::endOfDaySummary() const {
+  return endOfDaySummaryAt(QDateTime::currentDateTime());
+}
+
+QVariantMap AppController::endOfDaySummaryAt(const QDateTime& now) const {
+  const heap::safety::DaySummary s = heap::safety::daySummary(dayTasks(), now);
+  QHash<QString, const Task*> byId;
+  for(const Task& t : m_tasks.items()) {
+    byId.insert(t.id, &t);
+  }
+  for(const Profile& p : m_profiles) {
+    if(p.id != m_activeProfileId) {
+      for(const Task& t : p.tasks) {
+        if(!byId.contains(t.id)) {
+          byId.insert(t.id, &t);
+        }
+      }
+    }
+  }
+  const auto rows = [&byId](const QStringList& ids, bool withSince) {
+    QVariantList out;
+    for(const QString& id : ids) {
+      const Task* t = byId.value(id);
+      if(!t) {
+        continue;
+      }
+      QVariantMap m{{QStringLiteral("id"), t->id}, {QStringLiteral("title"), t->title}};
+      if(withSince) {
+        m.insert(QStringLiteral("since"), t->timerStartedAt);
+      }
+      out << m;
+    }
+    return out;
+  };
+  return {{QStringLiteral("date"), now.date()},
+          {QStringLiteral("closed"), rows(s.closedTaskIds, false)},
+          {QStringLiteral("carryOver"), rows(s.carryOverTaskIds, false)},
+          {QStringLiteral("timers"), rows(s.timerTaskIds, true)}};
 }
 
 // ── APP-159: you've seen this before ──

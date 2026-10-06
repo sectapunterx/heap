@@ -133,6 +133,8 @@ Item {
         return cells;
     }
     readonly property var cells: buildCells()
+    // Nothing dated in the whole grid: the empty state says what lands here.
+    readonly property bool monthEmpty: cells.every(c => c.tasks.length === 0 && c.events.length === 0)
 
     // Day-of-month held across a month step, clamped to the target month's own
     // length. A flat clamp to 28 was safe against JS Date overflow (Feb 31
@@ -173,8 +175,7 @@ Item {
         if (mode === "month")
             return I18n.monthName(anchorDate.getMonth()) + " " + anchorDate.getFullYear();
         const end = new Date(gridStart.getFullYear(), gridStart.getMonth(), gridStart.getDate() + rows * 7 - 1);
-        return gridStart.toLocaleDateString(I18n.locale, "d MMM")
-             + " – " + end.toLocaleDateString(I18n.locale, "d MMM yyyy");
+        return I18n.fmtDate(gridStart, "dayMonth") + " – " + I18n.fmtDate(end, "dayMonthYear");
     }
 
     // A day as a screen reader hears it: "Wednesday 30 September: 3 tasks,
@@ -188,7 +189,7 @@ Item {
             events = root.cells[i].events.length;
             break;
         }
-        return I18n.t("month.dayA11y").arg(d.toLocaleDateString(I18n.locale, "dddd d MMMM")).arg(tasks).arg(events);
+        return I18n.t("month.dayA11y").arg(I18n.fmtDate(d, "longWeekday")).arg(tasks).arg(events);
     }
     // Return on the grid: the first chip of the selected day takes the
     // keyboard, if the day has any.
@@ -527,6 +528,32 @@ Item {
                     }
                 }
             }
+        }
+    }
+
+    // A grid with nothing dated in it (APP-191). On a card of its own, like
+    // the board's: laid straight over the cells, their borders cut the text.
+    // Non-interactive, so a click beside it still selects the day.
+    Rectangle {
+        objectName: "month-empty"
+        visible: root.monthEmpty
+        anchors.centerIn: parent
+        width: monthEmptyState.width + 2 * Theme.sp3xl
+        height: monthEmptyState.implicitHeight + 2 * Theme.sp2xl
+        radius: Theme.radiusXl
+        color: Theme.panel
+        border.color: Theme.borderStrong
+        border.width: 1
+        EmptyState {
+            id: monthEmptyState
+            objectName: "month-empty-state"
+            readonly property bool searching: root.searchText.trim().length > 0
+            anchors.centerIn: parent
+            width: Math.min(root.width - 2 * Theme.sp3xl - 96, 360)
+            icon: searching ? "" : "heap-04-month"
+            title: I18n.t(searching ? "view.empty.noMatch.title" : "month.empty.title")
+            line: searching ? I18n.t("view.empty.noMatch.hint")
+                            : I18n.t("month.empty.hint").arg(AppController.shortcutFor("task.new"))
         }
     }
 }

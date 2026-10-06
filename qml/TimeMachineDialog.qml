@@ -77,8 +77,7 @@ Dialog {
         if (iso === key(today)) return I18n.t("tm.today");
         const y = new Date(today.getFullYear(), today.getMonth(), today.getDate() - 1);
         if (iso === key(y)) return I18n.t("tm.yesterday");
-        const loc = Qt.locale(I18n.lang === "ru" ? "ru_RU" : "en_US");
-        return new Date(iso + "T00:00:00").toLocaleDateString(loc, "ddd, d MMM");
+        return I18n.fmtDate(new Date(iso + "T00:00:00"), "weekdayDay");
     }
 
     function kindLabel(kind) {

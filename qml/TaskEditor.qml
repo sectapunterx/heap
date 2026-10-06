@@ -217,9 +217,7 @@ Popup {
     // read their own row.
     readonly property var _historyRows: root._history.map(e => ({ when: root._historyWhen(e.at), text: root._historyText(e) }))
     function _historyWhen(at) {
-        if (!at || !at.getTime || isNaN(at.getTime())) return "";
-        return AppController.shortDate(at) + " " + String(at.getHours()).padStart(2, "0")
-             + ":" + String(at.getMinutes()).padStart(2, "0");
+        return I18n.fmtDateTime(at, "weekdayDay");
     }
     function _statusName(id) {
         const at = root.statusList().indexOf(String(id || ""));
@@ -374,7 +372,7 @@ Popup {
         if (!d || !d.getFullYear || isNaN(d.getTime())) return "";
         const iso = formatDate(d);
         if (!hasTime) return iso;
-        return iso + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+        return iso + " " + String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");  // machine-format: the field parses it back
     }
 
     // "YYYY-MM-DD" or "YYYY-MM-DD HH:MM" — the shape formatWhen writes back into
@@ -1013,15 +1011,8 @@ Popup {
                             if (!root._deadlinePreview || !root._deadlinePreview.ok ||
                                 !root._deadlinePreview.start) return "";
                             const d = root._deadlinePreview.start;
-                            const iso = d.getFullYear() + "-" +
-                                String(d.getMonth() + 1).padStart(2, "0") + "-" +
-                                String(d.getDate()).padStart(2, "0");
-                            if (root._deadlinePreview.hasTime) {
-                                const hh = String(d.getHours()).padStart(2, "0");
-                                const mm = String(d.getMinutes()).padStart(2, "0");
-                                return "↑ " + iso + " " + hh + ":" + mm;
-                            }
-                            return "↑ " + iso;
+                            return "↑ " + (root._deadlinePreview.hasTime ? I18n.fmtDateTime(d, "weekdayDayYear")
+                                                                          : I18n.fmtDate(d, "weekdayDayYear"));
                         }
                     }
                 }

@@ -1210,11 +1210,20 @@ class AppController : public QObject {
   Q_INVOKABLE QString eventHourLabel(double hour) const;
   Q_INVOKABLE QString sprintLabel() const;
   Q_INVOKABLE QString humanDate(const QDate& date) const;
+  // Displayed dates in the UI language (APP-188): the pattern of a named
+  // style ("dayMonth", "weekdayDay", "longWeekday"… see text/LocaleFormat.h)
+  // for `lang` (empty = the current one). QML formats through I18n.date(),
+  // which passes its own lang so the binding repaints on a language switch.
+  Q_INVOKABLE QString datePattern(const QString& style, const QString& lang = QString()) const;
+  // "Oct 6" / "6 окт." and "Oct 6, 15:15" — the clock follows the 12h/24h
+  // setting.
+  Q_INVOKABLE QString dateLabel(const QDate& d, const QString& style) const;
+  Q_INVOKABLE QString dateTimeLabel(const QDateTime& dt, const QString& style) const;
 
   // ---- Timeline / week helpers ----
   Q_INVOKABLE QString deadlineBucket(const QDate& deadline) const;  // overdue/today/tomorrow/thisweek/nextweek/later/nodl
   Q_INVOKABLE QString deadlineDiffLabel(const QDate& deadline) const;
-  Q_INVOKABLE QString shortDate(const QDate& d) const;  // "Пт, 15 май"
+  Q_INVOKABLE QString shortDate(const QDate& d) const;  // "Fri, May 15" / "пт, 15 мая"
   Q_INVOKABLE int isoWeekNumber(const QDate& d) const;
 
   // ---- Free-form datetime parser (heap chrono) ----
@@ -1576,6 +1585,8 @@ class AppController : public QObject {
   void runAutomation();
 
  private:
+  // settings.calendar.timeFormat == "12h".
+  bool twelveHourClock() const;
   // `base` if no task holds it, else "base-2", "base-3", … Two pulled issues
   // can want the same id (the same number from two repos), and upsert on a
   // colliding id replaces the other task rather than adding one.
@@ -2332,9 +2343,18 @@ class AppController : public QObject {
   // and the blocked cards. Text for the user to edit; nothing is sent.
   Q_INVOKABLE QString standupDraft();
   QString standupDraftFor(const QDate& today);
+  // The day's summary (APP-190) for the end-of-day dialog: { date,
+  // closed: [{id, title}], carryOver: [{id, title}], timers: [{id, title,
+  // since}] }. Closed today and still-open work dated today or earlier come
+  // from the active workspace; running timers from every workspace. It only
+  // reads. The *At form takes `now`, for tests.
+  Q_INVOKABLE QVariantMap endOfDaySummary() const;
+  Q_INVOKABLE QVariantMap endOfDaySummaryAt(const QDateTime& now) const;
   // What the end-of-day check reads from the workspace at `now`; the
   // repository part is filled in by git, asynchronously.
   heap::safety::EndOfDayFacts endOfDayFacts() const;
+  // The tasks the day's summary reads (APP-190).
+  QVector<heap::safety::DayTask> dayTasks() const;
 
  signals:
   // A safety-net notice for the in-app toast. `taskIds` are the tasks its

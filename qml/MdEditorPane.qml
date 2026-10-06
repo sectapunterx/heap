@@ -101,12 +101,13 @@ Item {
 
     Rectangle { anchors.fill: parent; color: Theme.bg }
 
-    Text {
+    EmptyState {
+        objectName: "md-editor-empty"
         anchors.centerIn: parent
+        width: Math.min(parent.width - 2 * Theme.sp3xl, 420)
         visible: root.pageId.length === 0
-        text: root.emptyText
-        color: Theme.textDim
-        font.pixelSize: Theme.fsMd
+        icon: "heap-08-docs"
+        title: root.emptyText
     }
 
     ColumnLayout {

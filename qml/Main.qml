@@ -513,7 +513,7 @@ ApplicationWindow {
         || personEditor.opened || personPicker.opened || profileEditor.opened || welcome.opened
         || cmdPalette.opened || quickCapture.opened || quickCaptureNotes.opened
         || tweaks.opened || hotkeys.opened || closeAsk.opened || goToDatePopup.opened
-        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened
+        || weeklyRecap.opened || standupDraft.opened || timeMachine.opened || eventLog.opened || endOfDay.opened
 
     // ── Keyboard scope ────────────────────────────────────────────────
     // Board and calendar keys (Return, Esc, the arrows, bare letters) are
@@ -825,7 +825,10 @@ ApplicationWindow {
         // board to the tasks it is about.
         function onSafetyNotice(kind, title, body, taskIds) {
             const msg = title.length > 0 ? title + " · " + body : body;
-            if (taskIds && taskIds.length > 0)
+            // The end-of-day check opens the day's summary (APP-190).
+            if (kind === "endOfDay")
+                toast.showWithAction(msg, I18n.t("eod.open"), 15, function () { endOfDay.showNow() });
+            else if (taskIds && taskIds.length > 0)
                 toast.showWithAction(msg, I18n.t("safety.show"), 10, function () { win.showSafetyTasks(taskIds) });
             else
                 toast.show(msg, "info");
@@ -1608,6 +1611,7 @@ ApplicationWindow {
         case "standup.draft":        standupDraft.showNow(); break;
         case "timeMachine.open":     timeMachine.showNow(); break;
         case "log.open":             eventLog.showNow(); break;
+        case "endOfDay.open":        endOfDay.showNow(); break;
         case "zoom.in":              win.zoomInterface(1); break;
         case "zoom.out":             win.zoomInterface(-1); break;
         case "zoom.reset":           win.zoomInterface(0); break;
@@ -1826,6 +1830,38 @@ ApplicationWindow {
         context: Qt.ApplicationShortcut
         enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.immersion)
         onActivated: win.toggleImmersion()
+    }
+    // The 0.6 tools (APP-192): no key by default; live once one is bound in
+    // Settings → Hotkeys, and they run what the palette runs.
+    Shortcut {
+        sequence: win._kbd("timeMachine.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("timeMachine.open")
+    }
+    Shortcut {
+        sequence: win._kbd("standup.draft")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn && !!(AppController.safety && AppController.safety.standupDraft)
+        onActivated: win.runCommand("standup.draft")
+    }
+    Shortcut {
+        sequence: win._kbd("recap.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("recap.open")
+    }
+    Shortcut {
+        sequence: win._kbd("endOfDay.open")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("endOfDay.open")
+    }
+    Shortcut {
+        sequence: win._kbd("welcome.replay")
+        context: Qt.ApplicationShortcut
+        enabled: sequence.length > 0 && win._globalKeysOn
+        onActivated: win.runCommand("welcome.replay")
     }
     Shortcut {
         sequence: "Escape"
@@ -2080,6 +2116,11 @@ ApplicationWindow {
     }
     // The standup draft (APP-170): text to edit and copy, sent nowhere.
     StandupDraftDialog { id: standupDraft }
+    // The day's summary (APP-190): closed, carrying over, timers. Read-only.
+    EndOfDayDialog {
+        id: endOfDay
+        onTaskActivated: (id) => taskEditor.showFor(Object.assign({}, AppController.taskById(id)))
+    }
     Connections {
         target: AppController
         function onTodayChanged() {
