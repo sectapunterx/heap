@@ -455,10 +455,10 @@ Item {
                                     // whatever font had them, in any size.
                                     IconImage {
                                         source: modelData.icon
-                                        Layout.preferredWidth: 16
-                                        Layout.preferredHeight: 16
-                                        sourceSize.width: 16
-                                        sourceSize.height: 16
+                                        Layout.preferredWidth: 18
+                                        Layout.preferredHeight: 18
+                                        sourceSize.width: 18
+                                        sourceSize.height: 18
                                         color: root.activeSection === modelData.id ? Theme.accentStrong : Theme.textMuted
                                     }
                                     Text {
@@ -612,11 +612,11 @@ Item {
                         spacing: Theme.spLg
                         IconImage {
                             source: root._activeMeta().icon || ""
-                            Layout.preferredWidth: 22
-                            Layout.preferredHeight: 22
+                            Layout.preferredWidth: 18
+                            Layout.preferredHeight: 18
                             Layout.alignment: Qt.AlignVCenter
-                            sourceSize.width: 22
-                            sourceSize.height: 22
+                            sourceSize.width: 18
+                            sourceSize.height: 18
                             color: Theme.textMuted
                         }
                         Text {

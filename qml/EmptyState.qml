@@ -13,7 +13,9 @@ Column {
     property string title: ""
     property string line: ""
     property bool compact: false
-    readonly property int _iconSize: compact ? 22 : 40
+    // Whole multiples of the icons' 18px grid (APP-195), so their 1px lines
+    // land on device pixels.
+    readonly property int _iconSize: compact ? 18 : 36
 
     spacing: compact ? Theme.spXs : Theme.spMd
     // Fades in rather than popping when the last card leaves.

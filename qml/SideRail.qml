@@ -408,6 +408,8 @@ Rectangle {
         property bool active: false
         property string countText: ""
         property color countColor: Theme.danger
+        // The icons are drawn on an 18px grid with 1px lines on the pixel
+        // grid (APP-195); shown at 18, every line is one device pixel.
         property int iconSize: 18
         // Saved views: the glyph is the Alt+N digit, set in the mono face; a
         // view whose filters were changed since it was applied gets a dot.
