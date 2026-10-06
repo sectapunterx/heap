@@ -780,8 +780,8 @@ Item {
                     id: wheelAnim
                     target: bodyScroll
                     property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                    duration: Theme.durMove
+                    easing.type: Theme.easeEnter
                 }
 
                 WheelHandler {
@@ -1537,7 +1537,12 @@ Item {
                 // the section menu's Move up / Move down.
                 opacity: card.cardHovered ? 1 : 0
                 enabled: card.cardHovered
-                Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+                Behavior on opacity {
+                    NumberAnimation {
+                        duration: card.cardHovered ? Theme.durTap : Theme.durTapOut
+                        easing.type: card.cardHovered ? Theme.easeEnter : Theme.easeExit
+                    }
+                }
                 width: 18; height: 22; radius: Theme.radiusSm
                 color: handleMA.containsMouse ? Theme.panel3 : Theme.panel2
                 border.color: Theme.border; border.width: 1

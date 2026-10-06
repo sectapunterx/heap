@@ -849,8 +849,8 @@ Item {
                     id: wheelAnim
                     target: notesScroll
                     property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                    duration: Theme.durMove
+                    easing.type: Theme.easeEnter
                 }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad

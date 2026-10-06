@@ -2305,7 +2305,7 @@ ApplicationWindow {
         NumberAnimation {
             id: splashFade
             target: splash; property: "opacity"; to: 0
-            duration: Theme.reducedMotion ? 0 : 350; easing.type: Easing.OutCubic
+            duration: Theme.durMoveOut; easing.type: Theme.easeExit
             onFinished: splash.visible = false
         }
     }

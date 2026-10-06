@@ -9,7 +9,7 @@ Rectangle {
     opacity: visible ? 1 : 0
     Behavior on opacity {
         NumberAnimation {
-            duration: Theme.scaledMs(160); easing.type: Easing.OutCubic
+            duration: Theme.durPop; easing.type: Theme.easeEnter
         }
     }
     radius: Theme.radiusLg

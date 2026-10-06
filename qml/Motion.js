@@ -28,7 +28,7 @@ function justCompleted(status, changedAt, now) {
 
 // Where a dropped card starts its settle: the offset from its home slot to
 // the point it was let go, scaled by Theme.motion (0 with reduced motion), so
-// it springs the rest of the way home instead of jumping.
+// it glides the rest of the way home instead of jumping.
 function settleFrom(dropX, dropY, homeX, homeY, motion) {
     var m = motion > 0 ? 1 : 0;
     return { x: (dropX - homeX) * m, y: (dropY - homeY) * m };

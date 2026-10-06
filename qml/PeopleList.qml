@@ -195,7 +195,12 @@ Rectangle {
                     border.color: Theme.border
                     border.width: 1
                     opacity: prow.rowHovered ? 1.0 : 0.0
-                    Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
+                    Behavior on opacity {
+                        NumberAnimation {
+                            duration: prow.rowHovered ? Theme.durTap : Theme.durTapOut
+                            easing.type: prow.rowHovered ? Theme.easeEnter : Theme.easeExit
+                        }
+                    }
                 }
 
                 RowLayout {
@@ -251,7 +256,12 @@ Rectangle {
                         Layout.preferredHeight: 22
                         opacity: prow.rowHovered ? 1.0 : 0.0
                         enabled: prow.rowHovered
-                        Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(80) } }
+                        Behavior on opacity {
+                            NumberAnimation {
+                                duration: prow.rowHovered ? Theme.durTap : Theme.durTapOut
+                                easing.type: prow.rowHovered ? Theme.easeEnter : Theme.easeExit
+                            }
+                        }
                         Rectangle {
                             anchors.fill: parent
                             radius: Theme.radiusSm

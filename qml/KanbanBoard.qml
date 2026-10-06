@@ -118,7 +118,7 @@ Item {
     NumberAnimation {
         id: colScrollAnim
         target: hscroll; property: "contentX"
-        duration: Theme.scaledMs(260); easing.type: Easing.OutCubic
+        duration: Theme.durMove; easing.type: Theme.easeEnter
     }
     Timer { id: focusPulseTimer; interval: 1100; onTriggered: root._focusPulseStatus = "" }
 
@@ -494,8 +494,8 @@ Item {
         id: outerAnim
         target: hscroll
         property: "contentX"
-        duration: Theme.scaledMs(220)
-        easing.type: Easing.OutCubic
+        duration: Theme.durMove
+        easing.type: Theme.easeEnter
     }
 
     Flickable {
@@ -599,7 +599,7 @@ Item {
                     border.color: (dragOver || focusPulse) ? Theme.accent : Theme.border
                     border.width: focusPulse ? 2 : 1
                     clip: true
-                    Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(180) } }
+                    Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
 
                     // Folded: the name runs down the strip, with the count; a
                     // click (or Z on the board) opens it again.
@@ -957,8 +957,8 @@ Item {
                                     id: bodyAnim
                                     target: bodyFlick
                                     property: "contentY"
-                                    duration: Theme.scaledMs(220)
-                                    easing.type: Easing.OutCubic
+                                    duration: Theme.durMove
+                                    easing.type: Theme.easeEnter
                                 }
 
                                 WheelHandler {
@@ -1436,7 +1436,12 @@ Item {
         height: 20
         radius: Theme.radiusSm
         opacity: shown ? 1 : 0
-        Behavior on opacity { NumberAnimation { duration: Theme.scaledMs(90) } }
+        Behavior on opacity {
+            NumberAnimation {
+                duration: hoverIcon.shown ? Theme.durTap : Theme.durTapOut
+                easing.type: hoverIcon.shown ? Theme.easeEnter : Theme.easeExit
+            }
+        }
         color: hoverIcon.hot ? (danger ? Theme.withAlpha(Theme.danger, 0.16) : Theme.panel3)
                              : "transparent"
         border.color: hoverIcon.hot ? (danger ? Theme.danger : Theme.border) : "transparent"

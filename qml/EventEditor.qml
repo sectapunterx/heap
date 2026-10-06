@@ -675,6 +675,7 @@ Popup {
                         onToggled: root.allDay = checked
                         Accessible.name: I18n.t("editor.label.allDay")
                         indicator: Rectangle {
+                            id: allDayTrack
                             objectName: "event-allday-track"
                             implicitWidth: 36
                             implicitHeight: 20
@@ -685,14 +686,20 @@ Popup {
                             border.color: allDaySwitch.checked ? Theme.accent : Theme.fieldBorder
                             border.width: 1
                             Rectangle {
+                                id: allDayKnob
                                 objectName: "event-allday-knob"
                                 width: 16; height: 16; radius: 8
-                                x: allDaySwitch.checked ? parent.width - width - 2 : 2
+                                x: 2
                                 y: 2
                                 color: Theme.knob
                                 border.color: Theme.fieldBorder
                                 border.width: 1
-                                Behavior on x { NumberAnimation { duration: Theme.scaledMs(90) } }
+                                // Slides by transform, not by x: only transform and opacity
+                                // animate (APP-175).
+                                transform: Translate {
+                                    x: allDaySwitch.checked ? allDayTrack.width - allDayKnob.width - 4 : 0
+                                    Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                                }
                             }
                             FocusRing { visible: allDaySwitch.visualFocus }
                         }

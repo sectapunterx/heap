@@ -574,8 +574,8 @@ Item {
                     id: scrollAnim
                     target: bodyScroll
                     property: "contentY"
-                    duration: Theme.scaledMs(220)
-                    easing.type: Easing.OutCubic
+                    duration: Theme.durMove
+                    easing.type: Theme.easeEnter
                 }
                 WheelHandler {
                     acceptedDevices: PointerDevice.Mouse | PointerDevice.TouchPad
@@ -1012,6 +1012,7 @@ Item {
         Keys.onReturnPressed: switchRow.toggled(!switchRow.checked)
 
         Rectangle {
+            id: switchTrack
             Layout.preferredWidth: 36; Layout.preferredHeight: 20; radius: 10
             color: switchRow.checked ? Theme.accent : Theme.panel3
             // The OFF track had no edge on panel3 in the light themes, and
@@ -1020,13 +1021,19 @@ Item {
             border.width: 1
             FocusRing { target: switchRow; radius: 13 }
             Rectangle {
+                id: switchKnob
                 width: 14; height: 14; radius: 7
                 color: Theme.knob
                 border.color: Theme.fieldBorder
                 border.width: 1
                 anchors.verticalCenter: parent.verticalCenter
-                x: switchRow.checked ? parent.width - width - 3 : 3
-                Behavior on x { NumberAnimation { duration: Theme.scaledMs(120) } }
+                // Slides by transform, not by x: only transform and opacity
+                // animate (APP-175).
+                x: 3
+                transform: Translate {
+                    x: switchRow.checked ? switchTrack.width - switchKnob.width - 6 : 0
+                    Behavior on x { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+                }
             }
         }
     }

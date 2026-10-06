@@ -308,17 +308,28 @@ QtObject {
     // ── Accessibility / motion ───────────────────────────────────────
     readonly property bool reducedMotion: !!_appearance.reducedMotion
     readonly property bool highContrast:  contrast === "high"
-    readonly property int animMs: reducedMotion ? 0 : 160
-    function scaledMs(n) { return reducedMotion ? 0 : n; }
     // 1, or 0 with "Reduce motion" on: a factor for anything that moves by a
     // distance (a springy drop, a check mark that grows), not only by time.
     readonly property real motion: reducedMotion ? 0 : 1
-    // Duration steps (APP-167). Feedback that answers a click is fast, a
-    // change of place is base, a panel that slides is slow; all 0 with
-    // "Reduce motion" on.
-    readonly property int durFast: reducedMotion ? 0 : 120
-    readonly property int durBase: reducedMotion ? 0 : 160
-    readonly property int durSlow: reducedMotion ? 0 : 240
+    // Motion (APP-175): three durations and one curve. How long a thing moves
+    // depends on how far it goes: tap answers a press, hover or switch; pop
+    // opens a menu, a drop-down or a tip; move carries a card, a panel or a
+    // dialog. A thing arrives on easeEnter (fast, slowing to rest) and leaves
+    // in half the time on easeExit (speeding away). No overshoot: a tool, not
+    // a toy. All 0 with "Reduce motion" on. QML outside this file never
+    // writes a duration or an Easing literal (ui_tokens_check.py).
+    readonly property int durTap:  reducedMotion ? 0 : 90
+    readonly property int durPop:  reducedMotion ? 0 : 140
+    readonly property int durMove: reducedMotion ? 0 : 220
+    readonly property int durTapOut:  durTap / 2
+    readonly property int durPopOut:  durPop / 2
+    readonly property int durMoveOut: durMove / 2
+    readonly property int easeEnter: Easing.OutQuint
+    readonly property int easeExit:  Easing.InCubic
+    // The one loop: a busy label breathing. Not a move, so not one of the
+    // three; it does not run at all with "Reduce motion" on.
+    readonly property int durPulse:  reducedMotion ? 0 : 600
+    readonly property int easePulse: Easing.InOutQuad
 
     // ── Typography — Brand defaults, overrideable via settings ───────
     // Golos Text and JetBrains Mono ship inside the app (platform/BundledFonts),

@@ -150,10 +150,10 @@ Rectangle {
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
     z: dragArea.drag.active ? 1000 : 0
-    // A dropped card settles with a little overshoot, as if it had weight
-    // (APP-167); with reduced motion it simply is where it was put.
-    Behavior on scale { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
-    Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
+    // A lifted card grows a little and settles back without overshoot
+    // (APP-175); with reduced motion it simply is where it was put.
+    Behavior on scale { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
+    Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
 
     FocusRing {
         objectName: "tc-cursor-ring"
@@ -194,13 +194,13 @@ Rectangle {
     readonly property bool _lifted: dragArea.drag.active && card.dragLayer !== null
     property Item _homeParent: null
     // Where the card was let go, in window coordinates: a card dropped back
-    // where it came from springs home from there instead of jumping (APP-167).
+    // where it came from glides home from there instead of jumping (APP-167).
     property var _dropAt: null
     transform: Translate { id: settle }
     ParallelAnimation {
         id: settleAnim
-        NumberAnimation { target: settle; property: "x"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
-        NumberAnimation { target: settle; property: "y"; to: 0; duration: Theme.durBase; easing.type: Easing.OutBack }
+        NumberAnimation { target: settle; property: "x"; to: 0; duration: Theme.durMove; easing.type: Theme.easeEnter }
+        NumberAnimation { target: settle; property: "y"; to: 0; duration: Theme.durMove; easing.type: Theme.easeEnter }
     }
     function _settleHome() {
         settleAnim.stop();
@@ -236,8 +236,9 @@ Rectangle {
     // ── Done (APP-167) ───────────────────────────────────────────────
     // A check mark grows over the card and fades when the task is marked
     // done — on this card, or just before it was built: the board makes a new
-    // card in the Done column for a moved task. Each step is under 150 ms;
-    // nothing plays with reduced motion.
+    // card in the Done column for a moved task. It pops in, holds for a
+    // move's length and leaves in half a pop; nothing plays with reduced
+    // motion.
     function playDone() {
         if (Theme.motion > 0) doneAnim.restart();
     }
@@ -274,11 +275,11 @@ Rectangle {
     SequentialAnimation {
         id: doneAnim
         ParallelAnimation {
-            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durFast }
-            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durFast; easing.type: Easing.OutBack }
+            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
+            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
         }
-        PauseAnimation { duration: Theme.durBase }
-        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durFast }
+        PauseAnimation { duration: Theme.durMove }
+        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
     }
 
     // What sits on a card, top to bottom: who it is (key, priority, and any

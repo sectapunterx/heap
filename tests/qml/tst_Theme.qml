@@ -22,7 +22,7 @@ TestCase {
     // ── smoke: the singleton resolves and core tokens have sane types ──
     function test_singleton_resolves() {
         verify(Theme !== null, "Theme singleton must resolve");
-        compare(typeof Theme.animMs, "number");
+        compare(typeof Theme.durMove, "number");
         verify(Theme.rowH > 0, "rowH must be positive");
         verify(Theme.pad > 0, "pad must be positive");
         verify(Theme.radius > 0, "radius must be positive");
@@ -104,18 +104,39 @@ TestCase {
         fuzzyCompare(c.a, 1.0, 0.01);
     }
 
-    // ── scaledMs: identity when motion is on, 0 when reduced ──
-    function test_scaledms_matches_motion_state() {
-        compare(Theme.scaledMs(0), 0);
-        // animMs is defined as reducedMotion ? 0 : 160 — scaledMs(160) must agree.
-        compare(Theme.scaledMs(160), Theme.animMs);
-        if (Theme.reducedMotion) {
-            compare(Theme.scaledMs(200), 0);
-            compare(Theme.animMs, 0);
-        } else {
-            compare(Theme.scaledMs(200), 200);
-            compare(Theme.animMs, 160);
-        }
+    // ── Motion tokens (APP-175): tap < pop < move, leaving takes half,
+    //    one curve in and one out, no overshoot ──
+    function test_motion_tokens_with_motion_on() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: false } });
+        const d = [Theme.durTap, Theme.durPop, Theme.durMove,
+                   Theme.durTapOut, Theme.durPopOut, Theme.durMoveOut, Theme.durPulse];
+        AppController.appSettingsJson = saved;
+        compare(d[0], 90);
+        compare(d[1], 140);
+        compare(d[2], 220);
+        compare(d[3], 45);
+        compare(d[4], 70);
+        compare(d[5], 110);
+        verify(d[6] > 0);
+        compare(Theme.easeEnter, Easing.OutQuint);
+        compare(Theme.easeExit, Easing.InCubic);
+    }
+
+    // ── "Reduce motion" = 0 ms for every duration token ──
+    function test_reduced_motion_zeroes_every_duration() {
+        const saved = AppController.appSettingsJson;
+        AppController.appSettingsJson = JSON.stringify({ appearance: { reducedMotion: true } });
+        const reduced = Theme.reducedMotion;
+        const motion = Theme.motion;
+        const d = { durTap: Theme.durTap, durPop: Theme.durPop, durMove: Theme.durMove,
+                    durTapOut: Theme.durTapOut, durPopOut: Theme.durPopOut,
+                    durMoveOut: Theme.durMoveOut, durPulse: Theme.durPulse };
+        AppController.appSettingsJson = saved;
+        compare(reduced, true);
+        compare(motion, 0);
+        for (const k in d)
+            compare(d[k], 0, k + " must be 0 with reduced motion");
     }
 
     // ── statusColor: each known id maps to its swatch, unknown → textMuted ──
@@ -211,7 +232,7 @@ TestCase {
         const showWeekends = Theme.showWeekends;
         const reduced      = Theme.reducedMotion;
         const contrast     = Theme.highContrast;
-        const animMs       = Theme.animMs;
+        const durMove      = Theme.durMove;
         AppController.appSettingsJson = saved;
 
         compare(weekStart, "mon");
@@ -220,7 +241,7 @@ TestCase {
         compare(showWeekends, true);
         compare(reduced, false);
         compare(contrast, false);
-        compare(animMs, 160);
+        compare(durMove, 220);
     }
 
     // ── explicit overrides win — notably showWeekends:false must survive

@@ -121,7 +121,7 @@ Item {
                     GradientStop { position: 0.5; color: Theme.accent }
                     GradientStop { position: 1.0; color: Theme.withAlpha(Theme.accent, 0) }
                 }
-                Behavior on width { NumberAnimation { duration: 120; easing.type: Easing.OutCubic } }
+                Behavior on width { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
             }
         }
 
@@ -159,7 +159,7 @@ Item {
         running: root.autoAnimate
         from: 0; to: 1
         duration: root.autoDuration
-        easing.type: Easing.InOutCubic
+        easing.type: Theme.easeEnter
         onFinished: root.finished()
     }
 }
