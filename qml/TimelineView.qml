@@ -557,10 +557,10 @@ Item {
                     width: parent ? parent.width : 0
                     radius: Theme.radius
                     color: _selected ? Theme.withAlpha(Theme.accent, 0.10)
-                        : rowMA.containsMouse ? Theme.panel2 : Theme.panel
+                        : rowMA.containsMouse ? Theme.surfaceCardHover : Theme.surfaceCard
                     border.color: _selected ? Theme.accent
                         : _cursored ? Theme.accentStrong
-                        : rowMA.containsMouse ? Theme.borderStrong : Theme.border
+                        : rowMA.containsMouse ? Theme.cardBorderHover : Theme.cardBorder
                     border.width: _selected || _cursored ? 2 : 1
                     implicitHeight: rowContent.implicitHeight + 16
 

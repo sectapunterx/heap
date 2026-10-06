@@ -739,6 +739,33 @@ function _fade(s, bg, t) {
     return _parse(s).a < 255 ? _scaleAlpha(s, 1 - t) : mix(s, bg, t);
 }
 
+// ── Lightness (CIE L*) ──────────────────────────────────────────────────
+
+function _lin(v) { v /= 255; return v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4); }
+function _gam(v) { v = v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055; return v * 255; }
+
+// CIE L* (0..100) of an opaque colour.
+function lightness(s) {
+    var c = _parse(s);
+    var y = 0.2126 * _lin(c.r) + 0.7152 * _lin(c.g) + 0.0722 * _lin(c.b);
+    return y > 216 / 24389 ? 116 * Math.cbrt(y) - 16 : y * 24389 / 27;
+}
+
+// `s` with its L* moved by dL, hue and chroma kept (scaling linear RGB by
+// the luminance ratio keeps the chromaticity). How far a surface sits
+// above the ground is a difference in L*, not in hex.
+function lift(s, dL) {
+    var c = _parse(s);
+    var l0 = lightness(s);
+    var l1 = Math.max(0, Math.min(100, l0 + dL));
+    function y(l) { return l > 8 ? Math.pow((l + 16) / 116, 3) : l * 27 / 24389; }
+    var y0 = y(l0), y1 = y(l1);
+    var r = _lin(c.r), g = _lin(c.g), b = _lin(c.b);
+    if (y0 <= 0) { r = g = b = y1; }
+    else { var k = y1 / y0; r *= k; g *= k; b *= k; }
+    return _fmt({ a: c.a, r: _gam(Math.min(1, r)), g: _gam(Math.min(1, g)), b: _gam(Math.min(1, b)) });
+}
+
 // ── Contrast (WCAG 2.x) ─────────────────────────────────────────────────
 
 // A colour laid over an opaque surface, as the eye sees it.

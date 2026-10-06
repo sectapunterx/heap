@@ -714,8 +714,8 @@ Item {
                     width: col.folded ? root.foldedWidth : root.columnWidth
                     height: rowL.height
                     radius: Theme.radius
-                    color: Theme.panel
-                    border.color: (dragOver || focusPulse) ? Theme.accent : Theme.border
+                    color: Theme.surfaceColumn
+                    border.color: (dragOver || focusPulse) ? Theme.accent : "transparent"
                     border.width: focusPulse ? 2 : 1
                     clip: true
                     Behavior on border.color { ColorAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
@@ -786,7 +786,7 @@ Item {
                         Rectangle {
                             Layout.fillWidth: true
                             Layout.preferredHeight: 38
-                            color: Theme.panel2
+                            color: "transparent"
                             HoverHandler { onHoveredChanged: col.headerHovered = hovered }
                             // The header's menu from the keyboard: Menu or
                             // Shift+F10 on any of its buttons, which pass the
@@ -946,7 +946,7 @@ Item {
                                 anchors.rightMargin: Theme.spMd + 22 + Theme.spMd + cntPill.width + Theme.spMd
                                 width: hoverIcons.implicitWidth + Theme.spSm
                                 height: hoverIcons.implicitHeight
-                                color: Theme.panel2
+                                color: Theme.bg
                                 opacity: col.headerRevealed ? 1 : 0
                                 visible: !col.renaming
                                 z: 2

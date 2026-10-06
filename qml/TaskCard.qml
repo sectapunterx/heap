@@ -142,13 +142,14 @@ Rectangle {
     // the cursor colour, with its halo inside. Selected: a filled card and a
     // check in a circle, no ring and no border of its own.
     radius: Theme.radius
-    color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
-        : _selected ? Qt.tint(Theme.panel2, Theme.withAlpha(Theme.text, 0.09))
-            : Theme.panel2
+    color: _isArchived ? Theme.withAlpha(Theme.surfaceCard, 0.55)
+        : _selected ? Qt.tint(Theme.surfaceCard, Theme.withAlpha(Theme.text, 0.09))
+        : hoverArea.containsMouse ? Theme.surfaceCardHover
+        : Theme.surfaceCard
     border.color: dragArea.drag.active ? Theme.accent
                 : _isStuck ? Theme.danger
-                : hoverArea.containsMouse ? Theme.borderStrong
-                : Theme.border
+                : hoverArea.containsMouse ? Theme.cardBorderHover
+                : Theme.cardBorder
     border.width: dragArea.drag.active || _isStuck ? 2 : 1
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0

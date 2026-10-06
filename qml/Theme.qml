@@ -80,6 +80,22 @@ QtObject {
     readonly property color panel2: _c.panel2
     readonly property color panel3: _c.panel3
 
+    // ── Surfaces on the page (APP-196) ───────────────────────────────
+    // One step per level, one way to take it. A column was a panel box
+    // 1.5 L* above the ground and a card a bordered box 3 L* above that:
+    // box in box, with edges nobody could see. Now a column has no fill
+    // (its header is what marks it) and a card stands on the ground by
+    // lightness alone: 9 L* above bg on a dark theme (8 with soft
+    // contrast), no border. A light theme has no room above its ground, so
+    // there a card is the theme's white panel and keeps its hairline.
+    // Derived from bg, so a user's own theme gets the same steps.
+    readonly property color surfaceColumn: "transparent"
+    readonly property color surfaceCard: dark ? Presets.lift(String(_c.bg), softContrast ? 8 : 9) : _c.panel
+    readonly property color surfaceCardHover: dark ? Presets.lift(String(_c.bg), softContrast ? 10 : 11)
+                                                   : Qt.tint(_c.panel, withAlpha(_c.text, 0.03))
+    readonly property color cardBorder: dark && !highContrast ? "transparent" : border
+    readonly property color cardBorderHover: dark && !highContrast ? "transparent" : borderStrong
+
     // ── Lines + text — highContrast strengthens both ──────────────────
     // High contrast is the accessibility mode, so its lines — field outlines
     // included — reach WCAG's 3:1 for UI against bg and panel on every theme;
@@ -100,7 +116,10 @@ QtObject {
     readonly property color textMuted:    _c.textMuted
     // The smallest text in the app uses this; every built-in theme keeps it
     // at WCAG AA (4.5:1) on bg, panel and panel2 (tst_Theme checks).
-    readonly property color textDim:      _c.textDim
+    // Cards stand lighter than the panels (APP-196), so they are measured too.
+    readonly property color textDim:      Presets.ensureContrast(String(_c.textDim),
+        [String(_c.bg), String(Qt.tint(_c.bg, _c.panel)), String(Qt.tint(_c.bg, _c.panel2)),
+         String(surfaceCard), String(surfaceCardHover)], 4.5)
     // Text drawn on an accent / danger fill (primary buttons, badges).
     readonly property color textOnAccent: _c.textOnAccent
     readonly property color textOnDanger: _c.textOnDanger
