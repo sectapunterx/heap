@@ -92,15 +92,9 @@ Item {
 
     // var, not Item: the parent's `radius` is not an Item member.
     readonly property var _shape: ca.parent
-    // Around the parent's shape, outside it, like FocusRing.
-    Rectangle {
-        anchors.fill: parent
-        anchors.margins: -3
+    // The cursor, around the parent's shape.
+    FocusRing {
+        target: ca
         radius: (ca._shape && typeof ca._shape.radius === "number" ? ca._shape.radius : Theme.radiusSm) + 3
-        color: "transparent"
-        border.color: Theme.focusRing
-        border.width: 2
-        visible: ca.activeFocus
-        z: 100
     }
 }

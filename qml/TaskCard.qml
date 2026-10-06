@@ -132,21 +132,20 @@ Rectangle {
     }
 
     // Selection and the keyboard cursor look different in shape, not only
-    // in colour (VISU-4): on a monochrome theme accent and accentStrong are
-    // both near-white, and the two were the same 2px white border. Selected:
-    // a solid accent border, an opaque accent tint and a check mark in the
-    // top row. Cursor (and Tab focus): the card's own border with a focus
-    // ring drawn inside it, a double line.
+    // in colour (VISU-4, APP-174): on a monochrome theme accent and
+    // accentStrong are both near-white, and the two were the same 2px white
+    // border. Cursor (and Tab focus): the FocusRing on the card's edge, in
+    // the cursor colour, with its halo inside. Selected: a filled card and a
+    // check in a circle, no ring and no border of its own.
     radius: Theme.radius
     color: _isArchived ? Theme.withAlpha(Theme.panel2, 0.55)
-        : _selected ? Qt.tint(Theme.panel2, Theme.withAlpha(Theme.accent, 0.16))
+        : _selected ? Qt.tint(Theme.panel2, Theme.withAlpha(Theme.text, 0.09))
             : Theme.panel2
     border.color: dragArea.drag.active ? Theme.accent
-        : _selected ? Theme.accent
                 : _isStuck ? Theme.danger
-                : (hoverArea.containsMouse || cursored || activeFocus) ? Theme.borderStrong
+                : hoverArea.containsMouse ? Theme.borderStrong
                 : Theme.border
-    border.width: dragArea.drag.active || _selected || _isStuck ? 2 : 1
+    border.width: dragArea.drag.active || _isStuck ? 2 : 1
     opacity: dragArea.drag.active ? 0.92 : (_isArchived ? 0.7 : 1.0)
     scale: dragArea.drag.active ? 1.03 : 1.0
     transformOrigin: Item.Center
@@ -156,16 +155,12 @@ Rectangle {
     Behavior on scale { NumberAnimation { duration: Theme.durBase; easing.type: Easing.OutBack } }
     Behavior on border.color { ColorAnimation { duration: Theme.scaledMs(120) } }
 
-    Rectangle {
+    FocusRing {
         objectName: "tc-cursor-ring"
-        visible: card.cursored || card.activeFocus
-        anchors.fill: parent
-        anchors.margins: card.border.width + Theme.sp2xs
-        radius: Math.max(0, card.radius - card.border.width - Theme.sp2xs)
-        color: "transparent"
-        border.color: Theme.focusRing
-        border.width: 2
-        z: 4
+        anchors.margins: 0
+        radius: card.radius
+        haloInside: true
+        visible: (card.cursored || card.activeFocus) && !dragArea.drag.active
     }
 
     implicitWidth: parent ? parent.width : 260
@@ -485,14 +480,23 @@ Rectangle {
                 font.weight: Font.DemiBold
             }
             Item { Layout.fillWidth: true }
-            Text {
+            // Ink on a text-coloured dot: reads on every theme, and is not
+            // the cursor's colour.
+            Rectangle {
                 objectName: "tc-selected-mark"
                 visible: card._selected
-                text: "✓"
-                color: Theme.accentStrong
-                font.family: Theme.fontUi
-                font.pixelSize: Theme.fsSm
-                font.weight: Font.DemiBold
+                implicitWidth: Theme.fsMd + Theme.sp2xs
+                implicitHeight: implicitWidth
+                radius: width / 2
+                color: Theme.text
+                Text {
+                    anchors.centerIn: parent
+                    text: "✓"
+                    color: Theme.bg
+                    font.family: Theme.fontUi
+                    font.pixelSize: Theme.fsXs
+                    font.weight: Font.DemiBold
+                }
             }
         }
 

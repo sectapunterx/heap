@@ -1366,6 +1366,22 @@ Item {
                         root.set("appearance", "highContrast", value === "high");
                     }
                 }
+                // The keyboard cursor's colour (APP-174). "" is the theme's
+                // accent, and follows a theme change.
+                CursorColorRow {
+                    objectName: "settings-cursor-color"
+                    label: I18n.t("settings.appearance.cursorColor")
+                    hint: I18n.t("settings.appearance.cursorColor.hint")
+                    value: Theme.cursorColorPick
+                    // Straight into the settings JSON, like the completion
+                    // sound below: no unqualified `root` from in here.
+                    onSelected: (color) => {
+                        let s = {};
+                        try { s = JSON.parse(AppController.appSettingsJson || "{}") || {}; } catch (e) { s = {}; }
+                        s.appearance = Object.assign({}, s.appearance, { cursorColor: color });
+                        AppController.appSettingsJson = JSON.stringify(s);
+                    }
+                }
             }
             SettingsGroup {
                 objectName: "settings-theme-card"

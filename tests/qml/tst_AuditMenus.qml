@@ -182,14 +182,24 @@ TestCase {
         card.cursored = true;
         verify(ring.visible, "the cursor has no ring");
         verify(!mark.visible);
-        compare(card.border.width, 1);
+        verify(Qt.colorEqual(ring.border.color, Theme.focusRing), "the cursor is not in the cursor colour");
+        verify(Qt.colorEqual(card.color, Theme.panel2), "the cursor filled the card");
 
+        // APP-174: told apart by form — a fill and a check in a circle, no
+        // ring and no border of its own.
         card.cursored = false;
         AppController.setSelectedTaskIds([id]);
         tryVerify(() => mark.visible, 1000, "a selected card has no check mark");
         verify(!ring.visible, "selection drew the cursor ring");
-        compare(card.border.width, 2);
+        compare(card.border.width, 1);
+        verify(Qt.colorEqual(card.border.color, Theme.border), "selection drew a border");
         verify(!Qt.colorEqual(card.color, Theme.panel2), "a selected card has no fill");
+        compare(mark.width, mark.height);
+        compare(mark.radius, mark.width / 2);
+
+        // Both at once: the ring over the filled card.
+        card.cursored = true;
+        verify(ring.visible && mark.visible);
     }
 
     // ── VISP-5: a menu is as wide as its longest row ──

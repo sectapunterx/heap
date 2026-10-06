@@ -146,12 +146,9 @@ Rectangle {
                 width: ListView.view ? ListView.view.width : 0
                 height: layout.implicitHeight + 12
                 function openMenu() { personMenu.popup(prow, 12, prow.height / 2); }
-                Rectangle {
-                    anchors.fill: parent
+                FocusRing {
+                    anchors.margins: 0
                     radius: Theme.radius
-                    color: "transparent"
-                    border.color: Theme.focusRing
-                    border.width: 2
                     visible: prow.ListView.isCurrentItem && peopleView.activeFocus
                     z: 10
                 }

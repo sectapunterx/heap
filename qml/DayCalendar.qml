@@ -660,14 +660,10 @@ Item {
                                 readonly property bool repeating: evRect.masterId.length > 0
 
                                 // Marked by the keyboard (↑/↓ on the panel).
-                                Rectangle {
+                                FocusRing {
                                     objectName: "event-kb-ring"
-                                    anchors.fill: parent
                                     anchors.margins: -2
                                     radius: Theme.radiusSm + 2
-                                    color: "transparent"
-                                    border.color: Theme.focusRing
-                                    border.width: 2
                                     visible: root._kbEventKey !== "" && root._kbEventKey === root._kbKey(evRect.modelData)
                                     z: 50
                                 }

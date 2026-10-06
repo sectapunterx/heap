@@ -694,15 +694,7 @@ Popup {
                                 border.width: 1
                                 Behavior on x { NumberAnimation { duration: Theme.scaledMs(90) } }
                             }
-                            Rectangle {
-                                anchors.fill: parent
-                                anchors.margins: -3
-                                radius: parent.radius + 3
-                                color: "transparent"
-                                border.color: Theme.focusRing
-                                border.width: 2
-                                visible: allDaySwitch.visualFocus
-                            }
+                            FocusRing { visible: allDaySwitch.visualFocus }
                         }
                     }
                     Text {
