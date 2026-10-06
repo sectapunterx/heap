@@ -46,6 +46,44 @@ TestCase {
         verify(s.line.indexOf(AppController.shortcutFor("task.new")) >= 0 || AppController.tasks.rowCount() > 0);
     }
 
+    // FUNC-1: a search that hides every card says so once, for the board,
+    // like the other views — not "Nothing here yet" in every column, nor an
+    // invitation to drag a card into a column the search emptied.
+    function test_board_search_finds_nothing() {
+        const d = AppController.newTaskDraft("todo");
+        d._isNew = true; d.id = "EMPTY-FUNC1"; d.title = "func1 probe";
+        verify(AppController.saveTask(d));
+        try {
+            const b = make('import TodoCpp; KanbanBoard { anchors.fill: parent }');
+            const s = findChild(b, "board-empty-state");
+            tryVerify(() => !s.visible, 2000, "the board has a task but says it is empty");
+            b.searchText = tc.nothing;
+            verifyState(s, "board search");
+            compare(s.title, I18n.t("view.empty.noMatch.title"));
+            compare(s.line, I18n.t("view.empty.noMatch.hint"));
+            const cols = [];
+            (function walk(it) {
+                if (!it) return;
+                if (it.objectName === "column-empty") cols.push(it);
+                const kids = it.children || [];
+                for (let i = 0; i < kids.length; i++) walk(kids[i]);
+            })(b);
+            verify(cols.length > 0);
+            for (const c of cols) verify(!c.parent.visible, "a column still says it is empty");
+            // A search that matches some cards: the board state goes, and the
+            // columns it emptied say nothing matches, with no drag invitation.
+            b.searchText = "func1 probe";
+            tryVerify(() => !s.visible, 2000);
+            for (const c of cols) if (c.parent.visible) {
+                compare(c.title, I18n.t("view.empty.noMatch.title"));
+                compare(c.line, "");
+            }
+        } finally {
+            AppController.deleteTask("EMPTY-FUNC1");
+            AppController.clearPendingUndo();
+        }
+    }
+
     function test_timeline_search_finds_nothing() {
         const v = make('import TodoCpp; TimelineView { anchors.fill: parent }');
         v.searchText = tc.nothing;

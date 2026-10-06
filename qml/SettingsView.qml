@@ -415,7 +415,13 @@ Item {
                     contentWidth: width
                     contentHeight: navCol.implicitHeight
                     boundsBehavior: Flickable.StopAtBounds
-                    ScrollBar.vertical: ThinScrollBar {}
+                    objectName: "settings-nav-scroll"
+                    // Thirteen groups do not fit at 125 % on a laptop: the
+                    // thumb stays drawn and the cut edge fades (SCALE-2), where
+                    // "Help" sat half under the footer and "About" was nowhere
+                    // with nothing saying the list went on.
+                    ScrollBar.vertical: ThinScrollBar { objectName: "settings-nav-scrollbar"; cue: true }
+                    onHeightChanged: Qt.callLater(root._revealNavActive)
 
                     ColumnLayout {
                         id: navCol
@@ -768,6 +774,22 @@ Item {
     }
     // Focus the nav row at `from`, skipping rows the search hides in the
     // direction `dir` (1 down, -1 up).
+    // The open group's row in view, after a deep link or a resize.
+    function _revealNavActive() {
+        for (let i = 0; i < navRep.count; i++) {
+            const it = navRep.itemAt(i);
+            if (!it || it.objectName !== "settings-nav-" + root.activeSection) continue;
+            const y = it.mapToItem(navCol, 0, 0).y;
+            if (y < navScroll.contentY)
+                navScroll.contentY = Math.max(0, y - Theme.spMd);
+            else if (y + it.height > navScroll.contentY + navScroll.height)
+                navScroll.contentY = Math.max(0, Math.min(navScroll.contentHeight - navScroll.height,
+                                                          y + it.height - navScroll.height + Theme.spMd));
+            return;
+        }
+    }
+    onActiveSectionChanged: Qt.callLater(root._revealNavActive)
+
     function _focusNav(from, dir) {
         const step = dir === -1 ? -1 : 1;
         for (let i = from; i >= 0 && i < navRep.count; i += step) {
@@ -1264,7 +1286,7 @@ Item {
                         Layout.fillWidth: true
                         spacing: Theme.sp2xl
                         Rectangle {
-                            Layout.preferredWidth: 48; Layout.preferredHeight: 48; radius: 24
+                            Layout.preferredWidth: Theme.px(48); Layout.preferredHeight: Theme.px(48); radius: width / 2
                             color: root.settings.profile ? root.settings.profile.color : Theme.accent
                             Text {
                                 anchors.centerIn: parent
@@ -3394,5 +3416,15 @@ Item {
         function onExportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.exportJson() }
         function onImportJsonRequested()  { if (typeof settingsBus !== "undefined") settingsBus.importJson() }
         function onTimeMachineRequested() { if (typeof settingsBus !== "undefined") settingsBus.openTimeMachine() }
+    }
+
+    // Over the list, not in it: parented to the Flickable itself
+    // (not its content), so it stays put while the rows scroll.
+    ScrollFade {
+        objectName: "settings-nav-fade"
+        parent: navScroll
+        anchors.fill: parent
+        flick: navScroll
+        color: Theme.panel
     }
 }

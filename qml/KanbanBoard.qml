@@ -636,7 +636,13 @@ Item {
             Repeater {
                 id: colRepeater
                 model: colModel
-                onItemAdded: (index, item) => item["bus"] = stackBus
+                // The board's search state too, for the column's empty state
+                // (Qt 6.9's qmllint does not resolve root inside the column).
+                onItemAdded: (index, item) => {
+                    item["bus"] = stackBus;
+                    item["filtering"] = Qt.binding(() => root._filtering);
+                    item["nothingFound"] = Qt.binding(() => root._nothingFound);
+                }
                 // A column's way to the stack: its drops and its cards' menus
                 // ask the board through this, not by the board's id.
 
@@ -655,6 +661,10 @@ Item {
                     readonly property alias taskFilter: colFilter
                     property bool dragOver: false
                     readonly property int visibleCount: colFilter.count
+                    // Set by colRepeater: a search or filter is on / it hides
+                    // every card on the board.
+                    property bool filtering: false
+                    property bool nothingFound: false
                     // Advisory work-in-progress limit. 0 = none. Over the
                     // limit the badge turns, and that is all it does: a hard
                     // cap would make a drag silently do nothing, which reads
@@ -1238,8 +1248,12 @@ Item {
                                 // An empty column says how a card gets here
                                 // (APP-167); one whose cards the search or a
                                 // filter hides, that nothing in it matches.
+                                // While a search or filter is on: "nothing
+                                // matches" and no invitation to drag cards in,
+                                // and nothing at all when the whole board came
+                                // up empty — the board says that once (FUNC-1).
                                 Item {
-                                    visible: col.visibleCount === 0
+                                    visible: col.visibleCount === 0 && !col.nothingFound
                                     width: bodyFlick.width
                                     height: colEmpty.implicitHeight + Theme.spXl
                                     EmptyState {
@@ -1249,8 +1263,9 @@ Item {
                                         width: parent.width
                                         compact: true
                                         icon: "heap-01-board"
-                                        title: I18n.t("kanban.empty")
-                                        line: (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
+                                        title: col.filtering ? I18n.t("view.empty.noMatch.title") : I18n.t("kanban.empty")
+                                        line: col.filtering ? ""
+                                            : (AppController.statusCounts[col.statusId] || 0) > 0 ? I18n.t("kanban.empty.noMatch") : I18n.t("kanban.empty.hint")
                                     }
                                 }
                             }
@@ -1747,6 +1762,21 @@ Item {
     // Live tasks: a board whose every card is archived is empty too, and
     // says where they went (TASKS-33).
     readonly property int _boardTotal: AppController.statusCounts["_total"] || 0
+    // A search or a priority filter that hides every card is not an empty
+    // board: it says the search found nothing, once, like the other views
+    // (FUNC-1). It used to be "Nothing here yet" in every column.
+    readonly property bool _filtering: root.searchText.trim().length > 0 || root.activePriorities.length > 0
+    // Every card the search lets through, in any column.
+    TaskFilterProxy {
+        id: boardFilter
+        sourceModel: AppController.tasks
+        statuses: AppController.statuses
+        showArchived: root.showArchived
+        searchText: root.searchText
+        priorities: root.activePriorities
+        today: AppController.today
+    }
+    readonly property bool _nothingFound: root._filtering && root._boardTotal > 0 && boardFilter.count === 0
     property int _allRows: AppController.tasks.rowCount()
     Connections {
         target: AppController.tasks
@@ -1765,18 +1795,20 @@ Item {
         color: Theme.panel
         border.color: Theme.borderStrong
         border.width: 1
-        visible: root._boardTotal === 0
+        visible: root._boardTotal === 0 || root._nothingFound
     }
     EmptyState {
         id: boardEmptyCol
         objectName: "board-empty-state"
         anchors.centerIn: parent
         width: Math.min(parent.width - 96, 360)
-        visible: root._boardTotal === 0
-        icon: root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
-        title: root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
+        visible: root._boardTotal === 0 || root._nothingFound
+        icon: root._nothingFound ? "" : root._allRows > 0 ? "heap-05-archive" : "heap-01-board"
+        title: root._nothingFound ? I18n.t("view.empty.noMatch.title")
+             : root._allRows > 0 ? I18n.t("board.empty.archivedTitle") : I18n.t("board.empty.title")
         // The keys as bound now, not as they shipped (design audit DES-15).
-        line: root._allRows > 0
+        line: root._nothingFound ? I18n.t("view.empty.noMatch.hint")
+            : root._allRows > 0
               ? I18n.t("board.empty.archivedHint").arg(AppController.shortcutFor("view.archive")).arg(AppController.shortcutFor("task.new"))
               : I18n.t("board.empty.hint").arg(AppController.shortcutFor("task.new")).arg(AppController.shortcutFor("quick-capture"))
     }

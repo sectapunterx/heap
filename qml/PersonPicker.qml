@@ -198,7 +198,7 @@ Popup {
                     spacing: Theme.spLg
 
                     Rectangle {
-                        width: 26; height: 26; radius: 13
+                        width: Theme.px(26); height: width; radius: width / 2
                         color: crow.modelData.color && crow.modelData.color.length ? crow.modelData.color : Theme.accent
                         Text {
                             anchors.centerIn: parent
@@ -293,7 +293,7 @@ Popup {
                 anchors.leftMargin: Theme.spLg; anchors.rightMargin: Theme.spLg
                 spacing: Theme.spLg
                 Rectangle {
-                    width: 26; height: 26; radius: 13
+                    width: Theme.px(26); height: width; radius: width / 2
                     color: "transparent"
                     border.color: Theme.border
                     border.width: 1

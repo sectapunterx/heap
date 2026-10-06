@@ -64,7 +64,7 @@ Rectangle {
             Item { Layout.fillWidth: true }
             Rectangle {
                 id: addBtn
-                width: 22; height: 22; radius: Theme.radiusSm
+                width: Theme.px(22); height: Theme.px(22); radius: Theme.radiusSm
                 color: addMA.containsMouse ? Theme.panel3 : "transparent"
                 activeFocusOnTab: true
                 Accessible.role: Accessible.Button
@@ -220,8 +220,11 @@ Rectangle {
                     anchors.leftMargin: Theme.spMd; anchors.rightMargin: Theme.spMd
                     spacing: Theme.spLg
 
+                    // Sized with the type its initials are set in: a fixed
+                    // 28 let "МК" run past the circle at 150 % (SCALE-4).
                     Rectangle {
-                        width: 28; height: 28; radius: 14
+                        objectName: "people-avatar"
+                        width: Theme.px(28); height: width; radius: width / 2
                         color: prow.color
                         Text {
                             anchors.centerIn: parent

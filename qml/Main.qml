@@ -1080,6 +1080,9 @@ ApplicationWindow {
                 Item {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
+                    // A view wider than its column is cut at the column, not
+                    // drawn under the right panel (SCALE-3).
+                    clip: true
                     // Board, Notes and Docs are kept alive once visited.
                     // Swapping a Loader's sourceComponent destroys the item,
                     // and these three hold state the user notices losing: the

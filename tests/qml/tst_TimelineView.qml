@@ -108,7 +108,7 @@ TestCase {
         AppController.deleteTask("TLV-ALIGN");
         AppController.clearPendingUndo();
         AppController.language = saved;
-        for (let i = 0; i < cols.length; i++) compare(cols[i], 160);
+        for (let i = 0; i < cols.length; i++) compare(cols[i], Theme.px(160));
     }
 
     function test_a_long_timeline_builds_only_the_visible_rows() {

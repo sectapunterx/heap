@@ -863,18 +863,43 @@ Popup {
                 }
 
                 // ── Title ──
-                TextField {
+                // Wraps instead of scrolling sideways: a long title opened
+                // scrolled to its end, the start off to the left and its first
+                // visible letter cut (SCALE-6). Still one line of text — Enter
+                // does not break it, a pasted newline becomes a space, and Tab
+                // moves on.
+                TextArea {
                     id: titleField
                     ContextMenu.menu: TextEditMenu { editor: titleField }
                     objectName: "te-title"
                     Layout.fillWidth: true
                     Layout.leftMargin: Theme.inset; Layout.rightMargin: Theme.inset
                     placeholderText: I18n.t("editor.ph.titleShort")
+                    wrapMode: TextEdit.Wrap
+                    selectByMouse: true
                     font.pixelSize: Theme.fsLg
                     font.weight: Theme.fwTitle
                     background: FieldBg {}
                     color: Theme.text
                     placeholderTextColor: Theme.textDim
+                    Keys.onPressed: (event) => {
+                        if (event.key === Qt.Key_Return || event.key === Qt.Key_Enter) {
+                            // Ctrl+Enter is the save shortcut's.
+                            if (!(event.modifiers & Qt.ControlModifier)) event.accepted = true;
+                            return;
+                        }
+                        if (event.key !== Qt.Key_Tab && event.key !== Qt.Key_Backtab) return;
+                        const back = event.key === Qt.Key_Backtab || (event.modifiers & Qt.ShiftModifier);
+                        const next = titleField.nextItemInFocusChain(!back);
+                        if (next) next.forceActiveFocus(back ? Qt.BacktabFocusReason : Qt.TabFocusReason);
+                        event.accepted = true;
+                    }
+                    onTextChanged: {
+                        if (!/[\r\n\t]/.test(text)) return;
+                        const at = cursorPosition;
+                        text = text.replace(/[\r\n\t]+/g, " ");
+                        cursorPosition = Math.min(at, text.length);
+                    }
                 }
 
                 // ── Status · priority · deadline: what a developer reads first ──
