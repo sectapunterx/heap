@@ -19,9 +19,11 @@ TestCase {
 
     Item { id: host; anchors.fill: parent }
 
+    // Cursored: the badge and the counts are details now (APP-179), shown
+    // under the cursor, and the card's resting face is title + one line.
     Component {
         id: cardComp
-        TaskCard { width: 360 }
+        TaskCard { width: 360; cursored: true }
     }
 
     function make(taskObj) {
@@ -175,16 +177,17 @@ TestCase {
         t.desc = "<b>bold</b>";
         const card = make(t);
         let checked = 0;
-        for (let i = 0; i < card.children.length; i++) {
-            const col = card.children[i];
-            for (let j = 0; j < (col.children ? col.children.length : 0); j++) {
-                const it = col.children[j];
-                if (it instanceof Text && (it.text === t.title || it.text === t.desc)) {
-                    compare(it.textFormat, Text.PlainText, "tracker text is rendered as markup");
-                    checked++;
-                }
+        // The whole tree: the description sits in the details under the
+        // cursor (APP-179), a few levels down.
+        (function walk(it) {
+            if (!it) return;
+            if (it instanceof Text && (it.text === t.title || it.text === t.desc)) {
+                compare(it.textFormat, Text.PlainText, "tracker text is rendered as markup");
+                checked++;
             }
-        }
+            const kids = it.children || [];
+            for (let i = 0; i < kids.length; i++) walk(kids[i]);
+        })(card);
         verify(checked >= 2, "did not find the title and description to check");
         card.destroy();
     }

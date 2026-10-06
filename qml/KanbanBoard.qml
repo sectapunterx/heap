@@ -4,6 +4,7 @@ import QtQuick.Controls
 import QtQuick.Controls.Basic
 import QtQuick.Controls as QQC
 import TodoCpp
+import "Motion.js" as Motion
 
 Item {
     id: root
@@ -429,6 +430,7 @@ Item {
         if (c < 0 || c >= cols.length) return;
         const destIds = cols[c].ids;
         const beforeId = manual && pos.row < destIds.length ? destIds[pos.row] : "";
+        root.stackOnClose(id, cols[pos.col].statusId, cols[c].statusId, 1);
         AppController.moveTaskTo(id, cols[c].statusId, beforeId);
     }
 
@@ -467,6 +469,68 @@ Item {
             if (merged.indexOf(ordered[i]) < 0) merged.push(ordered[i]);
         }
         AppController.setSelectedTaskIds(merged);
+    }
+
+    // ── Closing a task: the stack (APP-176) ─────────────────────────────
+    // A single card moved into Done folds into a bar where it stood and lays
+    // itself on the stack over the Done column, like a bar in the heap mark.
+    // The one big move in the app; a bulk move and "Reduce motion" skip it,
+    // and so does a Done column that is folded or off screen. Called just
+    // before the move, while the card is still where the user saw it.
+    property bool stackRunning: false
+    function stackOnClose(id, fromStatus, toStatus, moved) {
+        if (!Motion.shouldStack(moved, fromStatus, toStatus, Theme.motion)) return false;
+        let card = null;
+        let done = null;
+        for (let c = 0; c < colRepeater.count; c++) {
+            const it = colRepeater.itemAt(c);
+            card = card || root._cardIn(it, id);
+            if (root._columnIs(it, toStatus)) done = it;
+        }
+        return root._launchStack(card, done);
+    }
+    // A card dropped or sent from its menu: anything with the card's
+    // taskId and task.
+    function stackOnDrop(source, toStatus, moved) {
+        if (!source || !source.taskId) return false;
+        return root.stackOnClose(source.taskId, source.task ? source.task.status : "", toStatus, moved);
+    }
+    // The columns are the Repeater's untyped delegates; these read them.
+    function _columnIs(col, statusId) {
+        return !!col && col.statusId === statusId;
+    }
+    // The card for `id` if this column's list has built it; never scrolls.
+    function _cardIn(col, id) {
+        if (!col || !col.taskList) return null;
+        const row = col.taskFilter.ids().indexOf(id);
+        return row >= 0 ? col.taskList.itemAtIndex(row) : null;
+    }
+    function _launchStack(card, done) {
+        if (!card || !card.task || !done || done.folded) return false;
+        const vp = hscroll.mapToItem(root, 0, 0);
+        const cp = done.mapToItem(root, 0, 0);
+        if (cp.x < vp.x || cp.x + done.width > vp.x + hscroll.width + 1) return false;
+        const from = card.mapToItem(root, 0, 0);
+        // Where the new top bar will be: the stack's first row, as wide as
+        // the bar that row gets once the column has one more card.
+        const bars = Motion.stackBars(done.visibleCount + 1);
+        const to = done.stackAnchor.mapToItem(root, 0, 0);
+        stackFlyer.launch(from.x, from.y, card.width, card.height, card.task.title,
+                          to.x, to.y, done.stackAnchor.width * Motion.stackBarWidth(bars - 1), done);
+        return true;
+    }
+
+    // Columns that do not fit sit off to the right (APP-200): how many, so
+    // the board can say so instead of letting one hide under the panel.
+    readonly property int hiddenColumnsRight: {
+        const edge = hscroll.contentX + hscroll.width;
+        const _deps = [rowL.implicitWidth, colRepeater.count, root.collapsed];
+        let n = 0;
+        for (let c = 0; c < colRepeater.count; c++) {
+            const it = colRepeater.itemAt(c);
+            if (it && it.x + it.width / 2 > edge) n++;
+        }
+        return n;
     }
 
     // The priorities the filter bar has switched on, as a plain list for the
@@ -550,6 +614,9 @@ Item {
             Repeater {
                 id: colRepeater
                 model: colModel
+                // A column's way to the stack: its drops and its cards' menus
+                // ask the board through this, not by the board's id.
+                onItemAdded: (index, item) => item["stackHook"] = root.stackOnDrop
 
                 Rectangle {
                     id: col
@@ -591,6 +658,22 @@ Item {
                     // Briefly emphasised when the sidebar Blocked / Code Review
                     // button jumps focus to this column.
                     readonly property bool focusPulse: root._focusPulseStatus === col.statusId
+                    // Done's stack (APP-176): a bar per card, up to a few.
+                    // While a closed card is on its way the top bar waits.
+                    readonly property int stackBars: col.statusId === "done" ? Motion.stackBars(col.visibleCount) : 0
+                    property bool stackHold: false
+                    readonly property Item stackAnchor: stackCol
+                    property var stackHook: null
+                    // One entry per bar, top first. Widths are counted from
+                    // the bottom, so a bar laid on top leaves the rest as
+                    // they were.
+                    readonly property var stackModel: {
+                        const out = [];
+                        for (let i = 0; i < col.stackBars; i++)
+                            out.push({ w: Motion.stackBarWidth(col.stackBars - 1 - i), c: col.statusColor,
+                                       o: i === 0 && col.stackHold ? 0 : 0.75 });
+                        return out;
+                    }
 
                     width: col.folded ? root.foldedWidth : root.columnWidth
                     height: rowL.height
@@ -903,6 +986,33 @@ Item {
                         }
 
                         Item {
+                            objectName: "done-stack"
+                            Layout.fillWidth: true
+                            // Laid out even while empty, so the first card
+                            // closed has a place to land.
+                            visible: col.statusId === "done"
+                            Layout.preferredHeight: stackCol.implicitHeight + Theme.spMd + Theme.spXs
+                            Column {
+                                id: stackCol
+                                x: Theme.spXl
+                                y: Theme.spMd
+                                width: parent.width - 2 * Theme.spXl
+                                spacing: Theme.spXs
+                                Repeater {
+                                    model: col.stackModel
+                                    Rectangle {
+                                        required property var modelData
+                                        width: parent ? parent.width * modelData.w : 0
+                                        height: 4
+                                        radius: 2
+                                        color: modelData.c
+                                        opacity: modelData.o
+                                    }
+                                }
+                            }
+                        }
+
+                        Item {
                             Layout.fillWidth: true
                             Layout.fillHeight: true
 
@@ -912,6 +1022,9 @@ Item {
                             ListView {
                                 id: bodyFlick
                                 objectName: "column-list"
+                                // For the cards' menus (APP-176), which reach
+                                // it as ListView.view.
+                                property var stackHook: col.stackHook
                                 anchors.fill: parent
                                 anchors.margins: Theme.spMd
                                 clip: true
@@ -1071,6 +1184,10 @@ Item {
                                                 root.taskClicked(tc.id);
                                             }
                                             onRangeSelectRequested: (anchorId) => root._rangeSelect(anchorId)
+                                            onStatusPicked: (sid) => tc._stack(tc.ListView.view, sid)
+                                            function _stack(view, sid) {
+                                                if (view && view.stackHook) view.stackHook(tc, sid, 1);
+                                            }
                                             onMenuOpenChanged: root._openCardMenus += menuOpen ? 1 : -1
                                             Component.onDestruction: if (menuOpen) root._openCardMenus--
                                         }
@@ -1158,9 +1275,12 @@ Item {
                                     const target = manual ? colDrop.beforeId : "";
                                     if (AppController.isTaskSelected(src.taskId)
                                         && AppController.selectionCount > 1) {
+                                        // Several cards: no stack (APP-176).
+                                        if (col.stackHook) col.stackHook(src, col.statusId, AppController.selectionCount);
                                         if (manual) AppController.moveSelectedTasksTo(col.statusId, target);
                                         else AppController.moveSelectedTasksToStatus(col.statusId);
                                     } else if (manual || AppController.taskById(src.taskId).status !== col.statusId) {
+                                        if (col.stackHook) col.stackHook(src, col.statusId, 1);
                                         AppController.moveTaskTo(src.taskId, col.statusId, target);
                                     }
                                     drop.accept(Qt.MoveAction);
@@ -1412,6 +1532,122 @@ Item {
         objectName: "board-drag-layer"
         anchors.fill: parent
         z: 1000
+    }
+
+    // The closed card on its way to the stack (APP-176): it folds into a bar
+    // where it stood (the first third), then flies onto the stack. One curve
+    // for both. Drawn here, over every column, and gone when it lands.
+    Rectangle {
+        id: stackFlyer
+        objectName: "stack-flyer"
+        visible: false
+        z: 1001
+        property real toX: 0
+        property real toY: 0
+        property real toW: 0
+        property real foldY: 0
+        property color barColor: Theme.stDone
+        property Item column: null
+        color: Theme.panel2
+        border.color: Theme.border
+        border.width: height > 8 ? 1 : 0
+        radius: Theme.radius
+        function launch(x, y, w, h, title, tx, ty, tw, col) {
+            stackAnim.stop();
+            if (stackFlyer.column) stackFlyer.column.stackHold = false;
+            stackFlyer.x = x;
+            stackFlyer.y = y;
+            stackFlyer.width = w;
+            stackFlyer.height = h;
+            stackFlyer.radius = Theme.radius;
+            stackFlyer.color = Theme.panel2;
+            stackFlyer.opacity = 1;
+            stackFlyer.foldY = y + (h - 4) / 2;
+            stackFlyer.toX = tx;
+            stackFlyer.toY = ty;
+            stackFlyer.toW = tw;
+            stackFlyer.barColor = col.statusColor;
+            stackFlyer.column = col;
+            flyerTitle.text = title;
+            flyerTitle.opacity = 1;
+            col.stackHold = true;
+            stackFlyer.visible = true;
+            root.stackRunning = true;
+            stackAnim.restart();
+        }
+        function land() {
+            stackFlyer.visible = false;
+            if (stackFlyer.column) stackFlyer.column.stackHold = false;
+            stackFlyer.column = null;
+            root.stackRunning = false;
+        }
+        Text {
+            id: flyerTitle
+            x: Theme.spLg
+            y: Theme.spLg
+            width: parent.width - 2 * Theme.spLg
+            textFormat: Text.PlainText
+            color: Theme.text
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            font.weight: Font.Medium
+            elide: Text.ElideRight
+        }
+        SequentialAnimation {
+            id: stackAnim
+            ParallelAnimation {
+                NumberAnimation { target: flyerTitle; property: "opacity"; to: 0; duration: Theme.durTap; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "height"; to: 4; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "y"; to: stackFlyer.foldY; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "radius"; to: 2; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+                ColorAnimation { target: stackFlyer; property: "color"; to: stackFlyer.barColor; duration: Theme.durStackFold; easing.type: Theme.easeEnter }
+            }
+            ParallelAnimation {
+                NumberAnimation { target: stackFlyer; property: "x"; to: stackFlyer.toX; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "y"; to: stackFlyer.toY; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "width"; to: stackFlyer.toW; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+                NumberAnimation { target: stackFlyer; property: "opacity"; to: 0.75; duration: Theme.durStackFly; easing.type: Theme.easeEnter }
+            }
+            ScriptAction { script: stackFlyer.land() }
+        }
+    }
+
+    // Columns off to the right (APP-200): at 1600px the fourth went under the
+    // side panel with nothing to say it was there. Says how many; a click
+    // scrolls one column over.
+    Rectangle {
+        id: hiddenCols
+        objectName: "board-hidden-columns"
+        visible: root.hiddenColumnsRight > 0
+        anchors.right: parent.right
+        anchors.rightMargin: Theme.sp2xl + Theme.spMd
+        // Over the foot of the columns, just above the scrollbar it points
+        // along: a column's header and its "+" stay clear.
+        anchors.bottom: parent.bottom
+        anchors.bottomMargin: Theme.sp2xl + Theme.spLg
+        z: 900
+        radius: Theme.radiusPill
+        color: hiddenColsMA.hovered || hiddenColsMA.keyboardFocused ? Theme.panel3 : Theme.panel2
+        border.color: Theme.borderStrong
+        border.width: 1
+        implicitWidth: hiddenColsT.implicitWidth + 2 * Theme.spLg
+        implicitHeight: hiddenColsT.implicitHeight + 2 * Theme.spXs
+        Text {
+            id: hiddenColsT
+            objectName: "board-hidden-columns-text"
+            anchors.centerIn: parent
+            text: I18n.t("kanban.hiddenColumns").arg(root.hiddenColumnsRight) + "  →"
+            color: Theme.textMuted
+            font.family: Theme.fontUi
+            font.features: Theme.tabularNums
+            font.pixelSize: Theme.fsSm
+        }
+        ClickArea {
+            id: hiddenColsMA
+            label: hiddenColsT.text
+            tip: I18n.t("kanban.hiddenColumns.tip")
+            onActivated: root._scrollOuter(-(root.columnWidth + Theme.spXl))
+        }
     }
 
     // ── Inline components ───────────────────────────────────────────────────

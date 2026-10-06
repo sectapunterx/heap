@@ -97,6 +97,10 @@ Rectangle {
     }
 
     signal rangeSelectRequested(string anchorId)
+    // A status picked from the card's own menu, just before the task moves:
+    // the board lays a card that goes to Done on its stack (APP-176) and has
+    // to see where the card was while it is still there.
+    signal statusPicked(string statusId)
 
     // Time tracking (HEAP-78): tick once a second while this task's timer runs
     // so the elapsed chip stays live; _timerTick is read in the chip binding.
@@ -233,122 +237,80 @@ Rectangle {
         }
     }
 
-    // ── Done (APP-167) ───────────────────────────────────────────────
-    // A check mark grows over the card and fades when the task is marked
-    // done — on this card, or just before it was built: the board makes a new
-    // card in the Done column for a moved task. It pops in, holds for a
-    // move's length and leaves in half a pop; nothing plays with reduced
-    // motion.
-    function playDone() {
-        if (Theme.motion > 0) doneAnim.restart();
+    // What sits on a card (APP-179): the title, up to two lines, and one line
+    // under it: the key, the date, and the priority when it is P0 or P1.
+    // That is all a board shows at rest. Under the cursor — the keyboard's or
+    // the pointer's — the card opens the first line of its description, how
+    // far along its checklist is, and the quieter facts. An alert that needs
+    // the user (out of step with the tracker, stuck, archived) gets its own
+    // row above the title, and only while there is one. No people and no
+    // branch: heap shows the tasks that are mine, so the assignee is always
+    // me, and the branch is the editor's business.
+    readonly property bool detailsOpen: (card.cursored || card.activeFocus || hoverArea.containsMouse)
+        && !dragArea.drag.active
+    // The description's first line with words in it, as prose.
+    readonly property string _excerpt: {
+        // Code blocks out first: their fences would be a line of their own.
+        const lines = String((card.task && card.task.desc) || "").replace(/```[\s\S]*?```/g, " ").split("\n");
+        for (let i = 0; i < lines.length; i++) {
+            const p = MdPlain.plain(lines[i], 160).trim();
+            if (p.length > 0) return p;
+        }
+        return "";
     }
-    readonly property var _changedAt: card.task ? card.task.statusChangedAt : undefined
-    on_DoneChanged: {
-        if (!card._done) return;
-        // A view that does not pass the change time animates any change it
-        // sees; the board, which recycles cards, only a recent one.
-        if (card._changedAt === undefined || Motion.justCompleted("done", card._changedAt, Date.now())) card.playDone();
-    }
-    Component.onCompleted: {
-        if (card.task && Motion.justCompleted(card.task.status, card._changedAt, Date.now())) card.playDone();
-    }
+    readonly property var _cl: (card.task && card.task.checklist) ? card.task.checklist : ({})
+    readonly property bool _timing: !!(card.task && card.task.isTiming)
+    readonly property int _tracked: card.task ? (card.task.trackedSeconds || 0) : 0
+    readonly property var _waiting: (AppController.safety && AppController.safety.waitingOn)
+        ? AppController.waitingOn[card.taskId] : undefined
+    // From each fact's own condition, not from the children's `visible`:
+    // that reads false while the row is hidden, so a card given its task
+    // after creation never showed its facts.
+    readonly property bool _hasFacts: schedMore.label.length > 0 || prT.prState.length > 0
+        || (!card._timing && card._tracked > 0)
+        || !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
+        || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
+        || card._attachmentCount > 0 || card._waiting !== undefined || card._isTicket
+    readonly property bool _hasDetails: card._excerpt.length > 0 || (card._cl.total || 0) > 0 || card._hasFacts
+    readonly property bool _alerting: card._isStuck || card._isArchived
+        || (card._isTicket && (syncChip.shown || !!card._ticket.conflict
+                               || (!!card._ticket.outOfScope && !card._ticket.gone)))
+
+    // Ink on a text-coloured dot: reads on every theme, and is not the
+    // cursor's colour. In the corner, over the title's right padding.
     Rectangle {
-        id: doneMark
-        objectName: "tc-done-mark"
-        anchors.centerIn: parent
-        width: 28
-        height: 28
+        objectName: "tc-selected-mark"
+        visible: card._selected
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.margins: Theme.spMd
+        z: 4
+        implicitWidth: Theme.fsMd + Theme.sp2xs
+        implicitHeight: implicitWidth
         radius: width / 2
-        color: Theme.success
-        opacity: 0
-        scale: 0.6
-        visible: opacity > 0
-        z: 50
+        color: Theme.text
         Text {
             anchors.centerIn: parent
             text: "✓"
-            color: Theme.textOn(Theme.success)
-            font.pixelSize: Theme.fsLg
-            font.weight: Font.Bold
+            color: Theme.bg
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsXs
+            font.weight: Font.DemiBold
         }
-    }
-    SequentialAnimation {
-        id: doneAnim
-        ParallelAnimation {
-            NumberAnimation { target: doneMark; property: "opacity"; from: 0; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
-            NumberAnimation { target: doneMark; property: "scale"; from: 0.6; to: 1; duration: Theme.durPop; easing.type: Theme.easeEnter }
-        }
-        PauseAnimation { duration: Theme.durMove }
-        NumberAnimation { target: doneMark; property: "opacity"; to: 0; duration: Theme.durPopOut; easing.type: Theme.easeExit }
     }
 
-    // What sits on a card, top to bottom: who it is (key, priority, and any
-    // alert that needs the user), the title, how far along it is, the
-    // description, then one quiet line of facts. Only alerts and urgent dates
-    // get a box or a colour; everything else is dim text, so a synced ticket
-    // with a dozen facts still reads title-first.
     ColumnLayout {
         id: contentCol
         anchors.fill: parent
         anchors.margins: Theme.spLg
         spacing: Theme.spSm
 
+        // Alerts: shown only when the card is out of step with something.
         RowLayout {
+            objectName: "tc-alerts"
             Layout.fillWidth: true
+            visible: card._alerting
             spacing: Theme.spSm
-            // Provider badge: which tracker this card mirrors (HEAP-117). The
-            // provider's own colour is on the glyph only.
-            Text {
-                objectName: "tc-badge"
-                visible: card._isTicket
-                text: card._badge.icon || "◍"
-                textFormat: Text.PlainText
-                // Muted like the key beside it (VISU-2): the provider's own
-                // colour was one more accent on a card that already had five,
-                // and the glyph and its tooltip already say which tracker.
-                color: Theme.textMuted
-                font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
-                QQC.ToolTip.visible: badgeHover.hovered
-                QQC.ToolTip.text: (card._badge.name || card._ticket.provider || "")
-                    + (card._ticket.project ? " · " + card._ticket.project : "")
-                HoverHandler { id: badgeHover }
-            }
-            Text {
-                objectName: "tc-key"
-                // A mirrored issue is known by its tracker key, not by the
-                // synthetic heap id ("github-68") the merge invented for it.
-                text: card._isTicket ? (card._ticket.key || "") : (card.task ? card.task.id : "")
-                textFormat: Text.PlainText
-                // Metadata, so muted: accentStrong is white on a monochrome
-                // theme and the key was as loud as the title (VISU-3).
-                color: Theme.textMuted
-                font.family: Theme.fontMono
-                font.pixelSize: Theme.fsXs
-                font.weight: Font.Medium
-            }
-            // P0 and P1 are the priorities worth a glance, so they get the
-            // coloured chip; P2 and P3 are plain dim text.
-            Rectangle {
-                id: priChip
-                objectName: "tc-priority"
-                readonly property string pri: card.task ? String(card.task.priority || "") : ""
-                readonly property bool loud: pri === "P0" || pri === "P1"
-                visible: pri.length > 0
-                radius: Theme.radiusSm
-                color: loud ? Theme.withAlpha(Theme.priorityColor(pri), 0.14) : "transparent"
-                implicitWidth: priT.implicitWidth + (loud ? 10 : 0)
-                implicitHeight: priT.implicitHeight + 2
-                Text {
-                    id: priT
-                    anchors.centerIn: parent
-                    text: priChip.pri
-                    color: priChip.loud ? Theme.priorityColor(priChip.pri) : Theme.textDim
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
-                    font.weight: priChip.loud ? Font.DemiBold : Font.Normal
-                }
-            }
             // The tracker refused the last status change, or the issue is no
             // longer in the tracker. Either way the card is out of step with it.
             // Shown only when the card is not in step (APP-163): a status write
@@ -364,7 +326,9 @@ Rectangle {
                     || (card._ticket.gone ? "gone"
                         : card._ticket.unsynced ? (card._ticket.queued ? "queued" : "error") : "synced")
                 readonly property bool quiet: state === "pushing"
-                visible: card._isTicket && (state === "pushing" || state === "queued" || state === "error" || state === "gone")
+                readonly property bool shown: card._isTicket
+                    && (state === "pushing" || state === "queued" || state === "error" || state === "gone")
+                visible: syncChip.shown
                 radius: Theme.radiusSm
                 color: syncChip.quiet ? "transparent" : Theme.withAlpha(Theme.warning, 0.14)
                 implicitWidth: syncStateT.implicitWidth + 10
@@ -380,7 +344,7 @@ Rectangle {
                     textFormat: Text.PlainText
                     color: syncChip.quiet ? Theme.textDim : Theme.warning
                     font.pixelSize: Theme.fsXs
-                    font.weight: syncChip.quiet ? Font.Normal : Font.DemiBold
+                    font.weight: syncChip.quiet ? Font.Normal : Font.Medium
                 }
                 readonly property string tip: syncChip.state === "gone" ? I18n.t("taskcard.gone.tip")
                     : syncChip.state === "pushing" ? I18n.t("taskcard.pushing.tip")
@@ -421,7 +385,7 @@ Rectangle {
                     textFormat: Text.PlainText
                     color: Theme.warning
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                 }
                 QQC.ToolTip.visible: conflictHover.hovered
                 QQC.ToolTip.text: I18n.t("taskcard.conflict.tip")
@@ -436,21 +400,13 @@ Rectangle {
             }
             // Left behind by a filter change: still a live issue, just not one
             // this connection pulls any more. Quiet on purpose.
-            Rectangle {
+            Text {
                 objectName: "tc-out-of-scope"
                 visible: card._isTicket && !!card._ticket.outOfScope && !card._ticket.gone
-                radius: Theme.radiusSm
-                color: Theme.panel2
-                implicitWidth: scopeT.implicitWidth + 10
-                implicitHeight: scopeT.implicitHeight + 2
-                Text {
-                    id: scopeT
-                    anchors.centerIn: parent
-                    text: I18n.t("taskcard.outOfScope")
-                    textFormat: Text.PlainText
-                    color: Theme.textDim
-                    font.pixelSize: Theme.fsXs
-                }
+                text: I18n.t("taskcard.outOfScope")
+                textFormat: Text.PlainText
+                color: Theme.textDim
+                font.pixelSize: Theme.fsXs
                 QQC.ToolTip.visible: scopeHover.hovered
                 QQC.ToolTip.text: I18n.t("taskcard.outOfScope.tip")
                 HoverHandler { id: scopeHover }
@@ -469,7 +425,7 @@ Rectangle {
                     color: Theme.danger
                     font.family: Theme.fontUi
                     font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
+                    font.weight: Font.Medium
                 }
             }
             Text {
@@ -478,27 +434,8 @@ Rectangle {
                 color: Theme.textDim
                 font.family: Theme.fontUi
                 font.pixelSize: Theme.fsXs
-                font.weight: Font.DemiBold
             }
             Item { Layout.fillWidth: true }
-            // Ink on a text-coloured dot: reads on every theme, and is not
-            // the cursor's colour.
-            Rectangle {
-                objectName: "tc-selected-mark"
-                visible: card._selected
-                implicitWidth: Theme.fsMd + Theme.sp2xs
-                implicitHeight: implicitWidth
-                radius: width / 2
-                color: Theme.text
-                Text {
-                    anchors.centerIn: parent
-                    text: "✓"
-                    color: Theme.bg
-                    font.family: Theme.fontUi
-                    font.pixelSize: Theme.fsXs
-                    font.weight: Font.DemiBold
-                }
-            }
         }
 
         Text {
@@ -516,103 +453,29 @@ Rectangle {
             // Wrap, not WordWrap: a URL or a long identifier has no space to
             // break at and ran off the card (TASKS-27).
             wrapMode: Text.Wrap
-            maximumLineCount: 6
-            elide: Text.ElideRight
-        }
-
-        // Checklist progress. A template ships its steps as markdown task
-        // items, and until now a card could not say how far along it was
-        // without being opened.
-        RowLayout {
-            id: checklistRow
-            readonly property var _cl: (card.task && card.task.checklist) ? card.task.checklist : ({})
-            readonly property int _total: _cl.total || 0
-            readonly property int _done: _cl.done || 0
-            visible: _total > 0
-            Layout.fillWidth: true
-            spacing: Theme.spSm
-
-            Text {
-                objectName: "tc-checklist"
-                text: checklistRow._done + "/" + checklistRow._total
-                color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textMuted
-                font.family: Theme.fontUi
-                font.features: Theme.tabularNums
-                font.pixelSize: Theme.fsXs
-            }
-            // A bar rather than only a number: the ratio is the thing being
-            // read, and a number has to be compared against its own second
-            // half to mean anything.
-            Rectangle {
-                Layout.fillWidth: true
-                implicitHeight: 3
-                radius: Theme.radiusXs
-                color: Theme.panel3
-                Rectangle {
-                    width: parent.width * (checklistRow._total > 0 ? checklistRow._done / checklistRow._total : 0)
-                    height: parent.height
-                    radius: parent.radius
-                    // textDim, not accent: a white bar was as loud as the
-                    // title on a monochrome theme (VISU-3).
-                    color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textDim
-                }
-            }
-        }
-
-        Text {
-            Layout.fillWidth: true
-            visible: text.length > 0
-            text: card.task ? MdPlain.plain(card.task.desc) : ""
-            textFormat: Text.PlainText
-            color: Theme.textMuted
-            font.pixelSize: Theme.fsSm
-            wrapMode: Text.Wrap
             maximumLineCount: 2
             elide: Text.ElideRight
+            // Clear of the selection mark in the corner.
+            rightPadding: card._selected && !card._alerting ? Theme.fsMd + Theme.spSm : 0
         }
 
-        // One line of facts. Flow, not a row: on a narrow column the line
-        // wraps instead of pushing facts out past the card's edge.
-        Flow {
-            id: metaFlow
+        // The one line of facts: key, date, priority.
+        RowLayout {
+            objectName: "tc-meta"
             Layout.fillWidth: true
-            // From each fact's own condition, not from the children's
-            // `visible`: that reads false while this row is hidden, so a card
-            // given its task after creation never showed its facts.
-            visible: dueT.dlText.length > 0 || schedT.label.length > 0 || prT.state.length > 0
-                     || !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
-                     || !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
-                     || (card._isTicket && (card._ticket.commentCount || 0) > 0) || labelRep.count > 0
-                     || card._attachmentCount > 0 || waitT.link !== undefined
             spacing: Theme.spLg
-
-            // Waiting on someone's reply (APP-158): "waiting: Oleg · 2d".
             Text {
-                id: waitT
-                objectName: "tc-waiting"
-                readonly property var link: (AppController.safety && AppController.safety.waitingOn)
-                                            ? AppController.waitingOn[card.taskId] : undefined
-                visible: link !== undefined
-                text: link ? I18n.t("waiting.chip").arg(link.name).arg(link.days) : ""
+                objectName: "tc-key"
+                // A mirrored issue is known by its tracker key, not by the
+                // synthetic heap id ("github-68") the merge invented for it.
+                text: card._isTicket ? (card._ticket.key || "") : (card.task ? card.task.id : "")
                 textFormat: Text.PlainText
-                color: Theme.warning
-                font.family: Theme.fontUi
-                font.features: Theme.tabularNums
-                font.pixelSize: Theme.fsXs
-            }
-
-            // How many files are attached. Opening them is the editor's job.
-            Text {
-                objectName: "tc-attachments"
-                visible: card._attachmentCount > 0
-                text: "📎 " + card._attachmentCount
+                // Metadata, so muted: accentStrong is white on a monochrome
+                // theme and the key was as loud as the title (VISU-3).
                 color: Theme.textMuted
-                font.family: Theme.fontUi
-                font.features: Theme.tabularNums
+                font.family: Theme.fontMono
                 font.pixelSize: Theme.fsXs
-                Accessible.name: I18n.t("att.card.count").arg(card._attachmentCount)
             }
-
             Text {
                 id: dueT
                 objectName: "tc-due"
@@ -626,6 +489,10 @@ Rectangle {
                     const ms = dl.getTime() - new Date(t.getFullYear(), t.getMonth(), t.getDate()).getTime();
                     return Math.round(ms / 86400000);
                 }
+                // Red is for a date already past, and only that (APP-179):
+                // today and the next few days used to be red and amber too,
+                // and a board of them read as a board of alarms.
+                readonly property bool overdue: dlText.length > 0 && days < 0
                 readonly property string dlText: {
                     if (days === 99999) return "";
                     // Finished or archived work is not overdue (PLAT-24).
@@ -645,164 +512,313 @@ Rectangle {
                     return I18n.t("task.due.inDays").arg(days) + clock;
                 }
                 visible: dlText.length > 0
-                text: "◷ " + dlText
-                color: (card._done || card._isArchived) ? Theme.textDim
-                     : days <= 0 ? Theme.danger : days <= 3 ? Theme.warning : Theme.textDim
+                text: dlText
+                color: overdue ? Theme.danger : Theme.textDim
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
             }
+            // A task with only a plan, no deadline, says when it is planned
+            // here, or it looked undated (TASKS-12). With a deadline too, the
+            // plan is one of the details.
             Text {
                 id: schedT
                 objectName: "tc-scheduled"
                 readonly property string label: (AppController.today, I18n.lang, card._schedLabel())
-                visible: label.length > 0
+                visible: label.length > 0 && !dueT.visible
                 text: "▸ " + label
-                // A plan, not an alarm: muted, so the overdue date is the one
-                // that stands out (VISU-3).
+                color: Theme.textDim
+                font.family: Theme.fontUi
+                font.features: Theme.tabularNums
+                font.pixelSize: Theme.fsXs
+            }
+            // A running timer is the one live fact, so it stays on the line;
+            // time already tracked is a detail. Click to stop.
+            Text {
+                id: timerT
+                objectName: "tc-timer"
+                visible: card._timing
+                text: {
+                    card._timerTick;  // re-evaluate each tick while running
+                    return card.task && card._timing ? "● " + card._fmtElapsed(AppController.elapsedSecondsFor(card.task.id)) : "";
+                }
                 color: Theme.textMuted
                 font.family: Theme.fontUi
                 font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
-            }
-            // The pull request's state: open is info, merged is success, closed
-            // is dim. The branch itself is the editor's business (Details); on
-            // the card it was a second title nobody reads from across a board.
-            Text {
-                id: prT
-                objectName: "tc-pr"
-                readonly property string state: card.task ? String(card.task.prState || "") : ""
-                visible: state.length > 0
-                text: {
-                    const n = card.task ? (card.task.prNumber || 0) : 0;
-                    return (n > 0 ? "PR #" + n + " " : "PR ") + state;
-                }
-                textFormat: Text.PlainText
-                color: state === "merged" ? Theme.success : state === "closed" ? Theme.textDim : Theme.info
-                font.family: Theme.fontUi
-                font.features: Theme.tabularNums
-                font.pixelSize: Theme.fsXs
-                font.weight: Font.Medium
-            }
-            // Whose move it is on that PR (APP-156): read off the PR — a review
-            // asked of me, red CI, an approval — and only ever shown, never
-            // acted on. "Mine" gets the chip; "waiting" stays dim text.
-            Rectangle {
-                id: moveChip
-                objectName: "tc-move"
-                readonly property string move: card.task ? String(card.task.prMove || "") : ""
-                readonly property string reason: card.task ? String(card.task.prMoveReason || "") : ""
-                readonly property bool mine: move === "mine"
-                visible: AppController.showWhoseMove && move.length > 0 && prT.state.length > 0
-                radius: Theme.radiusSm
-                color: mine ? Theme.withAlpha(Theme.accent, 0.14) : "transparent"
-                implicitWidth: moveT.implicitWidth + (mine ? 10 : 0)
-                implicitHeight: moveT.implicitHeight + 2
-                Text {
-                    id: moveT
-                    objectName: "tc-move-text"
-                    anchors.centerIn: parent
-                    text: moveChip.mine ? I18n.t("taskcard.move.mine") : I18n.t("taskcard.move.theirs")
-                    textFormat: Text.PlainText
-                    color: moveChip.mine ? Theme.accentStrong : Theme.textDim
-                    font.family: Theme.fontUi
-                    font.features: Theme.tabularNums
-                    font.pixelSize: Theme.fsXs
-                    font.weight: moveChip.mine ? Font.DemiBold : Font.Normal
-                }
-                readonly property string tip: moveChip.reason.length > 0 ? I18n.t("taskcard.move." + moveChip.reason) : ""
-                QQC.ToolTip.visible: moveHover.hovered && moveChip.tip.length > 0
-                QQC.ToolTip.text: moveChip.tip
-                HoverHandler { id: moveHover }
-                Accessible.role: Accessible.StaticText
-                Accessible.name: moveT.text + (moveChip.tip.length > 0 ? " — " + moveChip.tip : "")
-            }
-            // Time tracking — click to start/stop; live while running.
-            Text {
-                id: timerT
-                objectName: "tc-timer"
-                visible: !!(card.task && (card.task.isTiming || (card.task.trackedSeconds || 0) > 0))
-                text: {
-                    card._timerTick;  // re-evaluate each tick while running
-                    if (!card.task) return "";
-                    const s = card.task.isTiming ? AppController.elapsedSecondsFor(card.task.id)
-                                                 : (card.task.trackedSeconds || 0);
-                    return (card.task.isTiming ? "● " : "⧗ ") + card._fmtElapsed(s);
-                }
-                // Running: the dot and the weight say so; the colour stays
-                // with the rest of the metadata (VISU-3).
-                color: card.task && card.task.isTiming ? Theme.textMuted : Theme.textDim
-                font.family: Theme.fontUi
-                font.features: Theme.tabularNums
-                font.pixelSize: Theme.fsXs
-                font.weight: card.task && card.task.isTiming ? Font.DemiBold : Font.Normal
                 MouseArea {
                     anchors.fill: parent
                     anchors.margins: -4
                     hoverEnabled: true
                     cursorShape: Qt.PointingHandCursor
-                    onClicked: {
-                        if (!card.task) return;
-                        if (card.task.isTiming) AppController.stopTaskTimer(card.task.id);
-                        else AppController.startTaskTimer(card.task.id);
-                    }
+                    onClicked: if (card.task) AppController.stopTaskTimer(card.task.id)
                 }
             }
-            // Recurrence (HEAP-77).
+            Item { Layout.fillWidth: true }
+            // Colour for P0 and P1 only, the priorities worth a glance; P2 and
+            // P3 are dim text.
             Text {
-                id: recurT
-                visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
-                text: "↻ " + card._recurLabel(card.task ? card.task.recurrence : "")
-                color: Theme.textDim
+                id: priT
+                objectName: "tc-priority"
+                readonly property string pri: card.task ? String(card.task.priority || "") : ""
+                readonly property bool loud: pri === "P0" || pri === "P1"
+                visible: pri.length > 0
+                text: pri
+                color: loud ? Theme.priorityColor(pri) : Theme.textDim
                 font.family: Theme.fontUi
-                font.features: Theme.tabularNums
                 font.pixelSize: Theme.fsXs
+                font.weight: loud ? Font.Medium : Font.Normal
             }
-            // Comment count. -1 means the provider never said, which is not the
-            // same as "no comments" — the count stays away for both, but a zero
-            // from a provider that does report is still worth nothing to show.
-            Text {
-                id: commentsT
-                objectName: "tc-comments"
-                visible: card._isTicket && (card._ticket.commentCount || 0) > 0
-                text: "❝ " + (card._ticket.commentCount || 0)
-                textFormat: Text.PlainText
-                color: Theme.textDim
-                font.pixelSize: Theme.fsXs
-            }
-            // Labels (HEAP-124): a dot in the colour the tracker gave it and
-            // the name in muted text. Two fit; the rest are counted.
-            Repeater {
-                id: labelRep
-                model: card.task && card.task.labels ? card.task.labels.slice(0, 2) : []
-                delegate: Row {
-                    required property var modelData
-                    spacing: Theme.spXs
-                    Rectangle {
-                        anchors.verticalCenter: parent.verticalCenter
-                        width: 6; height: 6; radius: 3
-                        color: modelData.color || Theme.textDim
-                    }
+        }
+
+        // Under the cursor: the description's first line, the checklist, and
+        // the quieter facts. Opens and closes in a pop; `visible` holds while
+        // it closes so the height can run down to nothing.
+        Item {
+            id: details
+            objectName: "tc-details"
+            Layout.fillWidth: true
+            readonly property bool open: card.detailsOpen && card._hasDetails
+            Layout.preferredHeight: details.open ? detailsCol.implicitHeight : 0
+            visible: details.open || details.height > 0
+            opacity: details.open ? 1 : 0
+            clip: true
+            Behavior on Layout.preferredHeight { NumberAnimation { duration: Theme.durPop; easing.type: Theme.easeEnter } }
+            Behavior on opacity { NumberAnimation { duration: Theme.durPop; easing.type: Theme.easeEnter } }
+
+            ColumnLayout {
+                id: detailsCol
+                width: parent.width
+                spacing: Theme.spSm
+
+                Text {
+                    objectName: "tc-excerpt"
+                    Layout.fillWidth: true
+                    visible: card._excerpt.length > 0
+                    text: card._excerpt
+                    textFormat: Text.PlainText
+                    color: Theme.textMuted
+                    font.pixelSize: Theme.fsSm
+                    maximumLineCount: 1
+                    elide: Text.ElideRight
+                }
+
+                // Checklist progress. A template ships its steps as markdown
+                // task items; the bar says how far along it is without opening
+                // the card.
+                RowLayout {
+                    id: checklistRow
+                    readonly property int _total: card._cl.total || 0
+                    readonly property int _done: card._cl.done || 0
+                    visible: _total > 0
+                    Layout.fillWidth: true
+                    spacing: Theme.spSm
+
                     Text {
-                        text: modelData.id
+                        objectName: "tc-checklist"
+                        text: checklistRow._done + "/" + checklistRow._total
+                        color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                    }
+                    // A bar rather than only a number: the ratio is the thing
+                    // being read.
+                    Rectangle {
+                        Layout.fillWidth: true
+                        implicitHeight: 3
+                        radius: Theme.radiusXs
+                        color: Theme.panel3
+                        Rectangle {
+                            width: parent.width * (checklistRow._total > 0 ? checklistRow._done / checklistRow._total : 0)
+                            height: parent.height
+                            radius: parent.radius
+                            // textDim, not accent: a white bar was as loud as
+                            // the title on a monochrome theme (VISU-3).
+                            color: checklistRow._done === checklistRow._total ? Theme.success : Theme.textDim
+                        }
+                    }
+                }
+
+                // The quieter facts. Flow, not a row: on a narrow column the
+                // line wraps instead of pushing facts out past the card's edge.
+                Flow {
+                    id: metaFlow
+                    Layout.fillWidth: true
+                    visible: card._hasFacts
+                    spacing: Theme.spLg
+
+                    // Provider badge: which tracker this card mirrors
+                    // (HEAP-117), muted like the rest.
+                    Text {
+                        objectName: "tc-badge"
+                        visible: card._isTicket
+                        text: card._badge.icon || "◍"
                         textFormat: Text.PlainText
                         color: Theme.textMuted
                         font.pixelSize: Theme.fsXs
-                        width: Math.min(implicitWidth, card.width * 0.5)
-                        elide: Text.ElideRight
+                        QQC.ToolTip.visible: badgeHover.hovered
+                        QQC.ToolTip.text: (card._badge.name || card._ticket.provider || "")
+                            + (card._ticket.project ? " · " + card._ticket.project : "")
+                        HoverHandler { id: badgeHover }
+                    }
+                    Text {
+                        id: schedMore
+                        objectName: "tc-scheduled-more"
+                        readonly property string label: dueT.visible ? schedT.label : ""
+                        visible: label.length > 0
+                        text: "▸ " + label
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                    }
+                    // Waiting on a reply (APP-158): that it waits and for how
+                    // long. Who it waits on is in the editor; the card shows
+                    // no people.
+                    Text {
+                        objectName: "tc-waiting"
+                        visible: card._waiting !== undefined
+                        text: card._waiting ? I18n.t("waiting.chip.card").arg(card._waiting.days) : ""
+                        textFormat: Text.PlainText
+                        color: Theme.warning
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                    }
+                    // How many files are attached. Opening them is the editor's job.
+                    Text {
+                        objectName: "tc-attachments"
+                        visible: card._attachmentCount > 0
+                        text: "📎 " + card._attachmentCount
+                        color: Theme.textMuted
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                        Accessible.name: I18n.t("att.card.count").arg(card._attachmentCount)
+                    }
+                    // The pull request's state: open is info, merged is
+                    // success, closed is dim.
+                    Text {
+                        id: prT
+                        objectName: "tc-pr"
+                        readonly property string prState: card.task ? String(card.task.prState || "") : ""
+                        visible: prT.prState.length > 0
+                        text: {
+                            const n = card.task ? (card.task.prNumber || 0) : 0;
+                            return (n > 0 ? "PR #" + n + " " : "PR ") + prT.prState;
+                        }
+                        textFormat: Text.PlainText
+                        color: prT.prState === "merged" ? Theme.success : prT.prState === "closed" ? Theme.textDim : Theme.info
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                    }
+                    // Whose move it is on that PR (APP-156): read off the PR — a
+                    // review asked of me, red CI, an approval — and only ever
+                    // shown, never acted on. "Mine" is the accent; "waiting"
+                    // stays dim.
+                    Item {
+                        id: moveChip
+                        objectName: "tc-move"
+                        readonly property string move: card.task ? String(card.task.prMove || "") : ""
+                        readonly property string reason: card.task ? String(card.task.prMoveReason || "") : ""
+                        readonly property bool mine: move === "mine"
+                        visible: AppController.showWhoseMove && move.length > 0 && prT.prState.length > 0
+                        implicitWidth: moveT.implicitWidth
+                        implicitHeight: moveT.implicitHeight
+                        Text {
+                            id: moveT
+                            objectName: "tc-move-text"
+                            text: moveChip.mine ? I18n.t("taskcard.move.mine") : I18n.t("taskcard.move.theirs")
+                            textFormat: Text.PlainText
+                            color: moveChip.mine ? Theme.accentStrong : Theme.textDim
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
+                            font.pixelSize: Theme.fsXs
+                            font.weight: moveChip.mine ? Font.Medium : Font.Normal
+                        }
+                        readonly property string tip: moveChip.reason.length > 0 ? I18n.t("taskcard.move." + moveChip.reason) : ""
+                        QQC.ToolTip.visible: moveHover.hovered && moveChip.tip.length > 0
+                        QQC.ToolTip.text: moveChip.tip
+                        HoverHandler { id: moveHover }
+                        Accessible.role: Accessible.StaticText
+                        Accessible.name: moveT.text + (moveChip.tip.length > 0 ? " — " + moveChip.tip : "")
+                    }
+                    // Time already tracked — click to start again.
+                    Text {
+                        objectName: "tc-tracked"
+                        visible: !card._timing && card._tracked > 0
+                        text: "⧗ " + card._fmtElapsed(card._tracked)
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                        MouseArea {
+                            anchors.fill: parent
+                            anchors.margins: -4
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: if (card.task) AppController.startTaskTimer(card.task.id)
+                        }
+                    }
+                    // Recurrence (HEAP-77).
+                    Text {
+                        visible: !!(card.task && card.task.recurrence && String(card.task.recurrence).length > 0)
+                        text: "↻ " + card._recurLabel(card.task ? card.task.recurrence : "")
+                        color: Theme.textDim
+                        font.family: Theme.fontUi
+                        font.features: Theme.tabularNums
+                        font.pixelSize: Theme.fsXs
+                    }
+                    // Comment count. -1 means the provider never said, which is
+                    // not the same as "no comments" — the count stays away for
+                    // both.
+                    Text {
+                        objectName: "tc-comments"
+                        visible: card._isTicket && (card._ticket.commentCount || 0) > 0
+                        text: "❝ " + (card._ticket.commentCount || 0)
+                        textFormat: Text.PlainText
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsXs
+                    }
+                    // Labels (HEAP-124): a dot in the colour the tracker gave it
+                    // and the name in muted text. Two fit; the rest are counted.
+                    Repeater {
+                        id: labelRep
+                        model: card.task && card.task.labels ? card.task.labels.slice(0, 2) : []
+                        delegate: Row {
+                            id: labelRow
+                            required property var modelData
+                            spacing: Theme.spXs
+                            Rectangle {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 6; height: 6; radius: 3
+                                color: labelRow.modelData.color || Theme.textDim
+                            }
+                            Text {
+                                text: labelRow.modelData.id
+                                textFormat: Text.PlainText
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsXs
+                                // Half the facts row at most.
+                                width: Math.min(implicitWidth, labelRow.parent ? labelRow.parent.width * 0.5 : implicitWidth)
+                                elide: Text.ElideRight
+                            }
+                        }
+                    }
+                    Text {
+                        readonly property int more: card.task && card.task.labels ? card.task.labels.length - 2 : 0
+                        visible: more > 0
+                        text: "+" + more
+                        color: Theme.textDim
+                        font.pixelSize: Theme.fsXs
+                        QQC.ToolTip.visible: moreHover.hovered
+                        QQC.ToolTip.text: card.task && card.task.labels
+                            ? card.task.labels.slice(2).map(l => l.id).join(", ") : ""
+                        HoverHandler { id: moreHover }
                     }
                 }
-            }
-            Text {
-                readonly property int more: card.task && card.task.labels ? card.task.labels.length - 2 : 0
-                visible: more > 0
-                text: "+" + more
-                color: Theme.textDim
-                font.pixelSize: Theme.fsXs
-                QQC.ToolTip.visible: moreHover.hovered
-                QQC.ToolTip.text: card.task && card.task.labels
-                    ? card.task.labels.slice(2).map(l => l.id).join(", ") : ""
-                HoverHandler { id: moreHover }
             }
         }
     }
@@ -929,6 +945,10 @@ Rectangle {
         if (!card._statusMenu) {
             card._statusMenu = statusMenuComponent.createObject(card);
             card._statusMenu.back.connect(() => card.backToMenu("status"));
+            card._statusMenu.picked.connect(sid => {
+                card.statusPicked(sid);
+                AppController.moveTaskTo(card.taskId, sid, "");
+            });
         }
         return card._statusMenu;
     }
@@ -1101,15 +1121,19 @@ Rectangle {
         id: statusMenu
         objectName: "tc-status-menu"
         backOnLeft: true
+        // A row was picked; statusMenu() moves the task.
+        signal picked(string statusId)
         Instantiator {
             model: AppController.statuses
             delegate: AppMenuItem {
                 required property var modelData
                 text: modelData.name
                 marked: !!(card.task && card.task.status === modelData.id)
-                onTriggered: AppController.moveTaskTo(card.taskId, modelData.id, "")
             }
-            onObjectAdded: (index, object) => statusMenu.insertItem(index, object)
+            onObjectAdded: (index, object) => {
+                statusMenu.insertItem(index, object);
+                object["triggered"].connect(() => statusMenu.picked(object["modelData"].id));
+            }
             onObjectRemoved: (index, object) => statusMenu.removeItem(object)
         }
     }

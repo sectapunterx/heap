@@ -326,6 +326,13 @@ QtObject {
     readonly property int durMoveOut: durMove / 2
     readonly property int easeEnter: Easing.OutQuint
     readonly property int easeExit:  Easing.InCubic
+    // The one big move (APP-176): a task marked done folds into a bar where
+    // its card stood, then lays itself on the stack over the Done column,
+    // like a bar in the heap mark. One curve (easeEnter) for both halves;
+    // the fold takes about the first third.
+    readonly property int durStack: reducedMotion ? 0 : 360
+    readonly property int durStackFold: Math.round(durStack * 0.38)
+    readonly property int durStackFly:  durStack - durStackFold
     // The one loop: a busy label breathing. Not a move, so not one of the
     // three; it does not run at all with "Reduce motion" on.
     readonly property int durPulse:  reducedMotion ? 0 : 600
