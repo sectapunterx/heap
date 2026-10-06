@@ -315,10 +315,11 @@ Item {
                     Text {
                         text: I18n.t("timeline.title"); color: Theme.text; font.pixelSize: Theme.fsLg; font.weight: Font.DemiBold
                     }
+                    // One count (APP-197). Today's date was here too; the
+                    // "Today" bucket below already says it.
                     Text {
-                        text: I18n.t("timeline.subtitle")
-                                .arg(I18n.tasks(root.totalShown()))
-                                .arg(AppController.today.toLocaleDateString(I18n.locale, "yyyy-MM-dd"))
+                        objectName: "timeline-count"
+                        text: I18n.tasks(root.totalShown())
                         color: Theme.textDim
                         font.family: Theme.fontUi
                         font.features: Theme.tabularNums
@@ -563,137 +564,113 @@ Item {
                     border.width: _selected || _cursored ? 2 : 1
                     implicitHeight: rowContent.implicitHeight + 16
 
-                    // Left accent stripe
-                    Rectangle {
-                        anchors.left: parent.left; anchors.top: parent.top; anchors.bottom: parent.bottom
-                        anchors.leftMargin: 0
-                        width: 3
-                        color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.withAlpha(Theme.danger, 0.6)
-                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accent
-                             : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.withAlpha(Theme.warning, 0.6)
-                             : "transparent"
-                        radius: 1
-                    }
+                    // A row says three things (APP-197): what the task is, when
+                    // it is due, and where it stands. The key, the description
+                    // and a booked block open under the cursor; priority and
+                    // branch are the editor's.
+                    readonly property string _excerpt: MdPlain.plain(tlRow.t.desc, 120)
+                    readonly property string _booked: root.scheduleMap[tlRow.t.id] !== undefined
+                        ? String(root.scheduleMap[tlRow.t.id]) : ""
+                    readonly property bool _overdue: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue"
 
-                    RowLayout {
+                    ColumnLayout {
                         id: rowContent
                         anchors.fill: parent
-                        anchors.leftMargin: Theme.sp2xl
+                        anchors.leftMargin: Theme.spXl
                         anchors.rightMargin: Theme.spXl
                         anchors.topMargin: Theme.spMd
                         anchors.bottomMargin: Theme.spMd
-                        spacing: Theme.spLg
+                        spacing: Theme.sp2xs
 
-                        Rectangle { width: 10; height: 10; radius: Theme.radiusXs; color: tlRow.st.color }
-                        Rectangle {
-                            radius: Theme.radiusSm
-                            color: Theme.withAlpha(Theme.priorityColor(tlRow.t.priority), 0.14)
-                            implicitWidth: priT.implicitWidth + 10; implicitHeight: 18
-                            Text {
-                                id: priT
-                                anchors.centerIn: parent
-                                text: tlRow.t.priority
-                                color: Theme.priorityColor(tlRow.t.priority)
-                                font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
-                            }
-                        }
-                        Text {
-                            // A mirrored issue reads by its
-                            // tracker key (HEAP-117).
-                            text: (tlRow.t.ticket && tlRow.t.ticket.key)
-                                  ? tlRow.t.ticket.key : tlRow.t.id
-                            textFormat: Text.PlainText
-                            color: Theme.accentStrong
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsSm
-                            font.weight: Font.Medium
-                        }
-                        ColumnLayout {
+                        RowLayout {
                             Layout.fillWidth: true
-                            spacing: 1
+                            spacing: Theme.spLg
                             Text {
+                                objectName: "tl-title"
                                 Layout.fillWidth: true
                                 text: tlRow.t.title
                                 textFormat: Text.PlainText
                                 color: Theme.text
                                 font.pixelSize: Theme.fsMd
-                                font.weight: Font.Medium
                                 elide: Text.ElideRight
                             }
+                            // Where it stands: the column's colour as a dot and
+                            // its name in dim text, no outlined pill.
+                            Row {
+                                objectName: "tl-status"
+                                spacing: Theme.spSm
+                                Rectangle {
+                                    anchors.verticalCenter: parent.verticalCenter
+                                    width: 6; height: 6; radius: 3
+                                    color: tlRow.st.color
+                                }
+                                Text {
+                                    text: tlRow.st.name
+                                    color: Theme.textDim
+                                    font.pixelSize: Theme.fsSm
+                                }
+                            }
+                            // When: the clock time of a timed deadline (or the
+                            // day of a task that only has a schedule), then how
+                            // far off it is. Red only once it is past.
                             Text {
-                                Layout.fillWidth: true
-                                visible: tlRow.t.desc && String(tlRow.t.desc).length > 0
-                                // Markdown read as prose, not as "**Steps:** - [ ]".
-                                text: MdPlain.plain(tlRow.t.desc, 120)
+                                objectName: "tl-when"
+                                readonly property var at: tlRow.t.scheduledOnly ? tlRow.t.scheduledAt : tlRow.t.dueAt
+                                readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
+                                visible: text.length > 0
+                                text: (tlRow.t.scheduledOnly ? "▸ " : "")
+                                      + (timed && at && at.getHours
+                                         ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
+                                         : "")
                                 color: Theme.textMuted
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsSm
-                                elide: Text.ElideRight
+                            }
+                            Text {
+                                objectName: "tl-due"
+                                text: I18n.relang((AppController.today, AppController.deadlineDiffLabel(tlRow.t.when)))
+                                color: tlRow._overdue ? Theme.danger : Theme.textMuted
+                                font.family: Theme.fontUi
+                                font.features: Theme.tabularNums
+                                font.pixelSize: Theme.fsSm
                             }
                         }
-                        Rectangle {
-                            radius: Theme.radiusPill
-                            color: "transparent"
-                            border.color: Theme.withAlpha(tlRow.st.color, 0.4)
-                            border.width: 1
-                            implicitWidth: stT.implicitWidth + 14; implicitHeight: 20
+                        // Under the cursor: the key, a block booked for it, and
+                        // the description's first line.
+                        RowLayout {
+                            objectName: "tl-more"
+                            Layout.fillWidth: true
+                            visible: tlRow._cursored
+                            spacing: Theme.spLg
                             Text {
-                                id: stT
-                                anchors.centerIn: parent
-                                text: tlRow.st.name
-                                color: Theme.readable(tlRow.st.color)
+                                objectName: "tl-key"
+                                // A mirrored issue reads by its tracker key (HEAP-117).
+                                text: (tlRow.t.ticket && tlRow.t.ticket.key) ? tlRow.t.ticket.key : tlRow.t.id
+                                textFormat: Text.PlainText
+                                color: Theme.textDim
+                                font.family: Theme.fontMono
                                 font.pixelSize: Theme.fsXs
-                                font.weight: Font.DemiBold
                             }
-                        }
-                        Text {
-                            visible: tlRow.t.branch && String(tlRow.t.branch).length > 0
-                            text: tlRow.t.branch ? "⎇ " + String(tlRow.t.branch).split("/").pop() : ""
-                            color: Theme.textDim
-                            font.family: Theme.fontMono
-                            font.pixelSize: Theme.fsXs
-                        }
-                        Rectangle {
-                            visible: root.scheduleMap[tlRow.t.id] !== undefined && String(root.scheduleMap[tlRow.t.id]).length > 0
-                            radius: Theme.radiusSm
-                            color: Theme.accentSoft
-                            implicitWidth: schT.implicitWidth + 10; implicitHeight: 18
                             Text {
-                                id: schT
-                                anchors.centerIn: parent
-                                text: "▸ " + (root.scheduleMap[tlRow.t.id] || "")
-                                color: Theme.accentStrong
+                                visible: tlRow._booked.length > 0
+                                text: "▸ " + tlRow._booked
+                                color: Theme.textMuted
                                 font.family: Theme.fontUi
                                 font.features: Theme.tabularNums
                                 font.pixelSize: Theme.fsXs
                             }
-                        }
-                        // The clock time of a timed deadline, and the day of a
-                        // task that only has a schedule.
-                        Text {
-                            objectName: "tl-when"
-                            readonly property var at: tlRow.t.scheduledOnly ? tlRow.t.scheduledAt : tlRow.t.dueAt
-                            readonly property bool timed: tlRow.t.scheduledOnly ? tlRow.t.scheduledHasTime : tlRow.t.dueHasTime
-                            visible: text.length > 0
-                            text: (tlRow.t.scheduledOnly ? "▸ " : "")
-                                  + (timed && at && at.getHours
-                                     ? String(at.getHours()).padStart(2, "0") + ":" + String(at.getMinutes()).padStart(2, "0")
-                                     : "")
-                            color: Theme.textMuted
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsSm
-                        }
-                        Text {
-                            text: I18n.relang((AppController.today, AppController.deadlineDiffLabel(tlRow.t.when)))
-                            color: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" ? Theme.danger
-                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Theme.accentStrong
-                                 : (tlRow.rd ? tlRow.rd.bucketId : "") === "tomorrow" ? Theme.warning
-                                 : Theme.textMuted
-                            font.family: Theme.fontUi
-                            font.features: Theme.tabularNums
-                            font.pixelSize: Theme.fsSm
-                            font.weight: (tlRow.rd ? tlRow.rd.bucketId : "") === "overdue" || (tlRow.rd ? tlRow.rd.bucketId : "") === "today" ? Font.DemiBold : Font.Normal
+                            Text {
+                                Layout.fillWidth: true
+                                visible: tlRow._excerpt.length > 0
+                                // Markdown read as prose, not as "**Steps:** - [ ]".
+                                text: tlRow._excerpt
+                                textFormat: Text.PlainText
+                                color: Theme.textMuted
+                                font.pixelSize: Theme.fsSm
+                                elide: Text.ElideRight
+                                maximumLineCount: 1
+                            }
                         }
                     }
 

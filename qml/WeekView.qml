@@ -121,6 +121,13 @@ Item {
     property bool railWanted: true
     Timer { interval: 60000; repeat: true; running: true; onTriggered: root.now = new Date() }
     readonly property int hourH: 38
+    // An event block's floor heights (APP-199): one line of small text, or
+    // the time on top of a title.
+    readonly property int eventOneLineH: Math.ceil(Theme.fsXs * 1.4) + 2 * Theme.sp2xs
+    readonly property int eventTwoLineH: Math.ceil((Theme.fsXs + Theme.fsSm) * 1.4) + 2 * Theme.sp2xs
+    function eventBlock(start, end) {
+        return Overlap.block(start, end, root.hourH, root.eventOneLineH, root.eventTwoLineH);
+    }
     // Indexed by JS day-of-week (0=Sun..6=Sat) so the label tracks the actual
     // date regardless of which day the week starts on. Names come from the app
     // language — they used to be hardcoded English next to a localised date
@@ -445,7 +452,9 @@ Item {
             const list = [];
             for (let j = 0; j < days[i].events.length; j++) {
                 const e = days[i].events[j];
-                list.push({ id: e.key, start: e.start, end: e.end });
+                // As tall as it is drawn: a half-hour block grown to two
+                // lines sits beside the meeting after it, not on top of it.
+                list.push({ id: e.key, start: e.start, end: root.eventBlock(e.start, e.end).visualEnd });
             }
             for (let j = 0; j < days[i].blocks.length; j++) {
                 const b = days[i].blocks[j];
@@ -1073,13 +1082,13 @@ Item {
                             x: gridHost.gutterW + weEv.effDayIndex * gridHost.dayW + 2 + weEv._lane.x
                             y: (weEv.effStart - root.hoursStart) * root.hourH + weEv.dragDy
                             width: weEv._lane.w - (weEv._cols > 1 ? 2 : 0)
-                            height: Math.max(18, (effEnd - effStart) * root.hourH - 2)
-                            // A half-hour meeting is the most common kind and
-                            // the block is too short for two lines of text:
-                            // the title was being clipped away, leaving a row
-                            // of blocks labelled only "09:30". Short blocks put
-                            // the time and the title on one line instead.
-                            readonly property bool compact: height < 30
+                            // Half an hour or more is at least two lines high,
+                            // the time small on top of the title; anything
+                            // shorter is one line (APP-199). A half-hour
+                            // meeting used to be 17px, its title clipped away.
+                            readonly property var _block: root.eventBlock(effStart, effEnd)
+                            height: weEv._block.height
+                            readonly property bool compact: !weEv._block.twoLine
                             radius: Theme.radiusSm
                             color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.18)
                             border.color: Theme.withAlpha(Theme.eventColor(modelData.type), 0.55)
@@ -1123,7 +1132,6 @@ Item {
                                         text: weEv.modelData.context
                                         color: Theme.textMuted
                                         font.pixelSize: Theme.fsXs
-                                        font.weight: Font.DemiBold
                                         elide: Text.ElideRight
                                         Layout.maximumWidth: parent.width * 0.5
                                     }
@@ -1134,11 +1142,12 @@ Item {
                                         color: Theme.eventColor(weEv.modelData.type)
                                     }
                                     Text {
+                                        objectName: "week-event-title"
                                         Layout.fillWidth: true
                                         text: weEv.modelData.title
                                         color: Theme.text
-                                        font.pixelSize: Theme.fsXs
-                                        font.weight: Font.DemiBold
+                                        font.pixelSize: weEv.compact ? Theme.fsXs : Theme.fsSm
+                                        font.weight: weEv.compact ? Font.Normal : Font.Medium
                                         elide: Text.ElideRight
                                     }
                                 }

@@ -216,7 +216,7 @@ Rectangle {
                         required property var modelData
                         required property int index
                         width: savedList.width
-                        height: 34
+                        height: svBtn.implicitHeight
                         objectName: "rail-saved-" + svBtn.index
                         expanded: root.expanded
                         glyph: svBtn.index < 9 ? String(svBtn.index + 1) : "·"
@@ -425,7 +425,9 @@ Rectangle {
         Keys.onEnterPressed: btn.activated()
         Keys.onSpacePressed: btn.activated()
         Layout.fillWidth: true
-        Layout.preferredHeight: 34
+        // Taller only when a long name needs its second line (APP-200).
+        implicitHeight: Math.max(34, railLabel.implicitHeight + Theme.spMd)
+        Layout.preferredHeight: implicitHeight
 
         readonly property color _fg: btn.active ? Theme.accentStrong
                                     : (ma.containsMouse ? Theme.text : Theme.textMuted)
@@ -464,8 +466,21 @@ Rectangle {
                 font.pixelSize: btn.glyphMono ? Theme.fsSm : Theme.fsLg
             }
         }
+        // A name that does not fit on the line steps down a size and, if it
+        // still does not, takes a second line (APP-200): saved views are
+        // named by the user, and "Срок на этой нед…" said less than its name.
+        TextMetrics {
+            id: labelFull
+            font.family: Theme.fontUi
+            font.pixelSize: Theme.fsMd
+            font.weight: btn.active ? Font.DemiBold : Font.Normal
+            font.italic: btn.modified
+            text: railLabel.text
+        }
         Text {
+            id: railLabel
             objectName: "rail-label"
+            readonly property bool tight: labelFull.advanceWidth > railLabel.width
             visible: btn.expanded
             opacity: btn.width > 96 ? 1 : 0
             Behavior on opacity { NumberAnimation { duration: Theme.durTap; easing.type: Theme.easeEnter } }
@@ -475,11 +490,14 @@ Rectangle {
             anchors.rightMargin: Theme.spMd
             anchors.verticalCenter: parent.verticalCenter
             text: btn.modified ? btn.label + " •" : btn.label
+            wrapMode: railLabel.tight ? Text.WordWrap : Text.NoWrap
+            maximumLineCount: 2
             elide: Text.ElideRight
+            lineHeight: 0.95
             font.italic: btn.modified
             color: btn.active ? Theme.accentStrong : (ma.containsMouse ? Theme.text : Theme.textMuted)
             font.family: Theme.fontUi
-            font.pixelSize: Theme.fsMd
+            font.pixelSize: railLabel.tight ? Theme.fsSm : Theme.fsMd
             font.weight: btn.active ? Font.DemiBold : Font.Normal
         }
         Text {

@@ -191,13 +191,29 @@ Rectangle {
                         elide: Text.ElideRight
                         Layout.fillWidth: true
                     }
-                    Text {
-                        text: chip.modelData.id + " · " + chip.modelData.deadline.toLocaleDateString(I18n.locale, "ddd d MMM")
-                        color: Theme.textDim
-                        font.family: Theme.fontMono
-                        font.pixelSize: Theme.fsXs
-                        elide: Text.ElideRight
+                    // The key in mono, because it is an id; the date in the
+                    // UI face with even digits (APP-200): set in mono it read
+                    // as code, "вт 6 окт." in a typewriter.
+                    RowLayout {
                         Layout.fillWidth: true
+                        spacing: Theme.spMd
+                        Text {
+                            objectName: "unscheduled-key"
+                            text: chip.modelData.id
+                            color: Theme.textDim
+                            font.family: Theme.fontMono
+                            font.pixelSize: Theme.fsXs
+                        }
+                        Text {
+                            objectName: "unscheduled-date"
+                            text: chip.modelData.deadline.toLocaleDateString(I18n.locale, "ddd d MMM")
+                            color: Theme.textDim
+                            font.family: Theme.fontUi
+                            font.features: Theme.tabularNums
+                            font.pixelSize: Theme.fsXs
+                            elide: Text.ElideRight
+                            Layout.fillWidth: true
+                        }
                     }
                 }
 

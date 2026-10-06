@@ -3,27 +3,28 @@
 // Pure helpers for the small motions (APP-167), so the rules are testable
 // without a clock: callers pass `now`.
 
-// How long after a task is marked done its card still celebrates it. The
-// board builds a new card in the Done column for a moved task, so the card
-// that shows the check mark is often one that did not exist a moment ago.
-var DONE_WINDOW_MS = 1500;
+// The stack over the Done column (APP-176): at most this many bars, newest
+// on top, however long the column is.
+var STACK_MAX = 5;
 
-function _ms(t) {
-    if (t === undefined || t === null || t === "") return NaN;
-    if (t instanceof Date) return t.getTime();
-    if (typeof t === "number") return t;
-    return new Date(t).getTime();
+// Whether closing a task plays the stack: one card (`moved`), going into
+// Done from another column, with motion on. A bulk move and "Reduce motion"
+// just move.
+function shouldStack(moved, fromStatus, toStatus, motion) {
+    return moved === 1 && toStatus === "done" && fromStatus !== "done" && motion > 0;
 }
 
-// True when a task with `status`, last changed at `changedAt` (a Date, an ISO
-// string or ms), was marked done no longer than DONE_WINDOW_MS before `now`.
-function justCompleted(status, changedAt, now) {
-    if (status !== "done") return false;
-    var at = _ms(changedAt);
-    var n = _ms(now);
-    if (isNaN(at) || isNaN(n)) return false;
-    var age = n - at;
-    return age >= 0 && age <= DONE_WINDOW_MS;
+// How many bars the stack shows for a Done column of `count` cards.
+function stackBars(count) {
+    return Math.max(0, Math.min(STACK_MAX, count | 0));
+}
+
+// The width of bar `i`, counted from the bottom, as a share of the column:
+// uneven like the heap mark, widest at the base. Counted from the bottom so
+// a bar laid on top leaves the ones under it as they were.
+function stackBarWidth(i) {
+    var w = [0.7, 0.54, 0.62, 0.42, 0.5];
+    return w[((i % w.length) + w.length) % w.length];
 }
 
 // Where a dropped card starts its settle: the offset from its home slot to
